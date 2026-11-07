@@ -620,6 +620,18 @@ describe('Unbounded queries bounded', () => {
   });
 });
 
+describe('searchService - honest trending hashtags, never fabricated counts', () => {
+  test('the no-Algolia facet fallback derives counts from real posts', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/searchService.js'), 'utf8');
+    // It once returned a hardcoded list of tags with invented counts
+    // (`count: 120`, `count: 98`, ...) presented as "N posts" in TrendingSection.
+    expect(src).not.toContain('fallbackTags');
+    expect(src).not.toMatch(/count:\s*(120|98|85|64|52|47|39)\b/);
+    expect(src).toContain('_hashtagFacetsFromPosts');
+    expect(src).toContain('doc.data().hashtags');
+  });
+});
+
 describe('UI/UX - a11y + states', () => {
   test('useEscapeClose hook exists and is wired into key modals', () => {
     const hook = fs.readFileSync(path.join(root, 'src/hooks/useEscapeClose.js'), 'utf8');

@@ -281,42 +281,6 @@ class SearchResultItem {
   }
 }
 
-class LRUCache {
-  constructor(maxSize = 50, ttl = 5 * 60 * 1000) {
-    this.maxSize = maxSize;
-    this.ttl = ttl;
-    this.cache = new Map();
-  }
-
-  get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-    return entry.value;
-  }
-
-  set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
-    }
-    this.cache.set(key, { value, timestamp: Date.now() });
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-
-  get size() {
-    return this.cache.size;
-  }
-}
-
 class UltimateSearchService {
   constructor() {
     this.client = null;
@@ -952,19 +916,51 @@ class UltimateSearchService {
     }
   }
 
+  /**
+   * Honest trending-hashtag source when no Algolia index is configured:
+   * aggregate the `hashtags` array off a bounded page of public, published
+   * posts. Counts are what the sample actually contains — never a constant.
+   */
+  async _hashtagFacetsFromPosts(queryStr, hitsPerPage) {
+    const needle = String(queryStr || '').trim().toLowerCase().replace(/^#/, '');
+    try {
+      const postsRef = collection(this.firestore, 'posts');
+      const snap = await getDocs(firestoreQuery(
+        postsRef,
+        where('authorIsPrivate', '==', false),
+        where('visibility', '==', 'public'),
+        where('status', '==', 'published'),
+        where('isDeleted', '==', false),
+        firestoreLimit(SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_RESULTS || 50)
+      ));
+      const counts = new Map();
+      snap.docs.forEach((doc) => {
+        for (const raw of doc.data().hashtags || []) {
+          const tag = String(raw).replace(/^#/, '').toLowerCase();
+          if (!tag || (needle && !tag.includes(needle))) continue;
+          counts.set(tag, (counts.get(tag) || 0) + 1);
+        }
+      });
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, hitsPerPage)
+        .map(([value, count]) => ({ value, count, highlighted: value, hashtag: value }));
+    } catch (error) {
+      logger.warn('[Search] Hashtag facet fallback failed', { error: error?.message });
+      return [];
+    }
+  }
+
   async getFacetValues(indexName, facetName, query = '', options = {}) {
     await this.ensureInitialized();
     if (!this.client) {
-      const fallbackTags = [
-        { value: 'arvdoul', count: 120, highlighted: 'arvdoul', hashtag: 'arvdoul' },
-        { value: 'trending', count: 98, highlighted: 'trending', hashtag: 'trending' },
-        { value: 'creators', count: 85, highlighted: 'creators', hashtag: 'creators' },
-        { value: 'music', count: 64, highlighted: 'music', hashtag: 'music' },
-        { value: 'art', count: 52, highlighted: 'art', hashtag: 'art' },
-        { value: 'photography', count: 47, highlighted: 'photography', hashtag: 'photography' },
-        { value: 'tech', count: 39, highlighted: 'tech', hashtag: 'tech' },
-      ].filter(t => !query || t.value.toLowerCase().includes(query.toLowerCase()));
-      return { success: true, facetValues: fallbackTags };
+      // No Algolia configured. Never invent counts: the only honest source of
+      // trending hashtags without a search index is the posts themselves.
+      // Any other facet has no local equivalent, so it stays empty.
+      const facetValues = facetName === 'hashtags'
+        ? await this._hashtagFacetsFromPosts(query, options?.hitsPerPage || 10)
+        : [];
+      return { success: true, facetValues };
     }
     const fullIndexName = this._resolveIndexName(indexName);
     let index = this.indices[fullIndexName];
