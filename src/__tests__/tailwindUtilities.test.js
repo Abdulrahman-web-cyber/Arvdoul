@@ -59,6 +59,30 @@ const SHADE = /\b(?:bg|border|text|from|via|to|ring|divide|fill|stroke|outline|d
 
 const DEFAULT_SHADES = new Set([0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]);
 
+// Tailwind's built-in animation utilities (keyframes it ships). Custom names must
+// be declared in `tailwind.config.js` `animation`.
+const DEFAULT_ANIMATIONS = new Set(['none', 'spin', 'ping', 'pulse', 'bounce']);
+
+function configBlockKeys(blockName) {
+  const config = readFileSync(path.join(root, 'tailwind.config.js'), 'utf8');
+  const block = config.match(new RegExp(`${blockName}:\\s*\\{([\\s\\S]*?)\\n\\s*\\},`, 's'));
+  const keys = new Set();
+  if (block) for (const m of block[1].matchAll(/'([^']+)':/g)) keys.add(m[1]);
+  return keys;
+}
+
+// `animate-in` + `fade-in` / `zoom-in-95` / `slide-in-from-*` are the
+// tailwindcss-animate plugin API, reimplemented in src/styles/tailwind.css. Every
+// such class used in src must have a selector there, or the entrance is a no-op.
+const ENTRANCE_CLASS = /^(?:animate-in|fade-in|fade-out|zoom-in-\d+|zoom-out-\d+|slide-in-from-[a-z]+-\d+|slide-out-to-[a-z]+-\d+|spin-in-\d+)$/;
+
+function entranceSelectors() {
+  const css = readFileSync(path.join(SRC, 'styles/tailwind.css'), 'utf8');
+  const names = new Set();
+  for (const m of css.matchAll(/\.([a-z][a-z0-9-]*)\s*[,{]/g)) names.add(m[1]);
+  return names;
+}
+
 // Colors whose shade set differs from the default scale. Everything else must be
 // a default shade; anything outside both is a typo (e.g. `gray-750`).
 function knownShades(color) {
@@ -97,6 +121,36 @@ describe('tailwind utilities reference declared scale steps (N111)', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  test('every animate-* utility is a built-in or declared in the config', () => {
+    const declared = configBlockKeys('animation');
+    const offenders = [];
+    for (const file of walk(SRC)) {
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/\banimate-([a-z0-9-]+)/g)) {
+        const name = m[1];
+        if (name === 'in') continue; // `animate-in` entrance class, checked below
+        if (DEFAULT_ANIMATIONS.has(name) || declared.has(name)) continue;
+        offenders.push(`${path.relative(root, file)}: ${m[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('every entrance class (animate-in API) has a selector in tailwind.css', () => {
+    const selectors = entranceSelectors();
+    const offenders = [];
+    for (const file of walk(SRC)) {
+      if (file.endsWith('styles/tailwind.css')) continue;
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/\b([a-z][a-z0-9-]*)\b/g)) {
+        const cls = m[1];
+        if (!ENTRANCE_CLASS.test(cls)) continue;
+        if (!selectors.has(cls)) offenders.push(`${path.relative(root, file)}: ${cls}`);
+      }
+    }
+    expect([...new Set(offenders)]).toEqual([]);
   });
 
   test('the /8 and /12 glass steps stay declared', () => {
