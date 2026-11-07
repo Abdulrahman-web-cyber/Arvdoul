@@ -60,9 +60,18 @@ describe('chat reconciles the optimistic message (N105)', () => {
 describe('reels nav badge is live and no fabricated relationship (N108, N109)', () => {
   const reels = read('src/screens/ReelsScreen.jsx');
 
-  test('the messages badge reads the real unread count', () => {
-    expect(reels).toContain('useNavBadges');
-    expect(reels).toContain('navBadges.messages');
+  test('the reels screen does not duplicate the app bottom nav', () => {
+    // The screen rendered its own inline <nav> while MainLayout still mounted
+    // the canonical BottomNav on /reels — two bottom bars stacked, and the
+    // inline one hardcoded /friends and /create-story. Navigation (and its live
+    // unread badge) belongs to BottomNav alone.
+    expect(reels).not.toMatch(/<nav\b/);
+  });
+
+  test('the canonical BottomNav owns the live unread badge', () => {
+    const nav = read('src/components/Shared/BottomNav.jsx');
+    expect(nav).toContain('useNavBadges');
+    expect(nav).toMatch(/unreadCounts/);
   });
 
   test('no hardcoded unread count literal', () => {

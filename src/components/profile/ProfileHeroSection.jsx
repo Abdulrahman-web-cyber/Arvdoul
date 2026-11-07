@@ -292,6 +292,8 @@ export const ProfileHeroSection = memo(({
     setShowRoadmapModal(true);
   }, []);
 
+  const profileUid = profile?.id || profile?.uid || 'user';
+
   // The call route keys off a conversation id, not a user id: resolve (or
   // create) the direct conversation first so the signaling doc has the
   // `participants` array the rules require.
@@ -305,7 +307,6 @@ export const ProfileHeroSection = memo(({
     }
   }, [profileUid, navigate]);
 
-  const profileUid = profile?.id || profile?.uid || 'user';
   const displayName = profile?.displayName || profile?.name || 'User';
   const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || 'user';
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
