@@ -78,3 +78,30 @@ exports.setFeatureFlagOverride = functions.https.onCall(async (data, context) =>
 
   return { success: true, flag, value: record.value, overridden: record.overridden };
 });
+
+/**
+ * Server-side flag read for Cloud Functions. Mirrors the client precedence
+ * (Firestore override > registry default) so a server-side kill switch flips a
+ * gated feature without a deploy. Fail-closed: an unknown flag or an unreadable
+ * override returns the registry default (never a truthy value by accident).
+ *
+ * @param {string} flag - a name from the canonical registry
+ * @returns {Promise<boolean>} the effective boolean value
+ */
+async function isFlagEnabled(flag) {
+  const def = DEFAULT_FLAGS[flag];
+  if (!def) return false;
+  if (def.type !== 'boolean') return Boolean(def.defaultValue);
+  try {
+    const snap = await db.collection('feature_flags').doc(flag).get();
+    const record = snap.exists ? snap.data() : null;
+    if (record && record.overridden === true && record.value !== undefined) {
+      return record.value === true || record.value === 'true';
+    }
+  } catch (err) {
+    functions.logger.warn('feature flag override read failed; using default', { flag, error: err.message });
+  }
+  return def.defaultValue === true;
+}
+
+module.exports.isFlagEnabled = isFlagEnabled;

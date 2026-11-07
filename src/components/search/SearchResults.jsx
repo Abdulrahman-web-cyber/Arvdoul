@@ -111,7 +111,7 @@ const SearchResults = memo(({
                   'whitespace-nowrap font-medium text-sm',
                   'transition-all duration-200',
                   isSelected
-                    ? 'bg-gradient-to-r from-[#B416DB] via-[#872FE2] to-[#4B6BFF] text-white shadow-lg'
+                    ? 'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-lg'
                     : isDark
                       ? 'bg-white/8 text-gray-300 hover:bg-white/12'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -198,8 +198,8 @@ const ResultCard = memo(({ result, index, onClick, isDark }) => {
       className={cn(
         'rounded-3xl overflow-hidden',
         'backdrop-blur-2xl bg-white/8 border border-white/12',
-        'shadow-[0_25px_80px_rgba(138,43,226,0.12)]',
-        'hover:shadow-[0_35px_100px_rgba(138,43,226,0.18)]',
+        'shadow-[0_25px_80px_rgba(139,30,243,0.12)]',
+        'hover:shadow-[0_35px_100px_rgba(139,30,243,0.18)]',
         'cursor-pointer transition-shadow duration-300'
       )}
     >

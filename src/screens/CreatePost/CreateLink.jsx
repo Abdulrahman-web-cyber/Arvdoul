@@ -9,10 +9,10 @@ import { toast } from "sonner";
 import { callFunction, FUNCTIONS } from "../../services/callableService.js";
 import * as Icons from "lucide-react";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // ── ARVDOUL DNA ──────────────────────────────────────────────────────
-const DNA_GRADIENT_STYLE =
-  "linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)";
+const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
 const DNA_SHADOW = "0 0 20px rgba(147,51,234,0.4)";
 const INPUT_CLASS =
   "w-full p-3 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 focus:outline-none";

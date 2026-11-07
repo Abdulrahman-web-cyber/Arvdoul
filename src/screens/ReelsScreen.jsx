@@ -8,10 +8,11 @@ import { useAuth } from '../context/AuthContext';
 import settingsService from '../services/settingsService.js';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Heart, MessageCircle, Share2, Bookmark, Gift, MoreVertical, Volume2, VolumeX, Play, Search, Camera, ChevronRight, Sparkles, Home, Users, Plus, MessageSquare, User, CheckCircle2, Music, ArrowUp, ArrowLeftRight } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, Gift, MoreVertical, Volume2, VolumeX, Play, Search, Camera, Sparkles, Home, Users, Plus, MessageSquare, User, CheckCircle2, Music, ArrowUp, ArrowLeftRight } from "lucide-react";
 import videoService from '../services/videoService';
 import { getMonetizationService } from '../services/monetizationService';
 import { getUserService } from '../services/userService';
+import { useNavBadges } from '../hooks/useNavBadges';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
@@ -33,11 +34,15 @@ const formatDuration = (seconds) => {
 
   const { theme } = useTheme();
   const isDark = theme !== 'light';
+  const navBadges = useNavBadges();
 
   const [activeTab, setActiveTab] = useState('forYou'); // 'following' | 'forYou'
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
   const [reels, setReels] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const cursorRef = useRef(null);
   // Honour the user's playback.autoPlayVideos preference (default on) instead of
   // hardcoding autoplay. When autoplay is off the reel waits for a tap on the
   // play overlay before it starts.
@@ -61,6 +66,38 @@ const formatDuration = (seconds) => {
     setReels((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
+  const mapVideoToReel = useCallback((v) => {
+    const creatorName = v.creator?.name || v.authorName || '';
+    const creatorUsername = v.creator?.username || v.authorUsername || '';
+    const creatorId = v.creator?.id || v.authorId || v.userId || null;
+    return {
+      id: v.id,
+      creator: {
+        id: creatorId,
+        name: creatorName,
+        username: creatorUsername,
+        avatar: getSafeAvatarUrl(v.creator?.avatar || v.authorPhoto, creatorName, creatorId),
+        verified: Boolean(v.creator?.isVerified || v.authorVerified),
+        isFollowing: false,
+      },
+      title: v.title || v.description || '',
+      hashtags: v.hashtags || [],
+      music: v.audio?.title || v.music || '',
+      videoUrl: v.signedUrl || v.videoUrl || '',
+      thumbnailUrl: v.thumbnailUrl || '',
+      stats: {
+        likes: v.likes ?? v.stats?.likes ?? 0,
+        comments: v.comments ?? v.stats?.comments ?? 0,
+        shares: v.shares ?? v.stats?.shares ?? 0,
+        saves: v.saves ?? v.stats?.saves ?? 0,
+        gifts: v.gifts ?? v.stats?.gifts ?? 0,
+      },
+      duration: v.duration || 0,
+      isLiked: Boolean(v.isLiked),
+      isSaved: Boolean(v.isSaved),
+    };
+  }, []);
+
   // Load reels from the video feed (Firestore-backed, no mock data).
   const loadReels = useCallback(async (feedType) => {
     if (!user?.uid) {
@@ -75,37 +112,9 @@ const formatDuration = (seconds) => {
         limit: 10,
         type: 'video',
       });
-      const mapped = (res.feed || []).map((v) => {
-        const creatorName = v.creator?.name || v.authorName || '';
-        const creatorUsername = v.creator?.username || v.authorUsername || '';
-        const creatorId = v.creator?.id || v.authorId || v.userId || null;
-        return {
-          id: v.id,
-          creator: {
-            id: creatorId,
-            name: creatorName,
-            username: creatorUsername,
-            avatar: getSafeAvatarUrl(v.creator?.avatar || v.authorPhoto, creatorName, creatorId),
-            verified: Boolean(v.creator?.isVerified || v.authorVerified),
-            isFollowing: false,
-          },
-          title: v.title || v.description || '',
-          hashtags: v.hashtags || [],
-          music: v.audio?.title || v.music || '',
-          videoUrl: v.videoUrl || '',
-          thumbnailUrl: v.thumbnailUrl || '',
-          stats: {
-            likes: v.likes || 0,
-            comments: v.comments || 0,
-            shares: v.shares || 0,
-            saves: v.saves || 0,
-            gifts: v.gifts || 0,
-          },
-          duration: v.duration || 0,
-          isLiked: Boolean(v.isLiked),
-          isSaved: Boolean(v.isSaved),
-        };
-      });
+      const mapped = (res.feed || []).map(mapVideoToReel);
+      cursorRef.current = res.nextCursor || null;
+      setHasMore(Boolean(res.hasMore && res.nextCursor));
       if (targetReelId) {
         const foundIdx = mapped.findIndex((r) => r.id === targetReelId);
         if (foundIdx >= 0) {
@@ -114,37 +123,7 @@ const formatDuration = (seconds) => {
           try {
             const fetched = await videoService.getVideo(targetReelId);
             if (fetched?.video) {
-              const v = fetched.video;
-              const creatorName = v.creator?.name || v.authorName || '';
-              const creatorUsername = v.creator?.username || v.authorUsername || '';
-              const creatorId = v.creator?.id || v.authorId || v.userId || null;
-              const singleReel = {
-                id: v.id || targetReelId,
-                creator: {
-                  id: creatorId,
-                  name: creatorName,
-                  username: creatorUsername,
-                  avatar: getSafeAvatarUrl(v.creator?.avatar || v.authorPhoto, creatorName, creatorId),
-                  verified: Boolean(v.creator?.isVerified || v.authorVerified),
-                  isFollowing: false,
-                },
-                title: v.title || v.description || '',
-                hashtags: v.hashtags || [],
-                music: v.audio?.title || v.music || '',
-                videoUrl: v.signedUrl || v.videoUrl || '',
-                thumbnailUrl: v.thumbnailUrl || '',
-                stats: {
-                  likes: v.likes || v.stats?.likes || 0,
-                  comments: v.comments || v.stats?.comments || 0,
-                  shares: v.shares || v.stats?.shares || 0,
-                  saves: v.saves || v.stats?.saves || 0,
-                  gifts: v.gifts || v.stats?.gifts || 0,
-                },
-                duration: v.duration || 0,
-                isLiked: Boolean(v.isLiked),
-                isSaved: Boolean(v.isSaved),
-              };
-              mapped.unshift(singleReel);
+              mapped.unshift(mapVideoToReel(fetched.video));
               setCurrentReelIndex(0);
             }
           } catch (e) {
@@ -158,14 +137,50 @@ const formatDuration = (seconds) => {
     } catch (err) {
       console.error('Failed to load reels:', err);
       setReels([]);
+      setHasMore(false);
+      cursorRef.current = null;
     } finally {
       setFeedLoading(false);
     }
-  }, [user?.uid, targetReelId]);
+  }, [user?.uid, targetReelId, mapVideoToReel]);
+
+  // Append the next page of reels so the feed does not stop at 10 videos.
+  const loadMoreReels = useCallback(async () => {
+    if (loadingMore || !cursorRef.current || !user?.uid) return;
+    setLoadingMore(true);
+    try {
+      const res = await videoService.getVideoFeed(user.uid, {
+        feedType: activeTab === 'following' ? 'following' : 'for_you',
+        limit: 10,
+        type: 'video',
+        cursor: cursorRef.current,
+      });
+      const mapped = (res.feed || []).map(mapVideoToReel);
+      if (mapped.length > 0) {
+        setReels((prev) => {
+          const seen = new Set(prev.map((r) => r.id));
+          return [...prev, ...mapped.filter((r) => !seen.has(r.id))];
+        });
+      }
+      cursorRef.current = res.nextCursor || null;
+      setHasMore(Boolean(res.hasMore && res.nextCursor));
+    } catch (err) {
+      console.warn('Could not load more reels:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, user?.uid, activeTab, mapVideoToReel]);
 
   useEffect(() => {
     loadReels(activeTab);
   }, [activeTab, loadReels]);
+
+  // Prefetch the next page when the viewer nears the end of the loaded list.
+  useEffect(() => {
+    if (reels.length > 0 && hasMore && currentReelIndex >= reels.length - 2) {
+      loadMoreReels();
+    }
+  }, [currentReelIndex, reels.length, hasMore, loadMoreReels]);
 
   // Resolve the follow state for the loaded creators (never a local-only fake).
   useEffect(() => {
@@ -587,17 +602,13 @@ const formatDuration = (seconds) => {
         </div>
       </header>
 
-      {/* Top Banner: Mutual Friends */}
+      {/* Top Banner: gesture hint (the previous "Following" mutual-friends pill
+          claimed a relationship it never resolved, so it was removed). */}
       <div className="relative z-30 px-5 pt-2">
-        <button
-          onClick={() => navigate('/friends')}
-          className="px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center gap-2 text-xs font-semibold text-white/90 hover:bg-black/60 transition-colors"
-        >
-          {/* Real mutual-friend indicator (loaded from the reel's author) */}
+        <div className="px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center gap-2 text-xs font-semibold text-white/90 w-fit">
           <span className="w-2 h-2 rounded-full bg-emerald-400" aria-hidden="true" />
-          <span>Following</span>
-          <ChevronRight className="w-3.5 h-3.5 text-white/60" />
-        </button>
+          <span>Swipe up for more</span>
+        </div>
       </div>
 
       {/* Center Spacer */}
@@ -873,9 +884,11 @@ const formatDuration = (seconds) => {
             className="relative flex flex-col items-center gap-1 text-white/70 hover:text-white transition-colors"
           >
             <MessageSquare className="w-5 h-5" />
-            <span className="absolute -top-1 right-1 w-4 h-4 rounded-full bg-violet-600 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-[#060814]">
-              8
-            </span>
+            {navBadges.messages > 0 && (
+              <span className="absolute -top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-violet-600 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-[#060814]">
+                {navBadges.messages > 99 ? '99+' : navBadges.messages}
+              </span>
+            )}
             <span className="text-[10px] font-semibold">Messages</span>
           </button>
 

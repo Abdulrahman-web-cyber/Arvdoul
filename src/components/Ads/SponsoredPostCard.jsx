@@ -12,6 +12,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMonetizationService } from '../../services/monetizationService';
 import { AD_REWARD_COINS } from '../../shared/levelConfig.cjs';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // The server (getAd callable) returns a creative as
 // `{ id, type, media, link, title, cta, advertiserId }`. The helpers below
@@ -322,7 +323,7 @@ export default function SponsoredPostCard({
           <button
             onClick={handleCtaClick}
             className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-md hover:scale-105 active:scale-95 transition cursor-pointer"
-            style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
+            style={{ background: BRAND_GRADIENT }}
           >
             {ad.ctaText || 'Visit Sponsor'}
           </button>

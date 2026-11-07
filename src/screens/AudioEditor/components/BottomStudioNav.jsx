@@ -2,6 +2,7 @@
 
 import { FolderOpen, Grid, Plus, Mic, Settings } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { BRAND_GRADIENT } from '../../../design-system/tokens.js';
 
 export default function BottomStudioNav({
   isDark = true,
@@ -38,7 +39,7 @@ export default function BottomStudioNav({
         <button
           onClick={onRecord}
           className="w-12 h-12 -mt-5 rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(139,30,243,0.6)] hover:scale-110 active:scale-95 transition-all cursor-pointer"
-          style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
+          style={{ background: BRAND_GRADIENT }}
           title="Record / Add Track"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />

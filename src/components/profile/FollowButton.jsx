@@ -17,6 +17,7 @@
 import { memo, useCallback } from "react";
 import { cn } from '../../lib/utils';
 import { UserPlus, UserMinus, Loader2 } from 'lucide-react';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /**
  * FollowButton Component
@@ -31,10 +32,10 @@ const FollowButton = memo(({
   size = 'md',
 }) => {
   // ARVDOUL DNA Gradient
-  const buttonGradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)';
+  const buttonGradient = BRAND_GRADIENT;
   
   // Glow effect for following button
-  const glowEffect = '0 0 20px rgba(180, 22, 219, 0.4), 0 0 40px rgba(135, 47, 226, 0.2)';
+  const glowEffect = '0 0 20px rgba(139, 30, 243, 0.4), 0 0 40px rgba(139, 30, 243, 0.2)';
   
   // Size classes
   const sizeClasses = {

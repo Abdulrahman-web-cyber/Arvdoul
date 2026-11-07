@@ -38,7 +38,7 @@ const TrendingSection = memo(({
       <div className="flex items-center gap-3 mb-4">
         <div className={cn(
           'w-10 h-10 rounded-2xl flex items-center justify-center',
-          'bg-gradient-to-r from-[#B416DB] via-[#872FE2] to-[#4B6BFF]'
+          'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]'
         )}>
           <Icon className="w-5 h-5 text-white" />
         </div>
@@ -58,7 +58,7 @@ const TrendingSection = memo(({
         className={cn(
           'rounded-3xl overflow-hidden',
           'backdrop-blur-2xl bg-white/8 border border-white/12',
-          'shadow-[0_25px_80px_rgba(138,43,226,0.15)]'
+          'shadow-[0_25px_80px_rgba(139,30,243,0.15)]'
         )}
       >
         {loading ? (
@@ -104,7 +104,7 @@ const TrendingItem = memo(({ item, index, type, onClick, isDark }) => {
         'w-full flex items-center gap-4 p-4',
         'transition-colors duration-150',
         'hover:bg-white/5',
-        'focus:outline-none focus:ring-2 focus:ring-[#B416DB]/50'
+        'focus:outline-none focus:ring-2 focus:ring-[#8B1EF3]/50'
       )}
     >
       {/* Rank Number */}
@@ -112,7 +112,7 @@ const TrendingItem = memo(({ item, index, type, onClick, isDark }) => {
         'w-8 h-8 rounded-full flex items-center justify-center',
         'font-bold text-sm',
         isTopThree
-          ? 'bg-gradient-to-r from-[#B416DB] to-[#4B6BFF] text-white'
+          ? 'bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white'
           : isDark ? 'bg-white/10 text-gray-400' : 'bg-gray-100 text-gray-500'
       )}>
         {index + 1}
@@ -189,7 +189,7 @@ const HashtagContent = memo(({ item, isDark }) => (
     <div className="flex items-center gap-2">
       <Hash className={cn(
         'w-4 h-4',
-        'bg-gradient-to-r from-[#B416DB] to-[#4B6BFF] bg-clip-text text-transparent'
+        'bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] bg-clip-text text-transparent'
       )} />
       <span className={cn(
         'font-semibold',

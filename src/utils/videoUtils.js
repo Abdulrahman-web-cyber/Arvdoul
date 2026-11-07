@@ -517,9 +517,10 @@ export const getRecommendedQuality = () => {
 };
 
 /**
- * ARVDOUL gradient for video UI elements
+ * ARVDOUL gradient for video UI elements — re-exported from the design system
+ * so video surfaces cannot drift from the canonical brand gradient (N104).
  */
-export const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
+export { BRAND_GRADIENT as ARVDOUL_GRADIENT } from '../design-system/tokens.js';
 
 /**
  * Glass effect classes for video overlay components

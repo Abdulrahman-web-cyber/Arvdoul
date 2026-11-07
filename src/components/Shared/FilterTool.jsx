@@ -7,12 +7,13 @@
 
 import { useState, useCallback, useMemo, useEffect, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Star, SlidersHorizontal, Image as ImageIcon } from "lucide-react";
 
 // ARVDOUL Design System
-const DNA_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
+const DNA_GRADIENT = BRAND_GRADIENT;
 const DNA_SHADOW = '0 0 20px rgba(147,51,234,0.4)';
 
 /**

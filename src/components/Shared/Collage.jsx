@@ -29,7 +29,7 @@ export const BACKGROUND_COLORS = [
   { id: 'white', color: '#FFFFFF', label: 'Pure White' },
   { id: 'slate', color: '#1E293B', label: 'Slate' },
   { id: 'purple', color: '#8B1EF3', label: 'Arvdoul Purple' },
-  { id: 'gradient', color: 'linear-gradient(135deg, #B416DB, #4B6BFF)', label: 'DNA Gradient' },
+  { id: 'gradient', color: 'linear-gradient(135deg, #8B1EF3, #055BFB)', label: 'DNA Gradient' },
 ];
 
 export default function Collage({
@@ -116,9 +116,9 @@ export default function Collage({
     // Background
     if (bgColor.startsWith('linear-gradient')) {
       const grad = ctx.createLinearGradient(0, 0, baseWidth, baseHeight);
-      grad.addColorStop(0, '#B416DB');
-      grad.addColorStop(0.5, '#872FE2');
-      grad.addColorStop(1, '#0EA3E6');
+      grad.addColorStop(0, '#8B1EF3');
+      grad.addColorStop(0.5, '#4431F7');
+      grad.addColorStop(1, '#0088FF');
       ctx.fillStyle = grad;
     } else {
       ctx.fillStyle = bgColor;

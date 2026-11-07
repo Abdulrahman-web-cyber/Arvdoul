@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check, Loader2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import GIFPicker from '../components/Shared/GIFPicker';
+import { useFeatureFlag } from '../hooks/useFeatureFlag.js';
 
 const CREATIVE_TOOLS = [
   { id: 'text', label: 'Text', icon: Type, color: 'text-white' },
@@ -59,6 +60,7 @@ export default function CreateStory() {
   const [pollOption1, setPollOption1] = useState('Yes 🔥');
   const [pollOption2, setPollOption2] = useState('No ❄️');
   const [selectedMusic, setSelectedMusic] = useState(null);
+  const musicLibraryEnabled = useFeatureFlag('stories.music_library');
   const [musicTracks, setMusicTracks] = useState([]);
   const [musicLoading, setMusicLoading] = useState(false);
   const [mediaFile, setMediaFile] = useState(null);
@@ -340,7 +342,7 @@ export default function CreateStory() {
                 Creative Tools
               </span>
               <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-3 space-y-1 backdrop-blur-xl shadow-2xl">
-                {CREATIVE_TOOLS.map((tool) => {
+                {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
                   const Icon = tool.icon;
                   const isSelected = activeTool === tool.id;
                   return (

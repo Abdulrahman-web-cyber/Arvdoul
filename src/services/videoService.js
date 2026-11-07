@@ -8,6 +8,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { featureFlagService } from './featureFlagService.js';
 
 const VIDEO_CONFIG = {
   UPLOAD: {
@@ -546,7 +547,7 @@ class UltimateVideoService {
       return { success: false, error: 'Video is still processing' };
     }
 
-    if (video.monetization?.type === 'pay_per_view' && video.userId !== currentUser?.uid) {
+    if (featureFlagService.isEnabled('monetization.pay_per_view') && video.monetization?.type === 'pay_per_view' && video.userId !== currentUser?.uid) {
       const hasAccess = await this._checkPayPerViewAccess(videoId, currentUser?.uid);
       if (!hasAccess) throw new VideoError('access-denied', 'Payment required.');
     }
@@ -639,8 +640,22 @@ class UltimateVideoService {
 
   async getVideoFeed(userId, options = {}) {
     await this.ensureInitialized();
-    const { feedType = 'for_you', limit = 20, type = null, lastDocSnapshot, signal } = options;
+    const { feedType = 'for_you', limit = 20, type = null, signal, cursor } = options;
+    let { lastDocSnapshot } = options;
     const safeUserId = userId || 'anonymous_user';
+
+    // Callers paginate with the opaque `nextCursor` (a video id) they received
+    // from the previous page. Resolve it to a document snapshot here — the
+    // service previously only honoured `lastDocSnapshot`, so every "load more"
+    // silently returned the first page again.
+    if (!lastDocSnapshot && cursor) {
+      try {
+        const cursorSnap = await getDoc(doc(this.firestore, 'videos', String(cursor)));
+        if (cursorSnap.exists()) lastDocSnapshot = cursorSnap;
+      } catch (err) {
+        logger.warn('[Video] Could not resolve feed cursor:', err?.message);
+      }
+    }
 
     if (this.activeAbortControllers.has(safeUserId)) {
       this.activeAbortControllers.get(safeUserId).abort();

@@ -99,7 +99,7 @@ const SearchSuggestions = memo(({
         'absolute left-0 right-0 top-full mt-3 z-50',
         'rounded-3xl overflow-hidden',
         'backdrop-blur-2xl bg-white/10 border border-white/15',
-        'shadow-[0_25px_80px_rgba(138,43,226,0.15)]'
+        'shadow-[0_25px_80px_rgba(139,30,243,0.15)]'
       )}
     >
       {/* Recent Searches */}
@@ -185,7 +185,7 @@ const SearchSuggestions = memo(({
                   key={i}
                   animate={{ opacity: [0.3, 1, 0.3] }}
                   transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                  className="w-2 h-2 rounded-full bg-gradient-to-r from-[#B416DB] to-[#4B6BFF]"
+                  className="w-2 h-2 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB]"
                 />
               ))}
             </div>
@@ -233,7 +233,7 @@ const SuggestionItem = memo(({
       className={cn(
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl',
         'transition-colors duration-150',
-        'focus:outline-none focus:ring-2 focus:ring-[#B416DB]/50',
+        'focus:outline-none focus:ring-2 focus:ring-[#8B1EF3]/50',
         isSelected
           ? isDark ? 'bg-white/10' : 'bg-gray-100'
           : 'hover:bg-white/5'

@@ -215,7 +215,7 @@ const AvatarUploadModal = memo(({
             ) : (
               /* Initial Selection View */
               <div className="space-y-4 text-center py-2">
-                <div className="relative w-32 h-32 mx-auto rounded-full overflow-hidden p-1 bg-gradient-to-tr from-[#B416DB] via-[#4B6BFF] to-[#0EA3E6] shadow-xl">
+                <div className="relative w-32 h-32 mx-auto rounded-full overflow-hidden p-1 bg-gradient-to-tr from-[#8B1EF3] via-[#055BFB] to-[#0088FF] shadow-xl">
                   <div className="w-full h-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                     {currentAvatarUrl ? (
                       <img

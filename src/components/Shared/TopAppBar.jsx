@@ -15,6 +15,7 @@ import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import { pickHandle, deriveHandle, pickDisplayName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -33,7 +34,7 @@ const TOKENS = {
     textPrimary: "#FFFFFF",
     textSecondary: "rgba(255, 255, 255, 0.7)",
     brandGradient:
-      "linear-gradient(135deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)",
+      BRAND_GRADIENT,
     brandLine:
       "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
     shadow: "0 20px 48px rgba(0, 0, 0, 0.5)",
@@ -51,7 +52,7 @@ const TOKENS = {
     textPrimary: "#111827",
     textSecondary: "rgba(0, 0, 0, 0.6)",
     brandGradient:
-      "linear-gradient(135deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)",
+      BRAND_GRADIENT,
     brandLine:
       "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
     shadow: "0 18px 40px rgba(17, 24, 39, 0.09)",

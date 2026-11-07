@@ -7,6 +7,7 @@ import * as Icons from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../lib/utils";
 import { useTheme } from "../../context/ThemeContext";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const AUDIO_GENRES = [
   "✨ Original", "🎵 Electronic", "🎤 Hip-Hop", "🎸 Acoustic",
@@ -177,7 +178,7 @@ export default function CreateAudio() {
           <button
             onClick={() => navigate("/audio-editor")}
             className="px-3.5 py-1.5 text-xs font-bold rounded-xl text-white shadow-md flex items-center gap-1.5 hover:scale-105 active:scale-95 transition cursor-pointer"
-            style={{ background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)" }}
+            style={{ background: BRAND_GRADIENT }}
           >
             <Icons.Sliders className="w-3.5 h-3.5" />
             <span>Open Studio</span>
@@ -342,7 +343,7 @@ export default function CreateAudio() {
                 },
               })}
               className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 hover:scale-105 active:scale-95 transition cursor-pointer"
-              style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
+              style={{ background: BRAND_GRADIENT }}
             >
               <Icons.Sliders className="w-3.5 h-3.5" />
               <span>Multi-Track Master Studio</span>

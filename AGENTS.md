@@ -104,6 +104,18 @@ as failures.
   (`getUserIdFromContext`, `isAdmin`, `checkIsAdmin`, `assertAdmin`). Do not re-declare
   `isAdmin` in a module — a divergent check means an account can be admin for one endpoint
   and not another.
+- **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
+  `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
+  (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the
+  `#8B1EF3`/`#4431F7`/`#055BFB`/`#0088FF` hexes. The old divergent family
+  (`#B416DB`/`#872FE2`/`#4B6BFF`/`#0EA3E6`) is banned **in hex and `rgba()`
+  decimal form** (`rgba(180,22,219)` etc.), as is the legacy BlueViolet violet
+  `rgba(138,43,226)` and the rogue `from-purple-600 via-pink-600 to-cyan-500`
+  gradient; `designTokenDriftGuard.test.js` (hard-failing `guards` job) fails if
+  any reappears, if a non-design-system module re-declares the canonical literal,
+  if the `ThemeProvider` palettes (`src/context/themePalettes.js`) stop deriving
+  from the tokens, or if `tokens.js`/`tokens.css`/`tokens.json` drift.
+  Signup/login/onboarding keep their own 125deg/52% geometry by policy.
 - **Feature flags**: `src/shared/featureFlagRegistry.cjs` is the canonical flag
   list (synced to `functions/featureFlagRegistry.cjs`, guarded by
   `sharedConfigSync.test.js`). Platform-wide overrides live in Firestore
@@ -112,6 +124,19 @@ as failures.
   validates the name against the registry and audits to `moderation_logs`.
   `featureFlagService.setOverride()` is a device-local lever, not governance —
   never present it as an audit record.
+  A flag that no surface reads is a false feature claim, not a flag:
+  `featureFlagConsumption.test.js` (hard-failing `guards` job) fails if a
+  registered flag has no `isEnabled` / `isFlagEnabled` / `useFeatureFlag` /
+  `<FeatureGate flag>` consumer. Read flags through `src/hooks/useFeatureFlag.js`
+  (reactive) or `src/components/Shared/FeatureGate.jsx`; the server reads through
+  `functions/featureFlags.js#isFlagEnabled` (override > registry default,
+  fail-closed). Only register a flag alongside the real code it gates — do not
+  add a flag for a feature that does not exist yet.
+- **Calls**: `src/services/callService.js` is the canonical call implementation
+  (Firestore `calls/{id}` signaling, `participants` array, `CallScreen`).
+  `messagesService` must not re-implement `startCall`/`acceptCall`/`endCall`;
+  the `/call/:conversationId` route takes a **conversationId**, not a uid — a
+  caller with only a uid must resolve the direct conversation first.
 - **Audit trail**: `functions/admin.js#writeAudit` appends to `moderation_logs`
   (admin-readable, server-write-only). `AdminAuditLogsScreen` reads that
   collection. `src/utils/AuditLogger.js` is a local IndexedDB queue and is not

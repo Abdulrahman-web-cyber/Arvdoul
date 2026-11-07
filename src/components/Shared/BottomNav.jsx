@@ -11,13 +11,12 @@ import { useProfileStore } from "../../store/profileStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
+import { BRAND_GRADIENT } from "../../design-system/tokens.js";
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
    ========================================================================== */
 
-const BRAND_GRADIENT =
-  "linear-gradient(135deg,#8B1EF3 0%,#4431F7 52%,#055BFB 100%)";
 const BRAND_LINE =
   "linear-gradient(90deg,#C82BFF 0%,#8B1EF3 34%,#4431F7 66%,#0088FF 100%)";
 const MAX_WIDTH = 1320;

@@ -12,6 +12,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { enqueuePush } = require('./pushQueue');
 const { checkRateLimit } = require('./rateLimit');
+const { isFlagEnabled } = require('./featureFlags');
 
 // A single shared Admin SDK instance. This module previously referenced a bare
 // `db` that was never defined (no `admin.initializeApp()` either), so every
@@ -57,6 +58,13 @@ exports.moderateComment = functions.firestore
 
     // Skip if no content, not pending, or already moderated (idempotency)
     if (!commentData.content || commentData.moderationStatus !== 'pending' || commentData.moderatedAt) {
+      return;
+    }
+
+    // Platform kill switch: leave the comment pending for the manual queue.
+    if (!(await isFlagEnabled('moderation.auto_review'))) {
+      log('warn', 'automated moderation disabled by feature flag', { commentId });
+      await snap.ref.update({ moderationStatus: 'pending_manual_review' });
       return;
     }
 
@@ -146,6 +154,8 @@ exports.moderateCommentOnUpdate = functions.firestore
     const content = after.content;
     if (!content) return;
     const userId = after.userId;
+
+    if (!(await isFlagEnabled('moderation.auto_review'))) return;
 
     try {
       await checkRateLimit(userId, 'moderate', 10, 60000);

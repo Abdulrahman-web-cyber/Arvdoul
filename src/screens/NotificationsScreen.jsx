@@ -12,6 +12,7 @@ import notificationsService from '../services/notificationsService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/UI/Dialog.jsx';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 
 const FILTERS = [
   { id: 'All', label: 'All' },
@@ -950,7 +951,7 @@ export default function NotificationsScreen() {
                 onClick={handleEnablePush}
                 disabled={requestingPush}
                 className="px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md hover:scale-105 active:scale-95 transition cursor-pointer"
-                style={{ background: 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)' }}
+                style={{ background: BRAND_GRADIENT }}
               >
                 {requestingPush ? 'Enabling…' : 'Enable'}
               </button>

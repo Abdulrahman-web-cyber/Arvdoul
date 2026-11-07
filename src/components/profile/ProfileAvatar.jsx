@@ -21,6 +21,7 @@ import PropTypes from 'prop-types';
 import { BadgeCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /**
  * ProfileAvatar Component
@@ -166,7 +167,7 @@ const ProfileAvatar = memo(({
           style={{ 
             width: levelBadgeSize, 
             height: levelBadgeSize,
-            background: 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)',
+            background: BRAND_GRADIENT,
             fontSize: levelBadgeSize * 0.4
           }}
           aria-label={`Level ${level}`}

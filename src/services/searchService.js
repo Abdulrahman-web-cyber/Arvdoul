@@ -3,6 +3,7 @@
 // Fully optimized search routing, real Algolia index querying, and structured lexical token-overlap indexing fallback.
 
 import { getMonetizationService } from './monetizationService.js';
+import { featureFlagService } from './featureFlagService.js';
 import { collection, query as firestoreQuery, where, limit as firestoreLimit, getDocs, startAfter } from "firebase/firestore";
 
 function enhanceError(error, defaultMessage) {
@@ -463,7 +464,7 @@ class UltimateSearchService {
         source = 'firestore';
       }
 
-      if (SEARCH_CONFIG.VECTOR_ENABLED && query) {
+      if (SEARCH_CONFIG.VECTOR_ENABLED && featureFlagService.isEnabled('search.vector') && query) {
         const vectorResults = await this._vectorSearch(query, userId);
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         resultsByType = this._mergeVectorResults(resultsByType, vectorResults);

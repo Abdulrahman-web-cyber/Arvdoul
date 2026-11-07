@@ -73,7 +73,7 @@ const SearchFilters = memo(({
               'fixed bottom-0 left-0 right-0 z-50',
               'rounded-t-[32px] overflow-hidden',
               'backdrop-blur-2xl bg-white/10 border border-white/15',
-              'shadow-[0_-25px_80px_rgba(138,43,226,0.15)]'
+              'shadow-[0_-25px_80px_rgba(139,30,243,0.15)]'
             )}
             style={{ maxHeight: '85vh' }}
           >
@@ -238,7 +238,7 @@ const SearchFilters = memo(({
                 onClick={handleApply}
                 className={cn(
                   'flex-1 py-3.5 rounded-full font-semibold',
-                  'bg-gradient-to-r from-[#B416DB] via-[#872FE2] to-[#4B6BFF]',
+                  'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]',
                   'text-white shadow-lg',
                   'hover:shadow-xl transition-shadow'
                 )}
@@ -285,7 +285,7 @@ const FilterChip = memo(({ label, selected, onClick, isDark }) => (
       'flex items-center gap-2',
       'transition-all duration-200',
       selected
-        ? 'bg-gradient-to-r from-[#B416DB] via-[#872FE2] to-[#4B6BFF] text-white shadow-lg'
+        ? 'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-lg'
         : isDark
           ? 'backdrop-blur-xl border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
           : 'backdrop-blur-xl border border-gray-200 bg-white/50 text-gray-700 hover:bg-white/70'

@@ -19,6 +19,7 @@ import { getDatabase, ref, onValue, set, remove, onDisconnect, push as rtdbPush 
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, getStorage } from 'firebase/storage';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase';
 import { openDB } from 'idb';
+import { featureFlagService } from './featureFlagService.js';
 
 const MESSAGING_CONFIG = {
   FREE: {
@@ -1152,7 +1153,7 @@ class UltimateMessagingService {
     const ttlExpiresAt = new Date(Date.now() + MESSAGING_CONFIG.MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
     let encryptedPayload = null;
-    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
+    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && featureFlagService.isEnabled('messaging.e2ee') && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
       // Best-effort E2EE. Encryption requires the sender's private key to be
       // unlocked and every participant to have published a public key. Until
       // key provisioning is wired, an unconditional gate would throw on the
@@ -1389,7 +1390,7 @@ class UltimateMessagingService {
     });
 
     // decryption
-    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED) {
+    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && featureFlagService.isEnabled('messaging.e2ee')) {
       const privateKey = this.unlockedPrivateKeys.get(currentUser.uid);
       if (privateKey) {
         for (const msg of messages) {
@@ -1450,10 +1451,26 @@ class UltimateMessagingService {
       console.warn('[Messaging] Reaction merge failed:', err.message);
     }
 
+    // Enforce the message TTL in-memory (there is no server-side cleanup
+    // trigger): drop only messages that DECLARE an expired ttlExpiresAt. A
+    // document with no TTL field is kept — the previous server-side range filter
+    // on that field also excluded field-less docs, which made them permanently
+    // invisible while still counting toward the unread badge.
+    const nowMs = Date.now();
+    const liveMessages = messages.filter((m) => {
+      const ttl = this._toMillis(m.ttlExpiresAt);
+      return ttl === null || ttl > nowMs;
+    });
+
+    // The shard query walks newest-first (orderBy createdAt desc) so it can page
+    // backwards, but every consumer renders oldest-first. Normalise ONCE here so
+    // the wire format is chronological and no screen has to know the query order.
+    liveMessages.sort((a, b) => this._messageTime(a) - this._messageTime(b));
+
     const result = {
       success: true,
-      messages,
-      hasMore: messages.length === (options.limit || MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE),
+      messages: liveMessages,
+      hasMore: liveMessages.length === (options.limit || MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE),
       conversationId,
     };
 
@@ -1461,6 +1478,19 @@ class UltimateMessagingService {
     this.messageKeysByConversation.get(conversationId).add(cacheKey);
     this.messagesCache.set(cacheKey, result);
     return result;
+  }
+
+  _toMillis(ts) {
+    if (!ts) return null;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+    if (ts instanceof Date) return ts.getTime();
+    const parsed = new Date(ts).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  _messageTime(msg) {
+    return this._toMillis(msg?.createdAt) ?? 0;
   }
 
   async markConversationAsRead(conversationId, userId) {
@@ -2621,52 +2651,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  async startCall(conversationId, callType = 'audio') {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw new Error('Auth required');
-    const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const callRef = this.fs.doc(this.firestore, 'calls', callId);
-    const callData = {
-      id: callId,
-      conversationId,
-      createdBy: currentUser.uid,
-      participants: [currentUser.uid],
-      type: callType,
-      status: 'ringing',
-      createdAt: this.fs.serverTimestamp(),
-      updatedAt: this.fs.serverTimestamp(),
-    };
-    await this.fs.setDoc(callRef, callData);
-    return { success: true, callId };
-  }
-
-  async acceptCall(callId) {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw new Error('Auth required');
-    const callRef = this.fs.doc(this.firestore, 'calls', callId);
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const snap = await transaction.get(callRef);
-      if (!snap.exists()) throw new Error('Call not found');
-      const call = snap.data();
-      if (call.participants.includes(currentUser.uid)) return; // already accepted
-      transaction.update(callRef, {
-        participants: arrayUnion(currentUser.uid),
-        status: 'ongoing',
-        updatedAt: this.fs.serverTimestamp(),
-      });
-    });
-    return { success: true };
-  }
-
-  async endCall(callId) {
-    await this.ensureInitialized();
-    const callRef = this.fs.doc(this.firestore, 'calls', callId);
-    await this.fs.updateDoc(callRef, { status: 'ended', updatedAt: this.fs.serverTimestamp() });
-    return { success: true };
-  }
-
   async _findExistingConversation(participants) {
     const [uid1, uid2] = participants.sort();
     const id = `direct_${uid1}_${uid2}`;
@@ -3038,7 +3022,6 @@ class UltimateMessagingService {
     const messages = [];
     let remaining = limit;
     let currentDate = startAfterDate ? new Date(startAfterDate) : new Date();
-    const now = new Date();
 
     while (remaining > 0) {
       const shardPath = this._getMessageSubcollectionPath(conversationId, conversation, currentDate);
@@ -3047,7 +3030,6 @@ class UltimateMessagingService {
       let q = this.fs.query(
         messagesRef,
         this.fs.where('isDeleted', '==', false),
-        this.fs.where('ttlExpiresAt', '>', this.fs.Timestamp.fromDate(now)),
         this.fs.orderBy('createdAt', 'desc'),
         this.fs.limit(remaining + 1)
       );
@@ -3336,9 +3318,6 @@ const messagingService = {
   getConversationMedia: (cid, opts) => getMessagingService().getConversationMedia(cid, opts),
   getMessageHistory: (cid, mid) => getMessagingService().getMessageHistory(cid, mid),
   registerPushToken: (uid, token) => getMessagingService().registerPushToken(uid, token),
-  startCall: (cid, callType) => getMessagingService().startCall(cid, callType),
-  acceptCall: (callId) => getMessagingService().acceptCall(callId),
-  endCall: (callId) => getMessagingService().endCall(callId),
   getUnreadCount: (userId, conversationId) => getMessagingService().getUnreadCount(userId, conversationId),
   getTotalUnreadCount: (userId) => getMessagingService().getTotalUnreadCount(userId),
   getService: getMessagingService,

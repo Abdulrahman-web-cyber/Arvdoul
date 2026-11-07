@@ -14,7 +14,7 @@
  * trigger a visual regression review of the whole app.
  */
 
-export const TOKEN_VERSION = '1.0.0';
+export const TOKEN_VERSION = '1.1.0';
 
 export const tokens = {
   version: TOKEN_VERSION,
@@ -99,8 +99,8 @@ export const tokens = {
     md: '0 4px 12px rgba(2, 4, 10, 0.15)',
     lg: '0 12px 32px rgba(2, 4, 10, 0.2)',
     dialog: '0 24px 64px rgba(2, 4, 10, 0.35)',
-    glow: '0 0 20px rgba(139, 92, 246, 0.25)',
-    glowStrong: '0 0 32px rgba(139, 92, 246, 0.45)',
+    glow: '0 0 20px rgba(139, 30, 243, 0.25)',
+    glowStrong: '0 0 32px rgba(139, 30, 243, 0.45)',
   },
 
   /** Glassmorphism backdrop blur. */
@@ -193,3 +193,10 @@ export const tokens = {
 };
 
 export default tokens;
+
+/**
+ * Canonical brand gradient as a plain CSS string, for call sites that need a
+ * `style={{ background }}` value or an SVG stop. Import this instead of
+ * re-declaring the literal — the design system is the single source of truth.
+ */
+export const BRAND_GRADIENT = tokens.color.brand.gradient;

@@ -15,12 +15,13 @@ import { TopAppLoadingBanner } from "../../components/Navigation/RouteProgressBa
 import { getStorageService } from "../../services/storageService";
 import { getAuthService } from "../../services/authService";
 import { openDB } from "idb";
+import { BRAND_GRADIENT } from "../../design-system/tokens.js";
 
 const ImageEditor = lazy(() => import("./ImageEditor"));
 const Collage = lazy(() => import("../../components/Shared/Collage"));
 
 // ─── DESIGN TOKENS ──────────────────────────────────────────────────
-const DNA_GRADIENT = "linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)";
+const DNA_GRADIENT = BRAND_GRADIENT;
 
 const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
