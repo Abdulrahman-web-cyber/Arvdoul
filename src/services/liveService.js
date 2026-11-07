@@ -22,6 +22,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
 import { GIFT_CATALOG, GIFT_VALUES, LEVEL_GATES } from '../shared/levelConfig.cjs';
+import { callFunction, FUNCTIONS } from './callableService.js';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase.js';
 import { secureRandom } from '../lib/utils.js';
 
@@ -790,7 +791,7 @@ class UltimateLiveService {
   async sendLiveGift(streamId, senderId, recipientId, giftType) {
     try {
       await this._ensureInitialized();
-      
+
       const giftConfig = LIVE_CONFIG.GIFT_TYPES.find(g => g.id === giftType);
       if (!giftConfig) {
         throw new Error('Invalid gift type');
@@ -804,62 +805,27 @@ class UltimateLiveService {
       if (!idempotencyStore.checkAndRecord(idemKey, 30000)) {
         return { success: true, duplicate: true };
       }
-      
-      const { collection, addDoc, doc, getDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
-      const streamRef = doc(this.firestore, 'live_streams', streamId);
-      const streamSnap = await getDoc(streamRef);
-      
-      if (!streamSnap.exists() || streamSnap.data().status !== 'live') {
-        throw new Error('Stream is not available');
-      }
-      
-      if (!streamSnap.data().monetization?.giftsEnabled) {
-        throw new Error('Gifts are disabled for this stream');
-      }
-      
-      // Debit the sender FIRST — the gift only exists if the coins were
-      // really charged (server-authoritative ledger).
-      const { getMonetizationService } = await import('./monetizationService.js');
-      const debit = await getMonetizationService().spendCoins(senderId, giftConfig.coinValue, 'live_gift', {
-        streamId, giftType, recipientId,
-      });
-      if (!debit?.success) {
-        throw new Error(debit?.message || 'Could not charge coins for this gift');
-      }
 
-      const giftsRef = collection(this.firestore, 'live_gifts');
-      const giftData = {
-        streamId,
-        senderId,
-        recipientId,
-        giftType,
-        coinValue: giftConfig.coinValue,
-        createdAt: serverTimestamp(),
-        idempotencyKey: idemKey,
-      };
-      
-      await addDoc(giftsRef, giftData);
-      
-      await runTransaction(this.firestore, async (transaction) => {
-        const snap = await transaction.get(streamRef);
-        const stats = snap.data().stats || {};
-        
-        transaction.update(streamRef, {
-          'stats.totalGifts': (stats.totalGifts || 0) + 1,
-          'stats.coinsEarned': (stats.coinsEarned || 0) + giftConfig.coinValue,
-          updatedAt: serverTimestamp(),
-        });
-      });
+      // Server-authoritative: the callable validates the stream, prices the
+      // gift from GIFT_VALUES, and debits the sender + credits the streamer in
+      // one transaction. The previous client path debited the sender and then
+      // wrote a `live_gifts` row the rules deny, so the coins were destroyed
+      // and the streamer was never paid.
+      const result = await callFunction(FUNCTIONS.SEND_LIVE_GIFT, { streamId, giftType, idempotencyKey: idemKey });
 
       auditLogger.log('monetization.live_gift', {
         userId: senderId,
         meta: { streamId, recipientId, giftType, coinValue: giftConfig.coinValue },
       });
-      
+
       return {
         success: true,
         gift: {
-          ...giftData,
+          streamId,
+          senderId,
+          recipientId,
+          giftType,
+          coinValue: result?.coinValue ?? giftConfig.coinValue,
           createdAt: new Date().toISOString(),
         },
       };
@@ -876,65 +842,29 @@ class UltimateLiveService {
       if (amount < LIVE_CONFIG.TIPS.MIN || amount > LIVE_CONFIG.TIPS.MAX) {
         throw new Error(`Tip amount must be between ${LIVE_CONFIG.TIPS.MIN} and ${LIVE_CONFIG.TIPS.MAX} coins`);
       }
-      
-      const { collection, addDoc, doc, getDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
-      const streamRef = doc(this.firestore, 'live_streams', streamId);
-      const streamSnap = await getDoc(streamRef);
-      
-      if (!streamSnap.exists() || streamSnap.data().status !== 'live') {
-        throw new Error('Stream is not available');
-      }
-      
-      if (!streamSnap.data().monetization?.tipsEnabled) {
-        throw new Error('Tips are disabled for this stream');
-      }
-      
-      const recipientId = streamSnap.data().userId;
 
-      // Debit sender + credit streamer FIRST via the real ledger — a tip
-      // only exists if the coins were really transferred.
-      const { getMonetizationService } = await import('./monetizationService.js');
-      const transfer = await getMonetizationService().transferCoins(
-        senderId, recipientId, amount, 'live_tip', { streamId }
-      );
-      if (!transfer?.success) {
-        throw new Error(transfer?.message || 'Could not process tip');
-      }
+      // Server-authoritative transfer: the callable resolves the streamer,
+      // debits the sender and credits the streamer in one transaction. The
+      // previous client path debited the sender and wrote an unreadable
+      // `live_tips` row, so the coins vanished.
+      const result = await callFunction(FUNCTIONS.SEND_LIVE_TIP, { streamId, amount });
 
-      const tipsRef = collection(this.firestore, 'live_tips');
-      const tipData = {
-        streamId,
-        senderId,
-        recipientId,
-        amount,
-        createdAt: serverTimestamp(),
-      };
-      
-      await addDoc(tipsRef, tipData);
-      
-      await runTransaction(this.firestore, async (transaction) => {
-        const snap = await transaction.get(streamRef);
-        const stats = snap.data().stats || {};
-        
-        transaction.update(streamRef, {
-          'stats.totalTips': (stats.totalTips || 0) + 1,
-          'stats.coinsEarned': (stats.coinsEarned || 0) + amount,
-          updatedAt: serverTimestamp(),
-        });
-      });
-      
       return {
         success: true,
         tip: {
-          ...tipData,
+          streamId,
+          senderId,
+          recipientId: result?.recipientId,
+          amount,
           createdAt: new Date().toISOString(),
         },
       };
     } catch (error) {
-      logger.error('❌ Send live tip failed:', error);
+      logger.error('\u274c Send live tip failed:', error);
       throw enhanceError(error, 'Failed to send tip');
     }
   }
+
 
   async getLiveEarnings(streamId, userId) {
     try {

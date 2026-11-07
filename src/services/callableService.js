@@ -110,6 +110,8 @@ export const FUNCTIONS = {
   SPEND_COINS: 'spendCoins',
   TRANSFER_COINS: 'transferCoins',
   SEND_GIFT: 'sendGift',
+  SEND_LIVE_GIFT: 'sendLiveGift',
+  SEND_LIVE_TIP: 'sendLiveTip',
   BOOST_POST: 'boostPost',
   REQUEST_WITHDRAWAL: 'requestWithdrawal',
   RECORD_AD_IMPRESSION: 'recordAdImpression',

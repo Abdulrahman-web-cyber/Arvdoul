@@ -1325,9 +1325,11 @@ service cloud.firestore {
 
     // ==================== LIVE TIPS ====================
     match /live_tips/{tipId} {
+      // Tips move real coins sender -> streamer inside the `sendLiveTip`
+      // callable, so the client never writes here (a forged row would claim a
+      // tip that never happened).
       allow read: if isSignedIn() && (resource.data.senderId == uid() || resource.data.recipientId == uid());
-      allow create: if isSignedIn() && request.resource.data.senderId == uid();
-      allow update, delete: if isAdmin();
+      allow write: if false; // server-verified
     }
 
     // ==================== MESSAGE REPORTS ====================

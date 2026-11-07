@@ -271,16 +271,24 @@ describe('Spaces & Live - no free-money tips/gifts', () => {
     expect(src).toContain('Sign in to send a tip');
   });
 
-  test('liveService debits coins BEFORE recording gifts/tips', () => {
+  test('liveService delegates gifts/tips to the server callable (no client debit or write)', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
     const giftIdx = src.indexOf('async sendLiveGift');
     const tipIdx = src.indexOf('async sendLiveTip');
-    // spendCoins/transferCoins must appear before addDoc(live_gifts/live_tips)
+    expect(giftIdx).toBeGreaterThan(-1);
+    expect(tipIdx).toBeGreaterThan(giftIdx);
     const giftBlock = src.slice(giftIdx, tipIdx);
-    const spendIdx = giftBlock.indexOf('spendCoins');
-    const addGiftIdx = giftBlock.indexOf("addDoc(giftsRef");
-    expect(spendIdx).toBeGreaterThan(-1);
-    expect(addGiftIdx).toBeGreaterThan(spendIdx);
+    // The server callable moves value sender -> streamer in one transaction.
+    // The old client path debited via spendCoins and then wrote a `live_gifts`
+    // row that the rules deny — the coins were destroyed and the streamer was
+    // never paid.
+    expect(giftBlock).toContain('callFunction(FUNCTIONS.SEND_LIVE_GIFT');
+    expect(giftBlock).not.toContain('spendCoins');
+    expect(giftBlock).not.toContain('addDoc');
+    const tipBlock = src.slice(tipIdx, src.indexOf('\n  async ', tipIdx + 1));
+    expect(tipBlock).toContain('callFunction(FUNCTIONS.SEND_LIVE_TIP');
+    expect(tipBlock).not.toContain('transferCoins(');
+    expect(tipBlock).not.toContain('addDoc');
   });
 });
 
