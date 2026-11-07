@@ -390,7 +390,7 @@ const VideoBottomSheet = memo(({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 rounded-t-3xl bg-gray-900/98 backdrop-blur-2xl p-6 flex flex-col"
+                className="absolute inset-0 rounded-t-3xl bg-gray-900/95 backdrop-blur-2xl p-6 flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-6">
@@ -458,7 +458,7 @@ const VideoBottomSheet = memo(({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 rounded-t-3xl bg-gray-900/98 backdrop-blur-2xl p-6 flex flex-col"
+                className="absolute inset-0 rounded-t-3xl bg-gray-900/95 backdrop-blur-2xl p-6 flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-4">

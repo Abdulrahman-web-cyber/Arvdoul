@@ -7,6 +7,14 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // Tailwind's default opacity scale skips 8 and 12, so `bg-white/8` and
+      // `border-white/12` silently generated NO rule — the glass surfaces in the
+      // search components, `videoUtils` glass classes and the ThemeProvider glass
+      // presets rendered fully transparent. Declare the steps the UI uses.
+      opacity: {
+        8: '0.08',
+        12: '0.12',
+      },
       colors: {
         'arvdoul-bg': '#03071B',
         'arvdoul-surface': 'rgba(3, 7, 27, 0.85)',
