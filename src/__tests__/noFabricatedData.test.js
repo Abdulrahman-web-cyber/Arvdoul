@@ -495,6 +495,17 @@ describe('appStore - identity mirror only, no duplicate economy', () => {
     // an unknown balance must render as unavailable, not as invented money.
     expect(src).not.toContain('?? 1250');
   });
+
+  test('QuickAccessPanel reuses the canonical achievement catalog, not a local copy', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    // A hand-rolled achievements array here duplicated AchievementsScreen and
+    // could disagree with the server-granted items. It must delegate to the
+    // shared achievementService (ACHIEVEMENTS_CATALOG).
+    expect(src).toContain('achievementService.enrichAchievements');
+    expect(src).toContain('achievementService.getUserAchievements');
+    expect(src).not.toContain('"First Post"');
+    expect(src).not.toContain('"100 Followers"');
+  });
 });
 
 describe('Poll wagers - real coin debit', () => {

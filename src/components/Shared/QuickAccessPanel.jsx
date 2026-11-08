@@ -12,6 +12,7 @@ import { FaCoins, FaCrown, FaStar, FaBullhorn } from "react-icons/fa";
 import { MdAdsClick } from "react-icons/md";
 import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES, formatCoinsAsUsd } from "../../services/levelSystemService";
 import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
+import achievementService from "../../services/achievementService";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -184,6 +185,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
+  // Earned achievements come from the authoritative subcollection; the panel
+  // renders the canonical catalog (ACHIEVEMENTS_CATALOG) merged with them, so
+  // it can never drift from AchievementsScreen.
+  const [earnedAchievements, setEarnedAchievements] = useState([]);
 
   // Refs
   const panelRef = useRef(null);
@@ -411,69 +416,31 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
   const achievements = useMemo(() => {
     const stats = currentUser || {};
+    // Reuse the canonical catalog + enrichment; never re-declare achievements,
+    // points or criteria locally (that duplicated AchievementsScreen and let the
+    // two surfaces disagree).
+    return achievementService.enrichAchievements(earnedAchievements, {
+      level: stats.level,
+      activeStreak: stats.activeStreak,
+      postsCount: stats.postCount,
+      likesCount: stats.likeCount,
+      commentsCount: stats.commentCount,
+      friendsCount: stats.friendsCount,
+    });
+  }, [earnedAchievements, currentUser]);
 
-    return [
-      {
-        id: 1,
-        title: "First Post",
-        icon: PenSquare,
-        unlocked: (stats.postCount || 0) > 0,
-        date: "First post",
-        points: 100,
-        progress: (stats.postCount || 0) > 0 ? 100 : 0
-      },
-      {
-        id: 2,
-        title: "Profile Complete",
-        icon: CheckCircle,
-        unlocked: stats.isProfileComplete || false,
-        date: "Complete",
-        points: 250,
-        progress: stats.isProfileComplete ? 100 : 0
-      },
-      {
-        id: 3,
-        title: `Level ${LEVEL_GATES.withdrawals}`,
-        icon: Trophy,
-        unlocked: levelSystem.currentLevel >= LEVEL_GATES.withdrawals,
-        required: LEVEL_GATES.withdrawals,
-        current: levelSystem.currentLevel,
-        points: 1000,
-        progress: Math.min((levelSystem.currentLevel / LEVEL_GATES.withdrawals) * 100, 100)
-      },
-      {
-        id: 4,
-        title: "First Earnings",
-        icon: DollarSign,
-        // Lifetime earnings live on the mirrored profile (`totalEarned`); the
-        // phantom `monetization` store slice was always undefined, so this
-        // achievement could never unlock for anyone.
-        unlocked: (Number(stats.totalEarned) || 0) > 0,
-        date: "Earnings",
-        points: 500,
-        progress: (Number(stats.totalEarned) || 0) > 0 ? 100 : 0
-      },
-      {
-        id: 5,
-        title: "100 Followers",
-        icon: Users,
-        unlocked: (stats.followerCount || 0) >= 100,
-        required: 100,
-        current: stats.followerCount || 0,
-        points: 1000,
-        progress: Math.min(((stats.followerCount || 0) / 100) * 100, 100)
-      },
-      {
-        id: 6,
-        title: "Creator",
-        icon: FaCrown,
-        unlocked: stats.isCreator || false,
-        date: "Creator",
-        points: 2000,
-        progress: stats.isCreator ? 100 : 0
-      }
-    ];
-  }, [currentUser, levelSystem.currentLevel]);
+  useEffect(() => {
+    const uid = currentUser?.uid;
+    if (!uid) {
+      setEarnedAchievements([]);
+      return;
+    }
+    let cancelled = false;
+    achievementService.getUserAchievements(uid)
+      .then((items) => { if (!cancelled) setEarnedAchievements(Array.isArray(items) ? items : []); })
+      .catch(() => { if (!cancelled) setEarnedAchievements([]); });
+    return () => { cancelled = true; };
+  }, [currentUser?.uid]);
 
   const quickActions = useMemo(() => {
     const isCreator = currentUser?.isCreator || false;
@@ -1440,33 +1407,13 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           >
             <div className="flex items-start justify-between mb-3">
               <div className={cn(
-                "p-2 rounded-lg",
+                "w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg text-base",
                 achievement.unlocked
                   ? "bg-emerald-100 dark:bg-emerald-900/30"
                   : "bg-gray-100 dark:bg-gray-800"
               )}>
-                {achievement.icon === FaCoins ? (
-                  <FaCoins className={cn(
-                    "w-4 h-4 sm:w-5 sm:h-5",
-                    achievement.unlocked
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-gray-400"
-                  )} />
-                ) : achievement.icon === FaCrown ? (
-                  <FaCrown className={cn(
-                    "w-4 h-4 sm:w-5 sm:h-5",
-                    achievement.unlocked
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-gray-400"
-                  )} />
-                ) : (
-                  <achievement.icon className={cn(
-                    "w-4 h-4 sm:w-5 sm:h-5",
-                    achievement.unlocked
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-gray-400"
-                  )} />
-                )}
+                {/* Catalog icons are emoji strings, not components. */}
+                <span aria-hidden="true">{achievement.icon}</span>
               </div>
               {achievement.unlocked ? (
                 <Badge variant="success" className="text-xs">
@@ -1475,7 +1422,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 </Badge>
               ) : (
                 <Badge variant="default" className="text-xs">
-                  {achievement.current}/{achievement.required || 1}
+                  {achievement.progress}%
                 </Badge>
               )}
             </div>
@@ -1491,7 +1438,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {achievement.date}
+                {achievement.rarity || achievement.category}
               </span>
               <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
                 +{achievement.points} pts
