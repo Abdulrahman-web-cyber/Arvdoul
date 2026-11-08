@@ -481,3 +481,30 @@ describe('outgoing friend requests can be withdrawn', () => {
     expect(src).toMatch(/Cancel Request/);
   });
 });
+
+describe('stories are archived before they expire', () => {
+  // `archived_stories` is read by the Memories/Archive surface and by highlight
+  // creation, but only `archiveStory` wrote it and nothing called it — so the
+  // archive stayed permanently empty and a highlight could never be created.
+  test('createStory self-archives the story', () => {
+    const src = read('src/services/storyService.js');
+    const createIdx = src.indexOf('async createStory(');
+    const archiveCall = src.indexOf('await this.archiveStory(storyId, currentUser.uid)');
+    expect(createIdx).toBeGreaterThan(-1);
+    expect(archiveCall).toBeGreaterThan(createIdx);
+  });
+
+  test('the Memories/Archive surface reads the real archive', () => {
+    expect(read('src/screens/StoriesScreen.jsx')).toContain('getArchivedStories');
+  });
+
+  // The expiry job deleted the media the archive still references.
+  test('expired-story cleanup keeps media for archived stories', () => {
+    const src = read('functions/stories.js');
+    const idx = src.indexOf('cleanupExpiredStories');
+    expect(idx).toBeGreaterThan(-1);
+    const body = src.slice(idx, idx + 3000);
+    expect(body).toContain("collection('archived_stories')");
+    expect(body).toMatch(/!archived && storyData\.media/);
+  });
+});

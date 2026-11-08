@@ -435,6 +435,17 @@ class UltimateStoryService {
     this._invalidateFeedCache(currentUser.uid);
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
 
+    // Self-archive a copy at creation so the story survives the 24h expiry
+    // (the cleanup job deletes `stories` and its media). `archived_stories` is
+    // what the Memories/Archive surface and highlight creation read — without
+    // this the archive stayed permanently empty. Best-effort: a failed archive
+    // must not fail a published story.
+    try {
+      await this.archiveStory(storyId, currentUser.uid);
+    } catch (e) {
+      // archive is best-effort
+    }
+
     if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
     this.metrics.storiesCreated++;
     auditLogger.log('story.created', { userId: currentUser.uid, meta: { storyId, type: storyData.type || null } });

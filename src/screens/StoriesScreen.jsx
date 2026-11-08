@@ -1,6 +1,6 @@
 // src/screens/StoriesScreen.jsx
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -57,6 +57,7 @@ export default function StoriesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [archive, setArchive] = useState({ loading: false, error: null, items: [] });
 
   // Story Viewer State
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
@@ -283,6 +284,20 @@ export default function StoriesScreen() {
       setDeletingStory(false);
     }
   };
+
+  // Owner-only: load the archive when the Memories modal opens.
+  const handleOpenArchive = useCallback(async () => {
+    setIsCalendarOpen(true);
+    if (!user?.uid) return;
+    setArchive({ loading: true, error: null, items: [] });
+    try {
+      const res = await getStoryService().getArchivedStories(user.uid, { limit: 24 });
+      const items = Array.isArray(res) ? res : (res?.stories || []);
+      setArchive({ loading: false, error: null, items });
+    } catch (err) {
+      setArchive({ loading: false, error: err?.message || 'Could not load your archive.', items: [] });
+    }
+  }, [user?.uid]);
 
   // Owner-only: load who viewed the current story item.
   const handleOpenViewers = async () => {
@@ -595,7 +610,7 @@ export default function StoriesScreen() {
 
           {/* Memories / Archive */}
           <button
-            onClick={() => setIsCalendarOpen(true)}
+            onClick={handleOpenArchive}
             aria-label="Story archive"
             className={cn(
               'w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-200 active:scale-95',
@@ -1209,19 +1224,48 @@ export default function StoriesScreen() {
               </div>
 
               <p className="text-xs text-slate-400 mb-4">
-                Review your 24-hour highlights, past saved moments, and monthly memory reels.
+                Your saved Vibes, kept past their 24-hour highlight window.
               </p>
 
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {stories.slice(0, 3).map((st) => (
-                  <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
-                    <img src={st.mediaUrl} alt={st.caption} className="w-full h-full object-cover" />
-                    <span className="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1 py-0.5 rounded text-white font-mono">
-                      {st.timeAgo}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {archive.loading ? (
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="aspect-square rounded-2xl bg-white/5 animate-pulse" />
+                  ))}
+                </div>
+              ) : archive.error ? (
+                <div className="mb-4 text-center py-6">
+                  <p className="text-xs text-red-400 mb-2">{archive.error}</p>
+                  <button
+                    onClick={handleOpenArchive}
+                    className="text-xs font-bold px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : archive.items.length === 0 ? (
+                <div className="mb-4 text-center py-6">
+                  <p className="text-xs text-slate-400">No archived Vibes yet.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Vibes you post are saved here automatically.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 mb-4 max-h-56 overflow-y-auto">
+                  {archive.items.slice(0, 12).map((st) => {
+                    const url = st.media?.url || st.mediaUrl;
+                    return (
+                      <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-white/5">
+                        {url ? (
+                          <img src={url} alt={st.content || 'Archived Vibe'} loading="lazy" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 px-1 text-center">
+                            {st.content || 'Text Vibe'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <button
                 onClick={() => {

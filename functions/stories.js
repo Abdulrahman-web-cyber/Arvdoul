@@ -640,7 +640,18 @@ exports.cleanupExpiredStories = functions.pubsub
           deleteSubcollection(doc.ref.collection('reaction_shards')),
         ]);
 
-        if (storyData.media?.path) {
+        // Keep the media object when the story was archived at creation — the
+        // archive (and the highlights built from it) still render that file.
+        // Deleting it left every archived story with a broken image.
+        let archived = false;
+        try {
+          const archiveSnap = await db.collection('archived_stories').doc(storyId).get();
+          archived = archiveSnap.exists;
+        } catch (err) {
+          archived = false;
+        }
+
+        if (!archived && storyData.media?.path) {
           try { await bucket.file(storyData.media.path).delete(); } catch (err) {}
         }
 
