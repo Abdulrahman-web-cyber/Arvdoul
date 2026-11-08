@@ -479,6 +479,13 @@ describe('appStore - no fabricated starting coins', () => {
     expect(src).not.toContain('coins: 1000');
     expect(src).toContain('coins: 0,');
   });
+
+  test('QuickAccessPanel never fabricates a 1250-coin balance', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    // The balance header showed a fake 1250 when the real balance was unknown;
+    // an unknown balance must render as unavailable, not as invented money.
+    expect(src).not.toContain('?? 1250');
+  });
 });
 
 describe('Poll wagers - real coin debit', () => {

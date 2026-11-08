@@ -902,7 +902,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   >
                     <FaCoins className="w-4 h-4 text-amber-500" />
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                      {(currentUser?.coins ?? 1250).toLocaleString()} Coins
+                      {currentUser?.coins != null ? `${currentUser.coins.toLocaleString()} Coins` : '— Coins'}
                     </span>
                   </button>
                   <button
