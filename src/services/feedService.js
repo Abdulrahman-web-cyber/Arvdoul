@@ -92,7 +92,6 @@ const FEED_CONFIG = {
     CONFIG_CACHE_TTL: 15 * 60 * 1000,
     PROFILE_CACHE_TTL: 15 * 60 * 1000,
     PREF_CACHE_TTL: 10 * 60 * 1000,
-    BEHAVIOR_CACHE_TTL: 20 * 60 * 1000,
     MAX_CACHE_SIZE: 100,
     SESSION_SAVE_DEBOUNCE: 2000,
     FANOUT_BATCH_SIZE: 400,
@@ -570,7 +569,7 @@ class UltimateFeedService {
           if (Array.isArray(localPosts) && localPosts.length > 0) {
             const existingIds = new Set(posts.map(p => p.id));
             for (const lp of localPosts) {
-              if (lp && lp.id && !existingIds.has(lp.id) && !blockedUsers.has(lp.authorId)) {
+              if (lp && lp.id && lp.visibility !== 'community' && !existingIds.has(lp.id) && !blockedUsers.has(lp.authorId)) {
                 posts.unshift({
                   ...lp,
                   _source: 'local_storage',
@@ -923,10 +922,7 @@ class UltimateFeedService {
       if (Math.abs(total - 1) > 0.01) Object.keys(dynamicWeights).forEach(k => dynamicWeights[k] /= total);
     }
 
-    const [userPreferences, behaviorData] = await Promise.allSettled([
-      this._getUserPreferencesCached(userId),
-      this._getUserBehaviorCached(userId)
-    ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : {}));
+    const userPreferences = await this._getUserPreferencesCached(userId).catch(() => ({}));
 
     let decodedCursor = lastDoc ? this._decodeCursor(lastDoc) : null;
 
@@ -1348,45 +1344,6 @@ class UltimateFeedService {
       }
     } catch (e) {}
     return null;
-  }
-
-  async _getUserBehaviorCached(userId) {
-    if (this.offlineMode) return { engagementRate: 0.3, timeOnPlatform: 0, likesGiven: 0 };
-    const cacheKey = `user_behavior_${userId}`;
-    const cached = this.userPreferences.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.BEHAVIOR_CACHE_TTL) return cached.data;
-    try {
-      await this._ensureInitialized();
-      const { collection, query, where, getDocs } = this.firestoreMethods;
-      const eventsRef = collection(this.firestore, 'user_events');
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const q = query(eventsRef, where('userId', '==', userId), where('timestamp', '>=', oneDayAgo));
-      const snapshot = await getDocs(q);
-
-      let likes = 0, comments = 0, shares = 0, views = 0, totalTime = 0;
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        switch (data.type) {
-          case 'like': likes++; break;
-          case 'comment': comments++; break;
-          case 'share': shares++; break;
-          case 'view': views++; totalTime += data.duration || 0; break;
-        }
-      });
-
-      const behavior = {
-        engagementRate: (likes + comments + shares) / Math.max(1, views) || 0,
-        timeOnPlatform: totalTime,
-        likesGiven: likes,
-        commentsMade: comments,
-        sharesCount: shares,
-        viewsCount: views
-      };
-      this.userPreferences.set(cacheKey, { data: behavior, timestamp: Date.now() });
-      return behavior;
-    } catch (error) {
-      return { engagementRate: 0.3, timeOnPlatform: 0, likesGiven: 0 };
-    }
   }
 
   _buildCursorObject(feed, sources) {

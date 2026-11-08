@@ -200,6 +200,17 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     accountStatus: userProfile?.accountStatus || 'active',
     coins: userProfile?.coins || 0,
     level: userProfile?.level !== undefined ? userProfile.level : null,
+    // The mirror previously omitted standing/economy fields, so any consumer
+    // that read them off `currentUser` (QuickAccessPanel's XP bar, level badge,
+    // creator gate, earnings) silently saw `undefined` — the XP bar rendered a
+    // fabricated Level 1 and the creator gate locked real creators. Mirror the
+    // canonical profile fields so one identity source stays complete.
+    experience: userProfile?.experience ?? null,
+    experienceToNextLevel: userProfile?.experienceToNextLevel ?? null,
+    reputation: userProfile?.reputation ?? null,
+    totalEarned: userProfile?.totalEarned ?? null,
+    isCreator: !!userProfile?.isCreator,
+    isVerified: !!(userProfile?.isVerified || userProfile?.verified),
     postCount: userProfile?.postCount || 0,
     videoCount: userProfile?.videoCount || 0,
     savedCount: userProfile?.savedCount || 0,

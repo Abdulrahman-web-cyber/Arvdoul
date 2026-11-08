@@ -7,16 +7,18 @@
 /**
  * @typedef {Object} FollowButtonProps
  * @property {boolean} [isFollowing=false] - Whether currently following
+ * @property {boolean} [requested=false] - Pending follow request (private target)
  * @property {boolean} [loading=false] - Loading state
  * @property {Function} [onFollow] - Follow click handler
  * @property {Function} [onUnfollow] - Unfollow click handler
+ * @property {Function} [onCancelRequest] - Withdraw a pending follow request
  * @property {string} [theme='light'] - Current theme
  * @property {'sm'|'md'|'lg'} [size='md'] - Button size
  */
 
 import { memo, useCallback } from "react";
 import { cn } from '../../lib/utils';
-import { UserPlus, UserMinus, Loader2 } from 'lucide-react';
+import { UserPlus, UserMinus, Clock, Loader2 } from 'lucide-react';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /**
@@ -25,9 +27,11 @@ import { BRAND_GRADIENT } from '../../design-system/tokens.js';
  */
 const FollowButton = memo(({
   isFollowing = false,
+  requested = false,
   loading = false,
   onFollow,
   onUnfollow,
+  onCancelRequest,
   theme = 'light',
   size = 'md',
 }) => {
@@ -53,7 +57,12 @@ const FollowButton = memo(({
   // Handle click
   const handleClick = useCallback(() => {
     if (loading) return;
-    
+
+    if (requested) {
+      if (onCancelRequest) onCancelRequest();
+      return;
+    }
+
     if (isFollowing) {
       if (onUnfollow) {
         onUnfollow();
@@ -63,7 +72,7 @@ const FollowButton = memo(({
         onFollow();
       }
     }
-  }, [loading, isFollowing, onFollow, onUnfollow]);
+  }, [loading, requested, onCancelRequest, isFollowing, onFollow, onUnfollow]);
   
   // Loading state
   if (loading) {
@@ -89,6 +98,27 @@ const FollowButton = memo(({
     );
   }
   
+  // Requested state (pending private-account follow request)
+  if (requested) {
+    return (
+      <button
+        onClick={handleClick}
+        className={cn(
+          'flex items-center justify-center rounded-xl font-semibold',
+          'transition-all duration-200',
+          sizeClasses[size],
+          theme === 'dark'
+            ? 'bg-white/10 text-white/80 border border-white/15 hover:bg-white/15'
+            : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+        )}
+        aria-label="Requested - Click to withdraw request"
+      >
+        <Clock className={iconSizes[size]} aria-hidden="true" />
+        <span>Requested</span>
+      </button>
+    );
+  }
+
   // Following state
   if (isFollowing) {
     return (

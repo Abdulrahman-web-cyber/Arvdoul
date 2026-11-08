@@ -67,14 +67,24 @@ class TitleService {
     }
 
     const c = title.criteria || {};
-    const level = Number(stats.level) || 1;
+    // An unknown level is NOT Level 1: a `|| 1` floor used to hand every title
+    // with a `minLevel` gate to a viewer whose standing had not loaded, while
+    // the server (the authority) would reject it. Absent standing reads as 0 so
+    // the gate fails closed.
+    const level = Number(stats.level) || 0;
     const activeDays = Number(stats.activeDaysCount) || 0;
     const contribution = Number(stats.contributionScore || stats.contribution) || 0;
     const reputation = Number(stats.reputationScore || stats.reputation) || 0;
     const influence = Number(stats.influenceScore || stats.influence) || 0;
+    const creations = Number(stats.creationsCount || stats.minCreations || stats.creations) || 0;
 
     const reasons = [];
-    if (c.minLevel && level < c.minLevel) reasons.push(`Requires Level ${c.minLevel}`);
+    // Titles declare their gate on the title itself (`title.minLevel`); the
+    // criteria object may also carry one. Check both, and the creation-count
+    // gate the catalog defines but the evaluator used to ignore.
+    const minLevel = c.minLevel ?? title.minLevel;
+    if (minLevel && level < minLevel) reasons.push(`Requires Level ${minLevel}`);
+    if (c.minCreations && creations < c.minCreations) reasons.push(`Requires ${c.minCreations} Creations`);
     if (c.minActiveDays && activeDays < c.minActiveDays) reasons.push(`Requires ${c.minActiveDays} Active Days`);
     if (c.minContribution && contribution < c.minContribution) reasons.push(`Requires ${c.minContribution} Contribution`);
     if (c.minReputation && reputation < c.minReputation) reasons.push(`Requires ${c.minReputation} Reputation`);

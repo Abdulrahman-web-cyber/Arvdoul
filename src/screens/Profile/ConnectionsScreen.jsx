@@ -18,6 +18,7 @@ import { pickDisplayName, pickHandle, deriveHandle } from '../../services/profil
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
+import { toast } from 'sonner';
 
 export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const { userId } = useParams();
@@ -80,7 +81,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     }
   }, [propInitialTab]);
 
-  const { follow, unfollow, followLoading } = useProfileStore();
+  const { follow, unfollow, cancelFollowRequest, followLoading } = useProfileStore();
 
   // Load target profile & check capabilities
   useEffect(() => {
@@ -183,7 +184,18 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
     try {
       if (nextState) {
-        await follow(currentUserId, targetId);
+        const result = await follow(currentUserId, targetId);
+        // A private target records a pending request (no edge, no counter):
+        // reflect "Requested" rather than a fabricated "Following".
+        if (result?.requested || result?.requestStatus === 'pending') {
+          const markRequested = (list) =>
+            list.map((u) => (u.id === targetId || u.uid === targetId
+              ? { ...u, isFollowing: false, requestStatus: 'pending' }
+              : u));
+          setFollowers(markRequested);
+          setFollowing(markRequested);
+          setFriends(markRequested);
+        }
       } else {
         await unfollow(currentUserId, targetId);
       }
@@ -196,6 +208,23 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       setFriends(rollbacker);
     }
   }, [currentUserId, follow, unfollow]);
+
+  // Withdraw a pending follow request (private target).
+  const handleCancelRequest = useCallback(async (targetId) => {
+    if (!currentUserId) return;
+    const clearRequested = (list) =>
+      list.map((u) => (u.id === targetId || u.uid === targetId
+        ? { ...u, requestStatus: null }
+        : u));
+    try {
+      await cancelFollowRequest(currentUserId, targetId);
+      setFollowers(clearRequested);
+      setFollowing(clearRequested);
+      setFriends(clearRequested);
+    } catch {
+      toast.error('Could not withdraw the follow request');
+    }
+  }, [currentUserId, cancelFollowRequest]);
 
   // Per-tab visibility. Owner sees every tab; a non-owner tab is only shown
   // when the engine grants its scope. The screen-level `permissionDenied` state
@@ -549,9 +578,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                     {!isSelf && (
                       <FollowButton
                         isFollowing={citizen.isFollowing}
+                        requested={citizen.requestStatus === 'pending'}
                         loading={followLoading}
                         onFollow={() => handleFollowToggle(citizenId, false)}
                         onUnfollow={() => handleFollowToggle(citizenId, true)}
+                        onCancelRequest={() => handleCancelRequest(citizenId)}
                         theme={theme}
                         size="sm"
                       />

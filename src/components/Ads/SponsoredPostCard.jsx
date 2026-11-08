@@ -24,6 +24,15 @@ const adBrandName = (ad) => ad?.brandName || ad?.advertiserName || ad?.title || 
 const adBrandAvatar = (ad) => ad?.brandAvatar || ad?.advertiserAvatar || ad?.logoUrl || '/assets/ad-fallback.png';
 const adCtaText = (ad) => ad?.ctaText || ad?.cta || 'Learn More';
 
+const hiddenAdsKey = (uid) => `arvdoul_hidden_ads_${uid || 'anon'}`;
+const readHiddenAdIds = (uid) => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(hiddenAdsKey(uid)) || '[]'));
+  } catch {
+    return new Set();
+  }
+};
+
 // Fold the server creative shape onto the fields this card renders.
 const normalizeAd = (ad) => (ad ? {
   ...ad,
@@ -72,7 +81,10 @@ export default function SponsoredPostCard({
       try {
         const fetchedAd = await getMonetizationService().getAd(placement, user?.uid);
         if (!isMounted) return;
-        if (fetchedAd && adMediaUrl(fetchedAd)) {
+        // "Hide this ad" persists the creative id locally per account; a hidden
+        // ad must not come straight back on the next load.
+        const hidden = readHiddenAdIds(user?.uid);
+        if (fetchedAd && adMediaUrl(fetchedAd) && !hidden.has(fetchedAd.id)) {
           setAd(normalizeAd(fetchedAd));
           setAdState('ready');
         } else {
@@ -167,7 +179,17 @@ export default function SponsoredPostCard({
 
   const handleHideAd = () => {
     setShowMenu(false);
-    if (ad?.id) onAdHidden(ad.id);
+    if (!ad?.id) return;
+    // The ad was actually hidden, so it must actually disappear: record the id
+    // locally (a UX preference, not a security control) and drop the card.
+    try {
+      const key = hiddenAdsKey(user?.uid);
+      const list = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!list.includes(ad.id)) localStorage.setItem(key, JSON.stringify([...list, ad.id].slice(-100)));
+    } catch {}
+    onAdHidden(ad.id);
+    setAd(null);
+    setAdState('empty');
   };
 
   const [isReporting, setIsReporting] = useState(false);

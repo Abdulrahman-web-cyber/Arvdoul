@@ -213,7 +213,6 @@ export default function VideoDetailScreen() {
               <VideoCreatorInfo
                 creator={creator}
                 onProfileClick={() => navigate(`/profile/${creator.id}`)}
-                theme={theme}
               />
             )}
 
@@ -261,7 +260,6 @@ export default function VideoDetailScreen() {
               isOpen={showComments}
               onClose={() => setShowComments(false)}
               video={video}
-              theme={theme}
             />
 
             {/* Report / share sheet opened from the rail's "more" action */}

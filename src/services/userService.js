@@ -1242,6 +1242,33 @@ class ProfessionalUserService {
     return { success: true };
   }
 
+  /**
+   * Requester withdraws their own pending follow request. Without this the
+   * request could only be answered by the target, so the requester's button
+   * stayed stuck on "Requested" forever (a dead end). The request id is
+   * deterministic (`${fromUserId}_${toUserId}`), and the rule permits the
+   * `fromUserId` party to update/delete, so no list read is needed.
+   */
+  async cancelFollowRequest(fromUserId, toUserId) {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return { success: false };
+    await this._ensureInitialized();
+    const { doc, getDoc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const requestRef = doc(this.firestore, 'follow_requests', `${fromUserId}_${toUserId}`);
+    try {
+      const snap = await getDoc(requestRef);
+      if (snap.exists() && snap.data()?.fromUserId === fromUserId && snap.data()?.status === 'pending') {
+        await updateDoc(requestRef, { status: 'cancelled', updatedAt: serverTimestamp() });
+      }
+    } catch (err) {
+      // An absent request is denied by the resource.data rule; treat it as
+      // already-cancelled rather than surfacing an error to the user.
+      logger.debug('[UserService] cancelFollowRequest no-op', { fromUserId, toUserId, error: err?.message });
+    }
+    this._invalidateUserCache(fromUserId);
+    this._invalidateUserCache(toUserId);
+    return { success: true };
+  }
+
   async getFollowStatus(followerId, followingId) {
     if (!followerId || !followingId || followerId === followingId) return { isFollowing: false };
     const cacheKey = `follow_${followerId}_${followingId}`;
@@ -1992,6 +2019,7 @@ export const addCoins = (uid, amount, reason) => getUserService().addCoins(uid, 
 export const followUser = (fid, tid) => getUserService().followUser(fid, tid);
 export const unfollowUser = (fid, tid) => getUserService().unfollowUser(fid, tid);
 export const getFollowStatus = (fid, tid) => getUserService().getFollowStatus(fid, tid);
+export const cancelFollowRequest = (from, to) => getUserService().cancelFollowRequest(from, to);
 export const checkFollowStatus = (fid, tid) => getUserService().checkFollowStatus(fid, tid);
 export const getRelationshipState = (a, b) => getUserService().getRelationshipState(a, b);
 export const getFriends = (uid, opts) => getUserService().getFriends(uid, opts);
@@ -2064,6 +2092,7 @@ const userServiceExport = Object.assign(getUserService, {
   followUser,
   unfollowUser,
   getFollowStatus,
+  cancelFollowRequest,
   checkFollowStatus,
   getRelationshipState,
   getFriends,

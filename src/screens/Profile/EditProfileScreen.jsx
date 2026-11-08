@@ -303,8 +303,8 @@ export default function EditProfileScreen() {
 
   // Links Handlers
   const handleAddLink = useCallback(() => {
-    if (formData.links.length >= 10) {
-      toast.error('Maximum 10 custom links allowed');
+    if (formData.links.length >= PROFILE_CONSTRAINTS.LINKS.MAX_COUNT) {
+      toast.error(`Maximum ${PROFILE_CONSTRAINTS.LINKS.MAX_COUNT} custom links allowed`);
       return;
     }
     const newLink = {

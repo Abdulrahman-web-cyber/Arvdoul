@@ -739,14 +739,24 @@ export const useProfileStore = create(
       
       try {
         const userService = (await import('../services/userService.js')).getUserService();
-        await userService.followUser(followerId, followingId);
+        const result = await userService.followUser(followerId, followingId);
+        if (result?.requested || result?.requestStatus === 'pending') {
+          set((state) => {
+            state.followLoading = false;
+            state.followStatus = { isFollowing: false, requestStatus: 'pending' };
+            if (state.profile) state.profile.followerCount = previousFollowerCount;
+          });
+          toast.success('Follow request sent');
+          return { requested: true, requestStatus: 'pending' };
+        }
         
         set((state) => {
           state.followLoading = false;
-          state.followStatus = { ...state.followStatus, isFollowing: true };
+          state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
         });
         
         toast.success('Following!');
+        return { requested: false, requestStatus: null };
       } catch (error) {
         console.error('❌ Follow failed:', error);
         
@@ -839,6 +849,34 @@ export const useProfileStore = create(
       });
     },
     
+    /**
+     * Withdraw a pending follow request to a private account. Without this the
+     * requester's control stayed on "Requested" with no way back.
+     */
+    cancelFollowRequest: async (fromUserId, toUserId) => {
+      if (!fromUserId || !toUserId) return;
+      if (get().followStatus?.requestStatus !== 'pending') return;
+      const previousFollowStatus = get().followStatus;
+      set((state) => {
+        state.followLoading = true;
+        state.followStatus = { isFollowing: false, requestStatus: null };
+      });
+      try {
+        const userService = (await import('../services/userService.js')).getUserService();
+        await userService.cancelFollowRequest(fromUserId, toUserId);
+        set((state) => {
+          state.followLoading = false;
+        });
+        toast.success('Follow request withdrawn');
+      } catch (error) {
+        set((state) => {
+          state.followLoading = false;
+          state.followStatus = previousFollowStatus;
+        });
+        toast.error('Could not withdraw request');
+      }
+    },
+
     /**
      * Set active tab
      * @param {string} tab - Tab name

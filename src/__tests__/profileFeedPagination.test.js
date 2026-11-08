@@ -123,4 +123,51 @@ describe('profileStore follow/unfollow rollback', () => {
     expect(state.profile.followerCount).toBe(10);
     spy.mockRestore();
   });
+
+  test('following a private account records a pending request, not a fabricated follow', async () => {
+    useProfileStore.setState({ followStatus: { isFollowing: false }, profile: { followerCount: 10 } });
+    const userServiceModule = await import('../services/userService.js');
+    const userService = userServiceModule.getUserService();
+    const spy = jest.spyOn(userService, 'followUser').mockResolvedValue({ success: true, requested: true, requestStatus: 'pending' });
+
+    await useProfileStore.getState().follow('viewer', 'privateTarget');
+
+    const state = useProfileStore.getState();
+    // No edge exists, so the follow flag must stay false and the optimistic
+    // follower count must be rolled back.
+    expect(state.followStatus.isFollowing).toBe(false);
+    expect(state.followStatus.requestStatus).toBe('pending');
+    expect(state.profile.followerCount).toBe(10);
+    spy.mockRestore();
+  });
+
+  test('a successful follow of a public account clears any pending request flag', async () => {
+    useProfileStore.setState({ followStatus: { isFollowing: false, requestStatus: 'pending' }, profile: { followerCount: 10 } });
+    const userServiceModule = await import('../services/userService.js');
+    const userService = userServiceModule.getUserService();
+    const spy = jest.spyOn(userService, 'followUser').mockResolvedValue({ success: true, alreadyFollowing: false });
+
+    await useProfileStore.getState().follow('viewer', 'target');
+
+    const state = useProfileStore.getState();
+    expect(state.followStatus.isFollowing).toBe(true);
+    expect(state.followStatus.requestStatus).toBe(null);
+    expect(state.profile.followerCount).toBe(11);
+    spy.mockRestore();
+  });
+
+  test('cancelFollowRequest clears a pending request through the service', async () => {
+    useProfileStore.setState({ followStatus: { isFollowing: false, requestStatus: 'pending' } });
+    const userServiceModule = await import('../services/userService.js');
+    const userService = userServiceModule.getUserService();
+    const spy = jest.spyOn(userService, 'cancelFollowRequest').mockResolvedValue({ success: true });
+
+    await useProfileStore.getState().cancelFollowRequest('viewer', 'target');
+
+    const state = useProfileStore.getState();
+    expect(state.followStatus.isFollowing).toBe(false);
+    expect(state.followStatus.requestStatus).toBe(null);
+    expect(spy).toHaveBeenCalledWith('viewer', 'target');
+    spy.mockRestore();
+  });
 });

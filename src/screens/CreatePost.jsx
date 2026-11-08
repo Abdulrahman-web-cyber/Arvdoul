@@ -4,7 +4,7 @@ import React, {
   useReducer, useEffect, useCallback, useRef, useState,
   createContext, useContext, useMemo, lazy, Suspense, useId
 } from "react";
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation, useParams } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "../context/ThemeContext";
@@ -718,6 +718,13 @@ export const useCreatePostState = () => {
 // ── PROVIDER (ALL LOGIC, FULLY INTEGRATED) ─────────────────────────────
 function CreatePostProvider({ children }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // CommunityDetailScreen links to /create-post?community=<id>. Nothing read
+  // the param, so a post composed from a community landed in the public feed
+  // and the server-authoritative createCommunityPost callable was never
+  // invoked (membership + content-approval + the community counters all live
+  // there). Capture it and route the publish through the callable.
+  const communityIdParam = searchParams.get('community') || null;
   const { theme } = useTheme();
   const { user } = useAuth();
   const { setCurrentUser } = useAppStore();
@@ -1012,12 +1019,13 @@ function CreatePostProvider({ children }) {
       } else { mediaToStore.push(m); }
     }
     await dbRef.current.put(OFFLINE_QUEUE_STORE, {
-      id, postType: stateRef.current.postType, data: { ...postData, mediaItems: mediaToStore },
+      id, postType: stateRef.current.postType,
+      data: { ...postData, mediaItems: mediaToStore, communityId: communityIdParam },
       createdAt: Date.now(), retries: 0,
     });
     await refreshOfflineQueue();
     toast.success("Post queued for offline");
-  }, [storeBlobWithDedup, refreshOfflineQueue]);
+  }, [storeBlobWithDedup, refreshOfflineQueue, communityIdParam]);
 
   const processOfflineQueue = useCallback(async () => {
     if (!dbRef.current || isOfflineRef.current || processingOfflineRef.current) return;
@@ -1360,6 +1368,9 @@ function CreatePostProvider({ children }) {
     if (publishLockRef.current) return;
     publishLockRef.current = true;
     const current = overrideState || stateRef.current;
+    // The offline queue replays with the stored state, so prefer the id baked
+    // into the record and fall back to the live query param.
+    const communityId = current.communityId || communityIdParam;
     let userNow = userRef.current;
 
     try {
@@ -1424,6 +1435,11 @@ function CreatePostProvider({ children }) {
 
       const effectiveText = sanitizedContent.trim() || jsonExtractedText || rawContent.trim();
 
+      // /edit/:postId (and legacy ?edit=) edits the existing document; the
+      // state carried `editPostId` but nothing consumed it, so "Edit post"
+      // silently published a duplicate. Update in place and return early.
+      const editPostId = current.editPostId || null;
+
       // Auto-adapt post type if appropriate
       let effectiveType = current.postType;
       if ((effectiveType === "image" || effectiveType === "video") && current.mediaItems.length === 0 && effectiveText) {
@@ -1435,6 +1451,27 @@ function CreatePostProvider({ children }) {
       if (effectiveType === "text" && !effectiveText && current.mediaItems.length === 0) throw new Error("Please add some text or media to your post.");
       if (effectiveType === "image" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add an image or caption.");
       if (effectiveType === "video" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add a video or caption.");
+
+      if (editPostId) {
+        const { getFirestoreService } = await import("../services/firestoreService.js");
+        const firestoreService = services.current.firestore || getFirestoreService();
+        const media = await uploadMedia(current.mediaItems);
+        await firestoreService.updatePost(editPostId, {
+          type: effectiveType,
+          content: effectiveText,
+          contentJSON: sanitizedJSON,
+          media,
+          mediaUrl: media[0]?.url || "",
+          videoUrl: media.find((m) => m.type === "video")?.url || "",
+          thumbnailUrl: media[0]?.thumbnail || media[0]?.url || "",
+          visibility: current.visibility || "public",
+        });
+        if (current.draftId) deleteDraft(current.draftId).catch(() => {});
+        toast.success("Post updated!");
+        publishLockRef.current = false;
+        navigate(`/post/${editPostId}`);
+        return;
+      }
       if (effectiveType === "poll" && current.typeData.poll.options.filter(o => o.trim()).length < 2) throw new Error("Please add at least 2 poll options.");
       if (effectiveType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
       if (effectiveType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
@@ -1464,7 +1501,8 @@ function CreatePostProvider({ children }) {
         authorName: userNow.displayName || userNow.name || "Arvdoul User",
         authorUsername: userNow.username || userNow.email?.split("@")[0] || `user_${userNow.uid.slice(0, 8)}`,
         authorPhoto: userNow.photoURL || userNow.photo || "",
-        visibility: current.visibility || "public",
+        visibility: communityId ? "community" : (current.visibility || "public"),
+        communityId: communityId || null,
         customList: current.customList || [],
         location: current.location || null,
         taggedPeople: current.taggedPeople || [],
@@ -1544,7 +1582,7 @@ function CreatePostProvider({ children }) {
       // 3. Instant UI feedback & Navigation (User never waits!)
       toast.success("Post published instantly! 🎉");
       publishLockRef.current = false;
-      navigate("/home");
+      navigate(communityId ? `/community/${communityId}` : "/home");
 
       // 4. Background Cloud Sync (Non-blocking)
       (async () => {
@@ -1572,9 +1610,21 @@ function CreatePostProvider({ children }) {
           };
           delete finalPostData.isOptimistic;
 
-          const { getFirestoreService } = await import("../services/firestoreService.js");
-          const firestoreService = services.current.firestore || getFirestoreService();
-          const result = await firestoreService.createPost(finalPostData);
+          let result;
+          if (communityId) {
+            // Community posts go through the callable: it verifies membership,
+            // applies the community's content-approval setting and increments
+            // the server-only counters. A direct createPost would bypass all
+            // three and write a post the community feed could never list.
+            const { getCommunityService } = await import("../services/communityService.js");
+            const communityService = services.current.community || getCommunityService();
+            const communityPost = await communityService.createCommunityPost(communityId, userNow.uid, finalPostData);
+            result = communityPost?.id ? { postId: communityPost.id } : null;
+          } else {
+            const { getFirestoreService } = await import("../services/firestoreService.js");
+            const firestoreService = services.current.firestore || getFirestoreService();
+            result = await firestoreService.createPost(finalPostData);
+          }
 
           if (!result?.postId) {
             // createPost resolved without an id: the server never persisted the
@@ -1645,7 +1695,7 @@ function CreatePostProvider({ children }) {
       dispatch({ type: "SET_LOADING", payload: false });
       publishLockRef.current = false;
     }
-  }, [addToOfflineQueue, deleteDraft, navigate, setCurrentUser, uploadMedia, moderateContent]);
+  }, [addToOfflineQueue, deleteDraft, navigate, setCurrentUser, uploadMedia, moderateContent, communityIdParam]);
 
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [pendingType, setPendingType] = useState(null);
@@ -3095,7 +3145,7 @@ function CreatePostShell({ children }) {
                 <span>Publishing...</span>
               </>
             ) : (
-              <span>{state.scheduledTime ? "📅 Schedule Post" : "🚀 Publish Post"}</span>
+              <span>{state.editPostId ? "💾 Save Changes" : state.scheduledTime ? "📅 Schedule Post" : "🚀 Publish Post"}</span>
             )}
           </button>
         )}
@@ -3109,14 +3159,19 @@ function CreatePostShell({ children }) {
 // PostOptionsDrawer "Edit"). Fetches the post and dispatches LOAD_DRAFT.
 function EditPostLoader() {
   const [searchParams] = useSearchParams();
+  // PostOptionsDrawer "Edit" navigates to the /edit/:postId route, not to
+  // ?edit=. Reading only the query param left the composer empty, so editing a
+  // post silently created a new one instead of updating the original.
+  const { postId: routePostId } = useParams();
   const { dispatch } = useCreatePostState();
-  const editId = searchParams.get("edit");
+  const editId = searchParams.get("edit") || routePostId || null;
   const quoteSnippet = searchParams.get("quote");
   const location = useLocation();
   const loadedRef = React.useRef(false);
   const quotedRef = React.useRef(false);
   const soundRef = React.useRef(false);
   const videoRef = React.useRef(false);
+  const typeRef = React.useRef(false);
 
   // "Share to Feed" from the Video Editor navigates here with the rendered
   // blob/URL in route state. Nothing read it, so the composer opened empty and
@@ -3189,6 +3244,19 @@ function EditPostLoader() {
     dispatch({ type: "SET_POST_TYPE", payload: "text" });
     dispatch({ type: "SET_STEP", payload: 2 });
   }, [quoteSnippet, dispatch]);
+
+  // Deep links like /create-post?type=poll (QuickAccessPanel "Create Poll")
+  // carry the intended composer type in the query string. Nothing read it, so
+  // the link landed on the type launcher instead of the poll composer.
+  React.useEffect(() => {
+    const requestedType = searchParams.get("type");
+    if (!requestedType || typeRef.current) return;
+    if (!POST_TYPES.some((t) => t.id === requestedType)) return;
+    typeRef.current = true;
+    if (requestedType === "vibe") return; // handled by /create-story
+    dispatch({ type: "SET_POST_TYPE", payload: requestedType });
+    dispatch({ type: "SET_STEP", payload: 2 });
+  }, [searchParams, dispatch]);
 
   React.useEffect(() => {
     if (!editId || loadedRef.current) return;

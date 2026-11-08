@@ -195,9 +195,12 @@ export default function ProfilePublicScreen() {
     useProfileStore.getState().loadMorePosts(targetUid);
   }, [targetUid]);
   const isFollowing = Boolean(storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing);
+  // A private target records a pending follow request rather than an edge; the
+  // control must show "Requested" (and offer withdrawal), not "Follow".
+  const requestStatus = storeFollowStatus?.requestStatus ?? relationship?.requestStatus ?? null;
   const followLoading = storeFollowLoading;
 
-  // Optimistic Follow / Unfollow via Profile Store
+  // Optimistic Follow / Unfollow / Withdraw-request via Profile Store
   const handleFollowToggle = useCallback(async () => {
     if (!currentUserId) {
       toast.error('Please sign in to follow this creator');
@@ -208,14 +211,23 @@ export default function ProfilePublicScreen() {
     const targetUid = profileData?.id || profileData?.uid || userId;
     if (!targetUid || targetUid === currentUserId) return;
 
+    if (requestStatus === 'pending') {
+      await useProfileStore.getState().cancelFollowRequest(currentUserId, targetUid);
+      setRelationship(prev => prev ? { ...prev, isFollowing: false, requestStatus: null } : null);
+      return;
+    }
+
     if (isFollowing) {
       await useProfileStore.getState().unfollow(currentUserId, targetUid);
       setRelationship(prev => prev ? { ...prev, isFollowing: false } : null);
     } else {
       await useProfileStore.getState().follow(currentUserId, targetUid);
-      setRelationship(prev => prev ? { ...prev, isFollowing: true } : null);
+      // The service may have created a pending request instead of an edge; read
+      // the store's truthful post-call state rather than assuming "following".
+      const next = useProfileStore.getState().followStatus;
+      setRelationship(prev => prev ? { ...prev, isFollowing: Boolean(next?.isFollowing), requestStatus: next?.requestStatus ?? null } : null);
     }
-  }, [currentUserId, isFollowing, profileData?.id, profileData?.uid, userId, navigate]);
+  }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, userId, navigate]);
 
   // Handle Friend Request Toggle (For Newcomer level 1-2 profiles)
   const handleFriendRequestToggle = useCallback(async () => {
@@ -515,6 +527,7 @@ export default function ProfilePublicScreen() {
             onShare={handleShare}
             onFollowToggle={handleFollowToggle}
             isFollowing={isFollowing}
+            requestStatus={requestStatus}
             followLoading={followLoading}
             friendshipStatus={friendshipStatus}
             friendRequestLoading={friendRequestLoading}

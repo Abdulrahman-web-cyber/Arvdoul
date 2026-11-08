@@ -20,8 +20,10 @@ export default function ProgressScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [levelInfo, setLevelInfo] = useState(null);
-  const [activeStreak, setActiveStreak] = useState(1);
-  const [activeDaysCount, setActiveDaysCount] = useState(1);
+  // Unknown streak/active-days render as unavailable, never as a fabricated
+  // "1 day" (a new account that has never been active is not on a 1-day streak).
+  const [activeStreak, setActiveStreak] = useState(null);
+  const [activeDaysCount, setActiveDaysCount] = useState(null);
 
   const isDark = theme === 'dark' || theme === 'midnight';
 
@@ -30,8 +32,10 @@ export default function ProgressScreen() {
     try {
       const info = await levelSystemService.getLevelInfo(currentUid);
       setLevelInfo(info);
-      setActiveStreak(Number(profile?.activeStreak) || 1);
-      setActiveDaysCount(Number(profile?.activeDaysCount) || 1);
+      const streak = Number(profile?.activeStreak);
+      setActiveStreak(Number.isFinite(streak) && streak > 0 ? streak : null);
+      const days = Number(profile?.activeDaysCount);
+      setActiveDaysCount(Number.isFinite(days) && days > 0 ? days : null);
     } catch {
       toast.error('Failed to load live progression data');
     } finally {
@@ -168,7 +172,7 @@ export default function ProgressScreen() {
             <div className="text-center">
               <div className="flex items-center justify-center space-x-1 text-amber-500">
                 <Flame className="w-4 h-4" />
-                <span className="text-lg font-bold">{activeStreak}</span>
+                <span className="text-lg font-bold">{activeStreak ?? '—'}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">Day Streak</p>
             </div>
@@ -176,7 +180,7 @@ export default function ProgressScreen() {
             <div className="text-center">
               <div className="flex items-center justify-center space-x-1 text-emerald-500">
                 <ShieldCheck className="w-4 h-4" />
-                <span className="text-lg font-bold">{activeDaysCount}</span>
+                <span className="text-lg font-bold">{activeDaysCount ?? '—'}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">Active Days</p>
             </div>

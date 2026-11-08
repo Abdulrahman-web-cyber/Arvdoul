@@ -959,7 +959,10 @@ export default function HomeScreen() {
               } catch {}
               if (Array.isArray(localPosts) && localPosts.length > 0) {
                 const existingIds = new Set(newPosts.map(p => p.id));
-                const freshLocal = localPosts.filter(p => p && p.id && !existingIds.has(p.id)).map(p => hydratePost(p));
+                // Community posts (visibility 'community') belong to their
+                // community feed, not the home feed; an optimistic one must not
+                // leak across surfaces.
+                const freshLocal = localPosts.filter(p => p && p.id && p.visibility !== 'community' && !existingIds.has(p.id)).map(p => hydratePost(p));
                 newPosts = [...freshLocal, ...newPosts];
               }
 
@@ -1573,7 +1576,7 @@ export default function HomeScreen() {
           <CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={activePost} currentUser={user} theme={theme} />
         )}
         {showOptions && activePost && (
-          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} onAnalytics={trackAnalyticsEvent} />
+          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} theme={theme} onAnalytics={trackAnalyticsEvent} />
         )}
 
         {/* Sponsored Reward Ad Modal for In-Feed Monetization */}

@@ -473,11 +473,51 @@ describe('Level gate - aligned with the real 15-level curve', () => {
   });
 });
 
-describe('appStore - no fabricated starting coins', () => {
-  test('initial coins are 0, not a fake 1000', () => {
+describe('appStore - identity mirror only, no duplicate economy', () => {
+  test('appStore never re-introduces a parallel in-memory coin/notification ledger', () => {
     const src = fs.readFileSync(path.join(root, 'src/store/appStore.js'), 'utf8');
-    expect(src).not.toContain('coins: 1000');
-    expect(src).toContain('coins: 0,');
+    // Compare code only — the explanatory comment names the removed keys.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    // A duplicate balance that no screen read could drift from the server
+    // ledger; the coin truth is Firestore (monetizationService), notifications
+    // are notificationsService, settings are ThemeContext/i18n.
+    for (const dead of ['coins:', 'transactions:', 'addCoins', 'deductCoins', 'getCoinBalance', 'addNotification', 'notifications:', 'subscription:', 'soundEnabled', 'setTheme']) {
+      expect(code).not.toContain(dead);
+    }
+    // The identity mirror it does own must remain.
+    expect(src).toContain('setCurrentUser');
+    expect(src).toContain('clearUserData');
+  });
+
+  test('QuickAccessPanel never fabricates a 1250-coin balance', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    // The balance header showed a fake 1250 when the real balance was unknown;
+    // an unknown balance must render as unavailable, not as invented money.
+    expect(src).not.toContain('?? 1250');
+  });
+
+  test('QuickAccessPanel renders unknown profile counts as unavailable, not zero', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    // videoCount/savedCount/collectionCount/likeCount/commentCount are not
+    // stored on users/{uid}; rendering `|| 0` claimed "none" for an unknown
+    // value. They must pass through the honest formatter.
+    expect(src).not.toContain('stats.videoCount || 0');
+    expect(src).not.toContain('stats.savedCount || 0');
+    expect(src).not.toContain('stats.collectionCount || 0');
+    expect(src).not.toContain('stats.commentCount || 0');
+    expect(src).toContain('formatCount(stats.videoCount)');
+    expect(src).toContain('formatCount(stats.likeCount)');
+  });
+
+  test('QuickAccessPanel reuses the canonical achievement catalog, not a local copy', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    // A hand-rolled achievements array here duplicated AchievementsScreen and
+    // could disagree with the server-granted items. It must delegate to the
+    // shared achievementService (ACHIEVEMENTS_CATALOG).
+    expect(src).toContain('achievementService.enrichAchievements');
+    expect(src).toContain('achievementService.getUserAchievements');
+    expect(src).not.toContain('"First Post"');
+    expect(src).not.toContain('"100 Followers"');
   });
 });
 
@@ -1034,12 +1074,12 @@ describe('CreateStory honest offline state (spec §53)', () => {
 });
 
 describe('Account isolation (audit N002) - persisted identity cannot bleed accounts', () => {
-  test('appStore never persists currentUser and migrates stale blobs', () => {
+  test('appStore never persists identity (no persist middleware at all)', () => {
     const src = fs.readFileSync(path.join(root, 'src/store/appStore.js'), 'utf8');
-    const persistBlock = src.slice(src.indexOf("name: 'arvdoul-app-store'"));
-    expect(persistBlock).not.toContain('currentUser: state.currentUser');
-    expect(persistBlock).toContain('version: 2');
-    expect(persistBlock).toContain('migrate:');
+    // The mirror is memory-only; there is no persisted blob left that could
+    // rehydrate account A's identity into account B's session.
+    expect(src).not.toContain('persist(');
+    expect(src).not.toContain('arvdoul-app-store');
   });
 
   test('getStoredUser refuses a cached user blob from a different session uid', () => {
@@ -1905,9 +1945,36 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
 
     const achievementsScreen = read('src/screens/Achievements/AchievementsScreen.jsx');
     expect(achievementsScreen).not.toContain('user.level || 1');
+    // A missing streak is unknown, not "1 day": the `|| 1` floor fabricated
+    // progress on every streak achievement for a brand-new account.
+    expect(achievementsScreen).not.toContain('user.activeStreak || 1');
+    expect(achievementsScreen).not.toContain('user.activeDaysCount || 1');
+
+    const progressScreen = read('src/screens/Progression/ProgressScreen.jsx');
+    expect(progressScreen).not.toContain('profile?.activeStreak) || 1');
+    expect(progressScreen).not.toContain('profile?.activeDaysCount) || 1');
+    expect(progressScreen).toContain("activeStreak ?? '—'");
 
     const achievementsService = read('src/services/achievementService.js');
     expect(achievementsService).not.toContain('userStats.level || 1');
+
+    // Title eligibility is a gate-bearing read: `Number(stats.level) || 1` gave
+    // every minLevel-gated title to a viewer whose standing had not loaded,
+    // while the server (the authority) would reject it.
+    const titleService = read('src/services/titleService.js');
+    expect(titleService).not.toContain('Number(stats.level) || 1');
+    expect(titleService).toContain('Number(stats.level) || 0');
+
+    const titlesScreen = read('src/screens/Titles/TitlesScreen.jsx');
+    expect(titlesScreen).not.toContain('inspectingTitle.minLevel || 1');
+  });
+
+  test('server-side title grants never floor an absent level to 1', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/levelSystem.js'), 'utf8');
+    // The server is the authority for claimTitle/applyForCreator; an absent
+    // level must fail the gate closed (0), not silently pass it as Level 1.
+    expect(src).not.toContain('Number(userData.level) || 1');
+    expect(src).toContain('Number(userData.level) || 0');
   });
 
   test('creator dashboard does not fabricate a trend line or ranking label', () => {

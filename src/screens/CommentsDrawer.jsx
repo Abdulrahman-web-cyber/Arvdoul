@@ -1717,7 +1717,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                   <p className="text-xs text-gray-400 mt-1">Be the first to share your thoughts</p>
                 </div>
               ) : (
-                <ErrorBoundary fallback={<CommentsErrorFallback resetErrorBoundary={() => {}} />}>
+                <ErrorBoundary fallback={({ reset }) => <CommentsErrorFallback resetErrorBoundary={reset} />}>
                   <Virtuoso
                     ref={virtuosoRef}
                     data={displayComments}

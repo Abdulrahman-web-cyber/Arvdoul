@@ -350,13 +350,20 @@ exports.claimTitle = functions
       missingReasons = evalRes.missing;
     } else {
       const c = titleDef.criteria || {};
-      const userLevel = Number(userData.level) || 1;
+      // Absent standing is 0, never a fabricated Level 1: the previous `|| 1`
+      // floor could grant a minLevel-gated title to a user whose level field
+      // was missing. The level gate lives on the title (`titleDef.minLevel`);
+      // criteria may also declare one — check both, plus minCreations.
+      const userLevel = Number(userData.level) || 0;
       const activeDays = Number(userData.activeDaysCount) || 0;
       const contribution = Number(userData.contributionScore || userData.contribution) || 0;
       const reputation = Number(userData.reputationScore || userData.reputation) || 0;
       const influence = Number(userData.influenceScore || userData.influence) || 0;
+      const creations = Number(userData.creationsCount || userData.creations) || 0;
 
-      if (c.minLevel && userLevel < c.minLevel) missingReasons.push(`Requires Level ${c.minLevel}`);
+      const minLevel = c.minLevel ?? titleDef.minLevel;
+      if (minLevel && userLevel < minLevel) missingReasons.push(`Requires Level ${minLevel}`);
+      if (c.minCreations && creations < c.minCreations) missingReasons.push(`Requires ${c.minCreations} Creations`);
       if (c.minActiveDays && activeDays < c.minActiveDays) missingReasons.push(`Requires ${c.minActiveDays} Active Days`);
       if (c.minContribution && contribution < c.minContribution) missingReasons.push(`Requires ${c.minContribution} Contribution`);
       if (c.minReputation && reputation < c.minReputation) missingReasons.push(`Requires ${c.minReputation} Reputation`);
@@ -481,7 +488,8 @@ exports.applyForCreator = functions
     }
 
     const userData = userSnap.data() || {};
-    const userLevel = Number(userData.level) || 1;
+    // Absent level is 0 (unknown), never a fabricated Level 1.
+    const userLevel = Number(userData.level) || 0;
 
     // Minimum gate: level >= LEVEL_GATES.creatorProfile (Level 5)
     if (userLevel < LEVEL_GATES.creatorProfile) {

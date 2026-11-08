@@ -45,3 +45,52 @@ describe('highlights remain wired to the real service and screen', () => {
     expect(src).toMatch(/collection\(this\.firestore, 'highlights'\)/);
   });
 });
+
+describe('highlight deep links reach the viewer', () => {
+  const stories = read('src/screens/StoriesScreen.jsx');
+
+  test('StoriesScreen consumes the /highlight/:highlightId route param', () => {
+    expect(stories).toMatch(/useParams\(\)/);
+    expect(stories).toMatch(/routeHighlightId/);
+    expect(stories).toMatch(/getHighlightStories\(/);
+  });
+
+  test('StoriesScreen also consumes the legacy ?highlight= query param', () => {
+    expect(stories).toMatch(/searchParams\.get\('highlight'\)/);
+  });
+
+  test('the resolved highlight group is prepended into the viewer list', () => {
+    expect(stories).toMatch(/highlightGroup \? \[highlightGroup, \.\.\.stories\] : stories/);
+  });
+});
+
+describe('community compose route reaches the community callable', () => {
+  const createPost = read('src/screens/CreatePost.jsx');
+  const communityDetail = read('src/screens/Community/CommunityDetailScreen.jsx');
+
+  test('CommunityDetailScreen links to /create-post with the community id', () => {
+    expect(communityDetail).toMatch(/navigate\(`\/create-post\?community=\$\{communityId\}`\)/);
+  });
+
+  test('CreatePost reads the community query param', () => {
+    expect(createPost).toMatch(/searchParams\.get\('community'\)/);
+  });
+
+  test('a community post publishes through createCommunityPost, not a bare addDoc', () => {
+    expect(createPost).toMatch(/createCommunityPost\(communityId, userNow\.uid, finalPostData\)/);
+  });
+
+  test('the publish path returns to the community, not /home', () => {
+    expect(createPost).toMatch(/navigate\(communityId \? `\/community\/\$\{communityId\}` : "\/home"\)/);
+  });
+});
+
+describe('optimistic community posts stay out of the public feed', () => {
+  test('HomeScreen filters visibility === community from the local cache', () => {
+    expect(read('src/screens/HomeScreen.jsx')).toMatch(/p\.visibility !== 'community'/);
+  });
+
+  test('feedService filters visibility === community from the local cache', () => {
+    expect(read('src/services/feedService.js')).toMatch(/lp\.visibility !== 'community'/);
+  });
+});

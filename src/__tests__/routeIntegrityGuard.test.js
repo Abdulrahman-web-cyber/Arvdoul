@@ -100,6 +100,22 @@ describe('every static navigate() target resolves to a defined route', () => {
     expect(missing).toEqual([]);
   });
 
+  test('query-string nav targets are consumed by their receiving screen', () => {
+    // `navigate('/path?key=value')` is excluded from the static-route check
+    // above, so the *param* needs its own guard: the panel linked to
+    // /profile?tab=posts, /create-post?type=poll and /videos?tab=sparks, none
+    // of which any screen read.
+    const profile = fs.readFileSync(path.join(SRC, 'screens/Profile/ProfileMyScreen.jsx'), 'utf8');
+    expect(profile).toContain("searchParams.get('tab')");
+
+    const composer = fs.readFileSync(path.join(SRC, 'screens/CreatePost.jsx'), 'utf8');
+    expect(composer).toContain('searchParams.get("type")');
+
+    const videos = fs.readFileSync(path.join(SRC, 'screens/VideosScreen.jsx'), 'utf8');
+    expect(videos).toContain("searchParams.get('tab')");
+    expect(videos).toContain('if (initialTab !== feedType) setFeedType(initialTab);');
+  });
+
   test('the community members/bans links point at in-page tabs, not dead routes', () => {
     const src = fs.readFileSync(path.join(SRC, 'screens/Community/CommunityDetailScreen.jsx'), 'utf8');
     expect(src).not.toContain('/members`');

@@ -45,7 +45,6 @@ export default function MultiTrackConsole({
   currentTime,
   setCurrentTime,
   totalDuration = 0,
-  isPlaying,
   isDark = true,
   onSelectClip,
   selectedClipId,

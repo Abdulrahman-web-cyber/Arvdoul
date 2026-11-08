@@ -271,7 +271,6 @@ const SearchScreen = memo(() => {
           type="hashtags"
           title="Trending Now"
           items={Array.isArray(trending) ? trending : (trending?.hashtags || [])}
-          isDark={isDark}
           onItemClick={(item) => handleSuggestionSelect(`#${item.hashtag || item.label}`)}
         />
 
@@ -280,7 +279,6 @@ const SearchScreen = memo(() => {
           creators={Array.isArray(trending?.creators) ? trending.creators : []}
           onFollow={handleFollow}
           onCreatorClick={handleCreatorClick}
-          isDark={isDark}
         />
 
         {/* Bottom Spacer for Navigation */}

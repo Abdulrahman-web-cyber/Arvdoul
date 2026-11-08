@@ -7,7 +7,7 @@
  * @component
  */
 import { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, Lock } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -196,18 +196,27 @@ export default function ProfileMyScreen() {
     return projectProfileForViewer(effectiveProfile, capabilities);
   }, [effectiveProfile, capabilities, viewAs]);
 
-  // Open on the owner's chosen default tab (the Edit Profile "Default Starting
-  // Tab"). Applied once per mount so it cannot override the owner's own tab
-  // clicks on a later store update.
+  // Deep links such as /profile?tab=posts (QuickAccessPanel, share links) name
+  // the tab to open; nothing read the param, so every such link landed on the
+  // default tab. Applied once per mount so it cannot override later clicks.
+  const [searchParams] = useSearchParams();
   const appliedDefaultTabRef = useRef(false);
   useEffect(() => {
     if (appliedDefaultTabRef.current) return;
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab && PROFILE_TABS.includes(requestedTab)) {
+      setActiveTab(requestedTab);
+      appliedDefaultTabRef.current = true;
+      return;
+    }
+    // Otherwise open on the owner's chosen default tab (the Edit Profile
+    // "Default Starting Tab").
     const preferred = displayedProfile?.defaultTab;
     if (preferred && PROFILE_TABS.includes(preferred)) {
       setActiveTab(preferred);
       appliedDefaultTabRef.current = true;
     }
-  }, [displayedProfile?.defaultTab]);
+  }, [searchParams, displayedProfile?.defaultTab]);
 
   // Load user data on mount
   useEffect(() => {
@@ -347,6 +356,32 @@ export default function ProfileMyScreen() {
         {isRefreshing && (
           <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg animate-pulse">
             Refreshing Profile...
+          </div>
+        )}
+
+        {/* Load failure banner: the store keeps a fallback profile so the screen
+            still renders, but the user must know the data did not load. */}
+        {error && (
+          <div className={cn(
+            "w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3"
+          )}>
+            <div className={cn(
+              "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
+              isDark
+                ? "bg-red-500/10 border-red-500/25 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            )}>
+              <span className="truncate">{error}</span>
+              <button
+                onClick={() => currentUserId && useProfileStore.getState().refreshProfile(currentUserId, currentUserId)}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0",
+                  isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
+                )}
+              >
+                Retry
+              </button>
+            </div>
           </div>
         )}
 
