@@ -449,4 +449,10 @@ describe('story viewers are reachable by the owner', () => {
     expect(src).toContain('getStoryViewers');
     expect(src).toMatch(/isOwnStory/);
   });
+
+  // `deleteStory` is owner-gated in the service but nothing called it, so a
+  // user could not delete their own Vibe.
+  test('StoriesScreen can delete the owner\'s story', () => {
+    expect(read('src/screens/StoriesScreen.jsx')).toContain('deleteStory');
+  });
 });

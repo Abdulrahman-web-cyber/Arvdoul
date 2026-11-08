@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown, Users, Loader2 } from "lucide-react";
+import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown, Users, Loader2, Trash2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
 import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
@@ -74,6 +74,8 @@ export default function StoriesScreen() {
   // service method that had no UI — a creator could not see who watched.
   const [viewersOpen, setViewersOpen] = useState(false);
   const [viewers, setViewers] = useState({ loading: false, error: null, items: [] });
+  const [deletingStory, setDeletingStory] = useState(false);
+  const [confirmDeleteStory, setConfirmDeleteStory] = useState(false);
 
   const progressIntervalRef = useRef(null);
   const storyAudioRef = useRef(null);
@@ -248,6 +250,37 @@ export default function StoriesScreen() {
     setViewersOpen(false);
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
+    }
+  };
+
+  // Owner-only: delete the current story (soft-delete + media cleanup server-side).
+  const handleDeleteStory = async () => {
+    const storyId = currentItem?.id;
+    if (!storyId || deletingStory) return;
+    setDeletingStory(true);
+    try {
+      await getStoryService().deleteStory(storyId);
+      // Drop the item locally so the viewer advances/closes without a refetch.
+      setStories((prev) => {
+        const next = prev.map((g) => {
+          if (g.id !== currentStory?.id) return g;
+          return { ...g, items: (g.items || []).filter((it) => it.id !== storyId) };
+        }).filter((g) => (g.items || []).length > 0);
+        return next;
+      });
+      toast.success('Vibe deleted.');
+      // Move to the next item, or close if that was the last one.
+      const remaining = (currentStory?.items || []).filter((it) => it.id !== storyId);
+      if (remaining.length === 0) {
+        handleCloseStory();
+      } else {
+        setActiveItemIndex((i) => Math.min(i, remaining.length - 1));
+        setStoryProgress(0);
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete this Vibe.');
+    } finally {
+      setDeletingStory(false);
     }
   };
 
@@ -898,6 +931,15 @@ export default function StoriesScreen() {
                     <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? 0}</span>
                   </button>
                 )}
+                {isOwnStory && (
+                  <button
+                    onClick={() => setConfirmDeleteStory(true)}
+                    aria-label="Delete this Vibe"
+                    className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:text-red-400"
+                  >
+                    {deletingStory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                )}
                 <button
                   onClick={() => setIsMuted((m) => !m)}
                   aria-label={isMuted ? 'Unmute Vibe' : 'Mute Vibe'}
@@ -1190,6 +1232,49 @@ export default function StoriesScreen() {
               >
                 Manage Profile Highlights
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Owner-only delete confirmation */}
+      <AnimatePresence>
+        {confirmDeleteStory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setConfirmDeleteStory(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              role="alertdialog"
+              aria-label="Delete Vibe confirmation"
+              className="w-full max-w-sm rounded-3xl p-6 border bg-[#0A102D] border-white/10 text-white shadow-2xl"
+            >
+              <h3 className="text-lg font-bold">Delete this Vibe?</h3>
+              <p className="text-sm text-white/60 mt-1.5">
+                This removes the Vibe from your story and deletes its media. This cannot be undone.
+              </p>
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => setConfirmDeleteStory(false)}
+                  className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/20 font-bold text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => { setConfirmDeleteStory(false); await handleDeleteStory(); }}
+                  disabled={deletingStory}
+                  className="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-500 font-bold text-sm disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
