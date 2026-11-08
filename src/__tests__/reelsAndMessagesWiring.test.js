@@ -33,6 +33,18 @@ describe('messages ordering is chronological (N107)', () => {
     expect(svc).not.toMatch(/message\.createdAt\.toDate\(\)/);
   });
 
+  test('the inbox scrolls inside MainLayout\'s overflow-hidden full-height main', () => {
+    // /messages is routed through MainLayout's `isFullHeightFeed` branch, whose
+    // <main> is `overflow-hidden`. MessagingScreen used `min-h-screen` with no
+    // inner scroll, so a long conversation list was clipped and unreachable.
+    const screen = read('src/screens/MessagingScreen.jsx');
+    const rootClass = screen.match(/<div className=\{`([^`]*)\$\{/);
+    expect(rootClass).toBeTruthy();
+    expect(rootClass[1]).not.toContain('min-h-screen');
+    expect(rootClass[1]).toContain('overflow-y-auto');
+    expect(rootClass[1]).toContain('min-h-0');
+  });
+
   test('getMessages normalises to oldest-first before returning', () => {
     expect(svc).toContain('_messageTime(');
     expect(svc).toMatch(/liveMessages\.sort\(\(a, b\) => this\._messageTime\(a\) - this\._messageTime\(b\)\)/);
