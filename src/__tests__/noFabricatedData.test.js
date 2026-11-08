@@ -1965,6 +1965,26 @@ describe('Profile gates read the shared level config, never a restated literal',
     expect(s).not.toContain('currentLevel >= 5');
     expect(s).not.toContain('activeDays >= 7');
   });
+
+  test('the royal eligibility checklist reads thresholds from ROYAL_ELIGIBILITY', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    // The Duke/King checklist used to restate Level 70/90, 180/365 days,
+    // 85/95 reputation, 80/90 contribution, 70/90 influence and 10/25
+    // achievements as bare literals in JSX — a second copy of the rule that
+    // getRoyalEligibility actually enforces. It now renders from the shared
+    // rule object, so the two can never drift.
+    expect(s).toContain('ROYAL_ELIGIBILITY');
+    expect(s).toContain('rule={ROYAL_ELIGIBILITY.duke}');
+    expect(s).toContain('rule={ROYAL_ELIGIBILITY.king}');
+    expect(s).not.toContain('currentLevel >= 70');
+    expect(s).not.toContain('currentLevel >= 90');
+    expect(s).not.toContain('reputation >= 85');
+    expect(s).not.toContain('reputation >= 95');
+    expect(s).not.toContain('activeDays >= 180');
+    expect(s).not.toContain('activeDays >= 365');
+    expect(s).not.toContain('Level 70+');
+    expect(s).not.toContain('Level 90+');
+  });
 });
 
 describe('Profile hero XP bar shows a consistent within-level fraction', () => {
