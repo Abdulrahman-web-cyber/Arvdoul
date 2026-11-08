@@ -350,6 +350,32 @@ export default function ProfileMyScreen() {
           </div>
         )}
 
+        {/* Load failure banner: the store keeps a fallback profile so the screen
+            still renders, but the user must know the data did not load. */}
+        {error && (
+          <div className={cn(
+            "w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3"
+          )}>
+            <div className={cn(
+              "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
+              isDark
+                ? "bg-red-500/10 border-red-500/25 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            )}>
+              <span className="truncate">{error}</span>
+              <button
+                onClick={() => currentUserId && useProfileStore.getState().refreshProfile(currentUserId, currentUserId)}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0",
+                  isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
+                )}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Master Container matching Image 1 Hierarchy */}
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
           {/* 1. Master Identity Card with Level Badge, Passport & 6 Action Buttons */}
