@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   Video, Users, FileText, Image, Radio, Calendar, BarChart2, 
-  HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search, SlidersHorizontal
+  HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search, SlidersHorizontal, Mic
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -66,6 +66,7 @@ const SearchScreen = memo(() => {
   
   const [showFilters, setShowFilters] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   const {
     query,
@@ -89,6 +90,7 @@ const SearchScreen = memo(() => {
     removeRecent,
     handleFocus,
     handleBlur,
+    voiceSearch,
   } = useSearch();
 
   // Listen for search events from unified TopAppBar
@@ -159,6 +161,28 @@ const SearchScreen = memo(() => {
     setHasSearched(true);
     window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: categoryId }));
   }, [updateQuery, setTab, search]);
+
+  // Voice search — real Web Speech API through the hook; the transcript fills
+  // the query and runs a search. A browser without support gets an honest error
+  // rather than a control that silently does nothing.
+  const handleVoiceSearch = useCallback(async () => {
+    if (isListening) return;
+    setIsListening(true);
+    try {
+      const transcript = await voiceSearch();
+      const text = String(transcript || '').trim();
+      if (text) {
+        updateQuery(text);
+        search(text);
+        setHasSearched(true);
+        window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: text }));
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Voice search is unavailable.');
+    } finally {
+      setIsListening(false);
+    }
+  }, [isListening, voiceSearch, updateQuery, search]);
 
   // Handle result click
   const handleResultClick = useCallback((result) => {
@@ -341,6 +365,23 @@ const SearchScreen = memo(() => {
               </button>
             )}
           </div>
+          <button
+            type="button"
+            onClick={handleVoiceSearch}
+            disabled={isListening}
+            className={cn(
+              "p-2.5 rounded-2xl border transition-all flex items-center justify-center shrink-0 cursor-pointer",
+              isListening
+                ? "bg-purple-600 text-white border-purple-500 animate-pulse"
+                : isDark
+                ? "bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]"
+                : "bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50"
+            )}
+            title={isListening ? "Listening…" : "Voice search"}
+            aria-label="Search by voice"
+          >
+            <Mic className="w-4 h-4" />
+          </button>
           <button
             type="button"
             onClick={() => setShowFilters(prev => !prev)}

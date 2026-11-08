@@ -1101,8 +1101,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /video_reports/{reportId} {
-      allow read: if isSignedIn() && (resource.data.reportedBy == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.reportedBy == uid();
+      // Written by the reportVideo/reportContent callable (Admin SDK), which
+      // stamps `reporterId`. The old `reportedBy` field name is never written,
+      // so keying the rule on it denied a reporter their own read.
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update, delete: if isAdmin();
     }
     // Post/story reports are written by the reportContent callable (Admin SDK),

@@ -600,3 +600,16 @@ describe('message reporting reaches the moderator queue', () => {
     expect(chat).toContain('REPORT_REASONS');
   });
 });
+
+describe('voice search is a real control, not a stub', () => {
+  // `useSearch` exposes a real Web Speech API `voiceSearch`, but no screen ever
+  // destructured it — the capability existed and nothing could reach it.
+  test('useSearch.voiceSearch reaches a screen', () => {
+    const hook = read('src/hooks/useSearch.js');
+    expect(hook).toContain('SpeechRecognition');
+    const screen = read('src/screens/SearchScreen.jsx');
+    expect(screen).toContain('voiceSearch');
+    expect(screen).toContain('handleVoiceSearch');
+    expect(screen).toMatch(/aria-label="Search by voice"/);
+  });
+});
