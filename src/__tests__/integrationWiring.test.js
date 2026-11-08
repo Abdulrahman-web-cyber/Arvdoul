@@ -573,3 +573,30 @@ describe('video watch-next recommendations are surfaced', () => {
     expect(src).toContain('More videos');
   });
 });
+
+describe('message reporting reaches the moderator queue', () => {
+  // `messagesService.reportMessage` used to write `message_reports` directly
+  // with a `reportedBy` field while the rules authorise on `reporterId`, so the
+  // write was denied and the report never reached any queue. It now goes
+  // through the reportContent callable, which the admin queue reads.
+  test('client routes through the reportMessage callable', () => {
+    const svc = read('src/services/messagesService.js');
+    expect(svc).toContain('FUNCTIONS.REPORT_MESSAGE');
+    expect(svc).not.toMatch(/collection\(this\.firestore, 'message_reports'\)/);
+    expect(read('src/services/callableService.js')).toContain("REPORT_MESSAGE: 'reportMessage'");
+  });
+
+  test('server routes and exposes message reports', () => {
+    const mod = read('functions/moderation.js');
+    expect(mod).toContain("message: { collection: 'message_reports'");
+    expect(mod).toContain("exports.reportMessage = reportAlias('message')");
+    expect(read('functions/admin.js')).toContain("message: 'message_reports'");
+  });
+
+  test('ChatScreen surfaces a report action', () => {
+    const chat = read('src/screens/ChatScreen.jsx');
+    expect(chat).toContain('onReport=');
+    expect(chat).toContain('reportMessage(');
+    expect(chat).toContain('REPORT_REASONS');
+  });
+});

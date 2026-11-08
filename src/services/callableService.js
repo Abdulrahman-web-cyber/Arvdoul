@@ -131,6 +131,7 @@ export const FUNCTIONS = {
   CREATE_DUET: 'createDuet',
   CREATE_STITCH: 'createStitch',
   REPORT_VIDEO: 'reportVideo',
+  REPORT_MESSAGE: 'reportMessage',
   GET_VIDEO_RECOMMENDATIONS: 'getVideoRecommendations',
   PROCESS_VIDEO_EVENT: 'processVideoEvent',
   WATERMARK_VIDEO: 'watermarkVideo',

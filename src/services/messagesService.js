@@ -1777,9 +1777,19 @@ class UltimateMessagingService {
 
   async reportMessage(messageId, conversationId, userId, reason, details = '') {
     await this.ensureInitialized();
-    const reportsRef = this.fs.collection(this.firestore, 'message_reports');
-    await this.fs.addDoc(reportsRef, { messageId, conversationId, reportedBy: userId, reason, details, status: 'pending', createdAt: this.fs.serverTimestamp() });
-    return { success: true };
+    // Route through the reportContent callable like every other report type:
+    // the direct write used `reportedBy`, but the rules authorise on
+    // `reporterId`, so it was silently denied and the report never reached the
+    // moderator queue. The callable rate-limits, de-duplicates and writes the
+    // queue-compatible record.
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const data = await callFunction(FUNCTIONS.REPORT_MESSAGE, {
+      targetId: messageId,
+      conversationId,
+      reason,
+      details,
+    });
+    return { success: true, ...(data || {}) };
   }
 
   async viewOnceMessage(messageId, conversationId, userId) {

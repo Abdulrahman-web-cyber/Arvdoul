@@ -30,7 +30,8 @@ import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark } from "lucide-react";
+import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X } from "lucide-react";
+import { REPORT_REASONS } from '../utils/videoUtils';
 import { format, isSameDay } from "date-fns";
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -63,6 +64,10 @@ export default function ChatScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [savedIds, setSavedIds] = useState({});
   const [savedMessages, setSavedMessages] = useState([]);
+  const [reportTarget, setReportTarget] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
   const mainRef = useRef(null);
 
   const messagesEndRef = useRef(null);
@@ -429,6 +434,32 @@ export default function ChatScreen() {
     }
   }, [conversationId, uid, loadingOlder]);
 
+  // Report a message: opens a reason dialog, then submits through the
+  // reportContent callable so it reaches the moderator queue (the old direct
+  // write was denied by the rules and never surfaced anywhere).
+  const submitReport = useCallback(async () => {
+    if (!reportTarget || !uid) return;
+    if (!reportReason) { toastError('Please select a reason.'); return; }
+    setSubmittingReport(true);
+    try {
+      await getMessagingService().reportMessage(
+        reportTarget.id,
+        conversationId,
+        uid,
+        reportReason,
+        reportDetails
+      );
+      toastSuccess('Report submitted. Thank you for helping keep Arvdoul safe.');
+      setReportTarget(null);
+      setReportReason('');
+      setReportDetails('');
+    } catch (err) {
+      toastError(err?.message || 'Could not submit report.');
+    } finally {
+      setSubmittingReport(false);
+    }
+  }, [reportTarget, uid, conversationId, reportReason, reportDetails]);
+
   const toggleSaveMessage = useCallback(async (msg) => {
     if (!conversationId || !uid || !msg?.id) return;
     try {
@@ -651,6 +682,7 @@ export default function ChatScreen() {
               }}
               onSave={toggleSaveMessage}
               isSaved={Boolean(savedIds[msg.id])}
+              onReport={(m) => { setReportTarget(m); setReportReason(''); setReportDetails(''); }}
               isGroup={conversation?.participantCount > 2}
               isGroupStart={item.groupStart}
               theme={isDark ? 'dark' : 'light'}
@@ -865,6 +897,78 @@ export default function ChatScreen() {
         </div>
       )}
 
+      {/* Message report dialog — reasons mirror the shared report taxonomy */}
+      {reportTarget && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Report message">
+          <div
+            className={cn(
+              'w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border p-5 space-y-4 max-h-[85vh] overflow-y-auto',
+              isDark ? 'bg-[#0f172a] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-base">Report message</h2>
+              <button
+                type="button"
+                onClick={() => setReportTarget(null)}
+                aria-label="Close report dialog"
+                className={cn('p-2 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className={cn('text-xs', isDark ? 'text-gray-400' : 'text-slate-500')}>
+              Your report is confidential. Choose the reason that best applies.
+            </p>
+            <div className="space-y-1.5">
+              {REPORT_REASONS.map((r) => (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => setReportReason(r.value)}
+                  aria-pressed={reportReason === r.value}
+                  className={cn(
+                    'w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors',
+                    reportReason === r.value
+                      ? 'border-purple-500 bg-purple-500/10 text-purple-500'
+                      : isDark ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'
+                  )}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value.slice(0, 500))}
+              rows={3}
+              placeholder="Add details (optional)"
+              className={cn(
+                'w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50',
+                isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+              )}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setReportTarget(null)}
+                className={cn('flex-1 py-2.5 rounded-xl text-sm font-semibold', isDark ? 'bg-white/10' : 'bg-slate-100')}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReport}
+                disabled={submittingReport || !reportReason}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white disabled:opacity-50"
+              >
+                {submittingReport ? 'Submitting…' : 'Submit report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Typing indicator */}
       {typingText && !loading && (
         <div className="max-w-3xl mx-auto w-full px-4 pb-1 text-[11px] text-purple-400">
@@ -890,4 +994,8 @@ export default function ChatScreen() {
 function toastError(message) {
   // Deferred import keeps the initial bundle lean.
   import('sonner').then(({ toast }) => toast.error(message)).catch(() => {});
+}
+
+function toastSuccess(message) {
+  import('sonner').then(({ toast }) => toast.success(message)).catch(() => {});
 }

@@ -177,6 +177,7 @@ const REPORT_COLLECTIONS = {
   post: 'post_reports',
   story: 'story_reports',
   ad: 'ad_reports',
+  message: 'message_reports',
 };
 
 exports.resolveUserReport = functions.https.onCall(async (data, context) => {
