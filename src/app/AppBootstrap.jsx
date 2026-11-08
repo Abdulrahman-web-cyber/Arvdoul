@@ -1,6 +1,6 @@
 // src/app/AppBootstrap.jsx
 
-import { Suspense, useEffect, useCallback } from "react";
+import { Suspense, useEffect } from "react";
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { MotionConfig } from 'framer-motion';
@@ -18,7 +18,7 @@ import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
 /**
  * System initialization manager
  */
-const SystemInitializer = ({ onReady }) => {
+const SystemInitializer = ({ onReady = () => {} }) => {
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -127,14 +127,14 @@ const SystemInitializer = ({ onReady }) => {
  * Main App Bootstrap Component
  */
 export default function AppBootstrap() {
-  const handleReady = useCallback(() => {}, []);
-
   return (
     <HelmetProvider>
       <ThemeProvider>
         <GlobalErrorBoundary>
-          {/* System initializer (invisible background tasks) */}
-          <SystemInitializer onReady={handleReady} />
+          {/* System initializer (invisible background tasks). It reports
+              completion through an optional callback; AppBootstrap has nothing
+              to do on ready, so it passes none rather than a dead no-op. */}
+          <SystemInitializer />
           
           {/* Main application renders immediately without blocking screens */}
           <BrowserRouter>
