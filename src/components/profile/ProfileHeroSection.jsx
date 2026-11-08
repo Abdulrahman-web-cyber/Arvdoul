@@ -15,7 +15,7 @@
 
 import { memo, useMemo, useState, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
-import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, Sparkles, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock, Clock } from "lucide-react";
+import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, Sparkles, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock, Clock, X } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -277,6 +277,7 @@ export const ProfileHeroSection = memo(({
   friendshipStatus = 'none',
   friendRequestLoading = false,
   onFriendRequestToggle,
+  onCancelFriendRequest,
   onOpenTipModal,
   onOpenMessages,
   capabilities,
@@ -768,8 +769,8 @@ export const ProfileHeroSection = memo(({
           {onFriendRequestToggle && (
             <button
               type="button"
-              onClick={onFriendRequestToggle}
-              disabled={friendRequestLoading || friendshipStatus === 'friends' || friendshipStatus === 'pending'}
+              onClick={friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle}
+              disabled={friendRequestLoading || friendshipStatus === 'friends'}
               className={cn(
                 "flex-1 min-w-[130px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all active:scale-95",
                 friendshipStatus === 'friends'
@@ -777,7 +778,7 @@ export const ProfileHeroSection = memo(({
                   : friendshipStatus === 'received'
                   ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-md cursor-pointer"
                   : friendshipStatus === 'pending'
-                  ? (isDark ? "bg-white/5 border-white/10 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-500")
+                  ? (isDark ? "bg-white/5 hover:bg-red-500/10 border-white/10 hover:border-red-500/30 text-slate-300 hover:text-red-300 cursor-pointer" : "bg-slate-100 hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-600 hover:text-red-600 cursor-pointer")
                   : (isDark ? "bg-white/5 hover:bg-white/10 border-white/10 text-white cursor-pointer" : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800 cursor-pointer")
               )}
             >
@@ -793,8 +794,8 @@ export const ProfileHeroSection = memo(({
                 </>
               ) : friendshipStatus === 'pending' ? (
                 <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Request Sent</span>
+                  <X className="w-4 h-4" />
+                  <span>{onCancelFriendRequest ? 'Cancel Request' : 'Request Sent'}</span>
                 </>
               ) : (
                 <>

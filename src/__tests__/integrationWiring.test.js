@@ -467,3 +467,17 @@ describe('story audience is a real control', () => {
     expect(src).toContain("useState('public')");
   });
 });
+
+describe('outgoing friend requests can be withdrawn', () => {
+  // `cancelFriendRequest` existed but no screen called it, so a sent request
+  // was a permanent dead-end. The public profile now offers withdrawal.
+  test('ProfilePublicScreen cancels the request via the service', () => {
+    expect(read('src/screens/Profile/ProfilePublicScreen.jsx')).toContain('cancelFriendRequest');
+  });
+
+  test('the hero renders a cancel affordance for a pending request', () => {
+    const src = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(src).toContain('onCancelFriendRequest');
+    expect(src).toMatch(/Cancel Request/);
+  });
+});
