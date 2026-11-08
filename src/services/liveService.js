@@ -307,7 +307,7 @@ class UltimateLiveService {
           const rtcAnswer = new RTCSessionDescription(data.answer);
           await this.peerConnection.setRemoteDescription(rtcAnswer);
         }
-      });
+      }, (err) => logger.warn('[liveService] subscription error', err));
 
       // Listen for client ICE Candidates
       const clientCandidatesCol = collection(roomRef, 'clientCandidates');
@@ -318,7 +318,7 @@ class UltimateLiveService {
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
-      });
+      }, (err) => logger.warn('[liveService] subscription error', err));
 
     } else {
       // Client connects to host offer
@@ -332,7 +332,7 @@ class UltimateLiveService {
 
           await setDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
         }
-      });
+      }, (err) => logger.warn('[liveService] subscription error', err));
 
       // Listen for host ICE Candidates
       const hostCandidatesCol = collection(roomRef, 'hostCandidates');
@@ -343,7 +343,7 @@ class UltimateLiveService {
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
-      });
+      }, (err) => logger.warn('[liveService] subscription error', err));
     }
   }
 

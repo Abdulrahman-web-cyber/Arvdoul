@@ -585,7 +585,7 @@ class UltimateVideoService {
         const data = snap.data();
         callback({ likes: data.stats?.likes, views: data.stats?.views, comments: data.stats?.comments });
       }
-    });
+    }, (err) => logger.warn('[videoService] subscription error', err));
     const key = `stats_${videoId}_${userId}`;
     if (this.realtimeUnsubscribes.has(key)) this.realtimeUnsubscribes.get(key)();
     this.realtimeUnsubscribes.set(key, unsubscribe);

@@ -73,7 +73,7 @@ class SpacesService {
           const rtcAnswer = new RTCSessionDescription(data.answer);
           await this.peerConnection.setRemoteDescription(rtcAnswer);
         }
-      });
+      }, (err) => log.warn('[spacesService] subscription error', err));
 
       const clientCandidatesCol = collection(roomRef, 'clientCandidates');
       onSnapshot(clientCandidatesCol, (snapshot) => {
@@ -83,7 +83,7 @@ class SpacesService {
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
-      });
+      }, (err) => log.warn('[spacesService] subscription error', err));
 
     } else {
       const roomSnap = doc(firestore, 'signaling_rooms', spaceId);
@@ -96,7 +96,7 @@ class SpacesService {
 
           await setDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
         }
-      });
+      }, (err) => log.warn('[spacesService] subscription error', err));
 
       const hostCandidatesCol = collection(roomRef, 'hostCandidates');
       onSnapshot(hostCandidatesCol, (snapshot) => {
@@ -106,7 +106,7 @@ class SpacesService {
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
-      });
+      }, (err) => log.warn('[spacesService] subscription error', err));
     }
   }
 
@@ -184,7 +184,7 @@ class SpacesService {
         } else {
           callback(items);
         }
-      });
+      }, (err) => log.warn('[spacesService] subscription error', err));
     } catch (err) {
       log.error('Error subscribing to spaces', err);
       return () => {};

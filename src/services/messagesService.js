@@ -541,7 +541,7 @@ class UltimateMessagingService {
     const settingsRef = this.fs.doc(this.firestore, 'user_settings', userId);
     const unsub = this.fs.onSnapshot(settingsRef, () => {
       this.notificationSettingsCache.delete(`push_${userId}`);
-    });
+    }, (err) => logger.warn('[messagesService] subscription error', err));
     this.firestoreListeners.set(`user_settings_${userId}`, unsub);
   }
 
@@ -1568,7 +1568,7 @@ class UltimateMessagingService {
               });
             }
           });
-        });
+        }, (err) => logger.warn('[messagesService] subscription error', err));
       } else {
         const currentDate = new Date();
         const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, currentDate);
@@ -1586,14 +1586,14 @@ class UltimateMessagingService {
               callback({ type: 'new_message', message: { id: change.doc.id, ...msg }, conversationId });
             }
           });
-        });
+        }, (err) => logger.warn('[messagesService] subscription error', err));
       }
 
       const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
       unsubscribeConversation = this.fs.onSnapshot(convRef, (snap) => {
         if (!snap.exists()) return;
         callback({ type: 'conversation_updated', conversation: { id: snap.id, ...snap.data() }, conversationId });
-      });
+      }, (err) => logger.warn('[messagesService] subscription error', err));
 
       unsubscribeTyping = this.subscribeToTyping(conversationId, userId, (typing) => {
         callback({ type: 'typing_update', typing, conversationId });

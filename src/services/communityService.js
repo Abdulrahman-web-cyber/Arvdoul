@@ -3,6 +3,7 @@
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { callFunction, FUNCTIONS } from './callableService.js';
+import { logger } from '../utils/Logger.js';
 
 const COMMUNITIES_PER_PAGE = 20;
 // Hard ceiling for any single community read; a per-user membership list is
@@ -403,7 +404,7 @@ class CommunityService {
       if (doc.exists) {
         callback({ id: doc.id, ...doc.data() });
       }
-    });
+    }, (err) => logger.warn('[communityService] subscription error', err));
   }
 
   subscribeToMembers(communityId, callback) {
@@ -412,7 +413,7 @@ class CommunityService {
         const members = doc.data().members || {};
         callback(Object.entries(members).map(([id, data]) => ({ id, ...data })));
       }
-    });
+    }, (err) => logger.warn('[communityService] subscription error', err));
     return unsubscribe;
   }
 
@@ -422,7 +423,7 @@ class CommunityService {
         const requests = doc.data().pendingRequests || {};
         callback(Object.entries(requests).map(([id, data]) => ({ id, ...data })));
       }
-    });
+    }, (err) => logger.warn('[communityService] subscription error', err));
     return unsubscribe;
   }
 }

@@ -1218,7 +1218,7 @@ class UltimateStoryService {
         forwardTaps: story.stats?.forwardTaps || 0,
         backTaps: story.stats?.backTaps || 0,
       });
-    });
+    }, (err) => logger.warn('[storyService] subscription error', err));
   }
 
   async searchStories({ query, location, music, hashtag, limit = 20 } = {}) {

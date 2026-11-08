@@ -168,7 +168,7 @@ class CallService {
     const { doc, onSnapshot } = await this._fs();
     return onSnapshot(doc(db, 'calls', callId), (snap) => {
       if (snap.exists()) onData(snap.data());
-    });
+    }, (err) => logger.warn('[callService] subscription error', err));
   }
 
   async updateCall(callId, patch) {
@@ -221,7 +221,7 @@ class CallService {
         const data = change.doc.data();
         if (data.from !== peerUid) onCandidate(data.candidate);
       });
-    });
+    }, (err) => logger.warn('[callService] subscription error', err));
   }
 }
 

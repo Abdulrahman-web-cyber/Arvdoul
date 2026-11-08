@@ -470,7 +470,7 @@ class EventService {
       if (doc.exists) {
         callback({ id: doc.id, ...doc.data() });
       }
-    });
+    }, (err) => logger.warn('[eventService] subscription error', err));
   }
 
   /**
@@ -485,7 +485,7 @@ class EventService {
         const attendees = doc.data().attendees || {};
         callback(Object.entries(attendees).map(([id, data]) => ({ id, ...data })));
       }
-    });
+    }, (err) => logger.warn('[eventService] subscription error', err));
   }
 
   /**
