@@ -3,7 +3,6 @@
 // Server-validated, categorized, auditable, zero-pill design.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import achievementService from '../../services/achievementService';
@@ -23,7 +22,6 @@ const CATEGORIES = [
 ];
 
 export default function AchievementsScreen() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
 
@@ -44,8 +42,10 @@ export default function AchievementsScreen() {
         // Pass the real values through unchanged: a missing level must not be
         // laundered into "Level 1" (see src/__tests__/noFabricatedData.test.js).
         level: user.level,
-        activeStreak: user.activeStreak || 1,
-        activeDaysCount: user.activeDaysCount || 1,
+        // A missing streak is unknown, not a 1-day streak: `|| 1` fabricated
+        // progress on every streak achievement (the service clamps `|| 0`).
+        activeStreak: user.activeStreak,
+        activeDaysCount: user.activeDaysCount,
         postsCount: user.postsCount || user.postCount || 0,
         likesCount: user.likesCount || 0,
         commentsCount: user.commentsCount || 0,

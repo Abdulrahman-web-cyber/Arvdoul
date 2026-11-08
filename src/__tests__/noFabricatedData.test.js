@@ -1945,6 +1945,15 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
 
     const achievementsScreen = read('src/screens/Achievements/AchievementsScreen.jsx');
     expect(achievementsScreen).not.toContain('user.level || 1');
+    // A missing streak is unknown, not "1 day": the `|| 1` floor fabricated
+    // progress on every streak achievement for a brand-new account.
+    expect(achievementsScreen).not.toContain('user.activeStreak || 1');
+    expect(achievementsScreen).not.toContain('user.activeDaysCount || 1');
+
+    const progressScreen = read('src/screens/Progression/ProgressScreen.jsx');
+    expect(progressScreen).not.toContain('profile?.activeStreak) || 1');
+    expect(progressScreen).not.toContain('profile?.activeDaysCount) || 1');
+    expect(progressScreen).toContain("activeStreak ?? '—'");
 
     const achievementsService = read('src/services/achievementService.js');
     expect(achievementsService).not.toContain('userStats.level || 1');

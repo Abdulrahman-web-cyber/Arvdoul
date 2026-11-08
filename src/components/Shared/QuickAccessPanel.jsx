@@ -1586,11 +1586,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 )}
               </div>
               <span className="text-xs font-medium text-center">{action.label}</span>
-              {action.earnings > 0 && (
-                <span className="text-xs text-emerald-500 font-bold mt-1">
-                  +${action.earnings.toFixed(2)}
-                </span>
-              )}
               {action.disabled && (
                 <span className="text-xs text-amber-600 font-bold mt-1">
                   {action.disabledText}
