@@ -1069,7 +1069,9 @@ describe('CreateStory honest offline state (spec §53)', () => {
     const src = fs.readFileSync(path.join(root, 'src/screens/CreateStory.jsx'), 'utf8');
     expect(src).toContain("'Offline — saved as draft. Will publish when you are back online.'");
     expect(src).not.toContain("'Story shared to your followers! 🌟'");
-    expect(src).toContain("visibility: 'public'");
+    // Audience is now a real control: the payload sends the chosen visibility
+    // (public/followers/private), never a hardcoded claim.
+    expect(src).toMatch(/visibility:\s*audience/);
   });
 });
 

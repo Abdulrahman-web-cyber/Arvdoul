@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check, Loader2 } from "lucide-react";
+import { X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check, Loader2, Globe, Users, Lock } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import GIFPicker from '../components/Shared/GIFPicker';
 import { useFeatureFlag } from '../hooks/useFeatureFlag.js';
@@ -71,6 +71,9 @@ export default function CreateStory() {
   const [mentionHandle, setMentionHandle] = useState('');
   const [storyTimer, setStoryTimer] = useState(0);
   const [publishing, setPublishing] = useState(false);
+  // Audience maps to the service visibility contract (public/followers/private)
+  // enforced by storyService + firestore.rules — not a decorative toggle.
+  const [audience, setAudience] = useState('public');
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -279,7 +282,7 @@ export default function CreateStory() {
         taggedUsers: mentionHandle.trim() ? [mentionHandle.trim().replace(/^@/, '')] : [],
         stickers: buildStickers(),
         // audience maps to the service visibility contract (public/followers).
-        visibility: 'public',
+        visibility: audience,
       };
       if (!isText && !mediaFile) {
         toast.error('Add a photo or video to share an image story.');
@@ -780,7 +783,38 @@ export default function CreateStory() {
 
             {/* If Preview Captured, show Publish / Share button */}
             {capturedPreview && (
-              <div className="pt-2">
+              <div className="pt-2 space-y-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-white/60 mb-1.5">Who can see this Vibe</p>
+                  <div role="radiogroup" aria-label="Story audience" className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'public', label: 'Everyone', icon: Globe },
+                      { id: 'followers', label: 'Followers', icon: Users },
+                      { id: 'private', label: 'Only me', icon: Lock },
+                    ].map((opt) => {
+                      const Icon = opt.icon;
+                      const isActive = audience === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActive}
+                          onClick={() => setAudience(opt.id)}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold border transition',
+                            isActive
+                              ? 'bg-white/15 border-white/40 text-white'
+                              : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                          )}
+                        >
+                          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <button
                   onClick={handlePublishStory}
                   disabled={publishing}

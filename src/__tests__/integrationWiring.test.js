@@ -456,3 +456,14 @@ describe('story viewers are reachable by the owner', () => {
     expect(read('src/screens/StoriesScreen.jsx')).toContain('deleteStory');
   });
 });
+
+describe('story audience is a real control', () => {
+  // The service and firestore.rules honour public/followers/private, but
+  // CreateStory hardcoded `visibility: 'public'` with no selector — the
+  // audience setting was unreachable.
+  test('CreateStory sends the chosen audience as visibility', () => {
+    const src = read('src/screens/CreateStory.jsx');
+    expect(src).toMatch(/visibility:\s*audience/);
+    expect(src).toContain("useState('public')");
+  });
+});
