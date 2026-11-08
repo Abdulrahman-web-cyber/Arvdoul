@@ -482,7 +482,7 @@ const CommunityDetailScreen = () => {
                   </h2>
                   {isAdmin && (
                     <button
-                      onClick={() => navigate(`/community/${communityId}/members`)}
+                      onClick={() => setActiveTab('members')}
                       className="text-sm text-indigo-600 hover:text-indigo-700"
                     >
                       View all
@@ -624,7 +624,7 @@ const CommunityDetailScreen = () => {
                         </div>
                       </div>
                       <button
-                        onClick={() => navigate(`/community/${communityId}/bans`)}
+                        onClick={() => setActiveTab('moderation')}
                         className="text-sm text-indigo-600 hover:text-indigo-700"
                       >
                         Manage
