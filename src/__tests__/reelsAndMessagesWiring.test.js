@@ -26,6 +26,13 @@ const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 describe('messages ordering is chronological (N107)', () => {
   const svc = read('src/services/messagesService.js');
 
+  test('a new message is never sharded via a serverTimestamp() sentinel', () => {
+    // _buildMessage sets createdAt to serverTimestamp(), which has no .toDate();
+    // calling it on the send path threw a TypeError on every message.
+    expect(svc).not.toMatch(/_getMessageSubcollectionPath\([^)]*\.createdAt\.toDate\(\)/);
+    expect(svc).not.toMatch(/message\.createdAt\.toDate\(\)/);
+  });
+
   test('getMessages normalises to oldest-first before returning', () => {
     expect(svc).toContain('_messageTime(');
     expect(svc).toMatch(/liveMessages\.sort\(\(a, b\) => this\._messageTime\(a\) - this\._messageTime\(b\)\)/);

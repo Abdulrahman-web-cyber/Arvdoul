@@ -219,7 +219,7 @@ class UltimateLiveService {
         
         if (lastEnded?.endTime) {
           const cooldownMs = LIVE_CONFIG.COOLDOWN_MINUTES * 60 * 1000;
-          const timeSinceEnd = Date.now() - lastEnded.endTime.toDate().getTime();
+          const timeSinceEnd = Date.now() - (lastEnded.endTime.toDate?.()?.getTime() || 0);
           
           if (timeSinceEnd < cooldownMs) {
             const remainingMinutes = Math.ceil((cooldownMs - timeSinceEnd) / 60000);

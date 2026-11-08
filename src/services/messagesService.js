@@ -1189,7 +1189,11 @@ class UltimateMessagingService {
 
     const message = this._buildMessage(idempotencyKey, conversationId, currentUser, validated, mediaInfo, ttlExpiresAt, encryptedPayload);
 
-    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, message.createdAt.toDate());
+    // `message.createdAt` is a serverTimestamp() sentinel until the write is
+    // committed, so it has no .toDate(); passing it here threw a TypeError on
+    // every send. The shard for a new message is simply the current month —
+    // every other call site passes a real Date for the same reason.
+    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
     const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), idempotencyKey);
     const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
