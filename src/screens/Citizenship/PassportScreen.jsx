@@ -12,6 +12,7 @@ import { shareProfile } from '../../utils/shareUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import { ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight, Stamp, Lock, UserCheck, Check } from "lucide-react";
 import { toast } from 'sonner';
+import { ROYAL_ELIGIBILITY } from '../../shared/levelConfig.cjs';
 
 /**
  * Arvdoul Sovereign National Crest
@@ -573,7 +574,7 @@ export default function PassportScreen() {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    Requires Level 70, 180 Active Days, 85 Reputation, and 10 Verified Achievements.
+                    Requires Level {ROYAL_ELIGIBILITY.duke.minLevel}, {ROYAL_ELIGIBILITY.duke.minActiveDays} Active Days, {ROYAL_ELIGIBILITY.duke.minReputation} Reputation, and {ROYAL_ELIGIBILITY.duke.minAchievements} Verified Achievements.
                   </p>
                   {passport.royalEligibility?.duke?.missing?.length > 0 && (
                     <div className="mt-2 text-[10px] font-mono text-amber-600 dark:text-amber-400">
@@ -595,7 +596,7 @@ export default function PassportScreen() {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    Requires Level 90, 365 Active Days, 95 Reputation, and 25 Verified Achievements.
+                    Requires Level {ROYAL_ELIGIBILITY.king.minLevel}, {ROYAL_ELIGIBILITY.king.minActiveDays} Active Days, {ROYAL_ELIGIBILITY.king.minReputation} Reputation, and {ROYAL_ELIGIBILITY.king.minAchievements} Verified Achievements.
                   </p>
                   {passport.royalEligibility?.king?.missing?.length > 0 && (
                     <div className="mt-2 text-[10px] font-mono text-amber-600 dark:text-amber-400">

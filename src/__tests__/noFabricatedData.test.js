@@ -2149,3 +2149,24 @@ describe('Passport visa stamps read their gates from the shared config', () => {
     expect(s).toContain('civicStreak: 7');
   });
 });
+
+describe('Royal-eligibility copy is rendered from the shared rule', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PassportScreen royal candidacy copy reads ROYAL_ELIGIBILITY', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(s).toContain('ROYAL_ELIGIBILITY.duke.minLevel');
+    expect(s).toContain('ROYAL_ELIGIBILITY.king.minLevel');
+    expect(s).not.toContain('Requires Level 70, 180 Active Days');
+    expect(s).not.toContain('Requires Level 90, 365 Active Days');
+  });
+
+  test('PerksRewardsScreen prestige copy reads MAX_LEVEL / ROYAL_ELIGIBILITY', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    expect(s).toContain('Level {MAX_LEVEL}');
+    expect(s).toContain('ROYAL_ELIGIBILITY.duke.minLevel');
+    expect(s).toContain('ROYAL_ELIGIBILITY.king.minLevel');
+    expect(s).not.toContain('Level 70 + High Reputation');
+    expect(s).not.toContain('Level 90 + Impeccable');
+  });
+});

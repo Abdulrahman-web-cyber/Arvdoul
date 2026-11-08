@@ -17,6 +17,8 @@ import {
   getPrestigeInfo,
   formatCoinsAsUsd,
   XP_RULES,
+  MAX_LEVEL,
+  ROYAL_ELIGIBILITY,
 } from '../../shared/levelConfig.cjs';
 import { Sparkles, Gift, Coins, Crown, Lock, CheckCircle2, Send, Zap, ArrowRight, UserCheck } from "lucide-react";
 import { cn } from '../../lib/utils';
@@ -443,7 +445,7 @@ export default function PerksRewardsScreen() {
                 Prestige & Sovereign Nobility
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Exceeding Level 100 unlocks Roman Numeral Prestige tiers (I through X), sovereign coronation eligibility, and permanent historical citizenship.
+                Exceeding Level {MAX_LEVEL} unlocks Roman Numeral Prestige tiers (I through X), sovereign coronation eligibility, and permanent historical citizenship.
               </p>
             </div>
           </div>
@@ -455,7 +457,7 @@ export default function PerksRewardsScreen() {
             )}>
               <span className="text-2xl">⭐</span>
               <h3 className="font-bold text-xs sm:text-sm">Founding Citizen</h3>
-              <p className="text-[11px] text-slate-400">Level 100 + 365 Active Days</p>
+              <p className="text-[11px] text-slate-400">Level {MAX_LEVEL} + {ROYAL_ELIGIBILITY.king.minActiveDays} Active Days</p>
             </div>
 
             <div className={cn(
@@ -464,7 +466,7 @@ export default function PerksRewardsScreen() {
             )}>
               <span className="text-2xl">⚜️</span>
               <h3 className="font-bold text-xs sm:text-sm">Ducal Nobility</h3>
-              <p className="text-[11px] text-slate-400">Level 70 + High Reputation & Contribution</p>
+              <p className="text-[11px] text-slate-400">Level {ROYAL_ELIGIBILITY.duke.minLevel} + High Reputation & Contribution</p>
             </div>
 
             <div className={cn(
@@ -473,7 +475,7 @@ export default function PerksRewardsScreen() {
             )}>
               <span className="text-2xl">👑</span>
               <h3 className="font-bold text-xs sm:text-sm">Crown Sovereign</h3>
-              <p className="text-[11px] text-slate-400">Level 90 + Impeccable Civic Provenance</p>
+              <p className="text-[11px] text-slate-400">Level {ROYAL_ELIGIBILITY.king.minLevel} + Impeccable Civic Provenance</p>
             </div>
           </div>
 
