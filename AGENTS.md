@@ -455,3 +455,32 @@ The `lint`/`test` jobs in `.github/workflows/ci.yml` use `continue-on-error: tru
 suites: architecture boundaries, Firebase cost, security-services, deploy
 integrity, shared-config sync, Firestore rules compile, dead-event and
 orphan-module reachability. Add new invariant suites to that job.
+
+## Realtime listeners must handle errors
+Every `onSnapshot` call takes an error callback as its third argument; a
+listener without one dies silently on a rules denial or dropped connection
+(stale UI, no log, unhandled rejection). Log through `utils/Logger` or the
+`ServiceKit` child. `src/__tests__/snapshotErrorHandling.test.js` parses each
+call and fails if any is registered with only two arguments.
+
+## Timestamps: serverTimestamp() sentinels have no .toDate()
+`_buildMessage` (and every other create path) sets timestamps to
+`serverTimestamp()`, a sentinel with no `.toDate()` until the write commits.
+Never call `.toDate()` on a value you just built — pass a real `Date` (e.g. the
+current month shard) or guard with `?.toDate?.()`. `messagesService.sendMessage`
+once did this and threw a `TypeError` on every send. `reelsAndMessagesWiring.test.js`
+guards the send-path shard.
+
+## Full-height feed screens own their scroll
+`MainLayout`'s `isFullHeightFeed` branch (`/`, `/home`, `/messages`, immersive
+video) renders `<main class="... overflow-hidden">`, so a screen there must be
+its own scroll container (`flex-1 min-h-0 overflow-y-auto`) and must not rely on
+`min-h-screen`. `MessagingScreen` used `min-h-screen` and clipped its inbox;
+`reelsAndMessagesWiring.test.js` asserts the inbox scrolls.
+
+## The enforced CSP must not be nullified
+`index.html` is the enforced policy. `script-src` stays first-party
+(`'self' 'unsafe-inline' blob:`): the app loads no external scripts and uses
+neither `eval()` nor `new Function()`, so `'unsafe-eval'` and a bare `https:`
+source are not allowed back in. `securityServices.test.js` fails if either
+returns or an external `<script src>` is introduced.
