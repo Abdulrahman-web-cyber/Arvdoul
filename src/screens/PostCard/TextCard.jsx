@@ -208,10 +208,22 @@ function parseMarkdownSafe(content) {
   } else {
     rawHtml = simpleMarkdownToHtml(safeContent);
   }
-  return DOMPurify.sanitize(rawHtml, {
+  const clean = DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: ['h1','h2','h3','p','strong','em','u','s','code','pre','blockquote','a','br','ul','ol','li','span','div'],
     ALLOWED_ATTR: ['href','target','rel','class']
   });
+  // DOMPurify strips a `javascript:` href but leaves target=_blank links without
+  // a rel, which is reverse-tabnabbing: the opened page can reach back through
+  // window.opener. Force the safe rel on every link, matching the composer
+  // previews (CreateText/CreateQuestion).
+  if (typeof document === 'undefined') return clean;
+  const holder = document.createElement('div');
+  holder.innerHTML = clean;
+  holder.querySelectorAll('a[href]').forEach((a) => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  });
+  return holder.innerHTML;
 }
 
 function getCachedMarkdown(content) {

@@ -13,7 +13,7 @@ import {
   collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp, increment,
   arrayUnion, arrayRemove, writeBatch, runTransaction, onSnapshot, getCountFromServer,
-  Timestamp, enableIndexedDbPersistence
+  Timestamp
 } from 'firebase/firestore';
 import { getDatabase, ref, onValue, set, remove, onDisconnect, push as rtdbPush } from 'firebase/database';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, getStorage } from 'firebase/storage';
@@ -512,11 +512,6 @@ class UltimateMessagingService {
         this.auth = await getAuthInstance();
         this.rtdb = getDatabase();
 
-        try {
-          await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
-        } catch (err) {
-        }
-
         this.fs = {
           collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
           query, where, orderBy, limit, startAfter, serverTimestamp, increment,
@@ -546,7 +541,7 @@ class UltimateMessagingService {
     const settingsRef = this.fs.doc(this.firestore, 'user_settings', userId);
     const unsub = this.fs.onSnapshot(settingsRef, () => {
       this.notificationSettingsCache.delete(`push_${userId}`);
-    });
+    }, (err) => logger.warn('[messagesService] subscription error', err));
     this.firestoreListeners.set(`user_settings_${userId}`, unsub);
   }
 
@@ -1194,7 +1189,11 @@ class UltimateMessagingService {
 
     const message = this._buildMessage(idempotencyKey, conversationId, currentUser, validated, mediaInfo, ttlExpiresAt, encryptedPayload);
 
-    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, message.createdAt.toDate());
+    // `message.createdAt` is a serverTimestamp() sentinel until the write is
+    // committed, so it has no .toDate(); passing it here threw a TypeError on
+    // every send. The shard for a new message is simply the current month —
+    // every other call site passes a real Date for the same reason.
+    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
     const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), idempotencyKey);
     const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
@@ -1573,7 +1572,7 @@ class UltimateMessagingService {
               });
             }
           });
-        });
+        }, (err) => logger.warn('[messagesService] subscription error', err));
       } else {
         const currentDate = new Date();
         const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, currentDate);
@@ -1591,14 +1590,14 @@ class UltimateMessagingService {
               callback({ type: 'new_message', message: { id: change.doc.id, ...msg }, conversationId });
             }
           });
-        });
+        }, (err) => logger.warn('[messagesService] subscription error', err));
       }
 
       const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
       unsubscribeConversation = this.fs.onSnapshot(convRef, (snap) => {
         if (!snap.exists()) return;
         callback({ type: 'conversation_updated', conversation: { id: snap.id, ...snap.data() }, conversationId });
-      });
+      }, (err) => logger.warn('[messagesService] subscription error', err));
 
       unsubscribeTyping = this.subscribeToTyping(conversationId, userId, (typing) => {
         callback({ type: 'typing_update', typing, conversationId });

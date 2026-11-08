@@ -111,7 +111,7 @@ class EnterpriseFirestoreService {
         collection, addDoc, getDoc, getDocs, updateDoc, deleteDoc,
         query, where, orderBy, limit, startAfter, startAt,
         serverTimestamp, increment, arrayUnion, arrayRemove, doc,
-        enableIndexedDbPersistence, onSnapshot, runTransaction, writeBatch, Timestamp,
+        onSnapshot, runTransaction, writeBatch, Timestamp,
         setDoc, collectionGroup, documentId, getCountFromServer
       } = this.firestoreModule;
       this.firestoreMethods = {
@@ -121,12 +121,9 @@ class EnterpriseFirestoreService {
         onSnapshot, runTransaction, writeBatch, Timestamp,
         setDoc, collectionGroup, documentId, getCountFromServer
       };
-      try {
-        await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
-        logger.warn('// Firestore persistence enabled');
-      } catch (persistenceError) {
-        // persistence already active or unsupported
-      }
+      // Offline persistence is configured once in src/firebase/firebase.js
+      // (multi-tab persistent cache). Enabling it here would race that init and
+      // throw once the instance has already served a query.
       this.initialized = true;
       return this.firestore;
     } catch (error) {

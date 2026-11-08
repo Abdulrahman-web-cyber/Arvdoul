@@ -1,4 +1,4 @@
-import appletConfig from '../../firebase-applet-config.json';
+import appletConfig from '../../firebase-applet-config.json' with { type: 'json' };
 
 // Environment-overridable Firebase config. VITE_FIREBASE_* takes precedence
 // (set in CI / .env); fallbacks read from firebase-applet-config.json.
@@ -33,14 +33,41 @@ const FIRESTORE_DATABASE_ID = resolveFirestoreDatabaseId();
 // are never `undefined`. `getFirestore(app)` / `getAuth(app)` / `getStorage(app)` are
 // cached per-app, so these are the exact same instances the lazy manager returns below.
 import { initializeApp as _fbInitializeApp, getApps as _fbGetApps, getApp as _fbGetApp } from 'firebase/app';
-import { getFirestore as _fbGetFirestore } from 'firebase/firestore';
+import {
+  getFirestore as _fbGetFirestore,
+  initializeFirestore as _fbInitializeFirestore,
+  persistentLocalCache as _fbPersistentLocalCache,
+  persistentMultipleTabManager as _fbPersistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getAuth as _fbGetAuth, setPersistence as _fbSetPersistence, browserLocalPersistence as _fbBrowserLocalPersistence } from 'firebase/auth';
 import { getStorage as _fbGetStorage } from 'firebase/storage';
 
 const _fbApp = _fbGetApps().length ? _fbGetApp() : _fbInitializeApp(FIREBASE_CONFIG);
-export const db = (!FIRESTORE_DATABASE_ID || FIRESTORE_DATABASE_ID === '(default)')
-  ? _fbGetFirestore(_fbApp)
-  : _fbGetFirestore(_fbApp, FIRESTORE_DATABASE_ID);
+
+// Firestore is configured EXACTLY ONCE, here, with the multi-tab persistent
+// cache. Doing it lazily inside each service was a race: a service that issued a
+// read before another service enabled persistence got the memory cache, the six
+// call sites disagreed on `synchronizeTabs`, and the deprecated
+// `enableIndexedDbPersistence` throws if it runs after the instance has served a
+// query. Configuring the cache at creation makes offline behaviour deterministic
+// for every consumer. `initializeFirestore` throws if the instance already exists
+// (double import / HMR), so fall back to `getFirestore`, which returns whatever
+// instance is already cached for this app + database id.
+function _createFirestore() {
+  const dbId = FIRESTORE_DATABASE_ID;
+  const useNamed = dbId && dbId !== '(default)';
+  try {
+    const settings = {
+      localCache: _fbPersistentLocalCache({ tabManager: _fbPersistentMultipleTabManager() }),
+    };
+    return useNamed ? _fbInitializeFirestore(_fbApp, settings, dbId) : _fbInitializeFirestore(_fbApp, settings);
+  } catch (_persistenceUnavailable) {
+    // Restricted storage (private mode) or a pre-existing instance: fall back to
+    // the SDK default cache rather than failing app bootstrap.
+    return useNamed ? _fbGetFirestore(_fbApp, dbId) : _fbGetFirestore(_fbApp);
+  }
+}
+export const db = _createFirestore();
 export const auth = _fbGetAuth(_fbApp);
 export const storage = _fbGetStorage(_fbApp);
 

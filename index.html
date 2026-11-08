@@ -15,8 +15,14 @@
     <!-- Theme Color -->
     <meta name="theme-color" content="#000000" />
 
-    <!-- Security hardening: first-party + external APIs with websocket and preview support -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: http: ws: wss: data: blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <!-- Security hardening: first-party + external APIs with websocket and preview support.
+         script-src is first-party only: the app loads no external scripts and uses
+         neither eval() nor new Function(), so 'unsafe-eval' and a bare `https:`
+         source are not needed. Leaving them in would let any injected script run
+         and make the directive useless as XSS defence. 'unsafe-inline' remains
+         because the pre-bundle matchMedia polyfill and runtime-note handler are
+         inline. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: http: ws: wss: data: blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self)" />

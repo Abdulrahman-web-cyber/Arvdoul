@@ -195,7 +195,7 @@ export default function MessagingScreen() {
   }, [conversations, searchQuery, activeFilter, pinnedOnly]);
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between select-none relative overflow-x-hidden font-sans pb-24 transition-colors duration-200 ${
+    <div className={`flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col select-none relative overflow-x-hidden font-sans pb-24 transition-colors duration-200 ${
       isDark ? 'bg-[#030614] text-white' : 'bg-slate-50 text-slate-900'
     }`}>
       {/* Background Atmosphere */}

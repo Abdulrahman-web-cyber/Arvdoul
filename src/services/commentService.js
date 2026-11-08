@@ -95,7 +95,6 @@ class UltimateCommentService {
         writeBatch: firestoreModule.writeBatch,
         onSnapshot: firestoreModule.onSnapshot,
         getCountFromServer: firestoreModule.getCountFromServer,
-        enableIndexedDbPersistence: firestoreModule.enableIndexedDbPersistence,
         disableNetwork: firestoreModule.disableNetwork,
         enableNetwork: firestoreModule.enableNetwork,
         runTransaction: firestoreModule.runTransaction,
@@ -103,15 +102,6 @@ class UltimateCommentService {
         average: firestoreModule.average,
         count: firestoreModule.count
       };
-
-      try {
-        await this.firestoreMethods.enableIndexedDbPersistence(this.firestore, {
-          synchronizeTabs: true,
-          forceOwnership: false
-        });
-        logger.warn('// Comment service persistence enabled');
-      } catch (persistenceError) {
-      }
 
       this.initialized = true;
       logger.warn('// Comment service initialized successfully');

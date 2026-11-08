@@ -833,7 +833,7 @@ class UltimateNotificationsService {
         return this.fs.onSnapshot(ref, () => {
           if (cancelled) return;
           this._getTotalUnreadCount(userId).then(count => callback({ count, subscriptionId }));
-        });
+        }, (err) => logger.warn('[notificationsService] subscription error', err));
       });
       if (cancelled) {
         unsubscribes.forEach(unsub => unsub());
