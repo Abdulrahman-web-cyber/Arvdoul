@@ -376,7 +376,6 @@ const VideoCard = React.memo(({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
-  const [isBuffering, setIsBuffering] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [tapPosition, setTapPosition] = useState({ x: 0, y: 0 });
   const [showHeartBurst, setShowHeartBurst] = useState(false);
@@ -599,17 +598,15 @@ const VideoCard = React.memo(({
   }, [postId, pushAnalytics, currentUser]);
   const lastTimeUpdate = useRef(0);
 
+  // Buffering UI is driven by the reducer's BUFFER/PLAYING_AGAIN state (the
+  // spinner reads `videoState`), so there is no second `isBuffering` flag to
+  // fall out of sync with it.
   const handleWaiting = () => {
     dispatchState({ type: 'BUFFER' });
-    setIsBuffering(true);
     telemetryRef.current.bufferingEvents++;
-  };
-  const handleCanPlay = () => {
-    setIsBuffering(false);
   };
   const handlePlaying = () => {
     dispatchState({ type: 'PLAYING_AGAIN' });
-    setIsBuffering(false);
   };
   const handleSeeking = () => dispatchState({ type: 'SEEK_START' });
   const handleSeeked = () => dispatchState({ type: 'SEEK_END' });
@@ -786,7 +783,6 @@ const VideoCard = React.memo(({
         onPause={handlePause}
         onTimeUpdate={handleTimeUpdate}
         onWaiting={handleWaiting}
-        onCanPlay={handleCanPlay}
         onPlaying={handlePlaying}
         onSeeking={handleSeeking}
         onSeeked={handleSeeked}

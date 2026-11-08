@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles } from "lucide-react";
 import { useAuth } from '../context/AuthContext';
+import { Loader2, AlertTriangle } from 'lucide-react';
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [post, setPost] = useState(null);
   const [metrics, setMetrics] = useState({
     views: 0,
@@ -28,6 +30,12 @@ export default function PostAnalyticsScreen() {
         const { default: postService } = await import('../services/postService.js');
         const postDoc = await postService.getPost(postId);
         if (!active) return;
+        if (!postDoc) {
+          // Never render a full page of zeros for a post that does not exist:
+          // "0 views" reads as real (empty) analytics.
+          setLoadError('This post could not be found, or you do not have access to its analytics.');
+          return;
+        }
         if (postDoc) {
           setPost(postDoc);
           const views = postDoc.viewsCount || postDoc.views || 0;
@@ -49,6 +57,7 @@ export default function PostAnalyticsScreen() {
         }
       } catch (err) {
         console.warn('Failed to load post analytics:', err);
+        if (active) setLoadError(err?.message || 'Could not load analytics for this post.');
       } finally {
         if (active) setLoading(false);
       }
@@ -82,6 +91,19 @@ export default function PostAnalyticsScreen() {
           </div>
         </div>
 
+        {loading && (
+          <div className="flex items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        )}
+
+        {!loading && loadError && (
+          <div className="p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            <p className="text-sm text-gray-700 dark:text-gray-300">{loadError}</p>
+          </div>
+        )}
+
         {/* Post Preview Summary */}
         {post && (
           <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm flex items-start gap-4">
@@ -104,6 +126,7 @@ export default function PostAnalyticsScreen() {
         )}
 
         {/* High-level KPI Cards */}
+        {!loadError && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
             <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
@@ -137,8 +160,10 @@ export default function PostAnalyticsScreen() {
             <div className="text-2xl font-bold">{metrics.engagementRate}%</div>
           </div>
         </div>
+        )}
 
         {/* Detailed Breakdown */}
+        {!loadError && (
         <div className="p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-4">
           <h2 className="text-base font-semibold flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-violet-500" />
@@ -172,6 +197,7 @@ export default function PostAnalyticsScreen() {
             </div>
           </div>
         </div>
+        )}
 
       </div>
     </div>

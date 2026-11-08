@@ -307,6 +307,7 @@ jobs:
           src/__tests__/firestorePersistence.test.js
           src/__tests__/snapshotErrorHandling.test.js
           src/__tests__/routeIntegrityGuard.test.js
+          src/__tests__/errorStateRenderedGuard.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
       # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the
