@@ -496,6 +496,19 @@ describe('appStore - identity mirror only, no duplicate economy', () => {
     expect(src).not.toContain('?? 1250');
   });
 
+  test('QuickAccessPanel renders unknown profile counts as unavailable, not zero', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    // videoCount/savedCount/collectionCount/likeCount/commentCount are not
+    // stored on users/{uid}; rendering `|| 0` claimed "none" for an unknown
+    // value. They must pass through the honest formatter.
+    expect(src).not.toContain('stats.videoCount || 0');
+    expect(src).not.toContain('stats.savedCount || 0');
+    expect(src).not.toContain('stats.collectionCount || 0');
+    expect(src).not.toContain('stats.commentCount || 0');
+    expect(src).toContain('formatCount(stats.videoCount)');
+    expect(src).toContain('formatCount(stats.likeCount)');
+  });
+
   test('QuickAccessPanel reuses the canonical achievement catalog, not a local copy', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
     // A hand-rolled achievements array here duplicated AchievementsScreen and

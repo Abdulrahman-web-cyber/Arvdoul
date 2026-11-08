@@ -33,7 +33,6 @@ import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 export default function ProfilePreviewScreen({
   profile: propProfile,
   loading: propLoading = false,
-  onSave,
   onBack,
 }) {
   const navigate = useNavigate();

@@ -24,6 +24,23 @@ const knownLevel = (level) => {
   const n = Number(level);
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
+// A count the profile does not carry is unknown, not zero. Rendering `0` here
+// claimed "no videos / no saves / no collections / no likes" for a profile whose
+// only real fields are postCount/followerCount/followingCount (see
+// src/__tests__/noFabricatedData.test.js).
+const knownCount = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+const formatCount = (value) => {
+  const n = knownCount(value);
+  if (n === null) return "—";
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+};
+
 
 const ANIMATION_CONFIG = {
   panelSpring: {
@@ -310,7 +327,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         {
           label: "Videos",
-          value: stats.videoCount || 0,
+          value: formatCount(stats.videoCount),
           icon: Video,
           color: "purple",
           change: stats.videosToday ? `+${stats.videosToday}` : "",
@@ -318,7 +335,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         {
           label: "Saved",
-          value: stats.savedCount || 0,
+          value: formatCount(stats.savedCount),
           icon: Bookmark,
           color: "green",
           change: stats.savedToday ? `+${stats.savedToday}` : "",
@@ -326,7 +343,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         {
           label: "Collections",
-          value: stats.collectionCount || 0,
+          value: formatCount(stats.collectionCount),
           icon: BookOpen,
           color: "yellow",
           change: stats.collectionsToday ? `+${stats.collectionsToday}` : "",
@@ -352,7 +369,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         {
           label: "Likes",
-          value: stats.likeCount ? (stats.likeCount > 1000 ? `${(stats.likeCount/1000).toFixed(1)}K` : stats.likeCount) : "0",
+          value: formatCount(stats.likeCount),
           icon: Heart,
           color: "red",
           change: stats.likesToday ? `+${stats.likesToday}` : "",
@@ -360,7 +377,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         {
           label: "Comments",
-          value: stats.commentCount || 0,
+          value: formatCount(stats.commentCount),
           icon: MessageCircle,
           color: "green",
           change: stats.commentsToday ? `+${stats.commentsToday}` : "",

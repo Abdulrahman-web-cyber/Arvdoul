@@ -321,7 +321,6 @@ export default function AudioEditorScreen() {
           currentTime={currentTime}
           setCurrentTime={handleSeek}
           totalDuration={totalDuration}
-          isPlaying={isPlaying}
           isDark={isDark}
           selectedClipId={selectedClip?.id}
           onSelectClip={(clip) => setSelectedClip(clip)}
