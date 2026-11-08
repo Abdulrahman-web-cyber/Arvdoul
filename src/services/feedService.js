@@ -569,7 +569,7 @@ class UltimateFeedService {
           if (Array.isArray(localPosts) && localPosts.length > 0) {
             const existingIds = new Set(posts.map(p => p.id));
             for (const lp of localPosts) {
-              if (lp && lp.id && !existingIds.has(lp.id) && !blockedUsers.has(lp.authorId)) {
+              if (lp && lp.id && lp.visibility !== 'community' && !existingIds.has(lp.id) && !blockedUsers.has(lp.authorId)) {
                 posts.unshift({
                   ...lp,
                   _source: 'local_storage',

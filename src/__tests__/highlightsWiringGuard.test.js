@@ -63,3 +63,34 @@ describe('highlight deep links reach the viewer', () => {
     expect(stories).toMatch(/highlightGroup \? \[highlightGroup, \.\.\.stories\] : stories/);
   });
 });
+
+describe('community compose route reaches the community callable', () => {
+  const createPost = read('src/screens/CreatePost.jsx');
+  const communityDetail = read('src/screens/Community/CommunityDetailScreen.jsx');
+
+  test('CommunityDetailScreen links to /create-post with the community id', () => {
+    expect(communityDetail).toMatch(/navigate\(`\/create-post\?community=\$\{communityId\}`\)/);
+  });
+
+  test('CreatePost reads the community query param', () => {
+    expect(createPost).toMatch(/searchParams\.get\('community'\)/);
+  });
+
+  test('a community post publishes through createCommunityPost, not a bare addDoc', () => {
+    expect(createPost).toMatch(/createCommunityPost\(communityId, userNow\.uid, finalPostData\)/);
+  });
+
+  test('the publish path returns to the community, not /home', () => {
+    expect(createPost).toMatch(/navigate\(communityId \? `\/community\/\$\{communityId\}` : "\/home"\)/);
+  });
+});
+
+describe('optimistic community posts stay out of the public feed', () => {
+  test('HomeScreen filters visibility === community from the local cache', () => {
+    expect(read('src/screens/HomeScreen.jsx')).toMatch(/p\.visibility !== 'community'/);
+  });
+
+  test('feedService filters visibility === community from the local cache', () => {
+    expect(read('src/services/feedService.js')).toMatch(/lp\.visibility !== 'community'/);
+  });
+});

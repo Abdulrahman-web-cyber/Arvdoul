@@ -718,6 +718,13 @@ export const useCreatePostState = () => {
 // ── PROVIDER (ALL LOGIC, FULLY INTEGRATED) ─────────────────────────────
 function CreatePostProvider({ children }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // CommunityDetailScreen links to /create-post?community=<id>. Nothing read
+  // the param, so a post composed from a community landed in the public feed
+  // and the server-authoritative createCommunityPost callable was never
+  // invoked (membership + content-approval + the community counters all live
+  // there). Capture it and route the publish through the callable.
+  const communityIdParam = searchParams.get('community') || null;
   const { theme } = useTheme();
   const { user } = useAuth();
   const { setCurrentUser } = useAppStore();
@@ -1012,12 +1019,13 @@ function CreatePostProvider({ children }) {
       } else { mediaToStore.push(m); }
     }
     await dbRef.current.put(OFFLINE_QUEUE_STORE, {
-      id, postType: stateRef.current.postType, data: { ...postData, mediaItems: mediaToStore },
+      id, postType: stateRef.current.postType,
+      data: { ...postData, mediaItems: mediaToStore, communityId: communityIdParam },
       createdAt: Date.now(), retries: 0,
     });
     await refreshOfflineQueue();
     toast.success("Post queued for offline");
-  }, [storeBlobWithDedup, refreshOfflineQueue]);
+  }, [storeBlobWithDedup, refreshOfflineQueue, communityIdParam]);
 
   const processOfflineQueue = useCallback(async () => {
     if (!dbRef.current || isOfflineRef.current || processingOfflineRef.current) return;
@@ -1360,6 +1368,9 @@ function CreatePostProvider({ children }) {
     if (publishLockRef.current) return;
     publishLockRef.current = true;
     const current = overrideState || stateRef.current;
+    // The offline queue replays with the stored state, so prefer the id baked
+    // into the record and fall back to the live query param.
+    const communityId = current.communityId || communityIdParam;
     let userNow = userRef.current;
 
     try {
@@ -1464,7 +1475,8 @@ function CreatePostProvider({ children }) {
         authorName: userNow.displayName || userNow.name || "Arvdoul User",
         authorUsername: userNow.username || userNow.email?.split("@")[0] || `user_${userNow.uid.slice(0, 8)}`,
         authorPhoto: userNow.photoURL || userNow.photo || "",
-        visibility: current.visibility || "public",
+        visibility: communityId ? "community" : (current.visibility || "public"),
+        communityId: communityId || null,
         customList: current.customList || [],
         location: current.location || null,
         taggedPeople: current.taggedPeople || [],
@@ -1544,7 +1556,7 @@ function CreatePostProvider({ children }) {
       // 3. Instant UI feedback & Navigation (User never waits!)
       toast.success("Post published instantly! 🎉");
       publishLockRef.current = false;
-      navigate("/home");
+      navigate(communityId ? `/community/${communityId}` : "/home");
 
       // 4. Background Cloud Sync (Non-blocking)
       (async () => {
@@ -1572,9 +1584,21 @@ function CreatePostProvider({ children }) {
           };
           delete finalPostData.isOptimistic;
 
-          const { getFirestoreService } = await import("../services/firestoreService.js");
-          const firestoreService = services.current.firestore || getFirestoreService();
-          const result = await firestoreService.createPost(finalPostData);
+          let result;
+          if (communityId) {
+            // Community posts go through the callable: it verifies membership,
+            // applies the community's content-approval setting and increments
+            // the server-only counters. A direct createPost would bypass all
+            // three and write a post the community feed could never list.
+            const { getCommunityService } = await import("../services/communityService.js");
+            const communityService = services.current.community || getCommunityService();
+            const communityPost = await communityService.createCommunityPost(communityId, userNow.uid, finalPostData);
+            result = communityPost?.id ? { postId: communityPost.id } : null;
+          } else {
+            const { getFirestoreService } = await import("../services/firestoreService.js");
+            const firestoreService = services.current.firestore || getFirestoreService();
+            result = await firestoreService.createPost(finalPostData);
+          }
 
           if (!result?.postId) {
             // createPost resolved without an id: the server never persisted the
@@ -1645,7 +1669,7 @@ function CreatePostProvider({ children }) {
       dispatch({ type: "SET_LOADING", payload: false });
       publishLockRef.current = false;
     }
-  }, [addToOfflineQueue, deleteDraft, navigate, setCurrentUser, uploadMedia, moderateContent]);
+  }, [addToOfflineQueue, deleteDraft, navigate, setCurrentUser, uploadMedia, moderateContent, communityIdParam]);
 
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [pendingType, setPendingType] = useState(null);
