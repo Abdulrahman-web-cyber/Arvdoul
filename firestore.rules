@@ -687,7 +687,14 @@ service cloud.firestore {
       match /polls/{pollId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
         allow create, delete: if isSignedIn() && vibeData().userId == uid();
-        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        // A viewer may only add their own vote: the changed keys are limited to
+        // the vote fields, their choice must be recorded, and they must not
+        // have voted already. Nothing else on the poll may be rewritten.
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'userVotes', 'userChoices', 'updatedAt'])
+          && 'userChoices' in request.resource.data
+          && request.resource.data.userChoices[uid()] is int
+          && (!('userChoices' in resource.data) || !(uid() in resource.data.userChoices));
       }
       match /quizzes/{quizId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());

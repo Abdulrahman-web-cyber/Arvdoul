@@ -385,6 +385,25 @@ class UltimateStoryService {
       }));
     }
 
+    // A poll is a real subcollection document (`stories/{id}/polls/{pollId}`)
+    // that viewers vote on via `voteOnPoll`; rules only allow the owner to
+    // create it. Persisting it here is what makes the CreateStory poll tool a
+    // working feature instead of a control that collected input nothing read.
+    let pollSticker = null;
+    if (storyData.poll?.question && Array.isArray(storyData.poll.options) && storyData.poll.options.length >= 2) {
+      const options = storyData.poll.options.filter(o => typeof o === 'string' && o.trim());
+      if (options.length >= 2) {
+        pollSticker = {
+          pollId: this.fs.doc(this.fs.collection(this.firestore, 'stories', storyId, 'polls')).id,
+          question: storyData.poll.question,
+          options,
+          votes: options.map(() => 0),
+          userVotes: [],
+        };
+        stickers = [...(stickers || []), { type: 'poll', data: { pollId: pollSticker.pollId, question: pollSticker.question, options }, position: { x: 0.5, y: 0.7 } }];
+      }
+    }
+
     // Collaboration
     let collaborators = [];
     if (STORY_CONFIG.COLLABORATION.ENABLED && storyData.collaborators?.length) {
@@ -431,6 +450,11 @@ class UltimateStoryService {
     };
 
     await this.fs.setDoc(this.fs.doc(this.firestore, 'stories', storyId), story);
+
+    if (pollSticker) {
+      const { pollId, ...pollData } = pollSticker;
+      await this.fs.setDoc(this.fs.doc(this.firestore, 'stories', storyId, 'polls', pollId), pollData);
+    }
 
     this._invalidateFeedCache(currentUser.uid);
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
@@ -791,10 +815,28 @@ class UltimateStoryService {
       transaction.update(pollRef, {
         votes: newVotes,
         userVotes: [...(poll.userVotes || []), currentUser.uid],
+        // Record *which* option so the viewer can show the result rather than
+        // just "you voted".
+        [`userChoices.${currentUser.uid}`]: optionIndex,
         updatedAt: serverTimestamp(),
       });
     });
     return { success: true };
+  }
+
+  async getPoll(storyId, pollId, viewerId = null) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
+    const viewer = viewerId || currentUser.uid;
+    const snap = await this.fs.getDoc(this.fs.doc(this.firestore, 'stories', storyId, 'polls', pollId));
+    if (!snap.exists()) return { success: true, poll: null, voted: null };
+    const poll = snap.data();
+    return {
+      success: true,
+      poll: { id: pollId, question: poll.question, options: poll.options || [], votes: poll.votes || [] },
+      voted: poll.userChoices?.[viewer] ?? null,
+    };
   }
 
   async answerQuiz(storyId, quizId, optionIndex) {

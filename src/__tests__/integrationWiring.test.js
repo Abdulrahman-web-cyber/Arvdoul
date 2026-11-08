@@ -542,3 +542,23 @@ describe('Do Not Disturb is a real, server-honoured control', () => {
     expect(src).toContain('getUserNotificationPreferences');
   });
 });
+
+describe('story poll is a real, answerable feature', () => {
+  // CreateStory collected a poll question + options and `voteOnPoll`/rules
+  // existed, but createStory dropped the poll and no viewer rendered it — the
+  // control was pure input capture.
+  test('createStory persists the poll subcollection document', () => {
+    const src = read('src/services/storyService.js');
+    expect(src).toContain("storyData.poll");
+    expect(src).toContain("'stories', storyId, 'polls'");
+    expect(src).toContain("type: 'poll'");
+  });
+
+  test('StoriesScreen renders and answers the poll', () => {
+    const src = read('src/screens/StoriesScreen.jsx');
+    expect(src).toContain('pollSticker');
+    expect(src).toContain('handleVotePoll');
+    expect(src).toContain('voteOnPoll');
+    expect(src).toContain('stickers: st.stickers');
+  });
+});

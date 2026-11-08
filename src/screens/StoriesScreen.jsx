@@ -77,6 +77,8 @@ export default function StoriesScreen() {
   const [viewers, setViewers] = useState({ loading: false, error: null, items: [] });
   const [deletingStory, setDeletingStory] = useState(false);
   const [confirmDeleteStory, setConfirmDeleteStory] = useState(false);
+  // Poll state for the current story item (interactive sticker).
+  const [poll, setPoll] = useState({ loading: false, data: null, voted: null, error: null });
 
   const progressIntervalRef = useRef(null);
   const storyAudioRef = useRef(null);
@@ -127,6 +129,9 @@ export default function StoriesScreen() {
               // The track chosen in CreateStory is persisted on the story doc;
               // the viewer has to read it back or the Music tool is a no-op.
               music: st.music || null,
+              // Interactive stickers (poll/quiz/...) are persisted on the doc;
+              // read them back so the poll is answerable in the viewer.
+              stickers: st.stickers || null,
             })),
           };
         });
@@ -177,6 +182,7 @@ export default function StoriesScreen() {
           ctaText: st.ctaText || '',
           ctaUrl: st.ctaUrl || '',
           music: st.music || null,
+          stickers: st.stickers || null,
         })).filter((st) => st.url || st.type === 'text');
         if (!items.length) return;
         const first = res.stories[0];
@@ -328,6 +334,46 @@ export default function StoriesScreen() {
   const currentStory = activeStoryIndex !== null ? filteredStories[activeStoryIndex] : null;
   const currentItem = currentStory?.items?.[activeItemIndex] || currentStory?.items?.[0];
   const isOwnStory = Boolean(user?.uid && currentStory?.user?.id === user.uid);
+  const pollSticker = (currentItem?.stickers || []).find((s) => s.type === 'poll' && s.data?.pollId) || null;
+
+  // Load the current item's poll (if any) so it can be answered.
+  useEffect(() => {
+    const sticker = (currentItem?.stickers || []).find((s) => s.type === 'poll' && s.data?.pollId);
+    if (!sticker || !currentItem?.id || !user?.uid) {
+      setPoll({ loading: false, data: null, voted: null, error: null });
+      return;
+    }
+    let cancelled = false;
+    setPoll({ loading: true, data: null, voted: null, error: null });
+    getStoryService()
+      .getPoll(currentItem.id, sticker.data.pollId)
+      .then((res) => {
+        if (cancelled) return;
+        setPoll({ loading: false, data: res?.poll || null, voted: res?.voted ?? null, error: null });
+      })
+      .catch((err) => {
+        if (!cancelled) setPoll({ loading: false, data: null, voted: null, error: err?.message || 'Could not load the poll.' });
+      });
+    return () => { cancelled = true; };
+  }, [currentItem?.id, user?.uid]);
+
+  const handleVotePoll = async (optionIndex) => {
+    if (!poll.data || poll.voted !== null || !currentItem?.id || poll.data.id == null) return;
+    const pollId = poll.data.id;
+    // Optimistic: bump the chosen option and lock further votes.
+    setPoll((p) => {
+      const votes = [...(p.data.votes || [])];
+      votes[optionIndex] = (votes[optionIndex] || 0) + 1;
+      return { ...p, data: { ...p.data, votes }, voted: optionIndex };
+    });
+    try {
+      await getStoryService().voteOnPoll(currentItem.id, pollId, optionIndex);
+    } catch (err) {
+      toast.error(err?.message || 'Could not record your vote.');
+      const res = await getStoryService().getPoll(currentItem.id, pollId).catch(() => null);
+      if (res) setPoll({ loading: false, data: res.poll, voted: res.voted, error: null });
+    }
+  };
 
   // Story playback timer
   useEffect(() => {
@@ -1001,6 +1047,60 @@ export default function StoriesScreen() {
                   >
                     Close
                   </button>
+                </div>
+              )}
+
+              {/* Interactive Poll Sticker */}
+              {pollSticker && (
+                <div className="absolute bottom-32 left-4 right-4 z-20">
+                  <div className="bg-black/70 backdrop-blur-md rounded-2xl border border-white/15 p-3.5 text-white">
+                    {poll.loading ? (
+                      <div className="space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-white/10 animate-pulse" />
+                        <div className="h-9 rounded-xl bg-white/10 animate-pulse" />
+                        <div className="h-9 rounded-xl bg-white/10 animate-pulse" />
+                      </div>
+                    ) : poll.error ? (
+                      <p className="text-xs text-red-300">{poll.error}</p>
+                    ) : poll.data ? (
+                      <>
+                        <p className="text-sm font-bold mb-2.5 text-center">{poll.data.question}</p>
+                        <div className="space-y-2">
+                          {poll.data.options.map((opt, i) => {
+                            const total = (poll.data.votes || []).reduce((a, b) => a + (b || 0), 0);
+                            const count = poll.data.votes?.[i] || 0;
+                            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                            const revealed = poll.voted !== null;
+                            return (
+                              <button
+                                key={i}
+                                onClick={(e) => { e.stopPropagation(); handleVotePoll(i); }}
+                                disabled={revealed}
+                                className={cn(
+                                  'relative w-full text-left rounded-xl px-3 py-2 text-xs font-semibold overflow-hidden border transition-colors',
+                                  revealed
+                                    ? (poll.voted === i ? 'border-violet-400 bg-violet-500/20' : 'border-white/10 bg-white/5')
+                                    : 'border-white/15 bg-white/10 hover:bg-white/20 active:scale-[0.98]'
+                                )}
+                              >
+                                {revealed && (
+                                  <span
+                                    className="absolute inset-y-0 left-0 bg-violet-500/25"
+                                    style={{ width: `${pct}%` }}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                <span className="relative flex items-center justify-between">
+                                  <span>{opt}{poll.voted === i ? ' ✓' : ''}</span>
+                                  {revealed && <span className="text-white/70">{pct}%</span>}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               )}
 
