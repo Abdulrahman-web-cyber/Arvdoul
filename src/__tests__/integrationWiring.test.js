@@ -518,3 +518,15 @@ describe('saved videos are surfaced', () => {
     expect(src).toContain('unsaveVideo');
   });
 });
+
+describe('notifications deep-link to their subject', () => {
+  // A notification row only marked itself read; the server-written
+  // metadata.postId / conversationId were never used, so a "liked your post"
+  // notification could not open the post.
+  test('the row click routes through a deep-link handler', () => {
+    const src = read('src/screens/NotificationsScreen.jsx');
+    expect(src).toContain('handleNotificationClick');
+    expect(src).toContain('notif.postId');
+    expect(src).toContain('conversationId');
+  });
+});

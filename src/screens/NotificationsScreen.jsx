@@ -300,6 +300,11 @@ export default function NotificationsScreen() {
         // Friend requests must carry the friend_requests doc id (not the
         // notification id) so accept/decline can hit the right document.
         requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
+        // Deep-link targets from the server-written metadata. Without these a
+        // notification row could only mark itself read, never open what it
+        // was about.
+        postId: fn.metadata?.postId || null,
+        conversationId: fn.metadata?.conversationId || null,
         // Real gift metadata only — never invent an amount. The gift
         // modal hides the amount block when the payload omits it.
         amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
@@ -410,6 +415,33 @@ export default function NotificationsScreen() {
     }
     handleMarkRead(notif.id);
     navigate(`/messages/new?to=${recipientId}`);
+  };
+
+  // Open the thing a notification is about. Friend requests have no
+  // destination (the accept/decline buttons are the action); everything else
+  // routes to the real entity using the server-written metadata.
+  const handleNotificationClick = (notif) => {
+    if (!notif) return;
+    handleMarkRead(notif.id);
+    if (notif.type === 'message' || notif.type === 'group_message' || notif.type === 'story_reply') {
+      navigate(notif.conversationId ? `/messages/${notif.conversationId}` : '/messages');
+      return;
+    }
+    if (notif.postId) {
+      navigate(`/post/${notif.postId}`);
+      return;
+    }
+    if (notif.type?.includes('story')) {
+      navigate('/stories');
+      return;
+    }
+    if (notif.type === 'follow' || notif.type === 'follow_request' || notif.type === 'friend_request' || notif.type === 'friend_accepted' || notif.type === 'follow_accepted') {
+      if (notif.user?.id) navigate(`/profile/${notif.user.id}`);
+      return;
+    }
+    if (notif.type?.includes('coin') || notif.type?.includes('gift') || notif.type?.includes('withdraw') || notif.type?.includes('payment') || notif.type?.includes('subscription')) {
+      navigate('/coins');
+    }
   };
 
   // Filtered Notifications
@@ -1118,7 +1150,7 @@ export default function NotificationsScreen() {
                     {items.map((item) => (
                       <div
                         key={item.id}
-                        onClick={() => handleMarkRead(item.id)}
+                        onClick={() => handleNotificationClick(item)}
                         className={cn(
                           "relative group overflow-hidden rounded-2xl p-3.5 transition-all duration-200 border flex items-center justify-between gap-3",
                           item.unread
