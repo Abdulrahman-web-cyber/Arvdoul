@@ -1573,7 +1573,7 @@ export default function HomeScreen() {
           <CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={activePost} currentUser={user} theme={theme} />
         )}
         {showOptions && activePost && (
-          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} onAnalytics={trackAnalyticsEvent} />
+          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} theme={theme} onAnalytics={trackAnalyticsEvent} />
         )}
 
         {/* Sponsored Reward Ad Modal for In-Feed Monetization */}

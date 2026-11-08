@@ -213,7 +213,6 @@ export default function VideoDetailScreen() {
               <VideoCreatorInfo
                 creator={creator}
                 onProfileClick={() => navigate(`/profile/${creator.id}`)}
-                theme={theme}
               />
             )}
 
