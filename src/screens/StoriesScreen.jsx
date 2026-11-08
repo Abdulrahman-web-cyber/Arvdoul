@@ -7,9 +7,11 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown } from "lucide-react";
+import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown, Users, Loader2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
+import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
+import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 const CATEGORY_TABS = [
@@ -67,6 +69,11 @@ export default function StoriesScreen() {
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
   const [highlightGroup, setHighlightGroup] = useState(null);
+
+  // Owner-only viewers panel. `getStoryViewers` is an owner-gated, paginated
+  // service method that had no UI — a creator could not see who watched.
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewers, setViewers] = useState({ loading: false, error: null, items: [] });
 
   const progressIntervalRef = useRef(null);
   const storyAudioRef = useRef(null);
@@ -238,14 +245,41 @@ export default function StoriesScreen() {
     setActiveStoryIndex(null);
     setActiveItemIndex(0);
     setStoryProgress(0);
+    setViewersOpen(false);
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
+    }
+  };
+
+  // Owner-only: load who viewed the current story item.
+  const handleOpenViewers = async () => {
+    const storyId = currentItem?.id;
+    if (!storyId) return;
+    setIsPaused(true);
+    setViewersOpen(true);
+    setViewers({ loading: true, error: null, items: [] });
+    try {
+      const res = await getStoryService().getStoryViewers(storyId, { limit: 100 });
+      const items = (res?.viewers || []).map((v) => {
+        const p = v.profile || {};
+        const name = pickDisplayName([p.displayName, p.name], { fallback: 'Member' });
+        return {
+          userId: v.userId,
+          name,
+          handle: pickHandle([p.username]) || deriveHandle(name),
+          avatar: getSafeAvatarUrl(p.photoURL, name, v.userId),
+        };
+      });
+      setViewers({ loading: false, error: null, items });
+    } catch (err) {
+      setViewers({ loading: false, error: err?.message || 'Could not load viewers.', items: [] });
     }
   };
 
   // Current story being viewed
   const currentStory = activeStoryIndex !== null ? filteredStories[activeStoryIndex] : null;
   const currentItem = currentStory?.items?.[activeItemIndex] || currentStory?.items?.[0];
+  const isOwnStory = Boolean(user?.uid && currentStory?.user?.id === user.uid);
 
   // Story playback timer
   useEffect(() => {
@@ -854,6 +888,16 @@ export default function StoriesScreen() {
 
               {/* Top Controls: Sound, Pause, Close */}
               <div className="flex items-center gap-2">
+                {isOwnStory && (
+                  <button
+                    onClick={handleOpenViewers}
+                    aria-label="See who viewed this Vibe"
+                    className="h-9 px-3 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center gap-1.5 text-white"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? 0}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setIsMuted((m) => !m)}
                   aria-label={isMuted ? 'Unmute Vibe' : 'Mute Vibe'}
@@ -1010,6 +1054,83 @@ export default function StoriesScreen() {
                 </button>
               </form>
             </div>
+
+            {/* Owner-only Viewers Sheet */}
+            <AnimatePresence>
+              {viewersOpen && (
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                  className="absolute inset-x-0 bottom-0 z-50 max-h-[70vh] rounded-t-3xl bg-[#0A102D]/98 backdrop-blur-xl border-t border-white/10 flex flex-col"
+                  role="dialog"
+                  aria-label="Vibe viewers"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                    <div className="flex items-center gap-2 text-white">
+                      <Users className="w-4 h-4 text-purple-400" />
+                      <span className="font-bold text-sm">
+                        {viewers.loading ? 'Viewers' : `${viewers.items.length} ${viewers.items.length === 1 ? 'viewer' : 'viewers'}`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => { setViewersOpen(false); setIsPaused(false); }}
+                      aria-label="Close viewers"
+                      className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="overflow-y-auto p-2">
+                    {viewers.loading ? (
+                      <div className="flex items-center justify-center py-10 text-white/60 gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" /> Loading viewers…
+                      </div>
+                    ) : viewers.error ? (
+                      <div className="text-center py-10 px-6">
+                        <p className="text-white font-semibold">Could not load viewers</p>
+                        <p className="text-white/50 text-sm mt-1">{viewers.error}</p>
+                        <button
+                          onClick={handleOpenViewers}
+                          className="mt-4 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : viewers.items.length === 0 ? (
+                      <div className="text-center py-10 px-6">
+                        <p className="text-white font-semibold">No views yet</p>
+                        <p className="text-white/50 text-sm mt-1">Viewers will appear here once people watch this Vibe.</p>
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {viewers.items.map((v) => (
+                          <li key={v.userId}>
+                            <button
+                              onClick={() => { setViewersOpen(false); navigate(`/profile/${v.userId}`); }}
+                              className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-white/5 text-left"
+                            >
+                              <img
+                                src={v.avatar}
+                                alt=""
+                                className="w-11 h-11 rounded-full object-cover border border-white/10"
+                                onError={(e) => { e.target.src = getSafeAvatarUrl(null, v.name, v.userId); }}
+                              />
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-white truncate">{v.name}</p>
+                                {v.handle && <p className="text-xs font-mono text-white/50 truncate">@{v.handle}</p>}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>

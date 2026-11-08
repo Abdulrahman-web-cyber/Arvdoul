@@ -440,3 +440,13 @@ describe('safety-graph management is reachable from the UI', () => {
     expect(settings).toContain("navigate('/settings/blocked')");
   });
 });
+
+describe('story viewers are reachable by the owner', () => {
+  // `getStoryViewers` is an owner-gated, paginated service method; a creator
+  // could not see who watched their Vibe because nothing called it.
+  test('StoriesScreen consumes getStoryViewers and gates on ownership', () => {
+    const src = read('src/screens/StoriesScreen.jsx');
+    expect(src).toContain('getStoryViewers');
+    expect(src).toMatch(/isOwnStory/);
+  });
+});
