@@ -562,3 +562,14 @@ describe('story poll is a real, answerable feature', () => {
     expect(src).toContain('stickers: st.stickers');
   });
 });
+
+describe('video watch-next recommendations are surfaced', () => {
+  // `getWatchNext` wraps the real `getVideoRecommendations` callable but no
+  // screen called it, so recommendations were unreachable.
+  test('VideoDetailScreen loads and renders watch-next', () => {
+    const src = read('src/screens/VideoDetailScreen.jsx');
+    expect(src).toContain('getWatchNext');
+    expect(src).toContain('watchNext');
+    expect(src).toContain('More videos');
+  });
+});
