@@ -2443,7 +2443,6 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                   updateSelectedText={(updates) => { if (selectedText) updObj(selectedText.id, updates, { label: 'Edit text', coalesce: true }); }}
                   handleDeleteText={() => { if (selectedText) delObj(selectedText.id); }}
                   handleQuickAddText={() => { const c = viewCenterWorld(); addTextAt(c.x, c.y); }}
-                  imageElement={doc.originalImage}
                 />
               </div>
             </div>
