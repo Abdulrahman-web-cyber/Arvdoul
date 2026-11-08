@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import titleService from '../../services/titleService';
-import { Check, Lock, Info, ShieldCheck, X, CheckCircle2 } from "lucide-react";
+import { Check, Lock, Info, ShieldCheck, X, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 
 const DOMAINS = [
@@ -112,6 +112,14 @@ export default function TitlesScreen() {
   }, [catalog, selectedDomain]);
 
   const activeTitleObj = catalog[activeTitleId] || { name: profile?.primaryTitle || 'Resident', icon: '🏛️' };
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen pb-24 flex items-center justify-center ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" aria-label="Loading titles" />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>

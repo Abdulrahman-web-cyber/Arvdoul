@@ -13,14 +13,15 @@ const AdminContentManagementScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState([]);
+  const [denied, setDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     const load = async () => {
       try {
-        if (!user?.uid) { setLoading(false); return; }
-        if (!(await fetchAdminStatus())) { setLoading(false); return; }
+        if (!user?.uid) { setDenied(true); setLoading(false); return; }
+        if (!(await fetchAdminStatus())) { setDenied(true); setLoading(false); return; }
         const { getAdminService } = await import('../../services/adminService.js');
         const rows = await getAdminService().listContent(100);
         setContent(rows);
@@ -68,6 +69,28 @@ const AdminContentManagementScreen = () => {
         return <FileText className="w-5 h-5 text-gray-500" />;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (denied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <p className="text-gray-400">Admin privileges required.</p>
+          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

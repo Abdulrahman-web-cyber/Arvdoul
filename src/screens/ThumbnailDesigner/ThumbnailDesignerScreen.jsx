@@ -150,7 +150,6 @@ export default function ThumbnailDesignerScreen() {
   const [draggingCompare, setDraggingCompare] = useState(false);
   const compareFrameRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
 
   // Drawing state
   const [drawColor, setDrawColor] = useState('#8B1EF3');
@@ -245,27 +244,26 @@ export default function ThumbnailDesignerScreen() {
     toast.success(`Photo ${newPhoto.num} added to session`);
   };
 
-  // Trigger AI Tools
+  // Tool actions. Auto Enhance is a deterministic local adjustment, applied
+  // immediately — there is no image-generation backend, so the buttons that
+  // would need one report that honestly instead of faking a success toast.
   const handleAiAction = (actionType) => {
-    setIsAiProcessing(true);
-    toast.loading(`Processing with Arvdoul AI: ${actionType}...`, { duration: 1600 });
-    setTimeout(() => {
-      setIsAiProcessing(false);
-      if (actionType === 'AI Enhance') {
-        const enhanced = {
-          brightness: 112,
-          contrast: 128,
-          saturation: 142,
-          warmth: 12,
-          vignette: 20,
-          blur: 0,
-        };
-        setAdjustments(enhanced);
-        setActiveFilter('v1');
-        pushState(enhanced, 'v1', layers);
-      }
-      toast.success(`✨ ${actionType} applied successfully!`);
-    }, 1600);
+    if (actionType === 'AI Enhance') {
+      const enhanced = {
+        brightness: 112,
+        contrast: 128,
+        saturation: 142,
+        warmth: 12,
+        vignette: 20,
+        blur: 0,
+      };
+      setAdjustments(enhanced);
+      setActiveFilter('v1');
+      pushState(enhanced, 'v1', layers);
+      toast.success('Auto Enhance applied.');
+      return;
+    }
+    toast.info(`${actionType} is not available yet.`);
   };
 
   // Export 4K

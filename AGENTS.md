@@ -431,6 +431,11 @@ has no integrated provider, remove the control and throw an honest "not availabl
 duplication/cost/route/dependency reconstruction and the AUDIT V3 finding-status
 ledger. Update it when a finding closes.
 
+Finding IDs must be unique across the whole ledger. Older series already used
+`N001`-`N118` (and a few ids like `N033`/`N034` appear in two sections), so a new
+finding takes the next id above the current maximum — never a small number that
+reads as "the next one" but collides with an existing row.
+
 ## Firebase cost is enforced in CI
 A new unbounded Firestore read, a new realtime listener, or a new runtime
 dependency is a billing change, not a detail. `scripts/firebaseCostAnalyzer.cjs`

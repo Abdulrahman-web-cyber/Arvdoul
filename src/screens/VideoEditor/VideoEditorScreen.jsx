@@ -131,7 +131,6 @@ export default function VideoEditorScreen() {
   // Tracks & Clips State
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
   const [selectedClipId, setSelectedClipId] = useState(null);
-  const [selectedTrackId, setSelectedTrackId] = useState('track-video');
   // History (Undo / Redo)
   const [history, setHistory] = useState([INITIAL_TRACKS]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -327,9 +326,8 @@ export default function VideoEditorScreen() {
   }, [isPlaying, selectedClipId, historyIndex, totalDuration]);
 
   // Track & Clip Actions
-  const handleSelectClip = (clipId, trackId) => {
+  const handleSelectClip = (clipId) => {
     setSelectedClipId(clipId);
-    if (trackId) setSelectedTrackId(trackId);
   };
 
   // Signature matches MultiTrackTimeline/PreviewCanvas: (trackId, clipId, updates).
@@ -438,7 +436,6 @@ export default function VideoEditorScreen() {
 
     pushHistory(newTracks);
     setSelectedClipId(newClip.id);
-    setSelectedTrackId('track-text');
   };
 
   const handleAddStickerClip = (emoji) => {
@@ -460,7 +457,6 @@ export default function VideoEditorScreen() {
 
     pushHistory(newTracks);
     setSelectedClipId(newClip.id);
-    setSelectedTrackId('track-stickers');
   };
 
   const handleAddAudioClip = async (audioData) => {
@@ -485,7 +481,6 @@ export default function VideoEditorScreen() {
 
     pushHistory(newTracks);
     setSelectedClipId(newClip.id);
-    setSelectedTrackId('track-audio');
   };
 
   const handleAddMediaFromDisk = async (file) => {
@@ -589,7 +584,6 @@ export default function VideoEditorScreen() {
 
   const handleSelectLayer = (layerId) => {
     const track = tracks.find((t) => (t.clips || []).some((c) => c.id === layerId));
-    if (track) setSelectedTrackId(track.id);
     setSelectedClipId(layerId);
   };
 
@@ -642,7 +636,6 @@ export default function VideoEditorScreen() {
       { id, name: `Track ${tracks.length + 1}`, type: 'video', visible: true, locked: false, muted: false, icon: 'Video', clips: [] },
     ];
     pushHistory(next);
-    setSelectedTrackId(id);
   };
 
   const handleToggleTrackVisibility = (trackId) => {
@@ -681,7 +674,6 @@ export default function VideoEditorScreen() {
     setHistory([INITIAL_TRACKS]);
     setHistoryIndex(0);
     setSelectedClipId(null);
-    setSelectedTrackId('track-video');
     setCurrentTime(0);
     setIsPlaying(false);
   };

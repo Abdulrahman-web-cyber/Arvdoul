@@ -1497,7 +1497,6 @@ class UltimateMessagingService {
     const conv = await this.getConversation(conversationId);
     if (!conv.success || conv.conversation.disableReadReceipts) return;
 
-    const unreadBefore = await this.getUnreadCount(userId, conversationId);
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
 
     await this.fs.runTransaction(this.firestore, async (transaction) => {

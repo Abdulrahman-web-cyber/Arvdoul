@@ -1496,6 +1496,24 @@ describe('Admin screens - server-authoritative admin gate', () => {
     expect(s).toContain('FUNCTIONS.RESOLVE_USER_REPORT');
     expect(s).not.toMatch(/updateDoc\(\s*doc\(firestore, collectionName/);
   });
+
+  test('a denied admin sees a denial state, never an empty dashboard', () => {
+    // AdminDashboardScreen held the denial in `error` but never rendered it, so
+    // a non-admin (or a failed count query) saw a full grid of zeros that read
+    // like real, empty platform data. Every admin surface must render the
+    // denial explicitly.
+    for (const file of [
+      'AdminDashboardScreen.jsx',
+      'AdminContentManagementScreen.jsx',
+      'AdminModerationQueueScreen.jsx',
+    ]) {
+      const s = fs.readFileSync(path.join(root, 'src/screens/Admin', file), 'utf8');
+      expect(s).toContain('Access Denied');
+    }
+    const dash = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
+    expect(dash).toMatch(/if \(error\)/);
+    expect(dash).toContain('{error}');
+  });
 });
 
 describe('Admin feature flags - platform-wide, server-authoritative', () => {
@@ -1965,6 +1983,26 @@ describe('Profile gates read the shared level config, never a restated literal',
     expect(s).not.toContain('currentLevel >= 5');
     expect(s).not.toContain('activeDays >= 7');
   });
+
+  test('the royal eligibility checklist reads thresholds from ROYAL_ELIGIBILITY', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    // The Duke/King checklist used to restate Level 70/90, 180/365 days,
+    // 85/95 reputation, 80/90 contribution, 70/90 influence and 10/25
+    // achievements as bare literals in JSX — a second copy of the rule that
+    // getRoyalEligibility actually enforces. It now renders from the shared
+    // rule object, so the two can never drift.
+    expect(s).toContain('ROYAL_ELIGIBILITY');
+    expect(s).toContain('rule={ROYAL_ELIGIBILITY.duke}');
+    expect(s).toContain('rule={ROYAL_ELIGIBILITY.king}');
+    expect(s).not.toContain('currentLevel >= 70');
+    expect(s).not.toContain('currentLevel >= 90');
+    expect(s).not.toContain('reputation >= 85');
+    expect(s).not.toContain('reputation >= 95');
+    expect(s).not.toContain('activeDays >= 180');
+    expect(s).not.toContain('activeDays >= 365');
+    expect(s).not.toContain('Level 70+');
+    expect(s).not.toContain('Level 90+');
+  });
 });
 
 describe('Profile hero XP bar shows a consistent within-level fraction', () => {
@@ -2103,5 +2141,112 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
     expect(s).toContain('canEncrypt');
     expect(s).not.toMatch(/throw new Error\('Your public key not found'\)/);
     expect(s).not.toMatch(/has no public key/);
+  });
+});
+
+describe('Passport visa stamps read their gates from the shared config', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('no stamp threshold is restated as a literal in passportService', () => {
+    const s = read('src/services/passportService.js');
+    // The stamp gates (streak 7, 3 achievements, 1 title) were literals in both
+    // the eligibility math and the "Requires ..." copy; a config change would
+    // have left the description advertising a gate the code no longer used.
+    expect(s).toContain('PASSPORT_STAMP_GATES.civicStreak');
+    expect(s).toContain('PASSPORT_STAMP_GATES.honorsAchievements');
+    expect(s).not.toContain('activeStreak >= 7');
+    expect(s).not.toContain('verifiedAchievements.length >= 3');
+    expect(s).not.toContain('Requires Level 10 or a 7-day');
+    expect(s).not.toContain('or Level 15 citizenship standing');
+    expect(s).not.toContain('at least 3 verified achievements');
+  });
+
+  test('the shared config owns the passport stamp gates', () => {
+    const s = read('src/shared/levelConfig.cjs');
+    expect(s).toContain('PASSPORT_STAMP_GATES');
+    expect(s).toContain('civicStreak: 7');
+  });
+});
+
+describe('Royal-eligibility copy is rendered from the shared rule', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PassportScreen royal candidacy copy reads ROYAL_ELIGIBILITY', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(s).toContain('ROYAL_ELIGIBILITY.duke.minLevel');
+    expect(s).toContain('ROYAL_ELIGIBILITY.king.minLevel');
+    expect(s).not.toContain('Requires Level 70, 180 Active Days');
+    expect(s).not.toContain('Requires Level 90, 365 Active Days');
+  });
+
+  test('PerksRewardsScreen prestige copy reads MAX_LEVEL / ROYAL_ELIGIBILITY', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    expect(s).toContain('Level {MAX_LEVEL}');
+    expect(s).toContain('ROYAL_ELIGIBILITY.duke.minLevel');
+    expect(s).toContain('ROYAL_ELIGIBILITY.king.minLevel');
+    expect(s).not.toContain('Level 70 + High Reputation');
+    expect(s).not.toContain('Level 90 + Impeccable');
+  });
+});
+
+describe('No user-facing gate text restates a threshold literal', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ConnectionsScreen reads the follower gate from the shared config', () => {
+    const s = read('src/screens/Profile/ConnectionsScreen.jsx');
+    expect(s).toContain('LEVEL_GATES.publicFollowers}+');
+    expect(s).not.toContain('At Level 3+');
+  });
+
+  test('EditProfileScreen section comments do not carry stale gate numbers', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).not.toContain('Creators or Level 10+');
+    expect(s).not.toContain('Royal Family or Level 35+');
+  });
+
+  test('ProfileVerificationModal never fabricates a Level 0 standing', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain('Level {userLevel || 0}');
+    expect(s).toContain("userLevel !== null ? `Level ${userLevel}` : 'Unranked'");
+  });
+});
+
+describe('ProfileCitizenshipCard resolves the real viewer relationship', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the card forwards a viewerId instead of always resolving PUBLIC', () => {
+    const card = read('src/components/profile/ProfileCitizenshipCard.jsx');
+    expect(card).toContain('viewerId = null');
+    expect(card).toContain('passportService.getPassport(userId, viewerId || (isOwner ? userId : null), profile)');
+    expect(card).not.toContain('passportService.getPassport(userId, isOwner ? userId : null, profile)');
+  });
+
+  test('ProfileFeedGrid threads the current user into the card', () => {
+    const grid = read('src/components/profile/ProfileFeedGrid.jsx');
+    expect(grid).toContain('viewerId={currentUserId}');
+  });
+});
+
+
+describe('Store and help copy read the shared config, never restated literals', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('SubscriptionScreen derives tiers, ids and prices from SUBSCRIPTION_TIERS', () => {
+    const src = read('src/screens/SubscriptionScreen.jsx');
+    expect(src).toContain('import { SUBSCRIPTION_TIERS }');
+    expect(src).toContain('Object.entries(SUBSCRIPTION_TIERS)');
+    // The old table hardcoded $24.99/enterprise/10,000 coins while the server
+    // charges $19.99 for `premium` and rejects `createSubscription('creator')`.
+    expect(src).not.toContain("id: 'enterprise'");
+    expect(src).not.toContain("id: 'creator'");
+    expect(src).not.toMatch(/price:\s*'\$\d/);
+    expect(src).not.toContain('10,000 coins');
+  });
+
+  test('HelpCenter verification copy reads CREATOR_VERIFICATION_REQUIREMENTS', () => {
+    const src = read('src/screens/Help/HelpCenterScreen.jsx');
+    expect(src).toContain('CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS');
+    expect(src).not.toContain('at least 1,000 followers');
+    expect(src).not.toContain('last 90 days');
   });
 });

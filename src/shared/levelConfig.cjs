@@ -128,6 +128,16 @@ const LEVEL_GATES = Object.freeze({
 });
 
 /**
+ * Passport visa-stamp thresholds. Kept here with the other gates so the
+ * passport service never restates a gate number in a description string.
+ */
+const PASSPORT_STAMP_GATES = Object.freeze({
+  civicStreak: 7,
+  honorsAchievements: 3,
+  honorsTitles: 1,
+});
+
+/**
  * Multidimensional eligibility for civic/royal titles (blueprint 31-32).
  * Level alone is deliberately insufficient: reputation, contribution,
  * influence and sustained active days are all required. Use these rules
@@ -986,6 +996,7 @@ module.exports = {
   XP_RULES,
   LEVEL_GATES,
   ROYAL_ELIGIBILITY,
+  PASSPORT_STAMP_GATES,
   MAX_LEVEL,
   ACHIEVEMENTS_CATALOG,
   TITLES_CATALOG,

@@ -25,10 +25,6 @@ function sumCredits(items, reasons) {
     .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0);
 }
 
-// Single-sourced with the payout server (functions/monetization.js) so the
-// estimate shown here can never diverge from what Stripe actually pays.
-const COIN_TO_USD_RATE = coinsToUsd(1);
-
 export default function CreatorPayoutScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -40,7 +36,6 @@ export default function CreatorPayoutScreen() {
   const [payouts, setPayouts] = useState([]);
   const [earnings, setEarnings] = useState({ gifts: 0, ads: 0, other: 0 });
   const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(0);
-  const [analytics, setAnalytics] = useState(null);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
 
@@ -57,10 +52,12 @@ export default function CreatorPayoutScreen() {
     try {
       const monSvc = getMonetizationService();
       const anaSvc = getAnalyticsService();
-      const [balRes, histRes, analyticsRes, earnRes, spendRes] = await Promise.allSettled([
+      // The analytics summary is deliberately not fetched here: this screen
+      // renders payout data only, and the value was never displayed (a wasted
+      // unbounded read). Views/engagement live on the creator dashboard.
+      const [balRes, histRes, earnRes, spendRes] = await Promise.allSettled([
         monSvc.getBalance(user.uid),
         monSvc.getTransactionHistory(user.uid, 20),
-        anaSvc?.getAnalyticsSummary?.(user.uid),
         anaSvc?.getCoinEarningHistory?.(user.uid, 200),
         anaSvc?.getCoinSpendingHistory?.(user.uid, 200),
       ]);
@@ -83,10 +80,6 @@ export default function CreatorPayoutScreen() {
       setLifetimeWithdrawnCoins(spent
         .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
         .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
-      if (analyticsRes.status === 'fulfilled') {
-        setAnalytics(analyticsRes.value);
-      }
-
       // payout account status (never simulated).
       try {
         const settings = await monSvc.getPayoutSettings();

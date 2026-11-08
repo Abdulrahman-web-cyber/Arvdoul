@@ -63,12 +63,24 @@ export default function CoinsScreen() {
   const [currentSub, setCurrentSub] = useState(null);
 
   // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names, perks
-  // and popularity are presentation.
-  const SUBSCRIPTION_TIERS = [
-    { id: 'basic', name: 'Basic', ...SUBSCRIPTION_TIERS_CANONICAL.basic, perks: ['500 coins monthly', 'Ad-free browsing', 'Priority support'] },
-    { id: 'pro', name: 'Pro', ...SUBSCRIPTION_TIERS_CANONICAL.pro, popular: true, perks: ['2,000 coins monthly', 'Creator badge', 'Advanced analytics', 'Boost discounts'] },
-    { id: 'premium', name: 'Premium', ...SUBSCRIPTION_TIERS_CANONICAL.premium, perks: ['5,000 coins monthly', 'Verified badge', 'Early features', 'Top support'] },
-  ].map((t) => ({ ...t, price: `$${(t.priceUsdCents / 100).toFixed(2)}/mo` }));
+  // and popularity are presentation. The monthly coin line is derived from the
+  // tier's `coinsPerMonth` so it can never disagree with the server grant.
+  const TIER_PRESENTATION = {
+    basic: { name: 'Basic', perks: ['Ad-free browsing', 'Priority support'] },
+    pro: { name: 'Pro', popular: true, perks: ['Creator badge', 'Advanced analytics', 'Boost discounts'] },
+    premium: { name: 'Premium', perks: ['Verified badge', 'Early features', 'Top support'] },
+  };
+  const SUBSCRIPTION_TIERS = Object.entries(SUBSCRIPTION_TIERS_CANONICAL).map(([id, cfg]) => {
+    const presentation = TIER_PRESENTATION[id] || { name: id, perks: [] };
+    return {
+      id,
+      name: presentation.name,
+      popular: Boolean(presentation.popular),
+      perks: [`${cfg.coinsPerMonth.toLocaleString()} coins monthly`, ...(presentation.perks || [])],
+      ...cfg,
+      price: `$${(cfg.priceUsdCents / 100).toFixed(2)}/mo`,
+    };
+  });
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawEmail, setWithdrawEmail] = useState('');

@@ -8,61 +8,52 @@ import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { cn } from '../lib/utils';
 import { getSubscriptionStatus, createSubscription, cancelSubscription } from '../services/monetizationService.js';
-const TIERS = [
-  {
-    id: 'premium',
-    name: 'Premium',
-    price: '$4.99',
-    period: '/month',
+import { SUBSCRIPTION_TIERS } from '../shared/levelConfig.cjs';
+
+// Ids, prices and monthly coin grants come from the shared config — the same
+// table `functions/monetization.js#createSubscription` validates against. Only
+// the marketing copy (name, description, feature bullets, accent colour) is
+// presentation. A hardcoded price or tier id here drifts from the server: the
+// previous table advertised a higher top-tier price, an `enterprise` id, and a
+// 10k-coin grant, while the server charges less for `premium`, grants half that
+// and rejects an unknown tier id outright.
+const TIER_PRESENTATION = {
+  basic: {
+    name: 'Basic',
     description: 'For casual users who want an enhanced experience',
-    features: [
-      'Ad-free browsing',
-      '500 coins monthly',
-      'Priority support',
-      'Enhanced privacy controls',
-      'Custom profile themes',
-    ],
     popular: false,
     color: 'from-blue-500 to-cyan-500',
+    features: ['Ad-free browsing', 'Priority support', 'Enhanced privacy controls', 'Custom profile themes'],
   },
-  {
-    id: 'creator',
-    name: 'Creator',
-    price: '$9.99',
-    period: '/month',
+  pro: {
+    name: 'Pro',
     description: 'For content creators who want to grow their audience',
-    features: [
-      'Everything in Premium',
-      '2,000 coins monthly',
-      'Creator badge',
-      'Advanced analytics',
-      'Boost discounts (20%)',
-      'Early access to features',
-      'Verified badge option',
-    ],
     popular: true,
     color: 'from-purple-500 to-pink-500',
+    features: ['Everything in Basic', 'Creator badge', 'Advanced analytics', 'Boost discounts', 'Early access to features'],
   },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: '$24.99',
-    period: '/month',
+  premium: {
+    name: 'Premium',
     description: 'For professional creators and businesses',
-    features: [
-      'Everything in Creator',
-      '10,000 coins monthly',
-      'Priority payouts',
-      'Dedicated support',
-      'Custom branding',
-      'API access',
-      'White-label options',
-      'Team management (up to 10)',
-    ],
     popular: false,
     color: 'from-orange-500 to-red-500',
+    features: ['Everything in Pro', 'Priority payouts', 'Dedicated support', 'Custom branding'],
   },
-];
+};
+
+const TIERS = Object.entries(SUBSCRIPTION_TIERS).map(([id, cfg]) => {
+  const presentation = TIER_PRESENTATION[id] || { name: id, features: [] };
+  return {
+    id,
+    name: presentation.name,
+    description: presentation.description,
+    popular: Boolean(presentation.popular),
+    color: presentation.color,
+    price: `$${(cfg.priceUsdCents / 100).toFixed(2)}`,
+    period: '/month',
+    features: [`${cfg.coinsPerMonth.toLocaleString()} coins monthly`, ...(presentation.features || [])],
+  };
+});
 
 export default function SubscriptionScreen() {
   const navigate = useNavigate();
@@ -71,7 +62,6 @@ export default function SubscriptionScreen() {
   const isDark = theme === 'dark';
   const [loading, setLoading] = useState(null);
   const [currentSubscription, setCurrentSubscription] = useState(null);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
 
   // Load current subscription status
   useEffect(() => {
@@ -79,17 +69,15 @@ export default function SubscriptionScreen() {
       try {
         const status = await getSubscriptionStatus();
         setCurrentSubscription(status?.tier || null);
-      } catch (err) {
-        console.error('Failed to load subscription:', err);
-      } finally {
-        setSubscriptionLoading(false);
+      } catch {
+        // A failed status read leaves `currentSubscription` null (no plan
+        // highlighted); the subscribe buttons still work, so this is a
+        // non-fatal, non-user-facing failure.
       }
     };
-    
+
     if (user?.uid) {
       loadSubscription();
-    } else {
-      setSubscriptionLoading(false);
     }
   }, [user?.uid]);
 

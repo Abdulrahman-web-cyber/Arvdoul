@@ -354,7 +354,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             <span>
               {isCreatorOrAdvanced
                 ? `Level ${effectiveLevel} Citizen Graph: Public broadcast reach, Followers, and Mutual Friends are active.`
-                : `Level ${effectiveLevel} Resident: Basic level citizens build mutual Friends. At Level 3+, your profile unlocks Public Followers!`}
+                : `Level ${effectiveLevel} Resident: Basic level citizens build mutual Friends. At Level ${LEVEL_GATES.publicFollowers}+, your profile unlocks Public Followers!`}
             </span>
           </div>
 

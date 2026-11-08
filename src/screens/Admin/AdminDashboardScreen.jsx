@@ -143,6 +143,23 @@ const AdminDashboardScreen = () => {
     );
   }
 
+  // A denied/failed load must not fall through to a dashboard of zeros that
+  // reads like real (empty) platform data.
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div className="text-center p-8 max-w-sm">
+          <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+          <h2 className="text-2xl font-bold mb-2">Dashboard unavailable</h2>
+          <p className="text-gray-400">{error}</p>
+          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}

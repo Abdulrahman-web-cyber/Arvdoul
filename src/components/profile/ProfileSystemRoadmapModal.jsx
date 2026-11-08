@@ -12,7 +12,51 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { X, Crown, ShieldCheck, CheckCircle2, Lock, ArrowRight, Zap } from "lucide-react";
 import { cn } from '../../lib/utils';
-import { LEVEL_PERKS, CITIZEN_TIERS, getRankTitle, getCitizenTier, getRoyalEligibility, getLevelInfo } from "../../shared/levelConfig.cjs";
+import { LEVEL_PERKS, CITIZEN_TIERS, ROYAL_ELIGIBILITY, getRankTitle, getCitizenTier, getRoyalEligibility, getLevelInfo } from "../../shared/levelConfig.cjs";
+
+// The royal checklist renders straight from the shared ROYAL_ELIGIBILITY rule
+// so the "Level 70" / "85 Reputation" / "180 Active Days" thresholds can never
+// drift from the config that actually decides eligibility.
+const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
+  rule,
+  level,
+  activeDays,
+  reputation,
+  contribution,
+  influence,
+  achievements,
+}) {
+  const rows = [
+    { label: `Level ${rule.minLevel}+`, current: level, target: rule.minLevel },
+    { label: `${rule.minActiveDays} Active Days`, current: activeDays, target: rule.minActiveDays },
+    { label: `Reputation ${rule.minReputation}+`, current: reputation, target: rule.minReputation },
+    { label: `Contribution ${rule.minContribution}+`, current: contribution, target: rule.minContribution },
+    { label: `Influence ${rule.minInfluence}+`, current: influence, target: rule.minInfluence },
+    { label: `${rule.minAchievements} Achievements`, current: achievements, target: rule.minAchievements },
+  ];
+  return (
+    <div className="pt-2 border-t border-white/5 space-y-1.5">
+      <div className="text-[11px] font-bold text-slate-400 font-mono">Eligibility Checklist:</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+        {rows.map((row) => {
+          const met = row.current >= row.target;
+          return (
+            <span
+              key={row.label}
+              className={cn(
+                'p-1.5 rounded border flex items-center justify-between',
+                met ? 'text-emerald-400 border-emerald-500/30' : 'text-slate-400 border-white/5'
+              )}
+            >
+              {row.label} ({row.current}/{row.target})
+              {met ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
 
 export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal({
   isOpen,
@@ -505,7 +549,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                           Duke / Duchess of Arvdoul
                         </h4>
                         <span className="text-[11px] font-mono text-purple-400 font-bold">
-                          Level 70+ • Sovereign Noble Standing
+                          Level {ROYAL_ELIGIBILITY.duke.minLevel}+ • Sovereign Noble Standing
                         </span>
                       </div>
                     </div>
@@ -545,36 +589,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     </ul>
                   </div>
 
-                  {/* Duke Checklist */}
-                  <div className="pt-2 border-t border-white/5 space-y-1.5">
-                    <div className="text-[11px] font-bold text-slate-400 font-mono">Eligibility Checklist:</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", currentLevel >= 70 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Level 70+ ({currentLevel}/70)
-                        {currentLevel >= 70 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", activeDays >= 180 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        180 Active Days ({activeDays}/180)
-                        {activeDays >= 180 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", reputation >= 85 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Reputation 85+ ({reputation}/85)
-                        {reputation >= 85 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", contribution >= 80 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Contribution 80+ ({contribution}/80)
-                        {contribution >= 80 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", influence >= 70 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Influence 70+ ({influence}/70)
-                        {influence >= 70 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", achievements >= 10 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        10 Achievements ({achievements}/10)
-                        {achievements >= 10 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                    </div>
-                  </div>
+                  <RoyalEligibilityChecklist
+                    rule={ROYAL_ELIGIBILITY.duke}
+                    level={currentLevel ?? 0}
+                    activeDays={activeDays}
+                    reputation={reputation}
+                    contribution={contribution}
+                    influence={influence}
+                    achievements={achievements}
+                  />
                 </div>
 
                 {/* 2. KING / QUEEN TIER */}
@@ -592,7 +615,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                           King / Queen of Arvdoul
                         </h4>
                         <span className="text-[11px] font-mono text-amber-400 font-bold">
-                          Level 90+ • Supreme Sovereign Monarch
+                          Level {ROYAL_ELIGIBILITY.king.minLevel}+ • Supreme Sovereign Monarch
                         </span>
                       </div>
                     </div>
@@ -636,36 +659,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     </ul>
                   </div>
 
-                  {/* King Checklist */}
-                  <div className="pt-2 border-t border-white/5 space-y-1.5">
-                    <div className="text-[11px] font-bold text-slate-400 font-mono">Eligibility Checklist:</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", currentLevel >= 90 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Level 90+ ({currentLevel}/90)
-                        {currentLevel >= 90 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", activeDays >= 365 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        365 Active Days ({activeDays}/365)
-                        {activeDays >= 365 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", reputation >= 95 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Reputation 95+ ({reputation}/95)
-                        {reputation >= 95 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", contribution >= 90 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Contribution 90+ ({contribution}/90)
-                        {contribution >= 90 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", influence >= 90 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        Influence 90+ ({influence}/90)
-                        {influence >= 90 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                      <span className={cn("p-1.5 rounded border flex items-center justify-between", achievements >= 25 ? "text-emerald-400 border-emerald-500/30" : "text-slate-400 border-white/5")}>
-                        25 Achievements ({achievements}/25)
-                        {achievements >= 25 ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                      </span>
-                    </div>
-                  </div>
+                  <RoyalEligibilityChecklist
+                    rule={ROYAL_ELIGIBILITY.king}
+                    level={currentLevel ?? 0}
+                    activeDays={activeDays}
+                    reputation={reputation}
+                    contribution={contribution}
+                    influence={influence}
+                    achievements={achievements}
+                  />
                 </div>
               </div>
             )}

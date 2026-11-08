@@ -187,7 +187,6 @@ const FilterTool = memo(({
       return [];
     }
   });
-  const [showIntensity, setShowIntensity] = useState(false);
   
   // Use external favorites if provided, otherwise use internal state
   const activeFavorites = externalFavorites.length > 0 ? externalFavorites : favorites;
@@ -225,7 +224,6 @@ const FilterTool = memo(({
 
   const handleSelect = useCallback((filterItem) => {
     setFilter(filterItem.value);
-    setShowIntensity(filterItem.value !== 'none');
   }, [setFilter]);
 
   const handleToggleFavorite = useCallback((filterId) => {

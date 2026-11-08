@@ -1,6 +1,6 @@
 // src/app/AppBootstrap.jsx
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useEffect, useCallback } from "react";
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { MotionConfig } from 'framer-motion';
@@ -19,17 +19,12 @@ import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
  * System initialization manager
  */
 const SystemInitializer = ({ onReady }) => {
-  const [initializationStage, setInitializationStage] = useState('starting');
-  const [progress, setProgress] = useState(0);
-  
   useEffect(() => {
     const initialize = async () => {
       try {
         console.info('🚀 Starting Arvdoul system initialization...');
         
         // Stage 1: Load essential configurations (non-blocking)
-        setInitializationStage('loading_config');
-        setProgress(20);
         
         // Dynamically import essential services (non-blocking)
         await Promise.allSettled([
@@ -44,8 +39,6 @@ const SystemInitializer = ({ onReady }) => {
         ]);
         
         // Stage 2: Load Firebase in background (non-critical)
-        setInitializationStage('background_init');
-        setProgress(60);
         
         // Initialize Firebase in background - don't block app startup
         const firebaseInit = async () => {
@@ -112,8 +105,6 @@ const SystemInitializer = ({ onReady }) => {
         wireOfflineDrain();
         
         // Stage 3: Complete
-        setInitializationStage('complete');
-        setProgress(100);
         
         console.info('✅ System initialization complete');
         initAppBackgroundPrefetch();
