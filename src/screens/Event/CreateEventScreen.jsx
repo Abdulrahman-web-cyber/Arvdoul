@@ -1,7 +1,7 @@
 // src/screens/Event/CreateEventScreen.jsx
 
-import { useState, useCallback, useRef } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { X, Calendar, MapPin, Users, Video, Globe, Plus, Check, Image as ImageIcon } from "lucide-react";
@@ -10,11 +10,27 @@ import { getStorageService } from '../../services/storageService';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 
+const toDateInput = (value) => {
+  const d = value?.toDate?.() || (value ? new Date(value) : null);
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+};
+const toTimeInput = (value) => {
+  const d = value?.toDate?.() || (value ? new Date(value) : null);
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return d.toTimeString().slice(0, 5);
+};
+
 const CreateEventScreen = () => {
   const navigate = useNavigate();
+  // /event/:eventId/edit routes here; without reading the param the screen
+  // rendered a blank form and "Edit event" silently created a duplicate.
+  const { eventId } = useParams();
+  const isEdit = Boolean(eventId);
   const { user } = useAuth();
   const eventService = getEventService();
   const storageService = getStorageService();
+  const editLoadedRef = useRef(false);
 
   // Form state
   const [step, setStep] = useState(1);
@@ -152,6 +168,40 @@ const CreateEventScreen = () => {
     setStep(prev => prev - 1);
   }, []);
 
+  // Load the event being edited and prefill the form.
+  useEffect(() => {
+    if (!isEdit || editLoadedRef.current) return undefined;
+    editLoadedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const event = await eventService.getEvent(eventId);
+        if (cancelled || !event) {
+          if (!cancelled) toast.error('Event not found');
+          return;
+        }
+        setFormData((prev) => ({
+          ...prev,
+          title: event.title || '',
+          description: event.description || '',
+          coverPreview: event.coverImage || '',
+          startDate: toDateInput(event.startDate),
+          startTime: toTimeInput(event.startDate),
+          endDate: toDateInput(event.endDate),
+          endTime: toTimeInput(event.endDate),
+          type: event.type || 'digital',
+          location: event.location || '',
+          capacity: event.capacity || 0,
+          privacy: event.privacy || 'public',
+          tickets: event.tickets || prev.tickets,
+        }));
+      } catch (err) {
+        if (!cancelled) toast.error(err?.message || 'Failed to load event');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isEdit, eventId, eventService]);
+
   // Handle submit
   const handleSubmit = useCallback(async (publishNow = true) => {
     if (!user?.uid) {
@@ -175,11 +225,10 @@ const CreateEventScreen = () => {
         ? new Date(`${formData.endDate}T${formData.endTime}`)
         : null;
 
-      // Create event
-      const event = await eventService.createEvent(user.uid, {
+      const payload = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        coverImage: coverUrl,
+        coverImage: coverUrl || formData.coverPreview || '',
         startDate: startDateTime,
         endDate: endDateTime,
         type: formData.type,
@@ -187,7 +236,16 @@ const CreateEventScreen = () => {
         capacity: formData.capacity,
         privacy: formData.privacy,
         tickets: formData.tickets
-      });
+      };
+
+      if (isEdit) {
+        await eventService.updateEvent(eventId, payload, user.uid);
+        toast.success('Event updated!');
+        navigate(`/event/${eventId}`);
+        return;
+      }
+
+      const event = await eventService.createEvent(user.uid, payload);
 
       // Publish if requested
       if (publishNow) {
@@ -204,7 +262,7 @@ const CreateEventScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.uid, formData, storageService, eventService, navigate]);
+  }, [user?.uid, formData, storageService, eventService, navigate, isEdit, eventId]);
 
   // Event type options
   const typeOptions = [
@@ -638,7 +696,7 @@ const CreateEventScreen = () => {
           )}
 
           <div className="flex gap-3">
-            {step === 3 && (
+            {step === 3 && !isEdit && (
               <button
                 onClick={() => handleSubmit(false)}
                 disabled={loading}
@@ -652,7 +710,7 @@ const CreateEventScreen = () => {
               disabled={loading}
               className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
             >
-              {loading ? 'Creating...' : step === 3 ? 'Create & Publish' : 'Continue'}
+              {loading ? (isEdit ? 'Saving...' : 'Creating...') : step === 3 ? (isEdit ? 'Save Changes' : 'Create & Publish') : 'Continue'}
             </button>
           </div>
         </div>

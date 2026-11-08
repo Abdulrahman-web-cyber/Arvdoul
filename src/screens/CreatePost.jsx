@@ -4,7 +4,7 @@ import React, {
   useReducer, useEffect, useCallback, useRef, useState,
   createContext, useContext, useMemo, lazy, Suspense, useId
 } from "react";
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation, useParams } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "../context/ThemeContext";
@@ -1435,6 +1435,11 @@ function CreatePostProvider({ children }) {
 
       const effectiveText = sanitizedContent.trim() || jsonExtractedText || rawContent.trim();
 
+      // /edit/:postId (and legacy ?edit=) edits the existing document; the
+      // state carried `editPostId` but nothing consumed it, so "Edit post"
+      // silently published a duplicate. Update in place and return early.
+      const editPostId = current.editPostId || null;
+
       // Auto-adapt post type if appropriate
       let effectiveType = current.postType;
       if ((effectiveType === "image" || effectiveType === "video") && current.mediaItems.length === 0 && effectiveText) {
@@ -1446,6 +1451,27 @@ function CreatePostProvider({ children }) {
       if (effectiveType === "text" && !effectiveText && current.mediaItems.length === 0) throw new Error("Please add some text or media to your post.");
       if (effectiveType === "image" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add an image or caption.");
       if (effectiveType === "video" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add a video or caption.");
+
+      if (editPostId) {
+        const { getFirestoreService } = await import("../services/firestoreService.js");
+        const firestoreService = services.current.firestore || getFirestoreService();
+        const media = await uploadMedia(current.mediaItems);
+        await firestoreService.updatePost(editPostId, {
+          type: effectiveType,
+          content: effectiveText,
+          contentJSON: sanitizedJSON,
+          media,
+          mediaUrl: media[0]?.url || "",
+          videoUrl: media.find((m) => m.type === "video")?.url || "",
+          thumbnailUrl: media[0]?.thumbnail || media[0]?.url || "",
+          visibility: current.visibility || "public",
+        });
+        if (current.draftId) deleteDraft(current.draftId).catch(() => {});
+        toast.success("Post updated!");
+        publishLockRef.current = false;
+        navigate(`/post/${editPostId}`);
+        return;
+      }
       if (effectiveType === "poll" && current.typeData.poll.options.filter(o => o.trim()).length < 2) throw new Error("Please add at least 2 poll options.");
       if (effectiveType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
       if (effectiveType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
@@ -3119,7 +3145,7 @@ function CreatePostShell({ children }) {
                 <span>Publishing...</span>
               </>
             ) : (
-              <span>{state.scheduledTime ? "📅 Schedule Post" : "🚀 Publish Post"}</span>
+              <span>{state.editPostId ? "💾 Save Changes" : state.scheduledTime ? "📅 Schedule Post" : "🚀 Publish Post"}</span>
             )}
           </button>
         )}
@@ -3133,8 +3159,12 @@ function CreatePostShell({ children }) {
 // PostOptionsDrawer "Edit"). Fetches the post and dispatches LOAD_DRAFT.
 function EditPostLoader() {
   const [searchParams] = useSearchParams();
+  // PostOptionsDrawer "Edit" navigates to the /edit/:postId route, not to
+  // ?edit=. Reading only the query param left the composer empty, so editing a
+  // post silently created a new one instead of updating the original.
+  const { postId: routePostId } = useParams();
   const { dispatch } = useCreatePostState();
-  const editId = searchParams.get("edit");
+  const editId = searchParams.get("edit") || routePostId || null;
   const quoteSnippet = searchParams.get("quote");
   const location = useLocation();
   const loadedRef = React.useRef(false);

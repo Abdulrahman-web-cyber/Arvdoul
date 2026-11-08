@@ -280,6 +280,7 @@ jobs:
           src/__tests__/deadEventGuard.test.js
           src/__tests__/deadWiringGuard.test.js
           src/__tests__/deadPropsGuard.test.js
+          src/__tests__/routeParamWiringGuard.test.js
           src/__tests__/uiStateWiringGuard.test.js
           src/__tests__/reducerDispatchGuard.test.js
           src/__tests__/routeStateHandoffGuard.test.js
