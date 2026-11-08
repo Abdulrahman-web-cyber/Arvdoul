@@ -42,7 +42,6 @@ export default function PerksRewardsScreen() {
   const experience = Number(profile?.experience) || 0;
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'perks' | 'coins' | 'gifts' | 'prestige'
-  const [selectedGift, setSelectedGift] = useState(null);
 
   const citizenTier = useMemo(() => getCitizenTier(currentLevel, activeDays), [currentLevel, activeDays]);
   const prestige = useMemo(() => getPrestigeInfo(currentLevel), [currentLevel]);
@@ -57,9 +56,11 @@ export default function PerksRewardsScreen() {
   }, [currentLevel]);
 
   const handleSendGiftClick = (gift) => {
-    setSelectedGift(gift);
-    navigate(`/profile/me`);
-    toast.info(`Select a friend or creator to send the ${gift.name} (${gift.coins} coins)!`);
+    // Gifts are sent from a recipient's profile (/gift/:userId); there is no
+    // recipient yet on this catalogue screen, so send the user to their
+    // connections to pick one instead of dropping the selection.
+    toast.info(`Open a friend or creator's profile to send the ${gift.name} (${gift.coins} coins).`);
+    navigate('/connections');
   };
 
   return (

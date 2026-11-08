@@ -49,7 +49,6 @@ const VideoCard = memo(({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [isFollowing, setIsFollowing] = useState(followedByViewer ?? video?.creator?.isFollowing ?? false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [showGestureGuide, setShowGestureGuide] = useState(true);
 
   const { theme, isDark } = useTheme();
@@ -273,8 +272,6 @@ const VideoCard = memo(({
   return (
     <div
       ref={containerRef}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className={`relative w-full h-full bg-black overflow-hidden select-none flex items-center justify-center ${className}`}
       onClick={handleContainerClick}
     >

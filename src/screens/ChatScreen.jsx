@@ -50,7 +50,6 @@ export default function ChatScreen() {
   const [loadError, setLoadError] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
   const [presence, setPresence] = useState({});
-  const [sendingId, setSendingId] = useState(null);
   const [atBottom, setAtBottom] = useState(true);
   const [newSinceScroll, setNewSinceScroll] = useState(0);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -255,7 +254,6 @@ export default function ChatScreen() {
           createdAt: new Date(),
         },
       ]);
-      setSendingId(localId);
       try {
         const res = await getMessagingService().sendMessage(conversationId, { type: 'text', content: data.content });
         reconcileSentMessage(localId, res);
@@ -264,8 +262,6 @@ export default function ChatScreen() {
         // Roll back the optimistic message so the UI never lies
         pendingRef.current.delete(localId);
         setMessages((prev) => prev.filter((m) => m.id !== localId));
-      } finally {
-        setSendingId(null);
       }
     },
     [conversationId, uid, reconcileSentMessage]
@@ -296,7 +292,6 @@ export default function ChatScreen() {
           createdAt: new Date(),
         },
       ]);
-      setSendingId(localId);
       try {
         // The service uploads the file and builds the media message.
         const res = await getMessagingService().sendMessage(conversationId, { type, media: { file } });
@@ -305,8 +300,6 @@ export default function ChatScreen() {
         toastError(err.message || 'Failed to send media');
         pendingRef.current.delete(localId);
         setMessages((prev) => prev.filter((m) => m.id !== localId));
-      } finally {
-        setSendingId(null);
       }
     },
     [conversationId, uid, reconcileSentMessage]
@@ -356,6 +349,23 @@ export default function ChatScreen() {
     if (names.length === 0) return null;
     return names.length === 1 ? `${names[0]} is typing...` : 'Several people are typing...';
   }, [typingUsers, conversation]);
+
+  // Live presence for a 1:1 chat (RTDB `.info/connected` style payload:
+  // { online, lastSeen }). Only meaningful when there is a single other
+  // participant, so a group header keeps showing its member count.
+  const presenceText = useMemo(() => {
+    if (otherParticipants.length !== 1) return null;
+    const p = presence[otherParticipants[0]];
+    if (!p) return null;
+    if (p.online) return 'Online';
+    if (p.lastSeen) {
+      const mins = Math.floor((Date.now() - Number(p.lastSeen)) / 60000);
+      if (mins < 1) return 'Last seen just now';
+      if (mins < 60) return `Last seen ${mins}m ago`;
+      return `Last seen ${Math.floor(mins / 60)}h ago`;
+    }
+    return null;
+  }, [presence, otherParticipants]);
 
   // Conversation info panel: pinned messages, shared media, search
   const openInfoPanel = useCallback(async () => {
@@ -557,7 +567,7 @@ export default function ChatScreen() {
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm truncate">{title}</h1>
             <p className="text-[11px] opacity-60 truncate">
-              {typingText || (otherParticipants.length > 0
+              {typingText || presenceText || (otherParticipants.length > 0
                 ? `${otherParticipants.length} participant${otherParticipants.length > 1 ? 's' : ''}`
                 : '')}
             </p>

@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import achievementService from '../../services/achievementService';
-import { CheckCircle2, Lock, Sparkles, Share2, Search, X } from "lucide-react";
+import { CheckCircle2, Lock, Sparkles, Share2, Search, X, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 
 const CATEGORIES = [
@@ -109,6 +109,14 @@ export default function AchievementsScreen() {
       percentage: achievements.length > 0 ? Math.round((unlocked.length / achievements.length) * 100) : 0,
     };
   }, [achievements]);
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen pb-24 flex items-center justify-center ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" aria-label="Loading achievements" />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>

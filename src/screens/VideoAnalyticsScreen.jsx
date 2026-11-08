@@ -36,7 +36,6 @@ const VideoAnalyticsScreen = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [analytics, setAnalytics] = useState(null);
   const { user } = useAuth();
 
@@ -105,7 +104,6 @@ const VideoAnalyticsScreen = () => {
         if (!cancelled) setAnalytics(null);
       } finally {
         if (!cancelled) setLoading(false);
-        if (!cancelled) setIsInitialized(true);
       }
     };
     load();

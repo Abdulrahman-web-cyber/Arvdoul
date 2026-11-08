@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Trash2, Search, Grid, List, Share2, Play, Plus, CheckSquare, Square, Folder, Sparkles, Film, Image as ImageIcon, Music } from "lucide-react";
+import { Bookmark, Trash2, Search, Grid, List, Share2, Play, Plus, CheckSquare, Square, Folder, Sparkles, Film, Image as ImageIcon, Music, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -294,7 +294,12 @@ export default function SavedScreen() {
         )}
 
         {/* Items Display */}
-        {filteredItems.length === 0 ? (
+        {savedLoading ? (
+          <div className="text-center py-16 text-gray-400">
+            <Loader2 className="w-8 h-8 mx-auto animate-spin" />
+            <p className="mt-3 text-xs">Loading saved items...</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="text-center py-16 space-y-3">
             <div className="w-16 h-16 mx-auto rounded-3xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
               <Bookmark className="w-8 h-8" />

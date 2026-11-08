@@ -63,4 +63,34 @@ describe('ui-state wiring guard: every useState setter is reachable', () => {
     }
     expect(violations).toEqual([]);
   });
+
+  // The inverse defect: a setter that IS called (so the previous test passes)
+  // but whose value is never rendered — "write-only state". It looks wired up
+  // and does nothing: a spinner that never shows, a denial flag that never
+  // gates the UI, a progress value no one reads. The auth screens keep a
+  // deliberate recaptchaError value (do-not-touch), so they are exempt.
+  const WRITE_ONLY_EXEMPT = new Set(['src/screens/SignupStep2VerifyContact.jsx']);
+
+  test('no useState value is written but never rendered', () => {
+    const violations = [];
+    for (const file of collect(SRC)) {
+      const rel = path.relative(root, file);
+      if (WRITE_ONLY_EXEMPT.has(rel)) continue;
+      const source = fs.readFileSync(file, 'utf8');
+      const re = /const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*useState/g;
+      let match;
+      while ((match = re.exec(source))) {
+        const [declaration, value, setter] = match;
+        const rest = source.slice(0, match.index) + source.slice(match.index + declaration.length);
+        // Only the value-read side matters here; the setter-reachable side is
+        // covered by the test above.
+        if (occurrences(rest, setter) > 0 && occurrences(rest, value) === 0) {
+          violations.push(
+            `${rel}: "${value}" is set via "${setter}" but never read — the state is write-only`,
+          );
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });

@@ -42,7 +42,6 @@ export default function PreviewCanvas({
   const videoRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
-  const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
 
   // Sync main video playback with currentTime
   useEffect(() => {
@@ -190,9 +189,7 @@ export default function PreviewCanvas({
                 key={textClip.id}
                 drag
                 dragMomentum={false}
-                onDragStart={() => setIsDraggingOverlay(true)}
                 onDragEnd={(e, info) => {
-                  setIsDraggingOverlay(false);
                   onUpdateClip?.(textClip.trackId, textClip.id, {
                     x: (textClip.x || 50) + (info.offset.x / 4),
                     y: (textClip.y || 50) + (info.offset.y / 4),

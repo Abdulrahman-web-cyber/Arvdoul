@@ -109,7 +109,6 @@ export default function MessagingScreen() {
   }, [user?.uid]);
   const [showSearchFilters, setShowSearchFilters] = useState(false);
   const [messageRequests, setMessageRequests] = useState([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
 
   // Load pending message requests (spec §35) — users who were blocked by
   // privacy settings but requested a conversation.
@@ -117,7 +116,6 @@ export default function MessagingScreen() {
     if (!user?.uid) return;
     let cancelled = false;
     const load = async () => {
-      setRequestsLoading(true);
       try {
         const { getMessagingService } = await import('../services/messagesService.js');
         const res = await getMessagingService().getMessageRequests(user.uid, { limit: 20 });
@@ -125,8 +123,6 @@ export default function MessagingScreen() {
       } catch (err) {
         console.warn('Failed to load message requests:', err);
         if (!cancelled) setMessageRequests([]);
-      } finally {
-        if (!cancelled) setRequestsLoading(false);
       }
     };
     load();

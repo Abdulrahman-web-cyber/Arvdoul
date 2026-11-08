@@ -9,7 +9,7 @@ import { useTheme } from '../../context/ThemeContext';
 import walletService from '../../services/walletService';
 import monetizationService from '../../services/monetizationService';
 import PaymentModal from '../../components/Shared/PaymentModal';
-import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw } from "lucide-react";
+import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, LEVEL_GATES, getCreatorCapabilities } from '../../shared/levelConfig.cjs';
 
@@ -150,6 +150,14 @@ export default function WalletScreen() {
     if (activeTab === 'out') return (tx.amount || 0) < 0;
     return true;
   });
+
+  if (loading && !wallet) {
+    return (
+      <div className={`min-h-screen pb-24 flex items-center justify-center ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" aria-label="Loading wallet" />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
