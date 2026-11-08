@@ -1496,6 +1496,24 @@ describe('Admin screens - server-authoritative admin gate', () => {
     expect(s).toContain('FUNCTIONS.RESOLVE_USER_REPORT');
     expect(s).not.toMatch(/updateDoc\(\s*doc\(firestore, collectionName/);
   });
+
+  test('a denied admin sees a denial state, never an empty dashboard', () => {
+    // AdminDashboardScreen held the denial in `error` but never rendered it, so
+    // a non-admin (or a failed count query) saw a full grid of zeros that read
+    // like real, empty platform data. Every admin surface must render the
+    // denial explicitly.
+    for (const file of [
+      'AdminDashboardScreen.jsx',
+      'AdminContentManagementScreen.jsx',
+      'AdminModerationQueueScreen.jsx',
+    ]) {
+      const s = fs.readFileSync(path.join(root, 'src/screens/Admin', file), 'utf8');
+      expect(s).toContain('Access Denied');
+    }
+    const dash = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
+    expect(dash).toMatch(/if \(error\)/);
+    expect(dash).toContain('{error}');
+  });
 });
 
 describe('Admin feature flags - platform-wide, server-authoritative', () => {

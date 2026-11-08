@@ -13,6 +13,7 @@ const AdminModerationQueueScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState([]);
+  const [denied, setDenied] = useState(false);
   const [filter, setFilter] = useState('pending');
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -23,7 +24,7 @@ const AdminModerationQueueScreen = () => {
     const load = async () => {
       try {
         // Cheap gate first so a non-admin never fires an admin callable.
-        if (!(await fetchAdminStatus())) { setLoading(false); return; }
+        if (!(await fetchAdminStatus())) { setDenied(true); setLoading(false); return; }
         const res = await callFunction(FUNCTIONS.ADMIN_LIST_MODERATION_REPORTS, { limit: 100 });
         setReports(Array.isArray(res?.reports) ? res.reports : []);
       } catch {
@@ -87,6 +88,20 @@ const AdminModerationQueueScreen = () => {
         return 'bg-gray-100 text-gray-700';
     }
   };
+
+  if (denied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <p className="text-gray-400">Admin privileges required.</p>
+          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
