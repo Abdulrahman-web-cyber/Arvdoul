@@ -10,6 +10,7 @@ import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import OfflineIndicator from '../components/UI/OfflineIndicator.jsx';
+import IncomingCallBanner from '../components/Shared/IncomingCallBanner.jsx';
 import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
 import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
 import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
@@ -157,6 +158,9 @@ export default function AppBootstrap() {
               
               {/* Global offline sync indicator */}
               <OfflineIndicator />
+
+              {/* Incoming 1:1 call ring (subscribes to ringing calls for the callee) */}
+              <IncomingCallBanner />
               
               {/* PWA Install and Update Banners */}
               <PWAInstallBanner />

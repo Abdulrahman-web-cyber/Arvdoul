@@ -137,8 +137,8 @@ const VideosScreen = () => {
   }, []);
 
   return (
-    <div 
-      className="h-screen w-full overflow-hidden relative"
+    <div
+      className="h-full w-full overflow-hidden relative"
       style={{
         background: isDark ? '#050510' : '#F8F9FA',
       }}
