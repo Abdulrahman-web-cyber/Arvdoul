@@ -10,6 +10,7 @@ import {
   getContributionBand,
   getRoyalEligibility,
   LEVEL_GATES,
+  PASSPORT_STAMP_GATES,
 } from './levelSystemService.js';
 import { getPassportUrl } from "../utils/shareUtils.js";
 import { resolveCapabilities } from './profileCapabilityEngine.js';
@@ -242,7 +243,8 @@ class PassportService {
     });
 
     // 3. Civic Vanguard Stamp (Level 10+ or 7+ day streak)
-    const hasVanguard = (level !== null && level >= LEVEL_GATES.civicVanguard) || (activeStreak !== null && activeStreak >= 7);
+    const hasVanguard = (level !== null && level >= LEVEL_GATES.civicVanguard)
+      || (activeStreak !== null && activeStreak >= PASSPORT_STAMP_GATES.civicStreak);
     stamps.push({
       id: 'stamp_vanguard',
       code: 'ARV-CVG-010',
@@ -255,7 +257,7 @@ class PassportService {
       icon: '⚔️',
       description: hasVanguard
         ? 'Commended for civic discipline and persistent participation in the commonwealth.'
-        : 'Requires Level 10 or a 7-day sustained citizenship streak to unlock.',
+        : `Requires Level ${LEVEL_GATES.civicVanguard} or a ${PASSPORT_STAMP_GATES.civicStreak}-day sustained citizenship streak to unlock.`,
     });
 
     // 4. Creative Laureate Visa
@@ -289,11 +291,12 @@ class PassportService {
       icon: '📜',
       description: hasDiplomatic
         ? 'Granted diplomatic audience and cross-community representation credentials.'
-        : 'Requires verified identity credentials or Level 15 citizenship standing.',
+        : `Requires verified identity credentials or Level ${LEVEL_GATES.diplomaticEnvoy} citizenship standing.`,
     });
 
     // 6. National Honors Ribbon Stamp
-    const hasHonors = (verifiedAchievements && verifiedAchievements.length >= 3) || (earnedTitles && earnedTitles.length >= 1);
+    const hasHonors = (verifiedAchievements && verifiedAchievements.length >= PASSPORT_STAMP_GATES.honorsAchievements)
+      || (earnedTitles && earnedTitles.length >= PASSPORT_STAMP_GATES.honorsTitles);
     stamps.push({
       id: 'stamp_honors',
       code: 'ARV-NHL-003',
@@ -306,7 +309,7 @@ class PassportService {
       icon: '👑',
       description: hasHonors
         ? 'Bestowed for distinguished service and decorated achievements in Arvdoul.'
-        : 'Requires at least 3 verified achievements or an earned national title.',
+        : `Requires at least ${PASSPORT_STAMP_GATES.honorsAchievements} verified achievements or an earned national title.`,
     });
 
     return stamps;

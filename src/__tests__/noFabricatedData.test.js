@@ -2125,3 +2125,27 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
     expect(s).not.toMatch(/has no public key/);
   });
 });
+
+describe('Passport visa stamps read their gates from the shared config', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('no stamp threshold is restated as a literal in passportService', () => {
+    const s = read('src/services/passportService.js');
+    // The stamp gates (streak 7, 3 achievements, 1 title) were literals in both
+    // the eligibility math and the "Requires ..." copy; a config change would
+    // have left the description advertising a gate the code no longer used.
+    expect(s).toContain('PASSPORT_STAMP_GATES.civicStreak');
+    expect(s).toContain('PASSPORT_STAMP_GATES.honorsAchievements');
+    expect(s).not.toContain('activeStreak >= 7');
+    expect(s).not.toContain('verifiedAchievements.length >= 3');
+    expect(s).not.toContain('Requires Level 10 or a 7-day');
+    expect(s).not.toContain('or Level 15 citizenship standing');
+    expect(s).not.toContain('at least 3 verified achievements');
+  });
+
+  test('the shared config owns the passport stamp gates', () => {
+    const s = read('src/shared/levelConfig.cjs');
+    expect(s).toContain('PASSPORT_STAMP_GATES');
+    expect(s).toContain('civicStreak: 7');
+  });
+});
