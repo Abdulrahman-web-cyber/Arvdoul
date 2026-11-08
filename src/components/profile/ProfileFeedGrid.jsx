@@ -241,6 +241,7 @@ const ProfileFeedGrid = memo(({
       <div className="w-full py-1">
         <ProfileCitizenshipCard
           userId={profile?.id || profile?.userId}
+          viewerId={currentUserId}
           profile={profile}
           isOwner={isOwner}
           theme={theme}

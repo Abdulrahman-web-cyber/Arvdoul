@@ -2192,3 +2192,19 @@ describe('No user-facing gate text restates a threshold literal', () => {
     expect(s).toContain("userLevel !== null ? `Level ${userLevel}` : 'Unranked'");
   });
 });
+
+describe('ProfileCitizenshipCard resolves the real viewer relationship', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the card forwards a viewerId instead of always resolving PUBLIC', () => {
+    const card = read('src/components/profile/ProfileCitizenshipCard.jsx');
+    expect(card).toContain('viewerId = null');
+    expect(card).toContain('passportService.getPassport(userId, viewerId || (isOwner ? userId : null), profile)');
+    expect(card).not.toContain('passportService.getPassport(userId, isOwner ? userId : null, profile)');
+  });
+
+  test('ProfileFeedGrid threads the current user into the card', () => {
+    const grid = read('src/components/profile/ProfileFeedGrid.jsx');
+    expect(grid).toContain('viewerId={currentUserId}');
+  });
+});

@@ -11,6 +11,7 @@ import passportService from '../../services/passportService';
 
 export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
   userId,
+  viewerId = null,
   profile = {},
   isOwner = false,
   theme = 'dark',
@@ -25,7 +26,10 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
     let mounted = true;
     if (!userId) return;
 
-    passportService.getPassport(userId, isOwner ? userId : null, profile)
+    // Pass the real viewer so the card resolves the same relationship (and
+    // capability decision) the passport screen does; a null viewer always
+    // resolves PUBLIC and under-reports for followers/connections.
+    passportService.getPassport(userId, viewerId || (isOwner ? userId : null), profile)
       .then((data) => {
         if (mounted) {
           setPassport(data);
@@ -39,7 +43,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
     return () => {
       mounted = false;
     };
-  }, [userId, isOwner, profile]);
+  }, [userId, viewerId, isOwner, profile]);
 
   if (loading) {
     return (
