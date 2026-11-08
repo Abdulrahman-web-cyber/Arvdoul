@@ -95,6 +95,44 @@ async function settleWithdrawal(deps, withdrawalId, action) {
       throw new functions.https.HttpsError('aborted', 'Withdrawal is being processed by another request.');
     }
 
+    // Verify the creator still holds the locked coins BEFORE moving any real
+    // money. A Stripe payout is irreversible, so a balance that shrank between
+    // the request and the approval (a concurrent spend, an admin debit) must
+    // fail here rather than after a payout has already been sent. The finalize
+    // transaction below re-checks, but it runs after Stripe and cannot
+    // un-send the money.
+    //
+    // A failed settlement must also RELEASE the hold: `lockedCoins` is what
+    // makes the coins unavailable in the wallet, so leaving it set would strand
+    // the creator's balance forever on a withdrawal that never pays out.
+    const userRef = db.collection('users').doc(withdrawalData.userId);
+    const preflight = await runTransaction(async (t) => {
+      const freshSnap = await t.get(withdrawalRef);
+      if (freshSnap.data().status !== 'processing' || freshSnap.data().lockOwner !== serverId) {
+        throw new Error('Invalid lock state.');
+      }
+      const userSnap = await t.get(userRef);
+      const balance = userSnap.exists ? (userSnap.data().coins || 0) : 0;
+      const locked = userSnap.exists ? (userSnap.data().lockedCoins || 0) : 0;
+      if (locked < withdrawalData.amount || balance < withdrawalData.amount) {
+        const releaseAmount = Math.min(withdrawalData.amount, locked);
+        if (releaseAmount > 0) {
+          t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount) });
+        }
+        t.update(withdrawalRef, {
+          status: 'failed',
+          failureReason: 'Insufficient balance before payout.',
+          lockOwner: admin.firestore.FieldValue.delete(),
+          lockExpiresAt: admin.firestore.FieldValue.delete(),
+        });
+        return false;
+      }
+      return true;
+    });
+    if (!preflight) {
+      throw new functions.https.HttpsError('failed-precondition', 'Insufficient balance to settle this withdrawal.');
+    }
+
     // Convert through the shared helper so the settled payout uses the same
     // rate/rounding policy the wallet and payout screens display.
     const usdAmount = coinsToUsd(withdrawalData.amount) * (COINS_PER_DOLLAR / coinsPerDollar);
@@ -122,10 +160,9 @@ async function settleWithdrawal(deps, withdrawalId, action) {
         throw new Error('Invalid lock state.');
       }
 
-      const userRef = db.collection('users').doc(withdrawalData.userId);
-      const userSnap = await t.get(userRef);
-      const currentBalance = userSnap.data().coins || 0;
-      const currentLocked = userSnap.data().lockedCoins || 0;
+      const userSnap2 = await t.get(userRef);
+      const currentBalance = userSnap2.data().coins || 0;
+      const currentLocked = userSnap2.data().lockedCoins || 0;
 
       if (currentLocked < withdrawalData.amount || currentBalance < withdrawalData.amount) {
         t.update(withdrawalRef, { status: 'failed', failureReason: 'Insufficient balance at finalization.' });

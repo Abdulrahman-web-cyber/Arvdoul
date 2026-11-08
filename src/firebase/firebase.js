@@ -1,9 +1,12 @@
 import appletConfig from '../../firebase-applet-config.json' with { type: 'json' };
 
 // Environment-overridable Firebase config. VITE_FIREBASE_* takes precedence
-// (set in CI / .env); fallbacks read from firebase-applet-config.json.
+// (set in CI / .env); the single fallback source is firebase-applet-config.json.
+// A Firebase web apiKey is a public client identifier, not a secret, but it
+// must not be duplicated as a literal here — the committed applet config is the
+// one place it lives, so it can never drift from the deployed project.
 const FIREBASE_CONFIG = {
-  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || appletConfig?.apiKey || "AIzaSyDm9ks21qUT7vCVh6USGVtHJblBzEEPjxk",
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || appletConfig?.apiKey || "",
   authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || appletConfig?.authDomain || "arvdoul-8057b.firebaseapp.com",
   databaseURL: import.meta.env?.VITE_FIREBASE_DATABASE_URL || `https://${appletConfig?.projectId || "arvdoul-8057b"}-default-rtdb.firebaseio.com`,
   projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || appletConfig?.projectId || "arvdoul-8057b",

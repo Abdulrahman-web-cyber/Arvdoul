@@ -768,6 +768,13 @@ export default function HomeScreen() {
       }
       // Server-verified reward: the client never credits coins locally.
       const result = await watchAd('home', rewardAd.id, AD_WATCH_SECONDS, {});
+      if (result?.offlineQueued) {
+        // Queued, not earned — the server has not verified the ad yet.
+        toast.info('Ad reward queued — it will be credited when you are back online.');
+        setIsRewardAdOpen(false);
+        setRewardAd(null);
+        return;
+      }
       if (typeof result?.newBalance === 'number') {
         setUserCoins(result.newBalance);
         try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch {}
