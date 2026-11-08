@@ -84,3 +84,26 @@ describe('no client-side security theatre', () => {
   });
 });
 
+describe('the enforced CSP is not nullified', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const csp = (html.match(/Content-Security-Policy"\s+content="([^"]*)"/) || [])[1] || '';
+  const scriptSrc = (csp.match(/script-src ([^;]*)/) || [])[1] || '';
+
+  test('script-src does not allow eval', () => {
+    // The app has no eval()/new Function() and loads no external scripts, so
+    // 'unsafe-eval' only weakens XSS defence — it must not be present.
+    expect(csp).toContain('script-src');
+    expect(scriptSrc).not.toContain("'unsafe-eval'");
+  });
+
+  test('script-src does not allow arbitrary https origins', () => {
+    // A bare `https:` source lets any host's script run, defeating the directive.
+    expect(scriptSrc).not.toMatch(/(^|\s)https:(\s|$)/);
+  });
+
+  test('the app loads no external scripts that would need a looser policy', () => {
+    const externalScript = /<script[^>]*\ssrc=["']https?:/i.test(html);
+    expect(externalScript).toBe(false);
+  });
+});
+
