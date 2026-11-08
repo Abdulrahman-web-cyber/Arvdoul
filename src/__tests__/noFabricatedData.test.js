@@ -2170,3 +2170,25 @@ describe('Royal-eligibility copy is rendered from the shared rule', () => {
     expect(s).not.toContain('Level 90 + Impeccable');
   });
 });
+
+describe('No user-facing gate text restates a threshold literal', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ConnectionsScreen reads the follower gate from the shared config', () => {
+    const s = read('src/screens/Profile/ConnectionsScreen.jsx');
+    expect(s).toContain('LEVEL_GATES.publicFollowers}+');
+    expect(s).not.toContain('At Level 3+');
+  });
+
+  test('EditProfileScreen section comments do not carry stale gate numbers', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).not.toContain('Creators or Level 10+');
+    expect(s).not.toContain('Royal Family or Level 35+');
+  });
+
+  test('ProfileVerificationModal never fabricates a Level 0 standing', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain('Level {userLevel || 0}');
+    expect(s).toContain("userLevel !== null ? `Level ${userLevel}` : 'Unranked'");
+  });
+});

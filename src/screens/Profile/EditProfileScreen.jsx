@@ -1145,7 +1145,7 @@ export default function EditProfileScreen() {
         </section>
         )}
 
-        {/* 5. CREATOR SUITE SETTINGS (Unlocked for Creators or Level 10+) */}
+        {/* 5. CREATOR SUITE SETTINGS (gated by the canonical resolveCreatorFlag) */}
         {isCreatorAccount && (activeSection === 'all' || activeSection === 'creator') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
@@ -1264,7 +1264,7 @@ export default function EditProfileScreen() {
         </section>
         )}
 
-        {/* 6. ROYAL & NOBILITY HERALDIC SETTINGS (Unlocked for Royal Family or Level 35+) */}
+        {/* 6. ROYAL & NOBILITY HERALDIC SETTINGS (gated by isRoyalOrNoble / LEVEL_GATES.sovereign) */}
         {isRoyalOrNoble && (activeSection === 'all' || activeSection === 'royal') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",

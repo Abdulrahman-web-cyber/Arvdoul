@@ -311,7 +311,7 @@ export const ProfileVerificationModal = memo(({
                         />
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                        <span>Level {userLevel || 0}</span>
+                        <span>{userLevel !== null ? `Level ${userLevel}` : 'Unranked'}</span>
                         <span>Level {requiredLevel} Target</span>
                       </div>
                     </div>
