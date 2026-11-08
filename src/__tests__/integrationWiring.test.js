@@ -421,3 +421,22 @@ describe('router wiring: every lazy screen is actually routed', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('safety-graph management is reachable from the UI', () => {
+  // `blockUser`/`muteUser`/`restrictUser` were writable from profile menus but
+  // nothing let a user REVIEW or REVERSE a block/mute — a permanent one-way
+  // action. BlockedAccountsScreen closes that gap.
+  test('BlockedAccountsScreen lists and lifts every safety edge', () => {
+    const src = read('src/screens/BlockedAccountsScreen.jsx');
+    for (const fn of ['getBlockedUsers', 'getMutedUsers', 'getRestrictedUsers',
+                      'unblockUser', 'unmuteUser', 'unrestrictUser']) {
+      expect(src).toContain(fn);
+    }
+  });
+
+  test('the blocked-accounts route and Settings entry point exist', () => {
+    expect(read('src/routes/AppRoutes.jsx')).toContain('/settings/blocked');
+    const settings = read('src/screens/SettingsScreen.jsx');
+    expect(settings).toContain("navigate('/settings/blocked')");
+  });
+});

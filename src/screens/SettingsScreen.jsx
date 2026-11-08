@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, RefreshCw, Languages, Activity, Trophy, Zap } from "lucide-react";
+import { Bell, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap } from "lucide-react";
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -555,6 +555,13 @@ export default function SettingsScreen() {
               updateSetting('privacy.showActiveStatus', v);
               handleUpdateProfilePrivacyScope('presence', v ? VISIBILITY_SCOPES.FOLLOWERS : VISIBILITY_SCOPES.ONLY_ME);
             }}
+          />
+
+          <NavRow
+            icon={ShieldOff}
+            label="Blocked & muted accounts"
+            description="Review or lift the accounts you have blocked, muted, or restricted"
+            onClick={() => navigate('/settings/blocked')}
           />
 
           {/* Granular Scope Selectors */}

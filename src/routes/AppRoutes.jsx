@@ -10,6 +10,7 @@ import SplashScreen from "../screens/SplashScreen.jsx";
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
 const DataUsageScreen = lazy(() => import("../screens/DataUsageScreen.jsx"));
+const BlockedAccountsScreen = lazy(() => import("../screens/BlockedAccountsScreen.jsx"));
 const ProjectDashboardScreen = lazy(() => import("../screens/Collaboration/ProjectDashboardScreen.jsx"));
 const ProjectDetailScreen = lazy(() => import("../screens/Collaboration/ProjectDetailScreen.jsx"));
 const LoginScreen = lazy(() => import("../screens/LoginScreen.jsx"));
@@ -646,6 +647,14 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <DataUsageScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/settings/blocked" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <BlockedAccountsScreen />
           </Suspense>
         </ProtectedRoute>
       } />
