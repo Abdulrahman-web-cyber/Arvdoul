@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -44,6 +44,8 @@ function relativeTime(createdAt) {
 export default function StoriesScreen() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { highlightId: routeHighlightId } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -64,6 +66,7 @@ export default function StoriesScreen() {
   const [flyingParticles, setFlyingParticles] = useState([]);
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
+  const [highlightGroup, setHighlightGroup] = useState(null);
 
   const progressIntervalRef = useRef(null);
   const storyAudioRef = useRef(null);
@@ -142,9 +145,63 @@ export default function StoriesScreen() {
     return () => { cancelled = true; };
   }, [user?.uid]);
 
+  // Highlight deep links: /highlight/:highlightId (from HighlightsScreen) and
+  // the legacy /stories?highlight=<id>. Nothing read either, so every
+  // highlight link landed on the generic grid instead of the highlight. Resolve
+  // the id, load its ordered stories, and open the viewer on that group.
+  useEffect(() => {
+    const targetId = routeHighlightId || searchParams.get('highlight');
+    if (!targetId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const storyService = getStoryService();
+        const res = await storyService.getHighlightStories(targetId, { limit: 50 });
+        if (cancelled || !res?.success || !res.stories?.length) return;
+        const items = res.stories.map((st) => ({
+          id: st.originalStoryId || st.storyId || st.id,
+          url: st.media?.url || st.content || '',
+          type: st.type || 'image',
+          caption: st.content || '',
+          duration: st.duration || 5,
+          ctaText: st.ctaText || '',
+          ctaUrl: st.ctaUrl || '',
+          music: st.music || null,
+        })).filter((st) => st.url || st.type === 'text');
+        if (!items.length) return;
+        const first = res.stories[0];
+        setHighlightGroup({
+          id: `highlight_${targetId}`,
+          user: {
+            id: first.userId || '',
+            name: first.authorName || 'Highlight',
+            username: '',
+            avatar: first.authorPhoto || '/assets/default-profile.png',
+            verified: false,
+            category: 'Following',
+            isCloseFriend: false,
+            isLive: false,
+          },
+          timeAgo: null,
+          mediaUrl: items[0].url,
+          caption: items[0].caption,
+          isSponsored: false,
+          items,
+        });
+        setActiveStoryIndex(0);
+        setActiveItemIndex(0);
+        setStoryProgress(0);
+      } catch (err) {
+        if (!cancelled) toast.error(err?.message || 'Highlight could not be opened');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [routeHighlightId, searchParams]);
+
   // Filter stories based on active category & search
   const filteredStories = useMemo(() => {
-    return stories.filter((story) => {
+    const source = highlightGroup ? [highlightGroup, ...stories] : stories;
+    return source.filter((story) => {
       // Category filter
       if (activeCategory === 'sponsored' && !story.isSponsored) return false;
       if (activeCategory === 'friends' && story.user.category !== 'Friends') return false;
@@ -163,7 +220,7 @@ export default function StoriesScreen() {
       }
       return true;
     });
-  }, [stories, activeCategory, searchQuery]);
+  }, [stories, highlightGroup, activeCategory, searchQuery]);
 
   // Handle opening a story in the viewer
   const handleOpenStory = (index) => {

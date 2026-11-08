@@ -45,3 +45,21 @@ describe('highlights remain wired to the real service and screen', () => {
     expect(src).toMatch(/collection\(this\.firestore, 'highlights'\)/);
   });
 });
+
+describe('highlight deep links reach the viewer', () => {
+  const stories = read('src/screens/StoriesScreen.jsx');
+
+  test('StoriesScreen consumes the /highlight/:highlightId route param', () => {
+    expect(stories).toMatch(/useParams\(\)/);
+    expect(stories).toMatch(/routeHighlightId/);
+    expect(stories).toMatch(/getHighlightStories\(/);
+  });
+
+  test('StoriesScreen also consumes the legacy ?highlight= query param', () => {
+    expect(stories).toMatch(/searchParams\.get\('highlight'\)/);
+  });
+
+  test('the resolved highlight group is prepended into the viewer list', () => {
+    expect(stories).toMatch(/highlightGroup \? \[highlightGroup, \.\.\.stories\] : stories/);
+  });
+});
