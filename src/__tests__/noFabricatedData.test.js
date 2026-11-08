@@ -2327,3 +2327,16 @@ describe('Store and help copy read the shared config, never restated literals', 
     expect(src).not.toContain('last 90 days');
   });
 });
+
+describe('Offline status screen reads the real queue, never a fixed count', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('OfflineStatusScreen subscribes to the canonical sync engine', () => {
+    const s = read('src/screens/OfflineStatusScreen.jsx');
+    // It once rendered a hardcoded "Pending writes: 3" — a fabricated number.
+    expect(s).not.toContain('Pending writes: 3');
+    expect(s).not.toMatch(/>\s*Pending writes:\s*\d/);
+    expect(s).toContain('subscribeSyncStatus');
+    expect(s).toContain("from '../offline/syncEngine.js'");
+  });
+});
