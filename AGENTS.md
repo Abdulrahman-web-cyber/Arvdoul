@@ -72,7 +72,10 @@ as failures.
   or a `+1` follower count), the follow control must render a `requested` state,
   and `profileStore.cancelFollowRequest` / `userService.cancelFollowRequest`
   let the requester withdraw. Treating a pending request as a completed follow
-  fabricates both the edge and the count.
+  fabricates both the edge and the count. The owner approves or declines from
+  the notifications screen's *Follow Requests* tab
+  (`getFollowRequests` → `approveFollowRequest` / `declineFollowRequest`); a
+  `follow_request` notification is only a signal, never an actionable document.
 - **Social graph**: `src/services/socialGraphService.js` is the single source for
   relationship resolution and graph lists. Use `getRelationship` (one pair), `getEdgeSet`
   (batch; it chunks `documentId() in` to 30 and never scans the viewer's whole graph),

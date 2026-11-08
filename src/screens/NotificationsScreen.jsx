@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2 } from "lucide-react";
+import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2, UserCheck } from "lucide-react";
 import notificationsService from '../services/notificationsService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
@@ -56,6 +56,8 @@ export default function NotificationsScreen() {
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [followRequests, setFollowRequests] = useState([]);
+  const [pendingFollowRequestAction, setPendingFollowRequestAction] = useState(null);
   const [recommended, setRecommended] = useState([]);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [pendingNetworkAction, setPendingNetworkAction] = useState(null);
@@ -91,21 +93,41 @@ export default function NotificationsScreen() {
         setFollowers([]);
         setFollowing([]);
         setRequests([]);
+        setFollowRequests([]);
         return;
       }
 
       const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
-      const [f, g, r] = await Promise.allSettled([
+      const [f, g, r, fr] = await Promise.allSettled([
         svc.getFollowers(user.uid, { limit: 50 }),
         svc.getFollowing(user.uid, { limit: 50 }),
         svc.getFriendRequests(user.uid, 'received'),
+        svc.getFollowRequests(user.uid),
       ]);
       const recResult = await svc.getFriendRecommendations(user.uid, 6).catch(() => ({ success: false, recommendations: [] }));
       setRecommended(recResult.recommendations || []);
       setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
       setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
+      // Private-account follow requests arrive as `follow_request` notifications
+      // but only a friend/follow request *document* can be approved. Load the
+      // real pending rows so the owner can act on them (previously a dead end).
+      const rawFollowRequests = fr.status === 'fulfilled' ? (fr.value?.requests || []) : [];
+      setFollowRequests(rawFollowRequests);
+      if (rawFollowRequests.length) {
+        try {
+          const { socialGraphService } = await import('../services/socialGraphService.js');
+          const profiles = await socialGraphService.hydrateProfiles(
+            rawFollowRequests.map((r) => r.fromUserId),
+            { viewerId: user.uid }
+          );
+          const byId = new Map(profiles.map((p) => [p.uid || p.id, p]));
+          setFollowRequests(rawFollowRequests.map((r) => ({ ...r, fromUser: byId.get(r.fromUserId) || null })));
+        } catch {
+          // Keep the raw rows; the row falls back to a generic label.
+        }
+      }
     } catch {
       setRecommended([]);
     } finally {
@@ -118,6 +140,14 @@ export default function NotificationsScreen() {
       loadNetwork();
     }
   }, [mainTab, loadNetwork]);
+
+  // The Follow Requests tab only exists while rows are pending; fall back to the
+  // Requests tab once the last one is approved/declined.
+  useEffect(() => {
+    if (networkTab === 'followRequests' && followRequests.length === 0) {
+      setNetworkTab('requests');
+    }
+  }, [networkTab, followRequests.length]);
 
   const handleNetworkRequest = async (requestId, accept) => {
     if (!user?.uid || pendingNetworkAction) return;
@@ -137,6 +167,29 @@ export default function NotificationsScreen() {
       toast.error('Action failed');
     } finally {
       setPendingNetworkAction(null);
+    }
+  };
+
+  // Approve / decline a private-account follow request. The row id is the
+  // deterministic `${fromUserId}_${toUserId}`.
+  const handleFollowRequestAction = async (request, accept) => {
+    if (!user?.uid || pendingFollowRequestAction) return;
+    setPendingFollowRequestAction(request.id);
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      if (accept) {
+        await svc.approveFollowRequest(request.id, user.uid);
+        toast.success('Follow request accepted');
+      } else {
+        await svc.declineFollowRequest(request.id, user.uid);
+        toast.info('Follow request declined');
+      }
+      setFollowRequests((prev) => prev.filter((r) => r.id !== request.id));
+    } catch (err) {
+      toast.error(err?.message || 'Could not process the follow request.');
+    } finally {
+      setPendingFollowRequestAction(null);
     }
   };
 
@@ -583,6 +636,9 @@ export default function NotificationsScreen() {
           <div className="max-w-xl mx-auto mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
             {[
               { id: 'requests', label: 'Requests', count: requests.length },
+              ...(followRequests.length > 0
+                ? [{ id: 'followRequests', label: 'Follow Requests', count: followRequests.length }]
+                : []),
               { id: 'followers', label: 'Followers', count: followers.length },
               { id: 'following', label: 'Following', count: following.length },
               { id: 'recommended', label: 'Suggested', count: recommended.length },
@@ -693,6 +749,74 @@ export default function NotificationsScreen() {
                             disabled={pendingNetworkAction === reqId}
                             className={cn(
                               "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all",
+                              isDark ? "border-white/10 hover:bg-white/5 text-white/70" : "border-slate-300 hover:bg-slate-100 text-slate-600"
+                            )}
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : networkTab === 'followRequests' ? (
+              followRequests.length === 0 ? (
+                <EmptyState
+                  title="No Follow Requests"
+                  description="Private-account follow requests will appear here for you to approve."
+                  icon={<UserCheck className="w-8 h-8" />}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {followRequests.map((req) => {
+                    const reqUser = req.fromUser || req.sender || {};
+                    const reqName = reqUser.displayName || reqUser.username || reqUser.name || 'User';
+                    const reqAvatar = reqUser.photoURL || reqUser.avatar || null;
+                    const busy = pendingFollowRequestAction === req.id;
+                    return (
+                      <div
+                        key={req.id}
+                        className={cn(
+                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all",
+                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                        )}
+                      >
+                        <div
+                          onClick={() => navigate(`/profile/${req.fromUserId || reqUser.id || reqUser.uid}`)}
+                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                        >
+                          {reqAvatar ? (
+                            <img
+                              src={reqAvatar}
+                              alt={reqName}
+                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                              {reqName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{reqName}</p>
+                            <p className="text-xs text-arvdoul-text-secondary truncate">
+                              {reqUser.bio || 'Requested to follow you'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleFollowRequestAction(req, true)}
+                            disabled={busy}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleFollowRequestAction(req, false)}
+                            disabled={busy}
+                            className={cn(
+                              "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all disabled:opacity-50",
                               isDark ? "border-white/10 hover:bg-white/5 text-white/70" : "border-slate-300 hover:bg-slate-100 text-slate-600"
                             )}
                           >

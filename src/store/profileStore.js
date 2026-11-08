@@ -747,7 +747,7 @@ export const useProfileStore = create(
             if (state.profile) state.profile.followerCount = previousFollowerCount;
           });
           toast.success('Follow request sent');
-          return;
+          return { requested: true, requestStatus: 'pending' };
         }
         
         set((state) => {
@@ -756,6 +756,7 @@ export const useProfileStore = create(
         });
         
         toast.success('Following!');
+        return { requested: false, requestStatus: null };
       } catch (error) {
         console.error('❌ Follow failed:', error);
         
