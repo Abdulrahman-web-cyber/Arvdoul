@@ -70,7 +70,13 @@ function readKeys(src, storeName) {
   for (const m of src.matchAll(selectorRe)) keys.push(m[1]);
 
   // const { a, b } = useXStore()
-  const destructureRe = new RegExp(`(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*${storeName}\\s*\\(`, 'g');
+  // The body may contain default values that themselves use braces/brackets
+  // (`const { userStats = {}, list = [] } = useXStore()`), which a plain
+  // `[^}]*` stopped at — silently missing every defaulted destructure.
+  const destructureRe = new RegExp(
+    `(?:const|let|var)\\s*\\{([^{}]*(?:\\{[^{}]*\\}[^{}]*|\\[[^\\[\\]]*\\][^{}]*)*)\\}\\s*=\\s*${storeName}\\s*\\(`,
+    'g',
+  );
   for (const m of src.matchAll(destructureRe)) {
     for (const raw of m[1].split(',')) {
       const key = entryKey(raw);

@@ -10,7 +10,7 @@ import { cn } from "../../lib/utils";
 import { useAppStore } from "../../store/appStore";
 import { FaCoins, FaCrown, FaStar, FaBullhorn } from "react-icons/fa";
 import { MdAdsClick } from "react-icons/md";
-import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES } from "../../services/levelSystemService";
+import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES, formatCoinsAsUsd } from "../../services/levelSystemService";
 import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
@@ -25,11 +25,11 @@ const knownLevel = (level) => {
 };
 
 const ANIMATION_CONFIG = {
-  panelSpring: { 
-    type: "spring", 
-    damping: 30, 
-    stiffness: 380, 
-    mass: 0.75 
+  panelSpring: {
+    type: "spring",
+    damping: 30,
+    stiffness: 380,
+    mass: 0.75
   },
   staggerChildren: 0.03,
   delayChildren: 0.05
@@ -38,20 +38,20 @@ const ANIMATION_CONFIG = {
 // Level system configuration
 // Color schemes
 const getThemeColors = (theme) => ({
-  panelBg: theme === "dark" 
-    ? "bg-gradient-to-b from-gray-900 via-gray-900 to-black backdrop-blur-xl" 
+  panelBg: theme === "dark"
+    ? "bg-gradient-to-b from-gray-900 via-gray-900 to-black backdrop-blur-xl"
     : "bg-gradient-to-b from-white via-gray-50 to-gray-100 backdrop-blur-xl",
-  cardBg: theme === "dark" 
-    ? "bg-gradient-to-br from-gray-800/80 via-gray-800/60 to-gray-900/80" 
+  cardBg: theme === "dark"
+    ? "bg-gradient-to-br from-gray-800/80 via-gray-800/60 to-gray-900/80"
     : "bg-gradient-to-br from-white/80 via-gray-50/60 to-gray-100/80",
-  cardBorder: theme === "dark" 
-    ? "border border-gray-700/20" 
+  cardBorder: theme === "dark"
+    ? "border border-gray-700/20"
     : "border border-gray-300/20",
-  text: theme === "dark" 
-    ? "text-white" 
+  text: theme === "dark"
+    ? "text-white"
     : "text-gray-900",
-  subtext: theme === "dark" 
-    ? "text-gray-300" 
+  subtext: theme === "dark"
+    ? "text-gray-300"
     : "text-gray-600",
   accent: theme === "dark"
     ? "text-purple-400"
@@ -135,7 +135,7 @@ const ProgressBar = memo(({ value, max = 100, label, showLabel = true, color = "
             className={cn("h-full rounded-full", colors[color])}
           />
         ) : (
-          <div 
+          <div
             className={cn("h-full rounded-full", colors[color])}
             style={{ width: `${percentage}%` }}
           />
@@ -172,7 +172,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { track } = useAnalytics();
-  const { currentUser, userStats = {}, monetization = {} } = useAppStore();
+  // `userStats` / `monetization` were never slices on the store, so their
+  // `= {}` defaults silently fabricated empty objects for every read. The
+  // store is now read only for the real `currentUser` mirror.
+  const { currentUser } = useAppStore();
   const { playSound } = useSound();
 
   // State management
@@ -210,12 +213,15 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     saved: "/saved",
     collections: "/collections",
     live: "/live",
-    editProfile: "/edit-profile",
-    monetization: "/monetization",
-    earnings: "/earnings",
-    ads: "/ads",
-    sponsored: "/sponsored",
-    levels: "/levels",
+    editProfile: "/profile/edit",
+    // Revenue/payout entry points all land on the one real payout screen; the
+    // previous /monetization, /earnings, /ads and /sponsored paths had no route
+    // and silently fell through to the 404 page.
+    monetization: "/creator-payout",
+    earnings: "/creator-payout",
+    ads: "/creator-payout",
+    sponsored: "/creator-payout",
+    levels: "/progress",
     achievements: "/achievements",
     analytics: "/analytics",
     aiStudio: "/ai-studio",
@@ -227,127 +233,131 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   }), []);
 
   const levelSystem = useMemo(() => {
-    const currentXP = currentUser?.experience || 0;
+    // `experience` absent means standing is unknown — never render it as
+    // Level 1 (the fabricated floor the guards ban elsewhere). The curve is
+    // only consulted once a real XP value exists.
+    const hasXp = currentUser?.experience != null;
+    const currentXP = Number(currentUser?.experience) || 0;
     // The curve, rank bands and gates live in shared/levelConfig.cjs only.
-    const info = getLevelInfo(currentXP);
-    const currentLevel = info.level;
+    const info = hasXp ? getLevelInfo(currentXP) : null;
+    const currentLevel = info?.level ?? null;
 
     return {
+      hasXp,
       currentLevel,
       currentXP,
-      xpForCurrentLevel: info.currentLevelXp,
-      xpForNextLevel: info.nextLevelXp,
-      xpNeededForNextLevel: info.xpToNext,
-      progressPercentage: info.progress,
-      currentLevelName: getRankTitle(currentLevel),
-      nextLevelName: getRankTitle(currentLevel + 1),
-      isMaxLevel: info.isMaxLevel
+      xpForCurrentLevel: info?.currentLevelXp ?? null,
+      xpForNextLevel: info?.nextLevelXp ?? null,
+      xpNeededForNextLevel: info?.xpToNext ?? null,
+      progressPercentage: info?.progress ?? 0,
+      currentLevelName: hasXp ? getRankTitle(currentLevel) : null,
+      nextLevelName: hasXp ? getRankTitle(currentLevel + 1) : null,
+      isMaxLevel: info?.isMaxLevel ?? false
     };
   }, [currentUser?.experience]);
 
   const userStatistics = useMemo(() => {
     const stats = currentUser || {};
-    const monetizationStats = monetization || {};
-    
+
     return {
       level: [
-        { 
-          label: "Level", 
-          value: levelSystem.currentLevel, 
+        {
+          label: "Level",
+          value: levelSystem.hasXp ? levelSystem.currentLevel : "—",
           icon: FaCrown,
-          color: "purple", 
-          change: levelSystem.currentLevelName,
+          color: "purple",
+          change: levelSystem.currentLevelName || "",
           navigate: () => navigate(NAVIGATION_PATHS.levels)
         },
-        { 
-          label: "XP", 
-          value: levelSystem.currentXP?.toLocaleString() || "0", 
+        {
+          label: "XP",
+          value: levelSystem.hasXp ? (levelSystem.currentXP?.toLocaleString() || "0") : "—",
           icon: FaStar,
-          color: "yellow", 
-          change: `${levelSystem.progressPercentage.toFixed(1)}%`,
+          color: "yellow",
+          change: levelSystem.hasXp ? `${levelSystem.progressPercentage.toFixed(1)}%` : "",
           navigate: () => navigate(NAVIGATION_PATHS.levels)
         },
-        { 
-          label: "To Next", 
-          value: levelSystem.xpNeededForNextLevel?.toLocaleString() || "0", 
+        {
+          label: "To Next",
+          value: levelSystem.hasXp ? (levelSystem.xpNeededForNextLevel?.toLocaleString() || "0") : "—",
           icon: TargetIcon,
-          color: "blue", 
-          change: `Lvl ${levelSystem.currentLevel + 1}`,
+          color: "blue",
+          change: levelSystem.hasXp ? `Lvl ${levelSystem.currentLevel + 1}` : "",
           navigate: () => navigate(NAVIGATION_PATHS.levels)
         },
-        { 
-          label: "Rank", 
-          value: stats.rank ? `#${stats.rank}` : "N/A", 
+        {
+          label: "Rank",
+          value: stats.rank ? `#${stats.rank}` : "N/A",
           icon: Trophy,
-          color: "emerald", 
+          color: "emerald",
           change: stats.percentile ? `Top ${stats.percentile}%` : "",
           navigate: () => navigate("/rankings")
         }
       ],
       content: [
-        { 
-          label: "Posts", 
-          value: stats.postCount || 0, 
-          icon: Grid3X3, 
-          color: "blue", 
+        {
+          label: "Posts",
+          value: stats.postCount || 0,
+          icon: Grid3X3,
+          color: "blue",
           change: stats.postsToday ? `+${stats.postsToday}` : "",
           navigate: () => navigate("/profile?tab=posts")
         },
-        { 
-          label: "Videos", 
-          value: stats.videoCount || 0, 
-          icon: Video, 
-          color: "purple", 
+        {
+          label: "Videos",
+          value: stats.videoCount || 0,
+          icon: Video,
+          color: "purple",
           change: stats.videosToday ? `+${stats.videosToday}` : "",
           navigate: () => navigate(NAVIGATION_PATHS.videos)
         },
-        { 
-          label: "Saved", 
-          value: stats.savedCount || 0, 
-          icon: Bookmark, 
-          color: "green", 
+        {
+          label: "Saved",
+          value: stats.savedCount || 0,
+          icon: Bookmark,
+          color: "green",
           change: stats.savedToday ? `+${stats.savedToday}` : "",
           navigate: () => navigate(NAVIGATION_PATHS.saved)
         },
-        { 
-          label: "Collections", 
-          value: stats.collectionCount || 0, 
-          icon: BookOpen, 
-          color: "yellow", 
+        {
+          label: "Collections",
+          value: stats.collectionCount || 0,
+          icon: BookOpen,
+          color: "yellow",
           change: stats.collectionsToday ? `+${stats.collectionsToday}` : "",
           navigate: () => navigate(NAVIGATION_PATHS.collections)
         }
       ],
       social: [
-        { 
-          label: "Followers", 
-          value: stats.followerCount || 0, 
-          icon: Users, 
-          color: "purple", 
+        {
+          label: "Followers",
+          value: stats.followerCount || 0,
+          icon: Users,
+          color: "purple",
           change: stats.followersToday ? `+${stats.followersToday}` : "",
           navigate: () => navigate("/followers")
         },
-        { 
-          label: "Following", 
-          value: stats.followingCount || 0, 
-          icon: UserPlus, 
-          color: "blue", 
+        {
+          label: "Following",
+          value: stats.followingCount || 0,
+          icon: UserPlus,
+          color: "blue",
           change: stats.followingToday ? `+${stats.followingToday}` : "",
           navigate: () => navigate("/following")
         },
-        { 
-          label: "Likes", 
-          value: stats.likeCount ? (stats.likeCount > 1000 ? `${(stats.likeCount/1000).toFixed(1)}K` : stats.likeCount) : "0", 
-          icon: Heart, 
-          color: "red", 
+        {
+          label: "Likes",
+          value: stats.likeCount ? (stats.likeCount > 1000 ? `${(stats.likeCount/1000).toFixed(1)}K` : stats.likeCount) : "0",
+          icon: Heart,
+          color: "red",
           change: stats.likesToday ? `+${stats.likesToday}` : "",
           navigate: () => navigate("/analytics")
         },
-        { 
-          label: "Comments", 
-          value: stats.commentCount || 0, 
-          icon: MessageCircle, 
-          color: "green", 
+        {
+          label: "Comments",
+          value: stats.commentCount || 0,
+          icon: MessageCircle,
+          color: "green",
           change: stats.commentsToday ? `+${stats.commentsToday}` : "",
           navigate: () => navigate("/analytics")
         }
@@ -356,70 +366,73 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   }, [currentUser, levelSystem, navigate, NAVIGATION_PATHS]);
 
   const monetizationStats = useMemo(() => {
-    const stats = monetization || {};
     const userStats = currentUser || {};
-    
+    // The `monetization` store slice never existed, so every tile here read
+    // `undefined` and rendered a fabricated "$0.00". Coins and lifetime
+    // earnings now come from the mirrored profile; revenue sources the app has
+    // no data for render as unavailable rather than invented zeroes.
+    const lifetimeUsd = userStats.totalEarned != null ? formatCoinsAsUsd(userStats.totalEarned) : null;
+
     return [
       {
         label: "Coins",
-        value: userStats.coins ? userStats.coins.toLocaleString() : "0",
+        value: userStats.coins != null ? userStats.coins.toLocaleString() : "—",
         icon: FaCoins,
         color: "amber",
-        change: stats.coinsEarnedToday ? `+${stats.coinsEarnedToday}` : "",
+        change: "",
         navigate: () => navigate(NAVIGATION_PATHS.coins)
       },
       {
         label: "Earnings",
-        value: `$${(stats.totalEarnings || 0).toFixed(2)}`,
+        value: lifetimeUsd ?? "—",
         icon: DollarSign,
         color: "emerald",
-        change: stats.todayEarnings ? `+$${stats.todayEarnings.toFixed(2)}` : "",
+        change: "",
         navigate: () => navigate(NAVIGATION_PATHS.earnings)
       },
       {
         label: "Ad Revenue",
-        value: `$${(stats.adRevenue || 0).toFixed(2)}`,
+        value: "—",
         icon: MdAdsClick,
         color: "blue",
-        change: stats.adRevenueToday ? `+$${stats.adRevenueToday.toFixed(2)}` : "",
+        change: "",
         navigate: () => navigate(NAVIGATION_PATHS.ads)
       },
       {
         label: "Sponsored",
-        value: `$${(stats.sponsoredRevenue || 0).toFixed(2)}`,
+        value: "—",
         icon: FaBullhorn,
         color: "purple",
-        change: stats.sponsoredToday ? `+$${stats.sponsoredToday.toFixed(2)}` : "",
+        change: "",
         navigate: () => navigate(NAVIGATION_PATHS.sponsored)
       }
     ];
-  }, [monetization, currentUser?.coins, navigate, NAVIGATION_PATHS]);
+  }, [currentUser, navigate, NAVIGATION_PATHS]);
 
   const achievements = useMemo(() => {
     const stats = currentUser || {};
-    const monetizationStats = monetization || {};
-    
+
     return [
-      { 
-        id: 1, 
-        title: "First Post", 
-        icon: PenSquare, 
-        unlocked: (stats.postCount || 0) > 0, 
+      {
+        id: 1,
+        title: "First Post",
+        icon: PenSquare,
+        unlocked: (stats.postCount || 0) > 0,
         date: "First post",
         points: 100,
         progress: (stats.postCount || 0) > 0 ? 100 : 0
       },
-      { 
-        id: 2, 
-        title: "Profile Complete", 
-        icon: CheckCircle, 
-        unlocked: stats.isProfileComplete || false, 
+      {
+        id: 2,
+        title: "Profile Complete",
+        icon: CheckCircle,
+        unlocked: stats.isProfileComplete || false,
         date: "Complete",
         points: 250,
         progress: stats.isProfileComplete ? 100 : 0
       },
-      { 
-        id: 3, 
+      {
+        id: 3,
         title: `Level ${LEVEL_GATES.withdrawals}`,
         icon: Trophy,
         unlocked: levelSystem.currentLevel >= LEVEL_GATES.withdrawals,
@@ -428,55 +441,58 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         points: 1000,
         progress: Math.min((levelSystem.currentLevel / LEVEL_GATES.withdrawals) * 100, 100)
       },
-      { 
-        id: 4, 
-        title: "First Earnings", 
-        icon: DollarSign, 
-        unlocked: (monetizationStats.totalEarnings || 0) > 0, 
+      {
+        id: 4,
+        title: "First Earnings",
+        icon: DollarSign,
+        // Lifetime earnings live on the mirrored profile (`totalEarned`); the
+        // phantom `monetization` store slice was always undefined, so this
+        // achievement could never unlock for anyone.
+        unlocked: (Number(stats.totalEarned) || 0) > 0,
         date: "Earnings",
         points: 500,
-        progress: (monetizationStats.totalEarnings || 0) > 0 ? 100 : 0
+        progress: (Number(stats.totalEarned) || 0) > 0 ? 100 : 0
       },
-      { 
-        id: 5, 
-        title: "100 Followers", 
-        icon: Users, 
-        unlocked: (stats.followerCount || 0) >= 100, 
-        required: 100, 
-        current: stats.followerCount || 0, 
+      {
+        id: 5,
+        title: "100 Followers",
+        icon: Users,
+        unlocked: (stats.followerCount || 0) >= 100,
+        required: 100,
+        current: stats.followerCount || 0,
         points: 1000,
         progress: Math.min(((stats.followerCount || 0) / 100) * 100, 100)
       },
-      { 
-        id: 6, 
-        title: "Creator", 
-        icon: FaCrown, 
-        unlocked: stats.isCreator || false, 
+      {
+        id: 6,
+        title: "Creator",
+        icon: FaCrown,
+        unlocked: stats.isCreator || false,
         date: "Creator",
         points: 2000,
         progress: stats.isCreator ? 100 : 0
       }
     ];
-  }, [currentUser, monetization, levelSystem.currentLevel]);
+  }, [currentUser, levelSystem.currentLevel]);
 
   const quickActions = useMemo(() => {
     const isCreator = currentUser?.isCreator || false;
     const canMonetize = knownLevel(currentUser?.level) >= MONETIZATION_MIN_LEVEL || isCreator;
-    
+
     return {
       create: [
-        { 
-          label: "Create Post", 
-          icon: PenSquare, 
+        {
+          label: "Create Post",
+          icon: PenSquare,
           action: () => navigateToWithLoading(NAVIGATION_PATHS.createPost),
           color: "from-blue-500 to-cyan-500",
           description: "Share your thoughts",
           shortcut: "P",
           xpReward: 10
         },
-        { 
-          label: "Create Story", 
-          icon: Camera, 
+        {
+          label: "Create Story",
+          icon: Camera,
           action: () => navigateToWithLoading(NAVIGATION_PATHS.createStory),
           color: "from-purple-500 to-pink-600",
           description: "24-hour content",
@@ -485,8 +501,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           xpReward: 15
         },
         ...(isCreator ? [{
-          label: "Go Live", 
-          icon: Video, 
+          label: "Go Live",
+          icon: Video,
           action: () => navigateToWithLoading(NAVIGATION_PATHS.live),
           color: "from-rose-500 to-red-600",
           description: "Live streaming",
@@ -494,9 +510,9 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           premium: true,
           xpReward: 50
         }] : []),
-        { 
-          label: "Create Poll", 
-          icon: BarChart3, 
+        {
+          label: "Create Poll",
+          icon: BarChart3,
           action: () => {
             track("Create_Poll_Click");
             navigate("/create-post?type=poll");
@@ -508,69 +524,65 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         }
       ],
       monetization: [
-        { 
-          label: "Coins", 
-          icon: FaCoins, 
+        {
+          label: "Coins",
+          icon: FaCoins,
           action: () => navigate(NAVIGATION_PATHS.coins),
           color: "from-amber-500 to-yellow-500",
           description: "Earn & spend",
-          earnings: monetization.coinsEarnedToday || 0,
           disabled: !canMonetize,
           disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         },
-        { 
-          label: "Earnings", 
-          icon: DollarSign, 
+        {
+          label: "Earnings",
+          icon: DollarSign,
           action: () => navigate(NAVIGATION_PATHS.earnings),
           color: "from-emerald-500 to-green-500",
           description: "View income",
-          earnings: monetization.todayEarnings || 0,
           disabled: !canMonetize,
           disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         },
-        { 
-          label: "Ads", 
-          icon: MdAdsClick, 
+        {
+          label: "Ads",
+          icon: MdAdsClick,
           action: () => navigate(NAVIGATION_PATHS.ads),
           color: "from-blue-500 to-cyan-500",
           description: "Ad revenue",
-          earnings: monetization.adRevenueToday || 0,
           disabled: !canMonetize,
           disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         },
-        { 
-          label: "Sponsored", 
-          icon: FaBullhorn, 
+        {
+          label: "Sponsored",
+          icon: FaBullhorn,
           action: () => navigate(NAVIGATION_PATHS.sponsored),
           color: "from-purple-500 to-pink-500",
           description: "Brand deals",
-          earnings: monetization.sponsoredToday || 0,
           disabled: !canMonetize,
           disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         }
       ],
       navigate: [
-        { 
-          label: "Home", 
-          icon: Home, 
+        {
+          label: "Home",
+          icon: Home,
           action: () => navigate(NAVIGATION_PATHS.home),
           color: "from-gray-600 to-gray-700"
         },
-        { 
-          label: "Videos", 
-          icon: PlayCircle, 
+        {
+          label: "Videos",
+          icon: PlayCircle,
           action: () => navigate(NAVIGATION_PATHS.videos),
           color: "from-purple-600 to-indigo-600"
         },
-        { 
-          label: "Messages", 
-          icon: MessageCircle, 
+        {
+          label: "Messages",
+          icon: MessageCircle,
           action: () => navigate(NAVIGATION_PATHS.messages),
           color: "from-blue-600 to-cyan-600"
         },
-        { 
-          label: "Network", 
-          icon: UserPlus, 
+        {
+          label: "Network",
+          icon: UserPlus,
           action: () => navigate(NAVIGATION_PATHS.network),
           color: "from-green-600 to-emerald-600"
         }
@@ -627,7 +639,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         }
       ]
     };
-  }, [navigateToWithLoading, navigate, track, monetization, currentUser, NAVIGATION_PATHS]);
+  }, [navigateToWithLoading, navigate, track, currentUser, NAVIGATION_PATHS]);
 
   useEffect(() => {
     if (isPanelOpen) {
@@ -636,7 +648,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         location: location.pathname,
         time: new Date().toISOString()
       });
-      
+
       // Auto-focus search on open
       setTimeout(() => {
         if (searchInputRef.current) {
@@ -649,12 +661,12 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!isPanelOpen) return;
-      
+
       // Close on Escape
       if (e.key === 'Escape') {
         closePanel();
       }
-      
+
       // Quick shortcuts
       if (e.ctrlKey || e.metaKey) {
         switch(e.key.toLowerCase()) {
@@ -680,7 +692,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             break;
         }
       }
-      
+
       // Number shortcuts for tabs
       if (e.key >= '1' && e.key <= '4') {
         e.preventDefault();
@@ -746,12 +758,12 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
   const renderUserProfile = () => {
     // Get profile picture - use professional avatar if none
-    const profilePicture = currentUser?.photoURL || 
-      (currentUser?.uid ? 
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=3B82F6&color=fff&bold=true&size=200` : 
+    const profilePicture = currentUser?.photoURL ||
+      (currentUser?.uid ?
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=3B82F6&color=fff&bold=true&size=200` :
         "/assets/default-profile.png"
       );
-    
+
     // Handle image error
     const handleImageError = (e) => {
       e.target.onerror = null;
@@ -759,7 +771,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     };
 
     return (
-      <motion.div 
+      <motion.div
         className="relative"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -780,7 +792,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 <div className="absolute -top-2 -right-2 z-20">
                   <LevelBadge level={levelSystem.currentLevel} size="sm" />
                 </div>
-                
+
                 {/* Profile Avatar */}
                 <motion.div
                   whileHover={{ scale: 1.05 }}
@@ -794,21 +806,21 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                       "absolute inset-0 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-full",
                       "animate-spin-slow opacity-70"
                     )} style={{ animationDuration: '8s' }} />
-                    
+
                     {/* Profile image */}
                     <img
                       src={profilePicture}
                       alt={currentUser?.displayName || "Profile"}
                       className="w-14 h-14 sm:w-18 sm:h-18 rounded-full border-4 absolute top-1 left-1 sm:top-1.5 sm:left-1.5 object-cover z-10"
                       style={{
-                        borderColor: theme === "dark" 
-                          ? "rgba(255, 255, 255, 0.2)" 
+                        borderColor: theme === "dark"
+                          ? "rgba(255, 255, 255, 0.2)"
                           : "rgba(255, 255, 255, 0.9)"
                       }}
                       onError={handleImageError}
                       loading="lazy"
                     />
-                    
+
                     {/* Online status */}
                     {currentUser?.isOnline && (
                       <motion.div
@@ -828,7 +840,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
                   <div className="min-w-0">
                     {/* Display Name */}
-                    <h3 
+                    <h3
                       className={cn(
                         "text-lg sm:text-xl font-bold truncate",
                         themeColors.text
@@ -836,10 +848,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     >
                       {currentUser?.displayName || "User"}
                     </h3>
-                    
+
                     {/* Unique Username with Verification Badge */}
                     <div className="flex items-center gap-2 mt-1">
-                      <p 
+                      <p
                         className={cn(
                           "text-xs sm:text-sm truncate font-medium",
                           themeColors.subtext
@@ -847,14 +859,14 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                       >
                         @{currentUser?.username || "username"}
                       </p>
-                      
+
                       {/* Verified Badge */}
                       {currentUser?.isVerified && (
                         <BadgeCheck className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Copy Profile Link Button */}
                   <button
                     onClick={copyProfileLink}
@@ -865,34 +877,43 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     <Link className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                 </div>
-                
-                {/* Level Progress */}
+
+                {/* Level Progress — unknown standing renders as unavailable,
+                    never as a fabricated Level 1 / 0% bar. */}
                 <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      Level {levelSystem.currentLevel} → {levelSystem.currentLevel + 1}
-                    </span>
-                    <span className="font-medium">
-                      {levelSystem.currentXP?.toLocaleString()} / {levelSystem.xpForNextLevel?.toLocaleString()} XP
-                    </span>
-                  </div>
-                  <ProgressBar 
-                    value={levelSystem.currentXP} 
-                    max={levelSystem.xpForNextLevel}
-                    color="purple"
-                    size="sm"
-                    showLabel={false}
-                  />
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className="text-purple-600 dark:text-purple-400 font-medium">
-                      {levelSystem.currentLevelName}
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400">
-                      {levelSystem.progressPercentage.toFixed(1)}%
-                    </span>
-                  </div>
+                  {levelSystem.hasXp ? (
+                    <>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          Level {levelSystem.currentLevel} → {levelSystem.currentLevel + 1}
+                        </span>
+                        <span className="font-medium">
+                          {levelSystem.currentXP?.toLocaleString()} / {levelSystem.xpForNextLevel?.toLocaleString()} XP
+                        </span>
+                      </div>
+                      <ProgressBar
+                        value={levelSystem.currentXP}
+                        max={levelSystem.xpForNextLevel}
+                        color="purple"
+                        size="sm"
+                        showLabel={false}
+                      />
+                      <div className="flex justify-between text-xs mt-1">
+                        <span className="text-purple-600 dark:text-purple-400 font-medium">
+                          {levelSystem.currentLevelName}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {levelSystem.progressPercentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Level progress unavailable
+                    </p>
+                  )}
                 </div>
-                
+
                 {/* User Badges & Coin Balance Hub */}
                 <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-gradient-to-r from-amber-500/10 via-yellow-500/15 to-amber-500/10 border border-amber-500/30">
                   <button
@@ -916,9 +937,9 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                   <Badge variant="level" className="text-xs">
                     <FaStar className="w-3 h-3 mr-1" />
-                    Lvl {levelSystem.currentLevel}
+                    {levelSystem.hasXp ? `Lvl ${levelSystem.currentLevel}` : 'Level —'}
                   </Badge>
-                  
+
                   {currentUser?.isCreator && (
                     <Badge variant="creator" className="text-xs">
                       <Crown className="w-3 h-3 mr-1" />
@@ -926,7 +947,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     </Badge>
                   )}
                 </div>
-                
+
                 {/* View Profile Button */}
                 <motion.button
                   initial={{ opacity: 0 }}
@@ -942,7 +963,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 >
                   View Profile
                 </motion.button>
-                
+
                 {/* Bio - Show in fullscreen */}
                 {isFullScreen && currentUser?.bio && (
                   <motion.p
@@ -1008,7 +1029,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               exit={{ opacity: 0, y: -10 }}
               className={cn(
                 "absolute right-0 top-full mt-2 w-48 sm:w-56 rounded-xl shadow-2xl z-50",
-                theme === "dark" 
+                theme === "dark"
                   ? "bg-gray-800 border border-gray-700"
                   : "bg-white border border-gray-200"
               )}
@@ -1021,7 +1042,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 { label: "Achievements", icon: Trophy, action: () => navigate(NAVIGATION_PATHS.achievements) },
                 { separator: true },
                 { label: "Settings", icon: Settings, action: () => navigate(NAVIGATION_PATHS.settings) },
-                { label: "Monetization", icon: DollarSign, action: () => navigate(NAVIGATION_PATHS.monetization) },
+                { label: "Payouts", icon: DollarSign, action: () => navigate(NAVIGATION_PATHS.monetization) },
                 { separator: true },
                 { label: "Sign Out", icon: LogOut, action: () => track("Sign_Out_Click"), danger: true }
               ].map((item, index) => (
@@ -1039,7 +1060,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-sm transition-colors",
-                      item.danger 
+                      item.danger
                         ? "text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
                         : theme === "dark"
                           ? "hover:bg-gray-700 text-gray-300"
@@ -1079,8 +1100,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             "bg-gray-100/50 dark:bg-gray-800/50",
             "border border-gray-300/50 dark:border-gray-700/50",
             "focus:outline-none focus:ring-2",
-            theme === "dark" 
-              ? "focus:ring-purple-500" 
+            theme === "dark"
+              ? "focus:ring-purple-500"
               : "focus:ring-blue-500"
           )}
         />
@@ -1224,7 +1245,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
   const renderMonetization = () => {
     const canMonetize = knownLevel(currentUser?.level) >= MONETIZATION_MIN_LEVEL || currentUser?.isCreator;
-    
+
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -1244,7 +1265,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               {canMonetize ? "Active" : `Unlock at Level ${MONETIZATION_MIN_LEVEL}`}
             </Badge>
           </div>
-          
+
           {/* Unlock Message */}
           {!canMonetize && (
             <div className={cn(
@@ -1261,8 +1282,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   <p className="text-sm text-amber-700/70 dark:text-amber-300/70 mt-1">
                     Reach Level {MONETIZATION_MIN_LEVEL} to unlock monetization features. You need {Math.max(0, MONETIZATION_MIN_LEVEL - knownLevel(currentUser?.level))} more levels.
                   </p>
-                  <ProgressBar 
-                    value={knownLevel(currentUser?.level)} 
+                  <ProgressBar
+                    value={knownLevel(currentUser?.level)}
                     max={MONETIZATION_MIN_LEVEL}
                     label={`Progress to Level ${MONETIZATION_MIN_LEVEL}`}
                     color="amber"
@@ -1273,7 +1294,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               </div>
             </div>
           )}
-          
+
           {/* Earnings Overview */}
           {canMonetize && (
             <>
@@ -1285,48 +1306,32 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                      ${(monetization.totalEarnings || 0).toFixed(2)}
+                      {currentUser?.totalEarned != null ? formatCoinsAsUsd(currentUser.totalEarned) : "—"}
                     </div>
                     <div className="text-sm text-emerald-700/70 dark:text-emerald-300/70">
-                      Total Earnings
+                      Lifetime Earnings
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-lg sm:text-xl font-bold text-emerald-500">
-                      +${(monetization.todayEarnings || 0).toFixed(2)}
+                      {currentUser?.coins != null ? `${currentUser.coins.toLocaleString()} coins` : "—"}
                     </div>
                     <div className="text-xs text-emerald-600/70 dark:text-emerald-400/70">
-                      Today
+                      Balance
                     </div>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center">
-                    <div className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                      ${(monetization.thisMonth || 0).toFixed(2)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      This Month
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                      ${(monetization.lastMonth || 0).toFixed(2)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Last Month
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                      {monetization.growth || 0}%
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Growth
-                    </div>
-                  </div>
-                </div>
+
+                {/* Per-period revenue breakdown lives on the payout screen,
+                    where it is summed from the real coin ledger. The panel no
+                    longer prints fabricated zeroes for data it does not hold. */}
+                <button
+                  type="button"
+                  onClick={() => navigate(NAVIGATION_PATHS.earnings)}
+                  className="w-full text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:underline"
+                >
+                  View earnings breakdown →
+                </button>
               </div>
 
               {/* Monetization Stats Grid */}
@@ -1428,7 +1433,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             transition={{ delay: index * 0.1 }}
             className={cn(
               "p-3 sm:p-4 rounded-xl sm:rounded-2xl",
-              achievement.unlocked 
+              achievement.unlocked
                 ? "bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-green-500/10 border border-emerald-500/20"
                 : cn(themeColors.cardBg, themeColors.cardBorder)
             )}
@@ -1436,29 +1441,29 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             <div className="flex items-start justify-between mb-3">
               <div className={cn(
                 "p-2 rounded-lg",
-                achievement.unlocked 
+                achievement.unlocked
                   ? "bg-emerald-100 dark:bg-emerald-900/30"
                   : "bg-gray-100 dark:bg-gray-800"
               )}>
                 {achievement.icon === FaCoins ? (
                   <FaCoins className={cn(
                     "w-4 h-4 sm:w-5 sm:h-5",
-                    achievement.unlocked 
-                      ? "text-emerald-600 dark:text-emerald-400" 
+                    achievement.unlocked
+                      ? "text-emerald-600 dark:text-emerald-400"
                       : "text-gray-400"
                   )} />
                 ) : achievement.icon === FaCrown ? (
                   <FaCrown className={cn(
                     "w-4 h-4 sm:w-5 sm:h-5",
-                    achievement.unlocked 
-                      ? "text-emerald-600 dark:text-emerald-400" 
+                    achievement.unlocked
+                      ? "text-emerald-600 dark:text-emerald-400"
                       : "text-gray-400"
                   )} />
                 ) : (
                   <achievement.icon className={cn(
                     "w-4 h-4 sm:w-5 sm:h-5",
-                    achievement.unlocked 
-                      ? "text-emerald-600 dark:text-emerald-400" 
+                    achievement.unlocked
+                      ? "text-emerald-600 dark:text-emerald-400"
                       : "text-gray-400"
                   )} />
                 )}
@@ -1474,16 +1479,16 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 </Badge>
               )}
             </div>
-            
+
             <h4 className={cn(
               "font-semibold mb-2 text-sm sm:text-base",
-              achievement.unlocked 
+              achievement.unlocked
                 ? "text-emerald-700 dark:text-emerald-300"
                 : themeColors.text
             )}>
               {achievement.title}
             </h4>
-            
+
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {achievement.date}
@@ -1492,10 +1497,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 +{achievement.points} pts
               </span>
             </div>
-            
+
             {!achievement.unlocked && (
-              <ProgressBar 
-                value={achievement.progress} 
+              <ProgressBar
+                value={achievement.progress}
                 color="purple"
                 size="sm"
                 showLabel={false}
@@ -1546,7 +1551,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   <div className="absolute bottom-1 right-1 w-1 h-1 bg-white/40 rounded-full animate-ping animation-delay-300" />
                 </div>
               )}
-              
+
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <action.icon className="w-4 h-4 sm:w-5 sm:h-5 text-white/90" />
@@ -1590,8 +1595,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               className={cn(
                 "flex flex-col items-center justify-center p-3 rounded-xl",
                 "transition-all duration-200 relative",
-                action.disabled 
-                  ? "opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border border-gray-300/20 dark:border-gray-700/20" 
+                action.disabled
+                  ? "opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border border-gray-300/20 dark:border-gray-700/20"
                   : cn(themeColors.cardBg, themeColors.cardBorder, "hover:shadow-md")
               )}
               type="button"
@@ -1688,8 +1693,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           <div className="flex items-center space-x-3">
             <div className={cn(
               "p-2 rounded-lg",
-              theme === "dark" 
-                ? "bg-purple-100 dark:bg-purple-900/30" 
+              theme === "dark"
+                ? "bg-purple-100 dark:bg-purple-900/30"
                 : "bg-amber-100 dark:bg-amber-900/30"
             )}>
               {theme === "dark" ? (
@@ -1711,8 +1716,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             onClick={toggleTheme}
             className={cn(
               "relative w-12 h-6 rounded-full transition-all duration-300",
-              theme === "dark" 
-                ? "bg-gradient-to-r from-purple-500 to-pink-500" 
+              theme === "dark"
+                ? "bg-gradient-to-r from-purple-500 to-pink-500"
                 : "bg-gradient-to-r from-amber-500 to-orange-500"
             )}
             type="button"
@@ -1871,7 +1876,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           {/* Ultra Premium Panel */}
           <motion.div
             ref={panelRef}
-            style={{ 
+            style={{
               y,
               opacity,
               height: panelHeight,
@@ -1892,8 +1897,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               "fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden",
               themeColors.panelBg,
               "border-t shadow-4xl",
-              theme === "dark" 
-                ? "border-gray-800/50" 
+              theme === "dark"
+                ? "border-gray-800/50"
                 : "border-gray-300/50"
             )}
           >
@@ -1906,7 +1911,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   "shadow-lg"
                 )} />
               </div>
-              
+
               {/* Panel Header */}
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <div className="flex items-center space-x-2 sm:space-x-3">
@@ -1929,7 +1934,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     </p>
                   </div>
                 </div>
-                
+
                 {/* Control Buttons */}
                 <div className="flex items-center space-x-1 sm:space-x-2">
                   <button
@@ -1970,10 +1975,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             {renderSearchBar()}
 
             {/* Main Content Area */}
-            <div 
+            <div
               ref={scrollContainerRef}
               className="px-4 sm:px-6 pb-20 sm:pb-32 overflow-y-auto"
-              style={{ 
+              style={{
                 height: "calc(100% - 140px)",
                 scrollBehavior: "smooth",
                 WebkitOverflowScrolling: "touch"

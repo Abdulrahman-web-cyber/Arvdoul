@@ -350,7 +350,7 @@ export default function TitlesScreen() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Minimum Level</span>
-                <span>Level {inspectingTitle.minLevel || 1}</span>
+                <span>{inspectingTitle.minLevel != null ? `Level ${inspectingTitle.minLevel}` : 'No level gate'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Provenance Status</span>
