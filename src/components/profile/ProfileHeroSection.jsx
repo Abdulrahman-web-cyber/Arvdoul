@@ -15,7 +15,7 @@
 
 import { memo, useMemo, useState, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
-import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, Sparkles, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock } from "lucide-react";
+import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, Sparkles, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock, Clock } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -272,6 +272,7 @@ export const ProfileHeroSection = memo(({
   onInsightsPress,
   onFollowToggle,
   isFollowing = false,
+  requestStatus = null,
   followLoading = false,
   friendshipStatus = 'none',
   friendRequestLoading = false,
@@ -321,12 +322,13 @@ export const ProfileHeroSection = memo(({
   // "Level N to Verify" copy below must read it, not restate a literal.
   const verificationLevelGate = LevelModule.LEVEL_GATES?.verifiedPriority ?? null;
   const isLevelEligibleForVerification = userLevel !== null && verificationLevelGate !== null && userLevel >= verificationLevelGate;
+  const sovereignGate = LevelModule.LEVEL_GATES?.sovereign ?? null;
 
   // Dynamic level appearance & crest aura unlocked at higher levels / royal standing
   const crestAuraRing = useMemo(() => {
     const aura = profile?.crestAura;
     if (aura === 'purple') return 'bg-gradient-to-tr from-purple-500 via-indigo-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.45)]';
-    if (aura === 'royal' || (userLevel && userLevel >= (LevelModule.LEVEL_GATES?.sovereign || 50))) return 'bg-gradient-to-tr from-blue-500 via-indigo-700 to-cyan-400 shadow-[0_0_25px_rgba(59,130,246,0.5)]';
+    if (aura === 'royal' || (sovereignGate !== null && userLevel !== null && userLevel >= sovereignGate)) return 'bg-gradient-to-tr from-blue-500 via-indigo-700 to-cyan-400 shadow-[0_0_25px_rgba(59,130,246,0.5)]';
     if (aura === 'cyan') return 'bg-gradient-to-tr from-cyan-400 via-teal-500 to-sky-300 shadow-[0_0_25px_rgba(34,211,238,0.45)]';
     if (aura === 'emerald') return 'bg-gradient-to-tr from-emerald-400 via-green-600 to-teal-300 shadow-[0_0_25px_rgba(52,211,153,0.45)]';
     if (aura === 'gold') return 'bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.45)]';
@@ -810,7 +812,7 @@ export const ProfileHeroSection = memo(({
             disabled={followLoading}
             className={cn(
               "flex-1 min-w-[140px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer",
-              isFollowing
+              isFollowing || requestStatus === 'pending'
                 ? (isDark ? "bg-white/10 hover:bg-white/15 text-slate-200" : "bg-slate-200 hover:bg-slate-300 text-slate-800")
                 : "bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] hover:brightness-110 shadow-purple-600/30"
             )}
@@ -819,6 +821,11 @@ export const ProfileHeroSection = memo(({
               <>
                 <UserCheck className="w-4 h-4" />
                 <span>Following</span>
+              </>
+            ) : requestStatus === 'pending' ? (
+              <>
+                <Clock className="w-4 h-4" />
+                <span>Requested</span>
               </>
             ) : (
               <>

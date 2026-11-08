@@ -63,6 +63,16 @@ as failures.
   (superseded by `ProfileHeroSection`); do not resurrect them.
 - **Friendship**: `userService.areFriends(a, b)` is canonical. `_areMutualFriends` only
   delegates to it; treat both names as one implementation, never fork the logic.
+- **Private-account follow requests are a distinct state.** A follow against a
+  private target creates a `follow_requests/{from}_{to}` row with status
+  `pending` — it does NOT create a `follows` edge or move any counter.
+  `userService.followUser` returns `{ requested: true, requestStatus: 'pending' }`
+  in that case, and `getFollowStatus` returns `requestStatus: 'pending'`.
+  `profileStore.follow` must reconcile that result (never claim `isFollowing`
+  or a `+1` follower count), the follow control must render a `requested` state,
+  and `profileStore.cancelFollowRequest` / `userService.cancelFollowRequest`
+  let the requester withdraw. Treating a pending request as a completed follow
+  fabricates both the edge and the count.
 - **Social graph**: `src/services/socialGraphService.js` is the single source for
   relationship resolution and graph lists. Use `getRelationship` (one pair), `getEdgeSet`
   (batch; it chunks `documentId() in` to 30 and never scans the viewer's whole graph),
