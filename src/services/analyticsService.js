@@ -149,13 +149,6 @@ class UltimateAnalyticsService {
       const firebase = await import('../firebase/firebase.js');
       this.firestore = await firebase.getFirestoreInstance();
 
-      const { enableIndexedDbPersistence } = await import('firebase/firestore');
-      try {
-        await enableIndexedDbPersistence(this.firestore);
-        // Analytics persistence enabled
-      } catch (e) {
-      }
-
       this.initialized = true;
       return this.firestore;
     } catch (error) {

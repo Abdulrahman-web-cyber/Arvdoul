@@ -13,7 +13,7 @@ import {
   collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp, increment,
   arrayUnion, arrayRemove, writeBatch, runTransaction, onSnapshot, getCountFromServer,
-  Timestamp, enableIndexedDbPersistence
+  Timestamp
 } from 'firebase/firestore';
 import { getDatabase, ref, onValue, set, remove, onDisconnect, push as rtdbPush } from 'firebase/database';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, getStorage } from 'firebase/storage';
@@ -511,11 +511,6 @@ class UltimateMessagingService {
         this.storage = getStorage();
         this.auth = await getAuthInstance();
         this.rtdb = getDatabase();
-
-        try {
-          await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
-        } catch (err) {
-        }
 
         this.fs = {
           collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,

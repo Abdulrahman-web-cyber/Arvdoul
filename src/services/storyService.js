@@ -8,7 +8,7 @@ import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp,
   increment, writeBatch, runTransaction, Timestamp, onSnapshot, addDoc,
-  enableIndexedDbPersistence, documentId
+  documentId
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getMessagingService } from './messagesService.js';
@@ -317,9 +317,7 @@ class UltimateStoryService {
         documentId,
       };
       this.st = { ref: storageRef, uploadBytesResumable, getDownloadURL, deleteObject };
-      try { await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true }); } catch (err) {}
       this.initialized = true;
-// Initialized');
       this._onlineHandler(); // flush queue
     })();
     return this.initPromise;
