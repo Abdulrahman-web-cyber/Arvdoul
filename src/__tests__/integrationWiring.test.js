@@ -508,3 +508,13 @@ describe('stories are archived before they expire', () => {
     expect(body).toMatch(/!archived && storyData\.media/);
   });
 });
+
+describe('saved videos are surfaced', () => {
+  // `videoService.saveVideo` writes `users/{uid}/saved_videos`, but nothing
+  // read it — saving a video was a black hole. SavedScreen now merges them.
+  test('SavedScreen loads saved videos alongside saved posts', () => {
+    const src = read('src/screens/SavedScreen.jsx');
+    expect(src).toContain('getSavedVideos');
+    expect(src).toContain('unsaveVideo');
+  });
+});

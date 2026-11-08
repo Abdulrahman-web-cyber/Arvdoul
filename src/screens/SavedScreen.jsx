@@ -34,10 +34,15 @@ export default function SavedScreen() {
       if (!user?.uid) { setSavedLoading(false); return; }
       try {
         const { getFirestoreService } = await import('../services/firestoreService.js');
-        const res = await getFirestoreService().getSavedPosts(user.uid, { limit: 30 });
+        const { getVideoService } = await import('../services/videoService.js');
+        const [postRes, videoRes] = await Promise.allSettled([
+          getFirestoreService().getSavedPosts(user.uid, { limit: 30 }),
+          getVideoService().getSavedVideos(user.uid, { limit: 30 }),
+        ]);
         if (cancelled) return;
-        const mapped = (res.posts || []).map((p, i) => ({
+        const postItems = (postRes.status === 'fulfilled' ? (postRes.value?.posts || []) : []).map((p, i) => ({
           id: p.id || `saved-${i}`,
+          source: 'post',
           title: p.caption || p.content?.slice(0, 60) || 'Saved post',
           author: {
             name: p.authorName || 'Creator',
@@ -51,7 +56,27 @@ export default function SavedScreen() {
           collection: p.collection || 'Saved',
           tags: p.hashtags || [],
         }));
-        setItems(mapped);
+        // Videos saved via `videoService.saveVideo` live in a separate
+        // collection (`users/{uid}/saved_videos`); without this they were
+        // written but never surfaced anywhere.
+        const videoItems = (videoRes.status === 'fulfilled' ? (videoRes.value || []) : []).map((v, i) => ({
+          id: v.videoId || v.id || `saved-video-${i}`,
+          source: 'video',
+          title: v.title || 'Saved video',
+          author: {
+            name: v.creator?.name || 'Creator',
+            username: v.creator?.username || 'creator',
+            avatar: v.creator?.avatar || '/assets/default-profile.png',
+          },
+          type: 'video',
+          thumbnail: v.thumbnail || '/assets/default-profile.png',
+          videoUrl: v.videoUrl || '',
+          savedAt: v.savedAt || 'Recently',
+          likes: 0,
+          collection: 'Saved',
+          tags: [],
+        }));
+        setItems([...videoItems, ...postItems]);
       } catch (err) {
         console.error('Failed to load saved posts:', err);
         if (!cancelled) setItems([]);
@@ -96,10 +121,16 @@ export default function SavedScreen() {
   // Remove single item. Optimistic, but persisted — a local-only removal
   // reappears on reload, so the "Removed" toast would be a lie.
   const handleRemoveItem = async (id, title) => {
+    const item = items.find((i) => i.id === id);
     setItems((prev) => prev.filter((i) => i.id !== id));
     try {
-      const { getFirestoreService } = await import('../services/firestoreService.js');
-      await getFirestoreService().unsavePost(id, user.uid);
+      if (item?.source === 'video') {
+        const { getVideoService } = await import('../services/videoService.js');
+        await getVideoService().unsaveVideo(id, user.uid);
+      } else {
+        const { getFirestoreService } = await import('../services/firestoreService.js');
+        await getFirestoreService().unsavePost(id, user.uid);
+      }
       toast.success(`Removed "${title}" from saved`);
     } catch {
       toast.error('Could not remove from saved');
@@ -122,8 +153,13 @@ export default function SavedScreen() {
     setIsSelectMode(false);
     try {
       const { getFirestoreService } = await import('../services/firestoreService.js');
+      const { getVideoService } = await import('../services/videoService.js');
       const svc = getFirestoreService();
-      await Promise.all(ids.map((id) => svc.unsavePost(id, user.uid)));
+      const videoSvc = getVideoService();
+      await Promise.all(ids.map((id) => {
+        const item = items.find((i) => i.id === id);
+        return item?.source === 'video' ? videoSvc.unsaveVideo(id, user.uid) : svc.unsavePost(id, user.uid);
+      }));
       toast.success(`Removed ${ids.length} items from saved`);
     } catch {
       toast.error('Could not remove all selected items');
@@ -320,7 +356,7 @@ export default function SavedScreen() {
                     if (isSelectMode) {
                       handleToggleSelect(item.id);
                     } else {
-                      navigate(`/post/${item.id}`);
+                      navigate(item.source === 'video' ? `/video/${item.id}` : `/post/${item.id}`);
                     }
                   }}
                   className={cn(
@@ -395,7 +431,7 @@ export default function SavedScreen() {
                     if (isSelectMode) {
                       handleToggleSelect(item.id);
                     } else {
-                      navigate(`/post/${item.id}`);
+                      navigate(item.source === 'video' ? `/video/${item.id}` : `/post/${item.id}`);
                     }
                   }}
                   className={cn(
