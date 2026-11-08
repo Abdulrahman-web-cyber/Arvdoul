@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap } from "lucide-react";
+import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap } from "lucide-react";
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -123,6 +123,10 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [roadmapTab, setRoadmapTab] = useState('levels');
+  // Real Do Not Disturb state, read back from `user_settings` — the server
+  // gates every dispatch on `doNotDisturb` but nothing ever set it.
+  const [dnd, setDnd] = useState({ loading: true, enabled: false, until: null });
+  const [dndBusy, setDndBusy] = useState(false);
 
   const storeProfile = useProfileStore((state) => state.profile);
   const [profilePrivacy, setProfilePrivacy] = useState(DEFAULT_PROFILE_PRIVACY);
@@ -154,6 +158,39 @@ export default function SettingsScreen() {
       mounted = false;
     };
   }, [uid, storeProfile]);
+
+  // Read the real DND state once so the toggle reflects the server's view.
+  useEffect(() => {
+    if (!uid) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const { default: notificationsService } = await import('../services/notificationsService.js');
+        const prefs = await notificationsService.getUserNotificationPreferences(uid);
+        if (mounted) setDnd({ loading: false, enabled: !!prefs?.doNotDisturb?.enabled, until: prefs?.doNotDisturb?.until || null });
+      } catch {
+        if (mounted) setDnd({ loading: false, enabled: false, until: null });
+      }
+    })();
+    return () => { mounted = false; };
+  }, [uid]);
+
+  const handleToggleDnd = async (value) => {
+    if (!uid || dndBusy) return;
+    setDndBusy(true);
+    const prev = dnd;
+    setDnd({ loading: false, enabled: value, until: value ? prev.until : null });
+    try {
+      const { default: notificationsService } = await import('../services/notificationsService.js');
+      if (value) await notificationsService.muteNotifications(uid, 24 * 60);
+      else await notificationsService.unmuteNotifications(uid);
+    } catch (err) {
+      setDnd(prev);
+      toast.error(err?.message || 'Could not update Do Not Disturb.');
+    } finally {
+      setDndBusy(false);
+    }
+  };
 
   // Deep-link support: /settings#appearance, /settings#privacy, /settings#data
   // scroll to the matching section once settings have rendered.
@@ -535,6 +572,14 @@ export default function SettingsScreen() {
           <ToggleRow icon={Bell} label={t('settings.pushNotifs')} checked={settings.notifications.push} onChange={(v) => handleNotificationChannel('notifications.push', v)} />
           <ToggleRow icon={MailIcon} label={t('settings.emailNotifs')} checked={settings.notifications.email} onChange={(v) => handleNotificationChannel('notifications.email', v)} />
           <ToggleRow icon={Volume2} label={t('settings.soundFx')} checked={settings.notifications.soundFx} onChange={(v) => updateSetting('notifications.soundFx', v)} />
+          <ToggleRow
+            icon={BellOff}
+            label={t('settings.doNotDisturb')}
+            description={dnd.enabled ? t('settings.doNotDisturbOn') : t('settings.doNotDisturbDesc')}
+            checked={dnd.enabled}
+            disabled={dnd.loading || dndBusy}
+            onChange={handleToggleDnd}
+          />
         </Section>
 
         {/* ============ PRIVACY & AUDIENCE GOVERNANCE ============ */}

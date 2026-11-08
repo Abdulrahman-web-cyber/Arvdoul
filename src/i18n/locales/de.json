@@ -178,7 +178,10 @@
     "deleteAccountDesc": "Konto und Daten dauerhaft löschen",
     "deleteWarning": "Dies löscht dauerhaft Ihr Konto, Ihre Beiträge und Daten. Dieser Vorgang kann nicht rückgängig gemacht werden.",
     "confirmDelete": "Mein Konto löschen",
-    "deleting": "Löschen..."
+    "deleting": "Löschen...",
+    "doNotDisturb": "Do Not Disturb",
+    "doNotDisturbDesc": "Pause push and in-app alerts",
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
   },
   "level": {
     "title": "Level & Fortschritt",

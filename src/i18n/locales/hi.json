@@ -178,7 +178,10 @@
     "deleteAccountDesc": "अपना खाता और डेटा स्थायी रूप से हटाएं",
     "deleteWarning": "यह आपका खाता, पोस्ट और डेटा स्थायी रूप से हटा देगा। इसे पूर्ववत नहीं किया जा सकता।",
     "confirmDelete": "मेरा खाता हटाएं",
-    "deleting": "हटा रहे हैं..."
+    "deleting": "हटा रहे हैं...",
+    "doNotDisturb": "Do Not Disturb",
+    "doNotDisturbDesc": "Pause push and in-app alerts",
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
   },
   "level": {
     "title": "स्तर और प्रगति",

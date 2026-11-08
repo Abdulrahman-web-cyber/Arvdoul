@@ -530,3 +530,15 @@ describe('notifications deep-link to their subject', () => {
     expect(src).toContain('conversationId');
   });
 });
+
+describe('Do Not Disturb is a real, server-honoured control', () => {
+  // `muteNotifications` / `unmuteNotifications` existed but no screen called
+  // them, and the server gates every dispatch on `doNotDisturb` — so the
+  // setting was unreachable and the gate always saw "off".
+  test('SettingsScreen writes DND through notificationsService', () => {
+    const src = read('src/screens/SettingsScreen.jsx');
+    expect(src).toContain('muteNotifications');
+    expect(src).toContain('unmuteNotifications');
+    expect(src).toContain('getUserNotificationPreferences');
+  });
+});
