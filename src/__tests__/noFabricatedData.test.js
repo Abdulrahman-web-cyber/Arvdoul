@@ -2208,3 +2208,27 @@ describe('ProfileCitizenshipCard resolves the real viewer relationship', () => {
     expect(grid).toContain('viewerId={currentUserId}');
   });
 });
+
+
+describe('Store and help copy read the shared config, never restated literals', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('SubscriptionScreen derives tiers, ids and prices from SUBSCRIPTION_TIERS', () => {
+    const src = read('src/screens/SubscriptionScreen.jsx');
+    expect(src).toContain('import { SUBSCRIPTION_TIERS }');
+    expect(src).toContain('Object.entries(SUBSCRIPTION_TIERS)');
+    // The old table hardcoded $24.99/enterprise/10,000 coins while the server
+    // charges $19.99 for `premium` and rejects `createSubscription('creator')`.
+    expect(src).not.toContain("id: 'enterprise'");
+    expect(src).not.toContain("id: 'creator'");
+    expect(src).not.toMatch(/price:\s*'\$\d/);
+    expect(src).not.toContain('10,000 coins');
+  });
+
+  test('HelpCenter verification copy reads CREATOR_VERIFICATION_REQUIREMENTS', () => {
+    const src = read('src/screens/Help/HelpCenterScreen.jsx');
+    expect(src).toContain('CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS');
+    expect(src).not.toContain('at least 1,000 followers');
+    expect(src).not.toContain('last 90 days');
+  });
+});

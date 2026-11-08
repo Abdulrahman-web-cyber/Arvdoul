@@ -13,6 +13,18 @@ import { HelpCircle, Search, ChevronDown, Send, LifeBuoy, Loader2, MessageCircle
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getSupportTicketService } from '../../services/supportTicketService.js';
+import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
+
+// Build the checklist copy from the same constants the verification reviewer
+// uses, so the FAQ can never advertise a threshold the app does not enforce.
+// The old copy restated the follower count as a literal and invented a strike
+// window that no rule enforces.
+const verificationCopy = [
+  CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED ? 'a verified email' : null,
+  CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_PHONE_VERIFIED ? 'a verified phone' : null,
+  `at least ${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()} followers`,
+  'no active community strikes',
+].filter(Boolean).join(', ');
 
 // FAQ content mirrors the automation knowledge base so an auto-resolved
 // answer is exactly what the user can read here.
@@ -59,7 +71,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'How do I get verified?',
-        a: 'Creator verification requires a verified phone and email, at least 1,000 followers, and no community strikes in the last 90 days. Apply from Settings > Creator Verification.',
+        a: `Creator verification requires ${verificationCopy}. Apply from Settings > Creator Verification.`,
       },
       {
         q: 'How do I send a gift to a creator?',
