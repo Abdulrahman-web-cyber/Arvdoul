@@ -561,7 +561,9 @@ class MonetizationService {
     const isOnline = await this._isActuallyOnline();
     if (!isOnline) {
       await this.offlineQueue.add('watchAd', { placement, adId, watchDurationSeconds });
-      return { success: true, offlineQueued: true, message: 'Will be processed when online' };
+      // Queued is NOT earned: reporting success here made the UI announce a
+      // coin reward for an ad that was never verified (and may never replay).
+      return { success: false, offlineQueued: true, message: 'Will be processed when online' };
     }
     try {
       const result = await retryOperation(() =>
@@ -612,7 +614,9 @@ class MonetizationService {
     const isOnline = await this._isActuallyOnline();
     if (!isOnline) {
       await this.offlineQueue.add('purchaseCoins', { packageId, paymentMethodId });
-      return { success: true, offlineQueued: true, message: 'Will be processed when online' };
+      // A queued purchase has granted NO coins. Reporting success made the UI
+      // announce "+N coins added" for a purchase that was never charged.
+      return { success: false, offlineQueued: true, message: 'Will be processed when online' };
     }
 
     // Try real stripe integration checkout flow if initialized

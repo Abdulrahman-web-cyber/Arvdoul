@@ -177,6 +177,21 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     expect(monetization).not.toContain("console.log(`Granting ${coinAmount} coins");
   });
 
+  test('purchaseCoins credits only a settled PaymentIntent', () => {
+    // `confirm: true` with a card that needs 3DS returns `requires_action`
+    // (it does not throw); crediting that mints coins the user never paid for.
+    expect(monetization).toContain('const paymentIntent = await stripe.paymentIntents.create(');
+    expect(monetization).toContain("paymentIntent.status !== 'succeeded'");
+  });
+
+  test('createSubscription charges the first invoice before crediting coins', () => {
+    // `default_incomplete` left the first invoice unpaid while the code still
+    // marked the sub active and granted the monthly coins. `error_if_incomplete`
+    // throws on a card that cannot be charged off-session.
+    expect(monetization).toContain("payment_behavior: 'error_if_incomplete'");
+    expect(monetization).not.toContain("payment_behavior: 'default_incomplete'");
+  });
+
   test('subscription docs are keyed by uid everywhere', () => {
     // The client and the callables read `subscriptions/{uid}`. Keying the
     // webhook by the Stripe subscription id would write a phantom doc, leave
@@ -210,6 +225,27 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     expect(settlement).toContain('COINS_PER_DOLLAR');
     expect(settlement).toContain('coinsToUsd(withdrawalData.amount)');
     expect(settlement).not.toMatch(/coinsPerDollar\s*\)\s*:\s*200\b/);
+  });
+
+  test('the settlement path verifies the balance BEFORE sending a Stripe payout', () => {
+    const settlement = fs.readFileSync(
+      path.join(root, 'functions', 'withdrawalSettlement.js'), 'utf8'
+    );
+    // `stripe.payouts.create` is irreversible. A balance that shrank between
+    // the request and the approval (concurrent spend, admin debit) must fail
+    // BEFORE the payout is created; otherwise real money leaves the platform
+    // for coins the creator no longer holds. The finalize transaction re-checks
+    // but runs after Stripe and cannot un-send the payout.
+    const payoutAt = settlement.indexOf('await stripe.payouts.create(');
+    const precheckAt = settlement.indexOf('Insufficient balance before payout.');
+    expect(payoutAt).toBeGreaterThan(-1);
+    expect(precheckAt).toBeGreaterThan(-1);
+    expect(precheckAt).toBeLessThan(payoutAt);
+    // The pre-check must be a real guard, not a comment.
+    expect(settlement).toMatch(/if\s*\(locked\s*<\s*withdrawalData\.amount\s*\|\|\s*balance\s*<\s*withdrawalData\.amount\)/);
+    // A failed pre-flight must release the hold, or the coins stay locked
+    // forever on a withdrawal that never paid out.
+    expect(settlement).toContain('lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount)');
   });
 
   test('level-up coin rewards land in the wallet ledger and supply counter', () => {

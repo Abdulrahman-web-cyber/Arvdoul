@@ -1225,7 +1225,7 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
 
       // Real revenue path: charge the card (payment method validated above).
       const customer = await getOrCreateStripeCustomer(uid);
-      await stripe.paymentIntents.create({
+      const paymentIntent = await stripe.paymentIntents.create({
         amount: pkg.priceUsdCents,
         currency: 'usd',
         payment_method: paymentMethodId,
@@ -1234,6 +1234,17 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
         off_session: true,
         metadata: { userId: uid, packageId },
       }, { idempotencyKey: `pi_${key}` });
+
+      // Only credit coins for a charge that actually settled. `confirm: true`
+      // with a card that needs 3DS returns `requires_action` (it does not
+      // throw), and an async method returns `processing` — crediting either
+      // would mint coins the user never paid for.
+      if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Payment not completed (status: ${paymentIntent?.status || 'unknown'}). Please complete authentication and try again.`
+        );
+      }
 
       const userRef = admin.firestore().collection('users').doc(uid);
       const userSnap = await t.get(userRef);
@@ -1323,13 +1334,23 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
       const customer = await getOrCreateStripeCustomer(uid);
       await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
       await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: paymentMethodId } });
+      // `error_if_incomplete` charges the first invoice off-session and THROWS
+      // if the card cannot be charged (declined, needs 3DS). The previous
+      // `default_incomplete` created the subscription with an unpaid invoice,
+      // so the code below still marked it `active` and credited the first
+      // month's coins to a subscriber who had paid nothing.
       const sub = await stripe.subscriptions.create({
         customer: customer.id,
         items: [{ price: price.id }],
-        payment_behavior: 'default_incomplete',
-        expand: ['latest_invoice.payment_intent'],
+        payment_behavior: 'error_if_incomplete',
         metadata: { userId: uid, tier },
       });
+      if (!sub || (sub.status !== 'active' && sub.status !== 'trialing')) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Subscription not active (status: ${sub?.status || 'unknown'}). Please complete payment and try again.`
+        );
+      }
       const stripeSubscriptionId = sub.id;
 
       const subRef = admin.firestore().collection('subscriptions').doc(uid);
