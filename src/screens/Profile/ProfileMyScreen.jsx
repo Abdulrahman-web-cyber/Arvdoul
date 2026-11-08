@@ -7,7 +7,7 @@
  * @component
  */
 import { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, Lock } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -196,18 +196,27 @@ export default function ProfileMyScreen() {
     return projectProfileForViewer(effectiveProfile, capabilities);
   }, [effectiveProfile, capabilities, viewAs]);
 
-  // Open on the owner's chosen default tab (the Edit Profile "Default Starting
-  // Tab"). Applied once per mount so it cannot override the owner's own tab
-  // clicks on a later store update.
+  // Deep links such as /profile?tab=posts (QuickAccessPanel, share links) name
+  // the tab to open; nothing read the param, so every such link landed on the
+  // default tab. Applied once per mount so it cannot override later clicks.
+  const [searchParams] = useSearchParams();
   const appliedDefaultTabRef = useRef(false);
   useEffect(() => {
     if (appliedDefaultTabRef.current) return;
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab && PROFILE_TABS.includes(requestedTab)) {
+      setActiveTab(requestedTab);
+      appliedDefaultTabRef.current = true;
+      return;
+    }
+    // Otherwise open on the owner's chosen default tab (the Edit Profile
+    // "Default Starting Tab").
     const preferred = displayedProfile?.defaultTab;
     if (preferred && PROFILE_TABS.includes(preferred)) {
       setActiveTab(preferred);
       appliedDefaultTabRef.current = true;
     }
-  }, [displayedProfile?.defaultTab]);
+  }, [searchParams, displayedProfile?.defaultTab]);
 
   // Load user data on mount
   useEffect(() => {

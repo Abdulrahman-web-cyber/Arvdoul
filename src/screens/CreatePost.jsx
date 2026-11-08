@@ -3117,6 +3117,7 @@ function EditPostLoader() {
   const quotedRef = React.useRef(false);
   const soundRef = React.useRef(false);
   const videoRef = React.useRef(false);
+  const typeRef = React.useRef(false);
 
   // "Share to Feed" from the Video Editor navigates here with the rendered
   // blob/URL in route state. Nothing read it, so the composer opened empty and
@@ -3189,6 +3190,19 @@ function EditPostLoader() {
     dispatch({ type: "SET_POST_TYPE", payload: "text" });
     dispatch({ type: "SET_STEP", payload: 2 });
   }, [quoteSnippet, dispatch]);
+
+  // Deep links like /create-post?type=poll (QuickAccessPanel "Create Poll")
+  // carry the intended composer type in the query string. Nothing read it, so
+  // the link landed on the type launcher instead of the poll composer.
+  React.useEffect(() => {
+    const requestedType = searchParams.get("type");
+    if (!requestedType || typeRef.current) return;
+    if (!POST_TYPES.some((t) => t.id === requestedType)) return;
+    typeRef.current = true;
+    if (requestedType === "vibe") return; // handled by /create-story
+    dispatch({ type: "SET_POST_TYPE", payload: requestedType });
+    dispatch({ type: "SET_STEP", payload: 2 });
+  }, [searchParams, dispatch]);
 
   React.useEffect(() => {
     if (!editId || loadedRef.current) return;

@@ -49,12 +49,12 @@ const VideosScreen = () => {
   const [viewMode, setViewMode] = useState('feed'); // 'feed' | 'grid'
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
 
-  // Sync initial tab from URL if provided
+  // Sync the feed type from the URL. The tab bar highlights `feedType`, so a
+  // visit to /videos with no `tab` used to load the "sparks" feed while
+  // highlighting the store's stale "for_you" tab.
   useEffect(() => {
-    if (searchParams.get('tab') && searchParams.get('tab') !== feedType) {
-      setFeedType(searchParams.get('tab'));
-    }
-  }, [searchParams, setFeedType, feedType]);
+    if (initialTab !== feedType) setFeedType(initialTab);
+  }, [initialTab, setFeedType, feedType]);
 
   // Load videos from service (non-blocking background sync if videos already cached)
   const loadVideos = useCallback(async (type = feedType) => {
