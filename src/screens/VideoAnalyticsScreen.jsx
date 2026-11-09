@@ -57,7 +57,9 @@ const VideoAnalyticsScreen = () => {
         setAnalytics({
           overview: {
             totalViews: data.totalViews || 0,
-            viewsChange: data.changes?.views || 0,
+            // A change with no previous period (or a zero baseline) is unknown
+            // (the badge hides), never a fabricated "0%".
+            viewsChange: typeof data.changes?.views === 'number' ? data.changes.views : null,
             // `totalEngagement` is not incremented server-side; an absent
             // value is unknown (rendered '—'), not a measured zero.
             totalLikes: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
@@ -83,7 +85,9 @@ const VideoAnalyticsScreen = () => {
             subscriptions: null,
             payPerView: null,
             gifts: null,
-            change: 0,
+            // The period-over-period revenue change is only known when a real
+            // previous period exists; otherwise it is unknown (badge hides).
+            change: typeof data.changes?.coins === 'number' ? data.changes.coins : null,
           },
           videos: (data.topPosts || []).map((p, i) => ({
             id: p.id || `v-${i}`,

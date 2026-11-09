@@ -278,11 +278,13 @@ class UltimateAnalyticsService {
           interests: {},
         },
         ranking: null,
+        // No previous period has been compared yet, so every change is
+        // unknown (the UI hides the badge), never a measured "0% change".
         changes: {
-          views: 0,
-          reach: 0,
-          engagement: 0,
-          coins: 0,
+          views: null,
+          reach: null,
+          engagement: null,
+          coins: null,
         },
         lastUpdated: new Date().toISOString(),
       };
@@ -333,8 +335,11 @@ class UltimateAnalyticsService {
           const previousCoins = previousStats.reduce((sum, s) => sum + (s.coins || 0), 0);
 
           analytics.changes = {
-            views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : 0,
-            reach: previousTotalReach > 0 ? ((analytics.totalReach - previousTotalReach) / previousTotalReach) * 100 : 0,
+            // A change is only known when a real previous period exists and
+            // its baseline is non-zero; otherwise it is unknown (null), never
+            // a fabricated "0%".
+            views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : null,
+            reach: previousTotalReach > 0 ? ((analytics.totalReach - previousTotalReach) / previousTotalReach) * 100 : null,
             engagement: previousTotalEngagement > 0 && typeof analytics.totalEngagement === 'number'
               ? ((analytics.totalEngagement - previousTotalEngagement) / previousTotalEngagement) * 100
               : null,

@@ -2949,6 +2949,17 @@ describe('Creator dashboard never fabricates growth rate or active days (N172)',
     expect(svc).toContain("activeDays: typeof data.activeDays === 'number' ? data.activeDays : null");
   });
 
+  test('period-over-period changes are unknown (null), never a fabricated 0%', () => {
+    // With no previous period (or a zero baseline) there is no measured change;
+    // the old all-zero default and `: 0` fallbacks rendered a confident "0%".
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : 0');
+    expect(svc).toContain('views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : null');
+    const screen = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(screen).not.toContain('viewsChange: data.changes?.views || 0');
+    expect(screen).not.toContain('change: 0,');
+  });
+
   test('the dashboard only renders a growth rate that is a real number', () => {
     const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
     expect(s).not.toContain('analytics?.growthRate !== undefined');

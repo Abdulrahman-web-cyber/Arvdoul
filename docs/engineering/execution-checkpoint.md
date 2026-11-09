@@ -363,3 +363,16 @@ active days from the profile, and the identity mirror carries
 Gates: `npm test` — **119 suites / 1440 passing / 5 skipped**; `npm run build`
 — ✓; `eslint src/ --quiet` — 0 errors; guard suites (`noFabricatedData`,
 `storeContract`, `contextContract`) — 318 passing.
+
+## Checkpoint — N173 (period-over-period change badges fabricated 0%)
+
+`getUserAnalytics` defaulted `changes` to all-zero and computed the
+views/reach deltas as `previousTotal > 0 ? … : 0`, so a brand-new creator (or
+a zero baseline) saw a confident "0%" change badge on the metrics grid and the
+video analytics stat/revenue cards. Fix: defaults are `null`, the `: 0`
+fallbacks are `: null`, and `VideoAnalyticsScreen` passes the deltas through
+only when they are real numbers (its `revenue.change` is no longer hardcoded
+`0`). Guarded by `noFabricatedData.test.js`.
+
+Gates: `npm test` (noFabricatedData) — 314 passing; `eslint src/ --quiet` — 0
+errors; `npm run build` — ✓.
