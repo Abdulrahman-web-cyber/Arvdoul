@@ -538,7 +538,6 @@ const initialState = {
     video: { file: null },
   },
   pollClosesAt: null,
-  pollReward: 0,
   step: 1,
   loading: false,
   progress: 0,
@@ -628,7 +627,6 @@ function reducer(state, action) {
       case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_POLL_REWARD": draft.pollReward = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EVENT_DATE": draft.typeData.event.date = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EVENT_LOCATION": draft.typeData.event.location = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -1527,7 +1525,7 @@ function CreatePostProvider({ children }) {
         recurrence: current.recurrence || "none",
         settings: current.settings || {},
         coAuthors: current.coAuthors || [],
-        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null, rewardCoins: Number(current.pollReward) || 0 } : null,
+        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null } : null,
         event: effectiveType === "event" ? {
           title: effectiveText,
           date: current.typeData.event.date,

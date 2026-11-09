@@ -596,12 +596,11 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           badge: "0% Fee"
         },
         {
-          label: "Polls & Wagers",
+          label: "Polls",
           icon: BarChart3,
           action: () => navigate(NAVIGATION_PATHS.polls),
           color: "from-blue-500 via-indigo-500 to-cyan-500",
-          description: "Voting & prediction markets",
-          badge: "Earn"
+          description: "Vote on community polls"
         },
         {
           label: "Video Studio",
@@ -1700,7 +1699,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           <Badge variant="creator">PRO SUITE</Badge>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-          Next-gen creative suite: Viral hook AI, live audio stages, sound discovery, digital marketplace & prediction pools.
+          Next-gen creative suite: Viral hook AI, live audio stages, sound discovery & digital marketplace.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">

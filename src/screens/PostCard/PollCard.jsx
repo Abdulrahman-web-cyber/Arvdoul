@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { Sparkles, Coins, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Sparkles, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -67,7 +67,6 @@ const PollCard = React.memo(({
   tokens,
   onVote,             // async (postId, optionId, idempotencyKey) => void
   onAnalytics,
-  onReward,
   isPollClosed = false,
 }) => {
   const t = tokens || {};
@@ -117,7 +116,6 @@ const PollCard = React.memo(({
   const timeLeft = useMemo(() => formatTimeLeft(poll?.closesAt), [poll?.closesAt, now]);
   const isClosed = isPollClosed || (poll?.closesAt && new Date(poll.closesAt) <= new Date());
   const canVote = !isClosed && currentUser && !isVoting && !pendingVoteRef.current;
-  const rewardAmount = poll?.rewardCoins ?? 0;
 
   const handleVote = useCallback(async (optionId) => {
     if (!currentUser) {
@@ -192,15 +190,7 @@ const PollCard = React.memo(({
       await onVote(postId, optionId, idempotencyKey);
       if (version !== voteVersionRef.current) return; // stale response
       onAnalytics?.('poll_vote_success', { postId, optionId });
-      // The reward is credited server-side on the viewer's FIRST vote only, so
-      // only claim it then — a multi-choice second pick credits nothing.
-      const isFirstVote = !prevUserVote || prevUserVote.length === 0;
-      if (rewardAmount > 0 && isFirstVote) {
-        if (onReward) onReward(rewardAmount);
-        toast.success(`+${rewardAmount} coins!`);
-      } else {
-        toast.success('Vote recorded');
-      }
+      toast.success('Vote recorded');
     } catch (err) {
       if (version !== voteVersionRef.current) return;
       setOptimisticOptions(prevOptions);
@@ -216,7 +206,7 @@ const PollCard = React.memo(({
       setIsVoting(false);
     }
   }, [currentUser, onVote, canVote, isMulti, optimisticOptions, optimisticTotal, optimisticUserVote,
-      postId, onAnalytics, rewardAmount, onReward, isVoting]);
+      postId, onAnalytics, isVoting]);
 
   const neonGradient = `linear-gradient(135deg, ${t.audioNeonPrimary || '#9333ea'}, ${t.audioNeonSecondary || '#c026d3'}, #ec4899)`;
   const buttonGlow = `0 0 4px rgba(236, 72, 153, 0.3)`; // reduced from 8px to 4px, lower opacity
@@ -255,11 +245,6 @@ const PollCard = React.memo(({
         <p className="font-semibold text-base" style={{ color: t.text || '#fff' }}>
           {poll.question}
         </p>
-        {rewardAmount > 0 && canVote && (
-          <span className="flex items-center gap-1 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full backdrop-blur-sm">
-            <Coins className="w-3 h-3" /> +{rewardAmount}
-          </span>
-        )}
       </div>
 
       {/* Time left */}

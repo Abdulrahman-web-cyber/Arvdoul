@@ -563,25 +563,46 @@ describe('appStore - identity mirror only, no duplicate economy', () => {
   });
 });
 
-describe('Poll wagers - real coin debit', () => {
+describe('Poll wagers - no value sink without a settlement engine', () => {
   test('pollService.votePoll is server-authoritative (votePoll CF) and never writes the poll doc client-side', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
     expect(src).toContain('FUNCTIONS.VOTE_POLL'); // Cloud Function path
     expect(src).not.toContain('updateDoc(pollRef, updatePayload)'); // no direct poll writes
   });
 
-  test('functions/polls.js debits wagers through the double-entry ledger', () => {
+  test('functions/polls.js refuses wagers instead of debiting a pool nothing settles', () => {
     const src = fs.readFileSync(path.join(root, 'functions/polls.js'), 'utf8');
     expect(src).toContain('exports.votePoll');
-    expect(src).toContain('coin_transactions');
-    expect(src).toContain('coin_supply');
     expect(src).toContain('You have already voted on this poll');
+    // The wager path must not debit the ledger or burn supply until a real
+    // settlement engine (payout + refund + resolver) exists. A debit here is
+    // a value sink: the coins are destroyed and the pool is never released.
+    expect(src).toContain('there is no settlement engine');
+    expect(src).not.toContain("reason: 'poll_wager'");
+    expect(src).not.toContain('poolCoins: admin.firestore.FieldValue.increment(wager)');
   });
 
-  test('PollsScreen never falls back to fabricated 5000 coins', () => {
-    const src = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
-    expect(src).not.toContain('coins || 5000');
-    expect(src).toContain('getBalance(');
+  test('PollsScreen and pollService render no wager surface', () => {
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
+    expect(screen).not.toContain('isPredictionMarket');
+    expect(screen).not.toContain('poolCoins');
+    expect(screen).not.toContain('wagerCoins');
+    expect(screen).not.toContain('payout will trigger');
+    const svc = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
+    expect(svc).not.toContain('isPredictionMarket');
+    expect(svc).not.toContain('poolCoins');
+  });
+
+  test('no unfunded coin faucet: poll voter rewards credit nobody', () => {
+    // `votePostPoll` once minted `poll.rewardCoins` per first-time voter while
+    // debiting no balance — a creator could set 1000/voter and mint unlimited
+    // coins. The reward must stay gone until an escrow model exists.
+    const fn = fs.readFileSync(path.join(root, 'functions/polls.js'), 'utf8');
+    expect(fn).not.toContain("reason: 'poll_vote_reward'");
+    expect(fn).not.toContain('rewardCoins: firstVote');
+    const card = fs.readFileSync(path.join(root, 'src/screens/PostCard/PollCard.jsx'), 'utf8');
+    expect(card).not.toContain('rewardAmount');
+    expect(card).not.toContain('rewardCoins');
   });
 });
 

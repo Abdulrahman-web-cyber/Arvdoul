@@ -879,8 +879,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       return;
     }
     setUserPollVoteIndex(index);
-    // The reward is credited server-side by `votePostPoll`; PollCard owns the
-    // "+coins" toast so it fires only on the viewer's first vote (and only once).
+    // Vote rewards are not credited: there is no escrow to fund them (see
+    // functions/polls.js), so the card promises no coins.
     void idempotencyKey;
   }, [currentUser, post.poll]);
 

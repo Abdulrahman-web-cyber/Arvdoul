@@ -1105,10 +1105,10 @@ class EnterpriseFirestoreService {
   }
 
   // Post-embedded poll voting is server-authoritative: `functions/polls.js`
-  // `votePostPoll` validates eligibility/expiry/option, records one vote per
-  // viewer in a transaction and credits the reward. The posts update rule lets
-  // any signed-in user write `poll`, so a client transaction here would let a
-  // voter forge counts (the previous implementation did exactly that).
+  // `votePostPoll` validates eligibility/expiry/option and records one vote per
+  // viewer in a transaction. The posts update rule lets any signed-in user write
+  // `poll`, so a client transaction here would let a voter forge counts (the
+  // previous implementation did exactly that).
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
     if (!userId) throw new Error('Sign in to vote');
@@ -1119,7 +1119,7 @@ class EnterpriseFirestoreService {
         optionId: `opt_${optionIndex}`,
       });
       this.cache.delete(postId);
-      return { success: true, alreadyVoted: false, options: data?.options, totalVotes: data?.totalVotes, rewardCoins: data?.rewardCoins };
+      return { success: true, alreadyVoted: false, options: data?.options, totalVotes: data?.totalVotes };
     } catch (error) {
       const code = error?.code || '';
       if (String(code).includes('already-exists')) {

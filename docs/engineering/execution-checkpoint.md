@@ -6,6 +6,9 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 
 - Baseline: full Jest suite green (121 suites, 1464 passed, 5 skipped); `npm run
   build` green; `npm run lint` exit 0 (0 errors, warnings only).
+- Latest verified: 128 suites, 1504 passed, 5 skipped; `npm run build` green;
+  `npm run lint` exit 0 (0 errors); crash-bug gate (`eslint src/ functions/
+  --quiet`) exit 0.
 
 ## Completed this session
 
@@ -23,6 +26,8 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N184 | Denied-block duplication + count sweep | `sharedStatePrimitivesGuard.test.js`; see N183 |
 | N185 | Story/Vibe expiry in the data path (#9) | `storyService._isStoryExpired` single helper; `getUserStories` drops expired docs (the rules' list branch admits them regardless of expiry); `storyExpiryGuard.test.js` |
 | N186 | No-fabrication sweep round 3 | `WalletScreen` ledger rows + `firestoreService.getPostAnalytics` counters -> `unknownNumber`; `noFabricatedData` +round-3 block |
+| N187 | Prediction-market wagering removed (coin value sink) | `votePoll` no ledger debit/supply burn; `PollsScreen` wager modal gone; dead `prediction_markets` rules deleted; `noFabricatedData` guard |
+| N188 | Post-poll voter reward faucet removed (unfunded mint) | `votePostPoll` no `poll_vote_reward` credit/supply increment; `PollCard` reward badge+toast gone; composer reward input + `pollReward` state gone; `noFabricatedData` + `integrationWiring` guards |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,

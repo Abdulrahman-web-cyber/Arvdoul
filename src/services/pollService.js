@@ -1,6 +1,6 @@
 // src/services/pollService.js
 //
-// Real-time community voting, predictive coin markets, and creator opinion analytics in Firestore.
+// Real-time community voting and creator opinion analytics in Firestore.
 
 import { svcLogger } from './ServiceKit.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
@@ -79,17 +79,19 @@ class PollService {
     if (!user?.uid) {
       throw new Error('Sign in to vote');
     }
-    log.info('Voting on poll (server-authoritative)', { pollId, optionId, wagerCoins });
+    // `userCoins`/`wagerCoins` are accepted for call-site compatibility but
+    // ignored: prediction-market wagering was removed (it was a coin value sink
+    // with no settlement engine — see functions/polls.js).
+    log.info('Voting on poll (server-authoritative)', { pollId, optionId });
 
     // Server-authoritative vote: functions/polls.js votePoll atomically
-    // increments counters, records the deterministic poll_votes doc
-    // (${uid}_${pollId} — enforced by rules) and debits wagers through the
-    // double-entry ledger. Direct client writes to the poll doc are denied
-    // by firestore.rules (creator/admin only), so there is no client
-    // fallback for the money path.
+    // increments counters and records the deterministic poll_votes doc
+    // (${uid}_${pollId} — enforced by rules). Direct client writes to the poll
+    // doc are denied by firestore.rules (creator/admin only), so there is no
+    // client fallback.
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
-      const data = await callFunction(FUNCTIONS.VOTE_POLL, { pollId, optionId, wagerCoins: Number(wagerCoins) || 0 });
+      const data = await callFunction(FUNCTIONS.VOTE_POLL, { pollId, optionId });
       const poll = data?.poll || {};
       this.votedHistory.set(pollId, optionId);
       await this._saveVotes();
@@ -103,7 +105,7 @@ class PollService {
     }
   }
 
-  async createPoll({ question, category = 'General', options = [], isPredictionMarket = false, creator }) {
+  async createPoll({ question, category = 'General', options = [], creator }) {
     log.info('Creating poll in Firestore', { question });
     const firestore = await getFirestoreInstance();
     const { collection, addDoc } = await import('firebase/firestore');
@@ -137,10 +139,6 @@ class PollService {
         votes: 0,
         percentage: 0
       })),
-      isPredictionMarket,
-      // Prediction pools start at 0 — every coin is a real wager. No free
-      // starting pool.
-      poolCoins: 0,
       createdAt: now.toISOString()
     };
 
