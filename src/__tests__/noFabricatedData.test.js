@@ -934,7 +934,10 @@ describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
   test('_canViewStory mirrors expiry/status/block/private rules', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
     expect(src).toContain("story.status === 'expired'");
-    expect(src).toContain("story.expiresAt.toDate().getTime() <= Date.now()");
+    // Expiry is mirrored through the single `_isStoryExpired` helper (shared by
+    // `getUserStories`) instead of an inline toDate()/Date comparison.
+    expect(src).toContain('this._isStoryExpired(story)');
+    expect(src).toMatch(/\n {2}_isStoryExpired\(/);
     // Block check goes through the graph spine: a point read of an absent edge
     // is denied by the `resource.data` rule and would silently skip the check.
     expect(src).toContain("getSocialGraphService().getRelationship(viewerId, story.userId)");
@@ -3131,5 +3134,25 @@ describe('N184 — no fabricated counts sweep (round 2)', () => {
       expect(src).not.toContain(literal);
       expect(src).toContain('unknownNumber');
     }
+  });
+});
+
+describe('N184 — no fabricated counts sweep (round 3)', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('wallet ledger rows never fabricate a 0 amount', () => {
+    const src = read('src/screens/Economy/WalletScreen.jsx');
+    expect(src).not.toContain('(tx.amount || 0)');
+    expect(src).toContain('unknownNumber(tx.amount)');
+    // An unreadable amount renders as an explicit unavailable state.
+    expect(src).toContain("amount == null ? '—'");
+  });
+
+  test('post analytics counters render unknown, not 0', () => {
+    const src = read('src/services/firestoreService.js');
+    expect(src).toContain('totalLikes: unknownNumber(stats.likes)');
+    expect(src).toContain('totalComments: unknownNumber(stats.comments)');
+    expect(src).toContain('totalShares: unknownNumber(stats.shares)');
+    expect(src).not.toMatch(/totalLikes: stats\.likes \|\| 0/);
   });
 });

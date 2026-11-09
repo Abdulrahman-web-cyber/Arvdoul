@@ -1218,11 +1218,34 @@ class UltimateStoryService {
         this.fs.limit(options.limit || 30)
       );
       const snap = await this.fs.getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // The rules' list branch admits the owner's own stories regardless of
+      // expiry, so this returns expired docs too. Expired content must never be
+      // offered as a pickable "active" story (the Highlights create modal reads
+      // this), so drop anything past its expiry here (spec §6 — expiry enforced
+      // in the data-access path, not just hidden by the UI).
+      return snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(s => !this._isStoryExpired(s));
     } catch (err) {
       logger.warn('[StoryService] getUserStories error', err);
       return [];
     }
+  }
+
+  /**
+   * Single source of truth for story expiry. `expiresAt` is a Firestore
+   * Timestamp on documents read from the server but a raw Date/ISO string on
+   * documents built client-side before the write commits, so both shapes are
+   * handled. A story with no `expiresAt` is treated as not expired here; the
+   * rules (`vibeIsActive` requires `expiresAt > request.time`) remain the
+   * authoritative gate on read.
+   */
+  _isStoryExpired(story, now = Date.now()) {
+    if (!story?.expiresAt) return false;
+    const ms = story.expiresAt?.toDate
+      ? story.expiresAt.toDate().getTime()
+      : new Date(story.expiresAt).getTime();
+    return Number.isFinite(ms) && ms <= now;
   }
 
   async getHighlightStories(highlightId, options = {}) {
@@ -1817,11 +1840,7 @@ class UltimateStoryService {
     if (story.moderationStatus === 'rejected' || story.moderationStatus === 'removed') return false;
     // Expiry is server-enforced by rules; mirror it here so the UI never
     // presents expired content as active (spec §6).
-    if (story.expiresAt?.toDate) {
-      if (story.expiresAt.toDate().getTime() <= Date.now()) return false;
-    } else if (story.expiresAt && new Date(story.expiresAt).getTime() <= Date.now()) {
-      return false;
-    }
+    if (this._isStoryExpired(story)) return false;
     if (story.userId === viewerId) return true;
     // Blocked in either direction = no access (spec §28). Actor-scoped list
     // read via the graph spine: a point read of an absent block edge is denied

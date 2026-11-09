@@ -21,9 +21,12 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | #13 | Shared state primitives | `design-system/PermissionDenied.jsx` replaces 3 hand-rolled admin denial cards; `sharedStatePrimitivesGuard.test.js` |
 | N183 | No-fabrication sweep round 2 | `noFabricatedData` +N184 assertions; 7 count coercions -> `unknownNumber` (—) |
 | N184 | Denied-block duplication + count sweep | `sharedStatePrimitivesGuard.test.js`; see N183 |
+| N185 | Story/Vibe expiry in the data path (#9) | `storyService._isStoryExpired` single helper; `getUserStories` drops expired docs (the rules' list branch admits them regardless of expiry); `storyExpiryGuard.test.js` |
+| N186 | No-fabrication sweep round 3 | `WalletScreen` ledger rows + `firestoreService.getPostAnalytics` counters -> `unknownNumber`; `noFabricatedData` +round-3 block |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
-`a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`.
+`a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
+`storyExpiryGuard`.
 
 ## Next exact tasks (dependency order)
 
@@ -32,8 +35,11 @@ New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexM
    in the same change (the ratchet may only shrink).
 2. **#11 i18n rollout** - extract strings per screen group (only 3 screens use
    `useTranslation` today).
-3. **#9 Story/Vibe lifecycle** - expiry sweep + client read filter + tests.
-4. **#10 Video/Sparks** - moderation wiring on the playback path.
+3. **#10 Video/Sparks** - verify the report -> moderator-queue path end to end
+   (`video_reports` -> `adminListModerationReports`), plus adaptive player mounting.
+4. **#9 Story/Vibe lifecycle** (done: expiry in the read path, N185) - remaining:
+   the scheduled server sweep already deletes + keeps archived media; a reaction/
+   reply test is still open.
 5. **#14/#15/#17** - offline pending surfacing, observability sink, contract ratchet.
 
 ## Commands to resume
