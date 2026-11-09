@@ -191,6 +191,15 @@ async function settleWithdrawal(deps, withdrawalId, action) {
         payoutId: payout.id,
       });
 
+      // Coins redeemed for fiat leave circulation, so the incremental supply
+      // counter (`system/coin_supply`, bumped by every mint/burn path) must be
+      // decremented too. Without this the scheduled `auditCoins` reconciliation
+      // reported permanent drift after every payout (supply counted coins the
+      // creator no longer holds).
+      t.set(db.collection('system').doc('coin_supply'),
+        { totalCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) },
+        { merge: true });
+
       t.update(withdrawalRef, {
         status: 'completed',
         stripePayoutId: payout.id,

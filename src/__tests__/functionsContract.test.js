@@ -248,6 +248,19 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     expect(settlement).toContain('lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount)');
   });
 
+  test('a settled withdrawal burns the coins from the supply counter', () => {
+    const settlement = fs.readFileSync(
+      path.join(root, 'functions', 'withdrawalSettlement.js'), 'utf8'
+    );
+    // Redeeming coins for fiat removes them from circulation. Every other
+    // mint/burn path bumps `system/coin_supply`; without the decrement here the
+    // scheduled `auditCoins` reconciliation reported permanent drift after
+    // every payout (supply counted coins the creator no longer holds).
+    const completion = settlement.slice(settlement.indexOf("reason: 'withdrawal_completed'"));
+    expect(completion).toContain("doc('coin_supply')");
+    expect(completion).toContain('increment(-withdrawalData.amount)');
+  });
+
   test('level-up coin rewards land in the wallet ledger and supply counter', () => {
     const levelSystem = fs.readFileSync(
       path.join(root, 'functions', 'levelSystem.js'), 'utf8'
