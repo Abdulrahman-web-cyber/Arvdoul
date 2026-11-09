@@ -97,3 +97,37 @@ npm run build
    failed vs empty tri-state) where the guard has not yet pinned them.
 3. Keep chasing the "surpass major platforms" goal: profile highlight creation
    UI, richer About/Preview surfaces, and PII boundary review.
+
+## Checkpoint — fabricated-zero sweep, N155/N156/N157
+
+- Branch: `reconstruction/arvdoul-platform-hardening`.
+- Completed: the "no fabricated standing/counts" discipline extended to every
+  remaining engagement/economy surface. The root cause behind most of these
+  was a **schema mismatch**: post/video/story engagement is written under
+  `stats` (`firestoreService` writes `stats: { likes, comments, … }`), but a
+  number of readers used non-existent top-level `viewsCount`/`likesCount`
+  fields and then `|| 0`, so an unmeasured value rendered as a measured zero.
+- Fixed (see ledger N155/N156/N157 for the full list): `PostAnalyticsScreen`,
+  `postService.getPost` (returned the `{success, post}` envelope instead of the
+  post — every caller read `undefined`), `analyticsService.getUserAnalytics`
+  engagement, `PostCard` (engagement reducer + inline analytics + inline
+  comments), `ProfileFeaturedSection`/`ProfilePinnedPosts`,
+  `ProfileFeedGrid`, `CommentsDrawer`, `VideoComments`, `PollCard`,
+  `StoriesScreen`, `LiveScreen`, `PerksRewardsScreen`, `CreatePost` analytics
+  preview, plus the earlier video/reel/AuthContext/QuickAccessPanel work.
+- Canonical rule (unchanged): an absent count/level/balance is **unknown** —
+  render `—`, keep `null` in state, never `0`/`Level 1`/`Citizen`. A real
+  measured `0` stays `0`.
+- Guards: `src/__tests__/noFabricatedData.test.js` (N155/N156/N157 blocks),
+  hard-failing `guards` CI job.
+- Quality gates: `npm test` — **117 suites / 1408 tests passing**;
+  `npm run build` — ✓ built; `eslint --quiet` — exit 0.
+
+## Next exact tasks (updated)
+
+1. Continue the "no fabricated state" pass: audit `CommunityDetailScreen` /
+   `CommunityDirectoryScreen` member/post counts (community docs do seed
+   `stats.memberCount`, so these are real, but a missing doc still renders 0).
+2. Chasing "surpass major platforms": profile highlight creation UI, richer
+   About/Preview surfaces, PII boundary review.
+3. Re-run the `guards` job suites after any further reader changes.
