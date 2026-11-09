@@ -137,16 +137,50 @@ async function retryOperation(fn, maxRetries = 3, baseDelay = 1000) {
   throw lastError;
 }
 
+const MONETIZATION_QUEUE_DB = 'monetization_offline';
+
+function openMonetizationDb() {
+  return openDB(MONETIZATION_QUEUE_DB, 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains('queue')) {
+        db.createObjectStore('queue', { autoIncrement: true });
+      }
+    },
+  });
+}
+
+/**
+ * Drop every queued financial op owned by `uid` from the device-local queue.
+ * Module-level so it can run on sign-out even when `monetizationService` was
+ * never initialized this session (in which case its instance queue is null but
+ * the IndexedDB store may still hold a previous session's ops).
+ */
+export async function purgeMonetizationQueueForOwner(uid) {
+  if (!uid || typeof indexedDB === 'undefined') return 0;
+  try {
+    const db = await openMonetizationDb();
+    const tx = db.transaction('queue', 'readwrite');
+    const store = tx.objectStore('queue');
+    const [items, keys] = await Promise.all([store.getAll(), store.getAllKeys()]);
+    let removed = 0;
+    for (let i = 0; i < items.length; i += 1) {
+      if (items[i].ownerUid === uid) {
+        await store.delete(keys[i]);
+        removed += 1;
+      }
+    }
+    await tx.done;
+    return removed;
+  } catch (e) {
+    log.warn('monetization offline queue purge failed', { error: e?.message });
+    return 0;
+  }
+}
+
 class OfflineMonetizationQueue {
   constructor(service) {
     this.service = service; // store reference to service for sync
-    this.dbPromise = openDB('monetization_offline', 1, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('queue')) {
-          db.createObjectStore('queue', { autoIncrement: true });
-        }
-      },
-    });
+    this.dbPromise = openMonetizationDb();
     this.isSyncing = false;
     this._boundSync = this.sync.bind(this);
 
@@ -159,13 +193,17 @@ class OfflineMonetizationQueue {
   }
 
   async add(operation, params) {
+    // The owner is resolved once and stored on the IndexedDB record so a later
+    // drain can prove which account queued the op. `params` (packageId /
+    // paymentMethodId / placement / adId) never carries the owner, so it must
+    // come from the live session.
+    const ownerUid = auth?.currentUser?.uid || params?.userId || null;
     const db = await this.dbPromise;
-    await db.add('queue', { operation, params, timestamp: Date.now() });
+    await db.add('queue', { operation, params, ownerUid, timestamp: Date.now() });
     // Also write to Firestore outbox (backup). firestore.rules authorises the
     // create on `userId == uid()`, so the owner must come from the live session
     // — `params` (packageId/paymentMethodId/placement/…) never carries it, and a
     // null userId would be silently denied.
-    const ownerUid = auth?.currentUser?.uid || params?.userId || null;
     if (ownerUid && this.service && this.service.db) {
       try {
         await addDoc(collection(this.service.db, 'monetization_outbox'), {
@@ -205,8 +243,15 @@ class OfflineMonetizationQueue {
     if (!this.service || !this.service.initialized || this.isSyncing) return;
     this.isSyncing = true;
     try {
+      // Only replay ops owned by the live session. A queued purchase/ad reward
+      // belongs to the account that created it; replaying it under a different
+      // signed-in account would charge/mint coins for the wrong user. Ops with
+      // no recorded owner (queued before this field existed) are skipped rather
+      // than guessed — the Firestore outbox copy remains for manual recovery.
+      const sessionUid = auth?.currentUser?.uid || null;
       const queue = await this.getAll();
       for (const item of queue) {
+        if (!sessionUid || item.ownerUid !== sessionUid) continue;
         try {
           if (item.operation === 'watchAd') {
             await this.service.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds);
@@ -223,6 +268,16 @@ class OfflineMonetizationQueue {
     } finally {
       this.isSyncing = false;
     }
+  }
+
+  /** Drop every queued op owned by `uid` (account switch / sign-out). */
+  async purgeOwner(uid) {
+    if (!uid) return 0;
+    const db = await this.dbPromise;
+    const queue = await this.getAll();
+    const owned = queue.filter((item) => item.ownerUid === uid);
+    for (const item of owned) await db.delete('queue', item.id);
+    return owned.length;
   }
 
   destroy() {

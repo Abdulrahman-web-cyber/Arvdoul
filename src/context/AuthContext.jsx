@@ -779,6 +779,11 @@ export function AuthProvider({ children }) {
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(lastProfileUidRef.current))
                 .catch((err) => console.warn('[Auth] offline-queue purge on switch failed', err?.message));
+              // The monetization queue is a separate store; a queued purchase or
+              // ad reward must not replay under the incoming account.
+              import('../services/monetizationService.js')
+                .then(({ purgeMonetizationQueueForOwner }) => purgeMonetizationQueueForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] monetization-queue purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -823,6 +828,9 @@ export function AuthProvider({ children }) {
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(departingUid))
                 .catch((err) => console.warn('[Auth] offline-queue purge on logout failed', err?.message));
+              import('../services/monetizationService.js')
+                .then(({ purgeMonetizationQueueForOwner }) => purgeMonetizationQueueForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] monetization-queue purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {
