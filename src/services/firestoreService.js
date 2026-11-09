@@ -278,16 +278,25 @@ class EnterpriseFirestoreService {
         ? new Date(postData.expiresAt)
         : null;
       
-      // Sanitize media items to ensure pure serializable objects
+      // Sanitize media items to ensure pure serializable objects. A
+      // session-scoped `blob:` object URL or a base64 `data:` URL is dropped:
+      // it renders only for the uploader's current tab and is broken for every
+      // other viewer and after any reload, and a `data:` URL can be megabytes
+      // written into the document.
       const cleanMedia = (Array.isArray(postData.media) ? postData.media : []).map((m) => {
         if (!m) return null;
-        if (typeof m === 'string') return { url: m, type: 'image' };
+        const url = typeof m === 'string' ? m : (m.url || m.preview || '');
+        if (typeof url !== 'string' || url.startsWith('blob:') || url.startsWith('data:')) return null;
+        if (typeof m === 'string') return { url, type: 'image' };
+        const thumbnail = typeof m.thumbnail === 'string' && !m.thumbnail.startsWith('blob:') && !m.thumbnail.startsWith('data:')
+          ? m.thumbnail
+          : null;
         return {
-          url: m.url || m.preview || '',
+          url,
           type: m.type || 'image',
           name: m.name || '',
           alt: m.alt || '',
-          thumbnail: m.thumbnail || null,
+          thumbnail,
         };
       }).filter((m) => m && m.url);
 

@@ -2923,4 +2923,11 @@ describe('CreatePost media upload fails closed — never persists a session-scop
     expect(src).toContain('thumbnail.startsWith("blob:")');
     expect(src).toContain('thumbRes?.downloadURL || null');
   });
+
+  test('firestoreService.createPost drops blob:/data: media as defense in depth', () => {
+    // Even a caller that hand-builds a post must not be able to persist a
+    // session-scoped URL into `posts/{id}.media`.
+    const svc = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+    expect(svc).toContain("url.startsWith('blob:') || url.startsWith('data:')");
+  });
 });
