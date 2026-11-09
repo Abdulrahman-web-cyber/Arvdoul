@@ -192,3 +192,28 @@ npm run build
 2. Chasing "surpass major platforms": profile highlight creation UI, richer
    About/Preview surfaces, PII boundary review.
 3. Re-run the `guards` job suites after any further reader changes.
+
+## Checkpoint — event card + className interpolation, N165/N166
+
+- Branch: `reconstruction/arvdoul-platform-hardening`.
+- N165: the in-feed `EventCard` read `stats.going` / `stats.interested` /
+  preview-attendee fields that no writer produces (the real counter is
+  `stats.attendeeCount`) and the never-written `banner` field (the cover is
+  `coverImage`). Now reads the real counter (`null` → `—`), drops the dead
+  avatar row, and reads `banner || coverImage`; the host line no longer
+  fabricates "Arvdoul User" (real author name passed from `PostCard`).
+- N166: a `${...}` inside a double-quoted `className`, and an escaped `\${...}`
+  inside a template literal, both emit the literal text — so 2 status badges and
+  19 dark/light classes across `FilterTool`/`CropTool`/`TextTool` were dead.
+  Fixed all; new hard-failing `classNameInterpolationGuard.test.js` in the
+  `guards` CI job.
+- Quality gates: `npm test` — **118 suites / 1422 tests passing**;
+  `npm run build` — ✓ built; `eslint` — 0 errors.
+
+## Next exact tasks (updated)
+
+1. Continue the "no fabricated state" pass into remaining readers of
+   never-written fields (e.g. `event.stats.going` siblings elsewhere).
+2. Chasing "surpass major platforms": profile highlight creation UI, richer
+   About/Preview surfaces, PII boundary review.
+3. Re-run the `guards` job suites after any further reader changes.

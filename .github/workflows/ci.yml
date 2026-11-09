@@ -297,6 +297,7 @@ jobs:
           src/__tests__/subscriptionLifecycleGuard.test.js
           src/__tests__/orphanModuleGuard.test.js
           src/__tests__/noFabricatedData.test.js
+          src/__tests__/classNameInterpolationGuard.test.js
           src/__tests__/storageRulesDeploy.test.js
           src/__tests__/postVisibilityEnforcement.test.js
           src/__tests__/liveMonetizationGuard.test.js

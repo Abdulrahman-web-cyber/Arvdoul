@@ -150,6 +150,18 @@ describe('collaborationService - no sample projects', () => {
     expect(detail).toContain('collaborationService.updateMemberRole');
     expect(detail).toContain('collaborationService.removeTeamMember');
   });
+
+  test('EventCard reads the real attendee counter, not the never-written stats.going', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/EventCard.jsx'), 'utf8');
+    // The real counter (functions/events.js) is stats.attendeeCount.
+    expect(src).toContain('stats?.attendeeCount');
+    // The phantom fields must not reappear.
+    expect(src).not.toContain('stats?.going');
+    expect(src).not.toContain('previewAttendees');
+    // The real cover field is coverImage; `banner` is never written.
+    expect(src).toContain('event.coverImage');
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {

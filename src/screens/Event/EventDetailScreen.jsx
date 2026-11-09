@@ -202,7 +202,7 @@ const EventDetailScreen = () => {
         
         {/* Status Badge */}
         {status && (
-          <div className="absolute top-4 left-4 px-3 py-1.5 text-sm font-medium rounded-full ${status.className}">
+                      <div className={`absolute top-4 left-4 px-3 py-1.5 text-sm font-medium rounded-full ${status.className}`}>
             {status.text}
           </div>
         )}

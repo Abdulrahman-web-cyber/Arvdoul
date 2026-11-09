@@ -1153,7 +1153,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
-      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
+      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={post.isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}

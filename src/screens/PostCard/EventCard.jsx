@@ -62,6 +62,9 @@ const EventCard = React.memo(({
   attendanceVelocity = 0,
   matchScore = 0,
   onOpenEvent,
+  hostName = null,
+  hostUsername = null,
+  hostVerified = false,
 }) => {
   // Optimistic UI state
   const [optimisticStatus, setOptimisticStatus] = useState(userStatus);
@@ -77,16 +80,25 @@ const EventCard = React.memo(({
   const startDate = useMemo(() => toDate(event?.startTime || event?.startDate || event?.date), [event]);
   const endDate = useMemo(() => toDate(event?.endDate), [event?.endDate]);
 
-  const goingCount = event?.stats?.going ?? 0;
-  const interestedCount = event?.stats?.interested ?? 0;
-  const gravity = useMemo(() => event?.gravity ?? (goingCount * 2 + interestedCount), [event?.gravity, goingCount, interestedCount]);
-  const gravityLevel = getGravityLevel(gravity);
-  const previewAvatars = event?.previewAttendees?.slice(0, 3) ?? [];
+  // The real server counter is `stats.attendeeCount` (functions/events.js). The
+  // old `stats.going` / `stats.interested` / preview-attendee fields this card
+  // read are written by nothing, so they fabricated a "0 going" and a
+  // permanently empty avatar row. An absent count stays unknown, never 0.
+  const attendeeCount = typeof event?.stats?.attendeeCount === 'number'
+    ? event.stats.attendeeCount
+    : (typeof event?.attendeeCount === 'number' ? event.attendeeCount : null);
+  const interestedCount = typeof event?.stats?.interested === 'number' ? event.stats.interested : null;
+  const gravity = useMemo(() => {
+    if (typeof event?.gravity === 'number') return event.gravity;
+    if (attendeeCount === null) return null;
+    return attendeeCount * 2 + (interestedCount ?? 0);
+  }, [event?.gravity, attendeeCount, interestedCount]);
+  const gravityLevel = gravity === null ? 'low' : getGravityLevel(gravity);
   const friendsGoing = event?.friendsGoing ?? 0;
   const coinReward = event?.coinReward ?? 0;
   const scarcity = event?.scarcity || { seatsLeft: null, closingHours: null };
-  const hostDisplay = event?.host?.username || event?.host?.name || event?.authorUsername || event?.authorName || 'Arvdoul User';
-  const isVerified = event?.host?.verified || false;
+  const hostDisplay = hostUsername || hostName || event?.host?.username || event?.host?.name || event?.authorUsername || event?.authorName || null;
+  const isVerified = hostVerified || event?.host?.verified || false;
   const shortDescription = event?.shortDescription || (event?.content ? truncateSafe(event.content, 80) : '');
 
   // Countdown with stable interval (dynamic tick, not interval destruction)
@@ -161,7 +173,10 @@ const EventCard = React.memo(({
 
   // Fallback gradient (premium, NOT Arvdoul neon purple) – from-rose-700 via-pink-600 to-purple-500
   const fallbackGradient = 'linear-gradient(135deg, #be123c, #db2777, #9333ea)';
-  const hasBanner = event.banner && event.banner.trim() !== '';
+  // The writer stores the cover under `coverImage` (CreatePost + eventService);
+  // `banner` is never written, so reading only it made the real cover never show.
+  const bannerUrl = event.banner || event.coverImage || '';
+  const hasBanner = typeof bannerUrl === 'string' && bannerUrl.trim() !== '';
 
   if (!event) return null;
 
@@ -185,7 +200,7 @@ const EventCard = React.memo(({
       <div className="relative h-24 overflow-hidden">
         {hasBanner ? (
           <>
-            <img src={event.banner} alt="cover" className="w-full h-full object-cover" />
+            <img src={bannerUrl} alt="cover" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           </>
         ) : (
@@ -248,7 +263,7 @@ const EventCard = React.memo(({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px]" style={{ color: tokens.textSecondary }}>
           <div className="flex items-center gap-1">
             <span>by</span>
-            <span className="font-medium" style={{ color: tokens.text }}>{hostDisplay}</span>
+            <span className="font-medium" style={{ color: tokens.text }}>{hostDisplay || 'Unknown host'}</span>
             {isVerified && <CheckCircle className="w-2.5 h-2.5 text-blue-400" />}
           </div>
           {event.location && (
@@ -303,16 +318,12 @@ const EventCard = React.memo(({
         {/* Social proof row */}
         <div className="flex flex-wrap items-center justify-between gap-1">
           <div className="flex items-center gap-1.5">
-            {previewAvatars.length > 0 && (
-              <div className="flex -space-x-1">
-                {previewAvatars.map((avatar, idx) => (
-                  <img key={idx} src={avatar} className="w-4 h-4 rounded-full border border-white/20 object-cover" alt="" />
-                ))}
-              </div>
-            )}
             <span className="text-[9px]" style={{ color: tokens.textSecondary }}>
-              <span className="font-semibold" style={{ color: tokens.text }}>{goingCount}</span> going
-              {interestedCount > 0 && ` · ${interestedCount} interested`}
+              <span className="font-semibold" style={{ color: tokens.text }}>
+                {attendeeCount === null ? '—' : attendeeCount}
+              </span>{' '}
+              going
+              {interestedCount !== null && interestedCount > 0 && ` · ${interestedCount} interested`}
               {friendsGoing > 0 && ` · ${friendsGoing} friend${friendsGoing !== 1 ? 's' : ''}`}
             </span>
           </div>
