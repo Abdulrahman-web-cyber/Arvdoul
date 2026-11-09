@@ -56,7 +56,8 @@ const VideoAnalyticsScreen = () => {
         if (cancelled) return;
         setAnalytics({
           overview: {
-            totalViews: data.totalViews || 0,
+            // An absent total is unknown (rendered '—'), not a measured zero.
+            totalViews: typeof data.totalViews === 'number' ? data.totalViews : null,
             // A change with no previous period (or a zero baseline) is unknown
             // (the badge hides), never a fabricated "0%".
             viewsChange: typeof data.changes?.views === 'number' ? data.changes.views : null,

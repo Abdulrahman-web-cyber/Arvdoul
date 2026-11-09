@@ -3044,3 +3044,29 @@ describe('Ranking pagination and trend honesty (N178)', () => {
     expect(screen).toContain('if (trend == null)');
   });
 });
+
+describe('New-creator analytics fallback never invents a series or a reach estimate (N181)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the new-creator fallback ships no synthetic daily series', () => {
+    // The fallback used to build a `days`-long all-zero series with a single
+    // final spike, which the chart and the dashboard sparkline rendered as
+    // measured per-day data. It now reports no series until real snapshots exist.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('dailyStats[dailyStats.length - 1].views = totalViews;');
+    expect(svc).not.toContain("views: 0,\n            reach: 0,\n            engagement: 0,\n            coins: 0,");
+  });
+
+  test('reach is the measured counter, never max(views, followers)', () => {
+    // `Math.max(totalViews, followerCount)` presented an estimate as a
+    // measurement whenever the real sharded reach counter was absent.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('Math.max(totalViews, followerCount)');
+  });
+
+  test('an absent totalViews renders unknown, not a fabricated 0', () => {
+    const screen = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(screen).not.toContain('totalViews: data.totalViews || 0');
+    expect(screen).toContain("totalViews: typeof data.totalViews === 'number' ? data.totalViews : null");
+  });
+});

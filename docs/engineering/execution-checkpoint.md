@@ -450,3 +450,15 @@ Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**; build ✓.
 
 Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**; build ✓;
 `eslint src/ functions/ --quiet` — 0 errors.
+
+## Checkpoint — N181
+
+- **N181 (fixed)**: `analyticsService.getUserAnalytics` new-creator fallback
+  fabricated a `days`-long all-zero `dailyStats` series with one final spike
+  (rendered as measured daily data by the chart + dashboard sparkline) and an
+  invented `totalReach = totalReach || Math.max(totalViews, followerCount)`.
+  `VideoAnalyticsScreen` also mapped `totalViews: data.totalViews || 0`.
+  Now: empty series until real snapshots exist, measured `totalReach` only,
+  and `totalViews` → `null` (rendered `—`) when absent.
+
+Gates: `npm test` — **119 suites / 1451 passing / 5 skipped**; build ✓; lint ✓.

@@ -321,7 +321,6 @@ class UltimateAnalyticsService {
         ]);
 
         let coinsEarned = null;
-        let followerCount = 0;
         try {
           const userRef = doc(this.firestore, 'users', userId);
           const uSnap = await getDoc(userRef);
@@ -331,8 +330,6 @@ class UltimateAnalyticsService {
             // not a fabricated "0 coins earned".
             const rawCoins = uData.coins ?? uData.coinBalance;
             coinsEarned = typeof rawCoins === 'number' ? rawCoins : null;
-            const rawFollowers = uData.followerCount ?? uData.followersCount;
-            followerCount = typeof rawFollowers === 'number' ? rawFollowers : 0;
           }
         } catch (e) {
           logger.warn('Analytics identity read failed; coins unknown', { userId, error: e?.message });
@@ -356,28 +353,18 @@ class UltimateAnalyticsService {
           logger.warn('Analytics top-posts read failed; engagement is unavailable', { userId, error: e?.message });
         }
 
-        const days = this._getTimeframeDays(timeframe);
+        // No per-day series is stored for a brand-new creator, and a synthetic
+        // flat-then-spike series would render as measured daily data in the
+        // chart and sparkline. Report the real total and no series instead.
         const dailyStats = [];
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          dailyStats.push({
-            date: d.toISOString().split('T')[0],
-            views: 0,
-            reach: 0,
-            engagement: 0,
-            coins: 0,
-          });
-        }
-        if (totalViews > 0 && dailyStats.length > 0) {
-          dailyStats[dailyStats.length - 1].views = totalViews;
-        }
 
         analytics = {
           ...analytics,
           hasData: Boolean(totalViews > 0 || coinsEarned > 0 || topPosts.length > 0),
           totalViews,
-          totalReach: totalReach || Math.max(totalViews, followerCount),
+          // `totalReach` is the sharded counter read; inventing it as
+          // max(views, followers) presented an estimate as a measurement.
+          totalReach,
           totalEngagement,
           coinsEarned,
           dailyStats,
