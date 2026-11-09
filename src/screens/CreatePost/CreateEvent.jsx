@@ -253,12 +253,16 @@ export default function CreateEvent() {
       setUploadingCover(true);
       setUploadProgress(0);
       try {
+        if (!user?.uid) {
+          toast.error("You must be signed in to upload");
+          return;
+        }
         const compressed = await compressImage(file);
         const result = await services.storage.uploadFileWithProgress(
           compressed,
-          `events/${user?.uid || "user"}/${Date.now()}_${file.name}`,
+          `events/${user.uid}/${Date.now()}_${file.name}`,
           {
-            userId: user?.uid,
+            userId: user.uid,
             onProgress: (p) => {
               const percent = typeof p?.progress === "number" ? p.progress : p?.percent ?? 0;
               setUploadProgress(percent);

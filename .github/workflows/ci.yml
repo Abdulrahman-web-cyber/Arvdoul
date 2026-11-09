@@ -299,6 +299,7 @@ jobs:
           src/__tests__/noFabricatedData.test.js
           src/__tests__/classNameInterpolationGuard.test.js
           src/__tests__/storageRulesDeploy.test.js
+          src/__tests__/storageRulesPathAlignment.test.js
           src/__tests__/postVisibilityEnforcement.test.js
           src/__tests__/liveMonetizationGuard.test.js
           src/__tests__/serverOnlyCollectionWriteGuard.test.js
@@ -329,6 +330,17 @@ jobs:
           --only firestore
           --project demo-arvdoul
           "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js src/__tests__/spacesRosterWiringGuard.test.js"
+
+      # Storage rules are a separate emulator. This boots it and runs the live
+      # half of the storage path-alignment guard: every canonical client upload
+      # path is ALLOWED for its owner and DENIED for a different user, and
+      # owner deletes succeed (N170).
+      - name: Run Storage rules path-alignment checks (emulator)
+        run: >-
+          npx firebase-tools emulators:exec
+          --only storage
+          --project demo-arvdoul
+          "npm run test -- --watchAll=false src/__tests__/storageRulesPathAlignment.test.js"
 
   # ========== SECURITY CHECK ==========
   security:

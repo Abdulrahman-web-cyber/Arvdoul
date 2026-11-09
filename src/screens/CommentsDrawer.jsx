@@ -392,7 +392,7 @@ async function flushOfflineQueue(postId, userId, onSuccess) {
           await blobTx.done;
           if (record?.blob) {
             const file = new File([record.blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-            const uploadResult = await storageService.uploadFile(file, `comments/voice/${item.userId}/${safeRandomUUID()}.webm`, { userId: item.userId });
+            const uploadResult = await storageService.uploadFile(file, `comments/${item.userId}/voice/${safeRandomUUID()}.webm`, { userId: item.userId });
             mediaUrl = uploadResult.downloadURL;
           }
         } else if (item.metadata.type === 'voice') {
@@ -1283,7 +1283,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (type === 'voice') {
         const upload = await storageService.uploadFile(
           blob,
-          `comments/voice/${activeUser.uid}/${safeRandomUUID()}.webm`,
+          `comments/${activeUser.uid}/voice/${safeRandomUUID()}.webm`,
           { userId: activeUser.uid }
         );
         result = await commentService.createComment(postId, activeUser.uid, '', {

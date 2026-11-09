@@ -215,7 +215,7 @@ const CreateEventScreen = () => {
       // Upload cover image
       let coverUrl = '';
       if (formData.coverImage) {
-        const coverPath = `events/covers/${user.uid}/${Date.now()}`;
+        const coverPath = `events/${user.uid}/cover_${Date.now()}`;
         coverUrl = await storageService.uploadFile(formData.coverImage, coverPath);
       }
 

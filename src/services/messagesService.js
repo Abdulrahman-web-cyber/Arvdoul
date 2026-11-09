@@ -1150,7 +1150,7 @@ class UltimateMessagingService {
     const validated = await this._validateMessage(messageData, conversationId, currentUser.uid);
     let mediaInfo = null;
     if (this._isMediaMessage(validated.type) && validated.media?.file) {
-      mediaInfo = await this._uploadMessageMedia(idempotencyKey, validated.media.file, currentUser.uid, options);
+      mediaInfo = await this._uploadMessageMedia(idempotencyKey, validated.media.file, currentUser.uid, options, conversationId);
     }
 
     const ttlExpiresAt = new Date(Date.now() + MESSAGING_CONFIG.MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -2783,7 +2783,7 @@ class UltimateMessagingService {
     return 'Message';
   }
 
-  async _uploadMessageMedia(messageId, file, userId, options) {
+  async _uploadMessageMedia(messageId, file, userId, options, conversationId) {
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
 
@@ -2807,7 +2807,7 @@ class UltimateMessagingService {
     }
 
     const ext = processedFile.name.split('.').pop() || 'bin';
-    const path = `chat_media/${userId}/${messageId}_${Date.now()}.${ext}`;
+    const path = `messages/${conversationId}/${messageId}.${ext}`;
     const fileRef = this.st.ref(this.storage, path);
 
     const uploadTask = this.st.uploadBytesResumable(fileRef, processedFile, {
@@ -2825,6 +2825,7 @@ class UltimateMessagingService {
           const metadata = await this.st.getMetadata(uploadTask.snapshot.ref);
           resolve({
             url,
+            path,
             name: processedFile.name,
             size: metadata.size,
             type: metadata.contentType,
@@ -3320,7 +3321,7 @@ const messagingService = {
   deleteDraft: (cid) => getMessagingService().deleteDraft(cid),
   searchStickers: (query) => getMessagingService().searchStickers(query),
   searchGifs: (query) => getMessagingService().searchGifs(query),
-  uploadMessageMedia: (mid, file, uid, opts) => getMessagingService()._uploadMessageMedia(mid, file, uid, opts),
+  uploadMessageMedia: (mid, file, uid, opts, conversationId) => getMessagingService()._uploadMessageMedia(mid, file, uid, opts, conversationId),
   reportMessage: (mid, cid, uid, reason, details) => getMessagingService().reportMessage(mid, cid, uid, reason, details),
   getConversationMedia: (cid, opts) => getMessagingService().getConversationMedia(cid, opts),
   getMessageHistory: (cid, mid) => getMessagingService().getMessageHistory(cid, mid),

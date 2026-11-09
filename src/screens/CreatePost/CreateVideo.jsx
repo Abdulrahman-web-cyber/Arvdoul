@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import * as Icons from "lucide-react";
 import { getStorageService } from "../../services/storageService";
+import { useAuth } from "../../context/AuthContext";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -426,6 +427,7 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
 // ── MAIN COMPONENT ──────────────────────────────────────────────────
 export default function CreateVideo() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { state, dispatch } = useCreatePostState();
   const { saveDraft, isDark } = useCreatePostServices();
   const fileInputRef = useRef(null);
@@ -515,13 +517,18 @@ export default function CreateVideo() {
 
       // Start upload for each video
       const storage = getStorageService();
+      const uploaderUid = user?.uid || state?.authorId;
+      if (!uploaderUid) {
+        toast.error("You must be signed in to upload");
+        return;
+      }
       for (const item of newItems) {
         try {
           const result = await storage.uploadFileWithProgress(
             item.file,
-            `videos/${Date.now()}_${item.file.name}`,
+            `videos/${uploaderUid}/${Date.now()}_${item.file.name}`,
             {
-              userId: state?.authorId || "anonymous",
+              userId: uploaderUid,
               onProgress: (progressData) => {
                 const progress = Math.round(progressData.progress || 0);
                 setUploadProgressMap((prev) => ({ ...prev, [item.id]: progress }));
@@ -560,7 +567,7 @@ export default function CreateVideo() {
         }
       }
     },
-    [mediaItems, dispatch, selectedId, state?.authorId]
+    [mediaItems, dispatch, selectedId, state?.authorId, user?.uid]
   );
 
   const handleDrop = useCallback(

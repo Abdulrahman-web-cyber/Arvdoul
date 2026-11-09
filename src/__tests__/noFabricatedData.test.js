@@ -661,11 +661,26 @@ describe('Shared rate limiter + admin secrets', () => {
 describe('Storage rules - upload paths enforced', () => {
   test('sounds/videos/thumbnails paths exist with size limits', () => {
     const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
-    expect(rules).toContain('match /sounds/{userId}/{fileName}');
+    // `{fileName=**}` matches both `sounds/{uid}/s.mp3` and the zero-segment
+    // `avatars/{uid}` form, so every client write path resolves to one rule.
+    expect(rules).toContain('match /sounds/{userId}/{fileName=**}');
     expect(rules).toContain('contentType.matches(\'audio/.*\')');
-    expect(rules).toContain('match /videos/{userId}/{fileName}');
-    expect(rules).toContain('match /thumbnails/{userId}/{fileName}');
+    expect(rules).toContain('match /videos/{userId}/{fileName=**}');
+    expect(rules).toContain('match /thumbnails/{userId}/{fileName=**}');
     expect(rules).toContain('25 * 1024 * 1024');
+  });
+
+  test('every client write namespace has an owner-scoped rule', () => {
+    const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
+    // These are the namespaces the client actually uploads to. A namespace
+    // with no rule denies every upload (the N170 defect).
+    for (const ns of [
+      'avatars', 'banners', 'posts', 'stories', 'messages', 'live',
+      'communities', 'sounds', 'videos', 'thumbnails', 'comments',
+      'events', 'group-photos', 'audio_exports', 'temp', 'users',
+    ]) {
+      expect(rules).toContain(`match /${ns}/`);
+    }
   });
 });
 

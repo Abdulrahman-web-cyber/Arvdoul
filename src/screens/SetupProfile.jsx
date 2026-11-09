@@ -556,13 +556,14 @@ const PerfectAvatarUploader = React.memo(
         reader.onloadend = () => setAvatarPreview(reader.result);
         reader.readAsDataURL(file);
         setUploadProgress(10);
-        const uploadPath = `avatars/${Date.now()}_${Math.random()
+        const uploadPath = `avatars/${userId}/${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}_${file.name.replace(/\s+/g, "_")}`;
         const result = await storageService.uploadFileWithProgress(
           file,
           uploadPath,
           {
+            userId,
             onProgress: (progressData) =>
               setUploadProgress(progressData.progress),
           }

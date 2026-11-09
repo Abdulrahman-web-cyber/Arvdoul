@@ -183,12 +183,12 @@ const CreateCommunityScreen = () => {
       let coverUrl = '';
 
       if (formData.avatar) {
-        const avatarPath = `communities/avatars/${user.uid}/${Date.now()}`;
+        const avatarPath = `communities/${user.uid}/avatar_${Date.now()}`;
         avatarUrl = await storageService.uploadFile(formData.avatar, avatarPath);
       }
 
       if (formData.cover) {
-        const coverPath = `communities/covers/${user.uid}/${Date.now()}`;
+        const coverPath = `communities/${user.uid}/cover_${Date.now()}`;
         coverUrl = await storageService.uploadFile(formData.cover, coverPath);
       }
 

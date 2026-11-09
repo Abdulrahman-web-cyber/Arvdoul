@@ -1174,6 +1174,7 @@ function CreatePostProvider({ children }) {
         if (storageService && item.file) {
           try {
             const uid = userRef.current?.uid || 'anonymous';
+            if (uid === 'anonymous') throw new Error("You must be signed in to upload");
             const uploadPromise = storageService.uploadFileWithProgress(
               item.file,
               `posts/${uid}/${Date.now()}_${item.file.name}`,

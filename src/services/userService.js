@@ -209,7 +209,7 @@ class ProfessionalUserService {
 
   async uploadAvatar(userId, file) {
     const storageService = getStorageService();
-    const result = await storageService.uploadFileWithProgress(file, `avatars/${userId}`, {
+    const result = await storageService.uploadFileWithProgress(file, `avatars/${userId}/avatar_${Date.now()}`, {
       compressImages: true,
       maxSize: 2 * 1024 * 1024,
       userId,

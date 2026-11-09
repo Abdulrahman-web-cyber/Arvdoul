@@ -228,7 +228,7 @@ class UploadManager {
         this._updateState(item.id, UPLOAD_STATES.UPLOADING, -1); // -1 = indeterminate
       }, 800);
 
-      const path = `posts/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${item.file.name}`;
+      const path = `posts/${currentUser.uid}/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${item.file.name}`;
       // Race the storage promise against a timeout that rejects
       const storagePromise = this.storage.uploadFileWithProgress(item.file, path, {
         onProgress: (progressData) => {
@@ -247,6 +247,7 @@ class UploadManager {
           }
         },
         signal: controller.signal,
+        userId: currentUser.uid,
         metadata: { source: "CreateImage" },
       });
 

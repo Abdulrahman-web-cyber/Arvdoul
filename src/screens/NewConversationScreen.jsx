@@ -181,7 +181,8 @@ const NewConversationScreen = () => {
     }
     setUploadingPhoto(true);
     try {
-      const result = await storageService.uploadFile(file, `group-photos/${user?.uid || 'anon'}`);
+      if (!user?.uid) throw new Error('You must be signed in to upload');
+      const result = await storageService.uploadFile(file, `group-photos/${user.uid}/photo_${Date.now()}`, { userId: user.uid });
       const url = result?.downloadURL || result?.url;
       if (!url) throw new Error('Upload did not return a URL');
       setGroupPhoto(url);

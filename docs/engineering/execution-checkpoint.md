@@ -241,3 +241,50 @@ npm run build
   Earned" → "Total Earnings (USD)".
 - Guard added to `noFabricatedData.test.js`.
 - Gates: `npm test` 118 suites / 1425 tests; eslint 0 errors.
+
+## Checkpoint — N170 (Storage rules ↔ client write paths: every upload denied)
+
+The single highest-impact defect found this session. `storage.rules` and the
+client disagreed on the storage layout, so nearly **every** media upload failed
+with `storage/unauthorized` in production.
+
+Evidence (Storage emulator + `@firebase/rules-unit-testing`, authenticated
+context): before the fix, avatar, post, story, chat, comment-voice, event,
+group-photo, community and audio-export uploads were all DENIED. Root causes:
+
+1. Path shape: rules used `avatars/{userId}/{fileName}` (3 segments) while the
+   client wrote `avatars/{uid}` (2 segments) — an unmatched path is denied.
+2. Missing namespaces: `chat_media`, `comments/voice`, `events`, `group-photos`,
+   `communities/avatars`, `audio_exports` had **no rule at all**.
+3. Mixed/extra segments: `posts/{userId}/{postId}/{fileName}` vs client
+   `posts/{uid}/{file}`; `messages/{conv}/{msgId}/{file}` vs `chat_media/{uid}/…`.
+4. Delete semantics: a single `allow write` carrying `request.resource.size`
+   throws on delete (no `request.resource`), so owner deletes failed too.
+
+Fix:
+- One canonical layout for every client write: `{namespace}/{ownerUid}/...`
+  (`{fileName=**}` matches the zero-segment `avatars/{uid}` form).
+- Message media is participant-scoped: `messages/{conversationId}/{messageId}.{ext}`,
+  gated by a cross-service `firestore.get(/databases/(default)/documents/conversations/$(cid)).data.participants`
+  membership check (verified: participant ALLOW, stranger DENY).
+- Explicit owner `allow delete` per namespace; size/content-type gates on write only.
+- Client paths updated: `userService.uploadAvatar`, `SetupProfile`,
+  `CreatePost`, `CreateImage`, `CreateVideo`, `CreateEvent`, `CreateEventScreen`,
+  `CreateCommunityScreen`, `NewConversationScreen`, `CommentsDrawer`,
+  `messagesService`. Anonymous fallbacks (`|| 'anonymous'` / `'anon'` / `'user'`)
+  now fail closed instead of writing to an unwritable path.
+- Retired the `chat_media` namespace (message media now under `messages/{cid}`).
+
+Guards:
+- New `src/__tests__/storageRulesPathAlignment.test.js` — static contract
+  (every client namespace has a rule; every write embeds an owner/participant
+  segment; no `chat_media`) **plus** live emulator assertions (owner ALLOW,
+  cross-user DENY, owner delete OK, content-type gates). Added to the
+  hard-failing `guards` CI job and a new `emulators:exec --only storage` step.
+- Updated `storageRulesDeploy.test.js` (line-based match-block parser so a
+  nested `function` no longer truncates a block) and `noFabricatedData.test.js`
+  (asserts `{fileName=**}` + the full namespace list).
+
+Gates: `npm test` — **119 suites / 1431 passing**; `npm run build` — ✓;
+`eslint src/ functions/ --quiet` — 0 errors. Live storage emulator guard:
+10/10 passing.
