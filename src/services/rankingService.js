@@ -480,7 +480,9 @@ class RankingService {
           query(collection(this.firestore, 'stories'), where('userId', '==', userId), limit(500))
         );
         storyCount = sSnap.size;
-      } catch { /* stories stats unavailable — story badges stay unknown */ }
+      } catch (e) {
+        logger.warn('Story count unavailable; story badges stay unknown', { userId, error: e?.message });
+      }
 
       const defs = {
         first_like: { progress: totalLikes, target: 1 },

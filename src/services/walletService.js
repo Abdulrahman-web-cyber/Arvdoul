@@ -47,7 +47,9 @@ class WalletService {
           pendingWithdrawals += Number(d.data().amount || 0);
         });
       } catch (e) {
-        // withdrawal query may fail if index missing or unauthed
+        // The pending-withdrawal total feeds the available balance, so a failed
+        // read must be visible rather than silently showing the full balance.
+        logger.warn('Pending withdrawals read failed; available balance may be overstated', { userId, error: e?.message });
       }
 
       return {

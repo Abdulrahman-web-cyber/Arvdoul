@@ -666,9 +666,9 @@ class UltimateLiveService {
           const { levelSystemService } = await import('./levelSystemService.js');
           levelSystemService
             .awardExperience({ userId: viewerId, action: 'live_minute', count: Math.min(watchedMinutes, 100), source: `${streamId}_${viewerId}` })
-            .catch(() => {});
+            .catch((err) => logger.warn('live_minute XP award failed', { viewerId, error: err?.message }));
         } catch (e) {
-          // XP award is best-effort
+          logger.warn('live_minute XP award failed', { viewerId, error: e?.message });
         }
       }
     } catch (error) {

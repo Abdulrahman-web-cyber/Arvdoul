@@ -716,7 +716,9 @@ class UltimateVideoService {
           return { success: true, feed: matchingVideos, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logger.warn('[VideoService] matching-videos fallback failed', { error: e?.message });
+    }
 
     try {
       const videosRef = collection(this.firestore, 'videos');
