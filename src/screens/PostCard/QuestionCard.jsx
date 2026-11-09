@@ -256,7 +256,7 @@ const QuestionCard = React.memo(({
   currentUser,
   tokens,
   answers,
-  userReputation = 0,
+  userReputation = null,
   isAuthor,
   onSubmitAnswer,
   onVote,

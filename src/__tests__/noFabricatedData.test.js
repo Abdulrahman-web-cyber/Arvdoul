@@ -3115,6 +3115,15 @@ describe('Displayed amounts/counts render unknown, never a fabricated 0 (N183)',
     expect(src).not.toContain('answer.upvotes || 0');
     expect(src).toContain('unknownNumber(answer.upvotes)');
   });
+
+  test('QuestionCard does not default a missing viewer reputation to 0', () => {
+    // `userReputation = 0` fabricated a "Your reputation: 0" line when the
+    // parent passed null (unknown). PostCard passes null when the value is not
+    // a number, so the prop default must be null and render "—".
+    const src = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(src).not.toContain('userReputation = 0,');
+    expect(src).toContain('userReputation = null,');
+  });
 });
 
 describe('N184 — no fabricated counts sweep (round 2)', () => {
