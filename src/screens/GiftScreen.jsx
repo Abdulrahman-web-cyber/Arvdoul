@@ -48,7 +48,7 @@ export default function GiftScreen() {
         if (user?.uid) {
           const { getMonetizationService } = await import('../services/monetizationService.js');
           const bal = await getMonetizationService().getBalance(user.uid);
-          setBalance(typeof bal === 'number' ? bal : Number(bal?.coins ?? 0));
+          setBalance(typeof bal === 'number' ? bal : null);
         }
       } catch (err) {
         toast.error('Could not load recipient.');

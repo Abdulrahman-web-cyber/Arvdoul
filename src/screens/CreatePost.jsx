@@ -2682,19 +2682,19 @@ const LauncherGrid = React.memo(() => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Views</p>
-                    <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? '—'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Reach</p>
-                    <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? '—'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Engagement</p>
-                    <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? '—'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Coins Earned</p>
-                    <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? '—'}</p>
                   </div>
                 </div>
 
@@ -2703,7 +2703,12 @@ const LauncherGrid = React.memo(() => {
                     <Icons.TrendingUp className="w-3.5 h-3.5 text-green-500" />
                     <span>Audience Growth Rate:</span>
                   </div>
-                  <span className="font-semibold text-green-500">+{analyticsData?.changes?.engagement ? Math.round(analyticsData.changes.engagement) : 12}% this week</span>
+                  {/* No fabricated growth rate: an absent delta reads as unavailable. */}
+                  <span className="font-semibold text-green-500">
+                    {typeof analyticsData?.changes?.engagement === 'number'
+                      ? `${analyticsData.changes.engagement >= 0 ? '+' : ''}${Math.round(analyticsData.changes.engagement)}% this week`
+                      : 'Unavailable'}
+                  </span>
                 </div>
 
                 {recentPostsData && recentPostsData.length > 0 && (

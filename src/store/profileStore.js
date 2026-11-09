@@ -153,12 +153,14 @@ export const useProfileStore = create(
         // Fetch level if not available
         let level = profile?.level || null;
         
-        // Fetch balance if owner
-        let balance = 0;
+        // Fetch balance if owner. `getBalance` returns a number (or null when
+        // unknown); reading `.coins` off it always produced `0`, so the owner
+        // profile showed an empty wallet no matter the real balance.
+        let balance = null;
         if (isOwner) {
           try {
             const balanceResult = await monetizationService.getBalance(userId);
-            balance = balanceResult?.coins || 0;
+            balance = typeof balanceResult === 'number' ? balanceResult : null;
           } catch (e) {
             console.warn('Could not fetch balance:', e);
           }
@@ -621,7 +623,9 @@ export const useProfileStore = create(
         
         if (!get()._isLoadCurrent('balance', __seq)) return;
         set((state) => {
-          state.balance = balanceData?.coins || 0;
+          // `getBalance` returns a number (or null when unknown); never coerce
+          // an unknown balance to 0.
+          state.balance = typeof balanceData === 'number' ? balanceData : null;
           state.balanceLoading = false;
         });
       } catch (error) {

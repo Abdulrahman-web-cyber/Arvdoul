@@ -32,8 +32,9 @@ export const formatDuration = (seconds) => {
  * @example formatViewCount(3400000) => "3.4M"
  */
 export const formatViewCount = (views) => {
-  if (typeof views !== 'number' || isNaN(views)) {
-    return '0';
+  // An absent count is unknown; '0' claimed a measured empty value.
+  if (views === null || views === undefined || typeof views !== 'number' || isNaN(views)) {
+    return '—';
   }
 
   if (views >= 1_000_000_000) {

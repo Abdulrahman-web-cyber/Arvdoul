@@ -255,7 +255,7 @@ const UserResult = memo(({ result, isDark }) => (
         'text-xs mt-1',
         isDark ? 'text-gray-500' : 'text-gray-400'
       )}>
-        {formatCount(result.followers || result.followerCount || 0)} followers
+        {formatCount(result.followers ?? result.followerCount)} followers
       </p>
     </div>
   </div>
@@ -304,9 +304,9 @@ const VideoResult = memo(({ result, isDark }) => (
         'flex items-center gap-3 text-xs mt-1',
         isDark ? 'text-gray-500' : 'text-gray-400'
       )}>
-        <span>{formatCount(result.views || result.viewCount || 0)} views</span>
+        <span>{formatCount(result.views ?? result.viewCount)} views</span>
         <span>•</span>
-        <span>{formatCount(result.likes || result.likeCount || 0)} likes</span>
+        <span>{formatCount(result.likes ?? result.likeCount)} likes</span>
       </div>
     </div>
   </div>
@@ -355,9 +355,9 @@ const PostResult = memo(({ result, isDark }) => (
       'flex items-center gap-4 text-xs mt-3',
       isDark ? 'text-gray-500' : 'text-gray-400'
     )}>
-      <span>{formatCount(result.likes || result.likeCount || 0)} likes</span>
-      <span>{formatCount(result.comments || result.commentCount || 0)} comments</span>
-      <span>{formatCount(result.shares || result.shareCount || 0)} shares</span>
+      <span>{formatCount(result.likes ?? result.likeCount)} likes</span>
+      <span>{formatCount(result.comments ?? result.commentCount)} comments</span>
+      <span>{formatCount(result.shares ?? result.shareCount)} shares</span>
     </div>
   </div>
 ));

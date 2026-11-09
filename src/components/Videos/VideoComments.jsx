@@ -50,7 +50,7 @@ const VideoComments = memo(({
             isCreator: c.userId === video.userId || c.userId === video.creatorId,
           },
           text: c.content || c.text || '',
-          likes: c.likes || 0,
+          likes: typeof c.likes === 'number' ? c.likes : null,
           isLiked: false,
           createdAt: c.createdAt instanceof Date
             ? c.createdAt.toISOString()
@@ -412,7 +412,7 @@ const CommentItem = memo(({ comment, onLike, onReply }) => {
             <Heart
               className={`w-3.5 h-3.5 ${comment.isLiked ? 'fill-red-400 text-red-400 scale-110' : ''}`}
             />
-            <span className="text-xs font-semibold">{comment.likes || 0}</span>
+            <span className="text-xs font-semibold">{comment.likes ?? '—'}</span>
           </button>
 
           <button
@@ -473,7 +473,7 @@ const CommentItem = memo(({ comment, onLike, onReply }) => {
                       <Heart
                         className={`w-3 h-3 ${reply.isLiked ? 'fill-red-400 text-red-400' : ''}`}
                       />
-                      <span className="text-[10px] font-semibold">{reply.likes || 0}</span>
+                      <span className="text-[10px] font-semibold">{reply.likes ?? '—'}</span>
                     </button>
                   </div>
                 </div>

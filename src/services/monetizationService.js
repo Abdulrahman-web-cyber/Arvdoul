@@ -350,17 +350,21 @@ class MonetizationService {
     }
   }
 
+  // Returns a number when the balance is known, `null` when it could not be
+  // read. Callers already gate on `typeof bal === 'number'`; the previous
+  // `return 0` on failure told every screen the wallet was empty.
   async getBalance(userId) {
-    if (!userId) return 0;
+    if (!userId) return null;
     await this._ensureInitialized();
     try {
       const userRef = doc(this.db, 'users', userId);
       const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return 0;
-      return userSnap.data().coins || 0;
+      if (!userSnap.exists()) return null;
+      const coins = userSnap.data().coins;
+      return coins == null ? null : Number(coins);
     } catch (e) {
       log.error('Failed to get balance:', e);
-      return 0;
+      return null;
     }
   }
 
@@ -434,6 +438,9 @@ class MonetizationService {
   async getUserPosition(userId, gender = 'other') {
     await this._ensureInitialized();
     const balance = await this.getBalance(userId);
+    // An unknown balance cannot be ranked; returning the lowest title would
+    // fabricate a standing the ledger never confirmed.
+    if (balance === null) return null;
     const thresholds = this.config.POSITION_THRESHOLDS;
 
     if (balance >= thresholds.KING) {
@@ -459,16 +466,22 @@ class MonetizationService {
 
   async getUserPopularityPosition(userId) {
     await this._ensureInitialized();
-    let followers = 0;
+    // `null` means the follower count could not be resolved; the lowest tier
+    // ("Community Member") would be a fabricated standing.
+    let followers = null;
     if (userId) {
       try {
         const userRef = doc(this.db, 'users', userId);
         const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) followers = userSnap.data().followerCount || 0;
+        if (userSnap.exists()) {
+          const raw = userSnap.data().followerCount;
+          followers = raw == null ? null : Number(raw);
+        }
       } catch (e) {
         log.error('Failed to get user popularity:', e);
       }
     }
+    if (followers === null) return null;
     const thresholds = this.config.POPULARITY_THRESHOLDS;
     if (followers >= thresholds.LEGEND) return { title: 'Legend', emoji: '🏆', minFollowers: thresholds.LEGEND, type: 'popularity' };
     if (followers >= thresholds.ICON) return { title: 'Icon', emoji: '⭐', minFollowers: thresholds.ICON, type: 'popularity' };

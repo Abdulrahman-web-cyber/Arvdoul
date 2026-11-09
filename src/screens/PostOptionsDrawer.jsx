@@ -124,7 +124,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
     return {
       position: null,
-      followerCount: safePost.followerCount || 0,
+      // Unknown until the profile read resolves; a 0 here would claim the
+      // author has no followers.
+      followerCount: safePost.followerCount ?? null,
       isCreator: safePost.isCreator || false,
       isVerified: safePost.isVerified || false,
       creatorScore: null,
@@ -228,7 +230,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
         const score = typeof profile?.creatorScore === 'number' ? profile.creatorScore : null;
         const data = {
           position,
-          followerCount: profile?.followerCount || post.followerCount || 0,
+          followerCount: profile?.followerCount ?? post.followerCount ?? null,
           isCreator: profile?.isCreator || post.isCreator || false,
           isVerified: profile?.isVerified || post.isVerified || false,
           creatorScore: score,
@@ -805,7 +807,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   <div className="flex items-center gap-3 text-sm mt-1 text-gray-500 dark:text-gray-400">
                     <span>@{post.authorUsername}</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1"><Users className="w-4 h-4" aria-label="Followers" /> {authorMeta.followerCount.toLocaleString()}</span>
+                    <span className="flex items-center gap-1"><Users className="w-4 h-4" aria-label="Followers" /> {authorMeta.followerCount == null ? '—' : authorMeta.followerCount.toLocaleString()}</span>
                   </div>
                   {authorMeta.isCreator && authorMeta.creatorScore > 0 && (
                     <div className="mt-2 flex items-center gap-2">

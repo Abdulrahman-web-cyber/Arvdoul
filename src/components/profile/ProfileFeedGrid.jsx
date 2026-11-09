@@ -155,12 +155,20 @@ const ProfileFeedGrid = memo(({
   // Displayed like count = server count + (session like state - server baseline).
   // The server count already contains the viewer's like, so a post that arrived
   // pre-liked shows no change; a like toggled this session moves it by one.
+  // An absent server count stays unknown (rendered '—'); only a real number is
+  // shifted by the session's like delta.
   const likeCount = useCallback((item) => {
-    const base = Number(item?.likes ?? item?.likesCount ?? 0);
+    const raw = item?.likes ?? item?.likesCount;
+    const base = raw === null || raw === undefined ? null : Number(raw);
+    if (base === null || Number.isNaN(base)) return '—';
     const serverLiked = Boolean(likeBaseline[item?.id]);
     const viewerLiked = Boolean(likedPosts[item?.id]);
     return base + (viewerLiked ? 1 : 0) - (serverLiked ? 1 : 0);
   }, [likeBaseline, likedPosts]);
+  const commentCount = useCallback((item) => {
+    const raw = item?.comments ?? item?.commentsCount;
+    return raw === null || raw === undefined || Number.isNaN(Number(raw)) ? '—' : Number(raw);
+  }, []);
 
   const handleQuickShare = useCallback(async (e, post) => {
     e.stopPropagation();
@@ -610,7 +618,7 @@ const ProfileFeedGrid = memo(({
                   </button>
                   <div className="flex items-center gap-1">
                     <MessageCircle className="w-3.5 h-3.5" />
-                    <span>{item.comments || 0}</span>
+                    <span>{commentCount(item)}</span>
                   </div>
                 </div>
 
@@ -712,7 +720,7 @@ const ProfileFeedGrid = memo(({
                   </div>
                   <div className="flex items-center gap-1.5 text-xs font-bold">
                     <MessageCircle className="w-4 h-4 fill-white text-white" />
-                    <span>{item.comments || item.commentsCount || 0}</span>
+                    <span>{commentCount(item)}</span>
                   </div>
                 </div>
 
@@ -805,7 +813,7 @@ const ProfileFeedGrid = memo(({
                     </button>
                     <div className="flex items-center gap-1">
                       <MessageCircle className="w-3.5 h-3.5" />
-                      <span>{item.comments || item.commentsCount || 0}</span>
+                      <span>{commentCount(item)}</span>
                     </div>
                   </div>
 
@@ -961,7 +969,7 @@ const ProfileFeedGrid = memo(({
 
                 <div className="flex items-center gap-1.5 text-xs font-semibold">
                   <MessageCircle className="w-4 h-4" />
-                  <span>{item.comments || item.commentsCount || 0}</span>
+                  <span>{commentCount(item)}</span>
                 </div>
               </div>
 

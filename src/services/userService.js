@@ -947,7 +947,9 @@ class ProfessionalUserService {
       category: applicationData.category || 'Creator',
       reason: applicationData.reason || '',
       portfolioLink: applicationData.portfolioLink || applicationData.website || '',
-      followerCount: Number(applicationData.followerCount || 0),
+      // An unknown follower count stays null so the review queue shows
+      // "unavailable" instead of a fabricated 0 for a profile that never loaded.
+      followerCount: applicationData.followerCount == null ? null : Number(applicationData.followerCount),
       level: Number(applicationData.level) || null,
       status: 'pending',
       submittedAt: serverTimestamp(),

@@ -75,11 +75,13 @@ export function formatResult(result) {
     subtitle: result.bio || result.description || result.username || '',
     image: result.photoURL || result.thumbnail || result.mediaUrl || null,
     verified: result.isVerified || false,
-    followers: result.followers || result.followerCount || 0,
-    posts: result.postCount || result.posts || 0,
-    views: result.viewCount || result.views || 0,
-    likes: result.likeCount || result.likes || 0,
-    score: result.score || 0,
+    // An absent count stays null so a consumer renders unknown, not a
+    // fabricated 0; `formatCount` renders the null as an em-dash.
+    followers: result.followers ?? result.followerCount ?? null,
+    posts: result.postCount ?? result.posts ?? null,
+    views: result.viewCount ?? result.views ?? null,
+    likes: result.likeCount ?? result.likes ?? null,
+    score: result.score ?? null,
   };
 }
 
@@ -148,13 +150,16 @@ export function getResultColor(type) {
  * @returns {string} Formatted number
  */
 export function formatCount(num) {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  // An absent count is unknown; '0' would claim a measured empty value.
+  if (num === null || num === undefined || Number.isNaN(Number(num))) return '—';
+  const n = Number(num);
+  if (n >= 1000000) {
+    return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
   }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  if (n >= 1000) {
+    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   }
-  return num.toString();
+  return n.toString();
 }
 
 /**

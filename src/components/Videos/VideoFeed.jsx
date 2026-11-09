@@ -180,21 +180,26 @@ const VideoFeed = memo(({
   const handleLike = useCallback(async (video) => {
     if (!video) return;
     const wasLiked = video.isLiked;
-    const optimisticLikes = wasLiked ? Math.max(0, (video.likes || 1) - 1) : (video.likes || 0) + 1;
-    const withFormatted = (n) => ({ likes: n, likesFormatted: n > 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}` });
+    const knownLikes = typeof video.likes === 'number' ? video.likes : null;
+    const shift = (base) => (base === null ? null : Math.max(0, base + (wasLiked ? -1 : 1)));
+    const withFormatted = (n) => (
+      // An unknown total stays unknown: the optimistic flip must not invent a
+      // count of 1 for a video whose real like total was never loaded.
+      n === null ? { likes: null, likesFormatted: null } : { likes: n, likesFormatted: n > 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}` }
+    );
 
-    updateVideo(video.id, { isLiked: !wasLiked, ...withFormatted(optimisticLikes) });
+    updateVideo(video.id, { isLiked: !wasLiked, ...withFormatted(shift(knownLikes)) });
 
     try {
       // likeVideo TOGGLES server-side — the returned action is authoritative.
       const res = await videoService.likeVideo(video.id);
       const serverLiked = res?.action ? res.action === 'liked' : !wasLiked;
-      const serverLikes = serverLiked === wasLiked
-        ? (video.likes || 0)
-        : Math.max(0, (video.likes || 0) + (serverLiked ? 1 : -1));
+      const serverLikes = knownLikes === null || serverLiked === wasLiked
+        ? knownLikes
+        : Math.max(0, knownLikes + (serverLiked ? 1 : -1));
       updateVideo(video.id, { isLiked: serverLiked, ...withFormatted(serverLikes) });
     } catch (err) {
-      updateVideo(video.id, { isLiked: wasLiked, ...withFormatted(video.likes || 0) });
+      updateVideo(video.id, { isLiked: wasLiked, ...withFormatted(knownLikes) });
       toast.error('Could not update like');
     }
   }, [updateVideo]);
@@ -212,7 +217,7 @@ const VideoFeed = memo(({
       // the increment when the server confirms it — never a local guess.
       try {
         const res = await videoService.shareVideo(video.id);
-        if (res?.success) updateVideo(video.id, { shares: (video.shares || 0) + 1 });
+        if (res?.success && typeof video.shares === 'number') updateVideo(video.id, { shares: video.shares + 1 });
       } catch { /* share sheet still works; counter stays authoritative */ }
     }
   }, [updateVideo]);
@@ -224,10 +229,10 @@ const VideoFeed = memo(({
       return;
     }
     const wasSaved = video.isSaved;
-    updateVideo(video.id, {
-      isSaved: !wasSaved,
-      saves: wasSaved ? Math.max(0, (video.saves || 1) - 1) : (video.saves || 0) + 1,
-    });
+    // An unknown save total stays unknown rather than being shifted from 0.
+    const knownSaves = typeof video.saves === 'number' ? video.saves : null;
+    const shiftSaves = (base) => (base === null ? null : Math.max(0, base + (wasSaved ? -1 : 1)));
+    updateVideo(video.id, { isSaved: !wasSaved, saves: shiftSaves(knownSaves) });
     if (!wasSaved) {
       addToWatchLater(video);
       toast.success('Saved to your collection! 🌟');
@@ -245,10 +250,7 @@ const VideoFeed = memo(({
       }
     } catch (err) {
       // Rollback local state.
-      updateVideo(video.id, {
-        isSaved: wasSaved,
-        saves: wasSaved ? (video.saves || 0) : Math.max(0, (video.saves || 1) - 1),
-      });
+      updateVideo(video.id, { isSaved: wasSaved, saves: knownSaves });
       if (wasSaved) addToWatchLater(video);
       else removeFromWatchLater(video.id);
       toast.error(err?.message || 'Could not sync save');

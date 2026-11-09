@@ -2539,3 +2539,190 @@ describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () 
     expect(s).toContain('wallet?.availableCoins == null');
   });
 });
+
+describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the canonical search formatCount renders unknown as —', () => {
+    const s = read('src/lib/searchUtils.jsx');
+    expect(s).toContain("if (num === null || num === undefined || Number.isNaN(Number(num))) return '—';");
+    // The old body printed `num.toString()` for anything that reached the end,
+    // so an absent count rendered as the literal string "undefined"/"0".
+    expect(s).not.toContain('return num.toString();');
+  });
+
+  test('search result mapping leaves absent counts null instead of 0', () => {
+    const s = read('src/lib/searchUtils.jsx');
+    expect(s).not.toContain('followers: result.followers || result.followerCount || 0');
+    expect(s).toContain('followers: result.followers ?? result.followerCount ?? null');
+  });
+
+  test('search cards do not coerce absent counts to 0 before formatting', () => {
+    for (const rel of [
+      'src/components/search/CreatorCarousel.jsx',
+      'src/components/search/TrendingSection.jsx',
+      'src/components/search/SearchResults.jsx',
+    ]) {
+      const s = read(rel);
+      expect(s).not.toMatch(/followers \|\| [\w.]+ \|\| 0/);
+      expect(s).not.toMatch(/views \|\| [\w.]+ \|\| 0/);
+    }
+  });
+
+  test('QuickAccessPanel routes every count through the unknown-safe formatter', () => {
+    const s = read('src/components/Shared/QuickAccessPanel.jsx');
+    for (const key of ['postCount', 'followerCount', 'followingCount']) {
+      expect(s).not.toContain(`value: stats.${key} || 0,`);
+      expect(s).toContain(`value: formatCount(stats.${key})`);
+    }
+  });
+
+  test('monetizationService.getBalance reports unknown as null, not 0', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).not.toContain('if (!userSnap.exists()) return 0;');
+    expect(s).not.toContain("log.error('Failed to get balance:', e);\n      return 0;");
+    // A null balance cannot be ranked; the lowest title would be fabricated.
+    expect(s).toContain('if (balance === null) return null;');
+  });
+
+  test('the profile store reads the numeric balance, not a `.coins` off a number', () => {
+    const s = read('src/store/profileStore.js');
+    expect(s).not.toContain('balanceResult?.coins || 0');
+    expect(s).not.toContain('balanceData?.coins || 0');
+    expect(s).toContain("balance = typeof balanceResult === 'number' ? balanceResult : null;");
+  });
+
+  test('AuthContext mirrors counts as null (unknown), never a fabricated 0', () => {
+    const s = read('src/context/AuthContext.jsx');
+    expect(s).not.toContain('coins: userProfile?.coins || 0');
+    expect(s).not.toContain('postCount: userProfile?.postCount || 0');
+    expect(s).toContain('postCount: userProfile?.postCount ?? null');
+  });
+
+  test('the tip modal never claims "0 coins" for an unread balance', () => {
+    const s = read('src/components/profile/ProfileTipModal.jsx');
+    expect(s).not.toContain('setUserBalance(res?.coins || 0)');
+    expect(s).toContain('setUserBalance(typeof res === \'number\' ? res : null)');
+  });
+
+  test('the verification flow never records a fabricated 0 follower count', () => {
+    const modal = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(modal).not.toContain('followerCount: profile.followerCount || 0');
+    const service = read('src/services/userService.js');
+    expect(service).not.toContain('followerCount: Number(applicationData.followerCount || 0)');
+    const admin = read('src/screens/Admin/AdminVerificationScreen.jsx');
+    expect(admin).not.toContain('Number(applicant.followerCount ?? applicant.followersCount ?? 0)');
+  });
+
+  test('PostOptionsDrawer renders an unknown author follower count as —', () => {
+    const s = read('src/screens/PostOptionsDrawer.jsx');
+    expect(s).not.toContain('followerCount: safePost.followerCount || 0');
+    expect(s).toContain('followerCount: safePost.followerCount ?? null');
+  });
+
+  test('formatViewCount renders an absent count as —, not 0', () => {
+    const s = read('src/utils/videoUtils.js');
+    expect(s).not.toContain("    return '0';\n  }");
+    expect(s).toContain("if (views === null || views === undefined || typeof views !== 'number' || isNaN(views)) {");
+    expect(s).toContain("return '—';");
+  });
+
+  test('video surfaces never coerce an absent stat to 0 before formatting', () => {
+    for (const rel of [
+      'src/components/Videos/VideoCard.jsx',
+      'src/screens/VideoDetailScreen.jsx',
+      'src/screens/VideosScreen.jsx',
+    ]) {
+      const s = read(rel);
+      expect(s).not.toMatch(/formatViewCount\([\w?.]+ \|\| 0\)/);
+      expect(s).not.toMatch(/stats\?\.(views|likes|comments|shares) \|\| 0/);
+    }
+  });
+
+  test('videoService keeps an absent stat unknown, never a fake 0', () => {
+    const s = read('src/services/videoService.js');
+    expect(s).not.toContain('likes: item.stats?.likes ?? item.likes ?? 0');
+    expect(s).toContain('likes: item.stats?.likes ?? item.likes ?? null');
+  });
+
+  test('the reels action rail never fabricates a 0 stat', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).not.toContain('likes: v.likes ?? v.stats?.likes ?? 0');
+    expect(s).toContain('likes: v.likes ?? v.stats?.likes ?? null');
+    expect(s).not.toContain('(currentReel.stats.likes || 0).toLocaleString()');
+  });
+
+  test('VideoActionRail defaults a missing stat to null, not 0', () => {
+    const s = read('src/components/Videos/VideoActionRail.jsx');
+    expect(s).not.toContain('likes = 0,');
+    expect(s).toContain('likes = null,');
+  });
+
+  test('CreatePost analytics preview has no fabricated metrics or growth rate', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    expect(s).not.toContain('analyticsData?.totalViews ?? 0');
+    expect(s).not.toContain('analyticsData?.coinsEarned ?? 0');
+    // `: 12` invented a "+12% this week" growth rate when no delta was known.
+    expect(s).not.toContain('Math.round(analyticsData.changes.engagement) : 12');
+  });
+
+  test('StoriesScreen renders an unknown view total as —, not 0', () => {
+    const s = read('src/screens/StoriesScreen.jsx');
+    expect(s).not.toContain('viewsCount: String(storiesArr[0]?.stats?.views || 0)');
+    expect(s).not.toContain('currentStory.viewsCount ?? 0}');
+  });
+
+  test('comment surfaces keep an absent like total unknown', () => {
+    const videoComments = read('src/components/Videos/VideoComments.jsx');
+    expect(videoComments).not.toContain('{comment.likes || 0}');
+    expect(videoComments).not.toContain('{reply.likes || 0}');
+    const commentsDrawer = read('src/screens/CommentsDrawer.jsx');
+    expect(commentsDrawer).not.toContain('formatCount(comment.likes || 0)');
+  });
+
+  test('ProfileFeedGrid comment counts go through the unknown-safe helper', () => {
+    const s = read('src/components/profile/ProfileFeedGrid.jsx');
+    expect(s).not.toContain('{item.comments || 0}');
+    expect(s).toContain('const commentCount = useCallback');
+  });
+
+  test('PerksRewardsScreen never claims an empty treasury for an unknown balance', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    expect(s).not.toContain('const userCoins = Number(profile?.coins) || 0;');
+    expect(s).toContain('const canAfford = userCoins != null && userCoins >= g.coins;');
+  });
+
+  test('PostAnalyticsScreen reads the real `stats` shape and renders unknown as —', () => {
+    const s = read('src/screens/PostAnalyticsScreen.jsx');
+    // These top-level fields are never written; reading them fabricated "0".
+    expect(s).not.toContain('postDoc.viewsCount || postDoc.views || 0');
+    expect(s).not.toContain('postDoc.likesCount || postDoc.likes?.length || 0');
+    expect(s).toContain('postDoc.stats?.views');
+  });
+
+  test('PostCard analytics panel and comment preview do not fabricate a 0', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).not.toContain('(postAnalytics.totalViews || 0)');
+    expect(s).not.toContain('(postAnalytics.totalLikes || 0)');
+    expect(s).not.toContain('View all {totalComments} comments');
+    // The engagement reducer must not shift an unknown total from a fake 0.
+    expect(s).not.toContain('likeCount: state.likeCount + (action.payload ? 1 : -1)');
+  });
+
+  test('PollCard renders an unknown vote total as —', () => {
+    const s = read('src/screens/PostCard/PollCard.jsx');
+    expect(s).not.toContain('{(opt.votes ?? 0).toLocaleString()} votes');
+  });
+
+  test('analyticsService sums engagement from the real `stats` shape', () => {
+    const s = read('src/services/analyticsService.js');
+    expect(s).not.toContain("p.likesCount || p.likes || 0");
+    expect(s).toContain('const s = p.stats || {};');
+  });
+
+  test('postService.getPost unwraps the firestoreService envelope', () => {
+    const s = read('src/services/postService.js');
+    expect(s).not.toContain('return await this.fs.getPost(postId);');
+    expect(s).toContain('return res.post;');
+  });
+});

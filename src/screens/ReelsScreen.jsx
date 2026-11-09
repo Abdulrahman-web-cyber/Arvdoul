@@ -85,12 +85,13 @@ const formatDuration = (seconds) => {
       music: v.audio?.title || v.music || '',
       videoUrl: v.signedUrl || v.videoUrl || '',
       thumbnailUrl: v.thumbnailUrl || '',
+      // An absent stat is unknown (rendered '—'), never a fabricated 0.
       stats: {
-        likes: v.likes ?? v.stats?.likes ?? 0,
-        comments: v.comments ?? v.stats?.comments ?? 0,
-        shares: v.shares ?? v.stats?.shares ?? 0,
-        saves: v.saves ?? v.stats?.saves ?? 0,
-        gifts: v.gifts ?? v.stats?.gifts ?? 0,
+        likes: v.likes ?? v.stats?.likes ?? null,
+        comments: v.comments ?? v.stats?.comments ?? null,
+        shares: v.shares ?? v.stats?.shares ?? null,
+        saves: v.saves ?? v.stats?.saves ?? null,
+        gifts: v.gifts ?? v.stats?.gifts ?? null,
       },
       duration: v.duration || 0,
       isLiked: Boolean(v.isLiked),
@@ -254,7 +255,7 @@ const formatDuration = (seconds) => {
     const wasLiked = reel.isLiked;
     patchReel(reel.id, {
       isLiked: !wasLiked,
-      stats: { ...reel.stats, likes: Math.max(0, reel.stats.likes + (wasLiked ? -1 : 1)) },
+      stats: { ...reel.stats, likes: reel.stats.likes == null ? null : Math.max(0, reel.stats.likes + (wasLiked ? -1 : 1)) },
     });
     try {
       const res = await videoService.likeVideo(reel.id);
@@ -262,7 +263,7 @@ const formatDuration = (seconds) => {
       const serverDelta = serverLiked === wasLiked ? 0 : (serverLiked ? 1 : -1);
       patchReel(reel.id, {
         isLiked: serverLiked,
-        stats: { ...reel.stats, likes: Math.max(0, reel.stats.likes + serverDelta) },
+        stats: { ...reel.stats, likes: reel.stats.likes == null ? null : Math.max(0, reel.stats.likes + serverDelta) },
       });
     } catch (err) {
       patchReel(reel.id, { isLiked: wasLiked, stats: reel.stats });
@@ -280,7 +281,7 @@ const formatDuration = (seconds) => {
     const wasSaved = reel.isSaved;
     patchReel(reel.id, {
       isSaved: !wasSaved,
-      stats: { ...reel.stats, saves: Math.max(0, reel.stats.saves + (wasSaved ? -1 : 1)) },
+      stats: { ...reel.stats, saves: reel.stats.saves == null ? null : Math.max(0, reel.stats.saves + (wasSaved ? -1 : 1)) },
     });
     try {
       if (wasSaved) await videoService.unsaveVideo(reel.id, user.uid);
@@ -369,7 +370,7 @@ const formatDuration = (seconds) => {
     try {
       const res = await videoService.shareVideo(reel.id, 'arvdoul');
       if (res?.success) {
-        patchReel(reel.id, { stats: { ...reel.stats, shares: (reel.stats?.shares || 0) + 1 } });
+        if (reel.stats.shares != null) patchReel(reel.id, { stats: { ...reel.stats, shares: reel.stats.shares + 1 } });
       }
     } catch { /* counter stays authoritative */ }
   };
@@ -692,7 +693,7 @@ const formatDuration = (seconds) => {
             <Heart className={cn("w-6 h-6", currentReel.isLiked && "fill-current text-rose-500")} />
           </div>
           <span className="text-[11px] font-bold drop-shadow">
-            {(currentReel.stats.likes || 0).toLocaleString()}
+            {currentReel.stats.likes == null ? '—' : currentReel.stats.likes.toLocaleString()}
           </span>
         </button>
 
@@ -705,7 +706,7 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
             <MessageCircle className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{(currentReel.stats.comments || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.comments == null ? '—' : currentReel.stats.comments.toLocaleString()}</span>
         </button>
 
         {/* Share Button */}
@@ -717,7 +718,7 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
             <Share2 className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{(currentReel.stats.shares || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.shares == null ? '—' : currentReel.stats.shares.toLocaleString()}</span>
         </button>
 
         {/* Bookmark / Save */}
@@ -732,7 +733,7 @@ const formatDuration = (seconds) => {
           )}>
             <Bookmark className={cn("w-6 h-6", currentReel.isSaved && "fill-current text-amber-400")} />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{(currentReel.stats.saves || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.saves == null ? '—' : currentReel.stats.saves.toLocaleString()}</span>
         </button>
 
         {/* Coin Gift Button */}
@@ -744,7 +745,7 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/40 flex items-center justify-center shadow-arvdoul-glow">
             <Gift className="w-6 h-6 text-amber-400 animate-bounce" />
           </div>
-          <span className="text-[11px] font-black text-amber-400 drop-shadow">{(currentReel.stats.gifts || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-black text-amber-400 drop-shadow">{currentReel.stats.gifts == null ? '—' : currentReel.stats.gifts.toLocaleString()}</span>
         </button>
 
         {/* More Options */}

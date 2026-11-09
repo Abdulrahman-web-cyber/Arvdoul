@@ -21,6 +21,8 @@ import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+// One count formatter for the whole app (unknown -> '—'); a local copy drifted.
+import { formatCount } from '../lib/searchUtils';
 
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
@@ -302,12 +304,6 @@ const formatCommentText = (text, navigate) => {
     return <span key={i}>{part.value}</span>;
   });
 };
-
-function formatCount(num) {
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
-}
 
 /* ═══════════════════════════════════════════════════════════
    PROFILE CACHE (simple Map with TTL)
@@ -948,7 +944,7 @@ const CommentItem = memo(({
             </div>
             <button onClick={() => onLike(commentId)} className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors">
               <Heart className={`w-3.5 h-3.5 ${likedByArray.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
-              <span>{formatCount(comment.likes || 0)}</span>
+              <span>{formatCount(comment.likes)}</span>
             </button>
             <button onClick={() => onReply(comment)} className="flex items-center gap-1 text-gray-500 hover:text-purple-500 transition-colors"><Reply className="w-3.5 h-3.5" /> Reply</button>
             <button onClick={() => setShowActionSheet(!showActionSheet)} className="text-gray-500 hover:text-purple-500 transition-colors"><MoreHorizontal className="w-3.5 h-3.5" /></button>
@@ -1670,7 +1666,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 <div>
                   <h3 className="font-bold text-lg dark:text-white">Comments</h3>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {post?.stats?.comments || 0} total
+                    {post?.stats?.comments == null ? '—' : post.stats.comments} total
                   </p>
                 </div>
               </div>

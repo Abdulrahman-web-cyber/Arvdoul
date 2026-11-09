@@ -46,10 +46,12 @@ export default function AchievementsScreen() {
         // progress on every streak achievement (the service clamps `|| 0`).
         activeStreak: user.activeStreak,
         activeDaysCount: user.activeDaysCount,
-        postsCount: user.postsCount || user.postCount || 0,
-        likesCount: user.likesCount || 0,
-        commentsCount: user.commentsCount || 0,
-        friendsCount: user.friendsCount || 0,
+        // Unknown counters stay undefined; the service clamps them for the
+        // progress math instead of the screen laundering them into a literal 0.
+        postsCount: user.postsCount ?? user.postCount,
+        likesCount: user.likesCount,
+        commentsCount: user.commentsCount,
+        friendsCount: user.friendsCount,
       });
       setAchievements(items);
     } catch (err) {

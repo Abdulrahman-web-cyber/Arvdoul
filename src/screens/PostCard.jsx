@@ -28,6 +28,8 @@ import QuestionCard from './PostCard/QuestionCard';
 import EventCard from './PostCard/EventCard';
 import LinkCard from './PostCard/LinkCard';
 import { VIRTUAL_GIFTS } from '../data/videoData';
+// One count formatter for the whole app (unknown -> '—'); a local copy drifted.
+import { formatCount } from '../lib/searchUtils';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -442,7 +444,9 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
   if (!preview.length) return null;
   return (
     <div className="px-4 pb-2">
-      <button onClick={onViewAll} className="text-xs hover:underline mb-1" style={{ color: tokens.textSecondary }}>View all {totalComments} comments</button>
+      <button onClick={onViewAll} className="text-xs hover:underline mb-1" style={{ color: tokens.textSecondary }}>
+        {typeof totalComments === 'number' ? `View all ${totalComments} comments` : 'View all comments'}
+      </button>
       {preview.map(comment => (
         <div key={comment.id} className="flex gap-2 py-1">
           <img src={comment.userAvatar || '/assets/default-profile.png'} className="w-6 h-6 rounded-full" alt="" />
@@ -461,10 +465,12 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
 const engagementReducer = (state, action) => {
   switch (action.type) {
     case 'SET_LIKED':
-      return { ...state, liked: action.payload, reaction: action.payload ? '👍' : null, likeCount: state.likeCount + (action.payload ? 1 : -1) };
+      // An unknown like total stays unknown — never shifted from a fabricated 0.
+      return { ...state, liked: action.payload, reaction: action.payload ? '👍' : null, likeCount: state.likeCount == null ? null : Math.max(0, state.likeCount + (action.payload ? 1 : -1)) };
     case 'SET_REACTION': {
       const newLiked = !!action.payload;
-      return { ...state, reaction: action.payload, liked: newLiked, likeCount: state.likeCount + (newLiked && !state.liked ? 1 : (!newLiked && state.liked ? -1 : 0)) };
+      const delta = newLiked && !state.liked ? 1 : (!newLiked && state.liked ? -1 : 0);
+      return { ...state, reaction: action.payload, liked: newLiked, likeCount: state.likeCount == null ? null : Math.max(0, state.likeCount + delta) };
     }
     case 'SET_SAVED':
       return { ...state, saved: action.payload };
@@ -523,10 +529,10 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     reaction: post.userReaction || null,
     saved: post.savedBy?.includes(currentUser?.uid) || false,
     followState: 'none',
-    likeCount: post.stats?.likes || 0,
-    commentCount: post.stats?.comments || 0,
-    shareCount: post.stats?.shares || 0,
-    giftCount: post.stats?.gifts || 0,
+    likeCount: post.stats?.likes ?? null,
+    commentCount: post.stats?.comments ?? null,
+    shareCount: post.stats?.shares ?? null,
+    giftCount: post.stats?.gifts ?? null,
   });
   const engagementRef = useRef(engagement);
   useEffect(() => { engagementRef.current = engagement; }, [engagement]);
@@ -579,7 +585,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     (async () => {
       try {
         const bal = await monetizationService.getBalance(currentUser.uid);
-        if (!cancelled) setUi(prev => ({ ...prev, giftBalance: typeof bal === 'number' ? bal : Number(bal?.coins ?? 0) }));
+        if (!cancelled) setUi(prev => ({ ...prev, giftBalance: typeof bal === 'number' ? bal : null }));
       } catch {
         if (!cancelled) setUi(prev => ({ ...prev, giftBalance: null }));
       }
@@ -1003,12 +1009,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const ctaText = adDetails?.cta || (post.ctaText || 'Learn More');
   const ctaLink = adDetails?.link || post.ctaLink;
 
-  const formatCount = (num) => {
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num.toString();
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -1179,10 +1179,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
                 <div className="py-1 text-center">Loading analytics…</div>
               ) : postAnalytics ? (
                 <>
-                  <div className="flex justify-between"><span>Views</span><span>{(postAnalytics.totalViews || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Likes</span><span>{(postAnalytics.totalLikes || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Comments</span><span>{(postAnalytics.totalComments || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Shares</span><span>{(postAnalytics.totalShares || 0).toLocaleString()}</span></div>
+                  {[['Views', postAnalytics.totalViews], ['Likes', postAnalytics.totalLikes], ['Comments', postAnalytics.totalComments], ['Shares', postAnalytics.totalShares]].map(([label, value]) => (
+                    <div key={label} className="flex justify-between"><span>{label}</span><span>{typeof value === 'number' ? value.toLocaleString() : '—'}</span></div>
+                  ))}
                 </>
               ) : (
                 <div className="py-1 text-center">Analytics unavailable</div>

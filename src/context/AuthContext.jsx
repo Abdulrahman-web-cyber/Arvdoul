@@ -198,7 +198,9 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     authProvider: userProfile?.authProvider || user.providerData?.[0]?.providerId || 'email',
     isProfileComplete,
     accountStatus: userProfile?.accountStatus || 'active',
-    coins: userProfile?.coins || 0,
+    // Absent counts stay null (unknown); a fabricated 0 claims a measured
+    // empty account. Surfaces render `—` for null.
+    coins: userProfile?.coins ?? null,
     level: userProfile?.level !== undefined ? userProfile.level : null,
     // The mirror previously omitted standing/economy fields, so any consumer
     // that read them off `currentUser` (QuickAccessPanel's XP bar, level badge,
@@ -211,11 +213,11 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     totalEarned: userProfile?.totalEarned ?? null,
     isCreator: !!userProfile?.isCreator,
     isVerified: !!(userProfile?.isVerified || userProfile?.verified),
-    postCount: userProfile?.postCount || 0,
-    videoCount: userProfile?.videoCount || 0,
-    savedCount: userProfile?.savedCount || 0,
-    followerCount: userProfile?.followerCount || 0,
-    followingCount: userProfile?.followingCount || 0,
+    postCount: userProfile?.postCount ?? null,
+    videoCount: userProfile?.videoCount ?? null,
+    savedCount: userProfile?.savedCount ?? null,
+    followerCount: userProfile?.followerCount ?? null,
+    followingCount: userProfile?.followingCount ?? null,
     isOnline: true,
     lastActive: new Date().toISOString(),
     createdAt: user.metadata?.creationTime || new Date().toISOString(),

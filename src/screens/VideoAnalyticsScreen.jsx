@@ -58,8 +58,10 @@ const VideoAnalyticsScreen = () => {
           overview: {
             totalViews: data.totalViews || 0,
             viewsChange: data.changes?.views || 0,
-            totalLikes: data.totalEngagement || 0,
-            likesChange: data.changes?.engagement || 0,
+            // `totalEngagement` is not incremented server-side; an absent
+            // value is unknown (rendered '—'), not a measured zero.
+            totalLikes: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
+            likesChange: typeof data.changes?.engagement === 'number' ? data.changes.engagement : null,
             // Profile analytics tracks a single engagement total; there is no
             // per-type comment/share/watch-time breakdown, so report those as
             // unavailable (null) rather than duplicating the engagement number.

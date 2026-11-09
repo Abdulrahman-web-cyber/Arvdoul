@@ -314,7 +314,7 @@ const PollCard = React.memo(({
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   {hasVotes && <span className="font-bold" style={{ color: '#f0abfc' }}>{percentage}%</span>}
-                  <span style={{ color: '#e9d5ff' }}>{(opt.votes ?? 0).toLocaleString()} votes</span>
+                  <span style={{ color: '#e9d5ff' }}>{opt.votes == null ? '— votes' : `${opt.votes.toLocaleString()} votes`}</span>
                 </div>
               </div>
               {hasVotes && (

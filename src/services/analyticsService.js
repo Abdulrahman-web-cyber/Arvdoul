@@ -302,7 +302,9 @@ class UltimateAnalyticsService {
           hasData: true,
           totalViews,
           totalReach,
-          totalEngagement: data.totalEngagement || 0,
+          // Nothing on the server increments `totalEngagement`, so an absent
+          // value is unknown (rendered '—'), not a measured zero.
+          totalEngagement: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
           coinsEarned: data.coinsEarned || 0,
           dailyStats: this._extractDailyStats(data.dailyStats, startDate),
           topPosts: data.topPosts || [],
@@ -325,7 +327,9 @@ class UltimateAnalyticsService {
           analytics.changes = {
             views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : 0,
             reach: previousTotalReach > 0 ? ((analytics.totalReach - previousTotalReach) / previousTotalReach) * 100 : 0,
-            engagement: previousTotalEngagement > 0 ? ((analytics.totalEngagement - previousTotalEngagement) / previousTotalEngagement) * 100 : 0,
+            engagement: previousTotalEngagement > 0 && typeof analytics.totalEngagement === 'number'
+              ? ((analytics.totalEngagement - previousTotalEngagement) / previousTotalEngagement) * 100
+              : null,
             coins: previousCoins > 0 ? ((analytics.coinsEarned - previousCoins) / previousCoins) * 100 : 0,
           };
         }
@@ -357,9 +361,16 @@ class UltimateAnalyticsService {
           const postsRef = collection(this.firestore, 'posts');
           const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(10)));
           topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          totalEngagement = topPosts.reduce((sum, p) => sum + (p.likesCount || p.likes || 0) + (p.commentsCount || 0) + (p.sharesCount || 0), 0);
+          // Engagement is stored under `stats`; the top-level `likesCount`/
+          // `likes` fields are never written, so summing them produced a
+          // measured-looking 0 engagement for every creator.
+          totalEngagement = topPosts.reduce((sum, p) => {
+            const s = p.stats || {};
+            return sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);
+          }, 0);
         } catch (e) {
-          logger.warn('Analytics top-posts read failed; engagement defaults to zero', { userId, error: e?.message });
+          totalEngagement = null;
+          logger.warn('Analytics top-posts read failed; engagement is unavailable', { userId, error: e?.message });
         }
 
         const days = this._getTimeframeDays(timeframe);

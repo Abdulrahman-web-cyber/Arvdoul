@@ -689,11 +689,12 @@ class UltimateVideoService {
           id: item.authorId || item.userId,
           isVerified: item.authorVerified || false,
         },
-        likes: item.stats?.likes ?? item.likes ?? 0,
-        comments: item.stats?.comments ?? item.comments ?? 0,
-        shares: item.stats?.shares ?? item.shares ?? 0,
-        saves: item.stats?.saves ?? item.saves ?? 0,
-        views: item.stats?.views ?? item.views ?? 0,
+        // An absent stat stays unknown; the cards render '—', not a fake 0.
+        likes: item.stats?.likes ?? item.likes ?? null,
+        comments: item.stats?.comments ?? item.comments ?? null,
+        shares: item.stats?.shares ?? item.shares ?? null,
+        saves: item.stats?.saves ?? item.saves ?? null,
+        views: item.stats?.views ?? item.views ?? null,
         isLiked: item.isLiked || false,
         isSaved: item.isSaved || false,
       };

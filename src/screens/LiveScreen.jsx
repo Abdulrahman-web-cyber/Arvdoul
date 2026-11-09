@@ -403,7 +403,7 @@ export default function LiveScreen() {
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
                   </span>
                   <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-xs flex items-center gap-1">
-                    <Eye className="w-3 h-3" /> {stream.viewerCount ?? 0}
+                    <Eye className="w-3 h-3" /> {stream.viewerCount ?? '—'}
                   </span>
                 </div>
                 <div className="p-3">

@@ -17,9 +17,9 @@ import PropTypes from 'prop-types';
  * Floating glass design with ARVDOUL styling
  */
 const VideoActionRail = memo(({
-  likes = 0,
-  comments = 0,
-  shares = 0,
+  likes = null,
+  comments = null,
+  shares = null,
   isLiked = false,
   isSaved = false,
   onLike,

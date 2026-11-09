@@ -119,7 +119,8 @@ export default function StoriesScreen() {
             badgeType: storiesArr[0]?.type || 'image',
             mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
             caption: storiesArr[0]?.content || '',
-            viewsCount: String(storiesArr[0]?.stats?.views || 0),
+            // Unknown view total stays null (rendered '—'), not a fake '0'.
+            viewsCount: typeof storiesArr[0]?.stats?.views === 'number' ? String(storiesArr[0].stats.views) : null,
             isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
             ctaText: storiesArr[0]?.ctaText || '',
             ctaUrl: storiesArr[0]?.ctaUrl || '',
@@ -1013,7 +1014,7 @@ export default function StoriesScreen() {
                     className="h-9 px-3 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center gap-1.5 text-white"
                   >
                     <Users className="w-4 h-4" />
-                    <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? 0}</span>
+                    <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? '—'}</span>
                   </button>
                 )}
                 {isOwnStory && (

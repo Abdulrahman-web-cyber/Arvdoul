@@ -159,11 +159,15 @@ const AdminVerificationScreen = () => {
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredApplicants.map(applicant => {
-            const followerCount = Number(applicant.followerCount ?? applicant.followersCount ?? 0);
+            // A legacy application with no stored follower count is *unknown*,
+            // not 0 — render "—" and fail the gate closed rather than showing a
+            // fabricated "0".
+            const rawFollowers = applicant.followerCount ?? applicant.followersCount ?? null;
+            const followerCount = rawFollowers == null ? null : Number(rawFollowers);
             const strikesCount = Number(applicant.strikesCount ?? 0);
             const emailVerified = Boolean(applicant.emailVerified);
             const phoneVerified = Boolean(applicant.phoneVerified);
-            const meetsFollowers = followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
+            const meetsFollowers = followerCount !== null && followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
             const meetsStrikes = strikesCount <= CREATOR_VERIFICATION_REQUIREMENTS.MAX_STRIKES;
             const meetsVerification =
               (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED || emailVerified) &&
@@ -229,7 +233,7 @@ const AdminVerificationScreen = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Followers:</span>
                       <span className={`font-semibold ${meetsFollowers ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {followerCount.toLocaleString()} {meetsFollowers ? '✓' : `(Min ${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()})`}
+                        {followerCount === null ? '—' : followerCount.toLocaleString()} {meetsFollowers ? '✓' : `(Min ${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()})`}
                       </span>
                     </div>
 
