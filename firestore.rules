@@ -1265,9 +1265,6 @@ service cloud.firestore {
           .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount'])
       );
       allow delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
-      match /signals/{signalId} {
-        allow read, write: if isSignedIn();
-      }
     }
     match /sounds/{soundId} {
       allow read: if true;
