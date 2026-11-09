@@ -78,7 +78,7 @@ const VideoAnalyticsScreen = () => {
             hasData: Boolean(data.hasData),
           },
           revenue: {
-            total: data.coinsEarned || 0,
+            total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null,
             tips: null,
             subscriptions: null,
             payPerView: null,
@@ -594,7 +594,7 @@ const RevenueTab = ({ revenue }) => {
         animate={{ opacity: 1, scale: 1 }}
         className="p-8 rounded-3xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 backdrop-blur-xl text-center"
       >
-        <p className="text-white/60 mb-2">Total Coins Earned</p>
+        <p className="text-white/60 mb-2">Total Earnings (USD)</p>
         <p className="text-5xl font-bold text-white mb-2">
           {formatUsd(revenue.total)}
         </p>

@@ -230,3 +230,14 @@ npm run build
 - Also: `EventDetailScreen` waitlist stat now renders "—" for an unknown count.
 - Guards added to `noFabricatedData.test.js`.
 - Gates: `npm test` 118 suites / 1424 tests; build ok; eslint 0 errors.
+
+## Checkpoint — N169 (analytics earnings fabricated as 0)
+
+- `analyticsService.getUserAnalytics`: `coinsEarned` now `null` when the field is
+  absent (`typeof !== 'number'`) or the wallet read fails, instead of `|| 0`.
+  The coins change-% is `null` in that case too.
+- `VideoAnalyticsScreen`: revenue total is `null` when unknown (renders "—"),
+  and the revenue header no longer mislabels a USD figure as "Total Coins
+  Earned" → "Total Earnings (USD)".
+- Guard added to `noFabricatedData.test.js`.
+- Gates: `npm test` 118 suites / 1425 tests; eslint 0 errors.

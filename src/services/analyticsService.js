@@ -305,7 +305,7 @@ class UltimateAnalyticsService {
           // Nothing on the server increments `totalEngagement`, so an absent
           // value is unknown (rendered '—'), not a measured zero.
           totalEngagement: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
-          coinsEarned: data.coinsEarned || 0,
+          coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null,
           dailyStats: this._extractDailyStats(data.dailyStats, startDate),
           topPosts: data.topPosts || [],
           growthRate: data.growthRate || 0,
@@ -330,7 +330,9 @@ class UltimateAnalyticsService {
             engagement: previousTotalEngagement > 0 && typeof analytics.totalEngagement === 'number'
               ? ((analytics.totalEngagement - previousTotalEngagement) / previousTotalEngagement) * 100
               : null,
-            coins: previousCoins > 0 ? ((analytics.coinsEarned - previousCoins) / previousCoins) * 100 : 0,
+            coins: previousCoins > 0 && typeof analytics.coinsEarned === 'number'
+              ? ((analytics.coinsEarned - previousCoins) / previousCoins) * 100
+              : null,
           };
         }
       } else {
@@ -341,18 +343,22 @@ class UltimateAnalyticsService {
           countersManager.get({ docPath, field: 'totalReach', fallback: 0 }),
         ]);
 
-        let coinsEarned = 0;
+        let coinsEarned = null;
         let followerCount = 0;
         try {
           const userRef = doc(this.firestore, 'users', userId);
           const uSnap = await getDoc(userRef);
           if (uSnap.exists()) {
             const uData = uSnap.data();
-            coinsEarned = uData.coins ?? uData.coinBalance ?? 0;
-            followerCount = uData.followerCount ?? uData.followersCount ?? 0;
+            // A failed/absent identity read leaves coins unknown (rendered '—'),
+            // not a fabricated "0 coins earned".
+            const rawCoins = uData.coins ?? uData.coinBalance;
+            coinsEarned = typeof rawCoins === 'number' ? rawCoins : null;
+            const rawFollowers = uData.followerCount ?? uData.followersCount;
+            followerCount = typeof rawFollowers === 'number' ? rawFollowers : 0;
           }
         } catch (e) {
-          logger.warn('Analytics identity read failed; coins/followers defaulted', { userId, error: e?.message });
+          logger.warn('Analytics identity read failed; coins unknown', { userId, error: e?.message });
         }
 
         let topPosts = [];

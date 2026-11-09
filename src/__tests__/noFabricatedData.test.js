@@ -2861,4 +2861,16 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).toContain('applicant.strikesCount == null ? null');
     expect(s).toContain('strikesCount !== null && strikesCount <=');
   });
+
+  test('analytics coinsEarned is unknown (null) when unwritten, never a fabricated 0', () => {
+    // No server path increments `profile_analytics.coinsEarned`; the earnings
+    // figure is the wallet balance read from `users`. An absent balance must be
+    // unknown (rendered '—'), not a measured "0 coins earned".
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('coinsEarned: data.coinsEarned || 0');
+    expect(svc).toContain("coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
+    const screen = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(screen).not.toContain('total: data.coinsEarned || 0');
+    expect(screen).toContain("total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
+  });
 });
