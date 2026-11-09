@@ -578,3 +578,81 @@ exports.onShardedMessageCreated = functions.firestore
     const data = snap.data() || {};
     await incrementUnreadForMessage(context.params.conversationId, data.senderId || 'system', context.params.messageId, data.createdAt || FieldValue.serverTimestamp());
   });
+
+// Join a group via an invite link. This MUST run server-side: adding yourself
+// to `participants` is exactly the write the `conversations` update rule
+// refuses for a non-admin, so the client `joinGroupViaInvite` transaction was
+// always denied and the invite link did nothing. The Admin SDK bypasses rules,
+// so the join is validated here (expiry, max uses) and applied atomically.
+exports.joinGroupViaInvite = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+  const uid = context.auth.uid;
+  const { inviteId } = data || {};
+  if (!inviteId || typeof inviteId !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'inviteId is required.');
+  }
+
+  await checkRateLimit(uid, 'joinGroupViaInvite', 10, 60000);
+
+  const inviteRef = db.collection('group_invites').doc(inviteId);
+
+  const outcome = await db.runTransaction(async (transaction) => {
+    const inviteSnap = await transaction.get(inviteRef);
+    if (!inviteSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Invite not found.');
+    }
+    const invite = inviteSnap.data();
+    const conversationId = invite.conversationId;
+    if (!conversationId || typeof conversationId !== 'string') {
+      throw new functions.https.HttpsError('failed-precondition', 'Invite is not linked to a conversation.');
+    }
+
+    const convRef = db.collection('conversations').doc(conversationId);
+    const convSnap = await transaction.get(convRef);
+    if (!convSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+    }
+    const conv = convSnap.data();
+    const participants = Array.isArray(conv.participants) ? conv.participants : [];
+    const alreadyMember = participants.includes(uid);
+
+    const expiresMs = invite.expiresAt && typeof invite.expiresAt.toDate === 'function'
+      ? invite.expiresAt.toDate().getTime()
+      : null;
+    if (expiresMs && expiresMs < Date.now()) {
+      throw new functions.https.HttpsError('failed-precondition', 'Invite has expired.');
+    }
+    if (!alreadyMember && invite.maxUses && (invite.uses || 0) >= invite.maxUses) {
+      throw new functions.https.HttpsError('failed-precondition', 'Invite has reached its maximum uses.');
+    }
+
+    if (!alreadyMember) {
+      transaction.update(convRef, {
+        participants: FieldValue.arrayUnion(uid),
+        participantCount: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.update(inviteRef, { uses: FieldValue.increment(1) });
+
+      const msgRef = convRef.collection('messages').doc();
+      transaction.set(msgRef, {
+        id: msgRef.id,
+        conversationId,
+        type: 'system',
+        eventType: 'user_joined_via_invite',
+        eventData: { userId: uid },
+        senderId: 'system',
+        senderName: 'System',
+        createdAt: FieldValue.serverTimestamp(),
+        isSystem: true,
+      });
+    }
+
+    return { conversationId, alreadyMember };
+  });
+
+  log('INFO', 'Group joined via invite', { uid, inviteId, conversationId: outcome.conversationId, alreadyMember: outcome.alreadyMember });
+  return { success: true, conversationId: outcome.conversationId, alreadyMember: outcome.alreadyMember };
+});

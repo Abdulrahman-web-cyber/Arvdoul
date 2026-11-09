@@ -74,7 +74,7 @@ for (const { col, body } of topLevelBlocks) {
   const createLines = body.filter((l) => /allow create/.test(l)).join('\n');
   if (!createLines) continue;
   const fields = new Set();
-  for (const m of createLines.matchAll(/request\.resource\.data\.(\w+)\s*==\s*uid\(\)/g)) fields.add(m[1]);
+  for (const m of createLines.matchAll(/request\.resource\.data\.(\w+)(?:\.\w+)*\s*==\s*uid\(\)/g)) fields.add(m[1]);
   for (const m of createLines.matchAll(/authoredBy\(\s*'(\w+)'\s*\)/g)) {
     if (authoredByFields.has(m[1])) fields.add(m[1]);
     else fields.add(m[1]);
@@ -98,25 +98,44 @@ function balancedObject(src, open) {
   return src.slice(open, open + 2000);
 }
 
-// Writer call sites that target a literal top-level collection with an INLINE
-// object-literal payload. Inline literals are where the owner key is written
-// next to the collection name, so a mismatch is directly observable. Variable
-// payloads (e.g. `addDoc(col, newSpace)`) are skipped — the guard stays
-// conservative and at zero false positives rather than chasing a payload across
-// the file.
+// Resolve a single local-variable payload hop: `const payload = { ... }` written
+// as `addDoc(col, payload)`. Without this the guard misses every writer that
+// builds the document object first (the shape most service writers use), which
+// is exactly where an owner-field mismatch hides. Only a declaration that
+// precedes the write is used, so a reused variable name resolves to the right
+// literal.
+function localObjectLiteral(src, name, beforeIndex) {
+  const declRe = new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*\\{`, 'g');
+  let decl = null;
+  let m;
+  while ((m = declRe.exec(src))) {
+    if (m.index < beforeIndex) decl = m;
+    else break;
+  }
+  if (!decl) return null;
+  const open = decl.index + decl[0].length - 1;
+  return balancedObject(src, open);
+}
+
+// Writer call sites that target a literal top-level collection. The payload is
+// either an inline object literal or a single local variable bound to one.
 function writerSites(src) {
   const found = [];
+  const resolve = (col, arg, argIndex) => {
+    const a = arg.trim();
+    const window = a.startsWith('{') ? balancedObject(src, argIndex) : localObjectLiteral(src, a, argIndex);
+    if (window) found.push({ col, window });
+  };
   const patterns = [
-    // addDoc(collection(db, 'col'), { ... }) — allow a `this.fs.` facade prefix.
-    /addDoc\(\s*(?:this\.fs\.)?collection\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'\s*\)\s*,\s*\{/g,
-    // setDoc(doc(db, 'col', id), { ... }) / transaction.set(doc(...), { ... })
-    /(?:setDoc|transaction\.set)\(\s*(?:this\.fs\.)?doc\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'[^)]*\)\s*,\s*\{/g,
+    // addDoc(collection(db, 'col'), <payload>) — allow a `this.fs.` facade prefix.
+    /addDoc\(\s*(?:this\.fs\.)?collection\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'\s*\)\s*,\s*([\s\S]{1,40}?)\s*[,)]/g,
+    // setDoc(doc(db, 'col', id), <payload>) / transaction.set(doc(...), <payload>)
+    /(?:setDoc|transaction\.set)\(\s*(?:this\.fs\.)?doc\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'[^)]*\)\s*,\s*([\s\S]{1,40}?)\s*[,)]/g,
   ];
   for (const re of patterns) {
     let m;
     while ((m = re.exec(src))) {
-      const open = m.index + m[0].length - 1;
-      found.push({ col: m[1], window: balancedObject(src, open) });
+      resolve(m[1], m[2], m.index + m[0].indexOf(m[2]));
     }
   }
   // Local alias: `const ref = collection(db, 'col');` then a write through the
@@ -127,13 +146,14 @@ function writerSites(src) {
   while ((a = aliasRe.exec(src))) {
     const [, name, col] = a;
     const useRe = new RegExp(
-      `(?:addDoc\\(\\s*${name}\\s*,\\s*\\{|(?:setDoc|transaction\\.set)\\(\\s*(?:this\\.fs\\.)?doc\\(\\s*${name}\\s*,[^)]*\\)\\s*,\\s*\\{)`,
+      `(?:addDoc\\(\\s*${name}\\s*,\\s*([\\s\\S]{1,40}?)\\s*[,)]|(?:setDoc|transaction\\.set)\\(\\s*(?:this\\.fs\\.)?doc\\(\\s*${name}\\s*,[^)]*\\)\\s*,\\s*([\\s\\S]{1,40}?)\\s*[,)])`,
       'g',
     );
     let u;
     while ((u = useRe.exec(src))) {
-      const open = u.index + u[0].length - 1;
-      found.push({ col, window: balancedObject(src, open) });
+      const arg = (u[1] || u[2] || '').trim();
+      if (!arg) continue;
+      resolve(col, arg, u.index + u[0].indexOf(arg));
     }
   }
   return found;

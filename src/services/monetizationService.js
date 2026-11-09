@@ -175,7 +175,12 @@ class OfflineMonetizationQueue {
           status: 'pending',
           userId: ownerUid,
         });
-      } catch (e) { /* silent */ }
+      } catch (e) {
+        // The local IndexedDB copy still holds the op, so a failed Firestore
+        // backup is not fatal — but log it so a persistent rules/offline failure
+        // is visible rather than silently losing the durable backup.
+        log.warn('monetization_outbox backup write failed', { operation, error: e?.message });
+      }
     }
     this.sync();
   }

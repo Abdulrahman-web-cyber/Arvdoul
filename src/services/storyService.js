@@ -241,7 +241,9 @@ class UltimateStoryService {
         else if (action === 'clearStoryCache' && storyId) this.storyCache.delete(storyId);
         else if (action === 'clearAll') this.clearCache();
       };
-    } catch (e) {}
+    } catch (e) {
+      logger.debug('Cross-tab story-cache channel unavailable', { error: e?.message });
+    }
 
     // Offline queue flush on reconnection (with mutex)
     this._onlineHandler = async () => {
@@ -651,7 +653,11 @@ class UltimateStoryService {
         profiles.forEach((p, idx) => { if (p) profileMap.set(batch[idx], p); });
       }
       enriched = viewerList.map(v => ({ ...v, profile: profileMap.get(v.userId) || null }));
-    } catch (e) {}
+    } catch (e) {
+      // Viewer rows are still returned un-enriched; log so a profile-hydration
+      // failure does not look like "viewers with no names".
+      logger.warn('Story viewer profile hydration failed', { storyId, error: e?.message });
+    }
 
     return {
       success: true,
@@ -759,7 +765,13 @@ class UltimateStoryService {
     if (snap.data().userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'You can only delete your own stories');
 
     if (snap.data().media?.path) {
-      try { await this.st.deleteObject(this.st.ref(this.storage, snap.data().media.path)); } catch (e) {}
+      try {
+        await this.st.deleteObject(this.st.ref(this.storage, snap.data().media.path));
+      } catch (e) {
+        // The story is soft-deleted below regardless, but a failed object delete
+        // leaves an orphan blob — log it for cleanup/observability.
+        logger.warn('Story media object delete failed; orphan may remain', { storyId, path: snap.data().media.path, error: e?.message });
+      }
     }
 
     await this.fs.updateDoc(storyRef, { isDeleted: true });

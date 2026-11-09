@@ -1191,6 +1191,10 @@ class UltimateCommentService {
 
       return { allowed: true, count: totalCount + 1, waitTime: 0 };
     } catch (error) {
+      // Client-side spam counting is advisory (the server enforces the real
+      // limit); never block a comment on a counter-write failure — but log it so
+      // a persistent rules/index failure is observable instead of silent.
+      logger.warn('_checkSpamRate counter update failed; allowing comment', { userId, error: error?.message });
       return { allowed: true, count: 0, waitTime: 0 };
     }
   }

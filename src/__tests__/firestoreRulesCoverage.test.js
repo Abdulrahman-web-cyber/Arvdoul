@@ -135,10 +135,15 @@ describe('Firestore nested rule coverage', () => {
   // catch-all, so a client read/write silently fails.
   test('every client top-level collection has a matching rule', () => {
     const referenced = new Set();
+    // Only a reference whose first argument is a database handle is a
+    // TOP-LEVEL collection. `collection(roomRef, 'hostCandidates')` is a
+    // subcollection of an already-resolved ref and is policed by the nested
+    // guard above; matching it here would demand a bogus top-level rule.
+    const DB = '(?:this\\.(?:firestore|db|fs|service\\.db)|db|firestore)';
     for (const file of walk(path.join(ROOT, 'src'))) {
       const src = fs.readFileSync(file, 'utf8');
       // Direct literal: `collection(db, 'posts')` / `doc(db, 'users', uid)`.
-      const re = /(?:collection|doc)\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'/g;
+      const re = new RegExp(`(?:collection|doc)\\(\\s*${DB}\\s*,\\s*'([A-Za-z_][\\w]*)'`, 'g');
       let m;
       while ((m = re.exec(src))) referenced.add(m[1]);
       // Resolved config constant: `collection(db, FEED_CONFIG.SESSION.COLLECTION)`.
@@ -147,13 +152,18 @@ describe('Firestore nested rule coverage', () => {
       // this test stayed green — every session load returned nothing and every
       // save was denied. Resolve the const to its string value and check that.
       const consts = collectConstPaths(src);
-      const ref = /(?:collection|doc)\(\s*[^,()]+,\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*[,)]/g;
+      const ref = new RegExp(`(?:collection|doc)\\(\\s*${DB}\\s*,\\s*([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*[,)]`, 'g');
       while ((m = ref.exec(src))) {
         if (consts.has(m[1])) referenced.add(consts.get(m[1]));
       }
     }
     const declaredTop = new Set(
-      [...rules.matchAll(/match\s+\/([A-Za-z_][\w]*)/g)].map((m) => m[1])
+      // A TOP-LEVEL rule is indented exactly 4 spaces (the file's uniform
+      // style). The previous `/match\s+\/name/` scan matched a NESTED block
+      // too, so `group_invites` — declared only under `conversations/{id}` while
+      // the client writes it at the collection root — passed this guard even
+      // though every client read/write fell through to the deny-all catch-all.
+      [...rules.matchAll(/^ {4}match\s+\/([A-Za-z_][\w]*)\//gm)].map((m) => m[1])
     );
     const missing = [...referenced].filter((c) => !declaredTop.has(c)).sort();
     expect(missing).toEqual([]);

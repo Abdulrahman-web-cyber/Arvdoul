@@ -1223,7 +1223,9 @@ class EnterpriseFirestoreService {
       const userRef = doc(this.firestore, 'users', userId);
       await updateDoc(userRef, { postCount: increment(delta), updatedAt: serverTimestamp() });
     } catch (error) {
-      // update post count quietly
+      // Denormalised post count; the authoritative list is posts/{id}. Log so a
+      // rules/quota failure is diagnosable rather than silently drifting.
+      logger.warn('updateUserPostCount failed; denormalised count may drift', { userId, delta, error: error?.message });
     }
   }
 

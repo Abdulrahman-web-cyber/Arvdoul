@@ -161,49 +161,45 @@ service cloud.firestore {
           ));
     }
 
-    // Rules are not filters: a LIST read is allowed only when the query itself
-    // proves the visibility predicate, so the query can never return a
-    // draft/scheduled/deleted/only-me post. `request.query.get(field, sentinel)`
-    // returns the value the query constrained with `==`, or the sentinel when
-    // the query did not constrain it. Three safe shapes:
-    //   - the public feed shape: `authorIsPrivate == false` + `visibility == 'public'`
-    //   - the owner's own shape: `authorId == uid()`
-    //   - a community feed: `communityId == X` + `visibility == 'community'`,
-    //     admitted only when X is public or the viewer is a member
-    // Everything else (no constraint, or a narrower set) is denied. Server-side
-    // workers/admin use the Admin SDK, which bypasses these rules.
-    function postQueryConstrainsPublic() {
-      return request.query.get('authorIsPrivate', '__none__') == false &&
-        request.query.get('visibility', '__none__') == 'public' &&
-        request.query.get('status', '__none__') == 'published' &&
-        request.query.get('isDeleted', '__none__') == false;
-    }
-    function postQueryConstrainsOwn() {
-      return request.query.get('authorId', '__none__') == uid();
-    }
+    // Rules are not filters: a LIST query is evaluated against its whole
+    // potential result set, so a `list` rule must hold for EVERY document the
+    // query could return. Cloud Firestore's `request.query` exposes only
+    // `limit`, `offset` and `orderBy` — there is NO way to read a `where()`
+    // equality filter from a rule (the old `request.query.get(field, sentinel)`
+    // helper was not a real API, so it returned the sentinel and every feed
+    // `list` was denied). Authorise the read on each candidate document's own
+    // fields instead, which is exactly the "rules are not filters" contract:
+    //   - the author always reads their own posts (any status/visibility), so
+    //     an author-scoped query `where('authorId','==',uid)` is admitted;
+    //   - everyone else only ever receives a published, non-deleted post that
+    //     is either public from a non-private account, or a community post in a
+    //     public / joined community.
+    // A query that could also surface a draft / scheduled / only-me post (i.e.
+    // omits the visibility+status+isDeleted constraints) has no author branch
+    // to satisfy and is denied wholesale. Server-side workers/admin use the
+    // Admin SDK, which bypasses these rules.
     function isCommunityMember(communityId) {
       // Membership is a MAP field `members: { [uid]: {...} }`, not a
-      // subcollection. The old `exists(.../members/$(uid()))` never matched
-      // anything, so every non-public community post was unreadable even to its
-      // own members. `uid() in map` is the documented key-membership test.
+      // subcollection. `uid() in map` is the documented key-membership test.
       return isSignedIn() &&
         uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.get('members', {});
     }
-    function postQueryConstrainsViewableCommunity() {
-      let communityId = request.query.get('communityId', '__none__');
-      return communityId != '__none__' &&
-        request.query.get('visibility', '__none__') == 'community' &&
-        request.query.get('status', '__none__') == 'published' &&
-        request.query.get('isDeleted', '__none__') == false &&
-        (get(/databases/$(database)/documents/communities/$(communityId)).data.get('privacy', 'public') == 'public' ||
-          isCommunityMember(communityId));
+    function postListableShape() {
+      return resource.data.isDeleted == false &&
+        resource.data.status == 'published' &&
+        (
+          (resource.data.visibility == 'community' &&
+            isSignedIn() &&
+            (get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.get('privacy', 'public') == 'public' ||
+              isCommunityMember(resource.data.communityId))) ||
+          (resource.data.visibility == 'public' &&
+            resource.data.authorIsPrivate == false)
+        );
     }
     function postListableByViewer() {
       return isAdmin() ||
         (isSignedIn() &&
-          (postQueryConstrainsPublic() ||
-            postQueryConstrainsOwn() ||
-            postQueryConstrainsViewableCommunity()));
+          (resource.data.authorId == uid() || postListableShape()));
     }
 
     // Fields that must never appear on the world-readable `users/{uid}` doc.
@@ -613,10 +609,22 @@ service cloud.firestore {
           !exists(/databases/$(database)/documents/blocks/$(viewerId + '_' + s.userId)) &&
           !exists(/databases/$(database)/documents/blocks/$(s.userId + '_' + viewerId));
       }
-      allow read: if isSignedIn() &&
+      // `get` (single doc) is the full per-document decision. `list` is split
+      // out because a Firestore list rule may only read fields the QUERY
+      // constrains: `vibeIsActive`/`vibeVisibleToViewer` read isDeleted/status/
+      // expiresAt/moderationStatus/visibility, so a list query that omits any of
+      // them makes `resource.data.<field>` undefined and throws
+      // ("Property isDeleted is undefined on object"), denying the whole read.
+      // The only reachable client list is the owner's own grid
+      // (`getUserStories` → `where('userId','==',me).where('isDeleted','==',false)`),
+      // which is admitted by the author branch below; a public-discovery list is
+      // intentionally NOT granted here (it would need the full constraint set and
+      // no caller issues it — `searchStories`/`getSponsoredStories` are dead).
+      allow get: if isSignedIn() &&
         vibeIsActive(resource.data) &&
         vibeVisibleToViewer(resource.data, uid()) &&
         vibeNotBlocked(resource.data, uid());
+      allow list: if isSignedIn() && resource.data.userId == uid();
       allow create: if isSignedIn() && authoredBy('userId') &&
         request.resource.data.status == 'published' &&
         request.resource.data.moderationStatus == 'pending';
@@ -802,11 +810,39 @@ service cloud.firestore {
           allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
         }
       }
-      match /group_invites/{inviteId} {
-        allow read: if isSignedIn() && uid() in convParticipants();
-        // Only admins may create/revoke invites (prevents invite spam).
-        allow create, update, delete: if isSignedIn() && isConvAdmin();
-      }
+    }
+    // Group invite links. The client (`messagesService.createInviteLink` /
+    // `revokeInviteLink` / `listInviteLinks` / `joinGroupViaInvite`) reads and
+    // writes the TOP-LEVEL `group_invites` collection, so this block must be
+    // top-level too. It was previously nested under `conversations/{id}`, where
+    // it never matched the client path: every create fell through to the
+    // deny-all catch-all, so "create invite link" silently failed. Admin
+    // authority is resolved from the invite's own `conversationId` field.
+    match /group_invites/{inviteId} {
+      // Single-document reads only. `allow get` (not `list`) means a signed-in
+      // user may fetch one invite by its unguessable id — the bearer token in
+      // the join link — but cannot run a `list` query to enumerate every
+      // invite in the collection. The doc carries no secrets (conversationId,
+      // createdBy, uses), so a point read is the intended access shape.
+      allow get: if isSignedIn();
+      // An admin may also LIST the invites of a conversation they administer
+      // (the `listInviteLinks` management view). Authorize on each returned
+      // document's own `conversationId` — Firestore evaluates a `list` rule
+      // per candidate document, so only invites of conversations the caller
+      // administers are returned and the collection still cannot be
+      // enumerated. (`request.query.get()` cannot read a `where()` filter, so
+      // the query clause itself is not a usable authorization input.)
+      allow list: if isSignedIn() &&
+        uid() in get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.admins;
+      // Only a conversation admin may mint an invite, and the create must
+      // stamp the caller as `createdBy`.
+      allow create: if isSignedIn() &&
+        request.resource.data.createdBy == uid() &&
+        uid() in get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.admins;
+      // Revoke (delete) and use-count bump (update) are admin-only. A joiner's
+      // `uses` increment is performed by the server-side join path, not here.
+      allow update, delete: if isSignedIn() &&
+        uid() in get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.admins;
     }
     match /message_dedupe/{key} {
       // Opaque idempotency keys. The client writes its own record and reads it

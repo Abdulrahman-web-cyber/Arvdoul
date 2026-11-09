@@ -119,6 +119,7 @@ export const FUNCTIONS = {
 
   // Messaging
   SEARCH_MESSAGES: 'searchMessages',
+  JOIN_GROUP_VIA_INVITE: 'joinGroupViaInvite',
 
   // Video
   CREATE_MUX_UPLOAD: 'createMuxUpload',

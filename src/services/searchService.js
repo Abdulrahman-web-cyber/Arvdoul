@@ -622,7 +622,9 @@ class UltimateSearchService {
           docs = tokenSnap.docs;
           lastSnapshot = docs[docs.length - 1];
         }
-      } catch (_e) {}
+      } catch (_e) {
+        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+      }
     }
 
     if (docs.length === 0) {
@@ -633,6 +635,7 @@ class UltimateSearchService {
         docs = snap.docs;
         lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
       } catch (_e) {
+        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
         docs = [];
       }
     }
@@ -682,7 +685,9 @@ class UltimateSearchService {
           docs = tokenSnap.docs;
           lastSnapshot = docs[docs.length - 1];
         }
-      } catch (_e) {}
+      } catch (_e) {
+        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+      }
     }
 
     if (docs.length === 0) {
@@ -693,6 +698,7 @@ class UltimateSearchService {
         docs = snap.docs;
         lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
       } catch (_e) {
+        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
         docs = [];
       }
     }
@@ -732,7 +738,9 @@ class UltimateSearchService {
           docs = tokenSnap.docs;
           lastSnapshot = docs[docs.length - 1];
         }
-      } catch (_e) {}
+      } catch (_e) {
+        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+      }
     }
 
     if (docs.length === 0) {
@@ -743,6 +751,7 @@ class UltimateSearchService {
         docs = snap.docs;
         lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
       } catch (_e) {
+        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
         docs = [];
       }
     }

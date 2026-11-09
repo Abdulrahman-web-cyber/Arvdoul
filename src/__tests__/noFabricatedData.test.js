@@ -758,8 +758,13 @@ describe('Messaging master-spec: security rules', () => {
 
   test('group invites are admin-managed', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    const block = rules.slice(rules.indexOf('match /group_invites'), rules.indexOf('match /group_invites') + 300);
-    expect(block).toContain('isConvAdmin()');
+    // Top-level collection (the client reads/writes it at the root), with the
+    // admin gate resolved from the invite's own conversationId. `isConvAdmin()`
+    // is scoped to the `conversations/{id}` block and cannot be referenced here.
+    const start = rules.indexOf('match /group_invites');
+    const block = rules.slice(start, rules.indexOf('match /message_dedupe', start));
+    expect(block).toContain('.data.admins');
+    expect(block).toContain('request.resource.data.createdBy == uid()');
   });
 
   test('conversation updates cannot mutate roles/admins unless admin', () => {

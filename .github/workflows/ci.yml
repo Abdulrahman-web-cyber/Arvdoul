@@ -286,6 +286,7 @@ jobs:
           src/__tests__/reducerDispatchGuard.test.js
           src/__tests__/routeStateHandoffGuard.test.js
           src/__tests__/failOpenReadGuard.test.js
+          src/__tests__/silentWriteFailureGuard.test.js
           src/__tests__/falseSuccessToastGuard.test.js
           src/__tests__/spacesRosterWiringGuard.test.js
           src/__tests__/localContentCacheGuard.test.js

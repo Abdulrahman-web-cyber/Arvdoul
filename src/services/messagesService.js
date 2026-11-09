@@ -1415,8 +1415,11 @@ class UltimateMessagingService {
     }
 
     if (options.markAsRead && messages.length > 0) {
-      // Conversation-level read position (spec §17) — one write, not N.
-      this.markConversationAsRead(conversationId, currentUser.uid).catch(() => {});
+      // Conversation-level read position (spec §17) — one write, not N. A failed
+      // reset leaves the unread badge stuck, so log it instead of swallowing.
+      this.markConversationAsRead(conversationId, currentUser.uid).catch((e) => {
+        logger.warn('markConversationAsRead failed; unread badge may be stale', { conversationId, error: e?.message });
+      });
     }
 
     // Reactions: ONE collection-group query merges per-user reaction docs
@@ -2260,44 +2263,21 @@ class UltimateMessagingService {
 
   async joinGroupViaInvite(inviteId, userId) {
     await this.ensureInitialized();
-    let inviteData = null;
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const inviteRef = this.fs.doc(this.firestore, 'group_invites', inviteId);
-      const inviteSnap = await transaction.get(inviteRef);
-      if (!inviteSnap.exists()) throw new Error('Invite not found');
-      const invite = inviteSnap.data();
-      inviteData = invite;
-      if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) throw new Error('Invite expired');
-      if (invite.maxUses && invite.uses >= invite.maxUses) throw new Error('Invite max uses reached');
-
-      const convRef = this.fs.doc(this.firestore, 'conversations', invite.conversationId);
-      const convSnap = await transaction.get(convRef);
-      if (!convSnap.exists()) throw new Error('Conversation not found');
-
-      transaction.update(convRef, {
-        participants: arrayUnion(userId),
-        participantCount: increment(1),
-        updatedAt: this.fs.serverTimestamp(),
-      });
-      transaction.update(inviteRef, { uses: increment(1) });
-      const msgId = `sys_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const msgRef = this.fs.doc(this.firestore, 'conversations', invite.conversationId, 'messages', msgId);
-      transaction.set(msgRef, {
-        id: msgId,
-        conversationId: invite.conversationId,
-        type: MESSAGING_CONFIG.MESSAGE_TYPES.SYSTEM,
-        eventType: 'user_joined_via_invite',
-        eventData: { userId },
-        senderId: 'system',
-        senderName: 'System',
-        createdAt: this.fs.serverTimestamp(),
-        isSystem: true,
-      });
-    });
-    this.conversationsCache.delete(inviteData.conversationId);
+    if (!inviteId) throw new Error('Invite id is required');
+    // The join is a server-authoritative mutation: it adds the caller to
+    // `participants`, which the `conversations` update rule refuses for a
+    // non-admin. A client transaction was therefore always denied. The
+    // `joinGroupViaInvite` callable validates expiry/max-uses and applies the
+    // join atomically with the Admin SDK.
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.JOIN_GROUP_VIA_INVITE, { inviteId });
+    const conversationId = res?.conversationId;
+    if (conversationId) {
+      this.conversationsCache.delete(conversationId);
+    }
     cacheManager.invalidateUser(userId);
     auditLogger.log('messaging.group_joined', { userId, meta: { inviteId } });
-    return { success: true, conversationId: inviteData.conversationId };
+    return { success: true, conversationId, alreadyMember: res?.alreadyMember === true };
   }
 
   async pinMessage(conversationId, messageId, userId) {
@@ -2898,7 +2878,11 @@ class UltimateMessagingService {
           expiresAt,
         }, { merge: true });
       });
-    } catch (e) { /* silent */ }
+    } catch (e) {
+      // A failed rate-limit record weakens (not breaks) send throttling; log so
+      // a persistent rules/index failure is visible instead of silent.
+      logger.warn('_recordRateLimit transaction failed', { userId, error: e?.message });
+    }
   }
 
   async _generateIdempotencyKey(messageData, senderId, conversationId) {

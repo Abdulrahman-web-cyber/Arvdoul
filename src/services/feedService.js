@@ -340,7 +340,9 @@ class UltimateFeedService {
       const { doc, setDoc } = this.firestoreMethods;
       await setDoc(doc(this.firestore, 'user_interest_vectors', userId), { vector, updatedAt: Date.now() }, { merge: true });
       this.interestVectorCache.set(userId, { vector, ts: Date.now() });
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Interest-vector persist failed; ranking signal not stored', { userId, error: e?.message });
+    }
     return vector;
   }
 
@@ -376,7 +378,9 @@ class UltimateFeedService {
           ...state,
           updatedAt: serverTimestamp()
         }, { merge: true });
-      } catch (e) {}
+      } catch (e) {
+        logger.warn('Feed session-state persist failed; seen/hidden posts not remembered', { userId, error: e?.message });
+      }
     };
     if (immediate) await save();
     else setTimeout(save, 2000);

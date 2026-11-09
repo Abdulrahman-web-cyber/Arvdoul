@@ -1917,8 +1917,11 @@ class ProfessionalUserService {
         await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
       } catch (callErr) {
         // Non-blocking: fails gracefully if offline or not signed in
+        logger.debug('recordActiveDay skipped', { userId, error: callErr?.message });
       }
-    } catch (e) { /* silent */ }
+    } catch (e) {
+      logger.warn('updateLastActive failed; presence may be stale', { userId, error: e?.message });
+    }
   }
 
   async markProfileComplete(userId) {
