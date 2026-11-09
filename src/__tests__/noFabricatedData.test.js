@@ -2364,3 +2364,31 @@ describe('Composer moderation never claims a pass it did not verify', () => {
     expect(src).toContain('state.moderationStatus.approved ? "Content passed moderation"');
   });
 });
+
+describe('Admin content list reads the real nested post stats', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminContentManagementScreen.jsx'), 'utf8');
+
+  test('views/likes come from posts/{id}.stats, not a fabricated top-level field', () => {
+    // Posts store engagement under `stats` (firestoreService writes
+    // `stats: { likes, views, ... }`); the admin card read `item.views`/
+    // `item.likes`, which never exist, so every row rendered "0 views 0 likes".
+    expect(src).toContain('formatStat(item.stats?.views)');
+    expect(src).toContain('formatStat(item.stats?.likes)');
+    expect(src).not.toContain('{item.views || 0}');
+    expect(src).not.toContain('{item.likes || 0}');
+  });
+});
+
+describe('Admin rank titles are never fabricated from a missing level', () => {
+  test('a non-finite level renders "—", not the lowest rank', () => {
+    for (const rel of [
+      'src/screens/Admin/AdminEconomyScreen.jsx',
+      'src/screens/Admin/AdminVerificationScreen.jsx',
+    ]) {
+      const s = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(s).not.toContain('getRankTitle(payout.level || 0)');
+      expect(s).not.toContain('getRankTitle(applicant.level || 0)');
+      expect(s).toContain('Number.isFinite(');
+    }
+  });
+});

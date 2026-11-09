@@ -222,7 +222,7 @@ const AdminVerificationScreen = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Citizenship:</span>
                       <span className="font-bold text-violet-600 dark:text-violet-400">
-                        {applicant.citizenshipTier || getRankTitle(applicant.level || 0)} (Lvl {applicant.level ?? '—'})
+                        {applicant.citizenshipTier || (Number.isFinite(applicant.level) ? getRankTitle(applicant.level) : '—')} (Lvl {applicant.level ?? '—'})
                       </span>
                     </div>
 

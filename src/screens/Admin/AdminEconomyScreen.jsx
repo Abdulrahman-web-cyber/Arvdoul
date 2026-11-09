@@ -451,7 +451,7 @@ const AdminEconomyScreen = () => {
                         </td>
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 mr-2">
-                            {getRankTitle(payout.level || 0)}
+                            {Number.isFinite(payout.level) ? getRankTitle(payout.level) : '—'}
                           </span>
                           <span className="text-xs text-gray-500">Lvl {payout.level ?? '—'}</span>
                         </td>
