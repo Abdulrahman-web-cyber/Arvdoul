@@ -2725,4 +2725,49 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).not.toContain('return await this.fs.getPost(postId);');
     expect(s).toContain('return res.post;');
   });
+
+  test('community/event/admin counts render an unknown total as —', () => {
+    for (const f of [
+      'src/screens/Community/CommunityDirectoryScreen.jsx',
+      'src/screens/Community/CommunityDetailScreen.jsx',
+      'src/screens/Event/EventDiscoveryScreen.jsx',
+      'src/screens/Event/EventDetailScreen.jsx',
+    ]) {
+      expect(read(f)).not.toMatch(/stats\?\.(memberCount|activityScore|attendeeCount)\s*\|\|\s*0/);
+    }
+  });
+
+  test('VideoAnalyticsScreen maps per-video counts from `stats`', () => {
+    const s = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(s).not.toContain('views: p.views || 0,');
+    expect(s).not.toContain('likes: p.likeCount || 0,');
+    expect(s).toContain('p.stats?.likes ?? p.likeCount');
+  });
+
+  test('LiveScreen viewer counts are unknown (null), never a fabricated 0', () => {
+    const s = read('src/screens/LiveScreen.jsx');
+    expect(s).not.toContain('const [viewerCount, setViewerCount] = useState(0)');
+    expect(s).not.toContain('const [watchViewers, setWatchViewers] = useState(0)');
+  });
+
+  test('CreatorDashboard renders unmeasured metrics as —', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain("value: analytics?.totalViews || 0");
+    expect(s).not.toContain("value: analytics?.totalEngagement || 0");
+    expect(s).not.toContain("Number(analytics?.coinsEarned || 0).toLocaleString()");
+    expect(s).toContain("if (typeof num !== 'number' || Number.isNaN(num)) return '—';");
+  });
+
+  test('CreatorPayoutScreen keeps an unknown balance unknown', () => {
+    const s = read('src/screens/CreatorPayoutScreen.jsx');
+    expect(s).not.toContain('const [balance, setBalance] = useState(0)');
+    expect(s).not.toContain("Number(b?.coins || b?.balance || 0)");
+    expect(s).not.toContain('100% secure payouts');
+  });
+
+  test('ProfileSystemRoadmapModal does not turn absent XP into 0', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    expect(s).not.toContain('const currentXp = profile?.experience || profile?.xp || 0;');
+    expect(s).toContain('XP not yet recorded');
+  });
 });

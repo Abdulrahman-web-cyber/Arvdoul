@@ -32,7 +32,7 @@ export default function CreatorPayoutScreen() {
   const isDark = theme === 'dark';
 
   const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalance] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [earnings, setEarnings] = useState({ gifts: 0, ads: 0, other: 0 });
   const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(0);
@@ -63,8 +63,11 @@ export default function CreatorPayoutScreen() {
       ]);
 
       if (balRes.status === 'fulfilled') {
+        // `getBalance` returns null when the balance is unknown; mapping that
+        // to 0 claimed an empty wallet and blocked every payout request.
         const b = balRes.value;
-        setBalance(typeof b === 'number' ? b : Number(b?.coins || b?.balance || 0));
+        const resolved = typeof b === 'number' ? b : (b?.coins ?? b?.balance ?? null);
+        setBalance(resolved == null ? null : Number(resolved));
       }
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
         setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
@@ -137,6 +140,10 @@ export default function CreatorPayoutScreen() {
       toast.error(`Minimum payout is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${formatCoinsAsUsd(MIN_WITHDRAWAL_COINS)})`);
       return;
     }
+    if (balance == null) {
+      toast.error('Your balance is unavailable right now. Please retry in a moment.');
+      return;
+    }
     if (amount > balance) {
       toast.error('Withdrawal amount exceeds your current balance.');
       return;
@@ -170,9 +177,9 @@ export default function CreatorPayoutScreen() {
     }
   };
 
-  const estimatedUsd = coinsToUsd(balance).toFixed(2);
-  const eligibleForPayout = balance >= MIN_WITHDRAWAL_COINS;
-  const progressPercent = Math.min(100, Math.round((balance / MIN_WITHDRAWAL_COINS) * 100));
+  const estimatedUsd = balance == null ? null : coinsToUsd(balance).toFixed(2);
+  const eligibleForPayout = balance != null && balance >= MIN_WITHDRAWAL_COINS;
+  const progressPercent = balance == null ? 0 : Math.min(100, Math.round((balance / MIN_WITHDRAWAL_COINS) * 100));
 
   return (
     <div className={cn(
@@ -226,14 +233,14 @@ export default function CreatorPayoutScreen() {
               <span className="text-xs uppercase font-bold tracking-widest text-violet-200">Available Creator Balance</span>
               <div className="flex items-baseline gap-3 mt-1">
                 <h2 className="text-4xl font-extrabold tracking-tight font-display">
-                  {balance.toLocaleString()}
+                  {balance == null ? '—' : balance.toLocaleString()}
                 </h2>
                 <span className="text-lg font-medium text-violet-200">Coins</span>
-                <span className="text-xl font-semibold text-emerald-300 ml-2">≈ ${estimatedUsd} USD</span>
+                <span className="text-xl font-semibold text-emerald-300 ml-2">≈ {estimatedUsd == null ? '—' : `$${estimatedUsd}`} USD</span>
               </div>
               <p className="text-xs text-violet-200 mt-2 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-300" />
-                Double-entry verified ledger · 100% secure payouts
+                Server-verified ledger · payouts reviewed before settlement
               </p>
             </div>
 
@@ -459,7 +466,7 @@ export default function CreatorPayoutScreen() {
                   <input
                     type="number"
                     min={MIN_WITHDRAWAL_COINS}
-                    max={balance}
+                    max={balance ?? undefined}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
                     placeholder={`Min: ${MIN_WITHDRAWAL_COINS}`}

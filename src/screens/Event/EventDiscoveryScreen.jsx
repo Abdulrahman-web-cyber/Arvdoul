@@ -215,7 +215,7 @@ const EventDiscoveryScreen = () => {
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
               <span>
-                {event.stats?.attendeeCount || 0}
+                {typeof event.stats?.attendeeCount === 'number' ? event.stats.attendeeCount : '—'}
                 {event.capacity > 0 && ` / ${event.capacity}`}
               </span>
             </div>

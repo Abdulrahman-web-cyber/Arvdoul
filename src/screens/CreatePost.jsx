@@ -2736,9 +2736,9 @@ const LauncherGrid = React.memo(() => {
                             {post.content || post.title || 'Untitled Post'}
                           </span>
                           <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                            <span>❤️ {post.likes || post.likeCount || 0}</span>
-                            <span>💬 {post.comments || post.commentCount || 0}</span>
-                            <span>👁️ {post.views || post.viewCount || 0}</span>
+                            <span>❤️ {(() => { const v = post.stats?.likes ?? post.likeCount; return typeof v === 'number' ? v : '—'; })()}</span>
+                            <span>💬 {(() => { const v = post.stats?.comments ?? post.commentCount; return typeof v === 'number' ? v : '—'; })()}</span>
+                            <span>👁️ {(() => { const v = post.stats?.views ?? post.viewCount; return typeof v === 'number' ? v : '—'; })()}</span>
                             <Icons.ChevronRight className="w-3.5 h-3.5 text-purple-400 group-hover:translate-x-0.5 transition-transform" />
                           </div>
                         </div>

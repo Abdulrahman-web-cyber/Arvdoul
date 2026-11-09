@@ -77,8 +77,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
   const rawLvl = profile?.level;
   const currentLevel = rawLvl !== null && rawLvl !== undefined && !isNaN(Number(rawLvl)) && Number(rawLvl) > 0 ? Number(rawLvl) : null;
-  const currentXp = profile?.experience || profile?.xp || 0;
-  const levelInfo = useMemo(() => currentXp > 0 || currentLevel !== null ? getLevelInfo(currentXp) : { level: null, progress: 0, nextLevelXp: null }, [currentXp, currentLevel]);
+  // An absent XP is unknown, not 0 — a null must not render "Start posting" or
+  // a "Max" next-level badge for a profile that has simply not been measured.
+  const rawXp = profile?.experience ?? profile?.xp;
+  const hasXp = rawXp !== null && rawXp !== undefined && !Number.isNaN(Number(rawXp));
+  const currentXp = hasXp ? Number(rawXp) : null;
+  const levelInfo = useMemo(
+    () => (hasXp || currentLevel !== null) ? getLevelInfo(hasXp ? currentXp : 0) : { level: null, progress: null, nextLevelXp: null },
+    [hasXp, currentXp, currentLevel]
+  );
   const activeDays = Number(profile?.activeDaysCount || profile?.activeDays || 0);
   const reputation = Number(profile?.reputationScore || profile?.reputation || 0);
   const contribution = Number(profile?.contributionScore || profile?.contribution || 0);
@@ -284,7 +291,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                         {currentLevel !== null ? `Level ${currentLevel} • ${currentRankTitle}` : 'Civic Standing Initializing'}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {currentXp > 0 ? `${currentXp.toLocaleString()} XP earned across Arvdoul` : 'Start posting & engaging to earn XP'}
+                        {currentXp == null ? 'XP not yet recorded' : `${currentXp.toLocaleString()} XP earned across Arvdoul`}
                       </div>
                     </div>
                   </div>
@@ -292,7 +299,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                   <div className="w-full sm:w-48 text-right space-y-1">
                     <div className="flex justify-between text-[11px] font-bold">
                       <span className="text-slate-400">Next Level</span>
-                      <span className="text-cyan-400">{levelInfo.nextLevelXp ? `${levelInfo.nextLevelXp.toLocaleString()} XP` : 'Max'}</span>
+                      <span className="text-cyan-400">{levelInfo.progress == null ? '—' : levelInfo.nextLevelXp ? `${levelInfo.nextLevelXp.toLocaleString()} XP` : 'Max'}</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                       <div

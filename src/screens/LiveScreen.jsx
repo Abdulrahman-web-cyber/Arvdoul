@@ -36,13 +36,13 @@ export default function LiveScreen() {
   const myStreamRef = useRef(null);
   useEffect(() => { myStreamRef.current = myStream; }, [myStream]);
   const [duration, setDuration] = useState(0);
-  const [viewerCount, setViewerCount] = useState(0);
+  const [viewerCount, setViewerCount] = useState(null);
   const durationRef = useRef(null);
   const viewerPollRef = useRef(null);
 
   // Watch state
   const [watching, setWatching] = useState(null); // stream object
-  const [watchViewers, setWatchViewers] = useState(0);
+  const [watchViewers, setWatchViewers] = useState(null);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [showGifts, setShowGifts] = useState(false);
@@ -99,7 +99,7 @@ export default function LiveScreen() {
       viewerPollRef.current = setInterval(async () => {
         try {
           const stream = await svc().getLiveStream(streamId);
-          setViewerCount(stream?.viewerCount ?? stream?.stats?.totalViewers ?? 0);
+          setViewerCount(stream?.viewerCount ?? stream?.stats?.totalViewers ?? null);
         } catch (e) {
           console.warn('[Live] viewer poll failed; keeping last count', e?.message);
         }
@@ -142,7 +142,7 @@ export default function LiveScreen() {
   const handleWatch = async (stream) => {
     if (!user?.uid) { toast.error('Sign in to watch.'); return; }
     setWatching(stream);
-    setWatchViewers(stream?.viewerCount ?? stream?.stats?.totalViewers ?? 0);
+    setWatchViewers(stream?.viewerCount ?? stream?.stats?.totalViewers ?? null);
     setComments([]);
     joinedRef.current = false;
   };
@@ -170,7 +170,7 @@ export default function LiveScreen() {
         const fresh = await svc().getLiveStream(watching.id);
         if (fresh) {
           setWatching((w) => ({ ...w, ...fresh }));
-          setWatchViewers(fresh.viewerCount ?? fresh.stats?.totalViewers ?? 0);
+          setWatchViewers(fresh.viewerCount ?? fresh.stats?.totalViewers ?? null);
         } else { setWatching(null); toast.info('Stream has ended.'); }
       } catch (e) {
         console.warn('[Live] stream poll failed; keeping last state', e?.message);
@@ -265,7 +265,7 @@ export default function LiveScreen() {
               <Camera className="w-5 h-5" /> You are live: {liveTitle}
             </div>
             <div className="flex items-center gap-2 text-gray-300">
-              <Eye className="w-4 h-4" /> {viewerCount} viewers
+              <Eye className="w-4 h-4" /> {viewerCount ?? '—'} viewers
             </div>
             <button
               onClick={handleStopLive}
@@ -293,7 +293,7 @@ export default function LiveScreen() {
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> LIVE
                 </span>
                 <span className="px-2.5 py-1 rounded-full bg-white/10 flex items-center gap-1">
-                  <Eye className="w-3.5 h-3.5" /> {watchViewers}
+                  <Eye className="w-3.5 h-3.5" /> {watchViewers ?? '—'}
                 </span>
               </div>
             </div>
@@ -307,7 +307,7 @@ export default function LiveScreen() {
                 <h2 className="text-2xl font-bold mb-1">{streamerName(watching)}</h2>
                 <p className="text-gray-400 mb-2">{watching.title || 'Live stream'}</p>
                 <div className="flex items-center justify-center gap-4 text-sm text-gray-400">
-                  <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {watchViewers} watching</span>
+                  <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {watchViewers ?? '—'} watching</span>
                   <span className="flex items-center gap-1"><Wifi className="w-4 h-4 text-green-500" /> Live</span>
                 </div>
               </div>

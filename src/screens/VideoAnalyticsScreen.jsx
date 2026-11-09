@@ -89,10 +89,12 @@ const VideoAnalyticsScreen = () => {
             id: p.id || `v-${i}`,
             title: p.caption || p.content?.slice(0, 40) || `Video ${i + 1}`,
             thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
-            views: p.views || 0,
-            likes: p.likeCount || 0,
-            comments: p.commentCount || 0,
-            shares: p.shareCount || 0,
+            // Post engagement lives under `stats`; the top-level fields are
+            // never written, so an absent count is unknown ('—'), not 0.
+            views: typeof (p.stats?.views ?? p.views) === 'number' ? (p.stats?.views ?? p.views) : null,
+            likes: typeof (p.stats?.likes ?? p.likeCount) === 'number' ? (p.stats?.likes ?? p.likeCount) : null,
+            comments: typeof (p.stats?.comments ?? p.commentCount) === 'number' ? (p.stats?.comments ?? p.commentCount) : null,
+            shares: typeof (p.stats?.shares ?? p.shareCount) === 'number' ? (p.stats?.shares ?? p.shareCount) : null,
             watchTime: null,
             completionRate: null,
             earnings: null,

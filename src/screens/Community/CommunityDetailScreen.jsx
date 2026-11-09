@@ -216,7 +216,7 @@ const CommunityDetailScreen = () => {
                   <PrivacyIcon className="w-3 h-3" />
                   <span>{community.privacy}</span>
                   <span>•</span>
-                  <span>{(community.stats?.memberCount || 0).toLocaleString()} members</span>
+                  <span>{typeof community.stats?.memberCount === 'number' ? community.stats.memberCount.toLocaleString() : '—'} members</span>
                 </div>
               </div>
             </div>
@@ -427,24 +427,14 @@ const CommunityDetailScreen = () => {
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                    <div className="text-2xl font-bold text-indigo-600">
-                      {community.stats?.memberCount || 0}
+                  {[['Members', community.stats?.memberCount], ['Posts', community.stats?.postCount], ['Events', community.stats?.eventCount]].map(([label, value]) => (
+                    <div key={label} className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                      <div className="text-2xl font-bold text-indigo-600">
+                        {typeof value === 'number' ? value : '—'}
+                      </div>
+                      <div className="text-sm text-gray-500">{label}</div>
                     </div>
-                    <div className="text-sm text-gray-500">Members</div>
-                  </div>
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                    <div className="text-2xl font-bold text-indigo-600">
-                      {community.stats?.postCount || 0}
-                    </div>
-                    <div className="text-sm text-gray-500">Posts</div>
-                  </div>
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                    <div className="text-2xl font-bold text-indigo-600">
-                      {community.stats?.eventCount || 0}
-                    </div>
-                    <div className="text-sm text-gray-500">Events</div>
-                  </div>
+                  ))}
                 </div>
 
                 {/* Tags */}
@@ -478,7 +468,7 @@ const CommunityDetailScreen = () => {
               <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Members ({community.stats?.memberCount || 0})
+                    Members ({typeof community.stats?.memberCount === 'number' ? community.stats.memberCount : '—'})
                   </h2>
                   {isAdmin && (
                     <button

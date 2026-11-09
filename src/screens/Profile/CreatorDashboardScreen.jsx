@@ -19,9 +19,11 @@ import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig
  * Format number with K, M suffix
  */
 const formatNumber = (num) => {
+  // An unmeasured metric is unknown ('—'), never a measured 0.
+  if (typeof num !== 'number' || Number.isNaN(num)) return '—';
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num?.toString() || '0';
+  return num.toString();
 };
 
 /**
@@ -76,11 +78,12 @@ export default function CreatorDashboardScreen() {
   }, [analytics, timeframe]);
   
   // Metrics cards
+  const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null);
   const metrics = [
-    { key: 'views', label: 'Total Views', value: analytics?.totalViews || 0, icon: Eye, color: 'text-blue-500' },
-    { key: 'reach', label: 'Total Reach', value: analytics?.totalReach || 0, icon: Users, color: 'text-purple-500' },
-    { key: 'engagement', label: 'Engagement', value: analytics?.totalEngagement || 0, icon: Heart, color: 'text-pink-500' },
-    { key: 'coins', label: 'Coins Earned', value: analytics?.coinsEarned || 0, icon: Coins, color: 'text-yellow-500' },
+    { key: 'views', label: 'Total Views', value: num(analytics?.totalViews), icon: Eye, color: 'text-blue-500' },
+    { key: 'reach', label: 'Total Reach', value: num(analytics?.totalReach), icon: Users, color: 'text-purple-500' },
+    { key: 'engagement', label: 'Engagement', value: num(analytics?.totalEngagement), icon: Heart, color: 'text-pink-500' },
+    { key: 'coins', label: 'Coins Earned', value: num(analytics?.coinsEarned), icon: Coins, color: 'text-yellow-500' },
   ];
   
   // Changes
@@ -195,7 +198,8 @@ export default function CreatorDashboardScreen() {
               {metrics.map((metric) => {
                 const Icon = metric.icon;
                 const change = changes[metric.key];
-                const isPositive = (change || 0) >= 0;
+                const hasChange = typeof change === 'number' && !Number.isNaN(change);
+                const isPositive = change >= 0;
                 
                 return (
                   <div
@@ -208,7 +212,7 @@ export default function CreatorDashboardScreen() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <Icon className={cn('w-5 h-5', metric.color)} />
-                      {change !== undefined && (
+                      {hasChange && (
                         <span className={cn(
                           'flex items-center gap-0.5 text-xs font-medium',
                           isPositive ? 'text-green-600' : 'text-red-600'
@@ -250,7 +254,7 @@ export default function CreatorDashboardScreen() {
                       Creator Sovereign Earnings &amp; Payouts
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Balance: <strong className="text-amber-500">{Number(analytics?.coinsEarned || 0).toLocaleString()} coins</strong> ({formatCoinsAsUsd(analytics?.coinsEarned || 0)}) · Min withdrawal: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins
+                      Balance: <strong className="text-amber-500">{typeof analytics?.coinsEarned === 'number' ? analytics.coinsEarned.toLocaleString() : '—'} coins</strong> ({formatCoinsAsUsd(analytics?.coinsEarned)}) · Min withdrawal: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins
                     </p>
                   </div>
                 </div>
@@ -303,7 +307,7 @@ export default function CreatorDashboardScreen() {
                         />
                       </div>
                       <div className="w-16 text-xs text-right text-gray-500 dark:text-gray-400">
-                        {formatNumber(stat.views || 0)}
+                        {formatNumber(stat.views)}
                       </div>
                     </div>
                   ))}

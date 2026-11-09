@@ -189,11 +189,11 @@ const AdminCommunityManagementScreen = () => {
                 <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-xs mb-4">
                   <div>
                     <span className="text-gray-500">Members</span>
-                    <div className="font-bold text-gray-900 dark:text-white">{Number(comm.stats?.memberCount ?? comm.memberCount ?? 0).toLocaleString()}</div>
+                    <div className="font-bold text-gray-900 dark:text-white">{(() => { const v = comm.stats?.memberCount ?? comm.memberCount; return typeof v === 'number' ? v.toLocaleString() : '—'; })()}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Posts</span>
-                    <div className="font-bold text-gray-900 dark:text-white">{Number(comm.stats?.postCount ?? comm.postCount ?? 0).toLocaleString()}</div>
+                    <div className="font-bold text-gray-900 dark:text-white">{(() => { const v = comm.stats?.postCount ?? comm.postCount; return typeof v === 'number' ? v.toLocaleString() : '—'; })()}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Strikes</span>

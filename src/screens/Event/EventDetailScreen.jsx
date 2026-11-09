@@ -309,7 +309,7 @@ const EventDetailScreen = () => {
                     <div className="grid grid-cols-3 gap-4 mt-8">
                       <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                         <div className="text-2xl font-bold text-indigo-600">
-                          {event.stats?.attendeeCount || 0}
+                          {typeof event.stats?.attendeeCount === 'number' ? event.stats.attendeeCount : '—'}
                         </div>
                         <div className="text-sm text-gray-500">Attending</div>
                       </div>
