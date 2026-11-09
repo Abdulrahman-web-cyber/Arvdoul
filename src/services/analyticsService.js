@@ -531,10 +531,16 @@ class UltimateAnalyticsService {
         total: snapshot.size,
       };
       
-      if (userIndex !== -1) {
+      // A rank is only meaningful against a maintained, positive score.
+      // `profile_analytics.coinsEarned` is never incremented server-side
+      // (earnings live on the wallet, N169), so ordering by it placed every
+      // creator in an arbitrary order and handed out a fabricated "Top N%"
+      // label. An unranked creator stays unranked.
+      const userScore = userIndex !== -1 ? topCreators[userIndex].coinsEarned : null;
+      if (userIndex !== -1 && typeof userScore === 'number' && userScore > 0) {
         ranking.position = userIndex + 1;
         ranking.percentile = ((snapshot.size - userIndex) / snapshot.size) * 100;
-        
+
         if (ranking.percentile >= 99) ranking.label = 'Top 1%';
         else if (ranking.percentile >= 95) ranking.label = 'Top 5%';
         else if (ranking.percentile >= 90) ranking.label = 'Top 10%';
@@ -542,13 +548,14 @@ class UltimateAnalyticsService {
         else if (ranking.percentile >= 50) ranking.label = 'Top 50%';
         else ranking.label = 'Rising Creator';
       }
-      
+
       return ranking;
     } catch (error) {
+      // A failed read is unknown, not "New Creator".
       return {
         position: null,
         percentile: null,
-        label: 'New Creator',
+        label: null,
         total: 0,
       };
     }
@@ -624,31 +631,11 @@ class UltimateAnalyticsService {
         return growthData;
       }
 
-      // Fallback (legacy behavior): estimated growth from current follower count.
-      // NOTE: keep until snapshot collection is populated (migration plan:
-      // userService.followUser/unfollowUser record daily snapshots).
-      const userRef = doc(this.firestore, 'users', userId);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) return [];
-      
-      const currentFollowers = userSnap.data().followerCount || 0;
-      const estimatedDailyGrowth = currentFollowers / Math.max(days, 1);
-      
-      const growthData = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const daysFromNow = days - i;
-        
-        growthData.push({
-          date: this._getDateString(date),
-          followers: Math.round(currentFollowers - (estimatedDailyGrowth * daysFromNow)),
-          newFollowers: Math.round(estimatedDailyGrowth),
-        });
-      }
-      
-      return growthData;
+      // No snapshots yet means there is no measured growth to report — an
+      // invented straight-line estimate (currentFollowers / days) would render
+      // a fabricated trend. Return nothing until real snapshots exist;
+      // `userService._recordFollowerSnapshotIfDue` writes them on follow/unfollow.
+      return [];
     } catch (error) {
       logger.error('Get follower growth failed', { error: error.message, userId });
       return [];

@@ -391,3 +391,21 @@ would have defeated the client fix:
 
 Gates: `npm test` — **119 suites / 1443 passing / 5 skipped**;
 `eslint src/ functions/ --quiet` — 0 errors.
+
+## Checkpoint — N174 / N175 / N176
+
+- **N174 (fixed)**: `analyticsService.getCreatorRanking` ordered `profile_analytics`
+  by `coinsEarned`, a field no server path increments → every creator got an
+  arbitrary "Top 1%" label. Now ranks only a positive, maintained score; the
+  failure branch returns `label: null`; the dashboard hides the card when no real
+  rank exists.
+- **N176 (fixed)**: `analyticsService.getFollowerGrowth` fabricated a
+  straight-line follower series when no `user_daily_stats` snapshots existed.
+  Now returns `[]` until real snapshots exist.
+- **N175 (confirmed, blocked)**: the `rankings/*` collections every Rankings tab
+  reads have no writer anywhere (rules even say "scheduled functions compute
+  rankings", but none exists). Honest empty state, not fabricated data; closing
+  it needs a scheduled ranking function + a product-defined ranking formula.
+
+Gates: `npm test` — **119 suites / 1446 passing / 5 skipped**;
+`npm run build` — ✓; `eslint src/ functions/ --quiet` — 0 errors.

@@ -170,8 +170,9 @@ export default function CreatorDashboardScreen() {
           </div>
         ) : (
           <>
-            {/* Ranking */}
-            {ranking && (
+            {/* Ranking — only when a real rank exists; an unranked creator is
+                not dressed up as "New Creator". */}
+            {(ranking?.label || ranking?.percentile || ranking?.position) && (
               <div className={cn(
                 'p-4 rounded-2xl',
                 'bg-gradient-to-r from-purple-500/10 to-blue-500/10',
@@ -181,7 +182,7 @@ export default function CreatorDashboardScreen() {
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Your Ranking</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {ranking.label || 'New Creator'}
+                      {ranking.label || '—'}
                     </p>
                   </div>
                   {ranking.position && (

@@ -2992,3 +2992,35 @@ describe('Creator dashboard never fabricates growth rate or active days (N172)',
     expect(s).not.toContain('Number(profile?.activeDaysCount || profile?.activeDays) || 1');
   });
 });
+
+describe('Creator ranking never fabricates a percentile from an unmaintained field (N174)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getCreatorRanking only ranks a positive, maintained score', () => {
+    // `profile_analytics.coinsEarned` is never incremented server-side, so the
+    // old `orderBy('coinsEarned')` ranked every creator against all-zero data
+    // and handed out an arbitrary "Top 1%" label.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).toContain("typeof userScore === 'number' && userScore > 0");
+    expect(svc).not.toContain("label: 'New Creator'");
+    expect(svc).toContain("label: null,");
+  });
+
+  test('the dashboard does not default an absent rank to "New Creator"', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain("ranking.label || 'New Creator'");
+  });
+});
+
+describe('Follower growth is never an invented straight line (N176)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getFollowerGrowth returns only measured snapshots', () => {
+    // With no `user_daily_stats` snapshots the old code fabricated a flat
+    // straight line from `followerCount / days`, presenting an invented trend
+    // as measured. It now returns [] until real snapshots exist.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('estimatedDailyGrowth');
+    expect(svc).not.toContain('Fallback (legacy behavior): estimated growth');
+  });
+});
