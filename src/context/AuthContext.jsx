@@ -789,6 +789,11 @@ export function AuthProvider({ children }) {
               import('../services/notificationsService.js')
                 .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(lastProfileUidRef.current))
                 .catch((err) => console.warn('[Auth] notification-queue purge on switch failed', err?.message));
+              // The messaging queue is a fourth store; a queued offline message
+              // must not replay (send from) the incoming account.
+              import('../services/messagesService.js')
+                .then(({ purgeMessageQueueForOwner }) => purgeMessageQueueForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] message-queue purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -839,6 +844,9 @@ export function AuthProvider({ children }) {
               import('../services/notificationsService.js')
                 .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(departingUid))
                 .catch((err) => console.warn('[Auth] notification-queue purge on logout failed', err?.message));
+              import('../services/messagesService.js')
+                .then(({ purgeMessageQueueForOwner }) => purgeMessageQueueForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] message-queue purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {

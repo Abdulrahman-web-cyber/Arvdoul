@@ -255,6 +255,39 @@ function enhanceError(error, defaultMessage) {
 }
 
 //  LRU CACHE, TTLMap, SHA256, OfflineMessageQueue
+const MESSAGING_OFFLINE_DB = 'messaging_offline';
+
+/**
+ * Drop every queued offline message owned by `uid` from the device-local
+ * queue. Module-level so it can run on sign-out even when the messaging
+ * service was never initialized this session (its instance queue is null but
+ * the IndexedDB store may still hold a previous session's queued messages).
+ */
+export async function purgeMessageQueueForOwner(uid) {
+  if (!uid || typeof indexedDB === 'undefined') return 0;
+  try {
+    const db = await openDB(MESSAGING_OFFLINE_DB, 1, {
+      upgrade(upgradeDb) {
+        if (!upgradeDb.objectStoreNames.contains('queue')) {
+          upgradeDb.createObjectStore('queue', { autoIncrement: true });
+        }
+      },
+    });
+    const [keys, values] = await Promise.all([db.getAllKeys('queue'), db.getAll('queue')]);
+    let removed = 0;
+    for (let i = 0; i < values.length; i += 1) {
+      if (values[i].ownerUid === uid) {
+        await db.delete('queue', keys[i]);
+        removed += 1;
+      }
+    }
+    return removed;
+  } catch (e) {
+    logger.warn('message offline queue purge failed', { error: e?.message });
+    return 0;
+  }
+}
+
 class LRUCache {
   constructor(maxSize = 100, ttl = 5 * 60 * 1000) {
     this.maxSize = maxSize;
@@ -324,7 +357,7 @@ class OfflineMessageQueue {
     this.service = service;
     // v1 layout preserved (autoIncrement, no keyPath) — keys and values are
     // zipped in getAll so existing queued messages survive upgrades.
-    this.dbPromise = openDB('messaging_offline', 1, {
+    this.dbPromise = openDB(MESSAGING_OFFLINE_DB, 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('queue')) {
           db.createObjectStore('queue', { autoIncrement: true });
@@ -353,10 +386,23 @@ class OfflineMessageQueue {
 
   async add(message) {
     const db = await this.dbPromise;
-    const record = { ...message, attempts: 0, status: 'queued', queuedAt: Date.now() };
+    // Stamp the owner so a later drain can prove which account queued the
+    // message. Without this a message account A queued offline replayed as
+    // account B on the same device (sent into the wrong user's conversation).
+    const ownerUid = this.service?.auth?.currentUser?.uid || null;
+    const record = { ...message, ownerUid, attempts: 0, status: 'queued', queuedAt: Date.now() };
     const key = await db.add('queue', record);
     this.sync();
     return key;
+  }
+
+  /** Drop every queued message owned by `uid` (account switch / sign-out). */
+  async purgeOwner(uid) {
+    if (!uid) return 0;
+    const all = await this.getAll();
+    const owned = all.filter((m) => m.ownerUid === uid);
+    for (const m of owned) await this.remove(m._key);
+    return owned.length;
   }
 
   /** Values zipped with their autoIncrement keys so records are addressable. */
@@ -391,8 +437,15 @@ class OfflineMessageQueue {
     if (this.isSyncing) return;
     this.isSyncing = true;
     try {
+      // Only replay messages owned by the live session. A queued message
+      // belongs to the account that composed it; replaying it under a different
+      // signed-in account would send it from the wrong user. Records with no
+      // recorded owner (queued before this field existed) are skipped rather
+      // than guessed.
+      const sessionUid = this.service?.auth?.currentUser?.uid || null;
       const queue = await this.getAll();
       for (const msg of queue) {
+        if (!sessionUid || msg.ownerUid !== sessionUid) continue;
         if (msg.status === 'failed' && (msg.attempts || 0) >= this.maxAttempts) continue;
         try {
           const result = await this.service.sendMessage(msg.conversationId, msg.data, { ...msg.options, offlineRetry: true });
@@ -3332,6 +3385,10 @@ const messagingService = {
   getStats: () => getMessagingService().getStats(),
   clearCache: () => getMessagingService().clearCache(),
   destroy: () => getMessagingService().destroy(),
+  purgeQueueForOwner: (uid) => {
+    const svc = getMessagingService();
+    return svc.offlineQueue ? svc.offlineQueue.purgeOwner(uid) : 0;
+  },
   CONFIG: MESSAGING_CONFIG,
   MESSAGE_TYPES: MESSAGING_CONFIG.MESSAGE_TYPES,
   REACTION_TYPES: MESSAGING_CONFIG.REACTION_TYPES,
