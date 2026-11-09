@@ -573,7 +573,7 @@ export function AuthProvider({ children }) {
                 displayName: step1FullName,
                 firstName: step1Data.firstName || '',
                 lastName: step1Data.lastName || '',
-              }).catch(() => {});
+              }).catch((err) => console.warn('[Auth] step-1 name backfill failed', err?.message));
             }
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com') || profile.authProvider === 'google';
@@ -764,7 +764,7 @@ export function AuthProvider({ children }) {
               // cannot drain into this session.
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(lastProfileUidRef.current))
-                .catch(() => {});
+                .catch((err) => console.warn('[Auth] offline-queue purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -806,7 +806,7 @@ export function AuthProvider({ children }) {
             if (departingUid) {
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(departingUid))
-                .catch(() => {});
+                .catch((err) => console.warn('[Auth] offline-queue purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {

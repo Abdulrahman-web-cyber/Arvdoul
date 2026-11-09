@@ -39,7 +39,7 @@ export const useAnalytics = (userId) => {
     try {
       import('../services/metricsService.js').then(({ metricsService }) => {
         metricsService.incrementCounter(`event_${event}`, 1);
-      }).catch(() => {});
+      }).catch((err) => console.warn('[Analytics] metric increment failed', err?.message));
     } catch {
       // analytics must never break a UI interaction
     }

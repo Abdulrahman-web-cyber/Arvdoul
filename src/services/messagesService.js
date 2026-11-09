@@ -3078,7 +3078,7 @@ class UltimateMessagingService {
         title: 'New join request',
         message: 'A user wants to join the group',
         metadata: { conversationId, ...data },
-      }).catch(() => {});
+      }).catch((e) => logger.warn('Group join-request notification failed', { adminId, conversationId, error: e?.message }));
     }
   }
 
