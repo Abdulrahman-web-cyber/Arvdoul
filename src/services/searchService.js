@@ -1059,6 +1059,7 @@ class UltimateSearchService {
         metadata: { advertiser: sponsored.data.advertiser },
       };
     } catch (err) {
+      logger.warn('[Search] Sponsored result lookup failed', err);
       return null;
     }
   }
@@ -1070,7 +1071,8 @@ class UltimateSearchService {
       const profile = await userService.getUserProfile(userId);
       if (profile) this.userProfileCache.set(userId, profile);
       return profile;
-    } catch {
+    } catch (err) {
+      logger.warn('[Search] Profile lookup failed', err);
       return null;
     }
   }

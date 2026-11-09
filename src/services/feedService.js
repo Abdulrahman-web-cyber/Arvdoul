@@ -480,6 +480,7 @@ class UltimateFeedService {
       paginated._nextCursor = nextCursor;
       return paginated;
     } catch (error) {
+      logger.warn('Following feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -590,6 +591,7 @@ class UltimateFeedService {
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
       return posts.slice(0, limit);
     } catch (error) {
+      logger.warn('Latest feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -698,6 +700,7 @@ class UltimateFeedService {
       });
       return posts.slice(0, limit);
     } catch (error) {
+      logger.warn('Discover feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -736,6 +739,7 @@ class UltimateFeedService {
       this.sponsoredCache = { posts, timestamp: now };
       return posts.slice(0, options.limit);
     } catch (error) {
+      logger.warn('Sponsored posts source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -839,11 +843,17 @@ class UltimateFeedService {
     } catch (error) {
       logger.error('Feed generation failed', { error: error.message, userId, feedType });
       const fallback = await this._getFallbackFeed(userId, { limit });
+      const posts = fallback.slice(0, limit);
+      // A degraded source may still yield a fallback feed — serve it, but mark
+      // it. When the fallback is also empty the generation genuinely failed and
+      // must be reported as such: `success: true` + `feed: []` would render the
+      // "no posts yet" empty state instead of an error with retry.
       return {
-        success: true,
-        feed: fallback.slice(0, limit),
+        success: posts.length > 0,
+        feed: posts,
         nextCursor: null,
         hasMore: false,
+        error: error.message,
         metadata: { isFallback: true, error: error.message },
         operationId,
         duration: Date.now() - startTime
@@ -1270,6 +1280,7 @@ class UltimateFeedService {
         _source: 'monetisation',
       };
     } catch (error) {
+      logger.warn('Feed ad lookup failed', { userId, error: error?.message });
       return null;
     }
   }

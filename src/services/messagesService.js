@@ -3168,6 +3168,7 @@ class UltimateMessagingService {
         lastActivity: new Date().toISOString(),
       };
     } catch (err) {
+      logger.warn('[messagesService] conversation-list ad unavailable', err);
       return null;
     }
   }

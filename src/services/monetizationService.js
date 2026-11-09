@@ -614,6 +614,7 @@ class MonetizationService {
       const result = await retryOperation(() => this.cfGetSponsoredSearchResult({ userId, query, context }));
       return result.data.sponsoredResult;
     } catch (err) {
+      log.warn('Sponsored search result unavailable', { error: err?.message });
       return null;
     }
   }
