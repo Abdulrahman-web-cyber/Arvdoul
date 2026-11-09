@@ -482,11 +482,18 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
     expect(src).toContain("status: 'unconfigured'"); // honest when SendGrid missing
   });
 
-  test('verifyPurchase never mints coins without real receipt validation', () => {
+  test('the fabricated IAP verifyPurchase faucet is gone', () => {
     const src = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
-    expect(src).not.toContain("we'll just simulate success and award coins");
-    expect(src).toContain('Receipt required for purchase verification');
-    expect(src).toContain('appstore.*');
+    // verifyPurchase checked only that App Store / Play *config keys existed*
+    // and then minted coins WITHOUT ever validating the receipt against Apple
+    // or Google — a fabricated verification. It had no client caller and was
+    // not in the FUNCTIONS registry. Coin purchases go through the real
+    // Stripe-verified monetization.js purchaseCoins path.
+    expect(src).not.toContain('exports.verifyPurchase');
+    expect(src).not.toContain('Receipt required for purchase verification');
+    // No generic coin-mint helper may remain in the entry point either.
+    expect(src).not.toContain('async function _addCoins');
+    expect(src).not.toContain("reason, 'iap'");
   });
 
   test('processVideo storage trigger never fabricates ready', () => {

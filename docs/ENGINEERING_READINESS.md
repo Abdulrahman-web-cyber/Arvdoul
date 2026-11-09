@@ -166,9 +166,12 @@
 **Server-side money/security fixes (functions/)**
 - `sendEmailNotification` — logged "Would send..." and returned `{ success: true, mock: true }` →
   real SendGrid send when configured, honest `status: 'unconfigured'` otherwise.
-- `verifyPurchase` — minted coins with NO receipt validation (client-callable free-coin
-  exploit) → fail-closed: requires a receipt AND appstore/play config; coins only after
-  real validation.
+- `verifyPurchase` — was a **fabricated** IAP verification: it checked only that
+  appstore/play *config keys existed* and then minted coins without ever validating the
+  receipt against Apple/Google. It had no client caller and was not in the FUNCTIONS
+  registry. Removed entirely (with the dead `_addCoins`/`_spendCoins`/`_transferCoins`/
+  `checkIdempotency` entry-point helpers that existed only to serve it). Coin purchases go
+  through the real Stripe-verified `monetization.js` `purchaseCoins` path.
 - `addCoins` — was an unrestricted client coin faucet (any amount, any reason, rate limit
   only) → allowlisted reasons with per-reason daily caps (post_created_bonus 10, reel_watch
   200, reel_reaction 50, comment 50, like 100, watch_ad 50, feed_view 200, quiz_correct 20,
