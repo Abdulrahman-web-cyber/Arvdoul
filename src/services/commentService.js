@@ -1013,45 +1013,19 @@ class UltimateCommentService {
   }
 
   async reportComment(commentId, userId, reason, details = '') {
-    try {
-      await this._ensureInitialized();
-
-      const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
-      const reportQuery = this.firestoreMethods.query(
-        reportsRef,
-        this.firestoreMethods.where('commentId', '==', commentId),
-        this.firestoreMethods.where('userId', '==', userId)
-      );
-
-      const existingReports = await this.firestoreMethods.getDocs(reportQuery);
-      if (!existingReports.empty) {
-        throw new Error('You have already reported this comment');
-      }
-
-      await this.firestoreMethods.addDoc(reportsRef, {
-        commentId,
-        userId,
-        reason,
-        details,
-        status: 'pending',
-        createdAt: this.firestoreMethods.serverTimestamp(),
-        reviewedAt: null,
-        reviewedBy: null,
-        actionTaken: null
-      });
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      await this.firestoreMethods.updateDoc(commentRef, {
-        reports: this.firestoreMethods.increment(1),
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      });
-
-      return { success: true, commentId, reported: true };
-
-    } catch (error) {
-      logger.error(`❌ Report comment ${commentId} failed:`, error);
-      throw this._enhanceError(error, 'Failed to report comment');
-    }
+    await this._ensureInitialized();
+    // Route through the reportContent callable like every other report type.
+    // The direct write stamped `userId`, but firestore.rules authorises
+    // `comment_reports` create/read on `reporterId`, so the write was denied and
+    // the report never reached the moderator queue. The callable rate-limits,
+    // de-duplicates and writes the queue-compatible record.
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const data = await callFunction(FUNCTIONS.REPORT_COMMENT, {
+      targetId: commentId,
+      reason,
+      details,
+    });
+    return { success: true, commentId, reported: true, ...(data || {}) };
   }
 
 

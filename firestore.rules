@@ -1147,8 +1147,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     match /scheduled_messages/{messageId} {
-      allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
-      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      // The scheduling client stamps `senderId` and the dispatcher/cancel paths
+      // read `senderId`; the rule previously required a `userId` field that no
+      // writer ever set, so every schedule create (and the owner read) was
+      // denied.
+      allow read, update, delete: if isSignedIn() && resource.data.senderId == uid();
+      allow create: if isSignedIn() && request.resource.data.senderId == uid();
     }
     match /calls/{callId} {
       function callParticipants() {

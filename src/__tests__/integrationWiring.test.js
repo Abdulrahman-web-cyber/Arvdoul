@@ -601,6 +601,32 @@ describe('message reporting reaches the moderator queue', () => {
   });
 });
 
+describe('comment reporting reaches the moderator queue', () => {
+  // `commentService.reportComment` carried its own direct write to
+  // `comment_reports` stamped with `userId`, while the rules authorise that
+  // collection on `reporterId`; the dedupe query was denied too. It now goes
+  // through the same reportContent callable as every other report type.
+  test('client routes through the reportComment callable', () => {
+    const svc = read('src/services/commentService.js');
+    expect(svc).toContain('FUNCTIONS.REPORT_COMMENT');
+    expect(svc).not.toMatch(/collection\(this\.firestore, 'comment_reports'\)/);
+    expect(read('src/services/callableService.js')).toContain("REPORT_COMMENT: 'reportComment'");
+  });
+
+  test('server exposes reportComment and its queue', () => {
+    const mod = read('functions/moderation.js');
+    expect(mod).toContain("comment: { collection: 'comment_reports'");
+    expect(mod).toContain("exports.reportComment = reportAlias('comment')");
+    expect(read('functions/admin.js')).toContain("comment: 'comment_reports'");
+  });
+
+  test('firestore.rules authorise comment_reports on reporterId', () => {
+    const rules = read('firestore.rules');
+    const block = rules.slice(rules.indexOf('match /comment_reports/'));
+    expect(block.slice(0, 400)).toContain('request.resource.data.reporterId == uid()');
+  });
+});
+
 describe('voice search is a real control, not a stub', () => {
   // `useSearch` exposes a real Web Speech API `voiceSearch`, but no screen ever
   // destructured it — the capability existed and nothing could reach it.

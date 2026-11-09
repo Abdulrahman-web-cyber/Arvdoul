@@ -255,6 +255,7 @@ jobs:
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/firestoreRulesCoverage.test.js
+          src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js
           src/__tests__/userServicePrivacyProjection.test.js

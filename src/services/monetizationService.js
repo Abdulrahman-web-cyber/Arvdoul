@@ -161,15 +161,19 @@ class OfflineMonetizationQueue {
   async add(operation, params) {
     const db = await this.dbPromise;
     await db.add('queue', { operation, params, timestamp: Date.now() });
-    // Also write to Firestore outbox (backup)
-    if (this.service && this.service.db) {
+    // Also write to Firestore outbox (backup). firestore.rules authorises the
+    // create on `userId == uid()`, so the owner must come from the live session
+    // — `params` (packageId/paymentMethodId/placement/…) never carries it, and a
+    // null userId would be silently denied.
+    const ownerUid = auth?.currentUser?.uid || params?.userId || null;
+    if (ownerUid && this.service && this.service.db) {
       try {
         await addDoc(collection(this.service.db, 'monetization_outbox'), {
           operation,
           params,
           createdAt: serverTimestamp(),
           status: 'pending',
-          userId: params.userId || null,
+          userId: ownerUid,
         });
       } catch (e) { /* silent */ }
     }

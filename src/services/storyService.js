@@ -1758,8 +1758,16 @@ class UltimateStoryService {
   }
 
   async _logStoryReply(storyId, fromUserId, toUserId) {
+    // firestore.rules authorises the create on `userId == uid()` (or
+    // `authorId`). The reply document must therefore carry the canonical
+    // owner field — `fromUserId` alone was silently DENIED, so every story
+    // reply failed to log. `fromUserId`/`toUserId` are kept for the record.
     await this.fs.addDoc(this.fs.collection(this.firestore, 'story_replies'), {
-      storyId, fromUserId, toUserId, timestamp: serverTimestamp(),
+      storyId,
+      userId: fromUserId,
+      fromUserId,
+      toUserId,
+      timestamp: serverTimestamp(),
     });
   }
 
