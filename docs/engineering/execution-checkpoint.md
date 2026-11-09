@@ -288,3 +288,39 @@ Guards:
 Gates: `npm test` — **119 suites / 1431 passing**; `npm run build` — ✓;
 `eslint src/ functions/ --quiet` — 0 errors. Live storage emulator guard:
 10/10 passing.
+
+## Checkpoint — N171 (composer persisted a session-scoped media URL)
+
+`CreatePost.uploadMedia` fabricated a media URL whenever the real Storage
+upload failed, so a published post could carry a `data:` (base64) or `blob:`
+URL that renders only for the uploader's current tab and is broken for every
+other viewer and after any reload.
+
+Evidence:
+- The upload was raced against a bare `setTimeout(7000)` that rejected a
+  still-in-flight upload; the `catch` logged `Storage upload fallback to data
+  URL` and fell through to `convertFileToDataURL(file)` → a base64 `data:` URL,
+  then to `item.url || item.preview` → a `blob:` object URL.
+- The background-sync branch caught the upload error with
+  `console.warn("Background media upload fallback:", err)` and then wrote the
+  optimistic `blob:` previews (`instantMedia`) to Firestore anyway.
+- A generated video/image thumbnail (`canvas.toBlob` → `URL.createObjectURL`)
+  was persisted verbatim as `media[].thumbnail` / `thumbnailUrl`.
+
+Fix:
+- `uploadMedia` uploads the file, requires a `downloadURL` (else throws),
+  uploads the generated thumbnail alongside the media (or drops it if that
+  fails), and throws if any item failed — no fabricated fallback URL.
+- A non-file item keeps its URL only if it is not `blob:`/`data:`.
+- The background sync no longer swallows the upload error; the outer `catch`
+  drops the optimistic entry and enqueues the post to the offline queue.
+- Deleted `convertFileToDataURL` and the 7 s timeout.
+
+Guards: new `noFabricatedData.test.js` block asserting `convertFileToDataURL`,
+`Storage upload fallback to data URL`, `Storage upload timed out` and
+`Background media upload fallback` are gone, that `blob:`/`data:` candidates
+are rejected, that `uploadMedia` throws on a failure, and that a generated
+thumbnail is uploaded or dropped.
+
+Gates: `npm test` — **119 suites / 1435 passing**; `npm run build` — ✓;
+`eslint src/ --quiet` — 0 errors; full `guards` job list (73 suites) — 841 passing.

@@ -382,6 +382,18 @@ falls back to plaintext — no lock badge or "E2EE protected" label. Likewise
 `feedService` offline-mode write stubs throw instead of resolving a fake
 `{ id: 'dummy' }`. `noFabricatedData.test.js` guards both.
 
+## No fabricated media URLs
+A media write must persist a durable, publicly-resolvable Storage
+`downloadURL` — never a session-scoped `blob:` object URL or a base64 `data:`
+URL. Those render only for the uploader's current tab and are broken for every
+other viewer and after any reload, and a `data:` URL can be megabytes written
+straight into a Firestore document. `CreatePost.uploadMedia` therefore requires
+a `downloadURL` from the upload, uploads any generated (blob) thumbnail
+alongside the media or drops it, and **throws** when an item fails; the
+background sync must not swallow that failure and persist the optimistic
+previews. Never race a real upload against an arbitrary client timeout and fall
+back to a local URL on the rejection. Guarded by `noFabricatedData.test.js`.
+
 ## Cloud Functions deploy path — merge, don't just require
 Firebase publishes exactly what `functions/index.js` exports. `require('./x.js')`
 runs a module but does NOT deploy its functions — every module's exports must be

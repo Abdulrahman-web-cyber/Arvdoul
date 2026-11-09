@@ -1103,48 +1103,6 @@ function CreatePostProvider({ children }) {
     toast.success("Removed queued post");
   }, [refreshOfflineQueue]);
 
-  const convertFileToDataURL = (file) => new Promise((resolve) => {
-    if (!file) { resolve(null); return; }
-    if (!file.type?.startsWith("image/")) {
-      resolve(null);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result;
-      if (!dataUrl) { resolve(null); return; }
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const maxDim = 800;
-          let width = img.width;
-          let height = img.height;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL("image/jpeg", 0.65);
-          resolve(compressed);
-        } catch {
-          resolve(typeof dataUrl === "string" && dataUrl.length < 500000 ? dataUrl : null);
-        }
-      };
-      img.onerror = () => resolve(typeof dataUrl === "string" && dataUrl.length < 500000 ? dataUrl : null);
-      img.src = dataUrl;
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
-  });
 
   const uploadMedia = useCallback(async (mediaItems) => {
     if (isOfflineRef.current) { toast.error("Cannot upload offline"); return []; }
@@ -1154,6 +1112,7 @@ function CreatePostProvider({ children }) {
     const validItems = mediaItems.filter(m => (m.file || m.url || m.preview) && !m.error);
     const total = validItems.length;
     completedRef.current = 0;
+    const failures = [];
 
     const process = async (item) => {
       try {
@@ -1172,53 +1131,74 @@ function CreatePostProvider({ children }) {
 
         let downloadURL = null;
         if (storageService && item.file) {
-          try {
-            const uid = userRef.current?.uid || 'anonymous';
-            if (uid === 'anonymous') throw new Error("You must be signed in to upload");
-            const uploadPromise = storageService.uploadFileWithProgress(
-              item.file,
-              `posts/${uid}/${Date.now()}_${item.file.name}`,
-              {
-                userId: uid,
-                onProgress: (p) => dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { progress: p.progress || 0 } } })
-              }
-            );
-            const uploadTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Storage upload timed out")), 7000));
-            const uploadRes = await Promise.race([uploadPromise, uploadTimeout]);
-            if (uploadRes?.downloadURL) {
-              downloadURL = uploadRes.downloadURL;
+          const uid = userRef.current?.uid;
+          if (!uid) throw new Error("You must be signed in to upload media");
+          const uploadRes = await storageService.uploadFileWithProgress(
+            item.file,
+            `posts/${uid}/${Date.now()}_${item.file.name}`,
+            {
+              userId: uid,
+              onProgress: (p) => dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { progress: p.progress || 0 } } })
             }
-          } catch (storageErr) {
-            console.warn("Storage upload fallback to data URL:", storageErr?.message);
+          );
+          if (!uploadRes?.downloadURL) throw new Error("Upload did not return a URL");
+          downloadURL = uploadRes.downloadURL;
+        } else if (!item.file) {
+          // Already-hosted media (a remote URL picked from a library). A
+          // `blob:`/`data:` URL is session-scoped and must never be persisted
+          // as the post's media URL — it renders only for this uploader, this
+          // session, and is broken for everyone else and after a reload.
+          const candidate = item.url || item.preview || null;
+          if (candidate && !candidate.startsWith("blob:") && !candidate.startsWith("data:")) {
+            downloadURL = candidate;
           }
         }
 
-        if (!downloadURL && item.file) {
-          downloadURL = await convertFileToDataURL(item.file);
-        }
         if (!downloadURL) {
-          downloadURL = item.url || item.preview;
+          throw new Error(`Could not upload "${item.name || item.file?.name || "media"}"`);
         }
 
-        if (downloadURL) {
-          results.push({
-            url: downloadURL,
-            thumbnail: thumbnail || null,
-            type: item.type || (item.file?.type?.startsWith('video/') ? 'video' : 'image'),
-            name: item.name || item.file?.name || '',
-            alt: item.alt || '',
-          });
+        // A generated thumbnail is a `blob:` object URL. Persisting it would
+        // leave every grid/feed surface with a broken poster after reload, so
+        // it is uploaded alongside the media (or dropped if that fails).
+        if (thumbnail && thumbnail.startsWith("blob:") && storageService) {
+          try {
+            const thumbBlob = await (await fetch(thumbnail)).blob();
+            const thumbRes = await storageService.uploadFileWithProgress(
+              new File([thumbBlob], `thumb_${item.id || Date.now()}.jpg`, { type: "image/jpeg" }),
+              `posts/${userRef.current?.uid}/${Date.now()}_thumb_${item.id || "m"}.jpg`,
+              { userId: userRef.current?.uid }
+            );
+            thumbnail = thumbRes?.downloadURL || null;
+          } catch (thumbErr) {
+            console.warn("Thumbnail upload failed:", thumbErr?.message);
+            thumbnail = null;
+          }
+        } else if (thumbnail && thumbnail.startsWith("blob:")) {
+          thumbnail = null;
         }
+
+        results.push({
+          url: downloadURL,
+          thumbnail: thumbnail || null,
+          type: item.type || (item.file?.type?.startsWith('video/') ? 'video' : 'image'),
+          name: item.name || item.file?.name || '',
+          alt: item.alt || '',
+        });
         completedRef.current++;
         dispatch({ type: "SET_PROGRESS", payload: (completedRef.current / total) * 100 });
       } catch (err) {
         console.error(`Failed to process media item:`, err);
+        failures.push(err?.message || "Media upload failed");
         dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { error: err.message } } });
       }
     };
 
     for (let i = 0; i < validItems.length; i += 3) {
       await Promise.all(validItems.slice(i, i + 3).map(process));
+    }
+    if (failures.length > 0) {
+      throw new Error(failures[0]);
     }
     return results;
   }, []);
@@ -1615,12 +1595,13 @@ function CreatePostProvider({ children }) {
       (async () => {
         try {
           let uploadedMedia = instantMedia;
-          if (current.mediaItems?.length > 0 && navigator.onLine) {
-            try {
-              uploadedMedia = await uploadMedia(current.mediaItems);
-            } catch (err) {
-              console.warn("Background media upload fallback:", err);
-            }
+          if (current.mediaItems?.length > 0) {
+            // Upload must succeed before the Firestore write: `instantMedia`
+            // holds session-scoped `blob:` preview URLs, and persisting those
+            // would leave a post that renders only for this uploader, this
+            // session. A failure falls through to the outer catch, which drops
+            // the optimistic entry and hands the post to the offline queue.
+            uploadedMedia = await uploadMedia(current.mediaItems);
           }
 
           const finalPostData = {

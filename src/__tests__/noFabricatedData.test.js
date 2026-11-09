@@ -2889,3 +2889,38 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(screen).toContain("total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
   });
 });
+
+describe('CreatePost media upload fails closed — never persists a session-scoped URL', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+
+  test('a failed Storage upload does not fall back to a data: URL', () => {
+    // The composer once caught a failed/timed-out upload and persisted a
+    // base64 `data:` URL produced by `convertFileToDataURL`, so the post
+    // rendered only for the uploader, only for that session, and was broken
+    // for everyone else and after any reload.
+    expect(src).not.toContain('convertFileToDataURL');
+    expect(src).not.toContain('Storage upload fallback to data URL');
+    // The bare 7s Promise.race timeout that turned a slow upload into a
+    // fabricated success is gone; the real Storage timeout governs.
+    expect(src).not.toContain('Storage upload timed out');
+  });
+
+  test('a `blob:`/`data:` URL is never stored as a post media URL', () => {
+    expect(src).toContain("!candidate.startsWith(\"blob:\")");
+    expect(src).toContain("!candidate.startsWith(\"data:\")");
+  });
+
+  test('uploadMedia surfaces a failure instead of resolving partial media', () => {
+    expect(src).toContain('failures.push(');
+    expect(src).toContain('if (failures.length > 0)');
+    expect(src).toContain('throw new Error(failures[0])');
+    // The background sync no longer swallows an upload failure and writes the
+    // optimistic blob: previews to Firestore.
+    expect(src).not.toContain('Background media upload fallback');
+  });
+
+  test('a generated blob: thumbnail is uploaded or dropped, never persisted', () => {
+    expect(src).toContain('thumbnail.startsWith("blob:")');
+    expect(src).toContain('thumbRes?.downloadURL || null');
+  });
+});
