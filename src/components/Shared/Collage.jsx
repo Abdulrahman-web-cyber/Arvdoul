@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Grid, Columns, Layout, Download, X, Sparkles, Image as ImageIcon, Plus, ArrowLeftRight } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { tokens } from '../../design-system/tokens.js';
 
 export const COLLAGE_LAYOUTS = [
   { id: 'grid-2', count: 2, label: 'Split Vertical', icon: Columns },
@@ -28,8 +29,8 @@ export const BACKGROUND_COLORS = [
   { id: 'black', color: '#000000', label: 'Black' },
   { id: 'white', color: '#FFFFFF', label: 'Pure White' },
   { id: 'slate', color: '#1E293B', label: 'Slate' },
-  { id: 'purple', color: '#8B1EF3', label: 'Arvdoul Purple' },
-  { id: 'gradient', color: 'linear-gradient(135deg, #8B1EF3, #055BFB)', label: 'DNA Gradient' },
+  { id: 'purple', color: tokens.color.brand.violet, label: 'Arvdoul Purple' },
+  { id: 'gradient', color: `linear-gradient(135deg, ${tokens.color.brand.violet}, ${tokens.color.brand.blue})`, label: 'DNA Gradient' },
 ];
 
 export default function Collage({
@@ -116,9 +117,9 @@ export default function Collage({
     // Background
     if (bgColor.startsWith('linear-gradient')) {
       const grad = ctx.createLinearGradient(0, 0, baseWidth, baseHeight);
-      grad.addColorStop(0, '#8B1EF3');
-      grad.addColorStop(0.5, '#4431F7');
-      grad.addColorStop(1, '#0088FF');
+      grad.addColorStop(0, tokens.color.brand.violet);
+      grad.addColorStop(0.5, tokens.color.brand.indigo);
+      grad.addColorStop(1, tokens.color.brand.cyan);
       ctx.fillStyle = grad;
     } else {
       ctx.fillStyle = bgColor;
