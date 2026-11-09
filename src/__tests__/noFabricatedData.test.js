@@ -2392,3 +2392,32 @@ describe('Admin rank titles are never fabricated from a missing level', () => {
     }
   });
 });
+
+describe('Admin aggregate counts never fabricate a measured zero', () => {
+  const svc = fs.readFileSync(path.join(root, 'src/services/adminService.js'), 'utf8');
+  const dash = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
+
+  test('adminService.count returns null (unknown) on failure, not 0', () => {
+    // A failed aggregate rendered as 0 showed an unmeasured collection as an
+    // empty one; the dashboard printed "0 users" while the query had thrown.
+    expect(svc).toContain('return null;');
+    expect(svc).not.toMatch(/Returns 0 on failure/);
+  });
+
+  test('the dashboard renders an unknown stat as — and revenue as unavailable', () => {
+    expect(dash).toContain("value === null || value === undefined");
+    expect(dash).toContain("'Unavailable'");
+    expect(dash).not.toContain('stats.revenue.toLocaleString()');
+    expect(dash).toContain('revenue: null');
+  });
+});
+
+describe('BottomNav coin balance is unknown, not zero, before the profile loads', () => {
+  const src = fs.readFileSync(path.join(root, 'src/components/Shared/BottomNav.jsx'), 'utf8');
+
+  test('an absent balance renders — rather than claiming 0 coins', () => {
+    expect(src).toContain('const coinBalance = effectiveUser?.coins ?? null;');
+    expect(src).not.toContain('effectiveUser?.coins ?? 0');
+    expect(src).toContain('return "—";');
+  });
+});

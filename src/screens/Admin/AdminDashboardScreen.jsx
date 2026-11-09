@@ -13,14 +13,14 @@ const AdminDashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    totalPosts: 0,
-    totalReports: 0,
-    pendingReports: 0,
-    totalCommunities: 0,
-    totalEvents: 0,
-    revenue: 0
+    totalUsers: null,
+    activeUsers: null,
+    totalPosts: null,
+    totalReports: null,
+    pendingReports: null,
+    totalCommunities: null,
+    totalEvents: null,
+    revenue: null
   });
 
   // Admin authz is the `admins` collection only (mirrors server-side
@@ -60,18 +60,28 @@ const AdminDashboardScreen = () => {
           count('communities'),
           count('events'),
         ]);
-        // pending reports across all report collections (honest sum).
+        // pending reports across all report collections (honest sum). If any
+        // component count failed it is unknown (null) — the total is then
+        // unknown too, never a fabricated 0.
         const pendingUser = await count('user_reports', [await where('status', '==', 'pending')]);
         const pendingVideo = await count('video_reports', [await where('status', '==', 'pending')]);
+        const pendingParts = [pendingReports, pendingUser, pendingVideo];
+        const pendingTotal = pendingParts.every((n) => n === null)
+          ? null
+          : pendingParts.some((n) => n === null)
+            ? null
+            : pendingParts.reduce((a, b) => a + b, 0);
         setStats({
           totalUsers: users,
           activeUsers,
           totalPosts: posts,
           totalReports: reports,
-          pendingReports: pendingReports + pendingUser + pendingVideo,
+          pendingReports: pendingTotal,
           totalCommunities: communities,
           totalEvents: events,
-          revenue: 0, // real USD revenue requires the Stripe payout pipeline; never estimated
+          // Real USD revenue needs the payout pipeline; null renders as
+          // "unavailable", never a fabricated $0.
+          revenue: null,
         });
       } catch (err) {
         setError('Could not load admin data.');
@@ -89,7 +99,11 @@ const AdminDashboardScreen = () => {
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{title}</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-white">
-            {typeof value === 'number' ? value.toLocaleString() : value}
+            {value === null || value === undefined
+              ? '—'
+              : typeof value === 'number'
+                ? value.toLocaleString()
+                : value}
           </p>
           {trend && (
             <p className={`text-sm mt-2 flex items-center gap-1 ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
@@ -233,7 +247,7 @@ const AdminDashboardScreen = () => {
           />
           <StatCard
             title="Platform Revenue"
-            value={`$${stats.revenue.toLocaleString()}`}
+            value={stats.revenue === null ? 'Unavailable' : `$${Number(stats.revenue).toLocaleString()}`}
             icon={DollarSign}
             color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
           />

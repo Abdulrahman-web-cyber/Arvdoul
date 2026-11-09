@@ -122,8 +122,11 @@ const formatBadge = (value) => {
 };
 
 const formatCoins = (value) => {
+  // An absent balance is *unknown*, not zero — rendering "0" in the nav claims
+  // the account holds no coins while the profile document has not loaded.
+  if (value === null || value === undefined) return "—";
   const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) return "0";
+  if (!Number.isFinite(amount) || amount < 0) return "—";
   if (amount < 1000) return Math.floor(amount).toLocaleString();
   if (amount < 1_000_000)
     return `${(amount / 1000).toFixed(amount >= 10_000 ? 0 : 1)}K`;
@@ -1126,7 +1129,7 @@ function BottomNav() {
     };
   }, [unreadCounts]);
 
-  const coinBalance = effectiveUser?.coins ?? 0;
+  const coinBalance = effectiveUser?.coins ?? null;
 
   const activeId = useMemo(() => {
     const pathname = location.pathname;
