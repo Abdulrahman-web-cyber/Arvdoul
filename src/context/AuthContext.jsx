@@ -509,9 +509,10 @@ export function AuthProvider({ children }) {
                 .then(({ levelSystemService }) =>
                   levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
                 )
-                .catch(() => {});
+                .catch((err) => console.warn('[Auth] daily-login XP not credited', err?.message));
               if (userService?.updateLastActive) {
-                userService.updateLastActive(uid).catch(() => {});
+                userService.updateLastActive(uid).catch((err) =>
+                  console.warn('[Auth] last-active update failed', err?.message));
               }
             }
 
@@ -601,7 +602,8 @@ export function AuthProvider({ children }) {
             }
 
             if (isComplete && !onboarding && profile.isProfileComplete !== true) {
-              userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
+              userService.updateUserProfile(uid, { isProfileComplete: true }).catch((err) =>
+                console.warn('[Auth] could not flag profile complete', err?.message));
             }
             if (!onboarding) clearOnboardingRequired();
             if (status === 'active' || !status) {

@@ -416,7 +416,11 @@ const formatDuration = (seconds) => {
     return () => {
       const seconds = Math.round((Date.now() - reelViewStartRef.current) / 1000);
       reelViewStartRef.current = null;
-      if (seconds >= 1) videoService.recordVideoView(activeReelId, { duration: seconds }).catch(() => {});
+      if (seconds >= 1) {
+        videoService.recordVideoView(activeReelId, { duration: seconds }).catch((e) => {
+          console.warn('[Reels] view not recorded', e?.message);
+        });
+      }
     };
   }, [activeReelId, user?.uid]);
 

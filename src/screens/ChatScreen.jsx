@@ -221,7 +221,9 @@ export default function ChatScreen() {
     if (!conversationId || !uid || messages.length === 0) return;
     if (readTimerRef.current) clearTimeout(readTimerRef.current);
     readTimerRef.current = setTimeout(() => {
-      getMessagingService().markConversationAsRead(conversationId, uid).catch(() => {});
+      getMessagingService().markConversationAsRead(conversationId, uid).catch((e) => {
+        console.warn('[Chat] mark-as-read failed; unread badge may be stale', e?.message);
+      });
     }, 600);
     return () => { if (readTimerRef.current) clearTimeout(readTimerRef.current); };
   }, [conversationId, uid, messages]);

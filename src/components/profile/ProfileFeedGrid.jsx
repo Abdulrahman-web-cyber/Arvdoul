@@ -172,7 +172,7 @@ const ProfileFeedGrid = memo(({
     if (currentUserId && postId) {
       import('../../services/firestoreService.js')
         .then(({ firestoreService }) => firestoreService.sharePost(postId, currentUserId))
-        .catch(() => {});
+        .catch((e) => console.warn('[ProfileFeed] share not recorded', e?.message));
     }
     if (navigator.share) {
       navigator.share({

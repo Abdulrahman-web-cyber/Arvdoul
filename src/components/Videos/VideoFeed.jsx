@@ -63,7 +63,11 @@ const VideoFeed = memo(({
     return () => {
       const seconds = Math.round((Date.now() - viewStartRef.current) / 1000);
       viewStartRef.current = null;
-      if (seconds >= 1) videoService.recordVideoView(activeVideoId, { duration: seconds }).catch(() => {});
+      if (seconds >= 1) {
+        videoService.recordVideoView(activeVideoId, { duration: seconds }).catch((e) => {
+          console.warn('[VideoFeed] view not recorded', e?.message);
+        });
+      }
     };
   }, [activeVideoId, user?.uid]);
 

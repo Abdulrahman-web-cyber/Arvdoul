@@ -522,8 +522,10 @@ class ProfessionalUserService {
       const todayStr = new Date().toISOString().slice(0, 10);
       if (full.lastActiveDay !== todayStr) {
         import('./levelSystemService.js').then(({ levelSystemService }) => {
-          levelSystemService.recordActiveDay({ userId: targetUid }).catch(() => {});
-        }).catch(() => {});
+          levelSystemService.recordActiveDay({ userId: targetUid }).catch((err) => {
+            logger.warn('recordActiveDay failed; streak/XP day may be missed', { userId: targetUid, error: err?.message });
+          });
+        }).catch((err) => logger.warn('levelSystemService import failed', { error: err?.message }));
       }
     }
 
@@ -925,7 +927,9 @@ class ProfessionalUserService {
         return { success: false, error: 'You already have a pending verification application under review.' };
       }
     } catch (e) {
-      // Best-effort check
+      // Best-effort duplicate check; log so a broken read is diagnosable
+      // rather than silently allowing a second application.
+      logger.warn('Pending verification check failed', { userId, error: e?.message });
     }
 
     const docData = {
@@ -1101,9 +1105,9 @@ class ProfessionalUserService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: followingId, action: 'follow_received', source: followerId })
-          .catch(() => {});
+          .catch((err) => logger.warn('follow_received XP award failed', { userId: followingId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('follow_received XP award failed', { userId: followingId, error: e?.message });
       }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
@@ -1219,9 +1223,9 @@ class ProfessionalUserService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: ownerId, action: 'follow_received', source: requesterId })
-          .catch(() => {});
+          .catch((err) => logger.warn('follow-accept XP award failed', { userId: ownerId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('follow-accept XP award failed', { userId: ownerId, error: e?.message });
       }
       this._invalidateUserCache(requesterId);
     }
@@ -1598,7 +1602,7 @@ class ProfessionalUserService {
           metadata: { friendId: userId }
         });
       } catch (e) {
-        // Friend notification failed
+        logger.warn('Friend-accepted notification failed', { userId, requesterId, error: e?.message });
       }
       // Mutual follow edges now exist: credit both users' follow_received XP
       // (verified server-side against each edge, idempotent per follower).
@@ -1606,12 +1610,12 @@ class ProfessionalUserService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId, action: 'follow_received', source: requesterId })
-          .catch(() => {});
+          .catch((err) => logger.warn('mutual-follow XP award failed', { userId, error: err?.message }));
         levelSystemService
           .awardExperience({ userId: requesterId, action: 'follow_received', source: userId })
-          .catch(() => {});
+          .catch((err) => logger.warn('mutual-follow XP award failed', { userId: requesterId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('mutual-follow XP award failed', { error: e?.message });
       }
     }
     this._invalidateUserCache(requesterId);

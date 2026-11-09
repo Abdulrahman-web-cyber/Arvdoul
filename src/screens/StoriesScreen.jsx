@@ -399,7 +399,9 @@ export default function StoriesScreen() {
           // completion event (spec §23/58): the item was watched to the
           // end — buffered server-side, never a per-frame write.
           if (currentItem?.id) {
-            getStoryService().reportStoryCompletion(currentItem.id).catch(() => {});
+            getStoryService().reportStoryCompletion(currentItem.id).catch((e) => {
+              console.warn('[Stories] completion not reported', e?.message);
+            });
           }
           // Advance to next item or next story
           if (activeItemIndex + 1 < (currentStory.items?.length || 1)) {
