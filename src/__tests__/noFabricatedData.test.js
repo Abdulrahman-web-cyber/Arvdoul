@@ -3070,3 +3070,40 @@ describe('New-creator analytics fallback never invents a series or a reach estim
     expect(screen).toContain("totalViews: typeof data.totalViews === 'number' ? data.totalViews : null");
   });
 });
+
+describe('Displayed amounts/counts render unknown, never a fabricated 0 (N183)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the shared unknownNumber helper distinguishes 0 from unknown', async () => {
+    const { unknownNumber } = await import('../lib/unknownNumber.js');
+    expect(unknownNumber(0)).toBe(0);
+    expect(unknownNumber('0')).toBe(0);
+    expect(unknownNumber(12)).toBe(12);
+    expect(unknownNumber('1,200')).toBe(null);
+    expect(unknownNumber(undefined)).toBe(null);
+    expect(unknownNumber(null)).toBe(null);
+    expect(unknownNumber('')).toBe(null);
+    expect(unknownNumber(NaN)).toBe(null);
+    expect(unknownNumber(Infinity)).toBe(null);
+    expect(unknownNumber(false)).toBe(null);
+  });
+
+  test('admin economy renders payout/transaction amounts through the guard', () => {
+    const src = read('src/screens/Admin/AdminEconomyScreen.jsx');
+    expect(src).not.toContain('formatCoinsAsUsd(payout.amount || 0)');
+    expect(src).not.toContain('formatCoinsAsUsd(tx.amount || 0)');
+    expect(src).toContain('unknownNumber');
+  });
+
+  test('conversation settings never asserts a 0 member count', () => {
+    const src = read('src/screens/ConversationSettingsScreen.jsx');
+    expect(src).not.toContain('participants?.length || 0');
+    expect(src).toContain('unknownNumber');
+  });
+
+  test('question answers do not coerce a missing upvote count to 0', () => {
+    const src = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(src).not.toContain('answer.upvotes || 0');
+    expect(src).toContain('unknownNumber(answer.upvotes)');
+  });
+});

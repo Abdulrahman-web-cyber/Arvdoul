@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
+import { unknownNumber } from '../lib/unknownNumber.js';
 import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info } from 'lucide-react';
 
 export default function ConversationSettingsScreen() {
@@ -103,7 +104,7 @@ export default function ConversationSettingsScreen() {
     }
   };
 
-  const members = conv?.participants?.length || 0;
+  const memberCount = unknownNumber(conv?.participants?.length);
   const memberNames = (conv?.participantDetails || []).map((p) => p.displayName || p.username).filter(Boolean).join(', ');
 
   return (
@@ -126,7 +127,7 @@ export default function ConversationSettingsScreen() {
                 <Users className="w-8 h-8 text-violet-500" />
               </div>
               <h2 className={cn("font-bold text-lg", colors.text)}>{conv?.title || conv?.name || 'Conversation'}</h2>
-              <p className={cn("text-sm mt-1", colors.secondary)}>{members} members{memberNames ? ` · ${memberNames}` : ''}</p>
+              <p className={cn("text-sm mt-1", colors.secondary)}>{memberCount === null ? 'Member count unavailable' : `${memberCount} members`}{memberNames ? ` · ${memberNames}` : ''}</p>
             </div>
 
             {/* Actions */}

@@ -20,6 +20,18 @@ import {
 import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { COINS_PER_DOLLAR, getRankTitle } from '../../services/levelSystemService.js';
 import { formatCoinsAsUsd } from '../../shared/levelConfig.cjs';
+import { unknownNumber } from '../../lib/unknownNumber.js';
+
+// A payout/transaction amount is money: an absent or unread value must render
+// as an explicit unavailable state, never a confident "$0.00".
+const asUsd = (value) => {
+  const n = unknownNumber(value);
+  return n === null ? '—' : `$${formatCoinsAsUsd(n)}`;
+};
+const asCoins = (value) => {
+  const n = unknownNumber(value);
+  return n === null ? '—' : n.toLocaleString();
+};
 
 const AdminEconomyScreen = () => {
   const navigate = useNavigate();
@@ -457,9 +469,9 @@ const AdminEconomyScreen = () => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-bold text-gray-900 dark:text-white">
-                            ${formatCoinsAsUsd(payout.amount || 0)}
+                            {asUsd(payout.amount)}
                           </div>
-                          <div className="text-xs text-amber-600 font-medium">{Number(payout.amount || 0).toLocaleString()} coins</div>
+                          <div className="text-xs text-amber-600 font-medium">{asCoins(payout.amount)} coins</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-medium text-xs text-gray-900 dark:text-white">{payout.paymentMethod || '—'}</div>
@@ -585,10 +597,10 @@ const AdminEconomyScreen = () => {
 
                     <div className="text-right">
                       <div className="font-bold text-sm text-gray-900 dark:text-white">
-                        {Number(tx.amount || 0).toLocaleString()} Coins
+                        {asCoins(tx.amount)} Coins
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        ${formatCoinsAsUsd(tx.amount || 0)} USD
+                        {asUsd(tx.amount)} USD
                       </div>
                     </div>
                   </div>
