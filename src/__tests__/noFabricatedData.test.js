@@ -2931,3 +2931,39 @@ describe('CreatePost media upload fails closed — never persists a session-scop
     expect(svc).toContain("url.startsWith('blob:') || url.startsWith('data:')");
   });
 });
+
+describe('Creator dashboard never fabricates growth rate or active days (N172)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('analyticsService leaves growthRate/activeDays unknown, never a measured 0', () => {
+    // Nothing computes a growth rate into `profile_analytics`, and active days
+    // live on the user doc (`activeDaysCount`), never the analytics doc. The
+    // old `growthRate: 0` / `activeDays: <post count>` rendered a permanent
+    // green "+0.0%" and a streak derived from the number of recent posts.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('growthRate: 0,');
+    expect(svc).not.toContain('growthRate: data.growthRate || 0');
+    expect(svc).toContain("growthRate: typeof data.growthRate === 'number' ? data.growthRate : null");
+    expect(svc).not.toContain('activeDays: topPosts.length > 0 ? Math.min(topPosts.length, days) : 0');
+    expect(svc).not.toContain('activeDays: data.activeDays || 0');
+    expect(svc).toContain("activeDays: typeof data.activeDays === 'number' ? data.activeDays : null");
+  });
+
+  test('the dashboard only renders a growth rate that is a real number', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain('analytics?.growthRate !== undefined');
+    expect(s).toContain("typeof analytics?.growthRate === 'number'");
+  });
+
+  test('the dashboard reads active days from the profile, not the analytics doc', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain('{analytics.activeDays} days');
+    expect(s).toContain('typeof activeDaysCount === \'number\' ? `${activeDaysCount} days` : \'—\'');
+    expect(s).toContain('userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null');
+  });
+
+  test('the identity mirror carries the canonical activeDaysCount', () => {
+    const ctx = read('src/context/AuthContext.jsx');
+    expect(ctx).toContain('activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null');
+  });
+});

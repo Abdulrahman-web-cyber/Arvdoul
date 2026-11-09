@@ -266,8 +266,11 @@ class UltimateAnalyticsService {
         coinsEarned: 0,
         dailyStats: [],
         topPosts: [],
-        growthRate: 0,
-        activeDays: 0,
+        // Nothing computes a growth rate or an active-day count into
+        // profile_analytics, so an absent value is unknown (rendered '—' /
+        // hidden), never a fabricated measured 0.
+        growthRate: null,
+        activeDays: null,
         demographics: {
           ageGroups: {},
           gender: {},
@@ -308,8 +311,13 @@ class UltimateAnalyticsService {
           coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null,
           dailyStats: this._extractDailyStats(data.dailyStats, startDate),
           topPosts: data.topPosts || [],
-          growthRate: data.growthRate || 0,
-          activeDays: data.activeDays || 0,
+          // Nothing writes a growth rate, so a stored value is the only real
+          // one; an absent one is unknown (the dashboard hides the card).
+          growthRate: typeof data.growthRate === 'number' ? data.growthRate : null,
+          // Active days live on the user doc (functions/levelSystem
+          // recordActiveDay writes `activeDaysCount`), never on the analytics
+          // doc; an absent value is unknown, not a measured 0.
+          activeDays: typeof data.activeDays === 'number' ? data.activeDays : null,
           demographics: data.demographics || analytics.demographics,
         };
 
@@ -405,8 +413,11 @@ class UltimateAnalyticsService {
           coinsEarned,
           dailyStats,
           topPosts: topPosts.slice(0, 5),
-          growthRate: 0,
-          activeDays: topPosts.length > 0 ? Math.min(topPosts.length, days) : 0,
+          // The number of recent posts is NOT the canonical active-day count
+          // (`users/{uid}.activeDaysCount`, written by recordActiveDay); deriving
+          // one from the other fabricated a measured streak of activity.
+          growthRate: null,
+          activeDays: null,
           demographics: analytics.demographics,
         };
       }

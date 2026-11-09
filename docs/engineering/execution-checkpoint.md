@@ -324,3 +324,42 @@ thumbnail is uploaded or dropped.
 
 Gates: `npm test` — **119 suites / 1435 passing**; `npm run build` — ✓;
 `eslint src/ --quiet` — 0 errors; full `guards` job list (73 suites) — 841 passing.
+
+## Checkpoint — N172 (creator dashboard fabricated growth rate + active days)
+
+`analyticsService.getUserAnalytics` returned a hardcoded `growthRate: 0` and,
+in the new-creator fallback, derived `activeDays` from the recent-post count.
+`CreatorDashboardScreen` then rendered a permanent green **"Growth Rate
++0.0%"** and a fabricated "Active Days" streak for every creator.
+
+Evidence:
+- No writer computes a growth rate: only `functions/analytics.js` seeds
+  `growthRate: 0` on `profile_analytics` doc create, and `rankingService`
+  reads a separate `rankings/rising` collection. So `analytics?.growthRate
+  !== undefined` was always true → a confident "+0.0%" trend that never moved.
+- Active days are canonical on `users/{uid}.activeDaysCount`
+  (`functions/levelSystem` `recordActiveDay`), never on the analytics doc; the
+  fallback's `Math.min(topPosts.length, days)` dressed a recent-post count up
+  as an activity streak.
+- `null >= 0` is `true` in JS, so a `null` growth rate would have crashed the
+  card on `.toFixed(1)` — the guard had to be tightened too.
+
+Fix:
+- `getUserAnalytics`: `growthRate`/`activeDays` are `null` unless a real
+  stored number exists (both the exists-branch and the fallback branch).
+- `CreatorDashboardScreen`: the growth card renders only when
+  `typeof analytics?.growthRate === 'number'`; Active Days reads
+  `userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null` and
+  renders `—` when unknown.
+- `AuthContext.syncUserWithAppStore` mirror now carries `activeDaysCount` /
+  `activeStreak` (absent → null).
+- `analyticsStore` keeps `growthRate`/`activeDays` null when unmeasured.
+
+Guards: new `noFabricatedData.test.js` block (N172) asserting the service no
+longer seeds `0`, the dashboard gates on a real number, the dashboard reads
+active days from the profile, and the identity mirror carries
+`activeDaysCount`.
+
+Gates: `npm test` — **119 suites / 1440 passing / 5 skipped**; `npm run build`
+— ✓; `eslint src/ --quiet` — 0 errors; guard suites (`noFabricatedData`,
+`storeContract`, `contextContract`) — 318 passing.

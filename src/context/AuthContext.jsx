@@ -218,6 +218,10 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     savedCount: userProfile?.savedCount ?? null,
     followerCount: userProfile?.followerCount ?? null,
     followingCount: userProfile?.followingCount ?? null,
+    // Active days are the canonical `users/{uid}.activeDaysCount` (written by
+    // functions/levelSystem recordActiveDay); absent stays null (unknown).
+    activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null,
+    activeStreak: userProfile?.activeStreak ?? null,
     isOnline: true,
     lastActive: new Date().toISOString(),
     createdAt: user.metadata?.creationTime || new Date().toISOString(),

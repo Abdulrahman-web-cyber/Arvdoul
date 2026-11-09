@@ -32,10 +32,13 @@ const formatNumber = (num) => {
 export default function CreatorDashboardScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user: authUser } = useAuth();
+  const { user: authUser, userProfile } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
   const currentUser = authUser || storeUser;
   const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
+  // The canonical active-day count lives on the user profile
+  // (`users/{uid}.activeDaysCount`); an unmeasured value stays null → '—'.
+  const activeDaysCount = userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null;
   
   const {
     analytics,
@@ -319,8 +322,10 @@ export default function CreatorDashboardScreen() {
               )}
             </div>
             
-            {/* Growth Rate */}
-            {analytics?.growthRate !== undefined && (
+            {/* Growth Rate — only when a real rate was measured. Nothing
+                computes one, so the card stays hidden rather than showing a
+                fabricated green "+0.0%". */}
+            {typeof analytics?.growthRate === 'number' && (
               <div className={cn(
                 'p-4 rounded-2xl',
                 'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
@@ -352,24 +357,24 @@ export default function CreatorDashboardScreen() {
               </div>
             )}
             
-            {/* Active Days */}
-            {analytics?.activeDays !== undefined && (
-              <div className={cn(
-                'p-4 rounded-2xl',
-                'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-                'border border-gray-200/60 dark:border-gray-800/60'
-              )}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Active Days</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {analytics.activeDays} days
-                    </p>
-                  </div>
-                  <Calendar className="w-6 h-6 text-purple-500" />
+            {/* Active Days — the canonical count lives on the user profile
+                (`activeDaysCount`), never on the analytics doc; an unmeasured
+                value renders unknown. */}
+            <div className={cn(
+              'p-4 rounded-2xl',
+              'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+              'border border-gray-200/60 dark:border-gray-800/60'
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Active Days</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {typeof activeDaysCount === 'number' ? `${activeDaysCount} days` : '—'}
+                  </p>
                 </div>
+                <Calendar className="w-6 h-6 text-purple-500" />
               </div>
-            )}
+            </div>
           </>
         )}
       </div>

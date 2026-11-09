@@ -71,8 +71,8 @@ export const useAnalyticsStore = create(
           state.topPosts = analytics.topPosts || [];
           state.ranking = analytics.ranking || null;
           state.demographics = analytics.demographics || null;
-          state.growthRate = analytics.growthRate || 0;
-          state.activeDays = analytics.activeDays || 0;
+          state.growthRate = typeof analytics.growthRate === 'number' ? analytics.growthRate : null;
+          state.activeDays = typeof analytics.activeDays === 'number' ? analytics.activeDays : null;
         });
       } catch (error) {
         // A failed read is *unknown*, not zero: the fabricated all-zero
