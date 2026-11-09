@@ -767,12 +767,17 @@ service cloud.firestore {
       // Updates: participants may update their own state (lastRead, mutedBy,
       // archivedBy, pinnedBy...) but CANNOT mutate admins/roles/participants
       // unless they are an admin (prevents self-promotion / member tampering).
+      // The one exception is leaving: a participant may remove THEMSELVES from
+      // `participants` (the non-admin "leave group" path), and only themselves.
       allow update: if isSignedIn() && uid() in resource.data.participants && (
         isConvAdmin() ||
         (request.resource.data.admins == resource.data.admins &&
          request.resource.data.roles == resource.data.roles &&
-         request.resource.data.participants == resource.data.participants &&
-         request.resource.data.createdBy == resource.data.createdBy)
+         request.resource.data.createdBy == resource.data.createdBy &&
+         (
+           request.resource.data.participants == resource.data.participants ||
+           resource.data.participants.removeAll([uid()]) == request.resource.data.participants
+         ))
       );
       allow delete: if isSignedIn() && (uid() in resource.data.participants && isConvAdmin());
       // A 1:1 conversation may only be opened if the *other* participant's
@@ -805,10 +810,36 @@ service cloud.firestore {
       // validated so both layouts get identical ownership rules.
       match /{messageShardCollection}/{messageId} {
         allow read: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants();
+        // A normal message must be authored by the caller. A *system* message
+        // (`senderId: 'system'`, written by the client alongside a membership
+        // mutation) has no real author. This match previously required
+        // `senderId == uid()` for EVERY message, so every system message
+        // ("X left", "participants added", …) was denied and the whole
+        // membership call that sent it failed.
+        //
+        // A system message is admitted only from a conversation admin, or — for
+        // the one self-service event — from the member who is themselves
+        // leaving (`user_left` naming their own uid). It may never carry the
+        // shape of a real user message (`text`/`media`), so it cannot be used
+        // to inject content, and a member cannot forge another member's "left".
         allow create: if isSignedIn() &&
           isMessageShardCollection(messageShardCollection) &&
           uid() in convParticipants() &&
-          request.resource.data.senderId == uid();
+          (
+            request.resource.data.senderId == uid() ||
+            (
+              request.resource.data.senderId == 'system' &&
+              request.resource.data.isSystem == true &&
+              request.resource.data.type == 'system' &&
+              !('text' in request.resource.data) &&
+              !('media' in request.resource.data) &&
+              (
+                isConvAdmin() ||
+                request.resource.data.get('eventData', {}).get('userId', '') == uid() ||
+                request.resource.data.get('eventData', {}).get('from', '') == uid()
+              )
+            )
+          );
         allow update, delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
           resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])

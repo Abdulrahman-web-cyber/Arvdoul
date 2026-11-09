@@ -259,6 +259,38 @@ describe('firestore.rules economy accounting (regression guards)', () => {
   });
 });
 
+describe('firestore.rules messaging membership (regression guards)', () => {
+  test('a system message (senderId "system") is creatable by a participant', () => {
+    // Every `_sendSystemMessage` write uses `senderId: 'system'`, but the
+    // message-create rule required `senderId == uid()` for EVERY message — so
+    // every system message was denied and the membership call that sent it
+    // (leaveGroup / addParticipants / role changes) failed outright.
+    expect(rules).toContain("request.resource.data.senderId == 'system'");
+    expect(rules).toContain('request.resource.data.isSystem == true');
+    expect(rules).toContain("!('text' in request.resource.data)");
+  });
+
+  test('a participant may remove themselves from participants (leave)', () => {
+    // The non-admin leave path updates `participants`; the old rule required an
+    // admin for ANY participants change, so leaving was denied. The rule now
+    // admits `old.removeAll([uid()]) == new`.
+    expect(rules).toContain('resource.data.participants.removeAll([uid()]) == request.resource.data.participants');
+  });
+
+  test('leaveGroup sends the "left" notice before the membership update', () => {
+    // The create rule requires the sender to still be a participant; after the
+    // removal the departing member is not, so the notice must come first.
+    const svc = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    const start = svc.indexOf('async leaveGroup');
+    const body = svc.slice(start, svc.indexOf('\n  async ', start + 1));
+    const noticeAt = body.indexOf("'user_left'");
+    const removalAt = body.indexOf('participants: arrayRemove(userId)');
+    expect(noticeAt).toBeGreaterThan(-1);
+    expect(removalAt).toBeGreaterThan(-1);
+    expect(noticeAt).toBeLessThan(removalAt);
+  });
+});
+
 describe('firestore.rules adversarial checks (emulator)', () => {
   let reachable = false;
   beforeAll(async () => { reachable = await emulatorReachable(); });
@@ -632,6 +664,72 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       const grid = (db, uid) => query(collection(db, 'stories'), where('userId', '==', uid), where('isDeleted', '==', false), limit(30));
       await assertSucceeds(getDocs(grid(alice, 'alice')));
       await assertFails(getDocs(grid(bob, 'alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('group leave + system messages are authorized as intended (N197)', async () => {
+    // 1) a non-admin participant may remove themselves (leave);
+    // 2) a participant may write the `user_left` system notice while still a
+    //    member, but no member may forge another member's notice or inject
+    //    text through a "system" message.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayRemove, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const sysMsg = (eventData) => ({
+      type: 'system', eventType: 'user_left', eventData, senderId: 'system',
+      senderName: 'System', isSystem: true,
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/g1'), {
+          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol'],
+          participantCount: 3, admins: ['alice'], roles: { alice: 'admin', bob: 'member', carol: 'member' },
+          createdBy: 'alice',
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // A member sends their own "left" notice (still a participant) — allowed.
+      await assertSucceeds(setDoc(doc(bob, 'conversations/g1/messages/sys_bob'),
+        sysMsg({ userId: 'bob' })));
+      // A member cannot forge another member's notice.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_forged'),
+        sysMsg({ userId: 'carol' })));
+      // A "system" message may not smuggle real content.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_evil'),
+        { ...sysMsg({ userId: 'bob' }), text: 'free advertising' }));
+      // A member cannot author a normal message as someone else.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/forged'),
+        { type: 'text', text: 'hi', senderId: 'carol' }));
+
+      // The non-admin leaves: participants drops ONLY bob, count decremented.
+      await assertSucceeds(updateDoc(doc(bob, 'conversations/g1'), {
+        participants: arrayRemove('bob'), participantCount: increment(-1),
+      }));
+      // A member cannot remove someone ELSE.
+      await assertFails(updateDoc(doc(env.authenticatedContext('carol').firestore(), 'conversations/g1'), {
+        participants: arrayRemove('alice'), participantCount: increment(-1),
+      }));
+      // A member cannot self-promote.
+      await assertFails(updateDoc(doc(env.authenticatedContext('carol').firestore(), 'conversations/g1'), {
+        admins: ['carol'],
+      }));
+      // The admin may remove a member.
+      await assertSucceeds(updateDoc(doc(alice, 'conversations/g1'), {
+        participants: arrayRemove('carol'), participantCount: increment(-1),
+      }));
     } finally {
       await env.cleanup();
     }

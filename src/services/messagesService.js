@@ -2043,13 +2043,18 @@ class UltimateMessagingService {
       }
     }
 
+    // Send the "left" notice BEFORE the membership update: the create rule
+    // requires the sender to still be a participant, and after the removal the
+    // departing member no longer is. (The admin-transfer notice above is
+    // likewise sent while the member is still present.)
+    await this._sendSystemMessage(conversationId, 'user_left', { userId });
+
     await this.fs.updateDoc(convRef, {
       participants: arrayRemove(userId),
       participantCount: increment(-1),
       hiddenFor: arrayUnion(userId),
       updatedAt: this.fs.serverTimestamp(),
     });
-    await this._sendSystemMessage(conversationId, 'user_left', { userId });
     this.conversationsCache.delete(conversationId);
     return { success: true };
   }
@@ -2917,17 +2922,24 @@ class UltimateMessagingService {
   async _sendSystemMessage(conversationId, eventType, eventData) {
     const msgId = `sys_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const msgRef = this.fs.doc(this.firestore, 'conversations', conversationId, 'messages', msgId);
-    await this.fs.setDoc(msgRef, {
-      id: msgId,
-      conversationId,
-      type: MESSAGING_CONFIG.MESSAGE_TYPES.SYSTEM,
-      eventType,
-      eventData,
-      senderId: 'system',
-      senderName: 'System',
-      createdAt: this.fs.serverTimestamp(),
-      isSystem: true,
-    });
+    try {
+      await this.fs.setDoc(msgRef, {
+        id: msgId,
+        conversationId,
+        type: MESSAGING_CONFIG.MESSAGE_TYPES.SYSTEM,
+        eventType,
+        eventData,
+        senderId: 'system',
+        senderName: 'System',
+        createdAt: this.fs.serverTimestamp(),
+        isSystem: true,
+      });
+    } catch (e) {
+      // The membership/role mutation that triggered this notice is the primary
+      // operation and has already succeeded; a missing timeline chip must not
+      // roll it back. Log so a persistent rules denial is still visible.
+      logger.warn('System message write failed', { conversationId, eventType, error: e?.message });
+    }
   }
 
   async _recordRateLimit(userId) {
