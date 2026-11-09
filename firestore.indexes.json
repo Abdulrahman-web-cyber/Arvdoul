@@ -1683,16 +1683,6 @@
       ]
     },
     {
-      "collectionGroup": "reels",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "report_impressions",
       "queryScope": "COLLECTION",
       "fields": [
