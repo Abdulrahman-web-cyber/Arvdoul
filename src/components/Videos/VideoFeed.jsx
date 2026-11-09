@@ -41,7 +41,6 @@ const VideoFeed = memo(({
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
-  const [preloadedVideos, setPreloadedVideos] = useState({});
 
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
@@ -94,23 +93,47 @@ const VideoFeed = memo(({
   // Keep selected video in sync
   const currentVideo = videos[currentIndex] || videos[0] || null;
 
-  // Preload adjacent video assets for seamless scrolling
+  // Preload a small, bounded window of adjacent video assets. The previous
+  // implementation kept one detached <video> element per id in component
+  // state forever, and re-ran on every state change — a long feed session
+  // leaked a media element (plus its buffered network data) per video viewed.
+  const preloadRef = useRef(new Map()); // videoId -> detached <video>
+
   useEffect(() => {
-    const preload = (vid) => {
-      if (!vid || preloadedVideos[vid.id]) return;
+    const wanted = [currentIndex, currentIndex + 1, currentIndex + 2]
+      .map((i) => videos[i])
+      .filter(Boolean);
+    const wantedIds = new Set(wanted.map((v) => v.id));
+
+    // Release every preloader that has fallen outside the window.
+    for (const [id, el] of preloadRef.current) {
+      if (!wantedIds.has(id)) {
+        el.removeAttribute('src');
+        el.load();
+        preloadRef.current.delete(id);
+      }
+    }
+    for (const vid of wanted) {
+      if (preloadRef.current.has(vid.id)) continue;
       const el = document.createElement('video');
-      el.src = vid.videoUrl || vid.url || '';
       el.preload = 'auto';
       el.muted = true;
-      setPreloadedVideos((prev) => ({ ...prev, [vid.id]: el }));
-    };
-
-    if (videos.length > 0) {
-      if (videos[currentIndex]) preload(videos[currentIndex]);
-      if (videos[currentIndex + 1]) preload(videos[currentIndex + 1]);
-      if (videos[currentIndex + 2]) preload(videos[currentIndex + 2]);
+      el.src = vid.videoUrl || vid.url || '';
+      preloadRef.current.set(vid.id, el);
     }
-  }, [videos, currentIndex, preloadedVideos]);
+  }, [videos, currentIndex]);
+
+  // Release all preloaders on unmount so navigating away frees the buffers.
+  useEffect(() => {
+    const preloaders = preloadRef.current;
+    return () => {
+      for (const el of preloaders.values()) {
+        el.removeAttribute('src');
+        el.load();
+      }
+      preloaders.clear();
+    };
+  }, []);
 
   // Scroll to index
   const scrollToIndex = useCallback((index) => {

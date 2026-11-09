@@ -280,6 +280,10 @@ const VideoCard = memo(({
         ref={videoRef}
         src={videoSrc}
         poster={thumbnail}
+        // Only the on-screen card may buffer ahead; a vertical feed mounts
+        // every loaded card, so an unconditional 'auto' preload pulled
+        // full-resolution data for videos the viewer never reached.
+        preload={isActive ? 'auto' : 'metadata'}
         className="w-full h-full object-cover sm:object-contain"
         playsInline
         muted={isMuted}

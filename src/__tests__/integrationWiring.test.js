@@ -44,6 +44,15 @@ describe('video feed wiring', () => {
     expect(src).toContain('videoService.recordVideoView');
   });
 
+  test('VideoFeed bounds the preload window instead of leaking a player per video', () => {
+    const src = read('src/components/Videos/VideoFeed.jsx');
+    // The leaky pattern kept every detached <video> in React state forever.
+    expect(src).not.toContain('preloadedVideos');
+    expect(src).toContain('preloadRef.current.delete(id)');
+    // Preloaders are released on unmount.
+    expect(src).toMatch(/preloaders\.clear\(\)/);
+  });
+
   test('VideoDetailScreen feeds the action rail flat counters and a real viewer state', () => {
     const src = read('src/screens/VideoDetailScreen.jsx');
     expect(src).toContain('getViewerVideoState');
