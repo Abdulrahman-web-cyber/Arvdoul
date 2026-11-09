@@ -1649,6 +1649,10 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
       const price = Number(product.priceCoins) || 0;
       if (price <= 0) throw new functions.https.HttpsError('invalid-argument', 'Product has no valid coin price.');
 
+      const sellerId = product.creatorId || null;
+      if (!sellerId) throw new functions.https.HttpsError('failed-precondition', 'This listing has no seller and cannot be purchased.');
+      if (sellerId === uid) throw new functions.https.HttpsError('invalid-argument', 'You cannot purchase your own listing.');
+
       const userRef = db.collection('users').doc(uid);
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
@@ -1657,22 +1661,41 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError('failed-precondition', `Insufficient Arvdoul Coins. You need ${price} coins, but have ${available}.`);
       }
 
-      // 1. Debit coins (same double-entry ledger as spendCoins)
+      const sellerRef = db.collection('users').doc(sellerId);
+      const sellerSnap = await t.get(sellerRef);
+      if (!sellerSnap.exists) throw new functions.https.HttpsError('failed-precondition', 'The seller account is unavailable.');
+
+      // 1. Move the coins buyer -> seller. The marketplace is 0% fee (see
+      //    MarketplaceScreen copy), so the seller receives the full price and
+      //    total supply is unchanged. The old path debited the buyer and
+      //    burned the coins from system/coin_supply, so every purchase
+      //    destroyed value and the seller was never paid.
       const newBalance = (userSnap.data().coins || 0) - price;
-      t.update(userRef, { coins: newBalance });
+      const sellerNewBalance = (sellerSnap.data().coins || 0) + price;
+      t.update(userRef, { coins: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      t.update(sellerRef, { coins: sellerNewBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
       const txRef = db.collection('coin_transactions').doc();
       t.set(txRef, {
         userId: uid, type: 'debit', amount: price,
         reason: 'marketplace_purchase',
+        relatedUserId: sellerId,
         metadata: { productId, productTitle: product.title || '' },
         idempotencyKey: key, balanceAfter: newBalance,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       });
-      createLedgerEntry(t, `users:${uid}`, 'system:coin_supply', price, { reason: 'marketplace_purchase', transactionId: txRef.id });
-      t.set(db.collection('system').doc('coin_supply'),
-        { totalCoins: admin.firestore.FieldValue.increment(-price) }, { merge: true });
+      const saleRef = db.collection('coin_transactions').doc();
+      t.set(saleRef, {
+        userId: sellerId, type: 'credit', amount: price,
+        reason: 'marketplace_sale',
+        relatedUserId: uid,
+        metadata: { productId, productTitle: product.title || '', orderId: key },
+        idempotencyKey: `${key}_seller`, balanceAfter: sellerNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+      createLedgerEntry(t, `users:${uid}`, `users:${sellerId}`, price, { reason: 'marketplace_purchase', transactionId: txRef.id });
 
       // 2. Stock + sales
       t.update(productRef, {
@@ -1688,7 +1711,7 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
         productTitle: product.title || '',
         product,
         buyerId: uid,
-        sellerId: product.creatorId || null,
+        sellerId,
         purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
         amountPaidCoins: price,
         downloadUrl: product.downloadUrl || null,

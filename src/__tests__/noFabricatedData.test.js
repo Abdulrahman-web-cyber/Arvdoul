@@ -384,6 +384,19 @@ describe('Poll + marketplace rules compliance', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
     expect(src).toContain('creatorId: creator.uid');
   });
+
+  test('marketplace purchase credits the seller instead of burning the coins', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    const start = src.indexOf('exports.purchaseMarketplaceItem');
+    const body = src.slice(start, src.indexOf('exports.', start + 10));
+    // The buyer's coins must reach the seller (0% fee), not the supply sink.
+    expect(body).toContain('sellerNewBalance');
+    expect(body).toContain("reason: 'marketplace_sale'");
+    expect(body).toContain('`users:${sellerId}`');
+    // The old value sink: debit the buyer, burn from system:coin_supply.
+    expect(body).not.toContain("'system:coin_supply', price");
+    expect(body).not.toContain('increment(-price)');
+  });
 });
 
 describe('Offline drain - notification reads are retried', () => {
