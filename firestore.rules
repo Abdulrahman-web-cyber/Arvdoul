@@ -354,8 +354,11 @@ service cloud.firestore {
       allow create: if isOwner(userId);
     }
     match /user_daily_stats/{statId} {
+      // Doc id is `<userId>_<YYYY-MM-DD>`; a write keyed only on the incoming
+      // userId let a signed-in user overwrite another user's snapshot doc.
       allow read: if isSignedIn() && (request.auth.uid == resource.data.userId);
-      allow write: if isSignedIn() && request.resource.data.userId == uid();
+      allow write: if isSignedIn() && statId.startsWith(uid() + '_') &&
+        request.resource.data.userId == uid();
     }
     match /user_preferences/{userId} {
       allow read, write: if isOwner(userId);
@@ -1027,7 +1030,10 @@ service cloud.firestore {
     }
     match /live_viewers/{viewerId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.resource.data.userId == uid();
+      // Doc id is `<streamId>_<viewerId>`; a write keyed only on the incoming
+      // userId let a signed-in user overwrite another viewer's watch record.
+      allow write: if isSignedIn() && viewerId.endsWith('_' + uid()) &&
+        request.resource.data.userId == uid();
     }
     match /live_comments/{commentId} {
       allow read: if true;

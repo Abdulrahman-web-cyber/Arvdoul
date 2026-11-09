@@ -246,6 +246,17 @@ describe('firestore.rules economy accounting (regression guards)', () => {
     expect(body).toBeTruthy();
     expect(body).toMatch(/allow create: if false;/);
   });
+
+  test('per-day / per-stream stat docs are scoped to their owner doc id', () => {
+    // A write keyed only on the incoming `userId` let a signed-in user overwrite
+    // another user's document by targeting its id.
+    const daily = blockBody('user_daily_stats');
+    expect(daily).toBeTruthy();
+    expect(daily).toMatch(/statId\.startsWith\(uid\(\) \+ '_'\)/);
+    const viewers = blockBody('live_viewers');
+    expect(viewers).toBeTruthy();
+    expect(viewers).toMatch(/viewerId\.endsWith\('_' \+ uid\(\)\)/);
+  });
 });
 
 describe('firestore.rules adversarial checks (emulator)', () => {
