@@ -2,20 +2,28 @@
 //
 // Per Constitution v5.0 - Grid of collaboration projects
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
 import collaborationService from '../../services/collaborationService';
-import { Plus, Folder, Clock, Search, Filter, Loader2 } from "lucide-react";
+import { Dialog } from '../../components/UI/Dialog';
+import { Plus, Folder, Clock, Search, Filter, Loader2, Users } from "lucide-react";
 const STATUS_COLORS = {
   draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Draft' },
   in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
   review: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'In Review' },
   completed: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Completed' },
 };
+
+const CONTENT_TYPES = [
+  { id: 'video', label: 'Video' },
+  { id: 'audio', label: 'Audio' },
+  { id: 'article', label: 'Article' },
+  { id: 'thumbnail', label: 'Thumbnail' },
+];
 
 export default function ProjectDashboardScreen() {
   const navigate = useNavigate();
@@ -28,29 +36,57 @@ export default function ProjectDashboardScreen() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(null);
+  const [newProject, setNewProject] = useState({ name: '', description: '', contentType: 'video' });
+
+  const loadProjects = useCallback(async () => {
+    if (!user?.uid) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      // Get user's collaboration stats which includes their projects
+      const stats = await collaborationService.getStats(user.uid);
+      setProjects(stats?.projects || []);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
-    const loadProjects = async () => {
-      if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        // Get user's collaboration stats which includes their projects
-        const stats = await collaborationService.getStats(user.uid);
-        setProjects(stats?.projects || []);
-      } catch (err) {
-        console.error('Failed to load projects:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     loadProjects();
-  }, [user?.uid]);
+  }, [loadProjects]);
+
+  const handleCreateProject = async () => {
+    const name = newProject.name.trim();
+    if (!name || creating) return;
+    try {
+      setCreating(true);
+      setCreateError(null);
+      const project = await collaborationService.createProject({
+        name,
+        description: newProject.description.trim(),
+        contentType: newProject.contentType,
+      });
+      setCreateOpen(false);
+      setNewProject({ name: '', description: '', contentType: 'video' });
+      if (project?.id) navigate(`/collaboration/${project.id}`);
+      else await loadProjects();
+    } catch (err) {
+      console.error('Failed to create project:', err);
+      setCreateError(err.message || 'Could not create the project.');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const filteredProjects = useMemo(() => {
     return projects.filter(project => {
@@ -92,6 +128,7 @@ export default function ProjectDashboardScreen() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            onClick={() => { setCreateError(null); setCreateOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 rounded-arvdoul-md bg-arvdoul-gradient text-white font-medium shadow-arvdoul-button"
           >
             <Plus className="w-5 h-5" />
@@ -233,32 +270,14 @@ export default function ProjectDashboardScreen() {
                   </p>
                   
                   <div className="flex items-center justify-between">
-                    {/* Team Avatars */}
-                    <div className="flex -space-x-2">
-                      {(project.team || []).slice(0, 3).map((member, idx) => (
-                        member?.avatar ? (
-                          <img
-                            key={member.id}
-                            src={member.avatar}
-                            alt="Team member"
-                            className="w-7 h-7 rounded-full border-2 border-arvdoul-surface"
-                          />
-                        ) : (
-                          <div
-                            key={member?.id || `team-member-${idx}`}
-                            className="w-7 h-7 rounded-full bg-arvdoul-purple flex items-center justify-center text-xs text-white border-2 border-arvdoul-surface"
-                          >
-                            {(member?.name || '?').charAt(0).toUpperCase()}
-                          </div>
-                        )
-                      ))}
-                      {(project.members || 0) > 3 && (
-                        <div className="w-7 h-7 rounded-full bg-arvdoul-purple flex items-center justify-center text-xs text-white border-2 border-arvdoul-surface">
-                          +{(project.members || 0) - 3}
-                        </div>
-                      )}
+                    {/* Roster size, denormalized on the project document. */}
+                    <div className="flex items-center gap-1 text-xs text-arvdoul-text-secondary">
+                      <Users className="w-3.5 h-3.5" />
+                      {project.memberCount != null
+                        ? `${project.memberCount} member${project.memberCount === 1 ? '' : 's'}`
+                        : 'Members unavailable'}
                     </div>
-                    
+
                     {/* Updated */}
                     <div className="flex items-center gap-1 text-xs text-arvdoul-text-secondary">
                       <Clock className="w-3 h-3" />
@@ -272,6 +291,103 @@ export default function ProjectDashboardScreen() {
         </div>
         )}
       </div>
+
+      <Dialog
+        isOpen={createOpen}
+        onClose={() => { if (!creating) setCreateOpen(false); }}
+        title="New collaboration project"
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="collab-name" className="block text-sm font-medium mb-1.5">
+              Project name
+            </label>
+            <input
+              id="collab-name"
+              type="text"
+              value={newProject.name}
+              maxLength={120}
+              onChange={(e) => setNewProject(p => ({ ...p, name: e.target.value }))}
+              placeholder="e.g. Launch film — co-authored cut"
+              className={cn(
+                "w-full px-4 py-2.5 rounded-arvdoul-md outline-none border",
+                "bg-arvdoul-surface border-arvdoul-border focus:border-arvdoul-purple text-white placeholder:text-arvdoul-text-secondary"
+              )}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="collab-desc" className="block text-sm font-medium mb-1.5">
+              Description <span className="text-arvdoul-text-secondary">(optional)</span>
+            </label>
+            <textarea
+              id="collab-desc"
+              value={newProject.description}
+              maxLength={2000}
+              rows={3}
+              onChange={(e) => setNewProject(p => ({ ...p, description: e.target.value }))}
+              placeholder="What are you and your team building?"
+              className={cn(
+                "w-full px-4 py-2.5 rounded-arvdoul-md outline-none border resize-none",
+                "bg-arvdoul-surface border-arvdoul-border focus:border-arvdoul-purple text-white placeholder:text-arvdoul-text-secondary"
+              )}
+            />
+          </div>
+
+          <div>
+            <span className="block text-sm font-medium mb-1.5">Content type</span>
+            <div className="flex flex-wrap gap-2">
+              {CONTENT_TYPES.map((type) => (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => setNewProject(p => ({ ...p, contentType: type.id }))}
+                  className={cn(
+                    "px-3.5 py-2 rounded-arvdoul-md text-sm border transition-colors",
+                    newProject.contentType === type.id
+                      ? "bg-arvdoul-purple text-white border-arvdoul-purple"
+                      : "bg-arvdoul-surface border-arvdoul-border text-arvdoul-text-secondary hover:text-white"
+                  )}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {createError && (
+            <p role="alert" className="text-sm text-red-400">{createError}</p>
+          )}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              type="button"
+              disabled={creating}
+              onClick={() => setCreateOpen(false)}
+              className={cn(
+                "px-4 py-2.5 rounded-arvdoul-md border text-sm font-medium",
+                "bg-arvdoul-surface border-arvdoul-border text-arvdoul-text-secondary",
+                creating && "opacity-50"
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={creating || !newProject.name.trim()}
+              onClick={handleCreateProject}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 rounded-arvdoul-md text-sm font-medium text-white",
+                "bg-arvdoul-gradient shadow-arvdoul-button",
+                (creating || !newProject.name.trim()) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+              {creating ? 'Creating…' : 'Create project'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -213,13 +213,34 @@ class CollaborationService {
     return { id: snap.id, ...snap.data() };
   }
 
-  async getTeam(projectId) {
+  async getTeam(projectId, { viewerId = null } = {}) {
     await this.ensureInitialized();
 
     const teamRef = collection(this.firestore, 'collaboration_projects', projectId, 'team');
     const snap = await getDocs(query(teamRef, limit(COLLABORATION_CONFIG.MAX_LIST_READ)));
+    const members = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (members.length === 0) return members;
 
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    // Team documents carry only `{ userId, role, status }` — no display name or
+    // avatar. Resolve real identities through the canonical batched profile
+    // hydration so the roster never shows a bare uid.
+    try {
+      const { socialGraphService } = await import('./socialGraphService.js');
+      const profiles = await socialGraphService.hydrateProfiles(
+        members.map((m) => m.userId || m.id),
+        { viewerId }
+      );
+      const byId = new Map(profiles.map((p) => [p.uid || p.id, p]));
+      return members.map((m) => {
+        const profile = byId.get(m.userId || m.id);
+        return profile
+          ? { ...m, name: profile.displayName, avatar: profile.photoURL }
+          : m;
+      });
+    } catch (err) {
+      logger.warn('[CollaborationService] team identity hydration failed', err);
+      return members;
+    }
   }
 
   async updateMemberRole(projectId, userId, newRole, adminId, adminRole) {
@@ -352,8 +373,13 @@ class CollaborationService {
           description: data.description || '',
           status: data.status || 'draft',
           thumbnail: data.thumbnail || null,
-          team: Array.isArray(data.team) ? data.team : [],
-          members: typeof data.members === 'number' ? data.members : 0,
+          // Roster size is denormalized onto the project document by
+          // functions/collaboration.js (addTeamMember / removeTeamMember); the
+          // roster itself lives in the `team` subcollection and is loaded by
+          // getTeam() on the detail screen. There is no `team`/`members` array
+          // on the document, so reading those produced a fabricated 0 and a
+          // permanently empty avatar row.
+          memberCount: typeof data.memberCount === 'number' ? data.memberCount : null,
           updatedAt: updatedAt ? updatedAt.toISOString() : '',
           content: [],
           reviews: [],

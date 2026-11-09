@@ -120,6 +120,36 @@ describe('collaborationService - no sample projects', () => {
     expect(src).not.toContain("name: 'Arvdoul Launch Reel'");
     expect(src).toContain("where('ownerId', '==', userId)"); // real Firestore query
   });
+
+  test('project roster size is a real denormalized count, never a fabricated 0/empty array', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/collaborationService.js'), 'utf8');
+    // The project document has no `members` number or `team` array — members
+    // live in the `team` subcollection. Reading those fields produced a
+    // permanent `0` and a dead avatar row (N162).
+    expect(src).not.toMatch(/members:\s*typeof/);
+    expect(src).not.toMatch(/team:\s*Array\.isArray\(data\.team\)/);
+    expect(src).toContain("typeof data.memberCount === 'number'");
+  });
+
+  test('the server keeps the denormalized memberCount in step with the team roster', () => {
+    const fn = fs.readFileSync(path.join(root, 'functions/collaboration.js'), 'utf8');
+    expect(fn).toContain('memberCount: 1'); // seeded when the owner is added
+    expect(fn).toContain('memberCount: FieldValue.increment(1)');
+    expect(fn).toContain('memberCount: FieldValue.increment(-1)');
+  });
+
+  test('the collaboration UI wires create + team management (no dead controls)', () => {
+    const dashboard = fs.readFileSync(
+      path.join(root, 'src/screens/Collaboration/ProjectDashboardScreen.jsx'), 'utf8');
+    const detail = fs.readFileSync(
+      path.join(root, 'src/screens/Collaboration/ProjectDetailScreen.jsx'), 'utf8');
+    // The primary "New Project" action must reach the real create callable.
+    expect(dashboard).toContain('collaborationService.createProject');
+    // Team management must be reachable — these callables have no other caller.
+    expect(detail).toContain('collaborationService.createInvite');
+    expect(detail).toContain('collaborationService.updateMemberRole');
+    expect(detail).toContain('collaborationService.removeTeamMember');
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {

@@ -153,3 +153,42 @@ npm run build
 2. Chasing "surpass major platforms": profile highlight creation UI, richer
    About/Preview surfaces, PII boundary review.
 3. Re-run the `guards` job suites after any further reader changes.
+
+## Checkpoint — collaboration integrity, N162/N163
+
+- Branch: `reconstruction/arvdoul-platform-hardening`.
+- Completed: the collaboration domain had a **schema mismatch** between the
+  client reader and the server writer (same class as N155–N161).
+  - `collaborationService.getStats` read `members` (number) and `team` (array)
+    off the project document, but `functions/collaboration.js` never writes
+    either — the roster lives in the `team/{uid}` subcollection. Every project
+    card rendered a fabricated "0 members" and a permanently empty avatar row,
+    and the `+N` overflow chip was unreachable. Fixed by denormalizing a real
+    `memberCount` on the project document (`1` at create,
+    `FieldValue.increment(±1)` in `addTeamMember` / `removeCollaborationTeamMember`),
+    reading it in `getStats` (or `null` → "Members unavailable"), and replacing
+    the dead avatar row with a real member-count line (N162).
+  - `getTeam` now resolves real display names/avatars through the canonical
+    `socialGraphService.hydrateProfiles` batch (the team doc only stores
+    `{ userId, role, status }`), so the detail-screen roster no longer shows
+    bare uids.
+  - `ProjectDashboardScreen`'s primary "New Project" button had no `onClick`
+    — the only create path (`createCollaborationProject` callable) was
+    unreachable from the UI. Wired to an accessible `Dialog` with inline error
+    handling, duplicate-submit guard, and navigate-on-success (N163).
+  - `createInvite` / `updateMemberRole` / `removeTeamMember` had no caller in
+    `src/` at all — the team tab was read-only, so a project owner could never
+    build a team. The team tab now offers an invite dialog, inline role
+    selector and per-member removal, gated by `canManageTeam` + the server's
+    own role check (N164).
+- Guards: `noFabricatedData.test.js` (collaboration block extended).
+- Quality gates: `npm test` — **117 suites / 1419 tests passing**;
+  `npm run build` — ✓ built; `eslint` — 0 errors.
+
+## Next exact tasks (updated)
+
+1. Continue the "no fabricated state" pass: `ProfileHeroSection.isRoyal` stats
+   still seed `|| 0` (fail-closed, so no false royal grant, but worth tightening).
+2. Chasing "surpass major platforms": profile highlight creation UI, richer
+   About/Preview surfaces, PII boundary review.
+3. Re-run the `guards` job suites after any further reader changes.

@@ -109,6 +109,12 @@ async function addTeamMember(projectId, userId, role, addedBy) {
     addedAt: FieldValue.serverTimestamp(),
     addedBy: addedBy || null,
   });
+  // Denormalized roster size on the project document so the dashboard can show a
+  // real member count without fanning out one subcollection read per project.
+  await db.doc(`collaboration_projects/${projectId}`).update({
+    memberCount: FieldValue.increment(1),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
 }
 
 exports.createCollaborationProject = functions.https.onCall(async (data, context) => {
@@ -123,6 +129,9 @@ exports.createCollaborationProject = functions.https.onCall(async (data, context
     description: cleanText(description, 2000),
     ownerId: uid,
     contentType: ['video', 'audio', 'article', 'thumbnail'].includes(contentType) ? contentType : 'video',
+    // The owner is the first roster entry (team/{uid} below), so the denormalized
+    // count starts at 1. Kept in step by addTeamMember / removeCollaborationTeamMember.
+    memberCount: 1,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     settings: { requireReview: true, autoPublish: false, notifyOnChanges: true },
@@ -228,6 +237,10 @@ exports.removeCollaborationTeamMember = functions.https.onCall(async (data, cont
   if (!snap.exists) throw httpError('not-found', 'Team member not found.');
   if (snap.data().role === 'owner') throw httpError('failed-precondition', 'The owner cannot be removed.');
   await memberRef.delete();
+  await db.doc(`collaboration_projects/${projectId}`).update({
+    memberCount: FieldValue.increment(-1),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
   await writeAudit(uid, 'collaboration_member_removed', projectId, { targetUserId: userId }, 'collaboration');
   return { success: true };
 });
