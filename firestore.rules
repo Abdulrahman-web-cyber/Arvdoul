@@ -888,9 +888,16 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.recipientId == uid();
       allow create: if false;
     }
-    match /notification_counters/{userId} {
-      allow read, update: if isOwner(userId);
-      allow create: if isOwner(userId);
+    // Doc id format: `{userId}_shard_{n}` (see notificationsService
+    // `_getTotalUnreadCount` / `getNotificationStats`), NOT the bare userId.
+    // The previous `isOwner(userId)` keyed on the whole shard id, so the owner's
+    // own read (`uid() == "<uid>_shard_3"`) never matched and every client read
+    // was silently denied. Writes stay server-side (the callables own the
+    // counters); the client only ever reads its own shards.
+    match /notification_counters/{counterId} {
+      // `matches()` requires a full-string match; the id is `${uid}_shard_${n}`.
+      allow read: if isSignedIn() && counterId.matches(uid() + '_shard_[0-9]+');
+      allow write: if false;
     }
     match /push_tokens/{tokenId} {
       allow read, write, delete: if isSignedIn() && resource.data.userId == uid();
