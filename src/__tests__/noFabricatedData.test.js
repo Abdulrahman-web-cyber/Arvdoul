@@ -2769,5 +2769,14 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
     expect(s).not.toContain('const currentXp = profile?.experience || profile?.xp || 0;');
     expect(s).toContain('XP not yet recorded');
+    // Royal eligibility dimensions stay unknown, not a fabricated 0/requirement.
+    expect(s).not.toContain("Number(profile?.activeDaysCount || profile?.activeDays || 0)");
+    expect(s).toContain("{known ? row.current : '—'}");
+  });
+
+  test('VideoCard reads the real comment stat key', () => {
+    const s = read('src/components/Videos/VideoCard.jsx');
+    expect(s).not.toContain('formatViewCount(video?.commentsCount)');
+    expect(s).toContain('video?.comments ?? video?.commentsCount');
   });
 });

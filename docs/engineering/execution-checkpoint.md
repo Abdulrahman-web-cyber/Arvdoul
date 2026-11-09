@@ -131,3 +131,25 @@ npm run build
 2. Chasing "surpass major platforms": profile highlight creation UI, richer
    About/Preview surfaces, PII boundary review.
 3. Re-run the `guards` job suites after any further reader changes.
+
+## Checkpoint — fabricated-zero sweep batch 5, N158/N159
+
+- Branch: `reconstruction/arvdoul-platform-hardening`.
+- Completed: continued the "no fabricated standing" pass into the creator/economy
+  and royal-eligibility surfaces.
+- Fixed (see ledger N158/N159): `CreatorDashboardScreen` metrics + change
+  badges, `CreatorPayoutScreen` unknown balance + unverifiable security claim,
+  `ProfileSystemRoadmapModal` (XP + royal checklist dimensions), `VideoCard`
+  comment stat key, `LiveScreen` viewer counts, community/event counts,
+  `ProfileFeaturedSection`/`ProfilePinnedPosts`.
+- Guards: `noFabricatedData.test.js` (batch-4/5 blocks), `liveWiringGuard.test.js`.
+- Quality gates: `npm test` — **117 suites / 1415 tests passing**;
+  `npm run build` — ✓ built; `eslint --quiet` — exit 0.
+
+## Next exact tasks (updated)
+
+1. Continue the "no fabricated state" pass: `ProfileHeroSection.isRoyal` stats
+   still seed `|| 0` (fail-closed, so no false royal grant, but worth tightening).
+2. Chasing "surpass major platforms": profile highlight creation UI, richer
+   About/Preview surfaces, PII boundary review.
+3. Re-run the `guards` job suites after any further reader changes.

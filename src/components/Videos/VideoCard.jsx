@@ -462,7 +462,7 @@ const VideoCard = memo(({
             <MessageCircle className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {formatViewCount(video?.commentsCount)}
+            {formatViewCount(video?.comments ?? video?.commentsCount)}
           </span>
         </div>
 

@@ -39,7 +39,10 @@ const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
       <div className="text-[11px] font-bold text-slate-400 font-mono">Eligibility Checklist:</div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
         {rows.map((row) => {
-          const met = row.current >= row.target;
+          // An unmeasured dimension is unknown, not a measured 0 — show '—'
+          // and leave the requirement unmet rather than claiming a 0/20.
+          const known = row.current != null && !Number.isNaN(row.current);
+          const met = known && row.current >= row.target;
           return (
             <span
               key={row.label}
@@ -48,7 +51,7 @@ const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
                 met ? 'text-emerald-400 border-emerald-500/30' : 'text-slate-400 border-white/5'
               )}
             >
-              {row.label} ({row.current}/{row.target})
+              {row.label} ({known ? row.current : '—'}/{row.target})
               {met ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
             </span>
           );
@@ -86,18 +89,19 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
     () => (hasXp || currentLevel !== null) ? getLevelInfo(hasXp ? currentXp : 0) : { level: null, progress: null, nextLevelXp: null },
     [hasXp, currentXp, currentLevel]
   );
-  const activeDays = Number(profile?.activeDaysCount || profile?.activeDays || 0);
-  const reputation = Number(profile?.reputationScore || profile?.reputation || 0);
-  const contribution = Number(profile?.contributionScore || profile?.contribution || 0);
-  const influence = Number(profile?.influenceScore || profile?.influence || 0);
-  const achievements = Number(
-    profile?.achievementsCount !== undefined
-      ? profile?.achievementsCount
-      : (Array.isArray(profile?.achievements) ? profile.achievements.length : 0)
-  );
+  // Unknown dimensions stay null so the eligibility checklist shows '—'
+  // instead of a fabricated 0/requirement.
+  const num = (v) => (v == null || Number.isNaN(Number(v)) ? null : Number(v));
+  const activeDays = num(profile?.activeDaysCount ?? profile?.activeDays);
+  const reputation = num(profile?.reputationScore ?? profile?.reputation);
+  const contribution = num(profile?.contributionScore ?? profile?.contribution);
+  const influence = num(profile?.influenceScore ?? profile?.influence);
+  const achievements = profile?.achievementsCount !== undefined
+    ? num(profile?.achievementsCount)
+    : (Array.isArray(profile?.achievements) ? profile.achievements.length : null);
 
   const stats = useMemo(() => ({
-    level: currentLevel || 0,
+    level: currentLevel,
     activeDays,
     reputation,
     contribution,
@@ -598,7 +602,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                   <RoyalEligibilityChecklist
                     rule={ROYAL_ELIGIBILITY.duke}
-                    level={currentLevel ?? 0}
+                    level={currentLevel}
                     activeDays={activeDays}
                     reputation={reputation}
                     contribution={contribution}
@@ -668,7 +672,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                   <RoyalEligibilityChecklist
                     rule={ROYAL_ELIGIBILITY.king}
-                    level={currentLevel ?? 0}
+                    level={currentLevel}
                     activeDays={activeDays}
                     reputation={reputation}
                     contribution={contribution}
