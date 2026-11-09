@@ -19,11 +19,34 @@ jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-import { firestoreService } from '../services/firestoreService.js';
+// The service chain (firestoreService -> CountersManager -> Logger) is ESM.
+// Under CI's Node 22 Jest cannot `require()` that ESM module, so mock the
+// logger the way the other component tests do.
+jest.mock('../utils/Logger.js', () => {
+  class Logger {
+    constructor() {}
+    debug() {} info() {} warn() {} error() {} fatal() {}
+  }
+  return {
+    Logger,
+    logger: new Logger(),
+    setCorrelationId: jest.fn(),
+    getCorrelationId: jest.fn(),
+  };
+});
+
+// The grid loads the service with a dynamic `import()`. On CI's Node 22 that
+// resolves to a different module instance than a static import, so obtain the
+// same instance the component sees and spy on that.
 import ProfileFeedGrid from '../components/profile/ProfileFeedGrid';
 
+let firestoreService;
 let likeSpy;
 let unlikeSpy;
+
+beforeAll(async () => {
+  ({ firestoreService } = await import('../services/firestoreService.js'));
+});
 
 beforeEach(() => {
   likeSpy = jest.spyOn(firestoreService, 'likePost').mockResolvedValue({ success: true });
