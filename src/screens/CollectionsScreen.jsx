@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, Folder, Lock, Globe, X, FolderPlus } from "lucide-react";
+import { FolderOpen, Plus, Trash2, Folder, Lock, X, FolderPlus } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +27,6 @@ export default function CollectionsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newIsPrivate, setNewIsPrivate] = useState(false);
 
   // Load collections from collectionsService (Firestore-backed)
   useEffect(() => {
@@ -46,7 +45,6 @@ export default function CollectionsScreen() {
           title: c.name || c.title || 'Untitled',
           description: c.description || '',
           itemCount: c.itemCount || 0,
-          isPrivate: Boolean(c.isPrivate),
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
@@ -79,13 +77,11 @@ export default function CollectionsScreen() {
       const res = await collectionsService.createCollection(user?.uid, {
         name: newTitle.trim(),
         description: newDesc.trim() || 'Custom curated collection',
-        isPrivate: newIsPrivate,
       });
       if (!res.success) throw new Error(res.error || 'Failed to create');
       toast.success(`Created collection "${newTitle}"! 📁`);
       setNewTitle('');
       setNewDesc('');
-      setNewIsPrivate(false);
       setShowCreateModal(false);
       // Reload from the server so the list reflects the real state
       const reload = await collectionsService.getCollections(user?.uid, { cacheFirst: false });
@@ -95,7 +91,6 @@ export default function CollectionsScreen() {
           title: c.name || c.title || 'Untitled',
           description: c.description || '',
           itemCount: c.itemCount || 0,
-          isPrivate: Boolean(c.isPrivate),
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
@@ -137,7 +132,7 @@ export default function CollectionsScreen() {
               <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Collections Folders</span>
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              Organize your saved posts, sparks, and creative audio presets into private or public folders.
+              Organize your saved posts, sparks and creative audio presets into personal folders.
             </p>
           </div>
 
@@ -199,9 +194,12 @@ export default function CollectionsScreen() {
 
               {/* Badges Top Bar */}
               <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between z-10">
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold text-white border border-white/10">
-                  {c.isPrivate ? <Lock className="w-3 h-3 text-amber-400" /> : <Globe className="w-3 h-3 text-blue-400" />}
-                  <span>{c.isPrivate ? 'Private' : 'Public'}</span>
+                <span
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold text-white border border-white/10"
+                  title="Folders are private to your account."
+                >
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span>Only you</span>
                 </span>
 
                 <button
@@ -312,20 +310,14 @@ export default function CollectionsScreen() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
-                  <div className="flex items-center gap-2.5">
-                    <Lock className="w-4 h-4 text-amber-400" />
-                    <div>
-                      <p className="text-xs font-bold">Private Collection</p>
-                      <p className="text-[11px] text-gray-400">Only you can view this folder</p>
-                    </div>
+                <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10">
+                  <Lock className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <p className="text-xs font-bold">Private to your account</p>
+                    <p className="text-[11px] text-gray-400">
+                      Folders are stored in your account. Nothing here is published to other users.
+                    </p>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={newIsPrivate}
-                    onChange={(e) => setNewIsPrivate(e.target.checked)}
-                    className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
-                  />
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">

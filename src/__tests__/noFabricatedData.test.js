@@ -2784,6 +2784,16 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).toContain("{known ? row.current : '—'}");
   });
 
+  test('CollectionsScreen does not offer a Public/Private control the rules cannot honour', () => {
+    // `collections` is owner-scoped in firestore.rules (read/update/delete all
+    // require resource.data.userId == uid()), so a "Public" folder is readable
+    // by nobody. The toggle collected a flag the service dropped and no read
+    // path honoured — a dead control claiming a visibility that does not exist.
+    const s = read('src/screens/CollectionsScreen.jsx');
+    expect(s).not.toContain('isPrivate');
+    expect(s).not.toContain('private or public folders');
+    expect(s).toContain('Only you');
+  });
   test('VideoCard reads the real comment stat key', () => {
     const s = read('src/components/Videos/VideoCard.jsx');
     expect(s).not.toContain('formatViewCount(video?.commentsCount)');
