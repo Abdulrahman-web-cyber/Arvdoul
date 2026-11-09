@@ -183,6 +183,18 @@ describe('firestore.rules content-moderation ownership (regression guards)', () 
     // Soft-delete is one-way: the owner can set isDeleted true, never back.
     expect(body).toMatch(/request\.resource\.data\.isDeleted == true/);
   });
+
+  test('story quizzes: a viewer may only record their own answer, never rewrite the quiz', () => {
+    const body = blockBody('quizzes');
+    expect(body).toBeTruthy();
+    // A viewer update must be field-scoped to the answer fields...
+    expect(body).toMatch(/hasOnly\(\[\s*'answers', 'userAnswers', 'updatedAt'\s*\]\)/);
+    // ...and must add their own answer (no rewriting the existing one).
+    expect(body).toMatch(/'userAnswers' in request\.resource\.data/);
+    // The old blanket `allow update` let any viewer change `correctOption`
+    // or `coinReward` and mint the reward on someone else's quiz.
+    expect(body).not.toMatch(/allow update: if isSignedIn\(\) && vibeIsActive\(vibeData\(\)\) && vibeVisibleToViewer\(vibeData\(\), uid\(\)\);\s*$/m);
+  });
 });
 
 describe('firestore.rules economy accounting (regression guards)', () => {

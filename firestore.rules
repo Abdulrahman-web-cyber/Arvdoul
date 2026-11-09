@@ -707,7 +707,13 @@ service cloud.firestore {
       match /quizzes/{quizId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
         allow create, delete: if isSignedIn() && vibeData().userId == uid();
-        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        // A viewer may only record their own answer — never rewrite the quiz
+        // itself. The old blanket rule let any viewer change `correctOption`
+        // or `coinReward` (and mint the reward) on someone else's quiz.
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'userAnswers', 'updatedAt'])
+          && 'userAnswers' in request.resource.data
+          && (!('userAnswers' in resource.data) || !(uid() in resource.data.userAnswers));
       }
       match /countdowns/{countdownId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
