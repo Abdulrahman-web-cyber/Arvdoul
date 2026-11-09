@@ -106,8 +106,10 @@ class WalletService {
         };
       });
     } catch (err) {
-      logger.warn('[WalletService] getTransactions fallback:', { userId, error: err.message });
-      return [];
+      // A failed ledger read must not render as "No ledger transactions
+      // recorded yet." — an empty list is a claim the read never confirmed.
+      logger.error('[WalletService] getTransactions failed:', { userId, error: err.message });
+      throw err;
     }
   }
 

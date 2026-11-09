@@ -103,7 +103,10 @@ export default function CoinsScreen() {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       if (!monetization) setMonetization(svc);
       const bal = await svc.getBalance(user.uid);
-      setBalance(typeof bal === 'number' ? bal : Number(bal?.coins ?? bal?.balance ?? 0));
+      // An unknown balance stays null (renders —); coercing it to 0 would
+      // claim an empty wallet the read never confirmed.
+      const value = typeof bal === 'number' ? bal : (bal?.coins ?? bal?.balance ?? null);
+      setBalance(value === null ? null : Number(value));
     } catch (err) {
       toast.error('Could not load your coin balance.');
     } finally {
@@ -319,7 +322,7 @@ export default function CoinsScreen() {
                 </div>
                 <div>
                   <div className="text-4xl sm:text-5xl font-black text-amber-400 tracking-tight">
-                    {balanceLoading ? '…' : (balance ?? 0).toLocaleString()}
+                    {balanceLoading ? '…' : balance === null ? '—' : balance.toLocaleString()}
                   </div>
                   <p className={cn("text-sm sm:text-base font-semibold", colors.secondary)}>Arvdoul Golden Coins</p>
                 </div>

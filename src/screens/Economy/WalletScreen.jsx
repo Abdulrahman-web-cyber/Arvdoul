@@ -61,6 +61,7 @@ export default function WalletScreen() {
   const isDark = theme === 'dark' || theme === 'midnight';
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // all | in | out
@@ -78,7 +79,11 @@ export default function WalletScreen() {
       ]);
       setWallet(wData);
       setTransactions(txData);
+      setLoadError(null);
     } catch (err) {
+      // A failed read is *unknown*, not an empty wallet: the balance card must
+      // not present "0 Coins" for a wallet that never loaded.
+      setLoadError(err?.message || 'Failed to load wallet data');
       toast.error('Failed to load wallet data');
     } finally {
       setLoading(false);
@@ -159,6 +164,31 @@ export default function WalletScreen() {
     );
   }
 
+  // A read that failed is *unknown*, never an empty wallet: show a retry state
+  // instead of a "0 Coins" balance the ledger never confirmed.
+  if (loadError && !wallet) {
+    return (
+      <div className={`min-h-screen pb-24 flex items-center justify-center px-4 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+        <div role="alert" className="text-center space-y-4 max-w-sm">
+          <AlertCircle className="w-10 h-10 mx-auto text-amber-500" />
+          <h2 className="text-lg font-semibold">Wallet unavailable</h2>
+          <p className="text-sm text-gray-500">{loadError}</p>
+          <button
+            onClick={() => { setLoading(true); loadWallet(); }}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Unknown balances render as an em-dash, not a fabricated 0.
+  const fmtCoins = (value) => (
+    value === null || value === undefined ? '—' : Number(value).toLocaleString()
+  );
+
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       <main className="max-w-3xl mx-auto px-4 py-4 space-y-6">
@@ -194,7 +224,7 @@ export default function WalletScreen() {
               <div className="flex items-baseline space-x-2 mt-1">
                 <Coins className="w-6 h-6 text-amber-400 self-center" />
                 <h2 id="balance-heading" className="text-4xl font-extrabold tracking-tight">
-                  {(wallet?.availableCoins || user?.coins || 0).toLocaleString()}
+                  {fmtCoins(wallet?.availableCoins ?? user?.coins)}
                 </h2>
                 <span className="text-sm font-semibold text-gray-500">Coins</span>
               </div>
@@ -214,22 +244,22 @@ export default function WalletScreen() {
             <div>
               <span className="text-gray-500 block">Pending / Held</span>
               <span className="font-semibold text-amber-400 mt-0.5 block">
-                {(wallet?.pendingCoins || 0).toLocaleString()} Coins
+                {fmtCoins(wallet?.pendingCoins)} Coins
               </span>
             </div>
             <div>
               <span className="text-gray-500 block">Lifetime Earned</span>
               <span className="font-semibold text-emerald-400 mt-0.5 block">
-                {(wallet?.totalEarned || 0).toLocaleString()} Coins
+                {fmtCoins(wallet?.totalEarned)} Coins
               </span>
               <span className="text-[10px] text-gray-500 block">
-                ${formatCoinsAsUsd(wallet?.totalEarned || 0)} USD
+                ${formatCoinsAsUsd(wallet?.totalEarned ?? 0)} USD
               </span>
             </div>
             <div>
               <span className="text-gray-500 block">Lifetime Spent</span>
               <span className="font-semibold text-gray-400 mt-0.5 block">
-                {(wallet?.totalSpent || 0).toLocaleString()} Coins
+                {fmtCoins(wallet?.totalSpent)} Coins
               </span>
             </div>
           </div>

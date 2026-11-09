@@ -41,7 +41,9 @@ const ProfileMetricsGrid = memo(({
   // `friendCount` is not a stored counter; when it is absent the honest value is
   // "unknown" (—), not a fabricated 0 that claims the account has no friends.
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? null;
-  const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
+  // A missing economic balance is unknown (—), never a fabricated 0 that
+  // claims an empty wallet.
+  const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? null;
   const profileViews = analytics?.totalViews ?? profile?.profileViews ?? profile?.viewsCount ?? 0;
   const likesCount = profile?.likesReceived ?? profile?.likesCount ?? 0;
 
@@ -118,7 +120,7 @@ const ProfileMetricsGrid = memo(({
     {
       key: 'coins',
       label: 'Coins',
-      value: canShowEconomic ? formatNumber(coinsCount) : '—',
+      value: canShowEconomic && coinsCount !== null ? formatNumber(coinsCount) : '—',
       icon: Coins,
       iconColor: 'text-amber-500 dark:text-amber-400',
       iconBg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',

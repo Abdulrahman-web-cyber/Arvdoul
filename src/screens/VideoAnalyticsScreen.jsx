@@ -525,13 +525,13 @@ const RevenueTab = ({ revenue }) => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [payout, setPayout] = useState({ loading: true, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+  const [payout, setPayout] = useState({ loading: true, settings: null, pendingCoins: null, lastPayoutCoins: null });
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!user?.uid) {
-        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: null, lastPayoutCoins: null });
         return;
       }
       try {
@@ -547,7 +547,10 @@ const RevenueTab = ({ revenue }) => {
         if (cancelled) return;
 
         const settings = settingsRes.status === 'fulfilled' ? settingsRes.value : null;
-        const pendingCoins = walletRes.status === 'fulfilled' ? (walletRes.value?.pendingCoins || 0) : 0;
+        // A failed wallet read is unknown, not a $0.00 pending payout.
+        const pendingCoins = walletRes.status === 'fulfilled'
+          ? (walletRes.value?.pendingCoins ?? null)
+          : null;
 
         let lastPayoutCoins = null;
         const historyItems = historyRes.status === 'fulfilled' ? historyRes.value?.items : null;
@@ -560,7 +563,7 @@ const RevenueTab = ({ revenue }) => {
 
         setPayout({ loading: false, settings, pendingCoins, lastPayoutCoins });
       } catch (err) {
-        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: null, lastPayoutCoins: null });
       }
     };
     load();

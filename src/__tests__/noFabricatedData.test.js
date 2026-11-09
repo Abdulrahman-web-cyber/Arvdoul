@@ -2441,3 +2441,39 @@ describe('MenuScreen and RankingsScreen use the read model, not a Citizen stub',
     expect(s).toContain('deriveHandle(');
   });
 });
+
+describe('Wallet/economy surfaces never fabricate an empty balance', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('WalletScreen shows a retry state, not "0 Coins", when the read fails', () => {
+    const s = read('src/screens/Economy/WalletScreen.jsx');
+    expect(s).toContain('loadError && !wallet');
+    expect(s).toContain("value === null || value === undefined ? '—'");
+    // The balance must never be coerced to 0.
+    expect(s).not.toContain('(wallet?.availableCoins || user?.coins || 0).toLocaleString()');
+  });
+
+  test('walletService.getTransactions fails closed instead of returning []', () => {
+    const s = read('src/services/walletService.js');
+    expect(s).toContain('[WalletService] getTransactions failed:');
+    expect(s).not.toContain('getTransactions fallback');
+  });
+
+  test('CoinsScreen renders an unknown balance as —, not 0', () => {
+    const s = read('src/screens/CoinsScreen.jsx');
+    expect(s).not.toContain("Number(bal?.coins ?? bal?.balance ?? 0)");
+    expect(s).toContain("balance === null ? '—' : balance.toLocaleString()");
+  });
+
+  test('ProfileMetricsGrid renders an unknown coin count as —', () => {
+    const s = read('src/components/profile/ProfileMetricsGrid.jsx');
+    expect(s).not.toContain('profile?.balance ?? 0;');
+    expect(s).toContain('coinsCount !== null');
+  });
+
+  test('VideoAnalyticsScreen renders an unknown pending payout, not $0.00', () => {
+    const s = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(s).not.toContain("(walletRes.value?.pendingCoins || 0) : 0");
+    expect(s).toContain('pendingCoins: null');
+  });
+});
