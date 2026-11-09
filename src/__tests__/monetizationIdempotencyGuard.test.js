@@ -47,6 +47,17 @@ describe('monetization money callables retry with a stable idempotency key', () 
     // Guard against a regression that drops the key from one branch.
     expect(svc).not.toMatch(/cfPurchaseCoins\(\{ packageId, paymentMethodId, deviceMetadata \}\)/);
     expect(svc).not.toMatch(/cfWatchAd\(\{ placement, adId, watchDurationSeconds, deviceMetadata \}\)/);
+    expect(svc).not.toMatch(/cfCreateSubscription\(\{ tier, paymentMethodId, deviceMetadata \}\)/);
+    expect(svc).not.toMatch(/cfCancelSubscription\(\)/);
+  });
+
+  test('subscription callables reuse one key across retries', () => {
+    const create = methodBody('createSubscription');
+    expect(create).toContain('const key = idempotencyKey || generateIdempotencyKey()');
+    expect(create).toMatch(/cfCreateSubscription\(\{[^}]*idempotencyKey: key/);
+    const cancel = methodBody('cancelSubscription');
+    expect(cancel).toContain('const key = idempotencyKey || generateIdempotencyKey()');
+    expect(cancel).toMatch(/cfCancelSubscription\(\{ idempotencyKey: key \}\)/);
   });
 
   test('the offline drain replays with the stored key', () => {

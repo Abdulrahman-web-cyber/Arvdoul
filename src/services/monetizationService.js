@@ -786,10 +786,14 @@ class MonetizationService {
     }
   }
 
-  async createSubscription(tier, paymentMethodId = null, deviceMetadata = {}) {
+  async createSubscription(tier, paymentMethodId = null, deviceMetadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
+    // One key per logical subscription intent, reused across retries: the server
+    // charges Stripe and credits the first month's coins keyed on this value, so
+    // a fresh key per retry could double-charge and double-credit.
+    const key = idempotencyKey || generateIdempotencyKey();
     try {
-      const result = await retryOperation(() => this.cfCreateSubscription({ tier, paymentMethodId, deviceMetadata }));
+      const result = await retryOperation(() => this.cfCreateSubscription({ tier, paymentMethodId, deviceMetadata, idempotencyKey: key }));
       return result.data;
     } catch (err) {
       // Entitlement state is server-owned (subscriptions is server-write-only).
@@ -799,10 +803,11 @@ class MonetizationService {
     }
   }
 
-  async cancelSubscription() {
+  async cancelSubscription(idempotencyKey = null) {
     await this._ensureInitialized();
+    const key = idempotencyKey || generateIdempotencyKey();
     try {
-      const result = await retryOperation(() => this.cfCancelSubscription());
+      const result = await retryOperation(() => this.cfCancelSubscription({ idempotencyKey: key }));
       return result.data;
     } catch (err) {
       // Cancellation is server-owned; do not flip entitlement locally.
@@ -1016,9 +1021,9 @@ export const getSponsoredSearchResult = (userId, query, context) =>
 export const purchaseCoins = (packageId, paymentMethodId, deviceMetadata, idempotencyKey) =>
   getMonetizationService().purchaseCoins(packageId, paymentMethodId, deviceMetadata, idempotencyKey);
 export const getSubscriptionStatus = () => getMonetizationService().getSubscriptionStatus();
-export const createSubscription = (tier, paymentMethodId, deviceMetadata) =>
-  getMonetizationService().createSubscription(tier, paymentMethodId, deviceMetadata);
-export const cancelSubscription = () => getMonetizationService().cancelSubscription();
+export const createSubscription = (tier, paymentMethodId, deviceMetadata, idempotencyKey) =>
+  getMonetizationService().createSubscription(tier, paymentMethodId, deviceMetadata, idempotencyKey);
+export const cancelSubscription = (idempotencyKey) => getMonetizationService().cancelSubscription(idempotencyKey);
 export const getPayoutSettings = () => getMonetizationService().getPayoutSettings();
 export const createPayoutAccount = (countryCode, returnUrl, deviceMetadata) =>
   getMonetizationService().createPayoutAccount(countryCode, returnUrl, deviceMetadata);
