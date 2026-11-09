@@ -409,3 +409,13 @@ Gates: `npm test` — **119 suites / 1443 passing / 5 skipped**;
 
 Gates: `npm test` — **119 suites / 1446 passing / 5 skipped**;
 `npm run build` — ✓; `eslint src/ functions/ --quiet` — 0 errors.
+
+## Checkpoint — N177
+
+- **N177 (fixed)**: `storyService.getABBucket`/`setABOverride` randomly assigned
+  users to an A/B bucket (`Math.random() < 0.5`) and persisted it, but no code
+  anywhere reads a bucket or calls either method. Removed both plus their
+  service-facade exports (dead experiment with a fabricated assignment).
+
+Gates: `npm test` — **119 suites / 1446 passing / 5 skipped**;
+`npm run build` — ✓; `eslint src/ functions/ --quiet` — 0 errors.

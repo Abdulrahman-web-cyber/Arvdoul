@@ -1333,19 +1333,6 @@ class UltimateStoryService {
     ];
   }
 
-  getABBucket(userId) {
-    const key = `ab_bucket_${userId}`;
-    let bucket = localStorage.getItem(key);
-    if (!bucket) {
-      bucket = Math.random() < 0.5 ? 'A' : 'B';
-      localStorage.setItem(key, bucket);
-    }
-    return bucket;
-  }
-  setABOverride(userId, bucket) {
-    localStorage.setItem(`ab_bucket_${userId}`, bucket);
-  }
-
   async exportUserData(userId) {
     await this.ensureInitialized();
     const data = { stories: [], archived: [], highlights: [] };
@@ -1945,8 +1932,6 @@ const storyService = {
   getHighlightStories: (...args) => getStoryService().getHighlightStories(...args),
   searchStories: (...args) => getStoryService().searchStories(...args),
   getTemplates: () => getStoryService().getTemplates(),
-  getABBucket: (...args) => getStoryService().getABBucket(...args),
-  setABOverride: (...args) => getStoryService().setABOverride(...args),
   exportUserData: (...args) => getStoryService().exportUserData(...args),
   cleanupExpiredStories: () => getStoryService().cleanupExpiredStories(),
   clearCache: () => getStoryService().clearCache(),
