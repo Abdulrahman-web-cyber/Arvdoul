@@ -416,6 +416,18 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
       if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
       if (!receiverSnap.exists) throw new functions.https.HttpsError('not-found', 'Receiver not found.');
 
+      // Space tips also bump the space's running tip total. The client cannot
+      // write `spaces/{id}` (only the host may update it, and a self-tip is
+      // rejected), so the previous client-side `increment` was always denied
+      // and the "Tips" total stayed at 0. Bump it here, in the same settled
+      // transaction, so the aggregate tracks a real transfer.
+      let spaceRef = null;
+      if (reason === 'space_tip' && typeof metadata.spaceId === 'string' && metadata.spaceId) {
+        spaceRef = admin.firestore().collection('spaces').doc(metadata.spaceId);
+        const spaceSnap = await t.get(spaceRef);
+        if (!spaceSnap.exists) spaceRef = null;
+      }
+
       const senderData = senderSnap.data();
       const available = getAvailableBalance(senderData);
       if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available balance.');
@@ -438,6 +450,10 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
       t.set(receiverTxRef, { userId: toUserId, type: 'credit', amount, balanceAfter: receiverNewBalance, relatedUserId: senderUid, ...baseTx });
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${toUserId}`, amount, { reason, transactionId: senderTxRef.id });
+
+      if (spaceRef) {
+        t.update(spaceRef, { tipsTotalCoins: admin.firestore.FieldValue.increment(amount) });
+      }
 
       const resultData = { success: true, senderNewBalance, receiverNewBalance, transactionId: senderTxRef.id };
       t.set(ledgerRef, {

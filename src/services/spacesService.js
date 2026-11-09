@@ -251,9 +251,11 @@ class SpacesService {
 
   /**
  * coin tip: debits the sender via the server-authoritative coin ledger
-   * (spendCoins CF with atomic fallback) and credits the speaker, then
-   * updates the space's running tip total (best-effort). Never lets a sender
-   * tip coins they do not have.
+   * (transferCoins CF, no client fallback) and credits the speaker. The space's
+   * running tip total (`tipsTotalCoins`) is bumped by the same server
+   * transaction — a client write here was always denied (only the host may
+   * update a space, and a self-tip is rejected), so the total never moved.
+   * Never lets a sender tip coins they do not have.
    */
   async sendTip(spaceId, amount, speakerId, senderId = null) {
     log.info('Tipping in space', { spaceId, amount, speakerId, senderId });
@@ -266,7 +268,8 @@ class SpacesService {
     }
 
     try {
-      // 1. double-entry transfer: sender → speaker.
+      // Double-entry transfer: sender → speaker. The server also bumps the
+      // space's tipsTotalCoins when `reason` is 'space_tip'.
       const { getMonetizationService } = await import('./monetizationService.js');
       const monetization = getMonetizationService();
       const transfer = await monetization.transferCoins(
@@ -278,18 +281,6 @@ class SpacesService {
       );
       if (!transfer?.success) {
         return { success: false, error: transfer?.message || 'Tip could not be processed' };
-      }
-
-      // 2. Space tip total (best-effort — ledger above is authoritative).
-      try {
-        const firestore = await getFirestoreInstance();
-        const { doc, updateDoc, increment } = await import('firebase/firestore');
-        const spaceRef = doc(firestore, 'spaces', spaceId);
-        await updateDoc(spaceRef, {
-          tipsTotalCoins: increment(numericAmount)
-        });
-      } catch (err) {
-        log.warn('Space tip counter update failed (ledger already settled):', err.message);
       }
 
       return { success: true };

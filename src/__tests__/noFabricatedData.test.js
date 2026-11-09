@@ -311,6 +311,12 @@ describe('Spaces & Live - no free-money tips/gifts', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/spacesService.js'), 'utf8');
     expect(src).toContain('transferCoins(');
     expect(src).toContain('Sign in to send a tip');
+    // The space's running tip total is bumped by the SAME server transaction
+    // that moves the coins. A client `updateDoc(... increment(...))` on
+    // `spaces/{id}` is always denied (only the host may update a space, and a
+    // self-tip is rejected), so the previous client write was a dead control
+    // and the "Tips" total never moved.
+    expect(src).not.toMatch(/updateDoc\([\s\S]{0,80}tipsTotalCoins/);
   });
 
   test('liveService delegates gifts/tips to the server callable (no client debit or write)', () => {
