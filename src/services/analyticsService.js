@@ -347,7 +347,9 @@ class UltimateAnalyticsService {
             coinsEarned = uData.coins ?? uData.coinBalance ?? 0;
             followerCount = uData.followerCount ?? uData.followersCount ?? 0;
           }
-        } catch { /* identity optional */ }
+        } catch (e) {
+          logger.warn('Analytics identity read failed; coins/followers defaulted', { userId, error: e?.message });
+        }
 
         let topPosts = [];
         let totalEngagement = 0;
@@ -356,7 +358,9 @@ class UltimateAnalyticsService {
           const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(10)));
           topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           totalEngagement = topPosts.reduce((sum, p) => sum + (p.likesCount || p.likes || 0) + (p.commentsCount || 0) + (p.sharesCount || 0), 0);
-        } catch { /* posts optional */ }
+        } catch (e) {
+          logger.warn('Analytics top-posts read failed; engagement defaults to zero', { userId, error: e?.message });
+        }
 
         const days = this._getTimeframeDays(timeframe);
         const dailyStats = [];

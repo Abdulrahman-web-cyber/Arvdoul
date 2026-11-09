@@ -816,7 +816,9 @@ class UltimateSearchService {
               });
             });
           } catch (err) {
-            // catch missing fields gracefully
+            // A candidate missing required fields (e.g. a partially written
+            // document) is skipped; log so a systematic schema drift shows.
+            logger.warn('Search candidate skipped (missing fields)', { error: err?.message });
           }
         }
       }

@@ -145,6 +145,9 @@ class ProductionAuthService {
       const data = await res.json();
       return { allowed: data.allowed, waitTime: data.waitTime || 0 };
     } catch (e) {
+      // The server rate limiter is the authority; if it cannot be reached we
+      // fail open (the client guard still applies) but record the outage.
+      logger.warn('Server auth rate-limit check unreachable', { action, error: e?.message });
       return { allowed: true };
     }
   }
@@ -196,6 +199,8 @@ class ProductionAuthService {
       }
       localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
+      // Client backoff bookkeeping; storage may be full or disabled.
+      logger.warn('Could not persist failed-login attempt counter', { error: e?.message });
     }
   }
 
@@ -642,7 +647,9 @@ class ProductionAuthService {
         try {
           const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
           markOnboardingRequired(user.uid, { method: 'phone', isSignup: true, step1Data: step1 });
-        } catch (e) {}
+        } catch (e) {
+          logger.warn('markOnboardingRequired failed for phone signup', { uid: user.uid, error: e?.message });
+        }
       }
 
       let profile = null;
@@ -823,7 +830,9 @@ class ProductionAuthService {
         if (Object.keys(updateData).length > 0) {
           try {
             await updateProfile(user, updateData);
-          } catch (e) {}
+          } catch (e) {
+            logger.warn('Google display-name/photo update failed', { uid: user.uid, error: e?.message });
+          }
         }
       }
 

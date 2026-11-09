@@ -69,7 +69,9 @@ class AIStudioService {
   async _persistLogs() {
     try {
       await localforage.setItem('arvdoul_ai_usage_logs', this.usageLogs);
-    } catch (_) {}
+    } catch (e) {
+      log.warn('AI usage-log persist failed', { error: e?.message });
+    }
   }
 
   /**

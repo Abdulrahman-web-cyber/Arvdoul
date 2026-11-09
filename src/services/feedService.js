@@ -324,7 +324,9 @@ class UltimateFeedService {
         this.interestVectorCache.set(userId, { vector, ts: Date.now() });
         return vector;
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Interest-vector read failed; ranking falls back to defaults', { userId, error: e?.message });
+    }
     return {};
   }
 
@@ -363,7 +365,9 @@ class UltimateFeedService {
           topicStreaks: data.topicStreaks ?? {},
         };
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed session state read failed; starting a fresh session', { userId, error: e?.message });
+    }
     return { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
   }
 
@@ -587,7 +591,9 @@ class UltimateFeedService {
             }
           }
         }
-      } catch {}
+      } catch (e) {
+        logger.warn('Local optimistic-post merge failed', { error: e?.message });
+      }
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
       return posts.slice(0, limit);
     } catch (error) {
@@ -811,7 +817,9 @@ class UltimateFeedService {
         this.mlCache.set(cacheKey, { data: { feed, nextCursor: data.nextCursor }, timestamp: Date.now() });
         return { feed, nextCursor: data.nextCursor };
       }
-    } catch (error) {}
+    } catch (error) {
+      logger.warn('ML feed source unavailable; falling back to local ranking', { userId, error: error?.message });
+    }
     return null;
   }
 
@@ -1338,7 +1346,9 @@ class UltimateFeedService {
         this.userPreferences.set(cacheKey, { data: prefsSnap.data(), timestamp: Date.now() });
         return prefsSnap.data();
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed user_preferences read failed', { userId, error: e?.message });
+    }
     return {};
   }
 
@@ -1357,7 +1367,9 @@ class UltimateFeedService {
         this.userPreferences.set(cacheKey, { data: w, timestamp: Date.now() });
         return w;
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed weight preferences read failed', { userId, error: e?.message });
+    }
     return null;
   }
 
@@ -1674,7 +1686,9 @@ class UltimateFeedService {
       const postRef = doc(this.firestore, 'posts', postId);
       const snap = await getDoc(postRef);
       if (snap.exists()) return { id: snap.id, ...snap.data() };
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed single-post read failed', { postId, error: e?.message });
+    }
     return null;
   }
 
@@ -1702,7 +1716,9 @@ class UltimateFeedService {
         )
       );
       ads.forEach((ad, idx) => { if (ad) this._cacheAd(ad, userId, idx); });
-    } catch (error) {}
+    } catch (error) {
+      logger.warn('Ad prefetch failed', { userId, error: error?.message });
+    }
   }
 
   _canMakeRequest(userId, operation) {
