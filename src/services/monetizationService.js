@@ -254,9 +254,9 @@ class OfflineMonetizationQueue {
         if (!sessionUid || item.ownerUid !== sessionUid) continue;
         try {
           if (item.operation === 'watchAd') {
-            await this.service.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds);
+            await this.service.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds, {}, item.params.idempotencyKey);
           } else if (item.operation === 'purchaseCoins') {
-            await this.service.purchaseCoins(item.params.packageId, item.params.paymentMethodId);
+            await this.service.purchaseCoins(item.params.packageId, item.params.paymentMethodId, {}, item.params.idempotencyKey);
           }
           await this.delete(item.id);
         } catch (err) {
@@ -633,18 +633,23 @@ class MonetizationService {
     }
   }
 
-  async watchAd(placement, adId, watchDurationSeconds, deviceMetadata = {}) {
+  async watchAd(placement, adId, watchDurationSeconds, deviceMetadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
+    // One key per logical view, reused across every retry (and stored with an
+    // offline-queued op). The server credits the reward keyed on this value, so
+    // generating a fresh key per retry would let a retried request credit the
+    // reward more than once.
+    const key = idempotencyKey || generateIdempotencyKey();
     const isOnline = await this._isActuallyOnline();
     if (!isOnline) {
-      await this.offlineQueue.add('watchAd', { placement, adId, watchDurationSeconds });
+      await this.offlineQueue.add('watchAd', { placement, adId, watchDurationSeconds, idempotencyKey: key });
       // Queued is NOT earned: reporting success here made the UI announce a
       // coin reward for an ad that was never verified (and may never replay).
       return { success: false, offlineQueued: true, message: 'Will be processed when online' };
     }
     try {
       const result = await retryOperation(() =>
-        this.cfWatchAd({ placement, adId, watchDurationSeconds, deviceMetadata })
+        this.cfWatchAd({ placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey: key })
       );
       return result.data;
     } catch (err) {
@@ -687,11 +692,15 @@ class MonetizationService {
     }
   }
 
-  async purchaseCoins(packageId, paymentMethodId = null, deviceMetadata = {}) {
+  async purchaseCoins(packageId, paymentMethodId = null, deviceMetadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
+    // One key per logical purchase, reused across every retry (and stored with
+    // an offline-queued op). The server mints coins keyed on this value, so a
+    // fresh key per retry would allow a double credit after a transient error.
+    const key = idempotencyKey || generateIdempotencyKey();
     const isOnline = await this._isActuallyOnline();
     if (!isOnline) {
-      await this.offlineQueue.add('purchaseCoins', { packageId, paymentMethodId });
+      await this.offlineQueue.add('purchaseCoins', { packageId, paymentMethodId, idempotencyKey: key });
       // A queued purchase has granted NO coins. Reporting success made the UI
       // announce "+N coins added" for a purchase that was never charged.
       return { success: false, offlineQueued: true, message: 'Will be processed when online' };
@@ -701,7 +710,7 @@ class MonetizationService {
     if (this.stripe) {
       try {
         log.info('Proceeding with real Stripe purchase flow', { packageId });
-        const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata }));
+        const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata, idempotencyKey: key }));
         if (result.data?.sessionId) {
           await this.stripe.redirectToCheckout({ sessionId: result.data.sessionId });
           return { success: true, stripeRedirect: true };
@@ -737,7 +746,7 @@ class MonetizationService {
       throw new Error('PAYMENT_GATEWAY_NOT_CONFIGURED: purchaseCoins Cloud Function is not reachable. Coins are never granted without server-side payment verification.');
     }
     try {
-      const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata }));
+      const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata, idempotencyKey: key }));
       if (result.data?.success) {
         return {
           success: true,
@@ -998,14 +1007,14 @@ export const getTransactionHistory = (userId, limitCount, cursor) => getMonetiza
 export const getUserLevel = (userId) => getMonetizationService().getUserLevel(userId);
 export const getMonetizationStats = (userId) => getMonetizationService().getMonetizationStats(userId);
 export const getAd = (placement, userId, context) => getMonetizationService().getAd(placement, userId, context);
-export const watchAd = (placement, adId, watchDurationSeconds, deviceMetadata) =>
-  getMonetizationService().watchAd(placement, adId, watchDurationSeconds, deviceMetadata);
+export const watchAd = (placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey) =>
+  getMonetizationService().watchAd(placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey);
 export const recordAdImpression = (adId, placement, deviceMetadata) =>
   getMonetizationService().recordAdImpression(adId, placement, deviceMetadata);
 export const getSponsoredSearchResult = (userId, query, context) =>
   getMonetizationService().getSponsoredSearchResult(userId, query, context);
-export const purchaseCoins = (packageId, paymentMethodId, deviceMetadata) =>
-  getMonetizationService().purchaseCoins(packageId, paymentMethodId, deviceMetadata);
+export const purchaseCoins = (packageId, paymentMethodId, deviceMetadata, idempotencyKey) =>
+  getMonetizationService().purchaseCoins(packageId, paymentMethodId, deviceMetadata, idempotencyKey);
 export const getSubscriptionStatus = () => getMonetizationService().getSubscriptionStatus();
 export const createSubscription = (tier, paymentMethodId, deviceMetadata) =>
   getMonetizationService().createSubscription(tier, paymentMethodId, deviceMetadata);
