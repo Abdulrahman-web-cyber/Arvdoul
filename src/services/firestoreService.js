@@ -368,9 +368,9 @@ class EnterpriseFirestoreService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: postData.authorId, action: 'post_created', source: postId })
-          .catch(() => {});
+          .catch((err) => logger.warn('Post XP award failed', { postId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('Post XP award failed', { postId, error: e?.message });
       }
 
       return {
@@ -697,7 +697,7 @@ class EnterpriseFirestoreService {
             try {
               const { getNotificationsService } = await import('./notificationsService.js');
               await getNotificationsService().createLikeNotification(postId, userId, authorId);
-            } catch (e) { /* like notification is best-effort */ }
+            } catch (e) { logger.warn('Like notification failed', { postId, userId, error: e?.message }); }
           })(),
           (async () => {
             try {
@@ -707,7 +707,7 @@ class EnterpriseFirestoreService {
                 action: 'like_received',
                 source: postId,
               });
-            } catch (e) { /* XP award is best-effort */ }
+            } catch (e) { logger.warn('Like XP award failed', { postId, error: e?.message }); }
           })(),
         ]).catch(() => {});
       }
@@ -798,9 +798,9 @@ class EnterpriseFirestoreService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId, action: 'post_shared', source: postId })
-          .catch(() => {});
+          .catch((err) => logger.warn('Share XP award failed', { postId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('Share XP award failed', { postId, error: e?.message });
       }
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to share post'); }
@@ -891,13 +891,15 @@ class EnterpriseFirestoreService {
           postId, userId: uid, type: 'repost', sharedAt: serverTimestamp(),
         });
       } catch (e) { logger.warn('Repost share-counter update failed:', e?.message); }
-      try { await this.updateUserPostCount(uid, 1); } catch (e) {}
+      try { await this.updateUserPostCount(uid, 1); } catch (e) { logger.warn('updateUserPostCount failed (repost)', { uid, error: e?.message }); }
       try {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: uid, action: 'post_created', source: repostId })
-          .catch(() => {});
-      } catch (e) {}
+          .catch((err) => logger.warn('Repost XP award failed', { repostId, error: err?.message }));
+      } catch (e) {
+        logger.warn('Repost XP award failed', { repostId, error: e?.message });
+      }
 
       auditLogger.log('content.repost', { userId: uid, meta: { postId, repostId } });
       return { success: true, alreadyReposted: false, postId: repostId };

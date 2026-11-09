@@ -171,7 +171,9 @@ async function saveScrollPosition(userId, scrollTop) {
   try {
     const db = await getCacheDB();
     await db.put('scrollPosition', { userId, scrollTop, timestamp: Date.now() });
-  } catch (e) { /* silent */ }
+  } catch (e) {
+    console.warn('[Home] scroll position persist failed', e);
+  }
 }
 async function getScrollPosition(userId) {
   try {
@@ -246,7 +248,9 @@ async function processOptimisticQueue(userId) {
       i--;
       changed = true;
     } catch (err) {
-      // retry later
+      // Kept in the queue for the next drain, but a permanently failing action
+      // (e.g. a rules denial) would otherwise retry forever in silence.
+      console.warn('[Home] queued action replay failed; will retry', { action: item.action, postId: item.postId, error: err?.message });
     }
   }
   if (changed) await persistOptimisticQueue();
@@ -722,7 +726,8 @@ export default function HomeScreen() {
           localStorage.setItem(`arvdoul_coins_ts_${user.uid}`, String(Date.now()));
         }
       } catch (err) {
-        // graceful offline fallback
+        // Keep the last known balance, but record that it is stale.
+        console.warn('[Home] coin balance refresh failed; showing cached value', { error: err?.message });
       }
     };
     fetchBalance();

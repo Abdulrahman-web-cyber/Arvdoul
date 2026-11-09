@@ -1062,7 +1062,7 @@ class ProfessionalUserService {
           priority: 'normal',
         });
       } catch (e) {
-        // Follow-request notification failed
+        logger.warn('Follow-request notification failed', { followerId, followingId, error: e?.message });
       }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
@@ -1093,7 +1093,7 @@ class ProfessionalUserService {
         const notifications = await this._getNotificationsService();
         await notifications.createFollowNotification(followerId, followingId);
       } catch (e) {
-        // Follow notification failed
+        logger.warn('Follow notification failed', { followerId, followingId, error: e?.message });
       }
       // Level system: award follow_received XP to the followed user
       // (best-effort, never breaks the follow).
@@ -1211,7 +1211,7 @@ class ProfessionalUserService {
           metadata: { userId: ownerId },
         });
       } catch (e) {
-        // Follow-accept notification failed
+        logger.warn('Follow-accept notification failed', { requesterId, ownerId, error: e?.message });
       }
       // The edge now exists; credit the owner's follow_received XP (verified
       // server-side against the edge, so it is idempotent per follower).
@@ -1528,7 +1528,7 @@ class ProfessionalUserService {
           fromUser?.displayName || 'Someone'
         );
       } catch (e) {
-        // Friend request notification is best-effort
+        logger.warn('Friend-request notification failed', { fromUserId, toUserId, error: e?.message });
       }
       this._notifyFriendRequestsChanged();
     }

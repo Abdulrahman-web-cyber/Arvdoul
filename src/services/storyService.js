@@ -282,7 +282,9 @@ class UltimateStoryService {
       for (const [storyId, count] of buf.backTaps) jobs.push(this._incrementAnalyticsShard(storyId, 'backTaps', count));
       for (const [storyId, count] of buf.completions) jobs.push(this._incrementAnalyticsShard(storyId, 'completions', count));
       await Promise.allSettled(jobs);
-    } catch { /* best-effort */ }
+    } catch (e) {
+      logger.warn('Story analytics flush failed', { error: e?.message });
+    }
   }
 
   async _incrementAnalyticsShard(storyId, field, amount) {
@@ -469,7 +471,7 @@ class UltimateStoryService {
     try {
       await this.archiveStory(storyId, currentUser.uid);
     } catch (e) {
-      // archive is best-effort
+      logger.warn('Story archive failed; Memories will not show this story', { storyId, error: e?.message });
     }
 
     if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
@@ -481,9 +483,9 @@ class UltimateStoryService {
       const { levelSystemService } = await import('./levelSystemService.js');
       levelSystemService
         .awardExperience({ userId: currentUser.uid, action: 'story_created', source: storyId })
-        .catch(() => {});
+        .catch((err) => logger.warn('Story XP award failed', { storyId, error: err?.message }));
     } catch (e) {
-      // XP award is best-effort
+      logger.warn('Story XP award failed', { storyId, error: e?.message });
     }
     return { success: true, storyId, story };
   }
@@ -1621,13 +1623,19 @@ class UltimateStoryService {
       const userDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', userId));
       const lastServerAd = userDoc.data()?.lastAdImpression;
       if (lastServerAd && Date.now() - lastServerAd.toDate().getTime() < STORY_CONFIG.ADS.FREQ_CAP_MINUTES * 60 * 1000) return stories;
-    } catch (e) {}
+    } catch (e) {
+      // Server-side ad frequency cap could not be read; the local cap still applies.
+      logger.warn('Story ad frequency-cap read failed', { userId, error: e?.message });
+    }
 
     let targetingProfile = {};
     try {
       const userService = await import('./userService.js');
       targetingProfile = await userService.getUserProfile(userId).catch(() => ({}));
-    } catch (e) {}
+    } catch (e) {
+      // Targeting profile unavailable — ads fall back to untargeted.
+      logger.warn('Story ad targeting profile unavailable', { userId, error: e?.message });
+    }
 
     const targetedAds = sponsoredPool.filter(ad => {
       if (!ad.targeting) return true;
@@ -1762,10 +1770,10 @@ class UltimateStoryService {
           actionUrl: `/story/${storyId}`,
           metadata: { storyId },
           priority: 'high',
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Story tag notification failed', { storyId, error: e?.message }));
       }
     } catch (err) {
-      // Tag notification error
+      logger.warn('Story tag notification failed', { storyId, error: err?.message });
     }
   }
 

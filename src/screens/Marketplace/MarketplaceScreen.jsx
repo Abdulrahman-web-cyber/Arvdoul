@@ -70,7 +70,10 @@ export default function MarketplaceScreen() {
         if (currentUser && typeof bal === 'number') {
           setAppState({ currentUser: { ...currentUser, coins: bal } });
         }
-      } catch { /* balance refresh is best-effort */ }
+      } catch (e) {
+        // The purchase succeeded; only the displayed balance is stale.
+        console.warn('[Marketplace] post-purchase balance refresh failed', e);
+      }
       toast.success(`Purchased "${product.title}" with ${product.priceCoins} Coins! 🎁`);
     } catch (err) {
       toast.error(err.message || 'Purchase failed');

@@ -92,7 +92,10 @@ export default function PollsScreen() {
       const { getMonetizationService } = await import('../../services/monetizationService.js');
       const bal = await getMonetizationService().getBalance(user?.uid);
       currentCoins = typeof bal === 'number' ? bal : null;
-    } catch { /* balance fetch failed — service still validates server-side */ }
+    } catch (e) {
+      // Server still validates the wager; the local pre-check is skipped.
+      console.warn('[Polls] coin balance fetch failed; skipping local wager pre-check', e);
+    }
     if (currentCoins != null && currentCoins < wagerCoins) {
       toast.error(`Insufficient coins. You have ${currentCoins} coins.`);
       return;
