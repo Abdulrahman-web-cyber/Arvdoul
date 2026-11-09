@@ -711,7 +711,9 @@ class EnterpriseFirestoreService {
               });
             } catch (e) { logger.warn('Like XP award failed', { postId, error: e?.message }); }
           })(),
-        ]).catch(() => {});
+        ]).catch((e) => {
+          logger.warn('Post-like side effects failed', { postId, error: e?.message });
+        });
       }
 
       return { success: true, alreadyLiked };

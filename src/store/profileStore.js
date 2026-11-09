@@ -227,7 +227,9 @@ export const useProfileStore = create(
         
         // Track profile view if not owner
         if (!isOwner && currentUserId) {
-          analyticsService.trackProfileView(currentUserId, userId).catch(() => {});
+          analyticsService.trackProfileView(currentUserId, userId).catch((e) => {
+            console.warn('Profile view not tracked', e?.message);
+          });
         }
       } catch (error) {
         console.warn('Load profile handled gracefully with fallback:', error?.message);

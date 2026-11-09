@@ -269,8 +269,16 @@ class UltimateStoryService {
 
   _startAnalyticsFlushTimer() {
     if (typeof window === 'undefined' || this._analyticsFlushTimer) return;
-    this._analyticsFlushTimer = setInterval(() => { this.flushAnalyticsBuffer().catch(() => {}); }, 30000);
-    window.addEventListener('beforeunload', () => { this.flushAnalyticsBuffer().catch(() => {}); });
+    this._analyticsFlushTimer = setInterval(() => {
+      this.flushAnalyticsBuffer().catch((e) => {
+        logger.debug('Story analytics flush failed', { error: e?.message });
+      });
+    }, 30000);
+    window.addEventListener('beforeunload', () => {
+      this.flushAnalyticsBuffer().catch((e) => {
+        logger.debug('Story analytics flush on unload failed', { error: e?.message });
+      });
+    });
   }
 
   async flushAnalyticsBuffer() {

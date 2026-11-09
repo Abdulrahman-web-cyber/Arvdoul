@@ -1538,7 +1538,9 @@ class UltimateFeedService {
 
   async preloadNextFeed(userId, nextCursor) {
     if (!nextCursor) return;
-    setTimeout(() => this.getSmartFeed(userId, { limit: FEED_CONFIG.PERFORMANCE.PRELOAD_COUNT, lastDoc: nextCursor }).catch(() => {}), 2000);
+    setTimeout(() => this.getSmartFeed(userId, { limit: FEED_CONFIG.PERFORMANCE.PRELOAD_COUNT, lastDoc: nextCursor }).catch((e) => {
+      logger.debug('Next-page feed preload failed', { error: e?.message });
+    }), 2000);
   }
 
   async getFeedAnalytics(userId, timeframe = '7d') {

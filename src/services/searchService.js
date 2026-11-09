@@ -255,7 +255,9 @@ class AnalyticsBuffer {
         attempt++;
       }
     }
-    await offlineQueue.enqueue({ type: 'search.analytics', payload: event }).catch(() => {});
+    await offlineQueue.enqueue({ type: 'search.analytics', payload: event }).catch((e) => {
+      logger.debug('Search analytics enqueue failed', { error: e?.message });
+    });
   }
 }
 

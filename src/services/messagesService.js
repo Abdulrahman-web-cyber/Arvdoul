@@ -335,7 +335,9 @@ class OfflineMessageQueue {
     this.maxAttempts = 5;
     this.statusListeners = new Set();
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
-      navigator.serviceWorker.ready.then(reg => reg.sync.register('message-queue').catch(() => {}));
+      navigator.serviceWorker.ready.then(reg => reg.sync.register('message-queue').catch((e) => {
+        logger.debug('Background sync registration failed', { error: e?.message });
+      }));
     }
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
@@ -1127,7 +1129,9 @@ class UltimateMessagingService {
       }
     }
 
-    if (MESSAGING_CONFIG.RATE_LIMITING.ENABLED) this._recordRateLimit(currentUser.uid).catch(() => {});
+    if (MESSAGING_CONFIG.RATE_LIMITING.ENABLED) this._recordRateLimit(currentUser.uid).catch((e) => {
+      logger.warn('Message rate-limit record failed', { uid: currentUser.uid, error: e?.message });
+    });
 
     const idempotencyKey = options.idempotencyKey || await this._generateIdempotencyKey(messageData, currentUser.uid, conversationId);
     if (MESSAGING_CONFIG.DEDUPLICATION.ENABLED) {

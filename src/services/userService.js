@@ -770,7 +770,9 @@ class ProfessionalUserService {
     await setDoc(prefsDoc, {
       muted: false, blockedTypes: [], priorityMap: {}, soundEnabled: true, vibrationEnabled: true,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    }).catch(() => {});
+    }).catch((e) => {
+      logger.debug('Default notification preferences write failed', { userId, error: e?.message });
+    });
 
     this.avatarCache.set(`avatar_${userId}`, profile.photoURL);
     this._invalidateUserCache(userId);

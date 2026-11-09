@@ -208,7 +208,9 @@ export default function ChatScreen() {
       setMessages((prev) => prev.filter((m) => !m._local || m._failed));
       getMessagingService().getMessages(conversationId, { limit: 50 }).then((res) => {
         if (res?.success) setMessages(res.messages || []);
-      }).catch(() => {});
+      }).catch((e) => {
+        console.warn('Reconnect message reload failed', e?.message);
+      });
     };
     window.addEventListener('online', goOnline);
     return () => window.removeEventListener('online', goOnline);

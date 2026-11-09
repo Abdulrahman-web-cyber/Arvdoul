@@ -4,6 +4,7 @@ import { cacheManager } from '../utils/CacheManager.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
+import { logger } from '../utils/Logger.js';
 
 // Lazy loading for optimal bundle splitting
 let storageModule = null;
@@ -1845,7 +1846,13 @@ class EnterpriseStorageService {
       
       // Test connection with a simple operation
       const testRef = ref(storage, 'health_check_test');
-      await getStorageMetadata(testRef).catch(() => {}); // FIXED: Using correct function
+      // Probe an object that does not exist: a not-found rejection is the
+      // healthy signal, any other failure is a real Storage problem.
+      await getStorageMetadata(testRef).catch((e) => {
+        if (e?.code !== 'storage/object-not-found') {
+          logger.warn('Storage health probe failed', { error: e?.message, code: e?.code });
+        }
+      });
       
       const cacheStats = this.cacheManager.getStats();
       const uploadStats = this.logger.getUploadStats();

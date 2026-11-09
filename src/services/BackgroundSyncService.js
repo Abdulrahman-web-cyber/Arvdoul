@@ -66,7 +66,9 @@ class BackgroundSyncService {
       .then((count) => {
         this._pendingCount = count;
       })
-      .catch(() => {});
+      .catch((e) => {
+        logger.debug('Pending-count read failed', { error: e?.message });
+      });
     return this._pendingCount;
   }
 

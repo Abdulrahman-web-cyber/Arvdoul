@@ -165,10 +165,14 @@ class AuditLogger {
   startAutoFlush(firestore, { intervalMs = 300000 } = {}) {
     this.stopAutoFlush();
     this._flushTimer = setInterval(() => {
-      this.flushToFirestore(firestore).catch(() => {});
+      this.flushToFirestore(firestore).catch((e) => {
+        console.warn('Audit-log flush failed', e?.message);
+      });
     }, intervalMs);
     if (typeof window !== 'undefined') {
-      this._flushOnHide = () => this.flushToFirestore(firestore).catch(() => {});
+      this._flushOnHide = () => this.flushToFirestore(firestore).catch((e) => {
+        console.warn('Audit-log flush on hide failed', e?.message);
+      });
       window.addEventListener('pagehide', this._flushOnHide);
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') this._flushOnHide();

@@ -434,7 +434,9 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
     abortRef.current = controller;
     commentService.getCommentsByTarget('post', postId, { limit: 2, parentId: null }, { signal: controller.signal })
       .then(res => { if (res.success) setPreview(res.comments); })
-      .catch(() => {});
+      .catch((e) => {
+        console.warn('Comment preview read failed', e?.message);
+      });
     return () => abortRef.current?.abort();
   }, [postId, isVisible, totalComments]);
   if (!preview.length) return null;
@@ -495,7 +497,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (isSponsored && post.adCampaignId && monetizationService.getAd) {
       monetizationService.getAd('feed', currentUser?.uid, { adId: post.adCampaignId })
         .then(ad => setAdDetails(ad))
-        .catch(() => {});
+        .catch((e) => {
+          console.warn('Sponsored post ad detail read failed', e?.message);
+        });
     }
   }, [isSponsored, post.adCampaignId, currentUser?.uid]);
 
@@ -608,7 +612,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     const uid = currentUser?.uid;
     if (!uid || uid === post.authorId) return;
     viewRecordedRef.current = true;
-    firestoreService.recordPostView?.(post.id, uid).catch(() => {});
+    firestoreService.recordPostView?.(post.id, uid).catch((e) => {
+      console.warn('Post view not recorded', e?.message);
+    });
   }, [isVisible, post.id, post.authorId, currentUser?.uid]);
 
   // Real post analytics for the author panel. The panel used to read

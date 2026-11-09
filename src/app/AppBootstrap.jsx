@@ -97,7 +97,9 @@ const SystemInitializer = ({ onReady = () => {} }) => {
               typeof window !== 'undefined'
                 ? window._arvdoul_auth?.currentUser?.uid || null
                 : null;
-            if (uid) syncQueue({ ownerUid: uid }).catch(() => {});
+            if (uid) syncQueue({ ownerUid: uid }).catch((e) => {
+              console.warn('Startup queue drain failed', e?.message);
+            });
           } catch (err) {
             console.warn('Offline drain wiring skipped:', err.message);
           }

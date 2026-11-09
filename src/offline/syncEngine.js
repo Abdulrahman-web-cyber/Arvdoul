@@ -263,7 +263,9 @@ export async function enqueueAction({ type, payload = {}, priority = 'medium', i
   // If online, trigger a background drain scoped to the owning account so a
   // queued op is never executed on behalf of a different session.
   if (typeof navigator !== 'undefined' && navigator.onLine) {
-    syncQueue({ ownerUid }).catch(() => {});
+    syncQueue({ ownerUid }).catch((e) => {
+      console.warn('Offline queue drain failed', e?.message);
+    });
   }
 
   return opId;

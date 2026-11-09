@@ -462,7 +462,9 @@ export default function StoriesScreen() {
     // tap analytics (spec §58) — buffered, never per-tap doc writes.
     const svc = getStoryService();
     if (isRight) {
-      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch(() => {});
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch((e) => {
+        console.warn('Story forward analytics not buffered', e?.message);
+      });
       // Advance
       if (activeItemIndex + 1 < (currentStory?.items?.length || 1)) {
         setActiveItemIndex((i) => i + 1);
@@ -475,7 +477,9 @@ export default function StoriesScreen() {
         handleCloseStory();
       }
     } else {
-      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'back').catch(() => {});
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'back').catch((e) => {
+        console.warn('Story back analytics not buffered', e?.message);
+      });
       // Previous
       if (activeItemIndex > 0) {
         setActiveItemIndex((i) => i - 1);
