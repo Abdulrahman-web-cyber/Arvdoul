@@ -1,7 +1,7 @@
 import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 
 export const RANKING_CONFIG = {
   CATEGORIES: {
@@ -132,16 +132,19 @@ class RankingService {
         rankingsRef,
         where('timeRange', '==', timeRange),
         orderBy('score', 'desc'),
-        startAfter(offset),
-        limit(RANKING_CONFIG.PAGE_SIZE)
+        // Offset paging via a bounded read + slice: the modular SDK has no
+        // offset(), and passing a raw number to startAfter() compares it to
+        // `score` (which silently broke page 2+).
+        limit(offset + RANKING_CONFIG.PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
+      const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
-      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
+      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        const doc = snapshot.docs[i];
+      for (let i = 0; i < pageDocs.length; i++) {
+        const doc = pageDocs[i];
         const data = doc.data();
         
         // Batched user lookup (kills N+1)
@@ -155,7 +158,7 @@ class RankingService {
           userId: data.userId,
           user,
           score: data.score,
-          trend: data.trend || 0, // positive = up, negative = down
+          trend: data.trend ?? null, // positive = up, negative = down; null = unmeasured
           badge: this._getTier(data.score),
         });
       }
@@ -199,16 +202,19 @@ class RankingService {
         rankingsRef,
         where('timeRange', '==', timeRange),
         orderBy('score', 'desc'),
-        startAfter(offset),
-        limit(RANKING_CONFIG.PAGE_SIZE)
+        // Offset paging via a bounded read + slice: the modular SDK has no
+        // offset(), and passing a raw number to startAfter() compares it to
+        // `score` (which silently broke page 2+).
+        limit(offset + RANKING_CONFIG.PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
+      const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
-      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
+      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        const doc = snapshot.docs[i];
+      for (let i = 0; i < pageDocs.length; i++) {
+        const doc = pageDocs[i];
         const data = doc.data();
         
         // Batched user lookup (kills N+1)
@@ -222,7 +228,7 @@ class RankingService {
           userId: data.userId,
           user,
           score: data.score,
-          trend: data.trend || 0,
+          trend: data.trend ?? null,
           badge: this._getTier(data.score),
         });
       }
@@ -248,16 +254,19 @@ class RankingService {
         rankingsRef,
         where('timeRange', '==', timeRange),
         orderBy('score', 'desc'),
-        startAfter(offset),
-        limit(RANKING_CONFIG.PAGE_SIZE)
+        // Offset paging via a bounded read + slice: the modular SDK has no
+        // offset(), and passing a raw number to startAfter() compares it to
+        // `score` (which silently broke page 2+).
+        limit(offset + RANKING_CONFIG.PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
+      const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
-      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
+      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        const doc = snapshot.docs[i];
+      for (let i = 0; i < pageDocs.length; i++) {
+        const doc = pageDocs[i];
         const data = doc.data();
         
         // Batched user lookup (kills N+1)
@@ -271,7 +280,7 @@ class RankingService {
           userId: data.userId,
           user,
           score: data.score,
-          trend: data.trend || 0,
+          trend: data.trend ?? null,
           badge: this._getTier(data.score),
           badges: this._getBadges(data.badges || []),
         });
@@ -298,15 +307,18 @@ class RankingService {
         rankingsRef,
         where('timeRange', '==', timeRange),
         orderBy('score', 'desc'),
-        startAfter(offset),
-        limit(RANKING_CONFIG.PAGE_SIZE)
+        // Offset paging via a bounded read + slice: the modular SDK has no
+        // offset(), and passing a raw number to startAfter() compares it to
+        // `score` (which silently broke page 2+).
+        limit(offset + RANKING_CONFIG.PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
+      const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
 
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        const doc = snapshot.docs[i];
+      for (let i = 0; i < pageDocs.length; i++) {
+        const doc = pageDocs[i];
         const data = doc.data();
         
         rankings.push({
@@ -314,7 +326,7 @@ class RankingService {
           communityId: doc.id,
           community: data,
           score: data.score,
-          trend: data.trend || 0,
+          trend: data.trend ?? null,
         });
       }
 
@@ -339,12 +351,15 @@ class RankingService {
         trendingRef,
         where('timeRange', '==', timeRange),
         orderBy('score', 'desc'),
-        startAfter(offset),
-        limit(RANKING_CONFIG.PAGE_SIZE)
+        // Offset paging via a bounded read + slice: the modular SDK has no
+        // offset(), and passing a raw number to startAfter() compares it to
+        // `score` (which silently broke page 2+).
+        limit(offset + RANKING_CONFIG.PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
-      const trending = snapshot.docs.map((doc, i) => ({
+      const pageDocs = snapshot.docs.slice(offset);
+      const trending = pageDocs.map((doc, i) => ({
         rank: offset + i + 1,
         id: doc.id,
         ...doc.data(),
@@ -371,16 +386,19 @@ class RankingService {
         risingRef,
         where('timeRange', '==', timeRange),
         orderBy('growthRate', 'desc'),
-        startAfter(offset),
-        limit(RANKING_CONFIG.PAGE_SIZE)
+        // Offset paging via a bounded read + slice: the modular SDK has no
+        // offset(), and passing a raw number to startAfter() compares it to
+        // `score` (which silently broke page 2+).
+        limit(offset + RANKING_CONFIG.PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
+      const pageDocs = snapshot.docs.slice(offset);
       const rising = [];
-      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
+      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        const doc = snapshot.docs[i];
+      for (let i = 0; i < pageDocs.length; i++) {
+        const doc = pageDocs[i];
         const data = doc.data();
         
         // Batched user lookup (kills N+1)

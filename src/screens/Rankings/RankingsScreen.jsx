@@ -51,6 +51,15 @@ const TimeRangeSelector = ({ value, onChange, isDark }) => (
 );
 
 const TrendIndicator = ({ trend }) => {
+  if (trend == null) {
+    // No previous ranking period to compare against — showing "0 / no change"
+    // would claim a measured flat trend that was never computed.
+    return (
+      <span className="inline-flex items-center gap-0.5 text-slate-500 text-xs font-medium" title="Trend unavailable">
+        <Minus className="w-3 h-3" /> —
+      </span>
+    );
+  }
   if (trend > 0) {
     return (
       <span className="inline-flex items-center gap-0.5 text-emerald-400 text-xs font-bold">

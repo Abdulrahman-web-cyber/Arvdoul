@@ -419,3 +419,15 @@ Gates: `npm test` — **119 suites / 1446 passing / 5 skipped**;
 
 Gates: `npm test` — **119 suites / 1446 passing / 5 skipped**;
 `npm run build` — ✓; `eslint src/ functions/ --quiet` — 0 errors.
+
+## Checkpoint — N178
+
+- **N178 (fixed)**: all six `rankingService` list queries passed
+  `startAfter(offset)` (a raw number) to the modular SDK, which treats it as a
+  field value compared against `orderBy('score')` — breaking "Load more". Now
+  bounded offset paging (`limit(offset + PAGE_SIZE)` + `.slice(offset)`).
+  Also `trend: data.trend || 0` → `?? null` with `TrendIndicator` showing an
+  em-dash for an unmeasured trend.
+
+Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**;
+`npm run build` — ✓; `eslint src/ functions/ --quiet` — 0 errors.

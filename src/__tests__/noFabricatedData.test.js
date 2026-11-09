@@ -3024,3 +3024,23 @@ describe('Follower growth is never an invented straight line (N176)', () => {
     expect(svc).not.toContain('Fallback (legacy behavior): estimated growth');
   });
 });
+
+describe('Ranking pagination and trend honesty (N178)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('rankingService pages with a bounded limit + slice, not startAfter(offset)', () => {
+    // `startAfter(offset)` passes a raw number to the modular SDK, which treats
+    // it as a field value compared against `score` — silently dropping page 2+.
+    const svc = read('src/services/rankingService.js');
+    expect(svc).not.toMatch(/startAfter\(offset\)/);
+    expect(svc).toContain('limit(offset + RANKING_CONFIG.PAGE_SIZE)');
+  });
+
+  test('an unmeasured ranking trend stays null, never a fabricated 0', () => {
+    const svc = read('src/services/rankingService.js');
+    expect(svc).not.toMatch(/trend: data\.trend \|\| 0/);
+    expect(svc).toContain('trend: data.trend ?? null');
+    const screen = read('src/screens/Rankings/RankingsScreen.jsx');
+    expect(screen).toContain('if (trend == null)');
+  });
+});
