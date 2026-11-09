@@ -226,16 +226,18 @@ class UltimateCommentService {
           userId,
           userName: options.userName,
           content: content.substring(0, 100)
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Comment mentions processing failed', { commentId, error: e?.message }));
       }
 
       // Social loop: notify the post author (top-level comments only - replies
       // have their own _notifyReply) + award comment_created XP to the author.
       // Both are best-effort and never break the comment write.
       if (!options.parentId) {
-        this._notifyPostAuthor(postId, userId, commentId).catch(() => {});
+        this._notifyPostAuthor(postId, userId, commentId).catch((e) =>
+          logger.warn('Comment author notification failed', { commentId, error: e?.message }));
       }
-      this._awardCommentXp(userId, commentId).catch(() => {});
+      this._awardCommentXp(userId, commentId).catch((e) =>
+        logger.warn('comment_created XP award failed', { commentId, error: e?.message }));
 
       this._invalidatePostCache(postId);
 
@@ -456,7 +458,7 @@ class UltimateCommentService {
           previousContent: comment.comment.content,
           editedAt: this.firestoreMethods.serverTimestamp(),
           editedBy: userId
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Comment edit-history record failed', { commentId, error: e?.message }));
 
         const extracted = this._extractMetadata(updates.content);
         updates.mentions = extracted.mentions;
@@ -844,7 +846,7 @@ class UltimateCommentService {
           replyAuthorName: options.userName || `User_${userId.slice(0, 8)}`,
           postId: parentComment.comment.postId,
           content: content.substring(0, 100)
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Reply notification failed', { parentCommentId, error: e?.message }));
       }
 
       return result;

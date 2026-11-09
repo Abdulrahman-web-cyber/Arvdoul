@@ -835,7 +835,8 @@ class MonetizationService {
       );
       // Social loop: notify the post author + award gift_received XP
       // (best-effort, never breaks the gift).
-      this._afterGiftSent(senderId, postId, giftType, cost).catch(() => {});
+      this._afterGiftSent(senderId, postId, giftType, cost).catch((e) =>
+        log.warn('Gift follow-up (XP/notification) failed', { senderId, postId, error: e?.message }));
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO

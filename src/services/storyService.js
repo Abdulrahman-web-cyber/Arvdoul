@@ -1373,7 +1373,8 @@ class UltimateStoryService {
       const storyId = docSnap.id;
       try {
         if (STORY_CONFIG.ARCHIVE.ENABLED && STORY_CONFIG.ARCHIVE.AUTO_ARCHIVE_AFTER_EXPIRY) {
-          await this.archiveStory(storyId, story.userId).catch(() => {});
+          await this.archiveStory(storyId, story.userId).catch((e) =>
+            logger.warn('Story auto-archive failed', { storyId, error: e?.message }));
         }
         await this.fs.updateDoc(docSnap.ref, { isDeleted: true });
         this.storyCache.delete(storyId);

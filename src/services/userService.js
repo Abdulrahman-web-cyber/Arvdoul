@@ -762,7 +762,7 @@ class ProfessionalUserService {
       appearance: { theme: 'system' },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    }).catch(() => {});
+    }).catch((e) => logger.warn('Default settings seed failed', { userId, error: e?.message }));
 
     const prefsDoc = doc(this.firestore, 'user_preferences', userId);
     await setDoc(prefsDoc, {
@@ -1092,7 +1092,8 @@ class ProfessionalUserService {
       countersManager.invalidate({ docPath: `users/${followingId}`, field: 'followerCount' });
       countersManager.invalidate({ docPath: `users/${followerId}`, field: 'followingCount' });
       auditLogger.log('social.follow', { userId: followerId, meta: { followingId } });
-      this._recordFollowerSnapshotIfDue(followingId).catch(() => {});
+      this._recordFollowerSnapshotIfDue(followingId).catch((e) =>
+        logger.warn('Follower snapshot failed', { followingId, error: e?.message }));
       try {
         const notifications = await this._getNotificationsService();
         await notifications.createFollowNotification(followerId, followingId);

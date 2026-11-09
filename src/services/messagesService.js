@@ -2350,7 +2350,7 @@ class UltimateMessagingService {
       activeMembers: Array.from(activeMemberIds),
       totalMessages,
       lastStatsUpdate: this.fs.serverTimestamp(),
-    }).catch(() => {});
+    }).catch((e) => logger.warn('Conversation stats update failed', { conversationId, error: e?.message }));
 
     return {
       success: true,
