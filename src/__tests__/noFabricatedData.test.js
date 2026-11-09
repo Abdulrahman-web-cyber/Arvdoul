@@ -2421,3 +2421,23 @@ describe('BottomNav coin balance is unknown, not zero, before the profile loads'
     expect(src).toContain('return "—";');
   });
 });
+
+describe('MenuScreen and RankingsScreen use the read model, not a Citizen stub', () => {
+  test('MenuScreen renders the canonical name/handle and an unknown balance as —', () => {
+    const s = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
+    expect(s).not.toContain('activeUser?.displayName || "Citizen"');
+    expect(s).not.toContain('activeUser?.username || "citizen"');
+    expect(s).toContain('pickDisplayName(');
+    expect(s).toContain('pickHandle(');
+    // A missing balance must not claim an empty wallet.
+    expect(s).not.toContain("typeof activeUser?.coins === 'number' ? activeUser.coins : 0");
+    expect(s).toContain("typeof activeUser?.coins === 'number' ? activeUser.coins : null");
+  });
+
+  test('RankingsScreen resolves identity through the read model', () => {
+    const s = fs.readFileSync(path.join(root, 'src/screens/Rankings/RankingsScreen.jsx'), 'utf8');
+    expect(s).not.toContain("item.user?.displayName || item.community?.name || 'Citizen'");
+    expect(s).toContain('pickDisplayName(');
+    expect(s).toContain('deriveHandle(');
+  });
+});

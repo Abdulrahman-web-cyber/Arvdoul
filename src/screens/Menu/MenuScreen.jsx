@@ -8,6 +8,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
+import { pickDisplayName, pickHandle, deriveHandle } from "../../services/profileReadModel.js";
 
 // Animation Variants
 const containerVariants = {
@@ -40,8 +41,12 @@ export default function MenuScreen() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const activeUser = currentUser || user;
-  const userCoins = typeof activeUser?.coins === 'number' ? activeUser.coins : 0;
-  const formattedCoins = userCoins >= 1000 ? `${(userCoins / 1000).toFixed(1)}k` : `${userCoins}`;
+  const userDisplayName = pickDisplayName([activeUser?.displayName, activeUser?.name], { fallback: 'Member' });
+  const userHandle = pickHandle([activeUser?.username]) || deriveHandle(userDisplayName);
+  // An absent balance is unknown, not zero: rendering "0 Coins" claims an empty
+  // wallet while the profile document has not loaded.
+  const userCoins = typeof activeUser?.coins === 'number' ? activeUser.coins : null;
+  const formattedCoins = userCoins === null ? '—' : userCoins >= 1000 ? `${(userCoins / 1000).toFixed(1)}k` : `${userCoins}`;
 
   // Quick Action Launchers (Top Bento Banner)
   const quickLaunchers = useMemo(() => [
@@ -126,7 +131,7 @@ export default function MenuScreen() {
     { id: "titles", category: "community", icon: Award, label: "Civic & Nobility Titles", description: "Nobility titles, ceremonial honours & civic provenance", color: "#a855f7", path: "/titles", badge: "Titles" },
     { id: "reputation", category: "community", icon: Zap, label: "Civic Trust & Reputation", description: "Multidimensional trust score, influence & community contribution", color: "#10b981", path: "/reputation", badge: "Rep" },
     { id: "rankings", category: "community", icon: Trophy, label: "Global Creator Leaderboards", description: "Top creators, reputation badges & ranking XP", color: "#fbbf24", path: "/rankings", badge: "Top 100" },
-    { id: "coins", category: "community", icon: Coins, label: "Coin Treasury & Top-Up", description: "Purchase virtual coins and support favorite creators", color: "#f59e0b", path: "/coins", badge: userCoins > 0 ? `${formattedCoins} Coins` : "Coins" },
+    { id: "coins", category: "community", icon: Coins, label: "Coin Treasury & Top-Up", description: "Purchase virtual coins and support favorite creators", color: "#f59e0b", path: "/coins", badge: userCoins ? `${formattedCoins} Coins` : "Coins" },
     { id: "wallet", category: "community", icon: Wallet, label: "Sovereign Treasury Wallet", description: "Coins ledger, monthly subscriptions & withdrawal earnings", color: "#059669", path: "/wallet", badge: "Ledger" },
     { id: "community", category: "community", icon: Layers, label: "Communities & Circles", description: "Discover niche creator communities and forums", color: "#3b82f6", path: "/community", badge: null },
     { id: "events", category: "community", icon: Calendar, label: "Events & Meetups", description: "Virtual and in-person creator events RSVP", color: "#10b981", path: "/event", badge: null },
@@ -213,7 +218,7 @@ export default function MenuScreen() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                    {activeUser?.displayName || "Citizen"}
+                    {userDisplayName}
                   </h1>
                   {activeUser?.isCreator && (
                     <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-400 text-xs font-bold">
@@ -222,7 +227,7 @@ export default function MenuScreen() {
                   )}
                 </div>
                 <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                  @{activeUser?.username || "citizen"} • {activeUser?.level ? `Citizen Level ${activeUser.level}` : "Arvdoul Citizen"}
+                  @{userHandle}{activeUser?.level ? ` • Level ${activeUser.level}` : ''}
                 </p>
               </div>
             </div>
