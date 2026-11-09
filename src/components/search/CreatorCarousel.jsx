@@ -185,7 +185,7 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
             'text-xs',
             isDark ? 'text-gray-400' : 'text-gray-500'
           )}>
-            {formatCount(creator.followers || creator.followerCount || 0)} followers
+            {formatCount(creator.followers ?? creator.followerCount)} followers
           </p>
         </div>
 

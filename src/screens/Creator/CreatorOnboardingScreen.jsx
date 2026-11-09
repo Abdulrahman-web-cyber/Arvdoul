@@ -79,7 +79,9 @@ export default function CreatorOnboardingScreen() {
       // Re-pull the profile so the new creator flag/level is reflected before
       // the dashboard reads it. The canonical refresh is the profile store.
       if (user?.uid) {
-        await useProfileStore.getState().refreshProfile(user.uid, user.uid).catch(() => {});
+        await useProfileStore.getState().refreshProfile(user.uid, user.uid).catch((e) => {
+          console.warn('Creator onboarding profile refresh failed', e?.message);
+        });
       }
       navigate('/creator/dashboard');
     } catch (err) {

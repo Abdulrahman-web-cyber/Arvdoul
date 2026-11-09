@@ -75,7 +75,9 @@ export default function SpacesScreen() {
   const handleJoinSpace = async (space) => {
     const previous = activeSpace;
     if (previous?.id && previous.id !== space.id && user?.uid) {
-      spacesService.leaveSpace(previous.id, user.uid).catch(() => {});
+      spacesService.leaveSpace(previous.id, user.uid).catch((e) => {
+        console.warn('[Spaces] leave previous space failed', e?.message);
+      });
     }
     setActiveSpace(space);
     setIsHandRaised(false);
@@ -176,7 +178,9 @@ export default function SpacesScreen() {
         if (currentUser && typeof bal === 'number') {
           setAppState({ currentUser: { ...currentUser, coins: bal } });
         }
-      } catch { /* best-effort */ }
+      } catch (e) { /* best-effort */
+        console.warn('Space tip balance refresh failed', e?.message);
+      }
       toast.success(`Sent ${tipAmount} Coins to ${tipModalSpeaker.name}! 🪙✨`);
       setTipModalSpeaker(null);
       handleSendReaction('💎');

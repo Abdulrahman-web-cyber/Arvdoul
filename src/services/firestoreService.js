@@ -223,7 +223,9 @@ class EnterpriseFirestoreService {
             new Promise((res) => setTimeout(res, 1000))
           ]);
           currentUser = auth.currentUser;
-        } catch {}
+        } catch {
+          /* authStateReady raced the timeout; fall back to currentUser */
+        }
       }
       if (!currentUser) {
         currentUser = await new Promise((resolve) => {
@@ -276,16 +278,25 @@ class EnterpriseFirestoreService {
         ? new Date(postData.expiresAt)
         : null;
       
-      // Sanitize media items to ensure pure serializable objects
+      // Sanitize media items to ensure pure serializable objects. A
+      // session-scoped `blob:` object URL or a base64 `data:` URL is dropped:
+      // it renders only for the uploader's current tab and is broken for every
+      // other viewer and after any reload, and a `data:` URL can be megabytes
+      // written into the document.
       const cleanMedia = (Array.isArray(postData.media) ? postData.media : []).map((m) => {
         if (!m) return null;
-        if (typeof m === 'string') return { url: m, type: 'image' };
+        const url = typeof m === 'string' ? m : (m.url || m.preview || '');
+        if (typeof url !== 'string' || url.startsWith('blob:') || url.startsWith('data:')) return null;
+        if (typeof m === 'string') return { url, type: 'image' };
+        const thumbnail = typeof m.thumbnail === 'string' && !m.thumbnail.startsWith('blob:') && !m.thumbnail.startsWith('data:')
+          ? m.thumbnail
+          : null;
         return {
-          url: m.url || m.preview || '',
+          url,
           type: m.type || 'image',
           name: m.name || '',
           alt: m.alt || '',
-          thumbnail: m.thumbnail || null,
+          thumbnail,
         };
       }).filter((m) => m && m.url);
 
@@ -368,9 +379,9 @@ class EnterpriseFirestoreService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: postData.authorId, action: 'post_created', source: postId })
-          .catch(() => {});
+          .catch((err) => logger.warn('Post XP award failed', { postId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('Post XP award failed', { postId, error: e?.message });
       }
 
       return {
@@ -697,7 +708,7 @@ class EnterpriseFirestoreService {
             try {
               const { getNotificationsService } = await import('./notificationsService.js');
               await getNotificationsService().createLikeNotification(postId, userId, authorId);
-            } catch (e) { /* like notification is best-effort */ }
+            } catch (e) { logger.warn('Like notification failed', { postId, userId, error: e?.message }); }
           })(),
           (async () => {
             try {
@@ -707,9 +718,11 @@ class EnterpriseFirestoreService {
                 action: 'like_received',
                 source: postId,
               });
-            } catch (e) { /* XP award is best-effort */ }
+            } catch (e) { logger.warn('Like XP award failed', { postId, error: e?.message }); }
           })(),
-        ]).catch(() => {});
+        ]).catch((e) => {
+          logger.warn('Post-like side effects failed', { postId, error: e?.message });
+        });
       }
 
       return { success: true, alreadyLiked };
@@ -798,9 +811,9 @@ class EnterpriseFirestoreService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId, action: 'post_shared', source: postId })
-          .catch(() => {});
+          .catch((err) => logger.warn('Share XP award failed', { postId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('Share XP award failed', { postId, error: e?.message });
       }
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to share post'); }
@@ -891,13 +904,15 @@ class EnterpriseFirestoreService {
           postId, userId: uid, type: 'repost', sharedAt: serverTimestamp(),
         });
       } catch (e) { logger.warn('Repost share-counter update failed:', e?.message); }
-      try { await this.updateUserPostCount(uid, 1); } catch (e) {}
+      try { await this.updateUserPostCount(uid, 1); } catch (e) { logger.warn('updateUserPostCount failed (repost)', { uid, error: e?.message }); }
       try {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: uid, action: 'post_created', source: repostId })
-          .catch(() => {});
-      } catch (e) {}
+          .catch((err) => logger.warn('Repost XP award failed', { repostId, error: err?.message }));
+      } catch (e) {
+        logger.warn('Repost XP award failed', { repostId, error: e?.message });
+      }
 
       auditLogger.log('content.repost', { userId: uid, meta: { postId, repostId } });
       return { success: true, alreadyReposted: false, postId: repostId };
@@ -1177,7 +1192,9 @@ class EnterpriseFirestoreService {
     const postRef = doc(this.firestore, 'posts', postId);
     const subKey = `post_${postId}`;
     if (this.subscriptions.has(subKey)) {
-      try { this.subscriptions.get(subKey)(); } catch (e) {}
+      try { this.subscriptions.get(subKey)(); } catch (e) {
+        logger.debug('Stale post subscription unsubscribe failed', { error: e?.message });
+      }
     }
     const unsubscribe = onSnapshot(postRef, (snap) => {
       if (snap.exists()) {
@@ -1223,7 +1240,9 @@ class EnterpriseFirestoreService {
       const userRef = doc(this.firestore, 'users', userId);
       await updateDoc(userRef, { postCount: increment(delta), updatedAt: serverTimestamp() });
     } catch (error) {
-      // update post count quietly
+      // Denormalised post count; the authoritative list is posts/{id}. Log so a
+      // rules/quota failure is diagnosable rather than silently drifting.
+      logger.warn('updateUserPostCount failed; denormalised count may drift', { userId, delta, error: error?.message });
     }
   }
 
@@ -1242,7 +1261,9 @@ class EnterpriseFirestoreService {
   clearCache() { this.cache.clear(); logger.warn('// Firestore cache cleared'); }
 
   destroy() {
-    for (const unsub of this.subscriptions.values()) try { unsub(); } catch (e) {}
+    for (const unsub of this.subscriptions.values()) try { unsub(); } catch (e) {
+      logger.debug('Subscription unsubscribe failed', { error: e?.message });
+    }
     this.subscriptions.clear();
     this.clearCache();
     this.initialized = false;

@@ -226,16 +226,18 @@ class UltimateCommentService {
           userId,
           userName: options.userName,
           content: content.substring(0, 100)
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Comment mentions processing failed', { commentId, error: e?.message }));
       }
 
       // Social loop: notify the post author (top-level comments only - replies
       // have their own _notifyReply) + award comment_created XP to the author.
       // Both are best-effort and never break the comment write.
       if (!options.parentId) {
-        this._notifyPostAuthor(postId, userId, commentId).catch(() => {});
+        this._notifyPostAuthor(postId, userId, commentId).catch((e) =>
+          logger.warn('Comment author notification failed', { commentId, error: e?.message }));
       }
-      this._awardCommentXp(userId, commentId).catch(() => {});
+      this._awardCommentXp(userId, commentId).catch((e) =>
+        logger.warn('comment_created XP award failed', { commentId, error: e?.message }));
 
       this._invalidatePostCache(postId);
 
@@ -245,7 +247,9 @@ class UltimateCommentService {
           const current = JSON.parse(localStorage.getItem(key) || '[]');
           current.unshift({ ...commentData, id: commentId, createdAt: new Date().toISOString() });
           localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-        } catch {}
+        } catch (e) {
+          logger.debug('Local comment cache write failed', { postId, error: e?.message });
+        }
       }
 
       auditLogger.log('content.comment', { userId, meta: { commentId, postId, parentId: options.parentId || null } });
@@ -355,7 +359,9 @@ class UltimateCommentService {
               }
             });
           }
-        } catch {}
+        } catch (e) {
+          logger.warn('Local comment cache read failed', { error: e?.message });
+        }
       }
 
       let processedComments = comments;
@@ -456,7 +462,7 @@ class UltimateCommentService {
           previousContent: comment.comment.content,
           editedAt: this.firestoreMethods.serverTimestamp(),
           editedBy: userId
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Comment edit-history record failed', { commentId, error: e?.message }));
 
         const extracted = this._extractMetadata(updates.content);
         updates.mentions = extracted.mentions;
@@ -844,7 +850,7 @@ class UltimateCommentService {
           replyAuthorName: options.userName || `User_${userId.slice(0, 8)}`,
           postId: parentComment.comment.postId,
           content: content.substring(0, 100)
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Reply notification failed', { parentCommentId, error: e?.message }));
       }
 
       return result;
@@ -1013,45 +1019,19 @@ class UltimateCommentService {
   }
 
   async reportComment(commentId, userId, reason, details = '') {
-    try {
-      await this._ensureInitialized();
-
-      const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
-      const reportQuery = this.firestoreMethods.query(
-        reportsRef,
-        this.firestoreMethods.where('commentId', '==', commentId),
-        this.firestoreMethods.where('userId', '==', userId)
-      );
-
-      const existingReports = await this.firestoreMethods.getDocs(reportQuery);
-      if (!existingReports.empty) {
-        throw new Error('You have already reported this comment');
-      }
-
-      await this.firestoreMethods.addDoc(reportsRef, {
-        commentId,
-        userId,
-        reason,
-        details,
-        status: 'pending',
-        createdAt: this.firestoreMethods.serverTimestamp(),
-        reviewedAt: null,
-        reviewedBy: null,
-        actionTaken: null
-      });
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      await this.firestoreMethods.updateDoc(commentRef, {
-        reports: this.firestoreMethods.increment(1),
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      });
-
-      return { success: true, commentId, reported: true };
-
-    } catch (error) {
-      logger.error(`❌ Report comment ${commentId} failed:`, error);
-      throw this._enhanceError(error, 'Failed to report comment');
-    }
+    await this._ensureInitialized();
+    // Route through the reportContent callable like every other report type.
+    // The direct write stamped `userId`, but firestore.rules authorises
+    // `comment_reports` create/read on `reporterId`, so the write was denied and
+    // the report never reached the moderator queue. The callable rate-limits,
+    // de-duplicates and writes the queue-compatible record.
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const data = await callFunction(FUNCTIONS.REPORT_COMMENT, {
+      targetId: commentId,
+      reason,
+      details,
+    });
+    return { success: true, commentId, reported: true, ...(data || {}) };
   }
 
 
@@ -1217,6 +1197,10 @@ class UltimateCommentService {
 
       return { allowed: true, count: totalCount + 1, waitTime: 0 };
     } catch (error) {
+      // Client-side spam counting is advisory (the server enforces the real
+      // limit); never block a comment on a counter-write failure — but log it so
+      // a persistent rules/index failure is observable instead of silent.
+      logger.warn('_checkSpamRate counter update failed; allowing comment', { userId, error: error?.message });
       return { allowed: true, count: 0, waitTime: 0 };
     }
   }

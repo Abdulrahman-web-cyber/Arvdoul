@@ -43,8 +43,9 @@ export default function TitlesScreen() {
     try {
       const { useProfileStore } = await import('../../store/profileStore.js');
       await useProfileStore.getState().refreshProfile(uid, uid);
-    } catch {
+    } catch (e) {
       /* best-effort refresh; the realtime listener will reconcile */
+      console.warn('Title badge profile refresh failed', e?.message);
     }
   }, [profile, user]);
 

@@ -324,7 +324,9 @@ class UltimateFeedService {
         this.interestVectorCache.set(userId, { vector, ts: Date.now() });
         return vector;
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Interest-vector read failed; ranking falls back to defaults', { userId, error: e?.message });
+    }
     return {};
   }
 
@@ -340,7 +342,9 @@ class UltimateFeedService {
       const { doc, setDoc } = this.firestoreMethods;
       await setDoc(doc(this.firestore, 'user_interest_vectors', userId), { vector, updatedAt: Date.now() }, { merge: true });
       this.interestVectorCache.set(userId, { vector, ts: Date.now() });
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Interest-vector persist failed; ranking signal not stored', { userId, error: e?.message });
+    }
     return vector;
   }
 
@@ -361,7 +365,9 @@ class UltimateFeedService {
           topicStreaks: data.topicStreaks ?? {},
         };
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed session state read failed; starting a fresh session', { userId, error: e?.message });
+    }
     return { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
   }
 
@@ -376,7 +382,9 @@ class UltimateFeedService {
           ...state,
           updatedAt: serverTimestamp()
         }, { merge: true });
-      } catch (e) {}
+      } catch (e) {
+        logger.warn('Feed session-state persist failed; seen/hidden posts not remembered', { userId, error: e?.message });
+      }
     };
     if (immediate) await save();
     else setTimeout(save, 2000);
@@ -476,6 +484,7 @@ class UltimateFeedService {
       paginated._nextCursor = nextCursor;
       return paginated;
     } catch (error) {
+      logger.warn('Following feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -582,10 +591,13 @@ class UltimateFeedService {
             }
           }
         }
-      } catch {}
+      } catch (e) {
+        logger.warn('Local optimistic-post merge failed', { error: e?.message });
+      }
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
       return posts.slice(0, limit);
     } catch (error) {
+      logger.warn('Latest feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -694,6 +706,7 @@ class UltimateFeedService {
       });
       return posts.slice(0, limit);
     } catch (error) {
+      logger.warn('Discover feed source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -732,6 +745,7 @@ class UltimateFeedService {
       this.sponsoredCache = { posts, timestamp: now };
       return posts.slice(0, options.limit);
     } catch (error) {
+      logger.warn('Sponsored posts source failed', { userId, error: error?.message });
       return [];
     }
   }
@@ -803,7 +817,9 @@ class UltimateFeedService {
         this.mlCache.set(cacheKey, { data: { feed, nextCursor: data.nextCursor }, timestamp: Date.now() });
         return { feed, nextCursor: data.nextCursor };
       }
-    } catch (error) {}
+    } catch (error) {
+      logger.warn('ML feed source unavailable; falling back to local ranking', { userId, error: error?.message });
+    }
     return null;
   }
 
@@ -835,11 +851,17 @@ class UltimateFeedService {
     } catch (error) {
       logger.error('Feed generation failed', { error: error.message, userId, feedType });
       const fallback = await this._getFallbackFeed(userId, { limit });
+      const posts = fallback.slice(0, limit);
+      // A degraded source may still yield a fallback feed — serve it, but mark
+      // it. When the fallback is also empty the generation genuinely failed and
+      // must be reported as such: `success: true` + `feed: []` would render the
+      // "no posts yet" empty state instead of an error with retry.
       return {
-        success: true,
-        feed: fallback.slice(0, limit),
+        success: posts.length > 0,
+        feed: posts,
         nextCursor: null,
         hasMore: false,
+        error: error.message,
         metadata: { isFallback: true, error: error.message },
         operationId,
         duration: Date.now() - startTime
@@ -1266,6 +1288,7 @@ class UltimateFeedService {
         _source: 'monetisation',
       };
     } catch (error) {
+      logger.warn('Feed ad lookup failed', { userId, error: error?.message });
       return null;
     }
   }
@@ -1323,7 +1346,9 @@ class UltimateFeedService {
         this.userPreferences.set(cacheKey, { data: prefsSnap.data(), timestamp: Date.now() });
         return prefsSnap.data();
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed user_preferences read failed', { userId, error: e?.message });
+    }
     return {};
   }
 
@@ -1342,7 +1367,9 @@ class UltimateFeedService {
         this.userPreferences.set(cacheKey, { data: w, timestamp: Date.now() });
         return w;
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed weight preferences read failed', { userId, error: e?.message });
+    }
     return null;
   }
 
@@ -1511,7 +1538,9 @@ class UltimateFeedService {
 
   async preloadNextFeed(userId, nextCursor) {
     if (!nextCursor) return;
-    setTimeout(() => this.getSmartFeed(userId, { limit: FEED_CONFIG.PERFORMANCE.PRELOAD_COUNT, lastDoc: nextCursor }).catch(() => {}), 2000);
+    setTimeout(() => this.getSmartFeed(userId, { limit: FEED_CONFIG.PERFORMANCE.PRELOAD_COUNT, lastDoc: nextCursor }).catch((e) => {
+      logger.debug('Next-page feed preload failed', { error: e?.message });
+    }), 2000);
   }
 
   async getFeedAnalytics(userId, timeframe = '7d') {
@@ -1659,7 +1688,9 @@ class UltimateFeedService {
       const postRef = doc(this.firestore, 'posts', postId);
       const snap = await getDoc(postRef);
       if (snap.exists()) return { id: snap.id, ...snap.data() };
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Feed single-post read failed', { postId, error: e?.message });
+    }
     return null;
   }
 
@@ -1687,7 +1718,9 @@ class UltimateFeedService {
         )
       );
       ads.forEach((ad, idx) => { if (ad) this._cacheAd(ad, userId, idx); });
-    } catch (error) {}
+    } catch (error) {
+      logger.warn('Ad prefetch failed', { userId, error: error?.message });
+    }
   }
 
   _canMakeRequest(userId, operation) {

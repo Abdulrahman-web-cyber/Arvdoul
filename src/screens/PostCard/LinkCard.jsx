@@ -87,7 +87,9 @@ const getVideoId = (url) => {
     }
     if (u.hostname.includes('vimeo.com')) return u.pathname.slice(1);
     if (u.hostname.includes('tiktok.com')) return u.pathname.split('/')[2];
-  } catch {}
+  } catch {
+    /* an unparseable href is not a video embed */
+  }
   return null;
 };
 

@@ -32,8 +32,9 @@ export const formatDuration = (seconds) => {
  * @example formatViewCount(3400000) => "3.4M"
  */
 export const formatViewCount = (views) => {
-  if (typeof views !== 'number' || isNaN(views)) {
-    return '0';
+  // An absent count is unknown; '0' claimed a measured empty value.
+  if (views === null || views === undefined || typeof views !== 'number' || isNaN(views)) {
+    return '—';
   }
 
   if (views >= 1_000_000_000) {
@@ -425,7 +426,9 @@ export const generateTranscript = async (videoId) => {
       rec.onend = () => resolve(text);
       rec.onerror = () => resolve('');
       rec.start();
-      setTimeout(() => { try { rec.stop(); } catch (e) {} }, 15000);
+      setTimeout(() => { try { rec.stop(); } catch (e) {
+        console.warn('Speech recognition stop failed', e?.message);
+      } }, 15000);
     });
   } catch (err) {
     return '';

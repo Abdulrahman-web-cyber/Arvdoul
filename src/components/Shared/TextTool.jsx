@@ -365,7 +365,7 @@ const TextTool = memo(({
             onKeyDown={(e) => {
               if (e.key === "Enter") onQuickAdd();
             }}
-            className={`flex-1 px-4 py-2.5 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white \${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} border \${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-sm transition-colors`}
+            className={`flex-1 px-4 py-2.5 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white ${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} border ${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-sm transition-colors`}
             aria-label="Quick text input"
           />
           <motion.button
@@ -396,7 +396,7 @@ const TextTool = memo(({
               type="text"
               value={selectedText.text || ''}
               onChange={(e) => handleUpdate({ text: e.target.value })}
-              className={`w-full px-4 py-3 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white border \${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-lg`}
+              className={`w-full px-4 py-3 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white border ${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-lg`}
               aria-label="Edit text content"
               placeholder="Enter text..."
             />
@@ -636,7 +636,7 @@ const TextTool = memo(({
                         type="number"
                         value={selectedText.shadowX ?? 2}
                         onChange={(e) => handleUpdate({ shadowX: Number(e.target.value) })}
-                        className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                        className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                       />
                     </div>
                     <div>
@@ -645,7 +645,7 @@ const TextTool = memo(({
                         type="number"
                         value={selectedText.shadowY ?? 2}
                         onChange={(e) => handleUpdate({ shadowY: Number(e.target.value) })}
-                        className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                        className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                       />
                     </div>
                     <div>
@@ -654,7 +654,7 @@ const TextTool = memo(({
                         type="number"
                         value={selectedText.shadowBlur ?? 4}
                         onChange={(e) => handleUpdate({ shadowBlur: Number(e.target.value) })}
-                        className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                        className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                       />
                     </div>
                   </div>
@@ -700,7 +700,7 @@ const TextTool = memo(({
                       max={20}
                       value={selectedText.strokeWidth ?? 2}
                       onChange={(e) => handleUpdate({ strokeWidth: Number(e.target.value) })}
-                      className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                      className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                     />
                   </div>
                   <div>

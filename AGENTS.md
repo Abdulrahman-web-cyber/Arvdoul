@@ -95,6 +95,22 @@ as failures.
 - **Firestore rules must cover every collection the client reads/writes.** Notably
   `previous_usernames` (old username -> userId) is read when resolving share/QR links, so it
   needs an explicit `match` block; a missing block silently denies those reads.
+- **Storage rules must cover every path the client writes, and the client must
+  write the shape the rules can prove.** Every upload path is
+  `{namespace}/{ownerUid}/...` so the rule proves ownership from the path
+  (`request.auth.uid == {userId}`); message media is the one exception and is
+  participant-scoped at `messages/{conversationId}/{messageId}.{ext}`, gated by
+  a cross-service `firestore.get(conversations/$(cid)).data.participants`.
+  `storage.rules` used `avatars/{userId}/{fileName}` while the client wrote
+  `avatars/{uid}` (2 segments — unmatched, denied) and had **no rule at all**
+  for `chat_media`/`comments/voice`/`events`/`group-photos`/`communities/avatars`/
+  `audio_exports`, so nearly every upload failed `storage/unauthorized` (N170).
+  Use `{fileName=**}` (it also matches the zero-segment form), keep size/content
+  gates on `write` only, and give every namespace an explicit owner `allow
+  delete` (a delete carries no `request.resource`, so a shared write gate throws
+  and the delete is denied). Never add a namespace without a rule and a client
+  path with the owner segment; `storageRulesPathAlignment.test.js` (hard-failing
+  `guards` job, static + live emulator) fails if the two drift.
 - **Graph edge reads must be the shape the rules can prove.** `blocks`/`mutes`/
   `restricts` authorise on `resource.data.<actorField> == uid()`; Firestore rules are
   not filters. A `documentId() in [...]` list read cannot prove that condition, and a
@@ -365,6 +381,18 @@ server writes a `publicKey`), so the E2EE path never encrypts and the send gate
 falls back to plaintext — no lock badge or "E2EE protected" label. Likewise
 `feedService` offline-mode write stubs throw instead of resolving a fake
 `{ id: 'dummy' }`. `noFabricatedData.test.js` guards both.
+
+## No fabricated media URLs
+A media write must persist a durable, publicly-resolvable Storage
+`downloadURL` — never a session-scoped `blob:` object URL or a base64 `data:`
+URL. Those render only for the uploader's current tab and are broken for every
+other viewer and after any reload, and a `data:` URL can be megabytes written
+straight into a Firestore document. `CreatePost.uploadMedia` therefore requires
+a `downloadURL` from the upload, uploads any generated (blob) thumbnail
+alongside the media or drops it, and **throws** when an item fails; the
+background sync must not swallow that failure and persist the optimistic
+previews. Never race a real upload against an arbitrary client timeout and fall
+back to a local URL on the rejection. Guarded by `noFabricatedData.test.js`.
 
 ## Cloud Functions deploy path — merge, don't just require
 Firebase publishes exactly what `functions/index.js` exports. `require('./x.js')`

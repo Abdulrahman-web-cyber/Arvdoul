@@ -689,11 +689,12 @@ class UltimateVideoService {
           id: item.authorId || item.userId,
           isVerified: item.authorVerified || false,
         },
-        likes: item.stats?.likes ?? item.likes ?? 0,
-        comments: item.stats?.comments ?? item.comments ?? 0,
-        shares: item.stats?.shares ?? item.shares ?? 0,
-        saves: item.stats?.saves ?? item.saves ?? 0,
-        views: item.stats?.views ?? item.views ?? 0,
+        // An absent stat stays unknown; the cards render '—', not a fake 0.
+        likes: item.stats?.likes ?? item.likes ?? null,
+        comments: item.stats?.comments ?? item.comments ?? null,
+        shares: item.stats?.shares ?? item.shares ?? null,
+        saves: item.stats?.saves ?? item.saves ?? null,
+        views: item.stats?.views ?? item.views ?? null,
         isLiked: item.isLiked || false,
         isSaved: item.isSaved || false,
       };
@@ -716,7 +717,9 @@ class UltimateVideoService {
           return { success: true, feed: matchingVideos, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logger.warn('[VideoService] matching-videos fallback failed', { error: e?.message });
+    }
 
     try {
       const videosRef = collection(this.firestore, 'videos');
@@ -786,10 +789,11 @@ class UltimateVideoService {
     try {
       const res = await this.fns.shareVideo({ videoId, platform });
       return res.data;
-    } catch {
+    } catch (e) {
       // The share itself already happened client-side (native share/clipboard);
       // the server counter is a secondary metric. No direct-doc write here —
       // videos/{id} is owner-writable and would both over-count and fail.
+      logger.warn('Video share counter not recorded', { videoId, platform, error: e?.message });
       return { success: false, counted: false };
     }
   }

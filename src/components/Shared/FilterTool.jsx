@@ -259,13 +259,13 @@ const FilterTool = memo(({
             placeholder="Search filters..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2.5 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} border \${isDark ? 'border-white/10' : 'border-gray-200'} text-white \${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} text-sm outline-none focus:border-purple-500 transition-colors`}
+            className={`w-full pl-10 pr-4 py-2.5 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} border ${isDark ? 'border-white/10' : 'border-gray-200'} ${isDark ? 'text-white' : 'text-gray-900'} ${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} text-sm outline-none focus:border-purple-500 transition-colors`}
             aria-label="Search filters"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 ${isDark ? 'hover:text-white' : 'hover:text-gray-900'}"
+              className={`absolute right-3 top-1/2 -translate-y-1/2 text-white/40 ${isDark ? 'hover:text-white' : 'hover:text-gray-900'}`}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -361,7 +361,7 @@ const FilterTool = memo(({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className={`space-y-2 pt-2 border-t \${isDark ? 'border-white/10' : 'border-gray-200'}`}
+            className={`space-y-2 pt-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -372,7 +372,7 @@ const FilterTool = memo(({
             </div>
             
             <div className="relative h-8 flex items-center">
-              <div className={`absolute inset-x-0 h-1.5 rounded-full \${isDark ? 'bg-white/10' : 'bg-black/5'} overflow-hidden`}>
+              <div className={`absolute inset-x-0 h-1.5 rounded-full ${isDark ? 'bg-white/10' : 'bg-black/5'} overflow-hidden`}>
                 <motion.div
                   className="h-full rounded-full"
                   style={{

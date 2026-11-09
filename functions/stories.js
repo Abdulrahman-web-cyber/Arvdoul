@@ -369,7 +369,9 @@ exports.moderateStory = functions.firestore
       // ---- 3. Final decision ----
       if (shouldReject) {
         if (storyData.media?.path) {
-          try { await bucket.file(storyData.media.path).delete(); } catch (err) {}
+          try { await bucket.file(storyData.media.path).delete(); } catch (err) {
+            log('warn', 'Rejected story media delete failed', { storyId, error: err.message });
+          }
         }
         await storyRef.update({
           moderationStatus: 'rejected',
@@ -470,7 +472,9 @@ exports.processVideoModeration = functions.https.onRequest(async (req, res) => {
     if (hasExplicit) {
       const storyData = storySnap.data();
       if (storyData.media?.path) {
-        try { await bucket.file(storyData.media.path).delete(); } catch (e) {}
+        try { await bucket.file(storyData.media.path).delete(); } catch (e) {
+          log('warn', 'Explicit story media delete failed', { storyId, error: e.message });
+        }
       }
       await storyRef.update({
         moderationStatus: 'rejected',
@@ -652,7 +656,9 @@ exports.cleanupExpiredStories = functions.pubsub
         }
 
         if (!archived && storyData.media?.path) {
-          try { await bucket.file(storyData.media.path).delete(); } catch (err) {}
+          try { await bucket.file(storyData.media.path).delete(); } catch (err) {
+            log('warn', 'Expired story media delete failed', { storyId, error: err.message });
+          }
         }
 
         await doc.ref.delete();

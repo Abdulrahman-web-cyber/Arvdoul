@@ -818,8 +818,11 @@ export default function EmailVerification() {
     try {
       if (userId || user?.uid) {
         const { getAuthService } = await import("../services/authService.js");
-        // Delete before signing out: deleteUser needs a current user.
-        await getAuthService().deleteCurrentUser().catch(() => {});
+        // Delete before signing out: deleteUser needs a current user. If the
+        // delete fails the old account still exists, so the failure must be
+        // visible rather than pretending the account is gone.
+        await getAuthService().deleteCurrentUser().catch((e) =>
+          console.warn('[VerifyEmail] account delete before re-signup failed', e?.message));
         await signOut();
       }
       sessionStorage.clear();

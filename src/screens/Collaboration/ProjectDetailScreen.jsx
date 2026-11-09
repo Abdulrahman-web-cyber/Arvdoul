@@ -11,6 +11,7 @@ import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
 import collaborationService, { COLLABORATION_CONFIG } from '../../services/collaborationService';
 import { copyToClipboard } from '../../utils/shareUtils';
+import { Dialog } from '../../components/UI/Dialog';
 import { ArrowLeft, Users, Clock, FileText, CheckCircle, XCircle, Share2, MoreVertical, Plus, Eye, Loader2 } from "lucide-react";
 
 const formatRelativeTime = (value) => {
@@ -62,6 +63,10 @@ export default function ProjectDetailScreen() {
   const [creating, setCreating] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'editor' });
+  const [teamBusyId, setTeamBusyId] = useState(null);
 
   const loadProject = async () => {
     if (!projectId) {
@@ -74,7 +79,7 @@ export default function ProjectDetailScreen() {
       setError(null);
       const projectData = await collaborationService.getProject(projectId);
       const [teamData, contentData] = await Promise.all([
-        collaborationService.getTeam(projectId),
+        collaborationService.getTeam(projectId, { viewerId: user?.uid }),
         collaborationService.getContentVersions(projectId),
       ]);
 
@@ -197,6 +202,49 @@ export default function ProjectDetailScreen() {
     }
   };
 
+  const handleInviteMember = async () => {
+    const email = inviteForm.email.trim();
+    if (!email || inviting) return;
+    setInviting(true);
+    try {
+      await collaborationService.createInvite(projectId, email, inviteForm.role, user.uid);
+      toast.success(`Invite sent to ${email}`);
+      setInviteOpen(false);
+      setInviteForm({ email: '', role: 'editor' });
+    } catch (err) {
+      toast.error(err.message || 'Could not send the invite');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleChangeRole = async (member, newRole) => {
+    if (!newRole || newRole === member.role) return;
+    setTeamBusyId(member.userId || member.id);
+    try {
+      await collaborationService.updateMemberRole(projectId, member.userId || member.id, newRole, user.uid, myRole);
+      toast.success('Role updated');
+      await loadProject();
+    } catch (err) {
+      toast.error(err.message || 'Could not update the role');
+    } finally {
+      setTeamBusyId(null);
+    }
+  };
+
+  const handleRemoveMember = async (member) => {
+    setTeamBusyId(member.userId || member.id);
+    try {
+      await collaborationService.removeTeamMember(projectId, member.userId || member.id, user.uid, myRole);
+      toast.success('Member removed');
+      await loadProject();
+    } catch (err) {
+      toast.error(err.message || 'Could not remove the member');
+    } finally {
+      setTeamBusyId(null);
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -232,6 +280,7 @@ export default function ProjectDetailScreen() {
   const canReview = collaborationService.canReviewContent(myRole);
   const canEdit = collaborationService.canEditContent(myRole);
   const canPublish = collaborationService.canPublishContent(myRole);
+  const canManageTeam = collaborationService.canManageTeam(myRole);
 
   const tabs = [
     { id: 'content', label: 'Content', count: content.length },
@@ -471,39 +520,81 @@ export default function ProjectDetailScreen() {
 
         {activeTab === 'team' && (
           <div className="space-y-3">
+            {canManageTeam && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setInviteOpen(true)}
+                className="flex w-full items-center justify-center gap-2 py-2.5 rounded-arvdoul-lg text-sm font-medium bg-arvdoul-gradient text-white"
+              >
+                <Plus className="w-4 h-4" />
+                Invite member
+              </motion.button>
+            )}
+
             {team.length === 0 && (
               <p className="py-12 text-center text-sm text-arvdoul-text-secondary">No team members yet.</p>
             )}
-            {team.map((member, index) => (
-              <motion.div
-                key={member.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-arvdoul-lg",
-                  "bg-arvdoul-surface border border-arvdoul-border"
-                )}
-              >
-                {member.avatar ? (
-                  <img src={member.avatar} alt={member.name || member.userId} className="w-12 h-12 rounded-full object-cover" />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-arvdoul-purple/20 flex items-center justify-center text-arvdoul-purple font-semibold">
-                    {(member.name || member.userId || '?').slice(0, 1).toUpperCase()}
+            {team.map((member, index) => {
+              const memberId = member.userId || member.id;
+              const isMemberOwner = member.role === 'owner';
+              const busy = teamBusyId === memberId;
+              return (
+                <motion.div
+                  key={member.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-arvdoul-lg",
+                    "bg-arvdoul-surface border border-arvdoul-border"
+                  )}
+                >
+                  {member.avatar ? (
+                    <img src={member.avatar} alt={member.name || memberId} className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-arvdoul-purple/20 flex items-center justify-center text-arvdoul-purple font-semibold">
+                      {(member.name || memberId || '?').slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-white truncate">{member.name || memberId}</h4>
+                    {member.email && <p className="text-sm text-gray-400 truncate">{member.email}</p>}
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-white truncate">{member.name || member.userId}</h4>
-                  {member.email && <p className="text-sm text-gray-400 truncate">{member.email}</p>}
-                </div>
-                <span className={cn(
-                  "px-2 py-1 rounded-full text-xs capitalize",
-                  member.role === 'owner' ? "bg-arvdoul-purple/20 text-arvdoul-purple" : "bg-gray-500/20 text-gray-400"
-                )}>
-                  {member.role}
-                </span>
-              </motion.div>
-            ))}
+
+                  {canManageTeam && !isMemberOwner && memberId !== user?.uid ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        aria-label={`Role for ${member.name || memberId}`}
+                        value={member.role}
+                        disabled={busy}
+                        onChange={(e) => handleChangeRole(member, e.target.value)}
+                        className="px-2 py-1.5 rounded-arvdoul-md text-xs bg-arvdoul-surface border border-arvdoul-border text-white capitalize outline-none disabled:opacity-50"
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleRemoveMember(member)}
+                        aria-label={`Remove ${member.name || memberId}`}
+                        className="p-1.5 rounded-full text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className={cn(
+                      "px-2 py-1 rounded-full text-xs capitalize",
+                      isMemberOwner ? "bg-arvdoul-purple/20 text-arvdoul-purple" : "bg-gray-500/20 text-gray-400"
+                    )}>
+                      {member.role}
+                    </span>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         )}
 
@@ -573,6 +664,83 @@ export default function ProjectDetailScreen() {
           </div>
         )}
       </div>
+
+      <Dialog
+        isOpen={inviteOpen}
+        onClose={() => { if (!inviting) setInviteOpen(false); }}
+        title="Invite a team member"
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="invite-email" className="block text-sm font-medium mb-1.5">
+              Email address
+            </label>
+            <input
+              id="invite-email"
+              type="email"
+              value={inviteForm.email}
+              onChange={(e) => setInviteForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="teammate@example.com"
+              className={cn(
+                "w-full px-4 py-2.5 rounded-arvdoul-md outline-none border",
+                "bg-arvdoul-surface border-arvdoul-border focus:border-arvdoul-purple text-white placeholder:text-arvdoul-text-secondary"
+              )}
+            />
+            <p className="mt-1.5 text-xs text-arvdoul-text-secondary">
+              They join the project when they accept the invite with this email.
+            </p>
+          </div>
+
+          <div>
+            <span className="block text-sm font-medium mb-1.5">Role</span>
+            <div className="flex flex-wrap gap-2">
+              {['admin', 'editor', 'viewer'].map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setInviteForm(f => ({ ...f, role }))}
+                  className={cn(
+                    "px-3.5 py-2 rounded-arvdoul-md text-sm capitalize border transition-colors",
+                    inviteForm.role === role
+                      ? "bg-arvdoul-purple text-white border-arvdoul-purple"
+                      : "bg-arvdoul-surface border-arvdoul-border text-arvdoul-text-secondary hover:text-white"
+                  )}
+                >
+                  {role}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              type="button"
+              disabled={inviting}
+              onClick={() => setInviteOpen(false)}
+              className={cn(
+                "px-4 py-2.5 rounded-arvdoul-md border text-sm font-medium",
+                "bg-arvdoul-surface border-arvdoul-border text-arvdoul-text-secondary",
+                inviting && "opacity-50"
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={inviting || !inviteForm.email.trim()}
+              onClick={handleInviteMember}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 rounded-arvdoul-md text-sm font-medium text-white",
+                "bg-arvdoul-gradient",
+                (inviting || !inviteForm.email.trim()) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {inviting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {inviting ? 'Sending…' : 'Send invite'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

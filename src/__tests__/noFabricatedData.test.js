@@ -120,6 +120,48 @@ describe('collaborationService - no sample projects', () => {
     expect(src).not.toContain("name: 'Arvdoul Launch Reel'");
     expect(src).toContain("where('ownerId', '==', userId)"); // real Firestore query
   });
+
+  test('project roster size is a real denormalized count, never a fabricated 0/empty array', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/collaborationService.js'), 'utf8');
+    // The project document has no `members` number or `team` array — members
+    // live in the `team` subcollection. Reading those fields produced a
+    // permanent `0` and a dead avatar row (N162).
+    expect(src).not.toMatch(/members:\s*typeof/);
+    expect(src).not.toMatch(/team:\s*Array\.isArray\(data\.team\)/);
+    expect(src).toContain("typeof data.memberCount === 'number'");
+  });
+
+  test('the server keeps the denormalized memberCount in step with the team roster', () => {
+    const fn = fs.readFileSync(path.join(root, 'functions/collaboration.js'), 'utf8');
+    expect(fn).toContain('memberCount: 1'); // seeded when the owner is added
+    expect(fn).toContain('memberCount: FieldValue.increment(1)');
+    expect(fn).toContain('memberCount: FieldValue.increment(-1)');
+  });
+
+  test('the collaboration UI wires create + team management (no dead controls)', () => {
+    const dashboard = fs.readFileSync(
+      path.join(root, 'src/screens/Collaboration/ProjectDashboardScreen.jsx'), 'utf8');
+    const detail = fs.readFileSync(
+      path.join(root, 'src/screens/Collaboration/ProjectDetailScreen.jsx'), 'utf8');
+    // The primary "New Project" action must reach the real create callable.
+    expect(dashboard).toContain('collaborationService.createProject');
+    // Team management must be reachable — these callables have no other caller.
+    expect(detail).toContain('collaborationService.createInvite');
+    expect(detail).toContain('collaborationService.updateMemberRole');
+    expect(detail).toContain('collaborationService.removeTeamMember');
+  });
+
+  test('EventCard reads the real attendee counter, not the never-written stats.going', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/EventCard.jsx'), 'utf8');
+    // The real counter (functions/events.js) is stats.attendeeCount.
+    expect(src).toContain('stats?.attendeeCount');
+    // The phantom fields must not reappear.
+    expect(src).not.toContain('stats?.going');
+    expect(src).not.toContain('previewAttendees');
+    // The real cover field is coverImage; `banner` is never written.
+    expect(src).toContain('event.coverImage');
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {
@@ -619,11 +661,26 @@ describe('Shared rate limiter + admin secrets', () => {
 describe('Storage rules - upload paths enforced', () => {
   test('sounds/videos/thumbnails paths exist with size limits', () => {
     const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
-    expect(rules).toContain('match /sounds/{userId}/{fileName}');
+    // `{fileName=**}` matches both `sounds/{uid}/s.mp3` and the zero-segment
+    // `avatars/{uid}` form, so every client write path resolves to one rule.
+    expect(rules).toContain('match /sounds/{userId}/{fileName=**}');
     expect(rules).toContain('contentType.matches(\'audio/.*\')');
-    expect(rules).toContain('match /videos/{userId}/{fileName}');
-    expect(rules).toContain('match /thumbnails/{userId}/{fileName}');
+    expect(rules).toContain('match /videos/{userId}/{fileName=**}');
+    expect(rules).toContain('match /thumbnails/{userId}/{fileName=**}');
     expect(rules).toContain('25 * 1024 * 1024');
+  });
+
+  test('every client write namespace has an owner-scoped rule', () => {
+    const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
+    // These are the namespaces the client actually uploads to. A namespace
+    // with no rule denies every upload (the N170 defect).
+    for (const ns of [
+      'avatars', 'banners', 'posts', 'stories', 'messages', 'live',
+      'communities', 'sounds', 'videos', 'thumbnails', 'comments',
+      'events', 'group-photos', 'audio_exports', 'temp', 'users',
+    ]) {
+      expect(rules).toContain(`match /${ns}/`);
+    }
   });
 });
 
@@ -758,8 +815,13 @@ describe('Messaging master-spec: security rules', () => {
 
   test('group invites are admin-managed', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    const block = rules.slice(rules.indexOf('match /group_invites'), rules.indexOf('match /group_invites') + 300);
-    expect(block).toContain('isConvAdmin()');
+    // Top-level collection (the client reads/writes it at the root), with the
+    // admin gate resolved from the invite's own conversationId. `isConvAdmin()`
+    // is scoped to the `conversations/{id}` block and cannot be referenced here.
+    const start = rules.indexOf('match /group_invites');
+    const block = rules.slice(start, rules.indexOf('match /message_dedupe', start));
+    expect(block).toContain('.data.admins');
+    expect(block).toContain('request.resource.data.createdBy == uid()');
   });
 
   test('conversation updates cannot mutate roles/admins unless admin', () => {
@@ -2149,7 +2211,10 @@ describe('Wallet availability mirrors the server hold (lockedCoins)', () => {
   test('walletService derives availableCoins from lockedCoins, not a partial status sum', () => {
     const s = read('src/services/walletService.js');
     expect(s).toContain('const lockedCoins = Number(userData.lockedCoins || 0)');
-    expect(s).toContain('availableCoins: Math.max(0, coins - lockedCoins)');
+    // Availability mirrors the server hold; an unknown balance stays null
+    // rather than advertising 0 spendable coins.
+    expect(s).toContain('const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);');
+    expect(s).toContain('availableCoins,');
     // `pending_review` requests lock coins too; omitting it over-reported balance.
     expect(s).toContain("['pending', 'pending_review', 'processing']");
   });
@@ -2340,5 +2405,668 @@ describe('Offline status screen reads the real queue, never a fixed count', () =
     expect(s).not.toMatch(/>\s*Pending writes:\s*\d/);
     expect(s).toContain('subscribeSyncStatus');
     expect(s).toContain("from '../offline/syncEngine.js'");
+  });
+});
+
+describe('Composer moderation never claims a pass it did not verify', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+
+  test('a failed moderation call renders an "unavailable" state, not "passed"', () => {
+    // The catch branch used to dispatch `{ approved: true, fallback: true }`,
+    // so an unreachable moderation provider rendered "Content passed
+    // moderation" — a fabricated approval. It must surface the unknown state.
+    expect(src).not.toContain('approved: true, flags: [], fallback: true');
+    expect(src).toContain('unknown: true');
+    expect(src).toContain('Moderation check unavailable');
+  });
+
+  test('the approval copy is gated on a real approved flag', () => {
+    expect(src).toContain('state.moderationStatus.approved ? "Content passed moderation"');
+  });
+});
+
+describe('Admin content list reads the real nested post stats', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminContentManagementScreen.jsx'), 'utf8');
+
+  test('views/likes come from posts/{id}.stats, not a fabricated top-level field', () => {
+    // Posts store engagement under `stats` (firestoreService writes
+    // `stats: { likes, views, ... }`); the admin card read `item.views`/
+    // `item.likes`, which never exist, so every row rendered "0 views 0 likes".
+    expect(src).toContain('formatStat(item.stats?.views)');
+    expect(src).toContain('formatStat(item.stats?.likes)');
+    expect(src).not.toContain('{item.views || 0}');
+    expect(src).not.toContain('{item.likes || 0}');
+  });
+});
+
+describe('Admin rank titles are never fabricated from a missing level', () => {
+  test('a non-finite level renders "—", not the lowest rank', () => {
+    for (const rel of [
+      'src/screens/Admin/AdminEconomyScreen.jsx',
+      'src/screens/Admin/AdminVerificationScreen.jsx',
+    ]) {
+      const s = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(s).not.toContain('getRankTitle(payout.level || 0)');
+      expect(s).not.toContain('getRankTitle(applicant.level || 0)');
+      expect(s).toContain('Number.isFinite(');
+    }
+  });
+});
+
+describe('Admin aggregate counts never fabricate a measured zero', () => {
+  const svc = fs.readFileSync(path.join(root, 'src/services/adminService.js'), 'utf8');
+  const dash = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
+
+  test('adminService.count returns null (unknown) on failure, not 0', () => {
+    // A failed aggregate rendered as 0 showed an unmeasured collection as an
+    // empty one; the dashboard printed "0 users" while the query had thrown.
+    expect(svc).toContain('return null;');
+    expect(svc).not.toMatch(/Returns 0 on failure/);
+  });
+
+  test('the dashboard renders an unknown stat as — and revenue as unavailable', () => {
+    expect(dash).toContain("value === null || value === undefined");
+    expect(dash).toContain("'Unavailable'");
+    expect(dash).not.toContain('stats.revenue.toLocaleString()');
+    expect(dash).toContain('revenue: null');
+  });
+});
+
+describe('BottomNav coin balance is unknown, not zero, before the profile loads', () => {
+  const src = fs.readFileSync(path.join(root, 'src/components/Shared/BottomNav.jsx'), 'utf8');
+
+  test('an absent balance renders — rather than claiming 0 coins', () => {
+    expect(src).toContain('const coinBalance = effectiveUser?.coins ?? null;');
+    expect(src).not.toContain('effectiveUser?.coins ?? 0');
+    expect(src).toContain('return "—";');
+  });
+});
+
+describe('MenuScreen and RankingsScreen use the read model, not a Citizen stub', () => {
+  test('MenuScreen renders the canonical name/handle and an unknown balance as —', () => {
+    const s = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
+    expect(s).not.toContain('activeUser?.displayName || "Citizen"');
+    expect(s).not.toContain('activeUser?.username || "citizen"');
+    expect(s).toContain('pickDisplayName(');
+    expect(s).toContain('pickHandle(');
+    // A missing balance must not claim an empty wallet.
+    expect(s).not.toContain("typeof activeUser?.coins === 'number' ? activeUser.coins : 0");
+    expect(s).toContain("typeof activeUser?.coins === 'number' ? activeUser.coins : null");
+  });
+
+  test('RankingsScreen resolves identity through the read model', () => {
+    const s = fs.readFileSync(path.join(root, 'src/screens/Rankings/RankingsScreen.jsx'), 'utf8');
+    expect(s).not.toContain("item.user?.displayName || item.community?.name || 'Citizen'");
+    expect(s).toContain('pickDisplayName(');
+    expect(s).toContain('deriveHandle(');
+  });
+});
+
+describe('Wallet/economy surfaces never fabricate an empty balance', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('WalletScreen shows a retry state, not "0 Coins", when the read fails', () => {
+    const s = read('src/screens/Economy/WalletScreen.jsx');
+    expect(s).toContain('loadError && !wallet');
+    expect(s).toContain("value === null || value === undefined ? '—'");
+    // The balance must never be coerced to 0.
+    expect(s).not.toContain('(wallet?.availableCoins || user?.coins || 0).toLocaleString()');
+  });
+
+  test('walletService.getTransactions fails closed instead of returning []', () => {
+    const s = read('src/services/walletService.js');
+    expect(s).toContain('[WalletService] getTransactions failed:');
+    expect(s).not.toContain('getTransactions fallback');
+  });
+
+  test('CoinsScreen renders an unknown balance as —, not 0', () => {
+    const s = read('src/screens/CoinsScreen.jsx');
+    expect(s).not.toContain("Number(bal?.coins ?? bal?.balance ?? 0)");
+    expect(s).toContain("balance === null ? '—' : balance.toLocaleString()");
+  });
+
+  test('ProfileMetricsGrid renders an unknown coin count as —', () => {
+    const s = read('src/components/profile/ProfileMetricsGrid.jsx');
+    expect(s).not.toContain('profile?.balance ?? 0;');
+    expect(s).toContain('coinsCount !== null');
+  });
+
+  test('VideoAnalyticsScreen renders an unknown pending payout, not $0.00', () => {
+    const s = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(s).not.toContain("(walletRes.value?.pendingCoins || 0) : 0");
+    expect(s).toContain('pendingCoins: null');
+  });
+});
+
+describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N154)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('analyticsStore surfaces the failure instead of an all-zero fallback', () => {
+    const s = read('src/store/analyticsStore.js');
+    expect(s).not.toContain('Load analytics fallback used');
+    expect(s).not.toContain('fallbackAnalytics');
+    expect(s).toContain('state.analytics = null');
+    expect(s).toContain('state.error =');
+  });
+
+  test('analyticsService rethrows a failed read instead of caching fabricated zeros', () => {
+    const s = read('src/services/analyticsService.js');
+    // The old "resilient fallback" returned (and cached) 0 views / 0 reach /
+    // 0 coins as if measured, cleared the caller error branch and poisoned the
+    // cache so later reads never retried.
+    expect(s).not.toContain('fallbackAnalytics');
+    expect(s).toContain('Get user analytics failed');
+    expect(s).toMatch(/logger\.error\('Get user analytics failed'[\s\S]*?throw error;/);
+  });
+
+  test('ProfileCreatorDashboard renders an unknown metric as —, not 0', () => {
+    const s = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    expect(s).not.toMatch(/Number\(analytics\?\.totalViews\)\s*\|\|\s*0/);
+    expect(s).toContain("views === null ? '—'");
+    expect(s).toContain("coins === null ? '—'");
+  });
+});
+
+describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileMetricsGrid formatNumber does not fabricate 0 for a missing count', () => {
+    const s = read('src/components/profile/ProfileMetricsGrid.jsx');
+    expect(s).not.toContain("if (num === undefined || num === null) return '0';");
+    expect(s).toContain("if (num === undefined || num === null) return '—';");
+    expect(s).not.toContain('profile?.followersCount ?? 0');
+  });
+
+  test('RankingsScreen renders an unknown score as —, not 0', () => {
+    const s = read('src/screens/Rankings/RankingsScreen.jsx');
+    expect(s).not.toContain('item.score?.toLocaleString() || 0');
+    expect(s).toContain("typeof item.score === 'number'");
+  });
+
+  test('ProgressScreen renders unknown XP/coins as —, not 0', () => {
+    const s = read('src/screens/Progression/ProgressScreen.jsx');
+    expect(s).not.toContain('Total XP: {(user?.experience || 0).toLocaleString()}');
+    expect(s).not.toContain('{user?.coins || 0}');
+  });
+
+  test('walletService leaves an unknown balance null instead of 0', () => {
+    const s = read('src/services/walletService.js');
+    expect(s).not.toContain("Number(userData.coins || userData.coinBalance || 0)");
+    expect(s).toContain('const rawCoins = userData.coins ?? userData.coinBalance ?? null;');
+  });
+
+  test('PostOptionsDrawer does not derive a creator score from follower count', () => {
+    const s = read('src/screens/PostOptionsDrawer.jsx');
+    expect(s).not.toContain('Math.floor((profile?.followerCount || 0) / 1000)');
+  });
+
+  test('WalletScreen gates withdrawal on a verified balance', () => {
+    const s = read('src/screens/Economy/WalletScreen.jsx');
+    expect(s).not.toContain('amount > (wallet?.availableCoins || 0)');
+    expect(s).toContain('wallet?.availableCoins == null');
+  });
+});
+
+describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the canonical search formatCount renders unknown as —', () => {
+    const s = read('src/lib/searchUtils.jsx');
+    expect(s).toContain("if (num === null || num === undefined || Number.isNaN(Number(num))) return '—';");
+    // The old body printed `num.toString()` for anything that reached the end,
+    // so an absent count rendered as the literal string "undefined"/"0".
+    expect(s).not.toContain('return num.toString();');
+  });
+
+  test('search result mapping leaves absent counts null instead of 0', () => {
+    const s = read('src/lib/searchUtils.jsx');
+    expect(s).not.toContain('followers: result.followers || result.followerCount || 0');
+    expect(s).toContain('followers: result.followers ?? result.followerCount ?? null');
+  });
+
+  test('search cards do not coerce absent counts to 0 before formatting', () => {
+    for (const rel of [
+      'src/components/search/CreatorCarousel.jsx',
+      'src/components/search/TrendingSection.jsx',
+      'src/components/search/SearchResults.jsx',
+    ]) {
+      const s = read(rel);
+      expect(s).not.toMatch(/followers \|\| [\w.]+ \|\| 0/);
+      expect(s).not.toMatch(/views \|\| [\w.]+ \|\| 0/);
+    }
+  });
+
+  test('QuickAccessPanel routes every count through the unknown-safe formatter', () => {
+    const s = read('src/components/Shared/QuickAccessPanel.jsx');
+    for (const key of ['postCount', 'followerCount', 'followingCount']) {
+      expect(s).not.toContain(`value: stats.${key} || 0,`);
+      expect(s).toContain(`value: formatCount(stats.${key})`);
+    }
+  });
+
+  test('monetizationService.getBalance reports unknown as null, not 0', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).not.toContain('if (!userSnap.exists()) return 0;');
+    expect(s).not.toContain("log.error('Failed to get balance:', e);\n      return 0;");
+    // A null balance cannot be ranked; the lowest title would be fabricated.
+    expect(s).toContain('if (balance === null) return null;');
+  });
+
+  test('the profile store reads the numeric balance, not a `.coins` off a number', () => {
+    const s = read('src/store/profileStore.js');
+    expect(s).not.toContain('balanceResult?.coins || 0');
+    expect(s).not.toContain('balanceData?.coins || 0');
+    expect(s).toContain("balance = typeof balanceResult === 'number' ? balanceResult : null;");
+  });
+
+  test('AuthContext mirrors counts as null (unknown), never a fabricated 0', () => {
+    const s = read('src/context/AuthContext.jsx');
+    expect(s).not.toContain('coins: userProfile?.coins || 0');
+    expect(s).not.toContain('postCount: userProfile?.postCount || 0');
+    expect(s).toContain('postCount: userProfile?.postCount ?? null');
+  });
+
+  test('the tip modal never claims "0 coins" for an unread balance', () => {
+    const s = read('src/components/profile/ProfileTipModal.jsx');
+    expect(s).not.toContain('setUserBalance(res?.coins || 0)');
+    expect(s).toContain('setUserBalance(typeof res === \'number\' ? res : null)');
+  });
+
+  test('the verification flow never records a fabricated 0 follower count', () => {
+    const modal = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(modal).not.toContain('followerCount: profile.followerCount || 0');
+    const service = read('src/services/userService.js');
+    expect(service).not.toContain('followerCount: Number(applicationData.followerCount || 0)');
+    const admin = read('src/screens/Admin/AdminVerificationScreen.jsx');
+    expect(admin).not.toContain('Number(applicant.followerCount ?? applicant.followersCount ?? 0)');
+  });
+
+  test('PostOptionsDrawer renders an unknown author follower count as —', () => {
+    const s = read('src/screens/PostOptionsDrawer.jsx');
+    expect(s).not.toContain('followerCount: safePost.followerCount || 0');
+    expect(s).toContain('followerCount: safePost.followerCount ?? null');
+  });
+
+  test('formatViewCount renders an absent count as —, not 0', () => {
+    const s = read('src/utils/videoUtils.js');
+    expect(s).not.toContain("    return '0';\n  }");
+    expect(s).toContain("if (views === null || views === undefined || typeof views !== 'number' || isNaN(views)) {");
+    expect(s).toContain("return '—';");
+  });
+
+  test('video surfaces never coerce an absent stat to 0 before formatting', () => {
+    for (const rel of [
+      'src/components/Videos/VideoCard.jsx',
+      'src/screens/VideoDetailScreen.jsx',
+      'src/screens/VideosScreen.jsx',
+    ]) {
+      const s = read(rel);
+      expect(s).not.toMatch(/formatViewCount\([\w?.]+ \|\| 0\)/);
+      expect(s).not.toMatch(/stats\?\.(views|likes|comments|shares) \|\| 0/);
+    }
+  });
+
+  test('videoService keeps an absent stat unknown, never a fake 0', () => {
+    const s = read('src/services/videoService.js');
+    expect(s).not.toContain('likes: item.stats?.likes ?? item.likes ?? 0');
+    expect(s).toContain('likes: item.stats?.likes ?? item.likes ?? null');
+  });
+
+  test('the reels action rail never fabricates a 0 stat', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).not.toContain('likes: v.likes ?? v.stats?.likes ?? 0');
+    expect(s).toContain('likes: v.likes ?? v.stats?.likes ?? null');
+    expect(s).not.toContain('(currentReel.stats.likes || 0).toLocaleString()');
+  });
+
+  test('VideoActionRail defaults a missing stat to null, not 0', () => {
+    const s = read('src/components/Videos/VideoActionRail.jsx');
+    expect(s).not.toContain('likes = 0,');
+    expect(s).toContain('likes = null,');
+  });
+
+  test('CreatePost analytics preview has no fabricated metrics or growth rate', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    expect(s).not.toContain('analyticsData?.totalViews ?? 0');
+    expect(s).not.toContain('analyticsData?.coinsEarned ?? 0');
+    // `: 12` invented a "+12% this week" growth rate when no delta was known.
+    expect(s).not.toContain('Math.round(analyticsData.changes.engagement) : 12');
+  });
+
+  test('StoriesScreen renders an unknown view total as —, not 0', () => {
+    const s = read('src/screens/StoriesScreen.jsx');
+    expect(s).not.toContain('viewsCount: String(storiesArr[0]?.stats?.views || 0)');
+    expect(s).not.toContain('currentStory.viewsCount ?? 0}');
+  });
+
+  test('comment surfaces keep an absent like total unknown', () => {
+    const videoComments = read('src/components/Videos/VideoComments.jsx');
+    expect(videoComments).not.toContain('{comment.likes || 0}');
+    expect(videoComments).not.toContain('{reply.likes || 0}');
+    const commentsDrawer = read('src/screens/CommentsDrawer.jsx');
+    expect(commentsDrawer).not.toContain('formatCount(comment.likes || 0)');
+  });
+
+  test('ProfileFeedGrid comment counts go through the unknown-safe helper', () => {
+    const s = read('src/components/profile/ProfileFeedGrid.jsx');
+    expect(s).not.toContain('{item.comments || 0}');
+    expect(s).toContain('const commentCount = useCallback');
+  });
+
+  test('PerksRewardsScreen never claims an empty treasury for an unknown balance', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    expect(s).not.toContain('const userCoins = Number(profile?.coins) || 0;');
+    expect(s).toContain('const canAfford = userCoins != null && userCoins >= g.coins;');
+  });
+
+  test('PostAnalyticsScreen reads the real `stats` shape and renders unknown as —', () => {
+    const s = read('src/screens/PostAnalyticsScreen.jsx');
+    // These top-level fields are never written; reading them fabricated "0".
+    expect(s).not.toContain('postDoc.viewsCount || postDoc.views || 0');
+    expect(s).not.toContain('postDoc.likesCount || postDoc.likes?.length || 0');
+    expect(s).toContain('postDoc.stats?.views');
+  });
+
+  test('PostCard analytics panel and comment preview do not fabricate a 0', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).not.toContain('(postAnalytics.totalViews || 0)');
+    expect(s).not.toContain('(postAnalytics.totalLikes || 0)');
+    expect(s).not.toContain('View all {totalComments} comments');
+    // The engagement reducer must not shift an unknown total from a fake 0.
+    expect(s).not.toContain('likeCount: state.likeCount + (action.payload ? 1 : -1)');
+  });
+
+  test('PollCard renders an unknown vote total as —', () => {
+    const s = read('src/screens/PostCard/PollCard.jsx');
+    expect(s).not.toContain('{(opt.votes ?? 0).toLocaleString()} votes');
+  });
+
+  test('analyticsService sums engagement from the real `stats` shape', () => {
+    const s = read('src/services/analyticsService.js');
+    expect(s).not.toContain("p.likesCount || p.likes || 0");
+    expect(s).toContain('const s = p.stats || {};');
+  });
+
+  test('postService.getPost unwraps the firestoreService envelope', () => {
+    const s = read('src/services/postService.js');
+    expect(s).not.toContain('return await this.fs.getPost(postId);');
+    expect(s).toContain('return res.post;');
+  });
+
+  test('community/event/admin counts render an unknown total as —', () => {
+    for (const f of [
+      'src/screens/Community/CommunityDirectoryScreen.jsx',
+      'src/screens/Community/CommunityDetailScreen.jsx',
+      'src/screens/Event/EventDiscoveryScreen.jsx',
+      'src/screens/Event/EventDetailScreen.jsx',
+    ]) {
+      expect(read(f)).not.toMatch(/stats\?\.(memberCount|activityScore|attendeeCount)\s*\|\|\s*0/);
+    }
+  });
+
+  test('VideoAnalyticsScreen maps per-video counts from `stats`', () => {
+    const s = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(s).not.toContain('views: p.views || 0,');
+    expect(s).not.toContain('likes: p.likeCount || 0,');
+    expect(s).toContain('p.stats?.likes ?? p.likeCount');
+  });
+
+  test('LiveScreen viewer counts are unknown (null), never a fabricated 0', () => {
+    const s = read('src/screens/LiveScreen.jsx');
+    expect(s).not.toContain('const [viewerCount, setViewerCount] = useState(0)');
+    expect(s).not.toContain('const [watchViewers, setWatchViewers] = useState(0)');
+  });
+
+  test('CreatorDashboard renders unmeasured metrics as —', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain("value: analytics?.totalViews || 0");
+    expect(s).not.toContain("value: analytics?.totalEngagement || 0");
+    expect(s).not.toContain("Number(analytics?.coinsEarned || 0).toLocaleString()");
+    expect(s).toContain("if (typeof num !== 'number' || Number.isNaN(num)) return '—';");
+  });
+
+  test('CreatorPayoutScreen keeps an unknown balance unknown', () => {
+    const s = read('src/screens/CreatorPayoutScreen.jsx');
+    expect(s).not.toContain('const [balance, setBalance] = useState(0)');
+    expect(s).not.toContain("Number(b?.coins || b?.balance || 0)");
+    expect(s).not.toContain('100% secure payouts');
+  });
+
+  test('ProfileSystemRoadmapModal does not turn absent XP into 0', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    expect(s).not.toContain('const currentXp = profile?.experience || profile?.xp || 0;');
+    expect(s).toContain('XP not yet recorded');
+    // Royal eligibility dimensions stay unknown, not a fabricated 0/requirement.
+    expect(s).not.toContain("Number(profile?.activeDaysCount || profile?.activeDays || 0)");
+    expect(s).toContain("{known ? row.current : '—'}");
+  });
+
+  test('CollectionsScreen does not offer a Public/Private control the rules cannot honour', () => {
+    // `collections` is owner-scoped in firestore.rules (read/update/delete all
+    // require resource.data.userId == uid()), so a "Public" folder is readable
+    // by nobody. The toggle collected a flag the service dropped and no read
+    // path honoured — a dead control claiming a visibility that does not exist.
+    const s = read('src/screens/CollectionsScreen.jsx');
+    expect(s).not.toContain('isPrivate');
+    expect(s).not.toContain('private or public folders');
+    expect(s).toContain('Only you');
+  });
+  test('VideoCard reads the real comment stat key', () => {
+    const s = read('src/components/Videos/VideoCard.jsx');
+    expect(s).not.toContain('formatViewCount(video?.commentsCount)');
+    expect(s).toContain('video?.comments ?? video?.commentsCount');
+  });
+
+  test('CreatorPayoutScreen renders unknown earnings as "—", never a fabricated 0', () => {
+    // The gifts/ads/withdrawn figures are sums of the coin ledger. A failed
+    // ledger read must leave them unknown, not claim "0 Coins earned".
+    const s = read('src/screens/CreatorPayoutScreen.jsx');
+    expect(s).toContain("useState({ gifts: null, ads: null, other: null })");
+    expect(s).toContain("earnings.gifts == null ? '—'");
+    expect(s).toContain("earnings.ads == null ? '—'");
+    expect(s).toContain("lifetimeWithdrawnCoins == null ? '—'");
+  });
+
+  test('AdminVerificationScreen treats an absent strike count as unknown, not 0', () => {
+    // `strikesCount` is written only on `communities`; a verification applicant
+    // never carries it, so `?? 0` fabricated a clean "0 strikes ✓" and passed
+    // the strike gate. Unknown must fail the gate closed.
+    const s = read('src/screens/Admin/AdminVerificationScreen.jsx');
+    expect(s).not.toContain('Number(applicant.strikesCount ?? 0)');
+    expect(s).toContain('applicant.strikesCount == null ? null');
+    expect(s).toContain('strikesCount !== null && strikesCount <=');
+  });
+
+  test('analytics coinsEarned is unknown (null) when unwritten, never a fabricated 0', () => {
+    // No server path increments `profile_analytics.coinsEarned`; the earnings
+    // figure is the wallet balance read from `users`. An absent balance must be
+    // unknown (rendered '—'), not a measured "0 coins earned".
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('coinsEarned: data.coinsEarned || 0');
+    expect(svc).toContain("coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
+    const screen = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(screen).not.toContain('total: data.coinsEarned || 0');
+    expect(screen).toContain("total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
+  });
+});
+
+describe('CreatePost media upload fails closed — never persists a session-scoped URL', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+
+  test('a failed Storage upload does not fall back to a data: URL', () => {
+    // The composer once caught a failed/timed-out upload and persisted a
+    // base64 `data:` URL produced by `convertFileToDataURL`, so the post
+    // rendered only for the uploader, only for that session, and was broken
+    // for everyone else and after any reload.
+    expect(src).not.toContain('convertFileToDataURL');
+    expect(src).not.toContain('Storage upload fallback to data URL');
+    // The bare 7s Promise.race timeout that turned a slow upload into a
+    // fabricated success is gone; the real Storage timeout governs.
+    expect(src).not.toContain('Storage upload timed out');
+  });
+
+  test('a `blob:`/`data:` URL is never stored as a post media URL', () => {
+    expect(src).toContain("!candidate.startsWith(\"blob:\")");
+    expect(src).toContain("!candidate.startsWith(\"data:\")");
+  });
+
+  test('uploadMedia surfaces a failure instead of resolving partial media', () => {
+    expect(src).toContain('failures.push(');
+    expect(src).toContain('if (failures.length > 0)');
+    expect(src).toContain('throw new Error(failures[0])');
+    // The background sync no longer swallows an upload failure and writes the
+    // optimistic blob: previews to Firestore.
+    expect(src).not.toContain('Background media upload fallback');
+  });
+
+  test('a generated blob: thumbnail is uploaded or dropped, never persisted', () => {
+    expect(src).toContain('thumbnail.startsWith("blob:")');
+    expect(src).toContain('thumbRes?.downloadURL || null');
+  });
+
+  test('firestoreService.createPost drops blob:/data: media as defense in depth', () => {
+    // Even a caller that hand-builds a post must not be able to persist a
+    // session-scoped URL into `posts/{id}.media`.
+    const svc = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+    expect(svc).toContain("url.startsWith('blob:') || url.startsWith('data:')");
+  });
+});
+
+describe('Creator dashboard never fabricates growth rate or active days (N172)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('analyticsService leaves growthRate/activeDays unknown, never a measured 0', () => {
+    // Nothing computes a growth rate into `profile_analytics`, and active days
+    // live on the user doc (`activeDaysCount`), never the analytics doc. The
+    // old `growthRate: 0` / `activeDays: <post count>` rendered a permanent
+    // green "+0.0%" and a streak derived from the number of recent posts.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('growthRate: 0,');
+    expect(svc).not.toContain('growthRate: data.growthRate || 0');
+    expect(svc).toContain("growthRate: typeof data.growthRate === 'number' ? data.growthRate : null");
+    expect(svc).not.toContain('activeDays: topPosts.length > 0 ? Math.min(topPosts.length, days) : 0');
+    expect(svc).not.toContain('activeDays: data.activeDays || 0');
+    expect(svc).toContain("activeDays: typeof data.activeDays === 'number' ? data.activeDays : null");
+  });
+
+  test('period-over-period changes are unknown (null), never a fabricated 0%', () => {
+    // With no previous period (or a zero baseline) there is no measured change;
+    // the old all-zero default and `: 0` fallbacks rendered a confident "0%".
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : 0');
+    expect(svc).toContain('views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : null');
+    const screen = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(screen).not.toContain('viewsChange: data.changes?.views || 0');
+    expect(screen).not.toContain('change: 0,');
+  });
+
+  test('the dashboard only renders a growth rate that is a real number', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain('analytics?.growthRate !== undefined');
+    expect(s).toContain("typeof analytics?.growthRate === 'number'");
+  });
+
+  test('the dashboard reads active days from the profile, not the analytics doc', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain('{analytics.activeDays} days');
+    expect(s).toContain('typeof activeDaysCount === \'number\' ? `${activeDaysCount} days` : \'—\'');
+    expect(s).toContain('userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null');
+  });
+
+  test('the identity mirror carries the canonical activeDaysCount', () => {
+    const ctx = read('src/context/AuthContext.jsx');
+    expect(ctx).toContain('activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null');
+  });
+
+  test('the server seed and store fallback never fabricate growth/active days', () => {
+    const fn = read('functions/analytics.js');
+    expect(fn).not.toContain('growthRate: 0,');
+    expect(fn).not.toContain('activeDays: 1,');
+    const store = read('src/store/analyticsStore.js');
+    expect(store).not.toContain('state.growthRate = 0;');
+    expect(store).not.toContain('state.activeDays = 0;');
+  });
+
+  test('PerksRewardsScreen does not floor an unknown active-day count to 1', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    expect(s).not.toContain('Number(profile?.activeDaysCount || profile?.activeDays) || 1');
+  });
+});
+
+describe('Creator ranking never fabricates a percentile from an unmaintained field (N174)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getCreatorRanking only ranks a positive, maintained score', () => {
+    // `profile_analytics.coinsEarned` is never incremented server-side, so the
+    // old `orderBy('coinsEarned')` ranked every creator against all-zero data
+    // and handed out an arbitrary "Top 1%" label.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).toContain("typeof userScore === 'number' && userScore > 0");
+    expect(svc).not.toContain("label: 'New Creator'");
+    expect(svc).toContain("label: null,");
+  });
+
+  test('the dashboard does not default an absent rank to "New Creator"', () => {
+    const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+    expect(s).not.toContain("ranking.label || 'New Creator'");
+  });
+});
+
+describe('Follower growth is never an invented straight line (N176)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getFollowerGrowth returns only measured snapshots', () => {
+    // With no `user_daily_stats` snapshots the old code fabricated a flat
+    // straight line from `followerCount / days`, presenting an invented trend
+    // as measured. It now returns [] until real snapshots exist.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('estimatedDailyGrowth');
+    expect(svc).not.toContain('Fallback (legacy behavior): estimated growth');
+  });
+});
+
+describe('Ranking pagination and trend honesty (N178)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('rankingService pages with a bounded limit + slice, not startAfter(offset)', () => {
+    // `startAfter(offset)` passes a raw number to the modular SDK, which treats
+    // it as a field value compared against `score` — silently dropping page 2+.
+    const svc = read('src/services/rankingService.js');
+    expect(svc).not.toMatch(/startAfter\(offset\)/);
+    expect(svc).toContain('limit(offset + RANKING_CONFIG.PAGE_SIZE)');
+  });
+
+  test('an unmeasured ranking trend stays null, never a fabricated 0', () => {
+    const svc = read('src/services/rankingService.js');
+    expect(svc).not.toMatch(/trend: data\.trend \|\| 0/);
+    expect(svc).toContain('trend: data.trend ?? null');
+    const screen = read('src/screens/Rankings/RankingsScreen.jsx');
+    expect(screen).toContain('if (trend == null)');
+  });
+});
+
+describe('New-creator analytics fallback never invents a series or a reach estimate (N181)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the new-creator fallback ships no synthetic daily series', () => {
+    // The fallback used to build a `days`-long all-zero series with a single
+    // final spike, which the chart and the dashboard sparkline rendered as
+    // measured per-day data. It now reports no series until real snapshots exist.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('dailyStats[dailyStats.length - 1].views = totalViews;');
+    expect(svc).not.toContain("views: 0,\n            reach: 0,\n            engagement: 0,\n            coins: 0,");
+  });
+
+  test('reach is the measured counter, never max(views, followers)', () => {
+    // `Math.max(totalViews, followerCount)` presented an estimate as a
+    // measurement whenever the real sharded reach counter was absent.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('Math.max(totalViews, followerCount)');
+  });
+
+  test('an absent totalViews renders unknown, not a fabricated 0', () => {
+    const screen = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(screen).not.toContain('totalViews: data.totalViews || 0');
+    expect(screen).toContain("totalViews: typeof data.totalViews === 'number' ? data.totalViews : null");
   });
 });

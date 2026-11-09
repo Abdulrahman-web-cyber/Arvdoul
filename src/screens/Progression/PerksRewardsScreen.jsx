@@ -37,8 +37,14 @@ export default function PerksRewardsScreen() {
   const storedLevel = profile?.level != null ? Number(profile.level) : null;
   const hasStoredLevel = storedLevel != null && Number.isFinite(storedLevel);
   const currentLevel = hasStoredLevel ? storedLevel : 1;
-  const userCoins = Number(profile?.coins) || 0;
-  const activeDays = Number(profile?.activeDaysCount || profile?.activeDays) || 1;
+  // An unknown balance stays null: '0 Coins ($0.00)' would claim an empty
+  // treasury, and `>= g.coins` would then wrongly show 'insufficient funds'.
+  const coinsRaw = profile?.coins;
+  const userCoins = coinsRaw === null || coinsRaw === undefined || Number.isNaN(Number(coinsRaw)) ? null : Number(coinsRaw);
+  // An unknown active-day count is treated as the conservative floor (0), not a
+  // fabricated "1 day" that bumps a citizen tier; `getCitizenTier` floors at 0.
+  const activeDaysRaw = profile?.activeDaysCount ?? profile?.activeDays;
+  const activeDays = Number.isFinite(Number(activeDaysRaw)) ? Number(activeDaysRaw) : 0;
   const experience = Number(profile?.experience) || 0;
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'perks' | 'coins' | 'gifts' | 'prestige'
@@ -90,7 +96,7 @@ export default function PerksRewardsScreen() {
             </span>
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs font-mono font-bold text-amber-400">
-              {userCoins} Coins ({formatCoinsAsUsd(userCoins)})
+              {userCoins == null ? '— Coins' : `${userCoins} Coins (${formatCoinsAsUsd(userCoins)})`}
             </span>
           </div>
 
@@ -182,9 +188,9 @@ export default function PerksRewardsScreen() {
                 <div className="text-[10px] uppercase font-bold text-slate-400">Treasury</div>
                 <div className="text-lg font-black text-amber-400 flex items-center justify-center gap-1">
                   <Coins className="w-4 h-4" />
-                  <span>{userCoins}</span>
+                  <span>{userCoins == null ? '—' : userCoins}</span>
                 </div>
-                <div className="text-[10px] font-mono text-slate-500">{formatCoinsAsUsd(userCoins)}</div>
+                <div className="text-[10px] font-mono text-slate-500">{userCoins == null ? 'Balance unavailable' : formatCoinsAsUsd(userCoins)}</div>
               </div>
 
               <div className={cn(
@@ -255,7 +261,7 @@ export default function PerksRewardsScreen() {
           {/* Canonical 7 Virtual Gifts Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
             {GIFT_CATALOG.map((g) => {
-              const canAfford = userCoins >= g.coins;
+              const canAfford = userCoins != null && userCoins >= g.coins;
               return (
                 <div
                   key={g.id}

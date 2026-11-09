@@ -20,9 +20,15 @@ class WalletService {
       const userSnap = await getDoc(doc(db, 'users', userId));
       const userData = userSnap.exists() ? userSnap.data() : {};
 
-      const coins = Number(userData.coins || userData.coinBalance || 0);
-      const totalEarned = Number(userData.totalEarned || userData.lifetimeCoinsEarned || 0);
-      const totalSpent = Number(userData.totalSpent || 0);
+      // An absent balance field is *unknown*, not 0: the wallet card would
+      // otherwise claim an empty ledger it never read. A present field of 0
+      // stays a real 0.
+      const rawCoins = userData.coins ?? userData.coinBalance ?? null;
+      const coins = rawCoins == null ? null : Number(rawCoins);
+      const rawEarned = userData.totalEarned ?? userData.lifetimeCoinsEarned ?? null;
+      const totalEarned = rawEarned == null ? null : Number(rawEarned);
+      const rawSpent = userData.totalSpent ?? null;
+      const totalSpent = rawSpent == null ? null : Number(rawSpent);
 
       // `lockedCoins` is the server's authoritative hold (functions/monetization.js
       // requestWithdrawal increments it in the same transaction that writes the
@@ -31,6 +37,7 @@ class WalletService {
       // ignored `pending_review`, letting the wallet advertise more spendable
       // coins than the server would actually allow. The query is now display-only.
       const lockedCoins = Number(userData.lockedCoins || 0);
+      const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);
 
       // Fetch pending withdrawals for the itemised breakdown only.
       let pendingWithdrawals = 0;
@@ -47,13 +54,15 @@ class WalletService {
           pendingWithdrawals += Number(d.data().amount || 0);
         });
       } catch (e) {
-        // withdrawal query may fail if index missing or unauthed
+        // The pending-withdrawal total feeds the available balance, so a failed
+        // read must be visible rather than silently showing the full balance.
+        logger.warn('Pending withdrawals read failed; available balance may be overstated', { userId, error: e?.message });
       }
 
       return {
         userId,
         coins,
-        availableCoins: Math.max(0, coins - lockedCoins),
+        availableCoins,
         pendingCoins: pendingWithdrawals,
         heldCoins: lockedCoins,
         totalEarned,
@@ -104,8 +113,10 @@ class WalletService {
         };
       });
     } catch (err) {
-      logger.warn('[WalletService] getTransactions fallback:', { userId, error: err.message });
-      return [];
+      // A failed ledger read must not render as "No ledger transactions
+      // recorded yet." — an empty list is a claim the read never confirmed.
+      logger.error('[WalletService] getTransactions failed:', { userId, error: err.message });
+      throw err;
     }
   }
 

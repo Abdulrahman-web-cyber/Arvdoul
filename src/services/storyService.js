@@ -241,7 +241,9 @@ class UltimateStoryService {
         else if (action === 'clearStoryCache' && storyId) this.storyCache.delete(storyId);
         else if (action === 'clearAll') this.clearCache();
       };
-    } catch (e) {}
+    } catch (e) {
+      logger.debug('Cross-tab story-cache channel unavailable', { error: e?.message });
+    }
 
     // Offline queue flush on reconnection (with mutex)
     this._onlineHandler = async () => {
@@ -267,8 +269,16 @@ class UltimateStoryService {
 
   _startAnalyticsFlushTimer() {
     if (typeof window === 'undefined' || this._analyticsFlushTimer) return;
-    this._analyticsFlushTimer = setInterval(() => { this.flushAnalyticsBuffer().catch(() => {}); }, 30000);
-    window.addEventListener('beforeunload', () => { this.flushAnalyticsBuffer().catch(() => {}); });
+    this._analyticsFlushTimer = setInterval(() => {
+      this.flushAnalyticsBuffer().catch((e) => {
+        logger.debug('Story analytics flush failed', { error: e?.message });
+      });
+    }, 30000);
+    window.addEventListener('beforeunload', () => {
+      this.flushAnalyticsBuffer().catch((e) => {
+        logger.debug('Story analytics flush on unload failed', { error: e?.message });
+      });
+    });
   }
 
   async flushAnalyticsBuffer() {
@@ -280,7 +290,9 @@ class UltimateStoryService {
       for (const [storyId, count] of buf.backTaps) jobs.push(this._incrementAnalyticsShard(storyId, 'backTaps', count));
       for (const [storyId, count] of buf.completions) jobs.push(this._incrementAnalyticsShard(storyId, 'completions', count));
       await Promise.allSettled(jobs);
-    } catch { /* best-effort */ }
+    } catch (e) {
+      logger.warn('Story analytics flush failed', { error: e?.message });
+    }
   }
 
   async _incrementAnalyticsShard(storyId, field, amount) {
@@ -467,7 +479,7 @@ class UltimateStoryService {
     try {
       await this.archiveStory(storyId, currentUser.uid);
     } catch (e) {
-      // archive is best-effort
+      logger.warn('Story archive failed; Memories will not show this story', { storyId, error: e?.message });
     }
 
     if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
@@ -479,9 +491,9 @@ class UltimateStoryService {
       const { levelSystemService } = await import('./levelSystemService.js');
       levelSystemService
         .awardExperience({ userId: currentUser.uid, action: 'story_created', source: storyId })
-        .catch(() => {});
+        .catch((err) => logger.warn('Story XP award failed', { storyId, error: err?.message }));
     } catch (e) {
-      // XP award is best-effort
+      logger.warn('Story XP award failed', { storyId, error: e?.message });
     }
     return { success: true, storyId, story };
   }
@@ -651,7 +663,11 @@ class UltimateStoryService {
         profiles.forEach((p, idx) => { if (p) profileMap.set(batch[idx], p); });
       }
       enriched = viewerList.map(v => ({ ...v, profile: profileMap.get(v.userId) || null }));
-    } catch (e) {}
+    } catch (e) {
+      // Viewer rows are still returned un-enriched; log so a profile-hydration
+      // failure does not look like "viewers with no names".
+      logger.warn('Story viewer profile hydration failed', { storyId, error: e?.message });
+    }
 
     return {
       success: true,
@@ -759,7 +775,13 @@ class UltimateStoryService {
     if (snap.data().userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'You can only delete your own stories');
 
     if (snap.data().media?.path) {
-      try { await this.st.deleteObject(this.st.ref(this.storage, snap.data().media.path)); } catch (e) {}
+      try {
+        await this.st.deleteObject(this.st.ref(this.storage, snap.data().media.path));
+      } catch (e) {
+        // The story is soft-deleted below regardless, but a failed object delete
+        // leaves an orphan blob — log it for cleanup/observability.
+        logger.warn('Story media object delete failed; orphan may remain', { storyId, path: snap.data().media.path, error: e?.message });
+      }
     }
 
     await this.fs.updateDoc(storyRef, { isDeleted: true });
@@ -1311,19 +1333,6 @@ class UltimateStoryService {
     ];
   }
 
-  getABBucket(userId) {
-    const key = `ab_bucket_${userId}`;
-    let bucket = localStorage.getItem(key);
-    if (!bucket) {
-      bucket = Math.random() < 0.5 ? 'A' : 'B';
-      localStorage.setItem(key, bucket);
-    }
-    return bucket;
-  }
-  setABOverride(userId, bucket) {
-    localStorage.setItem(`ab_bucket_${userId}`, bucket);
-  }
-
   async exportUserData(userId) {
     await this.ensureInitialized();
     const data = { stories: [], archived: [], highlights: [] };
@@ -1359,7 +1368,8 @@ class UltimateStoryService {
       const storyId = docSnap.id;
       try {
         if (STORY_CONFIG.ARCHIVE.ENABLED && STORY_CONFIG.ARCHIVE.AUTO_ARCHIVE_AFTER_EXPIRY) {
-          await this.archiveStory(storyId, story.userId).catch(() => {});
+          await this.archiveStory(storyId, story.userId).catch((e) =>
+            logger.warn('Story auto-archive failed', { storyId, error: e?.message }));
         }
         await this.fs.updateDoc(docSnap.ref, { isDeleted: true });
         this.storyCache.delete(storyId);
@@ -1609,13 +1619,19 @@ class UltimateStoryService {
       const userDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', userId));
       const lastServerAd = userDoc.data()?.lastAdImpression;
       if (lastServerAd && Date.now() - lastServerAd.toDate().getTime() < STORY_CONFIG.ADS.FREQ_CAP_MINUTES * 60 * 1000) return stories;
-    } catch (e) {}
+    } catch (e) {
+      // Server-side ad frequency cap could not be read; the local cap still applies.
+      logger.warn('Story ad frequency-cap read failed', { userId, error: e?.message });
+    }
 
     let targetingProfile = {};
     try {
       const userService = await import('./userService.js');
       targetingProfile = await userService.getUserProfile(userId).catch(() => ({}));
-    } catch (e) {}
+    } catch (e) {
+      // Targeting profile unavailable — ads fall back to untargeted.
+      logger.warn('Story ad targeting profile unavailable', { userId, error: e?.message });
+    }
 
     const targetedAds = sponsoredPool.filter(ad => {
       if (!ad.targeting) return true;
@@ -1750,16 +1766,24 @@ class UltimateStoryService {
           actionUrl: `/story/${storyId}`,
           metadata: { storyId },
           priority: 'high',
-        }).catch(() => {});
+        }).catch((e) => logger.warn('Story tag notification failed', { storyId, error: e?.message }));
       }
     } catch (err) {
-      // Tag notification error
+      logger.warn('Story tag notification failed', { storyId, error: err?.message });
     }
   }
 
   async _logStoryReply(storyId, fromUserId, toUserId) {
+    // firestore.rules authorises the create on `userId == uid()` (or
+    // `authorId`). The reply document must therefore carry the canonical
+    // owner field — `fromUserId` alone was silently DENIED, so every story
+    // reply failed to log. `fromUserId`/`toUserId` are kept for the record.
     await this.fs.addDoc(this.fs.collection(this.firestore, 'story_replies'), {
-      storyId, fromUserId, toUserId, timestamp: serverTimestamp(),
+      storyId,
+      userId: fromUserId,
+      fromUserId,
+      toUserId,
+      timestamp: serverTimestamp(),
     });
   }
 
@@ -1908,8 +1932,6 @@ const storyService = {
   getHighlightStories: (...args) => getStoryService().getHighlightStories(...args),
   searchStories: (...args) => getStoryService().searchStories(...args),
   getTemplates: () => getStoryService().getTemplates(),
-  getABBucket: (...args) => getStoryService().getABBucket(...args),
-  setABOverride: (...args) => getStoryService().setABOverride(...args),
   exportUserData: (...args) => getStoryService().exportUserData(...args),
   cleanupExpiredStories: () => getStoryService().cleanupExpiredStories(),
   clearCache: () => getStoryService().clearCache(),

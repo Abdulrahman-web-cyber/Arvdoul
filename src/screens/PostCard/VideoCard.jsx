@@ -397,7 +397,9 @@ const VideoCard = React.memo(({
         videoRef.current.playbackRate = savedSpeed;
         setIsMuted(muted);
         setPlaybackSpeed(savedSpeed);
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Video playback state restore failed', e?.message);
+      }
     }
   }, [sessionKey]);
 

@@ -8,6 +8,13 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, Eye, Trash2, Flag, Image as ImageIcon, Video, FileText, CheckCircle, XCircle } from "lucide-react";
 
+// A missing/unknown count renders as "—", never as a fabricated 0 (a post whose
+// stats never loaded is not a post with zero views).
+const formatStat = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n.toLocaleString() : "—";
+};
+
 const AdminContentManagementScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -213,10 +220,10 @@ const AdminContentManagementScreen = () => {
 
                   <div className="flex items-center gap-4 mt-2 text-sm">
                     <span className="flex items-center gap-1 text-gray-500">
-                      <Eye className="w-4 h-4" /> {item.views || 0} views
+                      <Eye className="w-4 h-4" /> {formatStat(item.stats?.views)} views
                     </span>
                     <span className="flex items-center gap-1 text-gray-500">
-                      <CheckCircle className="w-4 h-4" /> {item.likes || 0} likes
+                      <CheckCircle className="w-4 h-4" /> {formatStat(item.stats?.likes)} likes
                     </span>
                     {item.reportCount > 0 && (
                       <span className="flex items-center gap-1 text-red-500">

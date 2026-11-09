@@ -51,7 +51,9 @@ class RateLimiter {
       if (!this._storage || !this.persist) return;
       this._storage.setItem(this.prefix + key, JSON.stringify(this._persisted.get(key)));
       let index = [];
-      try { index = JSON.parse(this._storage.getItem(`${this.prefix}_index`)) || []; } catch (err) {}
+      try { index = JSON.parse(this._storage.getItem(`${this.prefix}_index`)) || []; } catch (err) {
+        console.warn('Rate-limiter index read failed', err?.message);
+      }
       if (!index.includes(key)) {
         index.push(key);
         if (index.length > 500) index = index.slice(-500);

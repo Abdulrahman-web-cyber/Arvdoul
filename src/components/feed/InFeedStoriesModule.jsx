@@ -36,7 +36,9 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
                   name = p.displayName || p.username || name;
                   avatar = p.photoURL;
                 }
-              } catch {}
+              } catch (e) {
+                console.warn('In-feed story author profile read failed', e?.message);
+              }
               return {
                 id: g.userId,
                 name,
@@ -51,7 +53,10 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
           );
           if (isMounted) setCreators(realList);
         }
-      } catch {
+      } catch (err) {
+        // The strip degrades to just "Your Story", but a failed feed read must
+        // still be observable rather than looking like "nobody has stories".
+        console.warn('InFeedStoriesModule: story feed load failed', err);
         if (isMounted) setCreators([]);
       }
     }

@@ -13,6 +13,7 @@ import { getMonetizationService } from '../services/monetizationService';
 import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
+import ErrorState from '../design-system/ErrorState.jsx';
 
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
@@ -69,6 +70,8 @@ export default function StoriesScreen() {
   const [flyingParticles, setFlyingParticles] = useState([]);
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
+  const [storiesError, setStoriesError] = useState(null);
+  const [storiesNonce, setStoriesNonce] = useState(0);
   const [highlightGroup, setHighlightGroup] = useState(null);
 
   // Owner-only viewers panel. `getStoryViewers` is an owner-gated, paginated
@@ -88,6 +91,8 @@ export default function StoriesScreen() {
     let cancelled = false;
     const load = async () => {
       try {
+        setStoriesLoading(true);
+        setStoriesError(null);
         const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
         if (cancelled) return;
         const groups = feed?.groups || [];
@@ -114,7 +119,8 @@ export default function StoriesScreen() {
             badgeType: storiesArr[0]?.type || 'image',
             mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
             caption: storiesArr[0]?.content || '',
-            viewsCount: String(storiesArr[0]?.stats?.views || 0),
+            // Unknown view total stays null (rendered '—'), not a fake '0'.
+            viewsCount: typeof storiesArr[0]?.stats?.views === 'number' ? String(storiesArr[0].stats.views) : null,
             isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
             ctaText: storiesArr[0]?.ctaText || '',
             ctaUrl: storiesArr[0]?.ctaUrl || '',
@@ -150,7 +156,9 @@ export default function StoriesScreen() {
           }
         }
       } catch (err) {
-        console.error('Failed to load stories:', err);
+        // A failed feed read must not render as "No vibes in feed" — surface
+        // a retry instead of an empty state that lies about the network.
+        if (!cancelled) setStoriesError(err?.message || 'Could not load Vibes.');
         if (!cancelled) setStories([]);
       } finally {
         if (!cancelled) setStoriesLoading(false);
@@ -158,7 +166,7 @@ export default function StoriesScreen() {
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid]);
+  }, [user?.uid, storiesNonce]);
 
   // Highlight deep links: /highlight/:highlightId (from HighlightsScreen) and
   // the legacy /stories?highlight=<id>. Nothing read either, so every
@@ -392,7 +400,9 @@ export default function StoriesScreen() {
           // completion event (spec §23/58): the item was watched to the
           // end — buffered server-side, never a per-frame write.
           if (currentItem?.id) {
-            getStoryService().reportStoryCompletion(currentItem.id).catch(() => {});
+            getStoryService().reportStoryCompletion(currentItem.id).catch((e) => {
+              console.warn('[Stories] completion not reported', e?.message);
+            });
           }
           // Advance to next item or next story
           if (activeItemIndex + 1 < (currentStory.items?.length || 1)) {
@@ -453,7 +463,9 @@ export default function StoriesScreen() {
     // tap analytics (spec §58) — buffered, never per-tap doc writes.
     const svc = getStoryService();
     if (isRight) {
-      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch(() => {});
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch((e) => {
+        console.warn('Story forward analytics not buffered', e?.message);
+      });
       // Advance
       if (activeItemIndex + 1 < (currentStory?.items?.length || 1)) {
         setActiveItemIndex((i) => i + 1);
@@ -466,7 +478,9 @@ export default function StoriesScreen() {
         handleCloseStory();
       }
     } else {
-      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'back').catch(() => {});
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'back').catch((e) => {
+        console.warn('Story back analytics not buffered', e?.message);
+      });
       // Previous
       if (activeItemIndex > 0) {
         setActiveItemIndex((i) => i - 1);
@@ -781,8 +795,19 @@ export default function StoriesScreen() {
           </span>
         </motion.div>
 
+        {/* A failed feed read shows a retry, never the "no vibes" empty state. */}
+        {storiesError && !storiesLoading && (
+          <div className="col-span-3">
+            <ErrorState
+              title="Could not load Vibes"
+              message={storiesError}
+              onRetry={() => setStoriesNonce((n) => n + 1)}
+            />
+          </div>
+        )}
+
         {/* EMPTY STATE IF ZERO STORIES */}
-        {filteredStories.length === 0 && !storiesLoading && (
+        {filteredStories.length === 0 && !storiesLoading && !storiesError && (
           <div className={cn(
             'col-span-2 aspect-[3/4.5] rounded-3xl p-4 flex flex-col items-center justify-center text-center border',
             isDark
@@ -989,7 +1014,7 @@ export default function StoriesScreen() {
                     className="h-9 px-3 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center gap-1.5 text-white"
                   >
                     <Users className="w-4 h-4" />
-                    <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? 0}</span>
+                    <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? '—'}</span>
                   </button>
                 )}
                 {isOwnStory && (
@@ -1157,7 +1182,9 @@ export default function StoriesScreen() {
                         // client-side (there is no server story-reward path).
                         try {
                           getMonetizationService().recordAdImpression(currentStory.id, 'stories_click');
-                        } catch {}
+                        } catch (e) {
+                          console.warn('Story click impression not recorded', e?.message);
+                        }
                       }}
                       className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8B1EF3] to-[#0088FF] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
                     >

@@ -38,7 +38,7 @@ function walk(dir, out = []) {
 }
 
 describe('posts per-document visibility rule', () => {
-  const body = rules.slice(rules.indexOf('function postReadableByViewer'), rules.indexOf('function postQueryConstrainsPublic'));
+  const body = rules.slice(rules.indexOf('function postReadableByViewer'), rules.indexOf('function isCommunityMember'));
 
   test('requires published, not deleted, not expired', () => {
     expect(body).toMatch(/status == 'published'/);
@@ -61,13 +61,24 @@ describe('posts per-document visibility rule', () => {
 });
 
 describe('posts list rule proves the query shape', () => {
-  test('list is split from get and uses request.query.get', () => {
+  test('list is split from get and authorises on the document, not the query', () => {
+    // `request.query` exposes only limit/offset/orderBy — there is no
+    // `request.query.get()`. The list rule must therefore authorise on
+    // `resource.data` (evaluated per candidate document) so a query that could
+    // surface a draft/only-me post is denied wholesale.
     expect(rules).toMatch(/allow get: if postReadableByViewer\(\)/);
     expect(rules).toMatch(/allow list: if postListableByViewer\(\)/);
-    expect(rules).toMatch(/request\.query\.get\('authorIsPrivate'/);
-    expect(rules).toMatch(/request\.query\.get\('visibility'/);
-    expect(rules).toMatch(/request\.query\.get\('status'/);
-    expect(rules).toMatch(/request\.query\.get\('isDeleted'/);
+    expect(rules).not.toMatch(/request\.query\.get\(['"]/);
+    expect(rules).toMatch(/resource\.data\.authorId == uid\(\) \|\| postListableShape\(\)/);
+  });
+
+  test('the public list shape requires published, non-deleted, public, non-private', () => {
+    const body = rules.slice(rules.indexOf('function postListableShape'), rules.indexOf('function postListableByViewer'));
+    expect(body).toMatch(/isDeleted == false/);
+    expect(body).toMatch(/status == 'published'/);
+    expect(body).toMatch(/visibility == 'public'/);
+    expect(body).toMatch(/authorIsPrivate == false/);
+    expect(body).toMatch(/visibility == 'community'/);
   });
 });
 

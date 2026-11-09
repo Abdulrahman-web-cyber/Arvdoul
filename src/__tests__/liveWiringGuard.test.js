@@ -28,21 +28,22 @@ describe('LiveScreen viewer count is the polled value, not the stale stream obje
   });
 
   test('a dedicated watchViewers state drives the badge', () => {
-    expect(src).toMatch(/const \[watchViewers, setWatchViewers\] = useState\(0\)/);
-    expect(src).toMatch(/\{watchViewers\}/);
+    // An absent count is unknown (null -> '—'), never a fabricated 0.
+    expect(src).toMatch(/const \[watchViewers, setWatchViewers\] = useState\(null\)/);
+    expect(src).toMatch(/\{watchViewers \?\? '—'\}/);
   });
 
   test('the count is seeded when a stream is opened', () => {
     const start = src.indexOf('const handleWatch');
     const body = src.slice(start, src.indexOf('};', start));
-    expect(body).toMatch(/setWatchViewers\(stream\?\.viewerCount \?\? stream\?\.stats\?\.totalViewers \?\? 0\)/);
+    expect(body).toMatch(/setWatchViewers\(stream\?\.viewerCount \?\? stream\?\.stats\?\.totalViewers \?\? null\)/);
   });
 
   test('every stream refresh also refreshes the count', () => {
     const start = src.indexOf('watchPollRef.current = setInterval');
     const body = src.slice(start, src.indexOf('}, POLL_MS)', start));
     expect(body).toMatch(/getLiveStream/);
-    expect(body).toMatch(/setWatchViewers\(fresh\.viewerCount \?\? fresh\.stats\?\.totalViewers \?\? 0\)/);
+    expect(body).toMatch(/setWatchViewers\(fresh\.viewerCount \?\? fresh\.stats\?\.totalViewers \?\? null\)/);
   });
 
   test('the discover list only shows genuinely live, non-deleted streams', () => {

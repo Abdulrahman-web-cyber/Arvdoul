@@ -141,10 +141,13 @@ export default function GIFPicker({ onSelect, onClose }) {
       if (!res.ok) throw new Error('GIF search failed.');
       const data = await res.json();
       setApiResults(data.data || []);
+      setError(null);
     } catch (err) {
       console.warn('Giphy fetch error:', err);
-      // Fallback silently to curated items matching query
+      // Fall back to the curated set, but say so — an empty grid otherwise
+      // reads as "no GIFs match" rather than "search is down".
       setApiResults([]);
+      setError('Live GIF search is unavailable — showing curated reactions.');
     } finally {
       setLoading(false);
     }
@@ -225,6 +228,11 @@ export default function GIFPicker({ onSelect, onClose }) {
 
       {/* Body: Results Grid */}
       <div className="h-72 overflow-y-auto p-2.5 scrollbar-thin">
+        {error && !hasLiveApiResults && (
+          <p className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-300" role="status">
+            {error}
+          </p>
+        )}
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />

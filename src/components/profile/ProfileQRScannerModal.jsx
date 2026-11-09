@@ -281,7 +281,9 @@ const ProfileQRScannerModal = memo(({
               return;
             }
           }
-        } catch {}
+        } catch (e) {
+          console.warn('QR payload parse failed', e?.message);
+        }
       }
 
       // If browser detector failed or not available, prompt manual entry

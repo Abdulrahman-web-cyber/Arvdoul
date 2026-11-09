@@ -60,6 +60,7 @@ export default function ChatScreen() {
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [sharedMedia, setSharedMedia] = useState([]);
   const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search | saved
+  const [infoPanelError, setInfoPanelError] = useState(null);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [savedIds, setSavedIds] = useState({});
@@ -207,7 +208,9 @@ export default function ChatScreen() {
       setMessages((prev) => prev.filter((m) => !m._local || m._failed));
       getMessagingService().getMessages(conversationId, { limit: 50 }).then((res) => {
         if (res?.success) setMessages(res.messages || []);
-      }).catch(() => {});
+      }).catch((e) => {
+        console.warn('Reconnect message reload failed', e?.message);
+      });
     };
     window.addEventListener('online', goOnline);
     return () => window.removeEventListener('online', goOnline);
@@ -220,7 +223,9 @@ export default function ChatScreen() {
     if (!conversationId || !uid || messages.length === 0) return;
     if (readTimerRef.current) clearTimeout(readTimerRef.current);
     readTimerRef.current = setTimeout(() => {
-      getMessagingService().markConversationAsRead(conversationId, uid).catch(() => {});
+      getMessagingService().markConversationAsRead(conversationId, uid).catch((e) => {
+        console.warn('[Chat] mark-as-read failed; unread badge may be stale', e?.message);
+      });
     }, 600);
     return () => { if (readTimerRef.current) clearTimeout(readTimerRef.current); };
   }, [conversationId, uid, messages]);
@@ -386,7 +391,21 @@ export default function ChatScreen() {
       setPinnedMessages(Array.isArray(pinnedIds) ? pinnedIds : []);
       const mediaList = mediaRes.status === 'fulfilled' ? mediaRes.value?.media : [];
       setSharedMedia(Array.isArray(mediaList) ? mediaList : []);
-    } catch { /* panel still opens with empty states */ }
+      const failed = [];
+      if (pinnedRes.status === 'rejected') failed.push('pinned messages');
+      if (mediaRes.status === 'rejected') failed.push('shared media');
+      if (failed.length) {
+        // The panel still opens, but say which sections could not be loaded so
+        // an empty section is not read as "there are none".
+        console.warn('[Chat] conversation info sections failed', { conversationId, failed });
+        setInfoPanelError(`Could not load ${failed.join(' or ')}.`);
+      } else {
+        setInfoPanelError(null);
+      }
+    } catch (err) {
+      console.warn('[Chat] conversation info panel load failed', err);
+      setInfoPanelError('Could not load conversation details.');
+    }
   }, [conversationId]);
 
   const runSearch = useCallback(async () => {
@@ -493,7 +512,10 @@ export default function ChatScreen() {
         list.forEach((m) => { if (m.conversationId === conversationId) ids[m.id] = true; });
         setSavedIds(ids);
       }
-    } catch { /* panel still opens */ }
+    } catch (err) {
+      console.warn('[Chat] saved messages load failed', err);
+      toastError('Could not load your saved messages.');
+    }
   }, [uid, conversationId]);
 
   const jumpToMessage = (messageId) => {
@@ -512,7 +534,9 @@ export default function ChatScreen() {
       // the message) and try again; otherwise the user can search for it.
       getMessagingService().getMessages(conversationId, { limit: 50 }).then((res) => {
         if (res?.success) setMessages(res.messages || []);
-      }).catch(() => {});
+      }).catch((e) => {
+        console.warn('Message search reload failed', e?.message);
+      });
       toastError('Message not in the loaded window — try searching.');
     }, 100);
   };
@@ -676,8 +700,8 @@ export default function ChatScreen() {
               onDelete={async () => {
                 try {
                   await getMessagingService().deleteMessage?.(msg.id, conversationId, uid);
-                } catch {
-                  /* best-effort */
+                } catch (err) {
+                  toastError(err?.message || 'Could not delete the message.');
                 }
               }}
               onSave={toggleSaveMessage}
@@ -763,6 +787,12 @@ export default function ChatScreen() {
                 );
               })}
             </div>
+
+            {infoPanelError && (
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">
+                {infoPanelError}
+              </div>
+            )}
 
             {infoTab === 'pinned' && (
               <div className="space-y-2">

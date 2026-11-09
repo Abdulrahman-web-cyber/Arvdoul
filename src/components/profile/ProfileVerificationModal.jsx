@@ -79,8 +79,11 @@ export const ProfileVerificationModal = memo(({
   // from the shared contract (a restated "1,000 followers" literal would drift).
   // A criterion whose value the applicant cannot know (policy strikes, phone
   // verification) is listed as a requirement without claiming a status.
-  const followerCount = Number(profile?.followerCount ?? profile?.followersCount ?? 0);
-  const meetsFollowers = followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
+  // An absent follower count is unknown, not 0: the checklist must not claim
+  // the applicant has "0 so far" (or pass the gate) before the profile loads.
+  const rawFollowers = profile?.followerCount ?? profile?.followersCount ?? null;
+  const followerCount = rawFollowers == null ? null : Number(rawFollowers);
+  const meetsFollowers = followerCount !== null && followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
   const checklist = [
     {
       key: 'level',
@@ -91,7 +94,7 @@ export const ProfileVerificationModal = memo(({
       key: 'followers',
       label: `${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()}+ followers`,
       met: meetsFollowers,
-      detail: `${followerCount.toLocaleString()} so far`,
+      detail: followerCount === null ? 'count unavailable' : `${followerCount.toLocaleString()} so far`,
     },
     {
       key: 'strikes',
@@ -126,7 +129,7 @@ export const ProfileVerificationModal = memo(({
         category,
         reason: statement.trim(),
         portfolioLink: portfolioLink.trim(),
-        followerCount: profile.followerCount || 0,
+        followerCount,
         level: typeof profile.level === 'number' ? profile.level : 0,
       });
 

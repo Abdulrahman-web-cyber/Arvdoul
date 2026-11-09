@@ -159,12 +159,19 @@ const AdminVerificationScreen = () => {
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredApplicants.map(applicant => {
-            const followerCount = Number(applicant.followerCount ?? applicant.followersCount ?? 0);
-            const strikesCount = Number(applicant.strikesCount ?? 0);
+            // A legacy application with no stored follower count is *unknown*,
+            // not 0 — render "—" and fail the gate closed rather than showing a
+            // fabricated "0".
+            const rawFollowers = applicant.followerCount ?? applicant.followersCount ?? null;
+            const followerCount = rawFollowers == null ? null : Number(rawFollowers);
+            // `strikesCount` is only ever written on `communities`, never on a
+            // verification applicant, so an absent value is *unknown* — not a
+            // clean "0 strikes ✓". Fail the gate closed and render "—".
+            const strikesCount = applicant.strikesCount == null ? null : Number(applicant.strikesCount);
             const emailVerified = Boolean(applicant.emailVerified);
             const phoneVerified = Boolean(applicant.phoneVerified);
-            const meetsFollowers = followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
-            const meetsStrikes = strikesCount <= CREATOR_VERIFICATION_REQUIREMENTS.MAX_STRIKES;
+            const meetsFollowers = followerCount !== null && followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
+            const meetsStrikes = strikesCount !== null && strikesCount <= CREATOR_VERIFICATION_REQUIREMENTS.MAX_STRIKES;
             const meetsVerification =
               (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED || emailVerified) &&
               (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_PHONE_VERIFIED || phoneVerified);
@@ -222,21 +229,21 @@ const AdminVerificationScreen = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Citizenship:</span>
                       <span className="font-bold text-violet-600 dark:text-violet-400">
-                        {applicant.citizenshipTier || getRankTitle(applicant.level || 0)} (Lvl {applicant.level ?? '—'})
+                        {applicant.citizenshipTier || (Number.isFinite(applicant.level) ? getRankTitle(applicant.level) : '—')} (Lvl {applicant.level ?? '—'})
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Followers:</span>
                       <span className={`font-semibold ${meetsFollowers ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {followerCount.toLocaleString()} {meetsFollowers ? '✓' : `(Min ${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()})`}
+                        {followerCount === null ? '—' : followerCount.toLocaleString()} {meetsFollowers ? '✓' : `(Min ${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()})`}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Policy Strikes:</span>
                       <span className={`font-semibold ${meetsStrikes ? 'text-emerald-600' : 'text-red-600 font-bold'}`}>
-                        {strikesCount} strikes {meetsStrikes ? '✓' : '⚠️ Strike Active'}
+                        {strikesCount === null ? '—' : `${strikesCount} strikes ${meetsStrikes ? '✓' : '⚠️ Strike Active'}`}
                       </span>
                     </div>
 

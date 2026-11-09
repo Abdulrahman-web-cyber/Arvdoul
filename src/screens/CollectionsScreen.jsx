@@ -6,10 +6,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, Folder, Lock, Globe, X, FolderPlus } from "lucide-react";
+import { FolderOpen, Plus, Trash2, Folder, Lock, X, FolderPlus } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import ErrorState from '../design-system/ErrorState.jsx';
+import EmptyState from '../design-system/EmptyState.jsx';
 import { cn } from '../lib/utils';
 
 export default function CollectionsScreen() {
@@ -19,26 +21,30 @@ export default function CollectionsScreen() {
   const { user } = useAuth();
 
   const [collections, setCollections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newIsPrivate, setNewIsPrivate] = useState(false);
 
   // Load collections from collectionsService (Firestore-backed)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) { setLoading(false); return; }
+      setLoading(true);
+      setLoadError(null);
       try {
         const { default: collectionsService } = await import('../services/collectionsService.js');
         const res = await collectionsService.getCollections(user?.uid, { cacheFirst: false });
         if (cancelled) return;
+        if (res && res.success === false) throw new Error(res.error || 'Could not load collections.');
         const mapped = (res.collections || []).map((c) => ({
           id: c.id,
           title: c.name || c.title || 'Untitled',
           description: c.description || '',
           itemCount: c.itemCount || 0,
-          isPrivate: Boolean(c.isPrivate),
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
@@ -46,13 +52,18 @@ export default function CollectionsScreen() {
         }));
         setCollections(mapped);
       } catch (err) {
-        console.error('Failed to load collections:', err);
-        if (!cancelled) setCollections([]);
+        if (cancelled) return;
+        // Surface the failure with a retry; an empty grid would read as
+        // "you have no collections" when the read actually failed.
+        setLoadError(err?.message || 'Could not load your collections.');
+        setCollections([]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid]);
+  }, [user?.uid, reloadNonce]);
 
   // Create Collection ( persists via collectionsService)
   const handleCreateCollection = async (e) => {
@@ -66,13 +77,11 @@ export default function CollectionsScreen() {
       const res = await collectionsService.createCollection(user?.uid, {
         name: newTitle.trim(),
         description: newDesc.trim() || 'Custom curated collection',
-        isPrivate: newIsPrivate,
       });
       if (!res.success) throw new Error(res.error || 'Failed to create');
       toast.success(`Created collection "${newTitle}"! 📁`);
       setNewTitle('');
       setNewDesc('');
-      setNewIsPrivate(false);
       setShowCreateModal(false);
       // Reload from the server so the list reflects the real state
       const reload = await collectionsService.getCollections(user?.uid, { cacheFirst: false });
@@ -82,7 +91,6 @@ export default function CollectionsScreen() {
           title: c.name || c.title || 'Untitled',
           description: c.description || '',
           itemCount: c.itemCount || 0,
-          isPrivate: Boolean(c.isPrivate),
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
@@ -124,7 +132,7 @@ export default function CollectionsScreen() {
               <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Collections Folders</span>
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              Organize your saved posts, sparks, and creative audio presets into private or public folders.
+              Organize your saved posts, sparks and creative audio presets into personal folders.
             </p>
           </div>
 
@@ -153,8 +161,21 @@ export default function CollectionsScreen() {
             <p className="text-xs text-gray-400 mt-1">Group assets by theme</p>
           </button>
 
+          {/* Loading skeletons — the empty grid below would otherwise read as
+              "you have no collections" before the first read resolves. */}
+          {loading && [0, 1, 2].map((i) => (
+            <div
+              key={`sk-${i}`}
+              aria-hidden="true"
+              className={cn(
+                "aspect-[4/3] rounded-3xl border animate-pulse",
+                isDark ? "bg-white/[0.04] border-white/10" : "bg-gray-100 border-gray-200"
+              )}
+            />
+          ))}
+
           {/* Collection Cards */}
-          {collections.map((c) => (
+          {!loading && collections.map((c) => (
             <div
               key={c.id}
               onClick={() => navigate('/saved')}
@@ -173,9 +194,12 @@ export default function CollectionsScreen() {
 
               {/* Badges Top Bar */}
               <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between z-10">
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold text-white border border-white/10">
-                  {c.isPrivate ? <Lock className="w-3 h-3 text-amber-400" /> : <Globe className="w-3 h-3 text-blue-400" />}
-                  <span>{c.isPrivate ? 'Private' : 'Public'}</span>
+                <span
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold text-white border border-white/10"
+                  title="Folders are private to your account."
+                >
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span>Only you</span>
                 </span>
 
                 <button
@@ -205,6 +229,25 @@ export default function CollectionsScreen() {
             </div>
           ))}
         </div>
+
+        {!loading && loadError && (
+          <div className="mt-4">
+            <ErrorState
+              title="Could not load your collections"
+              message={loadError}
+              onRetry={() => setReloadNonce((n) => n + 1)}
+            />
+          </div>
+        )}
+
+        {!loading && !loadError && collections.length === 0 && (
+          <div className="mt-4">
+            <EmptyState
+              title="No collections yet"
+              description="Create a folder to organize your saved posts, sparks and audio presets."
+            />
+          </div>
+        )}
       </main>
 
       {/* Create Modal */}
@@ -267,20 +310,14 @@ export default function CollectionsScreen() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
-                  <div className="flex items-center gap-2.5">
-                    <Lock className="w-4 h-4 text-amber-400" />
-                    <div>
-                      <p className="text-xs font-bold">Private Collection</p>
-                      <p className="text-[11px] text-gray-400">Only you can view this folder</p>
-                    </div>
+                <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10">
+                  <Lock className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <p className="text-xs font-bold">Private to your account</p>
+                    <p className="text-[11px] text-gray-400">
+                      Folders are stored in your account. Nothing here is published to other users.
+                    </p>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={newIsPrivate}
-                    onChange={(e) => setNewIsPrivate(e.target.checked)}
-                    className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
-                  />
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">

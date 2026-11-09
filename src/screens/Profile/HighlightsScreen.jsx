@@ -13,6 +13,7 @@ import { Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X, Check } from
 import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
+import ErrorState from '../../design-system/ErrorState.jsx';
 
 const EMOJI_OPTIONS = ['✨', '🔥', '💖', '🎵', '✈️', '📸', '⚡', '🏆', '🌴', '🎨', '🚀', '🌟'];
 
@@ -30,6 +31,8 @@ export default function HighlightsScreen() {
   
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [selectedHighlight, setSelectedHighlight] = useState(null);
   const [showCreate, setShowCreate] = useState(() => searchParams.get('create') === 'true');
   const [highlightName, setHighlightName] = useState('');
@@ -85,20 +88,22 @@ export default function HighlightsScreen() {
         return;
       }
       setLoading(true);
+      setLoadError(null);
       try {
         const storyService = (await import('../../services/storyService.js')).getStoryService();
         const userHighlights = await storyService.getHighlights(currentUserId);
         const list = Array.isArray(userHighlights) ? userHighlights : (userHighlights?.highlights || []);
         setHighlights(list);
       } catch (error) {
-        console.error('Failed to load highlights:', error);
+        // A failed read must not render as "No highlights yet".
+        setLoadError(error?.message || 'Could not load highlights.');
       } finally {
         setLoading(false);
       }
     };
     
     loadHighlights();
-  }, [currentUserId]);
+  }, [currentUserId, reloadNonce]);
   
   const handleCreateHighlight = useCallback(() => {
     setShowCreate(true);
@@ -176,9 +181,15 @@ export default function HighlightsScreen() {
           </button>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-20" role="status" aria-label="Loading highlights">
             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
           </div>
+        ) : loadError ? (
+          <ErrorState
+            title="Could not load highlights"
+            message={loadError}
+            onRetry={() => setReloadNonce((n) => n + 1)}
+          />
         ) : highlights.length === 0 ? (
           <div className="text-center py-20">
             <div className={cn(

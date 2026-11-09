@@ -53,7 +53,13 @@ export default function PostDetails() {
 
   const handleShare = async () => {
     triggerHaptic('light');
-    if (navigator.share) { try { await navigator.share({ title: post?.content?.substring(0, 100), url: window.location.href }); } catch {} }
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post?.content?.substring(0, 100), url: window.location.href });
+      } catch {
+        /* the user dismissed the native share sheet — not an error */
+      }
+    }
     else { navigator.clipboard.writeText(window.location.href); toast.success('Link copied'); }
   };
 

@@ -27,6 +27,7 @@ const MessagingScreen = lazy(() => import("../screens/MessagingScreen.jsx"));
 const ChatScreen = lazy(() => import("../screens/ChatScreen.jsx"));
 const NewConversationScreen = lazy(() => import("../screens/NewConversationScreen.jsx"));
 const GroupInfoScreen = lazy(() => import("../screens/GroupInfoScreen.jsx"));
+const JoinGroupScreen = lazy(() => import("../screens/JoinGroupScreen.jsx"));
 const ConversationSettingsScreen = lazy(() => import("../screens/ConversationSettingsScreen.jsx"));
 const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
 const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
@@ -698,6 +699,15 @@ export default function AppRoutes() {
             <ReelsScreen />
           </Suspense>
         </ProtectedRoute>
+      } />
+
+      {/* Group invite link landing (`/join-group?invite=<id>`). Public-ish: it
+          renders a sign-in prompt when logged out and joins via the
+          joinGroupViaInvite callable when signed in. */}
+      <Route path="/join-group" element={
+        <Suspense fallback={<RouteFallback />}>
+          <JoinGroupScreen />
+        </Suspense>
       } />
 
       {/* Video detail (deep links from search, notifications, shares) */}

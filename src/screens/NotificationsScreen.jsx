@@ -10,8 +10,10 @@ import { cn } from '../lib/utils';
 import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2, UserCheck } from "lucide-react";
 import notificationsService from '../services/notificationsService';
 import EmptyState from '../design-system/EmptyState.jsx';
+import ErrorState from '../design-system/ErrorState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/UI/Dialog.jsx';
+import { ListRowsSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 
 const FILTERS = [
@@ -60,11 +62,19 @@ export default function NotificationsScreen() {
   const [pendingFollowRequestAction, setPendingFollowRequestAction] = useState(null);
   const [recommended, setRecommended] = useState([]);
   const [networkLoading, setNetworkLoading] = useState(false);
+  const [networkError, setNetworkError] = useState(null);
   const [pendingNetworkAction, setPendingNetworkAction] = useState(null);
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [networkActionState, setNetworkActionState] = useState({});
   const [notifications, setNotifications] = useState([]);
+  // First snapshot not yet delivered → show a skeleton instead of the "no
+  // notifications" empty state (which falsely reads as "you have none").
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  // A denied/failed stream must be visible, not silently rendered as "no
+  // notifications" (the `type: 'error'` payload used to fall through).
+  const [notificationsError, setNotificationsError] = useState(null);
+  const [streamNonce, setStreamNonce] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -87,6 +97,7 @@ export default function NotificationsScreen() {
 
   const loadNetwork = useCallback(async () => {
     setNetworkLoading(true);
+    setNetworkError(null);
     try {
       if (!user?.uid) {
         setRecommended([]);
@@ -124,11 +135,15 @@ export default function NotificationsScreen() {
           );
           const byId = new Map(profiles.map((p) => [p.uid || p.id, p]));
           setFollowRequests(rawFollowRequests.map((r) => ({ ...r, fromUser: byId.get(r.fromUserId) || null })));
-        } catch {
+        } catch (err) {
           // Keep the raw rows; the row falls back to a generic label.
+          console.warn('[Notifications] follow-request profile hydration failed', err?.message);
         }
       }
-    } catch {
+    } catch (err) {
+      // The network lists failed to load; surface a retry instead of an empty
+      // tab that reads as "no connections / no requests".
+      setNetworkError(err?.message || 'Could not load your network.');
       setRecommended([]);
     } finally {
       setNetworkLoading(false);
@@ -323,21 +338,34 @@ export default function NotificationsScreen() {
     };
     try {
       unsub = notificationsService.subscribeToUserNotifications(user.uid, (payload) => {
+        if (payload?.type === 'error') {
+          // The service reports a rules/network failure here; surface it with a
+          // retry instead of pretending the inbox is empty.
+          setNotificationsError(payload.error || 'Could not load notifications.');
+          setNotificationsLoading(false);
+          return;
+        }
         // The subscription emits change batches ({ added, modified }), not a
         // plain array — the array shape is tolerated for older callers/tests.
         const raw = Array.isArray(payload)
           ? payload
           : [...(payload?.added || []), ...(payload?.modified || [])];
+        // First snapshot (even an empty one) settles the loading state so the
+        // skeleton gives way to the real list or the genuine empty state.
+        setNotificationsError(null);
+        setNotificationsLoading(false);
         if (raw.length === 0) return;
         mergeNotifications(raw.map(formatNotification));
       });
     } catch (err) {
       console.warn('Notifications stream warning:', err);
+      setNotificationsError(err?.message || 'Could not load notifications.');
+      setNotificationsLoading(false);
     }
     return () => {
       if (typeof unsub === 'function') unsub();
     };
-  }, [user?.uid]);
+  }, [user?.uid, streamNonce]);
 
   // Handle Mark All Read
   const [markingAllRead, setMarkingAllRead] = useState(false);
@@ -721,10 +749,13 @@ export default function NotificationsScreen() {
         {mainTab === 'network' ? (
           <div className="space-y-4">
             {networkLoading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3 text-arvdoul-text-secondary">
-                <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
-                <p className="text-sm">Loading network connections...</p>
-              </div>
+              <ListRowsSkeleton count={6} />
+            ) : networkError ? (
+              <ErrorState
+                title="Could not load your network"
+                message={networkError}
+                onRetry={loadNetwork}
+              />
             ) : networkTab === 'requests' ? (
               requests.length === 0 ? (
                 <EmptyState
@@ -1320,8 +1351,28 @@ export default function NotificationsScreen() {
           );
         })}
 
+        {/* Stream failure (rules denial / dropped connection) — retry rather
+            than showing the misleading "no notifications" empty state. */}
+        {!notificationsLoading && notificationsError && (
+          <ErrorState
+            title="Could not load notifications"
+            message={notificationsError}
+            onRetry={() => {
+              setNotificationsError(null);
+              setNotificationsLoading(true);
+              setStreamNonce((n) => n + 1);
+            }}
+          />
+        )}
+
+        {/* First-load skeleton — the empty state below would otherwise read as
+            "you have no notifications" before the first snapshot arrives. */}
+        {notificationsLoading && (
+          <ListRowsSkeleton count={7} />
+        )}
+
         {/* Empty State when filters yield no results */}
-        {filteredNotifications.length === 0 && (
+        {!notificationsLoading && !notificationsError && filteredNotifications.length === 0 && (
           <EmptyState
             title="No notifications found"
             description={`There are no notifications under the ${activeFilter} filter at this moment.`}

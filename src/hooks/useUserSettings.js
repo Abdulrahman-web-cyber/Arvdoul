@@ -24,7 +24,7 @@ export function useUserSettings(uid) {
     let mounted = true;
     settingsService.getSettings(uid)
       .then((loaded) => { if (mounted) setSettings(loaded); })
-      .catch(() => {});
+      .catch((err) => console.warn('[Settings] load failed; showing defaults', err?.message));
     return () => { mounted = false; };
   }, [uid]);
 

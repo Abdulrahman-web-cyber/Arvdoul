@@ -37,7 +37,13 @@ class AdminService {
     }
   }
 
-  /** Aggregate count for a collection, optionally constrained. Returns 0 on failure. */
+  /**
+   * Aggregate count for a collection, optionally constrained.
+   *
+   * Returns `null` on failure — never `0`. A failed count is *unknown*, and a
+   * caller that rendered it as 0 would present an unmeasured collection as an
+   * empty one (the admin dashboard's "0 users" defect).
+   */
   async count(collectionPath, constraints = []) {
     try {
       const db = await this._firestore();
@@ -48,7 +54,7 @@ class AdminService {
       const snap = await getCountFromServer(colRef);
       return snap.data().count;
     } catch {
-      return 0;
+      return null;
     }
   }
 

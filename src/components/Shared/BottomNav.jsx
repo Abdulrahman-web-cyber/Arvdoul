@@ -122,8 +122,11 @@ const formatBadge = (value) => {
 };
 
 const formatCoins = (value) => {
+  // An absent balance is *unknown*, not zero — rendering "0" in the nav claims
+  // the account holds no coins while the profile document has not loaded.
+  if (value === null || value === undefined) return "—";
   const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) return "0";
+  if (!Number.isFinite(amount) || amount < 0) return "—";
   if (amount < 1000) return Math.floor(amount).toLocaleString();
   if (amount < 1_000_000)
     return `${(amount / 1000).toFixed(amount >= 10_000 ? 0 : 1)}K`;
@@ -743,7 +746,9 @@ const NavigationHandle = memo(function NavigationHandle({
       state.longPressed = false;
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
-      } catch {}
+      } catch {
+        /* pointer capture is best-effort; the press still works */
+      }
       longPressTimerRef.current = window.setTimeout(() => {
         const current = pointerRef.current;
         if (!current.active || current.moved) return;
@@ -779,7 +784,9 @@ const NavigationHandle = memo(function NavigationHandle({
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
-      } catch {}
+      } catch {
+        /* release is best-effort */
+      }
       resetPointer();
       if (wasLongPressed) {
         suppressClickRef.current = true;
@@ -991,8 +998,12 @@ function BottomNav() {
   const openQuickAccess = useCallback(() => {
     setQuickAccessOpen(true);
     // Nav will hide automatically due to effect
-    try { playSound?.("navigation"); } catch {}
-    try { trackEvent?.("quick_access_open", { source: "bottom_navigation_handle", interaction: "long_press" }); } catch {}
+    try { playSound?.("navigation"); } catch {
+      /* sound is optional */
+    }
+    try { trackEvent?.("quick_access_open", { source: "bottom_navigation_handle", interaction: "long_press" }); } catch {
+      /* telemetry is best-effort */
+    }
   }, [playSound, trackEvent]);
 
   /* ------------------------------------------------------------------------
@@ -1006,8 +1017,12 @@ function BottomNav() {
       navigationLockRef.current = false;
     }, NAVIGATION_LOCK_MS);
 
-    try { playSound?.("create"); } catch {}
-    try { trackEvent?.("bottom_nav_create_open", { destination: NAVIGATION_PATHS.createPost, source: "bottom_navigation" }); } catch {}
+    try { playSound?.("create"); } catch {
+      /* sound is optional */
+    }
+    try { trackEvent?.("bottom_nav_create_open", { destination: NAVIGATION_PATHS.createPost, source: "bottom_navigation" }); } catch {
+      /* telemetry is best-effort */
+    }
 
     closeQuickAccess();
     navigate(NAVIGATION_PATHS.createPost);
@@ -1021,8 +1036,12 @@ function BottomNav() {
         navigationLockRef.current = false;
       }, NAVIGATION_LOCK_MS);
 
-      try { playSound?.("navigation"); } catch {}
-      try { trackEvent?.("bottom_nav_navigation", { destination, path, source: "bottom_navigation" }); } catch {}
+      try { playSound?.("navigation"); } catch {
+        /* sound is optional */
+      }
+      try { trackEvent?.("bottom_nav_navigation", { destination, path, source: "bottom_navigation" }); } catch {
+        /* telemetry is best-effort */
+      }
 
       closeQuickAccess();
 
@@ -1037,8 +1056,12 @@ function BottomNav() {
 
   const navigateToWithLoading = useCallback(
     (path) => {
-      try { playSound?.("navigation"); } catch {}
-      try { trackEvent?.("Navigation_With_Loading", { path, source: "bottom_navigation_quick_access" }); } catch {}
+      try { playSound?.("navigation"); } catch {
+        /* sound is optional */
+      }
+      try { trackEvent?.("Navigation_With_Loading", { path, source: "bottom_navigation_quick_access" }); } catch {
+        /* telemetry is best-effort */
+      }
 
       closeQuickAccess();
       navigate(path);
@@ -1106,7 +1129,7 @@ function BottomNav() {
     };
   }, [unreadCounts]);
 
-  const coinBalance = effectiveUser?.coins ?? 0;
+  const coinBalance = effectiveUser?.coins ?? null;
 
   const activeId = useMemo(() => {
     const pathname = location.pathname;

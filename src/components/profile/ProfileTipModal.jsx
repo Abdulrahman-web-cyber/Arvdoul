@@ -22,7 +22,7 @@ export default function ProfileTipModal({
   const [amount, setAmount] = useState(50);
   const [customAmount, setCustomAmount] = useState('');
   const [note, setNote] = useState('');
-  const [userBalance, setUserBalance] = useState(0);
+  const [userBalance, setUserBalance] = useState(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -40,12 +40,11 @@ export default function ProfileTipModal({
 
     getMonetizationService().getBalance(currentUserId)
       .then((res) => {
-        if (isMounted) {
-          setUserBalance(res?.coins || 0);
-        }
+        // An unknown balance stays null; the modal must not claim "0 coins".
+        if (isMounted) setUserBalance(typeof res === 'number' ? res : null);
       })
       .catch(() => {
-        if (isMounted) setUserBalance(0);
+        if (isMounted) setUserBalance(null);
       })
       .finally(() => {
         if (isMounted) setLoadingBalance(false);
@@ -55,7 +54,7 @@ export default function ProfileTipModal({
   }, [isOpen, currentUserId]);
 
   const effectiveAmount = customAmount ? parseInt(customAmount, 10) || 0 : amount;
-  const hasInsufficientBalance = userBalance < effectiveAmount;
+  const hasInsufficientBalance = userBalance !== null && userBalance < effectiveAmount;
 
   const handleSelectPreset = (val) => {
     setAmount(val);
@@ -256,7 +255,7 @@ export default function ProfileTipModal({
                 <span className="text-gray-500 dark:text-gray-400">Your Coin Balance:</span>
                 <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-1">
                   <Coins className="w-3.5 h-3.5 text-amber-400" />
-                  {loadingBalance ? '...' : userBalance.toLocaleString()} coins
+                  {loadingBalance || userBalance === null ? '...' : userBalance.toLocaleString()} coins
                 </span>
               </div>
 

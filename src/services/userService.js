@@ -209,7 +209,7 @@ class ProfessionalUserService {
 
   async uploadAvatar(userId, file) {
     const storageService = getStorageService();
-    const result = await storageService.uploadFileWithProgress(file, `avatars/${userId}`, {
+    const result = await storageService.uploadFileWithProgress(file, `avatars/${userId}/avatar_${Date.now()}`, {
       compressImages: true,
       maxSize: 2 * 1024 * 1024,
       userId,
@@ -479,7 +479,9 @@ class ProfessionalUserService {
       if (auth?.currentUser && (auth.currentUser.uid === userId || requesterId === userId)) {
         authUser = auth.currentUser;
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('Auth instance unavailable while building profile', { userId, error: e?.message });
+    }
 
     full.displayName = (full.displayName && full.displayName !== 'User')
       ? full.displayName
@@ -522,8 +524,10 @@ class ProfessionalUserService {
       const todayStr = new Date().toISOString().slice(0, 10);
       if (full.lastActiveDay !== todayStr) {
         import('./levelSystemService.js').then(({ levelSystemService }) => {
-          levelSystemService.recordActiveDay({ userId: targetUid }).catch(() => {});
-        }).catch(() => {});
+          levelSystemService.recordActiveDay({ userId: targetUid }).catch((err) => {
+            logger.warn('recordActiveDay failed; streak/XP day may be missed', { userId: targetUid, error: err?.message });
+          });
+        }).catch((err) => logger.warn('levelSystemService import failed', { error: err?.message }));
       }
     }
 
@@ -760,13 +764,15 @@ class ProfessionalUserService {
       appearance: { theme: 'system' },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    }).catch(() => {});
+    }).catch((e) => logger.warn('Default settings seed failed', { userId, error: e?.message }));
 
     const prefsDoc = doc(this.firestore, 'user_preferences', userId);
     await setDoc(prefsDoc, {
       muted: false, blockedTypes: [], priorityMap: {}, soundEnabled: true, vibrationEnabled: true,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    }).catch(() => {});
+    }).catch((e) => {
+      logger.debug('Default notification preferences write failed', { userId, error: e?.message });
+    });
 
     this.avatarCache.set(`avatar_${userId}`, profile.photoURL);
     this._invalidateUserCache(userId);
@@ -774,7 +780,9 @@ class ProfessionalUserService {
     try {
       const { useProfileStore } = await import('../store/profileStore.js');
       useProfileStore.getState().loadProfile(userId, userId);
-    } catch {}
+    } catch (e) {
+      logger.warn('Profile store sync after create failed', { userId, error: e?.message });
+    }
 
     return { success: true, profile, username };
   }
@@ -882,7 +890,9 @@ class ProfessionalUserService {
           profile: { ...(state.profile || {}), ...sanitizedUpdates }
         }));
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('Profile store sync after update failed', { userId, error: e?.message });
+    }
 
     this._invalidateUserCache(userId);
 
@@ -925,7 +935,9 @@ class ProfessionalUserService {
         return { success: false, error: 'You already have a pending verification application under review.' };
       }
     } catch (e) {
-      // Best-effort check
+      // Best-effort duplicate check; log so a broken read is diagnosable
+      // rather than silently allowing a second application.
+      logger.warn('Pending verification check failed', { userId, error: e?.message });
     }
 
     const docData = {
@@ -935,7 +947,9 @@ class ProfessionalUserService {
       category: applicationData.category || 'Creator',
       reason: applicationData.reason || '',
       portfolioLink: applicationData.portfolioLink || applicationData.website || '',
-      followerCount: Number(applicationData.followerCount || 0),
+      // An unknown follower count stays null so the review queue shows
+      // "unavailable" instead of a fabricated 0 for a profile that never loaded.
+      followerCount: applicationData.followerCount == null ? null : Number(applicationData.followerCount),
       level: Number(applicationData.level) || null,
       status: 'pending',
       submittedAt: serverTimestamp(),
@@ -1062,7 +1076,7 @@ class ProfessionalUserService {
           priority: 'normal',
         });
       } catch (e) {
-        // Follow-request notification failed
+        logger.warn('Follow-request notification failed', { followerId, followingId, error: e?.message });
       }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
@@ -1088,12 +1102,13 @@ class ProfessionalUserService {
       countersManager.invalidate({ docPath: `users/${followingId}`, field: 'followerCount' });
       countersManager.invalidate({ docPath: `users/${followerId}`, field: 'followingCount' });
       auditLogger.log('social.follow', { userId: followerId, meta: { followingId } });
-      this._recordFollowerSnapshotIfDue(followingId).catch(() => {});
+      this._recordFollowerSnapshotIfDue(followingId).catch((e) =>
+        logger.warn('Follower snapshot failed', { followingId, error: e?.message }));
       try {
         const notifications = await this._getNotificationsService();
         await notifications.createFollowNotification(followerId, followingId);
       } catch (e) {
-        // Follow notification failed
+        logger.warn('Follow notification failed', { followerId, followingId, error: e?.message });
       }
       // Level system: award follow_received XP to the followed user
       // (best-effort, never breaks the follow).
@@ -1101,9 +1116,9 @@ class ProfessionalUserService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: followingId, action: 'follow_received', source: followerId })
-          .catch(() => {});
+          .catch((err) => logger.warn('follow_received XP award failed', { userId: followingId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('follow_received XP award failed', { userId: followingId, error: e?.message });
       }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
@@ -1133,7 +1148,8 @@ class ProfessionalUserService {
     countersManager.invalidate({ docPath: `users/${followingId}`, field: 'followerCount' });
     countersManager.invalidate({ docPath: `users/${followerId}`, field: 'followingCount' });
     auditLogger.log('social.unfollow', { userId: followerId, meta: { followingId } });
-    this._recordFollowerSnapshotIfDue(followingId).catch(() => {});
+    this._recordFollowerSnapshotIfDue(followingId).catch((e) =>
+      logger.warn('Follower snapshot failed', { followingId, error: e?.message }));
     this._invalidateUserCache(followerId);
     this._invalidateUserCache(followingId);
     return result;
@@ -1211,7 +1227,7 @@ class ProfessionalUserService {
           metadata: { userId: ownerId },
         });
       } catch (e) {
-        // Follow-accept notification failed
+        logger.warn('Follow-accept notification failed', { requesterId, ownerId, error: e?.message });
       }
       // The edge now exists; credit the owner's follow_received XP (verified
       // server-side against the edge, so it is idempotent per follower).
@@ -1219,9 +1235,9 @@ class ProfessionalUserService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId: ownerId, action: 'follow_received', source: requesterId })
-          .catch(() => {});
+          .catch((err) => logger.warn('follow-accept XP award failed', { userId: ownerId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('follow-accept XP award failed', { userId: ownerId, error: e?.message });
       }
       this._invalidateUserCache(requesterId);
     }
@@ -1528,7 +1544,7 @@ class ProfessionalUserService {
           fromUser?.displayName || 'Someone'
         );
       } catch (e) {
-        // Friend request notification is best-effort
+        logger.warn('Friend-request notification failed', { fromUserId, toUserId, error: e?.message });
       }
       this._notifyFriendRequestsChanged();
     }
@@ -1598,7 +1614,7 @@ class ProfessionalUserService {
           metadata: { friendId: userId }
         });
       } catch (e) {
-        // Friend notification failed
+        logger.warn('Friend-accepted notification failed', { userId, requesterId, error: e?.message });
       }
       // Mutual follow edges now exist: credit both users' follow_received XP
       // (verified server-side against each edge, idempotent per follower).
@@ -1606,12 +1622,12 @@ class ProfessionalUserService {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
           .awardExperience({ userId, action: 'follow_received', source: requesterId })
-          .catch(() => {});
+          .catch((err) => logger.warn('mutual-follow XP award failed', { userId, error: err?.message }));
         levelSystemService
           .awardExperience({ userId: requesterId, action: 'follow_received', source: userId })
-          .catch(() => {});
+          .catch((err) => logger.warn('mutual-follow XP award failed', { userId: requesterId, error: err?.message }));
       } catch (e) {
-        // XP award is best-effort
+        logger.warn('mutual-follow XP award failed', { error: e?.message });
       }
     }
     this._invalidateUserCache(requesterId);
@@ -1917,8 +1933,11 @@ class ProfessionalUserService {
         await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
       } catch (callErr) {
         // Non-blocking: fails gracefully if offline or not signed in
+        logger.debug('recordActiveDay skipped', { userId, error: callErr?.message });
       }
-    } catch (e) { /* silent */ }
+    } catch (e) {
+      logger.warn('updateLastActive failed; presence may be stale', { userId, error: e?.message });
+    }
   }
 
   async markProfileComplete(userId) {

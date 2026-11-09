@@ -78,7 +78,9 @@ export default function ProfileMyScreen() {
     setViewMode(mode);
     try {
       localStorage.setItem('arvdoul_profile_view_mode', mode);
-    } catch {}
+    } catch {
+      /* view-mode persistence is a preference, not state */
+    }
   }, []);
 
   // Authenticated user identity

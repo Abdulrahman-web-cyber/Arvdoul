@@ -661,8 +661,9 @@ export default function VideoEditorScreen() {
       const next = [snapshot, ...prev].slice(0, 10);
       try {
         localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(next));
-      } catch {
+      } catch (e) {
         // Quota exceeded / unavailable storage: the in-memory list still works.
+        console.warn('Video project autosave failed', e?.message);
       }
       return next;
     });

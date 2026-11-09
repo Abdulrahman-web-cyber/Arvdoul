@@ -42,7 +42,9 @@ export default function IncomingCallBanner() {
         if (cancelled) stopFn();
         else stop = stopFn;
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.warn('Incoming-call subscription failed', e?.message);
+      });
 
     return () => {
       cancelled = true;
@@ -67,7 +69,9 @@ export default function IncomingCallBanner() {
           avatar: getSafeAvatarUrl(profile.photoURL, name, incoming.callerId),
         });
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.warn('Incoming-call caller profile read failed', e?.message);
+      });
     return () => { cancelled = true; };
   }, [incoming?.callerId]);
 
@@ -81,7 +85,9 @@ export default function IncomingCallBanner() {
     const call = incoming;
     setIncoming(null);
     if (call?.callId && user?.uid) {
-      getCallService().endCall(call.callId, user.uid).catch(() => {});
+      getCallService().endCall(call.callId, user.uid).catch((e) => {
+        console.warn('Decline call failed', e?.message);
+      });
     }
   };
 

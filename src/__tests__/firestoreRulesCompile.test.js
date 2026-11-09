@@ -466,4 +466,143 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await env.cleanup();
     }
   });
+
+  test('group invite links are admin-minted and readable by id (N-group-invites)', async () => {
+    // The rule was nested under `conversations/{id}` while the client reads and
+    // writes the TOP-LEVEL `group_invites` collection, so every create fell
+    // through to the deny-all catch-all and "create invite link" silently
+    // failed. This pins the corrected top-level contract.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/c1'), { participants: ['alice', 'bob'], admins: ['alice'], type: 'group' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      const invite = { conversationId: 'c1', createdBy: 'alice', uses: 0 };
+
+      // Only a conversation admin may mint an invite, and it must stamp them.
+      await assertSucceeds(setDoc(doc(alice, 'group_invites/inv1'), invite));
+      await assertFails(setDoc(doc(bob, 'group_invites/inv2'), { ...invite, createdBy: 'bob' }));
+      await assertFails(setDoc(doc(alice, 'group_invites/inv3'), { ...invite, createdBy: 'bob' }));
+
+      // The invite id is the bearer token in the link: any signed-in user
+      // (even a non-participant) may read it by id to join.
+      await assertSucceeds(getDoc(doc(carol, 'group_invites/inv1')));
+
+      // Revoke / use-count changes are admin-only.
+      await assertFails(updateDoc(doc(bob, 'group_invites/inv1'), { uses: 99 }));
+      await assertSucceeds(updateDoc(doc(alice, 'group_invites/inv1'), { uses: 1 }));
+
+      // LIST is admin-only and must be scoped to an administered conversation,
+      // so the whole collection cannot be enumerated.
+      await assertFails(getDocs(query(collection(bob, 'group_invites'), where('conversationId', '==', 'c1'))));
+      await assertSucceeds(getDocs(query(collection(alice, 'group_invites'), where('conversationId', '==', 'c1'))));
+
+      await assertFails(deleteDoc(doc(bob, 'group_invites/inv1')));
+      await assertSucceeds(deleteDoc(doc(alice, 'group_invites/inv1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('the public feed list is admitted and never leaks a draft (N-feed-list)', async () => {
+    // `request.query` exposes only limit/offset/orderBy, so the old
+    // `request.query.get(field, sentinel)` list helper returned the sentinel and
+    // denied EVERY feed `list` for non-admins (the home feed silently fell back
+    // to an empty/permission-denied state). The rule now authorises per
+    // candidate document. This pins both the admit and the no-leak property.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'posts/pub1'), { authorId: 'alice', authorIsPrivate: false, visibility: 'public', status: 'published', isDeleted: false, createdAt: 1 });
+        await setDoc(doc(db, 'posts/draft1'), { authorId: 'alice', authorIsPrivate: false, visibility: 'public', status: 'draft', isDeleted: false, createdAt: 2 });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // The exact public-feed shape feedService issues now succeeds...
+      const publicFeed = (db) => query(collection(db, 'posts'),
+        where('authorIsPrivate', '==', false), where('status', '==', 'published'),
+        where('isDeleted', '==', false), where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'), limit(10));
+      const snap = await assertSucceeds(getDocs(publicFeed(bob)));
+      expect(snap.docs.map((d) => d.id)).toEqual(['pub1']);
+
+      // ...the author reads their own drafts through an author-scoped query...
+      await assertSucceeds(getDocs(query(collection(alice, 'posts'),
+        where('authorId', '==', 'alice'), orderBy('createdAt', 'desc'), limit(10))));
+
+      // ...but a viewer's author-scoped query must carry the public constraints
+      // (an authorId-only query could return alice's draft, so it is denied)...
+      await assertFails(getDocs(query(collection(bob, 'posts'),
+        where('authorId', '==', 'alice'), orderBy('createdAt', 'desc'), limit(10))));
+
+      // ...and an unconstrained query is denied wholesale.
+      await assertFails(getDocs(query(collection(bob, 'posts'), limit(50))));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('the owner story grid lists while another user\'s grid is denied (N-story-list)', async () => {
+    // A story `list` rule may only read fields the query constrains: the old
+    // combined `allow read` read isDeleted/status/expiresAt/moderationStatus/
+    // visibility, so a list query that omits any of them made `resource.data.X`
+    // undefined and threw ("Property isDeleted is undefined on object"),
+    // denying the whole read. `getUserStories` (the reachable grid) is now
+    // admitted by the owner-scoped `list` rule; a stranger's grid is denied.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collection, query, where, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'stories/own1'), {
+          userId: 'alice', isDeleted: false, status: 'published', moderationStatus: 'pending', visibility: 'public',
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const grid = (db, uid) => query(collection(db, 'stories'), where('userId', '==', uid), where('isDeleted', '==', false), limit(30));
+      await assertSucceeds(getDocs(grid(alice, 'alice')));
+      await assertFails(getDocs(grid(bob, 'alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
 });

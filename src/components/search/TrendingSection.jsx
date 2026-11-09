@@ -173,7 +173,7 @@ const CreatorContent = memo(({ item, isDark }) => (
       )}>
         <span>@{item.username}</span>
         <span>•</span>
-        <span>{formatCount(item.followers || item.followerCount || 0)} followers</span>
+        <span>{formatCount(item.followers ?? item.followerCount)} followers</span>
       </div>
     </div>
   </div>
@@ -202,7 +202,7 @@ const HashtagContent = memo(({ item, isDark }) => (
       'text-xs mt-0.5',
       isDark ? 'text-gray-400' : 'text-gray-500'
     )}>
-      {formatCount(item.count || item.postCount || 0)} posts
+      {formatCount(item.count ?? item.postCount)} posts
     </div>
   </div>
 ));
@@ -227,13 +227,13 @@ const DefaultContent = memo(({ item, type, isDark }) => (
       {type === 'videos' && (
         <>
           <Eye className="w-3 h-3" />
-          <span>{formatCount(item.views || item.viewCount || 0)} views</span>
+          <span>{formatCount(item.views ?? item.viewCount)} views</span>
         </>
       )}
       {type === 'posts' && (
         <>
           <MessageCircle className="w-3 h-3" />
-          <span>{formatCount(item.comments || item.commentCount || 0)} comments</span>
+          <span>{formatCount(item.comments ?? item.commentCount)} comments</span>
         </>
       )}
     </div>

@@ -35,9 +35,10 @@ const isAdmin = async (uid) => {
   try {
     const snap = await db.doc(`admins/${uid}`).get();
     if (snap.exists) return true;
-  } catch {
-    // Fall through to the claim check rather than denying outright, but never
-    // grant on an unreadable document unless the claim is present.
+  } catch (err) {
+    // Fail closed: never grant on an unreadable document. Log so an admin
+    // locked out by a transient read error is diagnosable instead of silent.
+    functions.logger.warn('Admin grant lookup failed; treating as non-admin', { uid, error: err.message });
   }
   return false;
 };
@@ -78,13 +79,14 @@ async function getUserEmail(uid) {
   try {
     const snap = await db.doc(`users_private/${uid}`).get();
     if (snap.exists && snap.data()?.email) return snap.data().email;
-  } catch {
-    // fall through to the legacy location
+  } catch (err) {
+    functions.logger.warn('users_private email read failed; trying legacy users doc', { uid, error: err.message });
   }
   try {
     const snap = await db.doc(`users/${uid}`).get();
     return snap.exists ? snap.data()?.email || undefined : undefined;
-  } catch {
+  } catch (err) {
+    functions.logger.warn('legacy users email read failed; returning no email', { uid, error: err.message });
     return undefined;
   }
 }

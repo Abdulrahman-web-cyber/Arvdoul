@@ -21,6 +21,8 @@ import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+// One count formatter for the whole app (unknown -> '—'); a local copy drifted.
+import { formatCount } from '../lib/searchUtils';
 
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
@@ -303,12 +305,6 @@ const formatCommentText = (text, navigate) => {
   });
 };
 
-function formatCount(num) {
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
-}
-
 /* ═══════════════════════════════════════════════════════════
    PROFILE CACHE (simple Map with TTL)
    ═══════════════════════════════════════════════════════════ */
@@ -396,7 +392,7 @@ async function flushOfflineQueue(postId, userId, onSuccess) {
           await blobTx.done;
           if (record?.blob) {
             const file = new File([record.blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-            const uploadResult = await storageService.uploadFile(file, `comments/voice/${item.userId}/${safeRandomUUID()}.webm`, { userId: item.userId });
+            const uploadResult = await storageService.uploadFile(file, `comments/${item.userId}/voice/${safeRandomUUID()}.webm`, { userId: item.userId });
             mediaUrl = uploadResult.downloadURL;
           }
         } else if (item.metadata.type === 'voice') {
@@ -449,7 +445,9 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
       if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       if (pointerIdRef.current !== null && buttonRef.current) {
-        try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (e) {}
+        try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (e) {
+          console.warn('Pointer capture release failed', e?.message);
+        }
       }
     };
   }, [recording]);
@@ -521,7 +519,9 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
     else if (locked) stopRecording();
     else stopRecording();
     if (pointerIdRef.current !== null && buttonRef.current) {
-      try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (ex) {}
+      try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (ex) {
+        console.warn('Pointer capture release failed', ex?.message);
+      }
       pointerIdRef.current = null;
     }
   };
@@ -944,7 +944,7 @@ const CommentItem = memo(({
             </div>
             <button onClick={() => onLike(commentId)} className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors">
               <Heart className={`w-3.5 h-3.5 ${likedByArray.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
-              <span>{formatCount(comment.likes || 0)}</span>
+              <span>{formatCount(comment.likes)}</span>
             </button>
             <button onClick={() => onReply(comment)} className="flex items-center gap-1 text-gray-500 hover:text-purple-500 transition-colors"><Reply className="w-3.5 h-3.5" /> Reply</button>
             <button onClick={() => setShowActionSheet(!showActionSheet)} className="text-gray-500 hover:text-purple-500 transition-colors"><MoreHorizontal className="w-3.5 h-3.5" /></button>
@@ -1093,7 +1093,11 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         const blocked = await userService.getBlockedUsers(currentUser.uid);
         const ids = new Set(blocked?.blockedUsers?.map(u => u.id) || []);
         setBlockedUserIds(ids);
-      } catch { /* ignore */ }
+      } catch (err) {
+        // Without the block list, blocked users' comments would render; log so
+        // the degraded state is diagnosable.
+        console.warn('[Comments] blocked-users load failed', err);
+      }
       setBlockedLoading(false);
     })();
   }, [currentUser?.uid]);
@@ -1137,7 +1141,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
           if (reset) setComments(postId, localStored, ranking, null, false, null);
           else appendComments(postId, localStored, false, null);
         }
-      } catch {}
+      } catch (e) {
+        console.warn('Local comment cache read failed', e?.message);
+      }
       if (reset) setInitialLoadError(false);
       else setLoadMoreError(false);
     } finally {
@@ -1265,7 +1271,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         const current = JSON.parse(localStorage.getItem(key) || '[]');
         current.unshift(optimistic);
         localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-      } catch {}
+      } catch (e) {
+        console.warn('Local comment cache write failed', e?.message);
+      }
       toast.success('Comment posted');
       return;
     }
@@ -1275,7 +1283,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (type === 'voice') {
         const upload = await storageService.uploadFile(
           blob,
-          `comments/voice/${activeUser.uid}/${safeRandomUUID()}.webm`,
+          `comments/${activeUser.uid}/voice/${safeRandomUUID()}.webm`,
           { userId: activeUser.uid }
         );
         result = await commentService.createComment(postId, activeUser.uid, '', {
@@ -1310,7 +1318,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (post?.authorId && post.authorId !== currentUser.uid && real.id) {
         notificationsService.createCommentNotification?.(
           postId, currentUser.uid, post.authorId, real.id, parentId ? 'reply' : 'comment'
-        ).catch(() => {});
+        ).catch((e) => console.warn('[Comments] comment notification failed', e?.message));
       }
       setReplyTarget(null);
     } catch (err) {
@@ -1324,7 +1332,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         const current = JSON.parse(localStorage.getItem(key) || '[]');
         current.unshift(optimistic);
         localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-      } catch {}
+      } catch (e) {
+        console.warn('Local comment cache write failed', e?.message);
+      }
       toast.success('Comment saved locally');
       setReplyTarget(null);
     }
@@ -1656,7 +1666,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 <div>
                   <h3 className="font-bold text-lg dark:text-white">Comments</h3>
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {post?.stats?.comments || 0} total
+                    {post?.stats?.comments == null ? '—' : post.stats.comments} total
                   </p>
                 </div>
               </div>

@@ -255,6 +255,8 @@ jobs:
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/firestoreRulesCoverage.test.js
+          src/__tests__/notificationCounterRuleShape.test.js
+          src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js
           src/__tests__/userServicePrivacyProjection.test.js
@@ -285,6 +287,7 @@ jobs:
           src/__tests__/reducerDispatchGuard.test.js
           src/__tests__/routeStateHandoffGuard.test.js
           src/__tests__/failOpenReadGuard.test.js
+          src/__tests__/silentWriteFailureGuard.test.js
           src/__tests__/falseSuccessToastGuard.test.js
           src/__tests__/spacesRosterWiringGuard.test.js
           src/__tests__/localContentCacheGuard.test.js
@@ -294,7 +297,9 @@ jobs:
           src/__tests__/subscriptionLifecycleGuard.test.js
           src/__tests__/orphanModuleGuard.test.js
           src/__tests__/noFabricatedData.test.js
+          src/__tests__/classNameInterpolationGuard.test.js
           src/__tests__/storageRulesDeploy.test.js
+          src/__tests__/storageRulesPathAlignment.test.js
           src/__tests__/postVisibilityEnforcement.test.js
           src/__tests__/liveMonetizationGuard.test.js
           src/__tests__/serverOnlyCollectionWriteGuard.test.js
@@ -310,6 +315,10 @@ jobs:
           src/__tests__/snapshotErrorHandling.test.js
           src/__tests__/routeIntegrityGuard.test.js
           src/__tests__/errorStateRenderedGuard.test.js
+          src/__tests__/silentReadFailureGuard.test.js
+          src/__tests__/sideEffectFailureGuard.test.js
+          src/__tests__/functionsSilentCatchGuard.test.js
+          src/__tests__/srcSilentCatchGuard.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
       # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the
@@ -321,6 +330,17 @@ jobs:
           --only firestore
           --project demo-arvdoul
           "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js src/__tests__/spacesRosterWiringGuard.test.js"
+
+      # Storage rules are a separate emulator. This boots it and runs the live
+      # half of the storage path-alignment guard: every canonical client upload
+      # path is ALLOWED for its owner and DENIED for a different user, and
+      # owner deletes succeed (N170).
+      - name: Run Storage rules path-alignment checks (emulator)
+        run: >-
+          npx firebase-tools emulators:exec
+          --only storage
+          --project demo-arvdoul
+          "npm run test -- --watchAll=false src/__tests__/storageRulesPathAlignment.test.js"
 
   # ========== SECURITY CHECK ==========
   security:

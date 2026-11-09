@@ -124,7 +124,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
     return {
       position: null,
-      followerCount: safePost.followerCount || 0,
+      // Unknown until the profile read resolves; a 0 here would claim the
+      // author has no followers.
+      followerCount: safePost.followerCount ?? null,
       isCreator: safePost.isCreator || false,
       isVerified: safePost.isVerified || false,
       creatorScore: null,
@@ -223,10 +225,12 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
           userService.getUserProfile(ownerId),
         ]);
         if (controller.signal.aborted || !mountedRef.current) return;
-        const score = profile?.creatorScore || Math.min(100, Math.floor((profile?.followerCount || 0) / 1000));
+        // A derived "score" from follower count is a fabricated metric; only a
+        // real creatorScore is shown, else the row stays hidden.
+        const score = typeof profile?.creatorScore === 'number' ? profile.creatorScore : null;
         const data = {
           position,
-          followerCount: profile?.followerCount || post.followerCount || 0,
+          followerCount: profile?.followerCount ?? post.followerCount ?? null,
           isCreator: profile?.isCreator || post.isCreator || false,
           isVerified: profile?.isVerified || post.isVerified || false,
           creatorScore: score,
@@ -347,7 +351,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
         shared = true;
       }
       if (shared) {
-        await callWithRetry(() => firestoreService.sharePost(post.id, currentUser.uid)).catch(() => {});
+        await callWithRetry(() => firestoreService.sharePost(post.id, currentUser.uid)).catch((e) => {
+          console.warn('[PostOptions] share not recorded', e?.message);
+        });
         debouncedAnalytics('post_option_click', { action: 'share', postId: post.id });
       }
     } catch (err) {
@@ -801,7 +807,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   <div className="flex items-center gap-3 text-sm mt-1 text-gray-500 dark:text-gray-400">
                     <span>@{post.authorUsername}</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1"><Users className="w-4 h-4" aria-label="Followers" /> {authorMeta.followerCount.toLocaleString()}</span>
+                    <span className="flex items-center gap-1"><Users className="w-4 h-4" aria-label="Followers" /> {authorMeta.followerCount == null ? '—' : authorMeta.followerCount.toLocaleString()}</span>
                   </div>
                   {authorMeta.isCreator && authorMeta.creatorScore > 0 && (
                     <div className="mt-2 flex items-center gap-2">

@@ -30,7 +30,9 @@ class PollService {
           this.votedHistory.set(key, val);
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      log.warn('Poll vote history read failed', { error: e?.message });
+    }
   }
 
   async _saveVotes() {
@@ -40,7 +42,9 @@ class PollService {
         obj[key] = val;
       });
       await localforage.setItem('arvdoul_polls_voted_history', obj);
-    } catch (_) {}
+    } catch (e) {
+      log.warn('Poll vote history write failed', { error: e?.message });
+    }
   }
 
   async getPolls(category = 'All') {

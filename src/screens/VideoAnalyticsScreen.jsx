@@ -21,6 +21,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import ErrorState from '../design-system/ErrorState.jsx';
 import { formatViewCount, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
 import { formatCoinsAsUsd } from '../shared/levelConfig.cjs';
 import GlassCard from '../components/UI/GlassCard';
@@ -35,8 +36,10 @@ const VideoAnalyticsScreen = () => {
   const { isDark } = useTheme();
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const { user } = useAuth();
 
   // Load analytics from analyticsService (Firestore-backed, sharded
@@ -44,18 +47,24 @@ const VideoAnalyticsScreen = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) { setLoading(false); return; }
       try {
         setLoading(true);
+        setLoadError(null);
         const { default: analyticsService } = await import('../services/analyticsService.js');
         const data = await analyticsService.getUserAnalytics(user.uid, timeRange === '7d' ? '7d' : timeRange === '28d' ? '30d' : '90d');
         if (cancelled) return;
         setAnalytics({
           overview: {
-            totalViews: data.totalViews || 0,
-            viewsChange: data.changes?.views || 0,
-            totalLikes: data.totalEngagement || 0,
-            likesChange: data.changes?.engagement || 0,
+            // An absent total is unknown (rendered '—'), not a measured zero.
+            totalViews: typeof data.totalViews === 'number' ? data.totalViews : null,
+            // A change with no previous period (or a zero baseline) is unknown
+            // (the badge hides), never a fabricated "0%".
+            viewsChange: typeof data.changes?.views === 'number' ? data.changes.views : null,
+            // `totalEngagement` is not incremented server-side; an absent
+            // value is unknown (rendered '—'), not a measured zero.
+            totalLikes: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
+            likesChange: typeof data.changes?.engagement === 'number' ? data.changes.engagement : null,
             // Profile analytics tracks a single engagement total; there is no
             // per-type comment/share/watch-time breakdown, so report those as
             // unavailable (null) rather than duplicating the engagement number.
@@ -72,21 +81,25 @@ const VideoAnalyticsScreen = () => {
             hasData: Boolean(data.hasData),
           },
           revenue: {
-            total: data.coinsEarned || 0,
+            total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null,
             tips: null,
             subscriptions: null,
             payPerView: null,
             gifts: null,
-            change: 0,
+            // The period-over-period revenue change is only known when a real
+            // previous period exists; otherwise it is unknown (badge hides).
+            change: typeof data.changes?.coins === 'number' ? data.changes.coins : null,
           },
           videos: (data.topPosts || []).map((p, i) => ({
             id: p.id || `v-${i}`,
             title: p.caption || p.content?.slice(0, 40) || `Video ${i + 1}`,
             thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
-            views: p.views || 0,
-            likes: p.likeCount || 0,
-            comments: p.commentCount || 0,
-            shares: p.shareCount || 0,
+            // Post engagement lives under `stats`; the top-level fields are
+            // never written, so an absent count is unknown ('—'), not 0.
+            views: typeof (p.stats?.views ?? p.views) === 'number' ? (p.stats?.views ?? p.views) : null,
+            likes: typeof (p.stats?.likes ?? p.likeCount) === 'number' ? (p.stats?.likes ?? p.likeCount) : null,
+            comments: typeof (p.stats?.comments ?? p.commentCount) === 'number' ? (p.stats?.comments ?? p.commentCount) : null,
+            shares: typeof (p.stats?.shares ?? p.shareCount) === 'number' ? (p.stats?.shares ?? p.shareCount) : null,
             watchTime: null,
             completionRate: null,
             earnings: null,
@@ -100,7 +113,9 @@ const VideoAnalyticsScreen = () => {
           },
         });
       } catch (err) {
-        console.error('Failed to load analytics:', err);
+        // A failed read must not read as "No analytics available yet" — that
+        // tells the creator they have no data when the fetch actually failed.
+        if (!cancelled) setLoadError(err?.message || 'Could not load your analytics.');
         if (!cancelled) setAnalytics(null);
       } finally {
         if (!cancelled) setLoading(false);
@@ -108,7 +123,7 @@ const VideoAnalyticsScreen = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid, timeRange]);
+  }, [user?.uid, timeRange, reloadNonce]);
 
   
 
@@ -172,9 +187,21 @@ const VideoAnalyticsScreen = () => {
 
       {/* Content */}
       <div className="max-w-5xl mx-auto p-4">
-        {!analytics && (
+        {!analytics && loading && (
+          <div className="text-center py-16 text-white/50" role="status" aria-label="Loading analytics">
+            Loading analytics...
+          </div>
+        )}
+        {!analytics && !loading && loadError && (
+          <ErrorState
+            title="Could not load your analytics"
+            message={loadError}
+            onRetry={() => setReloadNonce((n) => n + 1)}
+          />
+        )}
+        {!analytics && !loading && !loadError && (
           <div className="text-center py-16 text-white/50">
-            {loading ? 'Loading analytics...' : 'No analytics available yet. Publish videos to see insights.'}
+            No analytics available yet. Publish videos to see insights.
           </div>
         )}
         {/* Overview Tab */}
@@ -507,13 +534,13 @@ const RevenueTab = ({ revenue }) => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [payout, setPayout] = useState({ loading: true, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+  const [payout, setPayout] = useState({ loading: true, settings: null, pendingCoins: null, lastPayoutCoins: null });
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!user?.uid) {
-        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: null, lastPayoutCoins: null });
         return;
       }
       try {
@@ -529,7 +556,10 @@ const RevenueTab = ({ revenue }) => {
         if (cancelled) return;
 
         const settings = settingsRes.status === 'fulfilled' ? settingsRes.value : null;
-        const pendingCoins = walletRes.status === 'fulfilled' ? (walletRes.value?.pendingCoins || 0) : 0;
+        // A failed wallet read is unknown, not a $0.00 pending payout.
+        const pendingCoins = walletRes.status === 'fulfilled'
+          ? (walletRes.value?.pendingCoins ?? null)
+          : null;
 
         let lastPayoutCoins = null;
         const historyItems = historyRes.status === 'fulfilled' ? historyRes.value?.items : null;
@@ -542,7 +572,7 @@ const RevenueTab = ({ revenue }) => {
 
         setPayout({ loading: false, settings, pendingCoins, lastPayoutCoins });
       } catch (err) {
-        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: null, lastPayoutCoins: null });
       }
     };
     load();
@@ -569,7 +599,7 @@ const RevenueTab = ({ revenue }) => {
         animate={{ opacity: 1, scale: 1 }}
         className="p-8 rounded-3xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 backdrop-blur-xl text-center"
       >
-        <p className="text-white/60 mb-2">Total Coins Earned</p>
+        <p className="text-white/60 mb-2">Total Earnings (USD)</p>
         <p className="text-5xl font-bold text-white mb-2">
           {formatUsd(revenue.total)}
         </p>

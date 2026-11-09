@@ -161,17 +161,26 @@ class OfflineMonetizationQueue {
   async add(operation, params) {
     const db = await this.dbPromise;
     await db.add('queue', { operation, params, timestamp: Date.now() });
-    // Also write to Firestore outbox (backup)
-    if (this.service && this.service.db) {
+    // Also write to Firestore outbox (backup). firestore.rules authorises the
+    // create on `userId == uid()`, so the owner must come from the live session
+    // — `params` (packageId/paymentMethodId/placement/…) never carries it, and a
+    // null userId would be silently denied.
+    const ownerUid = auth?.currentUser?.uid || params?.userId || null;
+    if (ownerUid && this.service && this.service.db) {
       try {
         await addDoc(collection(this.service.db, 'monetization_outbox'), {
           operation,
           params,
           createdAt: serverTimestamp(),
           status: 'pending',
-          userId: params.userId || null,
+          userId: ownerUid,
         });
-      } catch (e) { /* silent */ }
+      } catch (e) {
+        // The local IndexedDB copy still holds the op, so a failed Firestore
+        // backup is not fatal — but log it so a persistent rules/offline failure
+        // is visible rather than silently losing the durable backup.
+        log.warn('monetization_outbox backup write failed', { operation, error: e?.message });
+      }
     }
     this.sync();
   }
@@ -341,17 +350,21 @@ class MonetizationService {
     }
   }
 
+  // Returns a number when the balance is known, `null` when it could not be
+  // read. Callers already gate on `typeof bal === 'number'`; the previous
+  // `return 0` on failure told every screen the wallet was empty.
   async getBalance(userId) {
-    if (!userId) return 0;
+    if (!userId) return null;
     await this._ensureInitialized();
     try {
       const userRef = doc(this.db, 'users', userId);
       const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return 0;
-      return userSnap.data().coins || 0;
+      if (!userSnap.exists()) return null;
+      const coins = userSnap.data().coins;
+      return coins == null ? null : Number(coins);
     } catch (e) {
       log.error('Failed to get balance:', e);
-      return 0;
+      return null;
     }
   }
 
@@ -425,6 +438,9 @@ class MonetizationService {
   async getUserPosition(userId, gender = 'other') {
     await this._ensureInitialized();
     const balance = await this.getBalance(userId);
+    // An unknown balance cannot be ranked; returning the lowest title would
+    // fabricate a standing the ledger never confirmed.
+    if (balance === null) return null;
     const thresholds = this.config.POSITION_THRESHOLDS;
 
     if (balance >= thresholds.KING) {
@@ -450,16 +466,22 @@ class MonetizationService {
 
   async getUserPopularityPosition(userId) {
     await this._ensureInitialized();
-    let followers = 0;
+    // `null` means the follower count could not be resolved; the lowest tier
+    // ("Community Member") would be a fabricated standing.
+    let followers = null;
     if (userId) {
       try {
         const userRef = doc(this.db, 'users', userId);
         const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) followers = userSnap.data().followerCount || 0;
+        if (userSnap.exists()) {
+          const raw = userSnap.data().followerCount;
+          followers = raw == null ? null : Number(raw);
+        }
       } catch (e) {
         log.error('Failed to get user popularity:', e);
       }
     }
+    if (followers === null) return null;
     const thresholds = this.config.POPULARITY_THRESHOLDS;
     if (followers >= thresholds.LEGEND) return { title: 'Legend', emoji: '🏆', minFollowers: thresholds.LEGEND, type: 'popularity' };
     if (followers >= thresholds.ICON) return { title: 'Icon', emoji: '⭐', minFollowers: thresholds.ICON, type: 'popularity' };
@@ -605,6 +627,7 @@ class MonetizationService {
       const result = await retryOperation(() => this.cfGetSponsoredSearchResult({ userId, query, context }));
       return result.data.sponsoredResult;
     } catch (err) {
+      log.warn('Sponsored search result unavailable', { error: err?.message });
       return null;
     }
   }
@@ -692,7 +715,9 @@ class MonetizationService {
       try {
         const subDoc = await getDoc(doc(this.db, 'subscriptions', uid));
         if (subDoc.exists()) return subDoc.data();
-      } catch (e) {}
+      } catch (e) {
+        log.warn('Subscription fallback read failed', { uid, error: e?.message });
+      }
       return { active: false, tier: null };
     }
   }
@@ -733,7 +758,9 @@ class MonetizationService {
       try {
         const snap = await getDoc(doc(this.db, 'payout_settings', uid));
         if (snap.exists()) return snap.data();
-      } catch (e) {}
+      } catch (e) {
+        log.warn('Payout-settings fallback read failed', { uid, error: e?.message });
+      }
       // Honest unconfigured state — never claim an active payout account
       // that does not exist.
       return { enabled: false, accountStatus: 'unconfigured', currency: 'USD' };
@@ -825,7 +852,8 @@ class MonetizationService {
       );
       // Social loop: notify the post author + award gift_received XP
       // (best-effort, never breaks the gift).
-      this._afterGiftSent(senderId, postId, giftType, cost).catch(() => {});
+      this._afterGiftSent(senderId, postId, giftType, cost).catch((e) =>
+        log.warn('Gift follow-up (XP/notification) failed', { senderId, postId, error: e?.message }));
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO

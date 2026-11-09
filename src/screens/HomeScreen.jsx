@@ -171,7 +171,9 @@ async function saveScrollPosition(userId, scrollTop) {
   try {
     const db = await getCacheDB();
     await db.put('scrollPosition', { userId, scrollTop, timestamp: Date.now() });
-  } catch (e) { /* silent */ }
+  } catch (e) {
+    console.warn('[Home] scroll position persist failed', e);
+  }
 }
 async function getScrollPosition(userId) {
   try {
@@ -246,7 +248,9 @@ async function processOptimisticQueue(userId) {
       i--;
       changed = true;
     } catch (err) {
-      // retry later
+      // Kept in the queue for the next drain, but a permanently failing action
+      // (e.g. a rules denial) would otherwise retry forever in silence.
+      console.warn('[Home] queued action replay failed; will retry', { action: item.action, postId: item.postId, error: err?.message });
     }
   }
   if (changed) await persistOptimisticQueue();
@@ -722,7 +726,8 @@ export default function HomeScreen() {
           localStorage.setItem(`arvdoul_coins_ts_${user.uid}`, String(Date.now()));
         }
       } catch (err) {
-        // graceful offline fallback
+        // Keep the last known balance, but record that it is stale.
+        console.warn('[Home] coin balance refresh failed; showing cached value', { error: err?.message });
       }
     };
     fetchBalance();
@@ -740,7 +745,8 @@ export default function HomeScreen() {
       const ad = await getAd('home', user.uid, {});
       setRewardAd(ad || null);
       if (!ad) toast.info('No sponsored ads available right now.');
-    } catch {
+    } catch (err) {
+      console.warn('HomeScreen: failed to fetch rewarded ad', err);
       setRewardAd(null);
     } finally {
       setRewardAdLoading(false);
@@ -777,7 +783,9 @@ export default function HomeScreen() {
       }
       if (typeof result?.newBalance === 'number') {
         setUserCoins(result.newBalance);
-        try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch {}
+        try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch (e) {
+          console.warn('Coin balance cache write failed', e?.message);
+        }
       }
       triggerHaptic('success');
       toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
@@ -963,7 +971,9 @@ export default function HomeScreen() {
               try {
                 const raw = localStorage.getItem(LOCAL_POSTS_KEY);
                 if (raw) localPosts = JSON.parse(raw);
-              } catch {}
+              } catch (e) {
+                console.warn('Local post cache read failed', e?.message);
+              }
               if (Array.isArray(localPosts) && localPosts.length > 0) {
                 const existingIds = new Set(newPosts.map(p => p.id));
                 // Community posts (visibility 'community') belong to their
@@ -1185,7 +1195,9 @@ export default function HomeScreen() {
         feedRuntimeRef.current.insertedIds.add(hydrated.id);
         try {
           virtuosoRef.current?.scrollToIndex({ index: 0, align: 'start', behavior: 'smooth' });
-        } catch {}
+        } catch {
+          /* the list may not be measured yet; the item is still prepended */
+        }
       }
     };
     window.addEventListener('arvdoul:new_post_published', handleNewPost);

@@ -38,6 +38,8 @@ const formatDuration = (seconds) => {
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
   const [reels, setReels] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState(null);
+  const [feedNonce, setFeedNonce] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const cursorRef = useRef(null);
@@ -83,12 +85,13 @@ const formatDuration = (seconds) => {
       music: v.audio?.title || v.music || '',
       videoUrl: v.signedUrl || v.videoUrl || '',
       thumbnailUrl: v.thumbnailUrl || '',
+      // An absent stat is unknown (rendered '—'), never a fabricated 0.
       stats: {
-        likes: v.likes ?? v.stats?.likes ?? 0,
-        comments: v.comments ?? v.stats?.comments ?? 0,
-        shares: v.shares ?? v.stats?.shares ?? 0,
-        saves: v.saves ?? v.stats?.saves ?? 0,
-        gifts: v.gifts ?? v.stats?.gifts ?? 0,
+        likes: v.likes ?? v.stats?.likes ?? null,
+        comments: v.comments ?? v.stats?.comments ?? null,
+        shares: v.shares ?? v.stats?.shares ?? null,
+        saves: v.saves ?? v.stats?.saves ?? null,
+        gifts: v.gifts ?? v.stats?.gifts ?? null,
       },
       duration: v.duration || 0,
       isLiked: Boolean(v.isLiked),
@@ -105,6 +108,7 @@ const formatDuration = (seconds) => {
     }
     try {
       setFeedLoading(true);
+      setFeedError(null);
       const res = await videoService.getVideoFeed(user.uid, {
         feedType: feedType === 'following' ? 'following' : 'for_you',
         limit: 10,
@@ -133,7 +137,9 @@ const formatDuration = (seconds) => {
       }
       setReels(mapped);
     } catch (err) {
-      console.error('Failed to load reels:', err);
+      // A failed read must not render the "No Sparks Yet" empty state, which
+      // claims the platform has no content rather than that the fetch failed.
+      setFeedError(err?.message || 'Could not load Sparks.');
       setReels([]);
       setHasMore(false);
       cursorRef.current = null;
@@ -141,6 +147,12 @@ const formatDuration = (seconds) => {
       setFeedLoading(false);
     }
   }, [user?.uid, targetReelId, mapVideoToReel]);
+
+  // Retry trigger for the error state below.
+  useEffect(() => {
+    if (feedNonce === 0) return;
+    loadReels(activeTab);
+  }, [feedNonce, activeTab, loadReels]);
 
   // Append the next page of reels so the feed does not stop at 10 videos.
   const loadMoreReels = useCallback(async () => {
@@ -243,7 +255,7 @@ const formatDuration = (seconds) => {
     const wasLiked = reel.isLiked;
     patchReel(reel.id, {
       isLiked: !wasLiked,
-      stats: { ...reel.stats, likes: Math.max(0, reel.stats.likes + (wasLiked ? -1 : 1)) },
+      stats: { ...reel.stats, likes: reel.stats.likes == null ? null : Math.max(0, reel.stats.likes + (wasLiked ? -1 : 1)) },
     });
     try {
       const res = await videoService.likeVideo(reel.id);
@@ -251,7 +263,7 @@ const formatDuration = (seconds) => {
       const serverDelta = serverLiked === wasLiked ? 0 : (serverLiked ? 1 : -1);
       patchReel(reel.id, {
         isLiked: serverLiked,
-        stats: { ...reel.stats, likes: Math.max(0, reel.stats.likes + serverDelta) },
+        stats: { ...reel.stats, likes: reel.stats.likes == null ? null : Math.max(0, reel.stats.likes + serverDelta) },
       });
     } catch (err) {
       patchReel(reel.id, { isLiked: wasLiked, stats: reel.stats });
@@ -269,7 +281,7 @@ const formatDuration = (seconds) => {
     const wasSaved = reel.isSaved;
     patchReel(reel.id, {
       isSaved: !wasSaved,
-      stats: { ...reel.stats, saves: Math.max(0, reel.stats.saves + (wasSaved ? -1 : 1)) },
+      stats: { ...reel.stats, saves: reel.stats.saves == null ? null : Math.max(0, reel.stats.saves + (wasSaved ? -1 : 1)) },
     });
     try {
       if (wasSaved) await videoService.unsaveVideo(reel.id, user.uid);
@@ -358,7 +370,7 @@ const formatDuration = (seconds) => {
     try {
       const res = await videoService.shareVideo(reel.id, 'arvdoul');
       if (res?.success) {
-        patchReel(reel.id, { stats: { ...reel.stats, shares: (reel.stats?.shares || 0) + 1 } });
+        if (reel.stats.shares != null) patchReel(reel.id, { stats: { ...reel.stats, shares: reel.stats.shares + 1 } });
       }
     } catch { /* counter stays authoritative */ }
   };
@@ -405,7 +417,11 @@ const formatDuration = (seconds) => {
     return () => {
       const seconds = Math.round((Date.now() - reelViewStartRef.current) / 1000);
       reelViewStartRef.current = null;
-      if (seconds >= 1) videoService.recordVideoView(activeReelId, { duration: seconds }).catch(() => {});
+      if (seconds >= 1) {
+        videoService.recordVideoView(activeReelId, { duration: seconds }).catch((e) => {
+          console.warn('[Reels] view not recorded', e?.message);
+        });
+      }
     };
   }, [activeReelId, user?.uid]);
 
@@ -418,6 +434,27 @@ const formatDuration = (seconds) => {
   }
 
   if (!feedLoading && (!reels || reels.length === 0 || !currentReel)) {
+    if (feedError) {
+      // The reel surface is always black; render a dark-native error block
+      // rather than the light-themed ErrorState (illegible here).
+      return (
+        <div className="h-full w-full bg-black flex flex-col items-center justify-center text-white p-6 text-center">
+          <div role="alert" className="max-w-sm space-y-4">
+            <div aria-hidden="true" className="w-14 h-14 mx-auto rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center text-2xl">
+              ⚠️
+            </div>
+            <h2 className="text-xl font-black">Could not load Sparks</h2>
+            <p className="text-white/60 text-sm">{feedError}</p>
+            <button
+              onClick={() => setFeedNonce((n) => n + 1)}
+              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="h-full w-full bg-black flex flex-col items-center justify-center text-white p-6 text-center">
         <Sparkles className="w-16 h-16 text-yellow-400 mb-4 animate-pulse" />
@@ -656,7 +693,7 @@ const formatDuration = (seconds) => {
             <Heart className={cn("w-6 h-6", currentReel.isLiked && "fill-current text-rose-500")} />
           </div>
           <span className="text-[11px] font-bold drop-shadow">
-            {(currentReel.stats.likes || 0).toLocaleString()}
+            {currentReel.stats.likes == null ? '—' : currentReel.stats.likes.toLocaleString()}
           </span>
         </button>
 
@@ -669,7 +706,7 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
             <MessageCircle className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{(currentReel.stats.comments || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.comments == null ? '—' : currentReel.stats.comments.toLocaleString()}</span>
         </button>
 
         {/* Share Button */}
@@ -681,7 +718,7 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
             <Share2 className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{(currentReel.stats.shares || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.shares == null ? '—' : currentReel.stats.shares.toLocaleString()}</span>
         </button>
 
         {/* Bookmark / Save */}
@@ -696,7 +733,7 @@ const formatDuration = (seconds) => {
           )}>
             <Bookmark className={cn("w-6 h-6", currentReel.isSaved && "fill-current text-amber-400")} />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{(currentReel.stats.saves || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.saves == null ? '—' : currentReel.stats.saves.toLocaleString()}</span>
         </button>
 
         {/* Coin Gift Button */}
@@ -708,7 +745,7 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/40 flex items-center justify-center shadow-arvdoul-glow">
             <Gift className="w-6 h-6 text-amber-400 animate-bounce" />
           </div>
-          <span className="text-[11px] font-black text-amber-400 drop-shadow">{(currentReel.stats.gifts || 0).toLocaleString()}</span>
+          <span className="text-[11px] font-black text-amber-400 drop-shadow">{currentReel.stats.gifts == null ? '—' : currentReel.stats.gifts.toLocaleString()}</span>
         </button>
 
         {/* More Options */}

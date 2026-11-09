@@ -123,7 +123,9 @@ export default function PassportScreen() {
         color: { dark: '#060816', light: '#ffffff' }
       })
         .then(setQrDataUrl)
-        .catch(() => {});
+        .catch((e) => {
+          console.warn('Passport QR generation failed', e?.message);
+        });
     }
   }, [passport?.passportUrl]);
 

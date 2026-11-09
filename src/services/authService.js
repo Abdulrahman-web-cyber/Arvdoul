@@ -145,6 +145,9 @@ class ProductionAuthService {
       const data = await res.json();
       return { allowed: data.allowed, waitTime: data.waitTime || 0 };
     } catch (e) {
+      // The server rate limiter is the authority; if it cannot be reached we
+      // fail open (the client guard still applies) but record the outage.
+      logger.warn('Server auth rate-limit check unreachable', { action, error: e?.message });
       return { allowed: true };
     }
   }
@@ -196,13 +199,17 @@ class ProductionAuthService {
       }
       localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
+      // Client backoff bookkeeping; storage may be full or disabled.
+      logger.warn('Could not persist failed-login attempt counter', { error: e?.message });
     }
   }
 
   _clearRateLimit(identifier) {
     try {
       localStorage.removeItem(this._getRateLimitKey(identifier));
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Could not clear failed-login counter', { error: e?.message });
+    }
   }
 
   _getSignupStep1Data() {
@@ -343,6 +350,7 @@ class ProductionAuthService {
         timestamp: Date.now()
       }));
     } catch (e) {
+      logger.warn('Could not persist pending profile', { uid, error: e?.message });
     }
   }
 
@@ -364,7 +372,9 @@ class ProductionAuthService {
   _clearPendingProfile(uid) {
     try {
       localStorage.removeItem(`pending_profile_${uid}`);
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Could not clear pending profile', { uid, error: e?.message });
+    }
   }
 
   async signInWithEmailPassword(email, password) {
@@ -391,6 +401,7 @@ class ProductionAuthService {
       try {
         profile = await getUserProfile(user.uid);
       } catch (err) {
+        logger.warn('Profile lookup after email verification failed', { uid: user.uid, error: err?.message });
       }
 
       if (!profile) {
@@ -402,6 +413,7 @@ class ProductionAuthService {
             this._clearPendingProfile(user.uid);
             logger.warn('// Pending profile recovered');
           } catch (e) {
+            logger.warn('Pending profile recovery failed', { uid: user.uid, error: e?.message });
           }
         }
       }
@@ -452,14 +464,20 @@ class ProductionAuthService {
       if (user.emailVerified) {
         const { getUserProfile, createUserProfile } = await import('./userService.js');
         let profile = null;
-        try { profile = await getUserProfile(user.uid); } catch (e) {}
+        try { profile = await getUserProfile(user.uid); } catch (e) {
+          logger.warn('Profile lookup after email verification failed', { uid: user.uid, error: e?.message });
+        }
         if (!profile) {
           const pending = this._getPendingProfile(user.uid);
           if (pending) {
             try {
               await createUserProfile(user.uid, pending);
               this._clearPendingProfile(user.uid);
-            } catch (e) {}
+            } catch (e) {
+              // The account is verified but has no profile document; the user
+              // would land in onboarding with nothing persisted. Log it.
+              logger.warn('Pending profile creation after verification failed', { uid: user.uid, error: e?.message });
+            }
           }
         }
       }
@@ -636,13 +654,17 @@ class ProductionAuthService {
         try {
           const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
           markOnboardingRequired(user.uid, { method: 'phone', isSignup: true, step1Data: step1 });
-        } catch (e) {}
+        } catch (e) {
+          logger.warn('markOnboardingRequired failed for phone signup', { uid: user.uid, error: e?.message });
+        }
       }
 
       let profile = null;
       try {
         profile = await getUserProfile(user.uid);
-      } catch (e) {}
+      } catch (e) {
+        logger.warn('Profile lookup during phone auth failed', { uid: user.uid, error: e?.message });
+      }
 
       const isNewUser = !profile;
       const isLoginMode = Boolean(optionalStep1Data?.isLogin);
@@ -691,7 +713,9 @@ class ProductionAuthService {
           logger.warn('// Profile created in Firestore for Phone user with username:', username);
           try {
             profile = await getUserProfile(user.uid);
-          } catch (e) {}
+          } catch (e) {
+            logger.warn('Profile re-read after phone creation failed', { uid: user.uid, error: e?.message });
+          }
         } catch (profileError) {
           logger.error('❌ Profile creation failed for Phone user', profileError);
           this._storePendingProfile(user.uid, {
@@ -730,7 +754,9 @@ class ProductionAuthService {
         if (displayName && user.displayName !== displayName) {
           await updateProfile(user, { displayName });
         }
-      } catch (e) {}
+      } catch (e) {
+        logger.warn('Display-name update after phone auth failed', { uid: user.uid, error: e?.message });
+      }
 
       // If user came with step 1 names, profile completion in setup-profile is strictly required
       const isComplete = hasStep1Names ? false : (profile ? (profile.isProfileComplete !== false) : false);
@@ -817,7 +843,9 @@ class ProductionAuthService {
         if (Object.keys(updateData).length > 0) {
           try {
             await updateProfile(user, updateData);
-          } catch (e) {}
+          } catch (e) {
+            logger.warn('Google display-name/photo update failed', { uid: user.uid, error: e?.message });
+          }
         }
       }
 
@@ -825,7 +853,9 @@ class ProductionAuthService {
       let profile = null;
       try {
         profile = await getUserProfile(user.uid);
-      } catch (e) {}
+      } catch (e) {
+        logger.warn('Profile lookup during Google auth failed', { uid: user.uid, error: e?.message });
+      }
 
       const isAccountNew = isNewUser || !profile;
       let profileCreated = false;
@@ -871,10 +901,14 @@ class ProductionAuthService {
           try {
             const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
             markOnboardingRequired(user.uid, { method: 'google', isSignup: true, step1Data: step1 });
-          } catch (e) {}
+          } catch (e) {
+            logger.warn('markOnboardingRequired failed for Google signup', { uid: user.uid, error: e?.message });
+          }
           try {
             profile = await getUserProfile(user.uid);
-          } catch (e) {}
+          } catch (e) {
+            logger.warn('Profile re-read after Google creation failed', { uid: user.uid, error: e?.message });
+          }
         } catch (profileError) {
           logger.error('❌ Profile creation failed', profileError);
           this._storePendingProfile(user.uid, {
@@ -938,7 +972,9 @@ class ProductionAuthService {
       // Clean existing verifier instance safely
       const existing = this.recaptchaVerifiers.get(containerId);
       if (existing && typeof existing.clear === 'function') {
-        try { existing.clear(); } catch(e) {}
+        try { existing.clear(); } catch(e) {
+          logger.debug('reCAPTCHA verifier clear failed', { error: e?.message });
+        }
       }
       this.recaptchaVerifiers.delete(containerId);
 
@@ -996,10 +1032,13 @@ class ProductionAuthService {
     try {
       const verifier = this.recaptchaVerifiers.get(containerId);
       if (verifier && typeof verifier.clear === 'function') {
-        try { verifier.clear(); } catch(e) {}
+        try { verifier.clear(); } catch(e) {
+          logger.debug('reCAPTCHA verifier clear failed', { error: e?.message });
+        }
       }
       this.recaptchaVerifiers.delete(containerId);
     } catch (e) {
+      logger.warn('reCAPTCHA cleanup failed', { containerId, error: e?.message });
     } finally {
       const container = document.getElementById(containerId);
       if (container) {

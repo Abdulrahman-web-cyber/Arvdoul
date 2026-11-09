@@ -32,10 +32,10 @@ export default function CreatorPayoutScreen() {
   const isDark = theme === 'dark';
 
   const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalance] = useState(null);
   const [payouts, setPayouts] = useState([]);
-  const [earnings, setEarnings] = useState({ gifts: 0, ads: 0, other: 0 });
-  const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(0);
+  const [earnings, setEarnings] = useState({ gifts: null, ads: null, other: null });
+  const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(null);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
 
@@ -63,23 +63,33 @@ export default function CreatorPayoutScreen() {
       ]);
 
       if (balRes.status === 'fulfilled') {
+        // `getBalance` returns null when the balance is unknown; mapping that
+        // to 0 claimed an empty wallet and blocked every payout request.
         const b = balRes.value;
-        setBalance(typeof b === 'number' ? b : Number(b?.coins || b?.balance || 0));
+        const resolved = typeof b === 'number' ? b : (b?.coins ?? b?.balance ?? null);
+        setBalance(resolved == null ? null : Number(resolved));
       }
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
         setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
       // Real earnings breakdown, summed from the coin ledger — not a fixed ratio.
-      const earned = earnRes.status === 'fulfilled' && Array.isArray(earnRes.value) ? earnRes.value : [];
-      setEarnings({
-        gifts: sumCredits(earned, GIFT_REASONS),
-        ads: sumCredits(earned, AD_REASONS),
-        other: sumCredits(earned, OTHER_EARNING_REASONS),
-      });
-      const spent = spendRes.status === 'fulfilled' && Array.isArray(spendRes.value) ? spendRes.value : [];
-      setLifetimeWithdrawnCoins(spent
-        .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
-        .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
+      // A failed ledger read leaves the figures unknown (rendered "—"), never a
+      // fabricated "0 Coins earned".
+      if (earnRes.status === 'fulfilled' && Array.isArray(earnRes.value)) {
+        const earned = earnRes.value;
+        setEarnings({
+          gifts: sumCredits(earned, GIFT_REASONS),
+          ads: sumCredits(earned, AD_REASONS),
+          other: sumCredits(earned, OTHER_EARNING_REASONS),
+        });
+      }
+      // A failed spend-ledger read leaves lifetime withdrawals unknown ("—"),
+      // never a fabricated "$0.00 withdrawn".
+      if (spendRes.status === 'fulfilled' && Array.isArray(spendRes.value)) {
+        setLifetimeWithdrawnCoins(spendRes.value
+          .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
+          .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
+      }
       // payout account status (never simulated).
       try {
         const settings = await monSvc.getPayoutSettings();
@@ -137,6 +147,10 @@ export default function CreatorPayoutScreen() {
       toast.error(`Minimum payout is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${formatCoinsAsUsd(MIN_WITHDRAWAL_COINS)})`);
       return;
     }
+    if (balance == null) {
+      toast.error('Your balance is unavailable right now. Please retry in a moment.');
+      return;
+    }
     if (amount > balance) {
       toast.error('Withdrawal amount exceeds your current balance.');
       return;
@@ -170,9 +184,9 @@ export default function CreatorPayoutScreen() {
     }
   };
 
-  const estimatedUsd = coinsToUsd(balance).toFixed(2);
-  const eligibleForPayout = balance >= MIN_WITHDRAWAL_COINS;
-  const progressPercent = Math.min(100, Math.round((balance / MIN_WITHDRAWAL_COINS) * 100));
+  const estimatedUsd = balance == null ? null : coinsToUsd(balance).toFixed(2);
+  const eligibleForPayout = balance != null && balance >= MIN_WITHDRAWAL_COINS;
+  const progressPercent = balance == null ? 0 : Math.min(100, Math.round((balance / MIN_WITHDRAWAL_COINS) * 100));
 
   return (
     <div className={cn(
@@ -226,14 +240,14 @@ export default function CreatorPayoutScreen() {
               <span className="text-xs uppercase font-bold tracking-widest text-violet-200">Available Creator Balance</span>
               <div className="flex items-baseline gap-3 mt-1">
                 <h2 className="text-4xl font-extrabold tracking-tight font-display">
-                  {balance.toLocaleString()}
+                  {balance == null ? '—' : balance.toLocaleString()}
                 </h2>
                 <span className="text-lg font-medium text-violet-200">Coins</span>
-                <span className="text-xl font-semibold text-emerald-300 ml-2">≈ ${estimatedUsd} USD</span>
+                <span className="text-xl font-semibold text-emerald-300 ml-2">≈ {estimatedUsd == null ? '—' : `$${estimatedUsd}`} USD</span>
               </div>
               <p className="text-xs text-violet-200 mt-2 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-300" />
-                Double-entry verified ledger · 100% secure payouts
+                Server-verified ledger · payouts reviewed before settlement
               </p>
             </div>
 
@@ -314,7 +328,7 @@ export default function CreatorPayoutScreen() {
               <span>Gifts & Tips</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             </div>
-            <p className="text-xl font-bold">{earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold">{earnings.gifts == null ? '—' : earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
           </div>
 
           <div className={cn(
@@ -325,7 +339,7 @@ export default function CreatorPayoutScreen() {
               <span>Ad Revenue Share</span>
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
-            <p className="text-xl font-bold">{earnings.ads.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold">{earnings.ads == null ? '—' : earnings.ads.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
           </div>
 
           <div className={cn(
@@ -336,7 +350,7 @@ export default function CreatorPayoutScreen() {
               <span>Lifetime Withdrawn</span>
               <Clock className="w-3.5 h-3.5 text-blue-500" />
             </div>
-            <p className="text-xl font-bold">{formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
+            <p className="text-xl font-bold">{lifetimeWithdrawnCoins == null ? '—' : formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
           </div>
         </div>
 
@@ -459,7 +473,7 @@ export default function CreatorPayoutScreen() {
                   <input
                     type="number"
                     min={MIN_WITHDRAWAL_COINS}
-                    max={balance}
+                    max={balance ?? undefined}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
                     placeholder={`Min: ${MIN_WITHDRAWAL_COINS}`}

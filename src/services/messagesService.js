@@ -335,7 +335,9 @@ class OfflineMessageQueue {
     this.maxAttempts = 5;
     this.statusListeners = new Set();
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
-      navigator.serviceWorker.ready.then(reg => reg.sync.register('message-queue').catch(() => {}));
+      navigator.serviceWorker.ready.then(reg => reg.sync.register('message-queue').catch((e) => {
+        logger.debug('Background sync registration failed', { error: e?.message });
+      }));
     }
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
@@ -716,7 +718,9 @@ class UltimateMessagingService {
       if (now - last < 2000) {
         // Re-arm the expiry timer so the indicator stays fresh without writing.
         const t = setTimeout(async () => {
-          try { await this.rt.remove(typingRef); } catch (e) {}
+          try { await this.rt.remove(typingRef); } catch (e) {
+            logger.debug('Typing indicator clear failed', { error: e?.message });
+          }
           this.typingTimers.delete(timerKey);
         }, MESSAGING_CONFIG.PERFORMANCE.TYPING_INDICATOR_TIMEOUT);
         this.typingTimers.set(timerKey, t);
@@ -726,7 +730,9 @@ class UltimateMessagingService {
       await this.rt.set(typingRef, { isTyping: true, timestamp: Date.now() });
       this.rt.onDisconnect(typingRef).remove();
       const timer = setTimeout(async () => {
-        try { await this.rt.remove(typingRef); } catch (e) {}
+        try { await this.rt.remove(typingRef); } catch (e) {
+          logger.debug('Typing indicator clear failed', { error: e?.message });
+        }
         this.typingTimers.delete(timerKey);
       }, MESSAGING_CONFIG.PERFORMANCE.TYPING_INDICATOR_TIMEOUT);
       this.typingTimers.set(timerKey, timer);
@@ -1123,7 +1129,9 @@ class UltimateMessagingService {
       }
     }
 
-    if (MESSAGING_CONFIG.RATE_LIMITING.ENABLED) this._recordRateLimit(currentUser.uid).catch(() => {});
+    if (MESSAGING_CONFIG.RATE_LIMITING.ENABLED) this._recordRateLimit(currentUser.uid).catch((e) => {
+      logger.warn('Message rate-limit record failed', { uid: currentUser.uid, error: e?.message });
+    });
 
     const idempotencyKey = options.idempotencyKey || await this._generateIdempotencyKey(messageData, currentUser.uid, conversationId);
     if (MESSAGING_CONFIG.DEDUPLICATION.ENABLED) {
@@ -1142,7 +1150,7 @@ class UltimateMessagingService {
     const validated = await this._validateMessage(messageData, conversationId, currentUser.uid);
     let mediaInfo = null;
     if (this._isMediaMessage(validated.type) && validated.media?.file) {
-      mediaInfo = await this._uploadMessageMedia(idempotencyKey, validated.media.file, currentUser.uid, options);
+      mediaInfo = await this._uploadMessageMedia(idempotencyKey, validated.media.file, currentUser.uid, options, conversationId);
     }
 
     const ttlExpiresAt = new Date(Date.now() + MESSAGING_CONFIG.MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -1239,7 +1247,9 @@ class UltimateMessagingService {
       metricsService.incrementCounter(`messaging_message_sent_type_${validated.type || 'text'}`, 1);
       const latencyMs = Date.now() - (options.sentAt || Date.now());
       metricsService.recordHistogram('messaging_send_latency_ms', latencyMs);
-    } catch { /* telemetry is best-effort */ }
+    } catch (e) { /* telemetry is best-effort */
+      logger.debug('Send telemetry failed', { error: e?.message });
+    }
 
     // Rate limit: messages per user per minute (UX guard; server/RTDB rules enforce).
     rateLimiter.checkAndHit(`msg:send:${currentUser.uid}`, { max: MESSAGING_CONFIG.PERFORMANCE.SEND_RATE_LIMIT_MAX || 60, windowMs: 60000 });
@@ -1299,7 +1309,9 @@ class UltimateMessagingService {
       const { metricsService } = await import('./metricsService.js');
       metricsService.incrementCounter('messaging_message_failed', 1);
       metricsService.incrementCounter(`messaging_message_failed_type_${type}`, 1);
-    } catch { /* best-effort */ }
+    } catch (e) { /* best-effort */
+      logger.debug('Failure telemetry failed', { error: e?.message });
+    }
   }
 
   async _resolveMentions(text, participantIds) {
@@ -1415,8 +1427,11 @@ class UltimateMessagingService {
     }
 
     if (options.markAsRead && messages.length > 0) {
-      // Conversation-level read position (spec §17) — one write, not N.
-      this.markConversationAsRead(conversationId, currentUser.uid).catch(() => {});
+      // Conversation-level read position (spec §17) — one write, not N. A failed
+      // reset leaves the unread badge stuck, so log it instead of swallowing.
+      this.markConversationAsRead(conversationId, currentUser.uid).catch((e) => {
+        logger.warn('markConversationAsRead failed; unread badge may be stale', { conversationId, error: e?.message });
+      });
     }
 
     // Reactions: ONE collection-group query merges per-user reaction docs
@@ -2260,44 +2275,21 @@ class UltimateMessagingService {
 
   async joinGroupViaInvite(inviteId, userId) {
     await this.ensureInitialized();
-    let inviteData = null;
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const inviteRef = this.fs.doc(this.firestore, 'group_invites', inviteId);
-      const inviteSnap = await transaction.get(inviteRef);
-      if (!inviteSnap.exists()) throw new Error('Invite not found');
-      const invite = inviteSnap.data();
-      inviteData = invite;
-      if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) throw new Error('Invite expired');
-      if (invite.maxUses && invite.uses >= invite.maxUses) throw new Error('Invite max uses reached');
-
-      const convRef = this.fs.doc(this.firestore, 'conversations', invite.conversationId);
-      const convSnap = await transaction.get(convRef);
-      if (!convSnap.exists()) throw new Error('Conversation not found');
-
-      transaction.update(convRef, {
-        participants: arrayUnion(userId),
-        participantCount: increment(1),
-        updatedAt: this.fs.serverTimestamp(),
-      });
-      transaction.update(inviteRef, { uses: increment(1) });
-      const msgId = `sys_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const msgRef = this.fs.doc(this.firestore, 'conversations', invite.conversationId, 'messages', msgId);
-      transaction.set(msgRef, {
-        id: msgId,
-        conversationId: invite.conversationId,
-        type: MESSAGING_CONFIG.MESSAGE_TYPES.SYSTEM,
-        eventType: 'user_joined_via_invite',
-        eventData: { userId },
-        senderId: 'system',
-        senderName: 'System',
-        createdAt: this.fs.serverTimestamp(),
-        isSystem: true,
-      });
-    });
-    this.conversationsCache.delete(inviteData.conversationId);
+    if (!inviteId) throw new Error('Invite id is required');
+    // The join is a server-authoritative mutation: it adds the caller to
+    // `participants`, which the `conversations` update rule refuses for a
+    // non-admin. A client transaction was therefore always denied. The
+    // `joinGroupViaInvite` callable validates expiry/max-uses and applies the
+    // join atomically with the Admin SDK.
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.JOIN_GROUP_VIA_INVITE, { inviteId });
+    const conversationId = res?.conversationId;
+    if (conversationId) {
+      this.conversationsCache.delete(conversationId);
+    }
     cacheManager.invalidateUser(userId);
     auditLogger.log('messaging.group_joined', { userId, meta: { inviteId } });
-    return { success: true, conversationId: inviteData.conversationId };
+    return { success: true, conversationId, alreadyMember: res?.alreadyMember === true };
   }
 
   async pinMessage(conversationId, messageId, userId) {
@@ -2370,7 +2362,7 @@ class UltimateMessagingService {
       activeMembers: Array.from(activeMemberIds),
       totalMessages,
       lastStatsUpdate: this.fs.serverTimestamp(),
-    }).catch(() => {});
+    }).catch((e) => logger.warn('Conversation stats update failed', { conversationId, error: e?.message }));
 
     return {
       success: true,
@@ -2517,7 +2509,9 @@ class UltimateMessagingService {
         senderName = profile.displayName || profile.username || null;
         senderAvatar = profile.photoURL || null;
       }
-    } catch { /* identity optional */ }
+    } catch (e) { /* identity optional */
+      logger.warn('System message sender identity read failed', { senderId, error: e?.message });
+    }
     await this.fs.setDoc(ref, {
       senderId,
       recipientId,
@@ -2789,7 +2783,7 @@ class UltimateMessagingService {
     return 'Message';
   }
 
-  async _uploadMessageMedia(messageId, file, userId, options) {
+  async _uploadMessageMedia(messageId, file, userId, options, conversationId) {
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
 
@@ -2813,7 +2807,7 @@ class UltimateMessagingService {
     }
 
     const ext = processedFile.name.split('.').pop() || 'bin';
-    const path = `chat_media/${userId}/${messageId}_${Date.now()}.${ext}`;
+    const path = `messages/${conversationId}/${messageId}.${ext}`;
     const fileRef = this.st.ref(this.storage, path);
 
     const uploadTask = this.st.uploadBytesResumable(fileRef, processedFile, {
@@ -2831,6 +2825,7 @@ class UltimateMessagingService {
           const metadata = await this.st.getMetadata(uploadTask.snapshot.ref);
           resolve({
             url,
+            path,
             name: processedFile.name,
             size: metadata.size,
             type: metadata.contentType,
@@ -2898,7 +2893,11 @@ class UltimateMessagingService {
           expiresAt,
         }, { merge: true });
       });
-    } catch (e) { /* silent */ }
+    } catch (e) {
+      // A failed rate-limit record weakens (not breaks) send throttling; log so
+      // a persistent rules/index failure is visible instead of silent.
+      logger.warn('_recordRateLimit transaction failed', { userId, error: e?.message });
+    }
   }
 
   async _generateIdempotencyKey(messageData, senderId, conversationId) {
@@ -3094,7 +3093,7 @@ class UltimateMessagingService {
         title: 'New join request',
         message: 'A user wants to join the group',
         metadata: { conversationId, ...data },
-      }).catch(() => {});
+      }).catch((e) => logger.warn('Group join-request notification failed', { adminId, conversationId, error: e?.message }));
     }
   }
 
@@ -3184,6 +3183,7 @@ class UltimateMessagingService {
         lastActivity: new Date().toISOString(),
       };
     } catch (err) {
+      logger.warn('[messagesService] conversation-list ad unavailable', err);
       return null;
     }
   }
@@ -3321,7 +3321,7 @@ const messagingService = {
   deleteDraft: (cid) => getMessagingService().deleteDraft(cid),
   searchStickers: (query) => getMessagingService().searchStickers(query),
   searchGifs: (query) => getMessagingService().searchGifs(query),
-  uploadMessageMedia: (mid, file, uid, opts) => getMessagingService()._uploadMessageMedia(mid, file, uid, opts),
+  uploadMessageMedia: (mid, file, uid, opts, conversationId) => getMessagingService()._uploadMessageMedia(mid, file, uid, opts, conversationId),
   reportMessage: (mid, cid, uid, reason, details) => getMessagingService().reportMessage(mid, cid, uid, reason, details),
   getConversationMedia: (cid, opts) => getMessagingService().getConversationMedia(cid, opts),
   getMessageHistory: (cid, mid) => getMessagingService().getMessageHistory(cid, mid),

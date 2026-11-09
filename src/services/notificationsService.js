@@ -18,10 +18,14 @@ function safeLocalStorageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 function safeLocalStorageSet(key, value) {
-  try { localStorage.setItem(key, value); } catch {}
+  try { localStorage.setItem(key, value); } catch (e) {
+    logger.warn('Push-token localStorage write failed', { key, error: e?.message });
+  }
 }
 function safeLocalStorageRemove(key) {
-  try { localStorage.removeItem(key); } catch {}
+  try { localStorage.removeItem(key); } catch (e) {
+    logger.warn('Push-token localStorage remove failed', { key, error: e?.message });
+  }
 }
 
 //  OFFLINE QUEUE (IndexedDB with idb library, cursor iteration)
@@ -540,10 +544,14 @@ class UltimateNotificationsService {
       if (hasServiceWorker) {
         const base = import.meta.env.BASE_URL || '/';
         try {
+          // The app-wide SW (`public/sw.js`) already carries the `push` and
+          // `notificationclick` handlers, so registering `firebase-messaging-sw.js`
+          // here is what FCM's `getToken()` binds to. A previous line also
+          // registered `sw-notifications.js`, which does not exist — the
+          // registration rejected and an empty catch hid it.
           await navigator.serviceWorker.register(`${base}firebase-messaging-sw.js`);
-          // Also register our custom SW for background pushes
-          await navigator.serviceWorker.register(`${base}sw-notifications.js`);
         } catch (err) {
+          logger.warn('Push service worker registration failed', { error: err?.message });
         }
       }
       const token = await this._getFreshPushToken();
@@ -645,7 +653,9 @@ class UltimateNotificationsService {
     try {
       await this.messagingMethods.deleteToken(this.messaging);
     } catch (err) {
-      // Token deletion failed
+      // The server token doc is already removed; a stale FCM registration can
+      // still deliver. Log so a leaked registration is diagnosable.
+      logger.warn('FCM token deletion failed', { userId, error: err?.message });
     }
     safeLocalStorageRemove('device_id');
     return { success: true };
@@ -1022,7 +1032,9 @@ class UltimateNotificationsService {
     if (this.dedupeCleanupInterval) clearInterval(this.dedupeCleanupInterval);
     if (this.offlineQueue) this.offlineQueue.destroy();
     for (const unsub of this.realtimeSubscriptions.values()) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        console.warn('Notification listener unsubscribe failed', e?.message);
+      }
     }
     this.realtimeSubscriptions.clear();
     this.clearCache();

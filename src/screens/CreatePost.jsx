@@ -732,16 +732,22 @@ function CreatePostProvider({ children }) {
   // monetization service). Never the store's in-memory number — the store is
   // not synced with the server.
   const [userCoins, setUserCoins] = useState(null);
+  const [userCoinsError, setUserCoinsError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    if (!user?.uid) { setUserCoins(null); return undefined; }
+    if (!user?.uid) { setUserCoins(null); setUserCoinsError(false); return undefined; }
     (async () => {
       try {
         const { getMonetizationService } = await import('../services/monetizationService.js');
         const bal = await getMonetizationService().getBalance(user.uid);
-        if (!cancelled) setUserCoins(typeof bal === 'number' ? bal : null);
+        if (!cancelled) {
+          setUserCoins(typeof bal === 'number' ? bal : null);
+          setUserCoinsError(false);
+        }
       } catch {
-        if (!cancelled) setUserCoins(null);
+        // Distinguish "failed" from "still loading" — the panel must not tell
+        // the user their balance is loading when the read failed.
+        if (!cancelled) { setUserCoins(null); setUserCoinsError(true); }
       }
     })();
     return () => { cancelled = true; };
@@ -944,7 +950,9 @@ function CreatePostProvider({ children }) {
     if (!draft && !isOfflineRef.current && services.current.firestore) {
       try {
         draft = await services.current.firestore.getDraft(draftId);
-      } catch {}
+      } catch (e) {
+        console.warn('Cloud draft fetch failed', e?.message);
+      }
     }
     if (!draft) { toast.error("Draft not found"); return; }
     const restoredMedia = [];
@@ -970,7 +978,9 @@ function CreatePostProvider({ children }) {
     if (!isOfflineRef.current && services.current.firestore) {
       try {
         await services.current.firestore.deleteDraft(draftId);
-      } catch {}
+      } catch (e) {
+        console.warn('Cloud draft delete failed', e?.message);
+      }
     }
     toast.success("Draft deleted");
   }, [refreshDraftsList]);
@@ -1093,48 +1103,6 @@ function CreatePostProvider({ children }) {
     toast.success("Removed queued post");
   }, [refreshOfflineQueue]);
 
-  const convertFileToDataURL = (file) => new Promise((resolve) => {
-    if (!file) { resolve(null); return; }
-    if (!file.type?.startsWith("image/")) {
-      resolve(null);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result;
-      if (!dataUrl) { resolve(null); return; }
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const maxDim = 800;
-          let width = img.width;
-          let height = img.height;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL("image/jpeg", 0.65);
-          resolve(compressed);
-        } catch {
-          resolve(typeof dataUrl === "string" && dataUrl.length < 500000 ? dataUrl : null);
-        }
-      };
-      img.onerror = () => resolve(typeof dataUrl === "string" && dataUrl.length < 500000 ? dataUrl : null);
-      img.src = dataUrl;
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
-  });
 
   const uploadMedia = useCallback(async (mediaItems) => {
     if (isOfflineRef.current) { toast.error("Cannot upload offline"); return []; }
@@ -1144,6 +1112,7 @@ function CreatePostProvider({ children }) {
     const validItems = mediaItems.filter(m => (m.file || m.url || m.preview) && !m.error);
     const total = validItems.length;
     completedRef.current = 0;
+    const failures = [];
 
     const process = async (item) => {
       try {
@@ -1162,52 +1131,74 @@ function CreatePostProvider({ children }) {
 
         let downloadURL = null;
         if (storageService && item.file) {
-          try {
-            const uid = userRef.current?.uid || 'anonymous';
-            const uploadPromise = storageService.uploadFileWithProgress(
-              item.file,
-              `posts/${uid}/${Date.now()}_${item.file.name}`,
-              {
-                userId: uid,
-                onProgress: (p) => dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { progress: p.progress || 0 } } })
-              }
-            );
-            const uploadTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Storage upload timed out")), 7000));
-            const uploadRes = await Promise.race([uploadPromise, uploadTimeout]);
-            if (uploadRes?.downloadURL) {
-              downloadURL = uploadRes.downloadURL;
+          const uid = userRef.current?.uid;
+          if (!uid) throw new Error("You must be signed in to upload media");
+          const uploadRes = await storageService.uploadFileWithProgress(
+            item.file,
+            `posts/${uid}/${Date.now()}_${item.file.name}`,
+            {
+              userId: uid,
+              onProgress: (p) => dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { progress: p.progress || 0 } } })
             }
-          } catch (storageErr) {
-            console.warn("Storage upload fallback to data URL:", storageErr?.message);
+          );
+          if (!uploadRes?.downloadURL) throw new Error("Upload did not return a URL");
+          downloadURL = uploadRes.downloadURL;
+        } else if (!item.file) {
+          // Already-hosted media (a remote URL picked from a library). A
+          // `blob:`/`data:` URL is session-scoped and must never be persisted
+          // as the post's media URL — it renders only for this uploader, this
+          // session, and is broken for everyone else and after a reload.
+          const candidate = item.url || item.preview || null;
+          if (candidate && !candidate.startsWith("blob:") && !candidate.startsWith("data:")) {
+            downloadURL = candidate;
           }
         }
 
-        if (!downloadURL && item.file) {
-          downloadURL = await convertFileToDataURL(item.file);
-        }
         if (!downloadURL) {
-          downloadURL = item.url || item.preview;
+          throw new Error(`Could not upload "${item.name || item.file?.name || "media"}"`);
         }
 
-        if (downloadURL) {
-          results.push({
-            url: downloadURL,
-            thumbnail: thumbnail || null,
-            type: item.type || (item.file?.type?.startsWith('video/') ? 'video' : 'image'),
-            name: item.name || item.file?.name || '',
-            alt: item.alt || '',
-          });
+        // A generated thumbnail is a `blob:` object URL. Persisting it would
+        // leave every grid/feed surface with a broken poster after reload, so
+        // it is uploaded alongside the media (or dropped if that fails).
+        if (thumbnail && thumbnail.startsWith("blob:") && storageService) {
+          try {
+            const thumbBlob = await (await fetch(thumbnail)).blob();
+            const thumbRes = await storageService.uploadFileWithProgress(
+              new File([thumbBlob], `thumb_${item.id || Date.now()}.jpg`, { type: "image/jpeg" }),
+              `posts/${userRef.current?.uid}/${Date.now()}_thumb_${item.id || "m"}.jpg`,
+              { userId: userRef.current?.uid }
+            );
+            thumbnail = thumbRes?.downloadURL || null;
+          } catch (thumbErr) {
+            console.warn("Thumbnail upload failed:", thumbErr?.message);
+            thumbnail = null;
+          }
+        } else if (thumbnail && thumbnail.startsWith("blob:")) {
+          thumbnail = null;
         }
+
+        results.push({
+          url: downloadURL,
+          thumbnail: thumbnail || null,
+          type: item.type || (item.file?.type?.startsWith('video/') ? 'video' : 'image'),
+          name: item.name || item.file?.name || '',
+          alt: item.alt || '',
+        });
         completedRef.current++;
         dispatch({ type: "SET_PROGRESS", payload: (completedRef.current / total) * 100 });
       } catch (err) {
         console.error(`Failed to process media item:`, err);
+        failures.push(err?.message || "Media upload failed");
         dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { error: err.message } } });
       }
     };
 
     for (let i = 0; i < validItems.length; i += 3) {
       await Promise.all(validItems.slice(i, i + 3).map(process));
+    }
+    if (failures.length > 0) {
+      throw new Error(failures[0]);
     }
     return results;
   }, []);
@@ -1319,9 +1310,14 @@ function CreatePostProvider({ children }) {
       const result = await callFunction(FUNCTIONS.MODERATE_POST, { content, mediaUrls });
       dispatch({ type: "SET_MODERATION_STATUS", payload: result });
       return result;
-    } catch {
-      dispatch({ type: "SET_MODERATION_STATUS", payload: { approved: true, flags: [], fallback: true } });
-      return null;
+    } catch (e) {
+      // The check could not run — never claim the content "passed". The server
+      // itself returns `unknown` when the provider is unconfigured; a failed
+      // call is the same state, not an approval.
+      console.warn('Moderation check unavailable', e?.message);
+      const unknown = { approved: false, unknown: true, flags: [], reason: 'moderation_unavailable' };
+      dispatch({ type: "SET_MODERATION_STATUS", payload: unknown });
+      return unknown;
     }
   }, []);
 
@@ -1333,7 +1329,10 @@ function CreatePostProvider({ children }) {
         visibility: stateRef.current.visibility, boost: stateRef.current.boost,
       });
       dispatch({ type: "SET_INSIGHTS", payload: result });
-    } catch { /* silent */ }
+    } catch (insightsErr) {
+      // Non-fatal: the composer still works without the performance preview.
+      console.warn("Post performance prediction unavailable:", insightsErr);
+    }
   }, []);
 
   const debounceTimerRef = useRef(null);
@@ -1386,7 +1385,9 @@ function CreatePostProvider({ children }) {
               photoURL: current.photoURL || "",
             };
           }
-        } catch {}
+        } catch (e) {
+          console.warn('Stored auth-user read failed', e?.message);
+        }
       }
 
       if (!userNow?.uid) {
@@ -1398,7 +1399,9 @@ function CreatePostProvider({ children }) {
               userNow = parsed;
             }
           }
-        } catch {}
+        } catch (e) {
+          console.warn('Stored email-auth data read failed', e?.message);
+        }
       }
 
       if (!userNow?.uid) {
@@ -1466,7 +1469,9 @@ function CreatePostProvider({ children }) {
           thumbnailUrl: media[0]?.thumbnail || media[0]?.url || "",
           visibility: current.visibility || "public",
         });
-        if (current.draftId) deleteDraft(current.draftId).catch(() => {});
+        if (current.draftId) deleteDraft(current.draftId).catch((e) => {
+          console.warn('Draft cleanup after publish failed', e?.message);
+        });
         toast.success("Post updated!");
         publishLockRef.current = false;
         navigate(`/post/${editPostId}`);
@@ -1576,7 +1581,9 @@ function CreatePostProvider({ children }) {
 
       // 2. Clear draft
       if (current.draftId) {
-        deleteDraft(current.draftId).catch(() => {});
+        deleteDraft(current.draftId).catch((e) => {
+          console.warn('Draft cleanup after publish failed', e?.message);
+        });
       }
 
       // 3. Instant UI feedback & Navigation (User never waits!)
@@ -1588,12 +1595,13 @@ function CreatePostProvider({ children }) {
       (async () => {
         try {
           let uploadedMedia = instantMedia;
-          if (current.mediaItems?.length > 0 && navigator.onLine) {
-            try {
-              uploadedMedia = await uploadMedia(current.mediaItems);
-            } catch (err) {
-              console.warn("Background media upload fallback:", err);
-            }
+          if (current.mediaItems?.length > 0) {
+            // Upload must succeed before the Firestore write: `instantMedia`
+            // holds session-scoped `blob:` preview URLs, and persisting those
+            // would leave a post that renders only for this uploader, this
+            // session. A failure falls through to the outer catch, which drops
+            // the optimistic entry and hands the post to the offline queue.
+            uploadedMedia = await uploadMedia(current.mediaItems);
           }
 
           const finalPostData = {
@@ -1639,7 +1647,11 @@ function CreatePostProvider({ children }) {
             const updated = localList.map(p => p.id === instantPostId ? { ...p, id: result.postId, isOptimistic: false } : p);
             localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated));
             window.dispatchEvent(new CustomEvent('arvdoul:post_id_synced', { detail: { oldId: instantPostId, newId: result.postId } }));
-          } catch {}
+          } catch (syncErr) {
+            // The optimistic id could not be swapped for the real one; the local
+            // cache may keep a ghost entry until the next feed reconciliation.
+            console.warn("Post id sync failed:", syncErr);
+          }
 
           // Monetization coins boost
           if (current.boost?.type !== "none" && current.boost?.budget > 0) {
@@ -1647,7 +1659,10 @@ function CreatePostProvider({ children }) {
               const { getMonetizationService } = await import("../services/monetizationService.js");
               const monetizationService = services.current.monetization || getMonetizationService();
               await monetizationService.spendCoins(userNow.uid, current.boost.budget, "post_boost");
-            } catch {}
+            } catch (boostErr) {
+              console.warn("Post boost spend failed:", boostErr);
+              toast.error("Your post published, but the paid boost could not be applied.");
+            }
           }
 
           // Clear feed cache
@@ -1655,7 +1670,9 @@ function CreatePostProvider({ children }) {
             const { getFeedService } = await import("../services/feedService.js");
             const feedService = services.current.feed || getFeedService();
             feedService.clearUserCache(userNow.uid);
-          } catch {}
+          } catch (e) {
+            console.warn('Feed cache clear failed', e?.message);
+          }
         } catch (bgErr) {
           // The server write failed (offline or transient). The optimistic entry
           // holds blob: URLs and no Firestore document, so leaving it in the
@@ -1677,7 +1694,9 @@ function CreatePostProvider({ children }) {
               LOCAL_POSTS_KEY,
               JSON.stringify(localList.filter(p => p.id !== instantPostId))
             );
-          } catch {}
+          } catch (e) {
+            console.warn('Local post cleanup failed', e?.message);
+          }
           toast.error(
             queued
               ? "You're offline — this post will publish when you reconnect."
@@ -1796,7 +1815,7 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const servicesValue = useMemo(() => ({
-    services: services.current, isOffline, offlineQueueItems, userCoins, isDark, prefersReducedMotion,
+    services: services.current, isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
     retryOfflineItem, deleteOfflineItem, searchUsers,
@@ -1804,7 +1823,7 @@ function CreatePostProvider({ children }) {
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
   }), [
-    isOffline, offlineQueueItems, userCoins, isDark, prefersReducedMotion,
+    isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
     retryOfflineItem, deleteOfflineItem, searchUsers,
@@ -1971,7 +1990,11 @@ export function LocationPanel({ defaultOpen = false }) {
         const data = await res.json();
         setSuggestions(data.map(d => d.display_name));
         setShow(true);
-      } catch { setSuggestions([]); }
+      } catch (err) {
+        // Geocoding is best-effort; log so a broken lookup is diagnosable.
+        console.warn('CreatePost: location lookup failed', err);
+        setSuggestions([]);
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
@@ -2034,7 +2057,7 @@ export function TaggingPanel({ defaultOpen = false }) {
 
 export function MonetizationPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
-  const { userCoins } = useCreatePostServices();
+  const { userCoins, userCoinsError } = useCreatePostServices();
   // userCoins is the ledger balance (null while loading / unauthenticated).
   const insufficient = state.monetization.type === "boost" &&
     userCoins != null && state.boost.budget > userCoins;
@@ -2055,7 +2078,11 @@ export function MonetizationPanel({ defaultOpen = false }) {
             className={INPUT_CLASS} />
           {insufficient && <p className="text-xs text-red-500">Insufficient coins (you have {userCoins})</p>}
           {state.monetization.type === "boost" && userCoins == null && (
-            <p className="text-xs text-gray-500">Balance loading… (server-side check still applies on publish)</p>
+            <p className="text-xs text-gray-500">
+              {userCoinsError
+                ? 'Could not load your balance — the server still verifies it on publish.'
+                : 'Balance loading… (server-side check still applies on publish)'}
+            </p>
           )}
         </div>
       )}
@@ -2240,10 +2267,16 @@ export function ModerationStatus({ defaultOpen = false }) {
   return (
     <Panel icon={Icons.Shield} title="Content Moderation" defaultOpen={defaultOpen}>
       {state.moderationStatus ? (
-        <div className={`p-2 rounded-lg text-xs ${state.moderationStatus.approved ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"}`}>
-          {state.moderationStatus.approved ? "✅ Content passed moderation" : `⚠️ Content flagged: ${(state.moderationStatus.flags || []).join(", ")}`}
-          {state.moderationStatus.fallback && <span className="ml-1 text-gray-400">(offline check)</span>}
-        </div>
+        state.moderationStatus.unknown ? (
+          <div className="p-2 rounded-lg text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
+            Moderation check unavailable — content was not screened.
+          </div>
+        ) : (
+          <div className={`p-2 rounded-lg text-xs ${state.moderationStatus.approved ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"}`}>
+            {state.moderationStatus.approved ? "Content passed moderation" : `Content flagged: ${(state.moderationStatus.flags || []).join(", ")}`}
+            {state.moderationStatus.needsReview && <span className="ml-1 text-gray-400">(flagged for review)</span>}
+          </div>
+        )
       ) : (
         <p className="text-xs text-gray-500">Typing will auto‑check content.</p>
       )}
@@ -2532,7 +2565,8 @@ const LauncherGrid = React.memo(() => {
         }
       }
     } catch (_e) {
-      // analytics fallback gracefully
+      // Analytics are advisory; the composer stays usable without them.
+      console.warn('Composer analytics unavailable:', _e?.message);
     } finally {
       setLoadingAnalytics(false);
     }
@@ -2630,19 +2664,19 @@ const LauncherGrid = React.memo(() => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Views</p>
-                    <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? '—'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Reach</p>
-                    <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? '—'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Engagement</p>
-                    <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? '—'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
                     <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Coins Earned</p>
-                    <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? 0}</p>
+                    <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? '—'}</p>
                   </div>
                 </div>
 
@@ -2651,7 +2685,12 @@ const LauncherGrid = React.memo(() => {
                     <Icons.TrendingUp className="w-3.5 h-3.5 text-green-500" />
                     <span>Audience Growth Rate:</span>
                   </div>
-                  <span className="font-semibold text-green-500">+{analyticsData?.changes?.engagement ? Math.round(analyticsData.changes.engagement) : 12}% this week</span>
+                  {/* No fabricated growth rate: an absent delta reads as unavailable. */}
+                  <span className="font-semibold text-green-500">
+                    {typeof analyticsData?.changes?.engagement === 'number'
+                      ? `${analyticsData.changes.engagement >= 0 ? '+' : ''}${Math.round(analyticsData.changes.engagement)}% this week`
+                      : 'Unavailable'}
+                  </span>
                 </div>
 
                 {recentPostsData && recentPostsData.length > 0 && (
@@ -2679,9 +2718,9 @@ const LauncherGrid = React.memo(() => {
                             {post.content || post.title || 'Untitled Post'}
                           </span>
                           <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                            <span>❤️ {post.likes || post.likeCount || 0}</span>
-                            <span>💬 {post.comments || post.commentCount || 0}</span>
-                            <span>👁️ {post.views || post.viewCount || 0}</span>
+                            <span>❤️ {(() => { const v = post.stats?.likes ?? post.likeCount; return typeof v === 'number' ? v : '—'; })()}</span>
+                            <span>💬 {(() => { const v = post.stats?.comments ?? post.commentCount; return typeof v === 'number' ? v : '—'; })()}</span>
+                            <span>👁️ {(() => { const v = post.stats?.views ?? post.viewCount; return typeof v === 'number' ? v : '—'; })()}</span>
                             <Icons.ChevronRight className="w-3.5 h-3.5 text-purple-400 group-hover:translate-x-0.5 transition-transform" />
                           </div>
                         </div>

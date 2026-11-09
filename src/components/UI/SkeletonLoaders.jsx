@@ -4,13 +4,37 @@
 // Zero screen-covering skeletons, zero layout interference.
 
 import { TopAppLoadingBanner } from "../Navigation/RouteProgressBar.jsx";
-
-export function Shimmer({ className = "" }) {
-  return null;
-}
+import { cn } from "../../lib/utils";
 
 export function StoriesSkeleton() {
   return <TopAppLoadingBanner isAnimating={true} label="Loading stories..." />;
+}
+
+/**
+ * Row-shaped skeleton for list/inbox surfaces (notifications, connections,
+ * search results). Matches the avatar + two-line row layout those screens use,
+ * so the first paint has the same geometry as the loaded content and does not
+ * shift when the real rows arrive.
+ */
+export function ListRowsSkeleton({ count = 6, className = "" }) {
+  return (
+    <div className={cn("w-full space-y-2.5", className)} role="status" aria-busy="true">
+      <span className="sr-only">Loading…</span>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-2xl p-3 border border-gray-200/70 dark:border-white/10 bg-white/70 dark:bg-[#0b101b]/70 animate-pulse"
+        >
+          <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-white/10 flex-shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="h-3.5 w-1/3 rounded-md bg-gray-200 dark:bg-white/10" />
+            <div className="h-3 w-3/4 rounded-md bg-gray-200/70 dark:bg-white/5" />
+          </div>
+          <div className="h-3 w-10 rounded-md bg-gray-200/60 dark:bg-white/5 flex-shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function PostSkeleton({ count = 1 }) {
@@ -102,8 +126,8 @@ export function RouteFallback() {
 }
 
 export default {
-  Shimmer,
   StoriesSkeleton,
+  ListRowsSkeleton,
   PostSkeleton,
   HomeScreenSkeleton,
   FeedSkeleton,

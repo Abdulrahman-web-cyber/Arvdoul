@@ -33,7 +33,7 @@ export default function VideoDetailScreen() {
   const [muted, setMuted] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
+  const [likeCount, setLikeCount] = useState(null);
   const [saved, setSaved] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [watchNext, setWatchNext] = useState({ loading: false, items: [], error: null });
@@ -56,7 +56,7 @@ export default function VideoDetailScreen() {
         }
         if (!data) throw new Error('Video not found');
         setVideo(data);
-        setLikeCount(data.stats?.likes || 0);
+        setLikeCount(typeof data.stats?.likes === 'number' ? data.stats.likes : null);
         setLiked(data.likedBy?.includes(user?.uid) || false);
 
         // Fetch creator profile if we have a userId
@@ -74,13 +74,17 @@ export default function VideoDetailScreen() {
                 bio: profile.bio,
               });
             }
-          } catch (e) { /* creator optional */ }
+          } catch (e) { /* creator optional */
+            console.warn('Video creator profile read failed', e?.message);
+          }
         }
 
         // Record a real view once
         if (!viewedRef.current && user?.uid) {
           viewedRef.current = true;
-          videoService.recordVideoView(data.id, { duration: 3 }).catch(() => {});
+          videoService.recordVideoView(data.id, { duration: 3 }).catch((e) => {
+            console.warn('[VideoDetail] view not recorded', e?.message);
+          });
         }
 
         // Resolve this viewer's like/save state (the public doc only carries
@@ -90,7 +94,9 @@ export default function VideoDetailScreen() {
             const state = await videoService.getViewerVideoState(data.id, user.uid);
             setLiked(state.liked);
             setSaved(state.saved);
-          } catch (e) { /* viewer state optional */ }
+          } catch (e) { /* viewer state optional */
+            console.warn('Viewer video state read failed', e?.message);
+          }
         }
       } catch (err) {
         setError(err?.message || 'Could not load this video.');
@@ -120,7 +126,9 @@ export default function VideoDetailScreen() {
       else { await navigator.clipboard.writeText(url); toast.success('Link copied!'); }
     } catch (err) { /* canceled */ }
     // Server-owned share counter (best-effort, never a local guess).
-    videoService.shareVideo(video.id).catch(() => {});
+    videoService.shareVideo(video.id).catch((e) => {
+      console.warn('[VideoDetail] share not recorded', e?.message);
+    });
   };
 
   const handleSave = async () => {
@@ -239,7 +247,7 @@ export default function VideoDetailScreen() {
                 <div className="min-w-0">
                   <h2 className={cn('font-bold text-lg', colors.text)}>{video.title || 'Untitled'}</h2>
                   <p className={cn('text-sm mt-1', colors.secondary)}>
-                    {(video.stats?.views || 0).toLocaleString()} views · {video.category || 'video'}
+                    {typeof video.stats?.views === 'number' ? `${video.stats.views.toLocaleString()} views` : 'Views unavailable'} · {video.category || 'video'}
                   </p>
                 </div>
                 {user?.uid && video.userId === user.uid && (
@@ -260,8 +268,8 @@ export default function VideoDetailScreen() {
             <div className={cn('rounded-2xl p-4 border flex items-center justify-around', colors.card)}>
               <VideoActionRail
                 likes={likeCount}
-                comments={video.stats?.comments || 0}
-                shares={video.stats?.shares || 0}
+                comments={video.stats?.comments ?? null}
+                shares={video.stats?.shares ?? null}
                 isLiked={liked}
                 isSaved={saved}
                 onLike={handleLike}
@@ -305,7 +313,7 @@ export default function VideoDetailScreen() {
                             )}
                           </div>
                           <p className={cn('mt-1.5 text-xs font-semibold line-clamp-2', colors.text)}>{item.title || 'Untitled'}</p>
-                          <p className={cn('text-[11px]', colors.secondary)}>{(item.stats?.views || 0).toLocaleString()} views</p>
+                          <p className={cn('text-[11px]', colors.secondary)}>{typeof item.stats?.views === 'number' ? `${item.stats.views.toLocaleString()} views` : 'Views unavailable'}</p>
                         </button>
                       );
                     })}

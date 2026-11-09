@@ -48,7 +48,9 @@ export default function OfflineStatusScreen() {
         {isOnline && pendingCount > 0 && !isSyncing && (
           <button
             type="button"
-            onClick={() => syncQueue().catch(() => {})}
+            onClick={() => syncQueue().catch((e) => {
+              console.warn('Manual sync drain failed', e?.message);
+            })}
             className="mt-4 w-full rounded-xl bg-white/10 hover:bg-white/20 transition px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-400"
           >
             Sync now

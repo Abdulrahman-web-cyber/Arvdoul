@@ -202,7 +202,7 @@ const EventDetailScreen = () => {
         
         {/* Status Badge */}
         {status && (
-          <div className="absolute top-4 left-4 px-3 py-1.5 text-sm font-medium rounded-full ${status.className}">
+                      <div className={`absolute top-4 left-4 px-3 py-1.5 text-sm font-medium rounded-full ${status.className}`}>
             {status.text}
           </div>
         )}
@@ -309,7 +309,7 @@ const EventDetailScreen = () => {
                     <div className="grid grid-cols-3 gap-4 mt-8">
                       <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                         <div className="text-2xl font-bold text-indigo-600">
-                          {event.stats?.attendeeCount || 0}
+                          {typeof event.stats?.attendeeCount === 'number' ? event.stats.attendeeCount : '—'}
                         </div>
                         <div className="text-sm text-gray-500">Attending</div>
                       </div>
@@ -323,7 +323,7 @@ const EventDetailScreen = () => {
                       )}
                       <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                         <div className="text-2xl font-bold text-indigo-600">
-                          {event.stats?.waitlistCount || 0}
+                          {typeof event.stats?.waitlistCount === 'number' ? event.stats.waitlistCount : '—'}
                         </div>
                         <div className="text-sm text-gray-500">Waitlisted</div>
                       </div>

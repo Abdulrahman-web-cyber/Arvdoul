@@ -18,7 +18,8 @@ import { FileText, Users, UserCheck, UserPlus, Eye, Heart, Coins } from "lucide-
 import { cn } from '../../lib/utils';
 
 const formatNumber = (num) => {
-  if (num === undefined || num === null) return '0';
+  // A missing count is unknown; rendering '0' claims a measured empty account.
+  if (num === undefined || num === null) return '—';
   const n = Number(num);
   if (n >= 1000000) return `${(n / 1000000).toFixed(n % 1000000 === 0 ? 0 : (n >= 10000000 ? 1 : 2))}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`;
@@ -35,15 +36,19 @@ const ProfileMetricsGrid = memo(({
 }) => {
   const isDark = theme === 'dark';
 
-  const postsCount = profile?.postCount ?? profile?.postsCount ?? profile?.posts?.length ?? 0;
-  const followersCount = profile?.followerCount ?? profile?.followersCount ?? 0;
-  const followingCount = profile?.followingCount ?? 0;
+  const postsCount = profile?.postCount ?? profile?.postsCount ?? profile?.posts?.length ?? null;
+  const followersCount = profile?.followerCount ?? profile?.followersCount ?? null;
+  const followingCount = profile?.followingCount ?? null;
   // `friendCount` is not a stored counter; when it is absent the honest value is
   // "unknown" (—), not a fabricated 0 that claims the account has no friends.
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? null;
-  const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
-  const profileViews = analytics?.totalViews ?? profile?.profileViews ?? profile?.viewsCount ?? 0;
-  const likesCount = profile?.likesReceived ?? profile?.likesCount ?? 0;
+  // A missing economic balance is unknown (—), never a fabricated 0 that
+  // claims an empty wallet.
+  const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? null;
+  // Analytics-derived counts are *unknown* when no source provides them — a 0
+  // here would claim a measured empty audience.
+  const profileViews = analytics?.totalViews ?? profile?.profileViews ?? profile?.viewsCount ?? null;
+  const likesCount = profile?.likesReceived ?? profile?.likesCount ?? null;
 
   // Fail CLOSED when the capability map is absent: a section the engine did not
   // explicitly grant must not render. `?? true` / `?? isOwner` previously made a
@@ -104,9 +109,9 @@ const ProfileMetricsGrid = memo(({
     {
       key: isOwner ? 'views' : 'likes',
       label: isOwner ? 'Profile Views' : 'Likes',
-      value: isOwner 
-        ? formatNumber(profileViews) 
-        : formatNumber(likesCount),
+      value: isOwner
+        ? (profileViews === null ? '—' : formatNumber(profileViews))
+        : (likesCount === null ? '—' : formatNumber(likesCount)),
       icon: isOwner ? Eye : Heart,
       iconColor: isOwner ? 'text-[#00F0FF] dark:text-[#38BDF8]' : 'text-pink-500 dark:text-pink-400',
       iconBg: isDark 
@@ -118,7 +123,7 @@ const ProfileMetricsGrid = memo(({
     {
       key: 'coins',
       label: 'Coins',
-      value: canShowEconomic ? formatNumber(coinsCount) : '—',
+      value: canShowEconomic && coinsCount !== null ? formatNumber(coinsCount) : '—',
       icon: Coins,
       iconColor: 'text-amber-500 dark:text-amber-400',
       iconBg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',

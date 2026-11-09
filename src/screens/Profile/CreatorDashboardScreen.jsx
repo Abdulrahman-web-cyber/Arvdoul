@@ -19,9 +19,11 @@ import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig
  * Format number with K, M suffix
  */
 const formatNumber = (num) => {
+  // An unmeasured metric is unknown ('—'), never a measured 0.
+  if (typeof num !== 'number' || Number.isNaN(num)) return '—';
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num?.toString() || '0';
+  return num.toString();
 };
 
 /**
@@ -30,10 +32,13 @@ const formatNumber = (num) => {
 export default function CreatorDashboardScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user: authUser } = useAuth();
+  const { user: authUser, userProfile } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
   const currentUser = authUser || storeUser;
   const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
+  // The canonical active-day count lives on the user profile
+  // (`users/{uid}.activeDaysCount`); an unmeasured value stays null → '—'.
+  const activeDaysCount = userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null;
   
   const {
     analytics,
@@ -76,11 +81,12 @@ export default function CreatorDashboardScreen() {
   }, [analytics, timeframe]);
   
   // Metrics cards
+  const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null);
   const metrics = [
-    { key: 'views', label: 'Total Views', value: analytics?.totalViews || 0, icon: Eye, color: 'text-blue-500' },
-    { key: 'reach', label: 'Total Reach', value: analytics?.totalReach || 0, icon: Users, color: 'text-purple-500' },
-    { key: 'engagement', label: 'Engagement', value: analytics?.totalEngagement || 0, icon: Heart, color: 'text-pink-500' },
-    { key: 'coins', label: 'Coins Earned', value: analytics?.coinsEarned || 0, icon: Coins, color: 'text-yellow-500' },
+    { key: 'views', label: 'Total Views', value: num(analytics?.totalViews), icon: Eye, color: 'text-blue-500' },
+    { key: 'reach', label: 'Total Reach', value: num(analytics?.totalReach), icon: Users, color: 'text-purple-500' },
+    { key: 'engagement', label: 'Engagement', value: num(analytics?.totalEngagement), icon: Heart, color: 'text-pink-500' },
+    { key: 'coins', label: 'Coins Earned', value: num(analytics?.coinsEarned), icon: Coins, color: 'text-yellow-500' },
   ];
   
   // Changes
@@ -164,8 +170,9 @@ export default function CreatorDashboardScreen() {
           </div>
         ) : (
           <>
-            {/* Ranking */}
-            {ranking && (
+            {/* Ranking — only when a real rank exists; an unranked creator is
+                not dressed up as "New Creator". */}
+            {(ranking?.label || ranking?.percentile || ranking?.position) && (
               <div className={cn(
                 'p-4 rounded-2xl',
                 'bg-gradient-to-r from-purple-500/10 to-blue-500/10',
@@ -175,7 +182,7 @@ export default function CreatorDashboardScreen() {
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Your Ranking</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {ranking.label || 'New Creator'}
+                      {ranking.label || '—'}
                     </p>
                   </div>
                   {ranking.position && (
@@ -195,7 +202,8 @@ export default function CreatorDashboardScreen() {
               {metrics.map((metric) => {
                 const Icon = metric.icon;
                 const change = changes[metric.key];
-                const isPositive = (change || 0) >= 0;
+                const hasChange = typeof change === 'number' && !Number.isNaN(change);
+                const isPositive = change >= 0;
                 
                 return (
                   <div
@@ -208,7 +216,7 @@ export default function CreatorDashboardScreen() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <Icon className={cn('w-5 h-5', metric.color)} />
-                      {change !== undefined && (
+                      {hasChange && (
                         <span className={cn(
                           'flex items-center gap-0.5 text-xs font-medium',
                           isPositive ? 'text-green-600' : 'text-red-600'
@@ -250,7 +258,7 @@ export default function CreatorDashboardScreen() {
                       Creator Sovereign Earnings &amp; Payouts
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Balance: <strong className="text-amber-500">{Number(analytics?.coinsEarned || 0).toLocaleString()} coins</strong> ({formatCoinsAsUsd(analytics?.coinsEarned || 0)}) · Min withdrawal: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins
+                      Balance: <strong className="text-amber-500">{typeof analytics?.coinsEarned === 'number' ? analytics.coinsEarned.toLocaleString() : '—'} coins</strong> ({formatCoinsAsUsd(analytics?.coinsEarned)}) · Min withdrawal: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins
                     </p>
                   </div>
                 </div>
@@ -303,7 +311,7 @@ export default function CreatorDashboardScreen() {
                         />
                       </div>
                       <div className="w-16 text-xs text-right text-gray-500 dark:text-gray-400">
-                        {formatNumber(stat.views || 0)}
+                        {formatNumber(stat.views)}
                       </div>
                     </div>
                   ))}
@@ -315,8 +323,10 @@ export default function CreatorDashboardScreen() {
               )}
             </div>
             
-            {/* Growth Rate */}
-            {analytics?.growthRate !== undefined && (
+            {/* Growth Rate — only when a real rate was measured. Nothing
+                computes one, so the card stays hidden rather than showing a
+                fabricated green "+0.0%". */}
+            {typeof analytics?.growthRate === 'number' && (
               <div className={cn(
                 'p-4 rounded-2xl',
                 'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
@@ -348,24 +358,24 @@ export default function CreatorDashboardScreen() {
               </div>
             )}
             
-            {/* Active Days */}
-            {analytics?.activeDays !== undefined && (
-              <div className={cn(
-                'p-4 rounded-2xl',
-                'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-                'border border-gray-200/60 dark:border-gray-800/60'
-              )}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Active Days</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {analytics.activeDays} days
-                    </p>
-                  </div>
-                  <Calendar className="w-6 h-6 text-purple-500" />
+            {/* Active Days — the canonical count lives on the user profile
+                (`activeDaysCount`), never on the analytics doc; an unmeasured
+                value renders unknown. */}
+            <div className={cn(
+              'p-4 rounded-2xl',
+              'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+              'border border-gray-200/60 dark:border-gray-800/60'
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Active Days</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {typeof activeDaysCount === 'number' ? `${activeDaysCount} days` : '—'}
+                  </p>
                 </div>
+                <Calendar className="w-6 h-6 text-purple-500" />
               </div>
-            )}
+            </div>
           </>
         )}
       </div>

@@ -35,7 +35,9 @@ export function SWUpdateBanner() {
           }
         });
       });
-    }).catch(() => {});
+    }).catch((e) => {
+      console.warn('Service-worker update check failed', e?.message);
+    });
 
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);

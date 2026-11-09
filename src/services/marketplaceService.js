@@ -33,13 +33,17 @@ class MarketplaceService {
       if (Array.isArray(saved)) {
         this.orders = saved;
       }
-    } catch (_) {}
+    } catch (e) {
+      log.warn('Local order history read failed', { error: e?.message });
+    }
   }
 
   async _saveOrders() {
     try {
       await localforage.setItem('arvdoul_marketplace_orders', this.orders);
-    } catch (_) {}
+    } catch (e) {
+      log.warn('Local order history write failed', { error: e?.message });
+    }
   }
 
   async getProducts(category = 'All') {

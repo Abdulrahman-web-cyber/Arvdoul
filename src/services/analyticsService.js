@@ -67,42 +67,6 @@ const ANALYTICS_CONFIG = {
   SNAPSHOT_COLLECTION: 'user_daily_stats', // follower-count snapshots (migration: REFACTOR_PROGRESS.md)
 };
 
-class LRUCache {
-  constructor(maxSize = 100, ttl = ANALYTICS_CONFIG.CACHE_TTL) {
-    this.maxSize = maxSize;
-    this.ttl = ttl;
-    this.cache = new Map();
-  }
-
-  get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-    return entry.value;
-  }
-
-  set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
-    }
-    this.cache.set(key, { value, timestamp: Date.now() });
-  }
-
-  delete(key) {
-    this.cache.delete(key);
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-}
-
 function enhanceError(error, defaultMessage) {
   const errorMap = {
     'permission-denied': 'You do not have permission to access analytics.',
@@ -266,8 +230,11 @@ class UltimateAnalyticsService {
         coinsEarned: 0,
         dailyStats: [],
         topPosts: [],
-        growthRate: 0,
-        activeDays: 0,
+        // Nothing computes a growth rate or an active-day count into
+        // profile_analytics, so an absent value is unknown (rendered '—' /
+        // hidden), never a fabricated measured 0.
+        growthRate: null,
+        activeDays: null,
         demographics: {
           ageGroups: {},
           gender: {},
@@ -275,11 +242,13 @@ class UltimateAnalyticsService {
           interests: {},
         },
         ranking: null,
+        // No previous period has been compared yet, so every change is
+        // unknown (the UI hides the badge), never a measured "0% change".
         changes: {
-          views: 0,
-          reach: 0,
-          engagement: 0,
-          coins: 0,
+          views: null,
+          reach: null,
+          engagement: null,
+          coins: null,
         },
         lastUpdated: new Date().toISOString(),
       };
@@ -302,12 +271,19 @@ class UltimateAnalyticsService {
           hasData: true,
           totalViews,
           totalReach,
-          totalEngagement: data.totalEngagement || 0,
-          coinsEarned: data.coinsEarned || 0,
+          // Nothing on the server increments `totalEngagement`, so an absent
+          // value is unknown (rendered '—'), not a measured zero.
+          totalEngagement: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
+          coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null,
           dailyStats: this._extractDailyStats(data.dailyStats, startDate),
           topPosts: data.topPosts || [],
-          growthRate: data.growthRate || 0,
-          activeDays: data.activeDays || 0,
+          // Nothing writes a growth rate, so a stored value is the only real
+          // one; an absent one is unknown (the dashboard hides the card).
+          growthRate: typeof data.growthRate === 'number' ? data.growthRate : null,
+          // Active days live on the user doc (functions/levelSystem
+          // recordActiveDay writes `activeDaysCount`), never on the analytics
+          // doc; an absent value is unknown, not a measured 0.
+          activeDays: typeof data.activeDays === 'number' ? data.activeDays : null,
           demographics: data.demographics || analytics.demographics,
         };
 
@@ -323,10 +299,17 @@ class UltimateAnalyticsService {
           const previousCoins = previousStats.reduce((sum, s) => sum + (s.coins || 0), 0);
 
           analytics.changes = {
-            views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : 0,
-            reach: previousTotalReach > 0 ? ((analytics.totalReach - previousTotalReach) / previousTotalReach) * 100 : 0,
-            engagement: previousTotalEngagement > 0 ? ((analytics.totalEngagement - previousTotalEngagement) / previousTotalEngagement) * 100 : 0,
-            coins: previousCoins > 0 ? ((analytics.coinsEarned - previousCoins) / previousCoins) * 100 : 0,
+            // A change is only known when a real previous period exists and
+            // its baseline is non-zero; otherwise it is unknown (null), never
+            // a fabricated "0%".
+            views: previousTotalViews > 0 ? ((analytics.totalViews - previousTotalViews) / previousTotalViews) * 100 : null,
+            reach: previousTotalReach > 0 ? ((analytics.totalReach - previousTotalReach) / previousTotalReach) * 100 : null,
+            engagement: previousTotalEngagement > 0 && typeof analytics.totalEngagement === 'number'
+              ? ((analytics.totalEngagement - previousTotalEngagement) / previousTotalEngagement) * 100
+              : null,
+            coins: previousCoins > 0 && typeof analytics.coinsEarned === 'number'
+              ? ((analytics.coinsEarned - previousCoins) / previousCoins) * 100
+              : null,
           };
         }
       } else {
@@ -337,17 +320,20 @@ class UltimateAnalyticsService {
           countersManager.get({ docPath, field: 'totalReach', fallback: 0 }),
         ]);
 
-        let coinsEarned = 0;
-        let followerCount = 0;
+        let coinsEarned = null;
         try {
           const userRef = doc(this.firestore, 'users', userId);
           const uSnap = await getDoc(userRef);
           if (uSnap.exists()) {
             const uData = uSnap.data();
-            coinsEarned = uData.coins ?? uData.coinBalance ?? 0;
-            followerCount = uData.followerCount ?? uData.followersCount ?? 0;
+            // A failed/absent identity read leaves coins unknown (rendered '—'),
+            // not a fabricated "0 coins earned".
+            const rawCoins = uData.coins ?? uData.coinBalance;
+            coinsEarned = typeof rawCoins === 'number' ? rawCoins : null;
           }
-        } catch { /* identity optional */ }
+        } catch (e) {
+          logger.warn('Analytics identity read failed; coins unknown', { userId, error: e?.message });
+        }
 
         let topPosts = [];
         let totalEngagement = 0;
@@ -355,37 +341,39 @@ class UltimateAnalyticsService {
           const postsRef = collection(this.firestore, 'posts');
           const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(10)));
           topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          totalEngagement = topPosts.reduce((sum, p) => sum + (p.likesCount || p.likes || 0) + (p.commentsCount || 0) + (p.sharesCount || 0), 0);
-        } catch { /* posts optional */ }
+          // Engagement is stored under `stats`; the top-level `likesCount`/
+          // `likes` fields are never written, so summing them produced a
+          // measured-looking 0 engagement for every creator.
+          totalEngagement = topPosts.reduce((sum, p) => {
+            const s = p.stats || {};
+            return sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);
+          }, 0);
+        } catch (e) {
+          totalEngagement = null;
+          logger.warn('Analytics top-posts read failed; engagement is unavailable', { userId, error: e?.message });
+        }
 
-        const days = this._getTimeframeDays(timeframe);
+        // No per-day series is stored for a brand-new creator, and a synthetic
+        // flat-then-spike series would render as measured daily data in the
+        // chart and sparkline. Report the real total and no series instead.
         const dailyStats = [];
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          dailyStats.push({
-            date: d.toISOString().split('T')[0],
-            views: 0,
-            reach: 0,
-            engagement: 0,
-            coins: 0,
-          });
-        }
-        if (totalViews > 0 && dailyStats.length > 0) {
-          dailyStats[dailyStats.length - 1].views = totalViews;
-        }
 
         analytics = {
           ...analytics,
           hasData: Boolean(totalViews > 0 || coinsEarned > 0 || topPosts.length > 0),
           totalViews,
-          totalReach: totalReach || Math.max(totalViews, followerCount),
+          // `totalReach` is the sharded counter read; inventing it as
+          // max(views, followers) presented an estimate as a measurement.
+          totalReach,
           totalEngagement,
           coinsEarned,
           dailyStats,
           topPosts: topPosts.slice(0, 5),
-          growthRate: 0,
-          activeDays: topPosts.length > 0 ? Math.min(topPosts.length, days) : 0,
+          // The number of recent posts is NOT the canonical active-day count
+          // (`users/{uid}.activeDaysCount`, written by recordActiveDay); deriving
+          // one from the other fabricated a measured streak of activity.
+          growthRate: null,
+          activeDays: null,
           demographics: analytics.demographics,
         };
       }
@@ -400,26 +388,14 @@ class UltimateAnalyticsService {
       this.cache.set(cacheKey, analytics);
       return analytics;
     } catch (error) {
-      logger.warn('Get user analytics error caught, returning resilient fallback:', { error: error.message, userId });
-      const fallbackAnalytics = {
-        userId,
-        timeframe,
-        hasData: false,
-        totalViews: 0,
-        totalReach: 0,
-        totalEngagement: 0,
-        coinsEarned: 0,
-        dailyStats: [],
-        topPosts: [],
-        growthRate: 0,
-        activeDays: 0,
-        demographics: { ageGroups: {}, gender: {}, locations: {}, interests: {} },
-        ranking: { rank: null, totalCreators: 0, percentile: null },
-        changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
-        lastUpdated: new Date().toISOString(),
-      };
-      this.cache.set(cacheKey, fallbackAnalytics);
-      return fallbackAnalytics;
+      // A failed read is *unknown*, not zero. Returning (and caching!) an
+      // all-zero "resilient fallback" rendered 0 views / 0 reach / 0 coins as
+      // measured data, cleared the caller's error branch and poisoned the cache
+      // so later reads returned the fabricated zeros without retrying. Surface
+      // the failure; the callers (analyticsStore, VideoAnalyticsScreen) already
+      // render an error state, and CreatePost treats analytics as advisory.
+      logger.error('Get user analytics failed', { error: error?.message, userId });
+      throw error;
     }
   }
 
@@ -506,10 +482,16 @@ class UltimateAnalyticsService {
         total: snapshot.size,
       };
       
-      if (userIndex !== -1) {
+      // A rank is only meaningful against a maintained, positive score.
+      // `profile_analytics.coinsEarned` is never incremented server-side
+      // (earnings live on the wallet, N169), so ordering by it placed every
+      // creator in an arbitrary order and handed out a fabricated "Top N%"
+      // label. An unranked creator stays unranked.
+      const userScore = userIndex !== -1 ? topCreators[userIndex].coinsEarned : null;
+      if (userIndex !== -1 && typeof userScore === 'number' && userScore > 0) {
         ranking.position = userIndex + 1;
         ranking.percentile = ((snapshot.size - userIndex) / snapshot.size) * 100;
-        
+
         if (ranking.percentile >= 99) ranking.label = 'Top 1%';
         else if (ranking.percentile >= 95) ranking.label = 'Top 5%';
         else if (ranking.percentile >= 90) ranking.label = 'Top 10%';
@@ -517,13 +499,14 @@ class UltimateAnalyticsService {
         else if (ranking.percentile >= 50) ranking.label = 'Top 50%';
         else ranking.label = 'Rising Creator';
       }
-      
+
       return ranking;
     } catch (error) {
+      // A failed read is unknown, not "New Creator".
       return {
         position: null,
         percentile: null,
-        label: 'New Creator',
+        label: null,
         total: 0,
       };
     }
@@ -575,7 +558,7 @@ class UltimateAnalyticsService {
     try {
       await this._ensureInitialized();
       
-      const { doc, getDoc, collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+      const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
       
       // Real historical follower snapshots (user_daily_stats) when available.
       const snapshotsRef = collection(this.firestore, ANALYTICS_CONFIG.SNAPSHOT_COLLECTION);
@@ -593,37 +576,19 @@ class UltimateAnalyticsService {
           .reverse()
           .map(s => ({
             date: s.date,
-            followers: s.value || 0,
-            newFollowers: s.delta || 0,
+            // `_recordFollowerSnapshotIfDue` writes `value` only; a missing
+            // field is unknown, not a measured 0.
+            followers: typeof s.value === 'number' ? s.value : null,
+            newFollowers: typeof s.delta === 'number' ? s.delta : null,
           }));
         return growthData;
       }
 
-      // Fallback (legacy behavior): estimated growth from current follower count.
-      // NOTE: keep until snapshot collection is populated (migration plan:
-      // userService.followUser/unfollowUser record daily snapshots).
-      const userRef = doc(this.firestore, 'users', userId);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) return [];
-      
-      const currentFollowers = userSnap.data().followerCount || 0;
-      const estimatedDailyGrowth = currentFollowers / Math.max(days, 1);
-      
-      const growthData = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const daysFromNow = days - i;
-        
-        growthData.push({
-          date: this._getDateString(date),
-          followers: Math.round(currentFollowers - (estimatedDailyGrowth * daysFromNow)),
-          newFollowers: Math.round(estimatedDailyGrowth),
-        });
-      }
-      
-      return growthData;
+      // No snapshots yet means there is no measured growth to report — an
+      // invented straight-line estimate (currentFollowers / days) would render
+      // a fabricated trend. Return nothing until real snapshots exist;
+      // `userService._recordFollowerSnapshotIfDue` writes them on follow/unfollow.
+      return [];
     } catch (error) {
       logger.error('Get follower growth failed', { error: error.message, userId });
       return [];
@@ -889,7 +854,9 @@ class UltimateAnalyticsService {
     }
     
     for (const unsub of this.subscriptions.values()) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Analytics listener unsubscribe failed', { error: e?.message });
+      }
     }
     this.subscriptions.clear();
     

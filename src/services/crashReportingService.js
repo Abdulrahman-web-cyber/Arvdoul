@@ -52,7 +52,9 @@ class CrashReportingService {
         existing.push(payload);
         localStorage.setItem('arvdoul_pending_crashes', JSON.stringify(existing));
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('Pending-crash persist failed', { error: e?.message });
+    }
   }
 
   /**

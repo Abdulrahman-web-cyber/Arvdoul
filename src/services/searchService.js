@@ -255,7 +255,9 @@ class AnalyticsBuffer {
         attempt++;
       }
     }
-    await offlineQueue.enqueue({ type: 'search.analytics', payload: event }).catch(() => {});
+    await offlineQueue.enqueue({ type: 'search.analytics', payload: event }).catch((e) => {
+      logger.debug('Search analytics enqueue failed', { error: e?.message });
+    });
   }
 }
 
@@ -622,7 +624,9 @@ class UltimateSearchService {
           docs = tokenSnap.docs;
           lastSnapshot = docs[docs.length - 1];
         }
-      } catch (_e) {}
+      } catch (_e) {
+        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+      }
     }
 
     if (docs.length === 0) {
@@ -633,6 +637,7 @@ class UltimateSearchService {
         docs = snap.docs;
         lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
       } catch (_e) {
+        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
         docs = [];
       }
     }
@@ -682,7 +687,9 @@ class UltimateSearchService {
           docs = tokenSnap.docs;
           lastSnapshot = docs[docs.length - 1];
         }
-      } catch (_e) {}
+      } catch (_e) {
+        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+      }
     }
 
     if (docs.length === 0) {
@@ -693,6 +700,7 @@ class UltimateSearchService {
         docs = snap.docs;
         lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
       } catch (_e) {
+        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
         docs = [];
       }
     }
@@ -732,7 +740,9 @@ class UltimateSearchService {
           docs = tokenSnap.docs;
           lastSnapshot = docs[docs.length - 1];
         }
-      } catch (_e) {}
+      } catch (_e) {
+        logger.debug('[Search] token query failed; falling back to unfiltered page', { error: _e?.message });
+      }
     }
 
     if (docs.length === 0) {
@@ -743,6 +753,7 @@ class UltimateSearchService {
         docs = snap.docs;
         lastSnapshot = docs.length === limitCount ? docs[docs.length - 1] : null;
       } catch (_e) {
+        logger.debug('[Search] fallback page query failed; returning empty', { error: _e?.message });
         docs = [];
       }
     }
@@ -807,7 +818,9 @@ class UltimateSearchService {
               });
             });
           } catch (err) {
-            // catch missing fields gracefully
+            // A candidate missing required fields (e.g. a partially written
+            // document) is skipped; log so a systematic schema drift shows.
+            logger.warn('Search candidate skipped (missing fields)', { error: err?.message });
           }
         }
       }
@@ -1050,6 +1063,7 @@ class UltimateSearchService {
         metadata: { advertiser: sponsored.data.advertiser },
       };
     } catch (err) {
+      logger.warn('[Search] Sponsored result lookup failed', err);
       return null;
     }
   }
@@ -1061,7 +1075,8 @@ class UltimateSearchService {
       const profile = await userService.getUserProfile(userId);
       if (profile) this.userProfileCache.set(userId, profile);
       return profile;
-    } catch {
+    } catch (err) {
+      logger.warn('[Search] Profile lookup failed', err);
       return null;
     }
   }

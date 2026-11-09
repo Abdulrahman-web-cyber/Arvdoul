@@ -7,6 +7,7 @@ import { Trophy, Crown, Medal, ArrowUp, ArrowDown, Minus, Star, Users, Flame, Li
 import { RANKING_CONFIG } from '../../services/rankingService.js';
 import rankingService from '../../services/rankingService.js';
 import { cn } from '../../lib/utils';
+import { pickDisplayName, pickHandle, deriveHandle } from '../../services/profileReadModel.js';
 
 const TabButton = ({ active, onClick, children, icon: Icon, isDark }) => (
   <button
@@ -50,6 +51,15 @@ const TimeRangeSelector = ({ value, onChange, isDark }) => (
 );
 
 const TrendIndicator = ({ trend }) => {
+  if (trend == null) {
+    // No previous ranking period to compare against — showing "0 / no change"
+    // would claim a measured flat trend that was never computed.
+    return (
+      <span className="inline-flex items-center gap-0.5 text-slate-500 text-xs font-medium" title="Trend unavailable">
+        <Minus className="w-3 h-3" /> —
+      </span>
+    );
+  }
   if (trend > 0) {
     return (
       <span className="inline-flex items-center gap-0.5 text-emerald-400 text-xs font-bold">
@@ -164,18 +174,18 @@ const RankCard = ({ rank, item, isDark }) => {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <h4 className="font-bold text-xs sm:text-sm truncate flex items-center gap-1.5">
-          <span>{item.user?.displayName || item.community?.name || 'Citizen'}</span>
+          <span>{pickDisplayName([item.user?.displayName, item.community?.name], { fallback: 'Member' })}</span>
           {item.badge && <TierBadge tier={item.badge} />}
         </h4>
         <p className="text-slate-400 text-xs truncate font-mono">
-          @{item.user?.username || item.community?.name?.toLowerCase().replace(/\s/g, '_') || 'unknown'}
+          @{pickHandle([item.user?.username]) || deriveHandle(item.community?.name) || 'unknown'}
         </p>
       </div>
 
       {/* Score & Trend */}
       <div className="text-right shrink-0">
         <div className="font-black text-sm sm:text-base text-purple-400">
-          {item.score?.toLocaleString() || 0}
+          {typeof item.score === 'number' ? item.score.toLocaleString() : '—'}
         </div>
         <TrendIndicator trend={item.trend} />
       </div>

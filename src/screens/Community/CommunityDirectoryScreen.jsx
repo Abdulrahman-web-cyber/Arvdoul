@@ -175,11 +175,11 @@ const CommunityDirectoryScreen = () => {
         <div className="flex items-center gap-4 mt-3 text-sm text-gray-500 dark:text-gray-400">
           <div className="flex items-center gap-1">
             <Users className="w-4 h-4" />
-            <span>{(community.stats?.memberCount || 0).toLocaleString()}</span>
+            <span>{typeof community.stats?.memberCount === 'number' ? community.stats.memberCount.toLocaleString() : '—'}</span>
           </div>
           <div className="flex items-center gap-1">
             <TrendingUp className="w-4 h-4" />
-            <span>{community.stats?.activityScore || 0} activity</span>
+            <span>{typeof community.stats?.activityScore === 'number' ? `${community.stats.activityScore} activity` : '— activity'}</span>
           </div>
         </div>
 

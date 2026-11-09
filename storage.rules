@@ -1,56 +1,66 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // ==================== USER MEDIA (owner write, public read) ====================
+    // ==================== MEDIA (owner write, per-namespace read) ====================
+    // Every path the client writes is `{namespace}/{ownerUid}/...` so the write
+    // gate can prove ownership from the path itself (`request.auth.uid ==
+    // {userId}`). The previous layout (`avatars/{userId}/{fileName}`,
+    // `posts/{userId}/{postId}/{fileName}`, ...) did NOT match what the client
+    // actually wrote (`avatars/{uid}`, `posts/{uid}/{file}`,
+    // `chat_media/{uid}/{file}`, `comments/voice/{uid}/{file}`, ...), so nearly
+    // every upload was denied with `storage/unauthorized`. `{fileName=**}` is
+    // used because it also matches the zero-segment form (`avatars/{uid}`).
+    //
     // Sizes and content types are enforced on WRITE only. A delete carries no
     // `request.resource`, so evaluating `request.resource.size` on a delete
     // throws and the whole operation is denied — every owner delete (avatar
     // replacement, post media cleanup, temp expiry, story media removal) failed.
     // `allow delete` is therefore owner-only and separate from the write gate.
 
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
     // User avatars — owner write/delete, public read, image only, max 10 MB
-    match /avatars/{userId}/{fileName} {
+    match /avatars/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) &&
         request.resource.size < 10 * 1024 * 1024 &&
         request.resource.contentType.matches('image/.*');
     }
 
     // User banners — owner write/delete, public read, image only, max 10 MB
-    match /banners/{userId}/{fileName} {
+    match /banners/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) &&
         request.resource.size < 10 * 1024 * 1024 &&
         request.resource.contentType.matches('image/.*');
     }
 
     // Post media — owner write/delete, public read, max 200 MB
-    match /posts/{userId}/{postId}/{fileName} {
+    match /posts/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 200 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 200 * 1024 * 1024;
     }
 
     // Story media — owner write/delete, public read (stories expire server-side)
-    match /stories/{userId}/{storyId}/{fileName} {
+    match /stories/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 100 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024;
     }
 
-    // Message media — participant read/write only (chat privacy), max 25 MB
-    match /messages/{conversationId}/{messageId}/{fileName} {
+    // Message media — participant read/write only (chat privacy), max 25 MB.
+    // The path carries the conversationId so the rule can prove membership
+    // against the conversation document (cross-service `firestore.get`).
+    match /messages/{conversationId}/{fileName=**} {
       function isParticipant() {
         return request.auth != null &&
-          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+          request.auth.uid in
+            firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participants;
       }
       allow read: if isParticipant();
       allow delete: if isParticipant();
@@ -58,59 +68,86 @@ service firebase.storage {
     }
 
     // Live media — owner write/delete, signed-in read
-    match /live/{userId}/{streamId}/{fileName} {
+    match /live/{userId}/{fileName=**} {
       allow read: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 500 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 500 * 1024 * 1024;
     }
 
-    // Community media — owner write/delete, signed-in read
-    match /communities/{userId}/{communityId}/{fileName} {
+    // Community media (avatar/cover) — owner write/delete, signed-in read
+    match /communities/{userId}/{fileName=**} {
       allow read: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 100 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024;
     }
 
     // Custom sounds (uploadCustomSound) — owner write/delete, public read,
     // audio content only, max 25 MB (matches the client-side limit).
-    match /sounds/{userId}/{fileName} {
+    match /sounds/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) &&
         request.resource.size < 25 * 1024 * 1024 &&
         request.resource.contentType.matches('audio/.*');
     }
 
     // Video uploads (videoService) — owner write/delete, public read
-    match /videos/{userId}/{fileName} {
+    match /videos/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 500 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 500 * 1024 * 1024;
     }
 
     // Video thumbnails / exports — owner write/delete, public read
-    match /thumbnails/{userId}/{fileName} {
+    match /thumbnails/{userId}/{fileName=**} {
       allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Comment media (voice notes) — owner write/delete, public read
+    match /comments/{userId}/{fileName=**} {
+      allow read: if true;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // Event media (cover images) — owner write/delete, public read
+    match /events/{userId}/{fileName=**} {
+      allow read: if true;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024;
+    }
+
+    // Group conversation photos — owner write/delete, signed-in read
+    match /group-photos/{userId}/{fileName=**} {
+      allow read: if request.auth != null;
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    // Audio-editor exports — owner write/delete, owner-only read, max 100 MB
+    match /audio_exports/{userId}/{fileName=**} {
+      allow read: if isOwner(userId);
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 100 * 1024 * 1024;
     }
 
     // Temp files (auto-delete after 24h) — owner-only, max 50 MB
-    match /temp/{userId}/{fileName} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null &&
-        request.auth.uid == userId &&
-        request.resource.size < 50 * 1024 * 1024;
+    match /temp/{userId}/{fileName=**} {
+      allow read: if isOwner(userId);
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId) && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // Generic owner-scoped media (storageService.generateSecurePath) —
+    // `users/{uid}/{yyyy}/{mm}/{dd}/{hash}/{fileName}` — owner-only.
+    match /users/{userId}/{fileName=**} {
+      allow read: if isOwner(userId);
+      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId);
     }
 
     // Default deny

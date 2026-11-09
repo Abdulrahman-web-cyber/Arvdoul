@@ -134,8 +134,10 @@ async function handleReportContent(data, context) {
     await db
       .doc(`${REPORT_TARGETS[type].contentCollection}/${targetId}`)
       .update({ reportCount: FieldValue.increment(1) });
-  } catch (_) {
-    // Target may not exist (e.g. already deleted); the report is still stored.
+  } catch (err) {
+    // Target may not exist (e.g. already deleted) — expected; a real write
+    // failure (quota/permissions) is logged so it is not indistinguishable.
+    logger.warn('reportCount increment skipped', { type, targetId, error: err.message });
   }
 
   return { success: true, type, targetId };

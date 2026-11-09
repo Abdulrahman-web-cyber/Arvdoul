@@ -13,6 +13,7 @@ import { MdAdsClick } from "react-icons/md";
 import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES, formatCoinsAsUsd } from "../../services/levelSystemService";
 import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 import achievementService from "../../services/achievementService";
+import { formatCount } from "../../lib/searchUtils";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -27,19 +28,8 @@ const knownLevel = (level) => {
 // A count the profile does not carry is unknown, not zero. Rendering `0` here
 // claimed "no videos / no saves / no collections / no likes" for a profile whose
 // only real fields are postCount/followerCount/followingCount (see
-// src/__tests__/noFabricatedData.test.js).
-const knownCount = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-};
-
-const formatCount = (value) => {
-  const n = knownCount(value);
-  if (n === null) return "—";
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
-};
+// src/__tests__/noFabricatedData.test.js). `formatCount` (canonical, from
+// searchUtils) renders the unknown as '—'.
 
 
 const ANIMATION_CONFIG = {
@@ -319,7 +309,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
       content: [
         {
           label: "Posts",
-          value: stats.postCount || 0,
+          value: formatCount(stats.postCount),
           icon: Grid3X3,
           color: "blue",
           change: stats.postsToday ? `+${stats.postsToday}` : "",
@@ -353,7 +343,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
       social: [
         {
           label: "Followers",
-          value: stats.followerCount || 0,
+          value: formatCount(stats.followerCount),
           icon: Users,
           color: "purple",
           change: stats.followersToday ? `+${stats.followersToday}` : "",
@@ -361,7 +351,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         {
           label: "Following",
-          value: stats.followingCount || 0,
+          value: formatCount(stats.followingCount),
           icon: UserPlus,
           color: "blue",
           change: stats.followingToday ? `+${stats.followingToday}` : "",

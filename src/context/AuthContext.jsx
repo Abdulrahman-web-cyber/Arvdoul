@@ -198,7 +198,9 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     authProvider: userProfile?.authProvider || user.providerData?.[0]?.providerId || 'email',
     isProfileComplete,
     accountStatus: userProfile?.accountStatus || 'active',
-    coins: userProfile?.coins || 0,
+    // Absent counts stay null (unknown); a fabricated 0 claims a measured
+    // empty account. Surfaces render `—` for null.
+    coins: userProfile?.coins ?? null,
     level: userProfile?.level !== undefined ? userProfile.level : null,
     // The mirror previously omitted standing/economy fields, so any consumer
     // that read them off `currentUser` (QuickAccessPanel's XP bar, level badge,
@@ -211,11 +213,15 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     totalEarned: userProfile?.totalEarned ?? null,
     isCreator: !!userProfile?.isCreator,
     isVerified: !!(userProfile?.isVerified || userProfile?.verified),
-    postCount: userProfile?.postCount || 0,
-    videoCount: userProfile?.videoCount || 0,
-    savedCount: userProfile?.savedCount || 0,
-    followerCount: userProfile?.followerCount || 0,
-    followingCount: userProfile?.followingCount || 0,
+    postCount: userProfile?.postCount ?? null,
+    videoCount: userProfile?.videoCount ?? null,
+    savedCount: userProfile?.savedCount ?? null,
+    followerCount: userProfile?.followerCount ?? null,
+    followingCount: userProfile?.followingCount ?? null,
+    // Active days are the canonical `users/{uid}.activeDaysCount` (written by
+    // functions/levelSystem recordActiveDay); absent stays null (unknown).
+    activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null,
+    activeStreak: userProfile?.activeStreak ?? null,
     isOnline: true,
     lastActive: new Date().toISOString(),
     createdAt: user.metadata?.creationTime || new Date().toISOString(),
@@ -352,7 +358,9 @@ export function AuthProvider({ children }) {
             try {
               const data = JSON.parse(e.newValue);
               handleMessage({ data });
-            } catch (err) {}
+            } catch (err) {
+              console.warn('Cross-tab auth broadcast parse failed', err?.message);
+            }
           }
         };
         window.addEventListener('storage', storageHandler);
@@ -509,9 +517,10 @@ export function AuthProvider({ children }) {
                 .then(({ levelSystemService }) =>
                   levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
                 )
-                .catch(() => {});
+                .catch((err) => console.warn('[Auth] daily-login XP not credited', err?.message));
               if (userService?.updateLastActive) {
-                userService.updateLastActive(uid).catch(() => {});
+                userService.updateLastActive(uid).catch((err) =>
+                  console.warn('[Auth] last-active update failed', err?.message));
               }
             }
 
@@ -543,7 +552,9 @@ export function AuthProvider({ children }) {
                 localStorage.removeItem('signup_step1');
                 localStorage.removeItem('signup_data');
                 localStorage.removeItem('signup_data_persist');
-              } catch (e) {}
+              } catch (e) {
+                console.warn('Signup draft cleanup failed', e?.message);
+              }
               clearOnboardingRequired();
             }
 
@@ -554,7 +565,9 @@ export function AuthProvider({ children }) {
                 const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
                             sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
                 if (raw) step1Data = JSON.parse(raw);
-              } catch (e) {}
+              } catch (e) {
+                console.warn('Signup step-1 data parse failed', e?.message);
+              }
             }
 
             const hasStep1Names = Boolean(!isDocComplete && (step1Data?.firstName || step1Data?.lastName));
@@ -572,7 +585,7 @@ export function AuthProvider({ children }) {
                 displayName: step1FullName,
                 firstName: step1Data.firstName || '',
                 lastName: step1Data.lastName || '',
-              }).catch(() => {});
+              }).catch((err) => console.warn('[Auth] step-1 name backfill failed', err?.message));
             }
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com') || profile.authProvider === 'google';
@@ -601,7 +614,8 @@ export function AuthProvider({ children }) {
             }
 
             if (isComplete && !onboarding && profile.isProfileComplete !== true) {
-              userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
+              userService.updateUserProfile(uid, { isProfileComplete: true }).catch((err) =>
+                console.warn('[Auth] could not flag profile complete', err?.message));
             }
             if (!onboarding) clearOnboardingRequired();
             if (status === 'active' || !status) {
@@ -613,7 +627,9 @@ export function AuthProvider({ children }) {
               const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
                           sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
               if (raw) step1Data = JSON.parse(raw);
-            } catch (e) {}
+            } catch (e) {
+              console.warn('Signup step-1 data parse failed', e?.message);
+            }
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com');
             const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
@@ -762,14 +778,16 @@ export function AuthProvider({ children }) {
               // cannot drain into this session.
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(lastProfileUidRef.current))
-                .catch(() => {});
+                .catch((err) => console.warn('[Auth] offline-queue purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
               localStorage.setItem('arvdoul_has_session', 'true');
               localStorage.setItem('arvdoul_uid', firebaseUser.uid);
               localStorage.setItem('uid', firebaseUser.uid);
-            } catch (e) {}
+            } catch (e) {
+              console.warn('Session marker write failed', e?.message);
+            }
 
             if (!initialProfileLoaded.current) {
               setLoading(true);
@@ -804,7 +822,7 @@ export function AuthProvider({ children }) {
             if (departingUid) {
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(departingUid))
-                .catch(() => {});
+                .catch((err) => console.warn('[Auth] offline-queue purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {
@@ -812,7 +830,9 @@ export function AuthProvider({ children }) {
               localStorage.removeItem('arvdoul_uid');
               localStorage.removeItem('uid');
               localStorage.removeItem('user');
-            } catch (e) {}
+            } catch (e) {
+              console.warn('Session marker clear failed', e?.message);
+            }
             initialProfileLoaded.current = false;
             setUser(null);
             setUserProfile(null);
@@ -1240,7 +1260,9 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('arvdoul_uid');
         localStorage.removeItem('uid');
         localStorage.removeItem('user');
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Sign-out session marker clear failed', e?.message);
+      }
       AuthStorageManager.clearAll();
       clearOnboardingRequired();
       broadcastRef.current?.postMessage({ type: 'signOut' });

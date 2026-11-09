@@ -352,9 +352,9 @@ const GridView = memo(({
                 </p>
 
                 <div className="flex items-center gap-2 text-[11px] text-white/70 font-medium">
-                  <span>{video.likesFormatted || `${video.likes || 0}`} likes</span>
+                  <span>{video.likesFormatted || (video.likes == null ? '—' : video.likes.toLocaleString())} likes</span>
                   <span>•</span>
-                  <span>{(video.views || 0).toLocaleString()} views</span>
+                  <span>{video.views == null ? '—' : video.views.toLocaleString()} views</span>
                 </div>
               </div>
             </motion.div>

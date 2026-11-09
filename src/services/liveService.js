@@ -666,9 +666,9 @@ class UltimateLiveService {
           const { levelSystemService } = await import('./levelSystemService.js');
           levelSystemService
             .awardExperience({ userId: viewerId, action: 'live_minute', count: Math.min(watchedMinutes, 100), source: `${streamId}_${viewerId}` })
-            .catch(() => {});
+            .catch((err) => logger.warn('live_minute XP award failed', { viewerId, error: err?.message }));
         } catch (e) {
-          // XP award is best-effort
+          logger.warn('live_minute XP award failed', { viewerId, error: e?.message });
         }
       }
     } catch (error) {
@@ -1002,13 +1002,19 @@ class UltimateLiveService {
 
   destroy() {
     for (const [key, unsub] of this._activeStreamListeners) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Live stream listener unsubscribe failed', { key, error: e?.message });
+      }
     }
     for (const [key, unsub] of this._commentListeners) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Live comment listener unsubscribe failed', { key, error: e?.message });
+      }
     }
     for (const [key, unsub] of this._viewerListeners) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Live viewer listener unsubscribe failed', { key, error: e?.message });
+      }
     }
     
     this._activeStreamListeners.clear();

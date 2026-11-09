@@ -341,13 +341,16 @@ export const ProfileHeroSection = memo(({
     if (profile?.isRoyal || profile?.royalFamily) return true;
     if (profile?.activeTitle && ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(profile.activeTitle).toLowerCase())) return true;
     if (Array.isArray(profile?.titles) && profile.titles.some(t => ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(t).toLowerCase()))) return true;
+    // Unknown dimensions stay null; `getRoyalEligibility` clamps internally and
+    // fails closed, so an unmeasured profile is denied for the right reason
+    // (no data) rather than because it was laundered into a measured 0.
     const stats = {
-      level: profile?.level || level || 0,
-      activeDays: profile?.activeDaysCount || profile?.activeDays || 0,
-      reputationScore: profile?.reputationScore || profile?.reputation || 0,
-      contributionScore: profile?.contributionScore || profile?.contribution || 0,
-      influenceScore: profile?.influenceScore || profile?.influence || 0,
-      achievements: profile?.achievements || 0,
+      level: profile?.level ?? level ?? null,
+      activeDays: profile?.activeDaysCount ?? profile?.activeDays ?? null,
+      reputationScore: profile?.reputationScore ?? profile?.reputation ?? null,
+      contributionScore: profile?.contributionScore ?? profile?.contribution ?? null,
+      influenceScore: profile?.influenceScore ?? profile?.influence ?? null,
+      achievements: profile?.achievements ?? null,
       policyStanding: profile?.policyStanding || profile?.accountStatus || null,
     };
     const dukeCheck = getRoyalEligibility('duke', stats);

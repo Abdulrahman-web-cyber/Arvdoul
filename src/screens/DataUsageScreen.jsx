@@ -69,8 +69,9 @@ export default function DataUsageScreen() {
           }
           if (!cancelled) setCacheEntries(counts);
         }
-      } catch {
+      } catch (e) {
         /* Cache API may be unavailable — cacheEntries stays null */
+        console.warn('Cache storage estimate unavailable', e?.message);
       }
     };
     load();

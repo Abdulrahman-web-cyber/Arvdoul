@@ -112,7 +112,11 @@ async function awardXpSafe(uid, action, options) {
   try {
     return await awardXp(uid, action, options);
   } catch (err) {
-    try { require('firebase-functions').logger.warn('awardXpSafe failed', { uid, action, error: err.message }); } catch {}
+    try {
+      require('firebase-functions').logger.warn('awardXpSafe failed', { uid, action, error: err.message });
+    } catch {
+      /* the logger itself failed; nothing further can be recorded */
+    }
     return { success: false, xpAwarded: 0 };
   }
 }

@@ -13,12 +13,12 @@ export default function PostAnalyticsScreen() {
   const [loadError, setLoadError] = useState(null);
   const [post, setPost] = useState(null);
   const [metrics, setMetrics] = useState({
-    views: 0,
-    likes: 0,
-    comments: 0,
-    shares: 0,
-    saves: 0,
-    engagementRate: 0,
+    views: null,
+    likes: null,
+    comments: null,
+    shares: null,
+    saves: null,
+    engagementRate: null,
   });
 
   useEffect(() => {
@@ -38,22 +38,24 @@ export default function PostAnalyticsScreen() {
         }
         if (postDoc) {
           setPost(postDoc);
-          const views = postDoc.viewsCount || postDoc.views || 0;
-          const likes = postDoc.likesCount || postDoc.likes?.length || 0;
-          const comments = postDoc.commentsCount || postDoc.comments || 0;
-          const shares = postDoc.sharesCount || postDoc.shares || 0;
-          const saves = postDoc.savesCount || 0;
-          const totalEngagements = likes + comments + shares + saves;
-          const engagementRate = views > 0 ? ((totalEngagements / views) * 100).toFixed(1) : 0;
+          // Engagement lives under `stats` (the shape firestoreService writes).
+          // Reading non-existent top-level `views`/`likes` rendered a measured
+          // "0" for every post. An absent stat stays null and renders '—'.
+          const stat = (value) => (typeof value === 'number' ? value : null);
+          const views = stat(postDoc.stats?.views ?? postDoc.viewsCount ?? postDoc.views);
+          const likes = stat(postDoc.stats?.likes ?? postDoc.likesCount);
+          const comments = stat(postDoc.stats?.comments ?? postDoc.commentsCount);
+          const shares = stat(postDoc.stats?.shares ?? postDoc.sharesCount);
+          const saves = stat(postDoc.stats?.saves ?? postDoc.savesCount);
+          const known = [likes, comments, shares, saves];
+          const totalEngagements = known.some((v) => v === null)
+            ? null
+            : known.reduce((sum, v) => sum + v, 0);
+          const engagementRate = views && totalEngagements !== null
+            ? ((totalEngagements / views) * 100).toFixed(1)
+            : null;
 
-          setMetrics({
-            views,
-            likes,
-            comments,
-            shares,
-            saves,
-            engagementRate,
-          });
+          setMetrics({ views, likes, comments, shares, saves, engagementRate });
         }
       } catch (err) {
         console.warn('Failed to load post analytics:', err);
@@ -68,6 +70,8 @@ export default function PostAnalyticsScreen() {
       active = false;
     };
   }, [postId]);
+
+  const show = (value, suffix = '') => (value == null ? '—' : `${value.toLocaleString()}${suffix}`);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#03071B] text-gray-900 dark:text-white p-4 sm:p-8">
@@ -133,7 +137,7 @@ export default function PostAnalyticsScreen() {
               <span className="text-xs font-medium uppercase tracking-wider">Views</span>
               <Eye className="w-4 h-4 text-violet-500" />
             </div>
-            <div className="text-2xl font-bold">{metrics.views.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{show(metrics.views)}</div>
           </div>
 
           <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
@@ -141,7 +145,7 @@ export default function PostAnalyticsScreen() {
               <span className="text-xs font-medium uppercase tracking-wider">Likes</span>
               <Heart className="w-4 h-4 text-rose-500" />
             </div>
-            <div className="text-2xl font-bold">{metrics.likes.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{show(metrics.likes)}</div>
           </div>
 
           <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
@@ -149,7 +153,7 @@ export default function PostAnalyticsScreen() {
               <span className="text-xs font-medium uppercase tracking-wider">Comments</span>
               <MessageCircle className="w-4 h-4 text-blue-500" />
             </div>
-            <div className="text-2xl font-bold">{metrics.comments.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{show(metrics.comments)}</div>
           </div>
 
           <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
@@ -157,7 +161,7 @@ export default function PostAnalyticsScreen() {
               <span className="text-xs font-medium uppercase tracking-wider">Engagement</span>
               <TrendingUp className="w-4 h-4 text-emerald-500" />
             </div>
-            <div className="text-2xl font-bold">{metrics.engagementRate}%</div>
+            <div className="text-2xl font-bold">{show(metrics.engagementRate, '%')}</div>
           </div>
         </div>
         )}
@@ -175,7 +179,7 @@ export default function PostAnalyticsScreen() {
                 <Share2 className="w-4 h-4 text-cyan-500" />
                 <span className="text-sm font-medium">Shares</span>
               </div>
-              <span className="font-bold text-sm">{metrics.shares.toLocaleString()}</span>
+              <span className="font-bold text-sm">{show(metrics.shares)}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
@@ -183,7 +187,7 @@ export default function PostAnalyticsScreen() {
                 <Bookmark className="w-4 h-4 text-amber-500" />
                 <span className="text-sm font-medium">Saves / Bookmarks</span>
               </div>
-              <span className="font-bold text-sm">{metrics.saves.toLocaleString()}</span>
+              <span className="font-bold text-sm">{show(metrics.saves)}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
@@ -192,7 +196,7 @@ export default function PostAnalyticsScreen() {
                 <span className="text-sm font-medium">Virality Score</span>
               </div>
               <span className="font-bold text-sm">
-                {metrics.views > 1000 ? 'High' : metrics.views > 100 ? 'Medium' : 'Normal'}
+                {metrics.views == null ? 'Unavailable' : metrics.views > 1000 ? 'High' : metrics.views > 100 ? 'Medium' : 'Normal'}
               </span>
             </div>
           </div>

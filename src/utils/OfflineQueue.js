@@ -309,7 +309,9 @@ class OfflineQueue {
       // another account's pending writes.
       const ownerUid = window._arvdoul_auth?.currentUser?.uid || null;
       if (!ownerUid) return;
-      this.process(handler, { ownerUid }).catch(() => {});
+      this.process(handler, { ownerUid }).catch((e) => {
+        console.warn('Offline queue process failed', e?.message);
+      });
     };
     this._onlineHandler = run;
     window.addEventListener('online', run);

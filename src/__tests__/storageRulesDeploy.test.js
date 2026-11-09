@@ -57,13 +57,23 @@ describe('storage.rules delete semantics', () => {
   });
 
   test('every media match declares an explicit owner/participant delete', () => {
-    const matchBlocks = [...rules.matchAll(/match\s+\/([^{]+)\{([\s\S]*?)\n\s{4}\}/g)];
-    expect(matchBlocks.length).toBeGreaterThan(0);
+    // Namespace-level blocks sit at 4-space indent inside the bucket wrapper.
+    // Slice each block up to the next namespace block; a nested helper
+    // `function ... { ... }` must not truncate the body (the earlier regex
+    // parser did, which is why this is line-based).
+    const lines = rules.split('\n');
+    const starts = [];
+    lines.forEach((line, i) => {
+      const m = line.match(/^ {4}match \/([^/]+)\//);
+      if (m) starts.push({ i, name: m[1] });
+    });
     const missing = [];
-    for (const [, p, body] of matchBlocks) {
-      if (p.includes('allPaths')) continue;
-      if (!/allow\s+delete\s*:/.test(body)) missing.push(p.trim());
-    }
+    starts.forEach((s, idx) => {
+      const end = idx + 1 < starts.length ? starts[idx + 1].i : lines.length;
+      const body = lines.slice(s.i, end).join('\n');
+      if (s.name.includes('allPaths')) return;
+      if (!/allow\s+delete\s*:/.test(body)) missing.push(s.name);
+    });
     expect(missing).toEqual([]);
   });
 

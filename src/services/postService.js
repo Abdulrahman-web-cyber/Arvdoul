@@ -33,7 +33,17 @@ class PostService {
   }
 
   async getPost(postId) {
-    return await this.fs.getPost(postId);
+    // firestoreService returns a `{ success, post }` envelope; the service
+    // contract is the post itself (or a thrown error). Callers read
+    // `post.stats`/`post.views` directly, so returning the envelope silently
+    // made every metric read undefined.
+    const res = await this.fs.getPost(postId);
+    if (!res?.success || !res.post) {
+      const err = new Error(res?.error || 'Post not found');
+      err.code = res?.code || 'not-found';
+      throw err;
+    }
+    return res.post;
   }
 
   async deletePost(postId, userId) {

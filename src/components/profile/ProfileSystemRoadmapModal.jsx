@@ -39,7 +39,10 @@ const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
       <div className="text-[11px] font-bold text-slate-400 font-mono">Eligibility Checklist:</div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
         {rows.map((row) => {
-          const met = row.current >= row.target;
+          // An unmeasured dimension is unknown, not a measured 0 — show '—'
+          // and leave the requirement unmet rather than claiming a 0/20.
+          const known = row.current != null && !Number.isNaN(row.current);
+          const met = known && row.current >= row.target;
           return (
             <span
               key={row.label}
@@ -48,7 +51,7 @@ const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
                 met ? 'text-emerald-400 border-emerald-500/30' : 'text-slate-400 border-white/5'
               )}
             >
-              {row.label} ({row.current}/{row.target})
+              {row.label} ({known ? row.current : '—'}/{row.target})
               {met ? <CheckCircle2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
             </span>
           );
@@ -77,20 +80,28 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
   const rawLvl = profile?.level;
   const currentLevel = rawLvl !== null && rawLvl !== undefined && !isNaN(Number(rawLvl)) && Number(rawLvl) > 0 ? Number(rawLvl) : null;
-  const currentXp = profile?.experience || profile?.xp || 0;
-  const levelInfo = useMemo(() => currentXp > 0 || currentLevel !== null ? getLevelInfo(currentXp) : { level: null, progress: 0, nextLevelXp: null }, [currentXp, currentLevel]);
-  const activeDays = Number(profile?.activeDaysCount || profile?.activeDays || 0);
-  const reputation = Number(profile?.reputationScore || profile?.reputation || 0);
-  const contribution = Number(profile?.contributionScore || profile?.contribution || 0);
-  const influence = Number(profile?.influenceScore || profile?.influence || 0);
-  const achievements = Number(
-    profile?.achievementsCount !== undefined
-      ? profile?.achievementsCount
-      : (Array.isArray(profile?.achievements) ? profile.achievements.length : 0)
+  // An absent XP is unknown, not 0 — a null must not render "Start posting" or
+  // a "Max" next-level badge for a profile that has simply not been measured.
+  const rawXp = profile?.experience ?? profile?.xp;
+  const hasXp = rawXp !== null && rawXp !== undefined && !Number.isNaN(Number(rawXp));
+  const currentXp = hasXp ? Number(rawXp) : null;
+  const levelInfo = useMemo(
+    () => (hasXp || currentLevel !== null) ? getLevelInfo(hasXp ? currentXp : 0) : { level: null, progress: null, nextLevelXp: null },
+    [hasXp, currentXp, currentLevel]
   );
+  // Unknown dimensions stay null so the eligibility checklist shows '—'
+  // instead of a fabricated 0/requirement.
+  const num = (v) => (v == null || Number.isNaN(Number(v)) ? null : Number(v));
+  const activeDays = num(profile?.activeDaysCount ?? profile?.activeDays);
+  const reputation = num(profile?.reputationScore ?? profile?.reputation);
+  const contribution = num(profile?.contributionScore ?? profile?.contribution);
+  const influence = num(profile?.influenceScore ?? profile?.influence);
+  const achievements = profile?.achievementsCount !== undefined
+    ? num(profile?.achievementsCount)
+    : (Array.isArray(profile?.achievements) ? profile.achievements.length : null);
 
   const stats = useMemo(() => ({
-    level: currentLevel || 0,
+    level: currentLevel,
     activeDays,
     reputation,
     contribution,
@@ -284,7 +295,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                         {currentLevel !== null ? `Level ${currentLevel} • ${currentRankTitle}` : 'Civic Standing Initializing'}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {currentXp > 0 ? `${currentXp.toLocaleString()} XP earned across Arvdoul` : 'Start posting & engaging to earn XP'}
+                        {currentXp == null ? 'XP not yet recorded' : `${currentXp.toLocaleString()} XP earned across Arvdoul`}
                       </div>
                     </div>
                   </div>
@@ -292,7 +303,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                   <div className="w-full sm:w-48 text-right space-y-1">
                     <div className="flex justify-between text-[11px] font-bold">
                       <span className="text-slate-400">Next Level</span>
-                      <span className="text-cyan-400">{levelInfo.nextLevelXp ? `${levelInfo.nextLevelXp.toLocaleString()} XP` : 'Max'}</span>
+                      <span className="text-cyan-400">{levelInfo.progress == null ? '—' : levelInfo.nextLevelXp ? `${levelInfo.nextLevelXp.toLocaleString()} XP` : 'Max'}</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                       <div
@@ -591,7 +602,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                   <RoyalEligibilityChecklist
                     rule={ROYAL_ELIGIBILITY.duke}
-                    level={currentLevel ?? 0}
+                    level={currentLevel}
                     activeDays={activeDays}
                     reputation={reputation}
                     contribution={contribution}
@@ -661,7 +672,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                   <RoyalEligibilityChecklist
                     rule={ROYAL_ELIGIBILITY.king}
-                    level={currentLevel ?? 0}
+                    level={currentLevel}
                     activeDays={activeDays}
                     reputation={reputation}
                     contribution={contribution}

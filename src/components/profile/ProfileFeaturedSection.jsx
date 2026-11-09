@@ -33,13 +33,17 @@ const ProfileFeaturedSection = memo(({
       const pinned = posts.filter(p => p.isPinned || p.isFeatured || p.featured || p.pinned);
       if (pinned.length > 0) {
         return pinned.slice(0, 3).map((p, idx) => {
-          const rawLikes = p.likesCount ?? (Array.isArray(p.likes) ? p.likes.length : p.likes) ?? 0;
-          const numLikes = Number(rawLikes) || 0;
-          const formattedLikes = numLikes >= 1000000 
-            ? `${(numLikes / 1000000).toFixed(1)}M` 
-            : numLikes >= 1000 
-              ? `${(numLikes / 1000).toFixed(1)}K` 
-              : `${numLikes}`;
+          // Engagement lives under `stats`; an absent count is unknown ('—'),
+          // never a measured 0 (top-level `likesCount` is never written).
+          const rawLikes = p.likesCount ?? (Array.isArray(p.likes) ? p.likes.length : p.likes) ?? p.stats?.likes;
+          const numLikes = typeof rawLikes === 'number' ? rawLikes : null;
+          const formattedLikes = numLikes == null
+            ? '—'
+            : numLikes >= 1000000
+              ? `${(numLikes / 1000000).toFixed(1)}M`
+              : numLikes >= 1000
+                ? `${(numLikes / 1000).toFixed(1)}K`
+                : `${numLikes}`;
 
           return {
             id: p.id,
