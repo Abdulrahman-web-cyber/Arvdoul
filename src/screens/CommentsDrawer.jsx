@@ -1141,7 +1141,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
           if (reset) setComments(postId, localStored, ranking, null, false, null);
           else appendComments(postId, localStored, false, null);
         }
-      } catch {}
+      } catch (e) {
+        console.warn('Local comment cache read failed', e?.message);
+      }
       if (reset) setInitialLoadError(false);
       else setLoadMoreError(false);
     } finally {
@@ -1269,7 +1271,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         const current = JSON.parse(localStorage.getItem(key) || '[]');
         current.unshift(optimistic);
         localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-      } catch {}
+      } catch (e) {
+        console.warn('Local comment cache write failed', e?.message);
+      }
       toast.success('Comment posted');
       return;
     }
@@ -1328,7 +1332,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         const current = JSON.parse(localStorage.getItem(key) || '[]');
         current.unshift(optimistic);
         localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-      } catch {}
+      } catch (e) {
+        console.warn('Local comment cache write failed', e?.message);
+      }
       toast.success('Comment saved locally');
       setReplyTarget(null);
     }

@@ -113,7 +113,9 @@ export default function CallScreen() {
 
         // Local ICE candidates → signaling doc.
         pc.onicecandidate = (e) => {
-          if (e.candidate) svc.addIceCandidate(callId, e.candidate, user.uid).catch(() => {});
+          if (e.candidate) svc.addIceCandidate(callId, e.candidate, user.uid).catch((err) => {
+            console.warn('ICE candidate publish failed', err?.message);
+          });
         };
         // Remote ICE candidates ← signaling doc (previously never applied).
         iceUnsubRef.current = await svc.subscribeToIce(callId, user.uid, async (candidate) => {

@@ -60,7 +60,9 @@ const saveIndex = (postId, index) => {
       const toRemove = entries.slice(0, allKeys.length - MAX_STORED_INDICES);
       toRemove.forEach(e => localStorage.removeItem(e.key));
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) { /* ignore */
+    console.warn('Image index prune failed', e?.message);
+  }
 };
 const loadIndex = (postId) => {
   if (!hasWindow) return 0;

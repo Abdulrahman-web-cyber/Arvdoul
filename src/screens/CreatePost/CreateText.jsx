@@ -94,7 +94,9 @@ const CharLimitExtension = Extension.create({
           tr.steps.forEach(step => {
             try {
               node = step.apply(node).doc ?? node;
-            } catch (e) { /* step may fail */ }
+            } catch (e) { /* step may fail */
+              console.warn('Text step apply failed; length estimate degraded', e?.message);
+            }
           });
           return node?.textContent?.length ?? newLen;
         })();

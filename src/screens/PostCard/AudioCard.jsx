@@ -300,7 +300,9 @@ const safeLocalStorage = {
   },
   set: (key, value) => {
     if (typeof window === 'undefined') return;
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
+      console.warn('Audio playback state persist failed', e?.message);
+    }
   },
 };
 

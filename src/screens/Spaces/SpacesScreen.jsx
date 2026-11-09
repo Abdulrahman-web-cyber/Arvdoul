@@ -178,7 +178,9 @@ export default function SpacesScreen() {
         if (currentUser && typeof bal === 'number') {
           setAppState({ currentUser: { ...currentUser, coins: bal } });
         }
-      } catch { /* best-effort */ }
+      } catch (e) { /* best-effort */
+        console.warn('Space tip balance refresh failed', e?.message);
+      }
       toast.success(`Sent ${tipAmount} Coins to ${tipModalSpeaker.name}! 🪙✨`);
       setTipModalSpeaker(null);
       handleSendReaction('💎');

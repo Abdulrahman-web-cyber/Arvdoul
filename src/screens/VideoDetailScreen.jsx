@@ -74,7 +74,9 @@ export default function VideoDetailScreen() {
                 bio: profile.bio,
               });
             }
-          } catch (e) { /* creator optional */ }
+          } catch (e) { /* creator optional */
+            console.warn('Video creator profile read failed', e?.message);
+          }
         }
 
         // Record a real view once
@@ -92,7 +94,9 @@ export default function VideoDetailScreen() {
             const state = await videoService.getViewerVideoState(data.id, user.uid);
             setLiked(state.liked);
             setSaved(state.saved);
-          } catch (e) { /* viewer state optional */ }
+          } catch (e) { /* viewer state optional */
+            console.warn('Viewer video state read failed', e?.message);
+          }
         }
       } catch (err) {
         setError(err?.message || 'Could not load this video.');

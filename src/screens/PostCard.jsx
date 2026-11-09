@@ -811,7 +811,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         } else {
           localStorage.removeItem(`arvdoul_reaction_${post.id}`);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Reaction state persist failed', e?.message);
+      }
     }
 
     if (debounceReactionRef.current) clearTimeout(debounceReactionRef.current);

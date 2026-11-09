@@ -783,7 +783,9 @@ export default function HomeScreen() {
       }
       if (typeof result?.newBalance === 'number') {
         setUserCoins(result.newBalance);
-        try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch {}
+        try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch (e) {
+          console.warn('Coin balance cache write failed', e?.message);
+        }
       }
       triggerHaptic('success');
       toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
@@ -969,7 +971,9 @@ export default function HomeScreen() {
               try {
                 const raw = localStorage.getItem(LOCAL_POSTS_KEY);
                 if (raw) localPosts = JSON.parse(raw);
-              } catch {}
+              } catch (e) {
+                console.warn('Local post cache read failed', e?.message);
+              }
               if (Array.isArray(localPosts) && localPosts.length > 0) {
                 const existingIds = new Set(newPosts.map(p => p.id));
                 // Community posts (visibility 'community') belong to their

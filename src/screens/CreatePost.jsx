@@ -950,7 +950,9 @@ function CreatePostProvider({ children }) {
     if (!draft && !isOfflineRef.current && services.current.firestore) {
       try {
         draft = await services.current.firestore.getDraft(draftId);
-      } catch {}
+      } catch (e) {
+        console.warn('Cloud draft fetch failed', e?.message);
+      }
     }
     if (!draft) { toast.error("Draft not found"); return; }
     const restoredMedia = [];
@@ -976,7 +978,9 @@ function CreatePostProvider({ children }) {
     if (!isOfflineRef.current && services.current.firestore) {
       try {
         await services.current.firestore.deleteDraft(draftId);
-      } catch {}
+      } catch (e) {
+        console.warn('Cloud draft delete failed', e?.message);
+      }
     }
     toast.success("Draft deleted");
   }, [refreshDraftsList]);
@@ -1671,7 +1675,9 @@ function CreatePostProvider({ children }) {
             const { getFeedService } = await import("../services/feedService.js");
             const feedService = services.current.feed || getFeedService();
             feedService.clearUserCache(userNow.uid);
-          } catch {}
+          } catch (e) {
+            console.warn('Feed cache clear failed', e?.message);
+          }
         } catch (bgErr) {
           // The server write failed (offline or transient). The optimistic entry
           // holds blob: URLs and no Firestore document, so leaving it in the
@@ -1693,7 +1699,9 @@ function CreatePostProvider({ children }) {
               LOCAL_POSTS_KEY,
               JSON.stringify(localList.filter(p => p.id !== instantPostId))
             );
-          } catch {}
+          } catch (e) {
+            console.warn('Local post cleanup failed', e?.message);
+          }
           toast.error(
             queued
               ? "You're offline — this post will publish when you reconnect."
@@ -2556,7 +2564,8 @@ const LauncherGrid = React.memo(() => {
         }
       }
     } catch (_e) {
-      // analytics fallback gracefully
+      // Analytics are advisory; the composer stays usable without them.
+      console.warn('Composer analytics unavailable:', _e?.message);
     } finally {
       setLoadingAnalytics(false);
     }

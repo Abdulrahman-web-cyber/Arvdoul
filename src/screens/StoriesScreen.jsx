@@ -1177,7 +1177,9 @@ export default function StoriesScreen() {
                         // client-side (there is no server story-reward path).
                         try {
                           getMonetizationService().recordAdImpression(currentStory.id, 'stories_click');
-                        } catch {}
+                        } catch (e) {
+                          console.warn('Story click impression not recorded', e?.message);
+                        }
                       }}
                       className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8B1EF3] to-[#0088FF] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
                     >

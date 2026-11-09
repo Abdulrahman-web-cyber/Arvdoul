@@ -69,7 +69,8 @@ export default function SubscriptionScreen() {
       try {
         const status = await getSubscriptionStatus();
         setCurrentSubscription(status?.tier || null);
-      } catch {
+      } catch (e) {
+        console.warn('Subscription status read failed', e?.message);
         // A failed status read leaves `currentSubscription` null (no plan
         // highlighted); the subscribe buttons still work, so this is a
         // non-fatal, non-user-facing failure.
