@@ -22,13 +22,13 @@ total work._
 | Storage rules | 158 lines |
 | Firestore indexes | 132 |
 | Routes | ~164 paths, 93 lazy-loaded |
-| Tests | 115 suites, 1451 passing / 5 skipped |
+| Tests | 123 suites, 1470 passing / 5 skipped |
 | Bundle | 7.1 MB JS raw, ~1.9 MB gzip (largest chunk: ImageEditor 984 KB) |
 | `onSnapshot` listeners | 32 |
 | `getDocs` call sites | 163 |
 | i18n | 7 locales, only 2/132 screens use `useTranslation`, 71 `t()` calls total |
-| Audit findings closed | N001–N182 (173 tracked) |
-| Audit findings open | N175 (rankings writer) |
+| Audit findings closed | N001–N184 (175 tracked) |
+| Audit findings open | N175 (rankings writer; needs a product ranking formula) |
 
 ---
 

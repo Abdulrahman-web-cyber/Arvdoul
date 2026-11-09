@@ -17,16 +17,24 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | T1.3 | Firestore query-index parity | `firestoreQueryIndexMap.test.js`; removed dead `reels(createdAt)` index; `docs/engineering/firestore-query-index-map.md` |
 | T1.4 | Accessibility gate | `a11yInteractiveGuard.test.js`; 17 interactive divs -> real controls/sliders |
 | #16 | Node parity + CI promotion | `engines.node >=22`, `.nvmrc`, `.node-version`; lint + test jobs now hard-failing; test matrix Node 22 & 24 |
+| #12 | Design-system consolidation (brand hex) | `brandHexRatchetGuard.test.js` + `scripts/brandHexBaseline.json` (ratchet may only shrink); LoadingSpinner/Collage migrated to `tokens.color.brand.*` (362 -> 349) |
+| #13 | Shared state primitives | `design-system/PermissionDenied.jsx` replaces 3 hand-rolled admin denial cards; `sharedStatePrimitivesGuard.test.js` |
+| N183 | No-fabrication sweep round 2 | `noFabricatedData` +N184 assertions; 7 count coercions -> `unknownNumber` (—) |
+| N184 | Denied-block duplication + count sweep | `sharedStatePrimitivesGuard.test.js`; see N183 |
 
-New guards are registered in the hard-failing `guards` CI job.
+New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
+`a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`.
 
 ## Next exact tasks (dependency order)
 
-1. **#12 Design-system consolidation** - migrate raw brand hex in UI to tokens;
-   extend `designTokenDriftGuard`.
-2. **#13 Shared state primitives** - adopt `EmptyState`/`ErrorState`.
-3. **#11 i18n rollout** - extract strings per screen group.
-4. **#17/#14/#15** - contract ratchet, offline pending, observability sink.
+1. **#12 Design-system consolidation** (continued) - migrate the remaining ~44 files
+   of raw brand hex to `tokens`/`BRAND_GRADIENT`; lower `scripts/brandHexBaseline.json`
+   in the same change (the ratchet may only shrink).
+2. **#11 i18n rollout** - extract strings per screen group (only 3 screens use
+   `useTranslation` today).
+3. **#9 Story/Vibe lifecycle** - expiry sweep + client read filter + tests.
+4. **#10 Video/Sparks** - moderation wiring on the playback path.
+5. **#14/#15/#17** - offline pending surfacing, observability sink, contract ratchet.
 
 ## Commands to resume
 
