@@ -217,3 +217,16 @@ npm run build
 2. Chasing "surpass major platforms": profile highlight creation UI, richer
    About/Preview surfaces, PII boundary review.
 3. Re-run the `guards` job suites after any further reader changes.
+
+## Checkpoint — N167/N168 (economy + verification fabricated zeros)
+
+- N167 `CreatorPayoutScreen`: earnings (`gifts`/`ads`/`other`) and
+  `lifetimeWithdrawnCoins` are sums over the coin ledger. A **failed** read used
+  to collapse to `[]` → a confident "0 Coins earned" / "$0.00 withdrawn". Now
+  `null` until a fulfilled read; unknown renders "—".
+- N168 `AdminVerificationScreen`: `Number(applicant.strikesCount ?? 0)` fabricated
+  a clean "0 strikes ✓" and passed `meetsStrikes`; `strikesCount` is written only
+  on `communities`. Absent → `null`, gate fails closed, row renders "—".
+- Also: `EventDetailScreen` waitlist stat now renders "—" for an unknown count.
+- Guards added to `noFabricatedData.test.js`.
+- Gates: `npm test` 118 suites / 1424 tests; build ok; eslint 0 errors.

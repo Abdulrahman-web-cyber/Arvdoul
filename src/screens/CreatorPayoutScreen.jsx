@@ -34,8 +34,8 @@ export default function CreatorPayoutScreen() {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(null);
   const [payouts, setPayouts] = useState([]);
-  const [earnings, setEarnings] = useState({ gifts: 0, ads: 0, other: 0 });
-  const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(0);
+  const [earnings, setEarnings] = useState({ gifts: null, ads: null, other: null });
+  const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(null);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
 
@@ -73,16 +73,23 @@ export default function CreatorPayoutScreen() {
         setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
       // Real earnings breakdown, summed from the coin ledger — not a fixed ratio.
-      const earned = earnRes.status === 'fulfilled' && Array.isArray(earnRes.value) ? earnRes.value : [];
-      setEarnings({
-        gifts: sumCredits(earned, GIFT_REASONS),
-        ads: sumCredits(earned, AD_REASONS),
-        other: sumCredits(earned, OTHER_EARNING_REASONS),
-      });
-      const spent = spendRes.status === 'fulfilled' && Array.isArray(spendRes.value) ? spendRes.value : [];
-      setLifetimeWithdrawnCoins(spent
-        .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
-        .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
+      // A failed ledger read leaves the figures unknown (rendered "—"), never a
+      // fabricated "0 Coins earned".
+      if (earnRes.status === 'fulfilled' && Array.isArray(earnRes.value)) {
+        const earned = earnRes.value;
+        setEarnings({
+          gifts: sumCredits(earned, GIFT_REASONS),
+          ads: sumCredits(earned, AD_REASONS),
+          other: sumCredits(earned, OTHER_EARNING_REASONS),
+        });
+      }
+      // A failed spend-ledger read leaves lifetime withdrawals unknown ("—"),
+      // never a fabricated "$0.00 withdrawn".
+      if (spendRes.status === 'fulfilled' && Array.isArray(spendRes.value)) {
+        setLifetimeWithdrawnCoins(spendRes.value
+          .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
+          .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
+      }
       // payout account status (never simulated).
       try {
         const settings = await monSvc.getPayoutSettings();
@@ -321,7 +328,7 @@ export default function CreatorPayoutScreen() {
               <span>Gifts & Tips</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             </div>
-            <p className="text-xl font-bold">{earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold">{earnings.gifts == null ? '—' : earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
           </div>
 
           <div className={cn(
@@ -332,7 +339,7 @@ export default function CreatorPayoutScreen() {
               <span>Ad Revenue Share</span>
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
-            <p className="text-xl font-bold">{earnings.ads.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold">{earnings.ads == null ? '—' : earnings.ads.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
           </div>
 
           <div className={cn(
@@ -343,7 +350,7 @@ export default function CreatorPayoutScreen() {
               <span>Lifetime Withdrawn</span>
               <Clock className="w-3.5 h-3.5 text-blue-500" />
             </div>
-            <p className="text-xl font-bold">{formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
+            <p className="text-xl font-bold">{lifetimeWithdrawnCoins == null ? '—' : formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
           </div>
         </div>
 

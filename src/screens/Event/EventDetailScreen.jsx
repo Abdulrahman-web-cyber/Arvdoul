@@ -323,7 +323,7 @@ const EventDetailScreen = () => {
                       )}
                       <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                         <div className="text-2xl font-bold text-indigo-600">
-                          {event.stats?.waitlistCount || 0}
+                          {typeof event.stats?.waitlistCount === 'number' ? event.stats.waitlistCount : '—'}
                         </div>
                         <div className="text-sm text-gray-500">Waitlisted</div>
                       </div>

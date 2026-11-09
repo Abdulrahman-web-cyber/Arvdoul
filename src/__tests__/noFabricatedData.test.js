@@ -2841,4 +2841,24 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).not.toContain('formatViewCount(video?.commentsCount)');
     expect(s).toContain('video?.comments ?? video?.commentsCount');
   });
+
+  test('CreatorPayoutScreen renders unknown earnings as "—", never a fabricated 0', () => {
+    // The gifts/ads/withdrawn figures are sums of the coin ledger. A failed
+    // ledger read must leave them unknown, not claim "0 Coins earned".
+    const s = read('src/screens/CreatorPayoutScreen.jsx');
+    expect(s).toContain("useState({ gifts: null, ads: null, other: null })");
+    expect(s).toContain("earnings.gifts == null ? '—'");
+    expect(s).toContain("earnings.ads == null ? '—'");
+    expect(s).toContain("lifetimeWithdrawnCoins == null ? '—'");
+  });
+
+  test('AdminVerificationScreen treats an absent strike count as unknown, not 0', () => {
+    // `strikesCount` is written only on `communities`; a verification applicant
+    // never carries it, so `?? 0` fabricated a clean "0 strikes ✓" and passed
+    // the strike gate. Unknown must fail the gate closed.
+    const s = read('src/screens/Admin/AdminVerificationScreen.jsx');
+    expect(s).not.toContain('Number(applicant.strikesCount ?? 0)');
+    expect(s).toContain('applicant.strikesCount == null ? null');
+    expect(s).toContain('strikesCount !== null && strikesCount <=');
+  });
 });

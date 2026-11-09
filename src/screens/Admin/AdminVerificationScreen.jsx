@@ -164,11 +164,14 @@ const AdminVerificationScreen = () => {
             // fabricated "0".
             const rawFollowers = applicant.followerCount ?? applicant.followersCount ?? null;
             const followerCount = rawFollowers == null ? null : Number(rawFollowers);
-            const strikesCount = Number(applicant.strikesCount ?? 0);
+            // `strikesCount` is only ever written on `communities`, never on a
+            // verification applicant, so an absent value is *unknown* — not a
+            // clean "0 strikes ✓". Fail the gate closed and render "—".
+            const strikesCount = applicant.strikesCount == null ? null : Number(applicant.strikesCount);
             const emailVerified = Boolean(applicant.emailVerified);
             const phoneVerified = Boolean(applicant.phoneVerified);
             const meetsFollowers = followerCount !== null && followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
-            const meetsStrikes = strikesCount <= CREATOR_VERIFICATION_REQUIREMENTS.MAX_STRIKES;
+            const meetsStrikes = strikesCount !== null && strikesCount <= CREATOR_VERIFICATION_REQUIREMENTS.MAX_STRIKES;
             const meetsVerification =
               (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED || emailVerified) &&
               (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_PHONE_VERIFIED || phoneVerified);
@@ -240,7 +243,7 @@ const AdminVerificationScreen = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Policy Strikes:</span>
                       <span className={`font-semibold ${meetsStrikes ? 'text-emerald-600' : 'text-red-600 font-bold'}`}>
-                        {strikesCount} strikes {meetsStrikes ? '✓' : '⚠️ Strike Active'}
+                        {strikesCount === null ? '—' : `${strikesCount} strikes ${meetsStrikes ? '✓' : '⚠️ Strike Active'}`}
                       </span>
                     </div>
 
