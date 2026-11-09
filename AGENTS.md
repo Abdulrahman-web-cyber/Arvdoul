@@ -349,9 +349,14 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
 - `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS` and
   `AD_REWARD_COINS` own store pricing, the monthly subscription grant and the
   rewarded-ad payout. `functions/monetization.js` (`purchaseCoins`,
-  `createSubscription`), `functions/index.js` (`verifyPurchase`) and the store
-  screens (`CoinsScreen`, `Economy/WalletScreen`) all read these tables. Never
-  re-declare a package id, price or coin amount in a screen or a function.
+  `createSubscription`) and the store screens (`CoinsScreen`,
+  `Economy/WalletScreen`) all read these tables. Never re-declare a package id,
+  price or coin amount in a screen or a function. IAP (`verifyPurchase`) was
+  removed: it checked only that appstore/play *config keys existed* and then
+  minted coins without validating the receipt against Apple/Google — a
+  fabricated verification. Coin purchases go through the real Stripe-verified
+  `monetization.js` `purchaseCoins` path; if IAP returns, the receipt must be
+  validated against Apple/Google before any coin is granted.
 - Coin -> USD is display-only: use `coinsToUsd` / `formatCoinsAsUsd` from the
   shared config. Dividing by `COINS_PER_DOLLAR` by hand (or deriving a
   `1 / COINS_PER_DOLLAR` rate) in a screen is a bug — it re-implements the
