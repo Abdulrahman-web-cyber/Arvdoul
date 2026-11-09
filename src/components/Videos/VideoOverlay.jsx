@@ -77,6 +77,12 @@ const VideoOverlay = memo(({
 
         {/* Progress Bar */}
         <div
+          role="slider"
+          aria-label="Seek video"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration) || 0}
+          aria-valuenow={Math.round(currentTime)}
+          tabIndex={0}
           className="absolute bottom-20 left-4 right-4 h-1 bg-white/30 rounded-full cursor-pointer pointer-events-auto"
           onClick={handleProgressClick}
         >
@@ -151,6 +157,12 @@ const VideoOverlay = memo(({
                     onMouseLeave={() => setShowVolumeSlider(false)}
                   >
                     <div
+                      role="slider"
+                      aria-label="Volume"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round((isMuted ? 0 : volume) * 100)}
+                      tabIndex={0}
                       className="w-24 h-1 bg-white/30 rounded-full cursor-pointer"
                       onClick={handleVolumeClick}
                     >

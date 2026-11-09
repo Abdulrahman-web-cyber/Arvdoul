@@ -405,8 +405,10 @@ const EventDetailScreen = () => {
                           .filter(([_, data]) => data.status !== 'waitlisted')
                           .slice(0, 16)
                           .map(([userId, data]) => (
-                            <div 
+                            <button
+                              type="button"
                               key={userId}
+                              aria-label="View attendee profile"
                               className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                               onClick={() => navigate(`/profile/${userId}`)}
                             >
@@ -422,7 +424,7 @@ const EventDetailScreen = () => {
                                   Checked In
                                 </span>
                               )}
-                            </div>
+                            </button>
                           ))}
                       </div>
                     ) : (

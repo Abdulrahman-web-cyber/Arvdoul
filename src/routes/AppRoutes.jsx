@@ -1210,7 +1210,7 @@ export default function AppRoutes() {
       <Route path="/store" element={<Navigate to="/marketplace" replace />} />
       <Route path="/shop" element={<Navigate to="/marketplace" replace />} />
 
-      {/* 5. Community Polls & Prediction Markets */}
+      {/* 5. Community Polls */}
       <Route path="/polls" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>

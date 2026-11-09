@@ -24,6 +24,12 @@ const VideoProgressBar = memo(({
 
   return (
     <div
+      role="slider"
+      aria-label="Video progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(progress)}
+      tabIndex={0}
       className={`relative h-1 bg-white/30 rounded-full cursor-pointer group ${className}`}
       onClick={handleClick}
     >

@@ -779,6 +779,21 @@ export function AuthProvider({ children }) {
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(lastProfileUidRef.current))
                 .catch((err) => console.warn('[Auth] offline-queue purge on switch failed', err?.message));
+              // The monetization queue is a separate store; a queued purchase or
+              // ad reward must not replay under the incoming account.
+              import('../services/monetizationService.js')
+                .then(({ purgeMonetizationQueueForOwner }) => purgeMonetizationQueueForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] monetization-queue purge on switch failed', err?.message));
+              // The notifications queue is a third store; a queued send/mark-read
+              // must not replay under the incoming account.
+              import('../services/notificationsService.js')
+                .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] notification-queue purge on switch failed', err?.message));
+              // The messaging queue is a fourth store; a queued offline message
+              // must not replay (send from) the incoming account.
+              import('../services/messagesService.js')
+                .then(({ purgeMessageQueueForOwner }) => purgeMessageQueueForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] message-queue purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -823,6 +838,15 @@ export function AuthProvider({ children }) {
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(departingUid))
                 .catch((err) => console.warn('[Auth] offline-queue purge on logout failed', err?.message));
+              import('../services/monetizationService.js')
+                .then(({ purgeMonetizationQueueForOwner }) => purgeMonetizationQueueForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] monetization-queue purge on logout failed', err?.message));
+              import('../services/notificationsService.js')
+                .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] notification-queue purge on logout failed', err?.message));
+              import('../services/messagesService.js')
+                .then(({ purgeMessageQueueForOwner }) => purgeMessageQueueForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] message-queue purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {

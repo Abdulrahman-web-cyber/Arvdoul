@@ -179,9 +179,10 @@
 - `processVideo` storage trigger — slept 5s and fabricated `status: 'ready'` → honest
   transcodeStatus (mux_pipeline / pending_upload_completion); readiness comes from Mux webhooks.
 - New `functions/polls.js` `votePoll` — server-authoritative voting: client writes to the
-  poll doc were DENIED by rules (creator/admin only) and wagers never debited real coins.
-  Now: atomic counters + deterministic poll_votes doc (`${uid}_${pollId}`) + real
-  double-entry wager debit in one transaction.
+  poll doc were DENIED by rules (creator/admin only). Now: atomic counters +
+  deterministic poll_votes doc (`${uid}_${pollId}`) in one transaction. Prediction
+  wagering was a coin value sink (debit + supply burn with no settlement engine) and is
+  removed, not debited.
 
 **Rules compliance**
 - `firestore.rules` — `users` and `posts` updates now allow `isAdmin()` (admin console
@@ -336,8 +337,7 @@ server serves every modified module 200.
 - `pollService.createPoll` — fabricated creator identity ('usr-creator',
   'Arvdoul Creator', '@creator', Unsplash avatar) written to real Firestore
   docs → real user fields or explicit nulls; fake `endsIn: '7 days left'` →
-  real computed `endsAt`; prediction pools no longer start with a fabricated
-  5,000 coins (0 = all real wagers). `PollsScreen` renders the honest
+  real computed `endsAt`. `PollsScreen` renders the honest
   countdown + initials-avatar fallback.
 - `collaborationService.getStats()` — hardcoded "Arvdoul Launch Reel" sample
   project (Unsplash + pravatar) → real Firestore query

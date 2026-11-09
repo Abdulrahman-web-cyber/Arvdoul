@@ -44,6 +44,15 @@ describe('video feed wiring', () => {
     expect(src).toContain('videoService.recordVideoView');
   });
 
+  test('VideoFeed bounds the preload window instead of leaking a player per video', () => {
+    const src = read('src/components/Videos/VideoFeed.jsx');
+    // The leaky pattern kept every detached <video> in React state forever.
+    expect(src).not.toContain('preloadedVideos');
+    expect(src).toContain('preloadRef.current.delete(id)');
+    // Preloaders are released on unmount.
+    expect(src).toMatch(/preloaders\.clear\(\)/);
+  });
+
   test('VideoDetailScreen feeds the action rail flat counters and a real viewer state', () => {
     const src = read('src/screens/VideoDetailScreen.jsx');
     expect(src).toContain('getViewerVideoState');
@@ -228,12 +237,14 @@ describe('post-embedded poll voting is wired end-to-end', () => {
     expect(callable).toContain("VOTE_POST_POLL: 'votePostPoll'");
   });
 
-  test('the composer persists poll closesAt + rewardCoins', () => {
+  test('the composer persists poll closesAt and no unfunded reward field', () => {
     const src = read('src/screens/CreatePost.jsx');
     expect(src).toContain('SET_POLL_EXPIRY');
-    expect(src).toContain('SET_POLL_REWARD');
     expect(src).toMatch(/poll:[\s\S]*?closesAt: current\.pollClosesAt/);
-    expect(src).toMatch(/rewardCoins: Number\(current\.pollReward\)/);
+    // The voter reward was an unfunded faucet (the server minted it without
+    // debiting anyone), so neither the composer nor the payload may carry it.
+    expect(src).not.toContain('rewardCoins');
+    expect(src).not.toContain('pollReward');
   });
 });
 

@@ -7,6 +7,7 @@ import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callab
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle, XCircle, Flag, AlertTriangle, User, MessageSquare, Image as ImageIcon, ChevronRight } from "lucide-react";
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
 
 const AdminModerationQueueScreen = () => {
   const navigate = useNavigate();
@@ -99,15 +100,7 @@ const AdminModerationQueueScreen = () => {
 
   if (denied) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
-          <p className="text-gray-400">Admin privileges required.</p>
-          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">
-            Go Home
-          </button>
-        </div>
-      </div>
+      <PermissionDenied onGoHome={() => navigate('/')} />
     );
   }
 

@@ -137,16 +137,50 @@ async function retryOperation(fn, maxRetries = 3, baseDelay = 1000) {
   throw lastError;
 }
 
+const MONETIZATION_QUEUE_DB = 'monetization_offline';
+
+function openMonetizationDb() {
+  return openDB(MONETIZATION_QUEUE_DB, 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains('queue')) {
+        db.createObjectStore('queue', { autoIncrement: true });
+      }
+    },
+  });
+}
+
+/**
+ * Drop every queued financial op owned by `uid` from the device-local queue.
+ * Module-level so it can run on sign-out even when `monetizationService` was
+ * never initialized this session (in which case its instance queue is null but
+ * the IndexedDB store may still hold a previous session's ops).
+ */
+export async function purgeMonetizationQueueForOwner(uid) {
+  if (!uid || typeof indexedDB === 'undefined') return 0;
+  try {
+    const db = await openMonetizationDb();
+    const tx = db.transaction('queue', 'readwrite');
+    const store = tx.objectStore('queue');
+    const [items, keys] = await Promise.all([store.getAll(), store.getAllKeys()]);
+    let removed = 0;
+    for (let i = 0; i < items.length; i += 1) {
+      if (items[i].ownerUid === uid) {
+        await store.delete(keys[i]);
+        removed += 1;
+      }
+    }
+    await tx.done;
+    return removed;
+  } catch (e) {
+    log.warn('monetization offline queue purge failed', { error: e?.message });
+    return 0;
+  }
+}
+
 class OfflineMonetizationQueue {
   constructor(service) {
     this.service = service; // store reference to service for sync
-    this.dbPromise = openDB('monetization_offline', 1, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('queue')) {
-          db.createObjectStore('queue', { autoIncrement: true });
-        }
-      },
-    });
+    this.dbPromise = openMonetizationDb();
     this.isSyncing = false;
     this._boundSync = this.sync.bind(this);
 
@@ -159,13 +193,17 @@ class OfflineMonetizationQueue {
   }
 
   async add(operation, params) {
+    // The owner is resolved once and stored on the IndexedDB record so a later
+    // drain can prove which account queued the op. `params` (packageId /
+    // paymentMethodId / placement / adId) never carries the owner, so it must
+    // come from the live session.
+    const ownerUid = auth?.currentUser?.uid || params?.userId || null;
     const db = await this.dbPromise;
-    await db.add('queue', { operation, params, timestamp: Date.now() });
+    await db.add('queue', { operation, params, ownerUid, timestamp: Date.now() });
     // Also write to Firestore outbox (backup). firestore.rules authorises the
     // create on `userId == uid()`, so the owner must come from the live session
     // — `params` (packageId/paymentMethodId/placement/…) never carries it, and a
     // null userId would be silently denied.
-    const ownerUid = auth?.currentUser?.uid || params?.userId || null;
     if (ownerUid && this.service && this.service.db) {
       try {
         await addDoc(collection(this.service.db, 'monetization_outbox'), {
@@ -205,13 +243,20 @@ class OfflineMonetizationQueue {
     if (!this.service || !this.service.initialized || this.isSyncing) return;
     this.isSyncing = true;
     try {
+      // Only replay ops owned by the live session. A queued purchase/ad reward
+      // belongs to the account that created it; replaying it under a different
+      // signed-in account would charge/mint coins for the wrong user. Ops with
+      // no recorded owner (queued before this field existed) are skipped rather
+      // than guessed — the Firestore outbox copy remains for manual recovery.
+      const sessionUid = auth?.currentUser?.uid || null;
       const queue = await this.getAll();
       for (const item of queue) {
+        if (!sessionUid || item.ownerUid !== sessionUid) continue;
         try {
           if (item.operation === 'watchAd') {
-            await this.service.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds);
+            await this.service.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds, {}, item.params.idempotencyKey);
           } else if (item.operation === 'purchaseCoins') {
-            await this.service.purchaseCoins(item.params.packageId, item.params.paymentMethodId);
+            await this.service.purchaseCoins(item.params.packageId, item.params.paymentMethodId, {}, item.params.idempotencyKey);
           }
           await this.delete(item.id);
         } catch (err) {
@@ -223,6 +268,16 @@ class OfflineMonetizationQueue {
     } finally {
       this.isSyncing = false;
     }
+  }
+
+  /** Drop every queued op owned by `uid` (account switch / sign-out). */
+  async purgeOwner(uid) {
+    if (!uid) return 0;
+    const db = await this.dbPromise;
+    const queue = await this.getAll();
+    const owned = queue.filter((item) => item.ownerUid === uid);
+    for (const item of owned) await db.delete('queue', item.id);
+    return owned.length;
   }
 
   destroy() {
@@ -578,18 +633,23 @@ class MonetizationService {
     }
   }
 
-  async watchAd(placement, adId, watchDurationSeconds, deviceMetadata = {}) {
+  async watchAd(placement, adId, watchDurationSeconds, deviceMetadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
+    // One key per logical view, reused across every retry (and stored with an
+    // offline-queued op). The server credits the reward keyed on this value, so
+    // generating a fresh key per retry would let a retried request credit the
+    // reward more than once.
+    const key = idempotencyKey || generateIdempotencyKey();
     const isOnline = await this._isActuallyOnline();
     if (!isOnline) {
-      await this.offlineQueue.add('watchAd', { placement, adId, watchDurationSeconds });
+      await this.offlineQueue.add('watchAd', { placement, adId, watchDurationSeconds, idempotencyKey: key });
       // Queued is NOT earned: reporting success here made the UI announce a
       // coin reward for an ad that was never verified (and may never replay).
       return { success: false, offlineQueued: true, message: 'Will be processed when online' };
     }
     try {
       const result = await retryOperation(() =>
-        this.cfWatchAd({ placement, adId, watchDurationSeconds, deviceMetadata })
+        this.cfWatchAd({ placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey: key })
       );
       return result.data;
     } catch (err) {
@@ -632,11 +692,15 @@ class MonetizationService {
     }
   }
 
-  async purchaseCoins(packageId, paymentMethodId = null, deviceMetadata = {}) {
+  async purchaseCoins(packageId, paymentMethodId = null, deviceMetadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
+    // One key per logical purchase, reused across every retry (and stored with
+    // an offline-queued op). The server mints coins keyed on this value, so a
+    // fresh key per retry would allow a double credit after a transient error.
+    const key = idempotencyKey || generateIdempotencyKey();
     const isOnline = await this._isActuallyOnline();
     if (!isOnline) {
-      await this.offlineQueue.add('purchaseCoins', { packageId, paymentMethodId });
+      await this.offlineQueue.add('purchaseCoins', { packageId, paymentMethodId, idempotencyKey: key });
       // A queued purchase has granted NO coins. Reporting success made the UI
       // announce "+N coins added" for a purchase that was never charged.
       return { success: false, offlineQueued: true, message: 'Will be processed when online' };
@@ -646,7 +710,7 @@ class MonetizationService {
     if (this.stripe) {
       try {
         log.info('Proceeding with real Stripe purchase flow', { packageId });
-        const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata }));
+        const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata, idempotencyKey: key }));
         if (result.data?.sessionId) {
           await this.stripe.redirectToCheckout({ sessionId: result.data.sessionId });
           return { success: true, stripeRedirect: true };
@@ -682,7 +746,7 @@ class MonetizationService {
       throw new Error('PAYMENT_GATEWAY_NOT_CONFIGURED: purchaseCoins Cloud Function is not reachable. Coins are never granted without server-side payment verification.');
     }
     try {
-      const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata }));
+      const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata, idempotencyKey: key }));
       if (result.data?.success) {
         return {
           success: true,
@@ -722,10 +786,14 @@ class MonetizationService {
     }
   }
 
-  async createSubscription(tier, paymentMethodId = null, deviceMetadata = {}) {
+  async createSubscription(tier, paymentMethodId = null, deviceMetadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
+    // One key per logical subscription intent, reused across retries: the server
+    // charges Stripe and credits the first month's coins keyed on this value, so
+    // a fresh key per retry could double-charge and double-credit.
+    const key = idempotencyKey || generateIdempotencyKey();
     try {
-      const result = await retryOperation(() => this.cfCreateSubscription({ tier, paymentMethodId, deviceMetadata }));
+      const result = await retryOperation(() => this.cfCreateSubscription({ tier, paymentMethodId, deviceMetadata, idempotencyKey: key }));
       return result.data;
     } catch (err) {
       // Entitlement state is server-owned (subscriptions is server-write-only).
@@ -735,10 +803,11 @@ class MonetizationService {
     }
   }
 
-  async cancelSubscription() {
+  async cancelSubscription(idempotencyKey = null) {
     await this._ensureInitialized();
+    const key = idempotencyKey || generateIdempotencyKey();
     try {
-      const result = await retryOperation(() => this.cfCancelSubscription());
+      const result = await retryOperation(() => this.cfCancelSubscription({ idempotencyKey: key }));
       return result.data;
     } catch (err) {
       // Cancellation is server-owned; do not flip entitlement locally.
@@ -943,18 +1012,18 @@ export const getTransactionHistory = (userId, limitCount, cursor) => getMonetiza
 export const getUserLevel = (userId) => getMonetizationService().getUserLevel(userId);
 export const getMonetizationStats = (userId) => getMonetizationService().getMonetizationStats(userId);
 export const getAd = (placement, userId, context) => getMonetizationService().getAd(placement, userId, context);
-export const watchAd = (placement, adId, watchDurationSeconds, deviceMetadata) =>
-  getMonetizationService().watchAd(placement, adId, watchDurationSeconds, deviceMetadata);
+export const watchAd = (placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey) =>
+  getMonetizationService().watchAd(placement, adId, watchDurationSeconds, deviceMetadata, idempotencyKey);
 export const recordAdImpression = (adId, placement, deviceMetadata) =>
   getMonetizationService().recordAdImpression(adId, placement, deviceMetadata);
 export const getSponsoredSearchResult = (userId, query, context) =>
   getMonetizationService().getSponsoredSearchResult(userId, query, context);
-export const purchaseCoins = (packageId, paymentMethodId, deviceMetadata) =>
-  getMonetizationService().purchaseCoins(packageId, paymentMethodId, deviceMetadata);
+export const purchaseCoins = (packageId, paymentMethodId, deviceMetadata, idempotencyKey) =>
+  getMonetizationService().purchaseCoins(packageId, paymentMethodId, deviceMetadata, idempotencyKey);
 export const getSubscriptionStatus = () => getMonetizationService().getSubscriptionStatus();
-export const createSubscription = (tier, paymentMethodId, deviceMetadata) =>
-  getMonetizationService().createSubscription(tier, paymentMethodId, deviceMetadata);
-export const cancelSubscription = () => getMonetizationService().cancelSubscription();
+export const createSubscription = (tier, paymentMethodId, deviceMetadata, idempotencyKey) =>
+  getMonetizationService().createSubscription(tier, paymentMethodId, deviceMetadata, idempotencyKey);
+export const cancelSubscription = (idempotencyKey) => getMonetizationService().cancelSubscription(idempotencyKey);
 export const getPayoutSettings = () => getMonetizationService().getPayoutSettings();
 export const createPayoutAccount = (countryCode, returnUrl, deviceMetadata) =>
   getMonetizationService().createPayoutAccount(countryCode, returnUrl, deviceMetadata);

@@ -138,3 +138,29 @@ describe('Cloud Functions runtime dependencies', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('Client callable contract (FUNCTIONS map)', () => {
+  const deployed = loadDeployedExports();
+
+  test('every FUNCTIONS key resolves to a deployed export', () => {
+    // The FUNCTIONS map is the client's callable contract. A key that names a
+    // function nobody deployed is a guaranteed "not found" at runtime, so the
+    // map and the deploy must stay in lockstep.
+    const callableService = fs.readFileSync(
+      path.join(root, 'src', 'services', 'callableService.js'),
+      'utf8'
+    );
+    const names = [...callableService.matchAll(/^\s*[A-Z_]+:\s*'([^']+)'/gm)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThan(100);
+    const missing = names.filter((n) => !deployed.has(n)).sort();
+    expect(missing).toEqual([]);
+  });
+
+  test('privacy-propagation and SAML callables are deployed with the expected names', () => {
+    // These two modules have no dedicated suite; pin their public surface here
+    // so a rename or a dropped merge cannot silently break the client.
+    for (const name of ['propagatePostPrivacy', 'backfillPostPrivacy', 'verifySAMLAssertion']) {
+      expect(deployed.has(name)).toBe(true);
+    }
+  });
+});

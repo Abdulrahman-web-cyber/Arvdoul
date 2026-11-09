@@ -738,7 +738,11 @@ const Thumbnail = React.memo(({
       className={`relative flex-shrink-0 w-24 h-24 xs:w-16 xs:h-16 rounded-2xl overflow-hidden cursor-pointer transition-all group bg-[#080C14] border ${
         isSelected ? "border-purple-500 ring-2 ring-purple-500 shadow-[0_0_15px_rgba(139,92,246,0.4)]" : "border-[#1A2440] hover:opacity-80 hover:shadow-lg hover:ring-1 hover:ring-purple-500/50"
       }`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
     >
       <img src={src || "/assets/placeholder.png"} alt={item.alt || ""} className="w-full h-full object-cover" draggable={false} />
       {isUploading && (

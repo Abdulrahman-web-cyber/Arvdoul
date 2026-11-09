@@ -538,7 +538,6 @@ const initialState = {
     video: { file: null },
   },
   pollClosesAt: null,
-  pollReward: 0,
   step: 1,
   loading: false,
   progress: 0,
@@ -628,7 +627,6 @@ function reducer(state, action) {
       case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_POLL_REWARD": draft.pollReward = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EVENT_DATE": draft.typeData.event.date = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EVENT_LOCATION": draft.typeData.event.location = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -1527,7 +1525,7 @@ function CreatePostProvider({ children }) {
         recurrence: current.recurrence || "none",
         settings: current.settings || {},
         coAuthors: current.coAuthors || [],
-        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null, rewardCoins: Number(current.pollReward) || 0 } : null,
+        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null } : null,
         event: effectiveType === "event" ? {
           title: effectiveText,
           date: current.typeData.event.date,
@@ -2784,10 +2782,10 @@ const LauncherGrid = React.memo(() => {
       {hasDrafts && (
         <div className="max-w-lg mx-auto mb-4">
           <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
-            <div className="flex items-center justify-between cursor-pointer" onClick={() => setDraftsOpen(!draftsOpen)}>
-              <span className="text-sm font-medium text-gray-800 dark:text-white">📄 My Drafts ({draftsList.length})</span>
-              <Icons.ChevronDown className={`w-4 h-4 transition-transform ${draftsOpen ? 'rotate-180' : ''}`} />
-            </div>
+            <button type="button" aria-expanded={draftsOpen} className="w-full flex items-center justify-between cursor-pointer" onClick={() => setDraftsOpen(!draftsOpen)}>
+              <span className="text-sm font-medium text-gray-800 dark:text-white">My Drafts ({draftsList.length})</span>
+              <Icons.ChevronDown aria-hidden="true" className={`w-4 h-4 transition-transform ${draftsOpen ? 'rotate-180' : ''}`} />
+            </button>
             <AnimatePresence>
               {draftsOpen && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -2821,10 +2819,10 @@ const LauncherGrid = React.memo(() => {
       {offlineCount > 0 && (
         <div className="max-w-lg mx-auto mb-4">
           <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
-            <div className="flex items-center justify-between cursor-pointer" onClick={() => setQueueOpen(!queueOpen)}>
-              <span className="text-sm font-medium text-yellow-600">📤 Offline Queue ({offlineCount})</span>
-              <Icons.ChevronDown className={`w-4 h-4 transition-transform ${queueOpen ? 'rotate-180' : ''}`} />
-            </div>
+            <button type="button" aria-expanded={queueOpen} className="w-full flex items-center justify-between cursor-pointer" onClick={() => setQueueOpen(!queueOpen)}>
+              <span className="text-sm font-medium text-yellow-600">Offline Queue ({offlineCount})</span>
+              <Icons.ChevronDown aria-hidden="true" className={`w-4 h-4 transition-transform ${queueOpen ? 'rotate-180' : ''}`} />
+            </button>
             <AnimatePresence>
               {queueOpen && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">

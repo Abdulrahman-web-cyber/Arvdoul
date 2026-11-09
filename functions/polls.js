@@ -1,10 +1,9 @@
-// functions/polls.js – ARVDOUL POLLS & PREDICTION MARKETS (server-authoritative)
-// Voting is a Cloud Function because:
-//   1. firestore.rules only allow the creator/admin to update polls — a voter
-//      writing vote counters directly would be denied (or worse, allowed to
-//      tamper with option text if rules were loosened).
-//   2. Prediction wagers must debit real coins through the double-entry
-//      ledger inside the same transaction as the vote.
+// functions/polls.js – ARVDOUL POLLS (server-authoritative)
+// Voting is a Cloud Function because firestore.rules only allow the
+// creator/admin to update a poll — a voter writing vote counters directly
+// would be denied (or worse, allowed to tamper with option text if the rules
+// were loosened). Prediction-market wagering is intentionally not implemented:
+// it was a coin value sink with no settlement engine (see votePoll below).
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
@@ -39,38 +38,21 @@ exports.votePoll = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('already-exists', 'You have already voted on this poll');
       }
 
-      // Wager: real coin debit inside the same transaction (double-entry).
+      // Prediction-market wagers were a value sink: `votePoll` debited the
+      // wager through the double-entry ledger and burned it from
+      // `system/coin_supply`, but NO settlement path exists anywhere in the
+      // repo — nothing resolves a poll, credits a winner, refunds a loser or
+      // releases the pool on expiry. Every wager therefore destroyed the
+      // creator's coins permanently while the UI promised "payout will trigger
+      // upon close". A parimutuel/fixed-odds payout, a resolver, a tie/refund
+      // policy and a house cut are product decisions (charter §5.1, §7.15), so
+      // rather than invent one this path now refuses to move money at all.
+      // Re-enable only alongside a real settlement engine.
       if (wager > 0) {
-        if (!poll.isPredictionMarket) {
-          throw new functions.https.HttpsError('invalid-argument', 'This poll is not a prediction market');
-        }
-        const userRef = db.collection('users').doc(uid);
-        const userSnap = await t.get(userRef);
-        if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found');
-        const balance = userSnap.data().coins || 0;
-        const locked = userSnap.data().lockedCoins || 0;
-        if (balance - locked < wager) {
-          throw new functions.https.HttpsError('failed-precondition', `Insufficient coins. You need ${wager} coins.`);
-        }
-        const newBalance = balance - wager;
-        t.update(userRef, { coins: newBalance });
-
-        const txRef = db.collection('coin_transactions').doc();
-        t.set(txRef, {
-          userId: uid,
-          type: 'debit',
-          amount: wager,
-          reason: 'poll_wager',
-          metadata: { pollId, optionId },
-          balanceAfter: newBalance,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-
-        t.set(db.collection('system').doc('coin_supply'),
-          { totalCoins: admin.firestore.FieldValue.increment(-wager) }, { merge: true });
-
-        t.set(pollRef, { poolCoins: admin.firestore.FieldValue.increment(wager) }, { merge: true });
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          'Prediction wagers are not available: there is no settlement engine to pay out or refund a pool.'
+        );
       }
 
       // Vote counters.
@@ -86,7 +68,6 @@ exports.votePoll = functions.https.onCall(async (data, context) => {
         pollId,
         optionId,
         userId: uid,
-        wagerCoins: wager,
         votedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -95,7 +76,6 @@ exports.votePoll = functions.https.onCall(async (data, context) => {
         ...poll,
         options,
         totalVotes: newTotal,
-        poolCoins: (poll.poolCoins || 0) + wager,
         hasVoted: optionId,
       };
     });
@@ -115,14 +95,14 @@ exports.votePoll = functions.https.onCall(async (data, context) => {
 // Post-embedded poll voting.
 //
 // A poll attached to a post lives on `posts/{postId}.poll` (composer shape:
-// `{ options: string[]|{id,text,votes}[], allowMultiple, closesAt, rewardCoins }`),
+// `{ options: string[]|{id,text,votes}[], allowMultiple, closesAt }`),
 // not in the top-level `polls` collection. The client used to mutate the poll
 // counters directly inside `firestoreService.voteOnPoll`'s transaction — but the
 // posts update rule lets ANY signed-in user change `poll`, so vote counts were
 // forgeable, there was no server-side expiry check, and the `isMultiple` branch
 // incremented the option count without recording a vote (double-vote / re-tap
-// inflation). Voting is now a callable: eligibility, expiry, option validation,
-// one-vote-per-viewer dedupe and the reward credit all happen server-side.
+// inflation). Voting is now a callable: eligibility, expiry, option validation
+// and one-vote-per-viewer dedupe all happen server-side.
 exports.votePostPoll = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
@@ -170,13 +150,10 @@ exports.votePostPoll = functions.https.onCall(async (data, context) => {
       const allowMultiple = poll.allowMultiple === true;
       const voteId = allowMultiple ? `${uid}_${optionId}` : uid;
       const voteRef = postRef.collection('poll_votes').doc(voteId);
-      const rewardRef = postRef.collection('poll_votes').doc(`${uid}__reward`);
       const voteSnap = await t.get(voteRef);
       if (voteSnap.exists) {
         throw new functions.https.HttpsError('already-exists', 'You have already voted on this poll');
       }
-      const rewardSnap = await t.get(rewardRef);
-      const firstVote = !rewardSnap.exists;
 
       target.votes += 1;
       const totalVotes = (poll.totalVotes || 0) + 1;
@@ -194,45 +171,22 @@ exports.votePostPoll = functions.https.onCall(async (data, context) => {
         optionIndex: options.findIndex((o) => o.id === optionId),
         votedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      if (firstVote) {
-        // Marker (server-only) so the reward is credited exactly once per
-        // (viewer, post), however many options a multi-choice poll allows.
-        t.set(rewardRef, { userId: uid, rewardMarker: true, votedAt: admin.firestore.FieldValue.serverTimestamp() });
-      }
 
-      return { options, totalVotes, rewardCoins: firstVote ? (Number(poll.rewardCoins) || 0) : 0 };
+      return { options, totalVotes };
     });
 
-    // Reward credit is server-authoritative and idempotent (one credit per
-    // post). The client only shows the toast; it never mints the coins.
-    const reward = result.rewardCoins;
-    if (reward > 0) {
-      const userRef = db.collection('users').doc(uid);
-      await db.runTransaction(async (t) => {
-        const userSnap = await t.get(userRef);
-        if (!userSnap.exists) return;
-        const balance = Number(userSnap.data().coins) || 0;
-        const newBalance = balance + reward;
-        t.update(userRef, { coins: newBalance });
-        t.set(db.collection('coin_transactions').doc(), {
-          userId: uid,
-          type: 'credit',
-          amount: reward,
-          reason: 'poll_vote_reward',
-          metadata: { postId },
-          balanceAfter: newBalance,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-        t.set(db.collection('system').doc('coin_supply'),
-          { totalCoins: admin.firestore.FieldValue.increment(reward) }, { merge: true });
-      });
-    }
+    // NOTE: post-poll voter rewards were removed. The composer let the author
+    // name `rewardCoins` client-side and this function minted that many coins to
+    // each first-time voter, incrementing `coin_supply` while debiting nobody —
+    // an unbounded faucet (a creator could set 1000/voter and mint unlimited
+    // coins). Funding a reward from the author's balance needs an escrow model
+    // (reserve at publish, refund the unused pool) that does not exist, so no
+    // reward is credited until that is designed. Charter §5.1 / §7.15.
 
     // Casting a vote grants XP; already committed, so the award is best-effort.
     await awardXpSafe(uid, 'civic_vote_cast', { source: postId });
 
-    return { success: true, options: result.options, totalVotes: result.totalVotes, rewardCoins: reward };
+    return { success: true, options: result.options, totalVotes: result.totalVotes };
   } catch (err) {
     if (err instanceof functions.https.HttpsError) throw err;
     throw new functions.https.HttpsError('internal', err.message);

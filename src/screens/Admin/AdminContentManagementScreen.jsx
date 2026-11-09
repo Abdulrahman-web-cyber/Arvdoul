@@ -7,6 +7,7 @@ import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callab
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, Eye, Trash2, Flag, Image as ImageIcon, Video, FileText, CheckCircle, XCircle } from "lucide-react";
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
 
 // A missing/unknown count renders as "—", never as a fabricated 0 (a post whose
 // stats never loaded is not a post with zero views).
@@ -87,15 +88,7 @@ const AdminContentManagementScreen = () => {
 
   if (denied) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
-          <p className="text-gray-400">Admin privileges required.</p>
-          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">
-            Go Home
-          </button>
-        </div>
-      </div>
+      <PermissionDenied onGoHome={() => navigate('/')} />
     );
   }
 

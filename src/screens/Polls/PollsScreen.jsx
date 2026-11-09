@@ -1,15 +1,15 @@
 // src/screens/Polls/PollsScreen.jsx
 //
-// Real-time community voting, coin prediction wagers, percentage animations, and creator opinion analytics
+// Real-time community polling: create a poll, vote, and watch consensus form.
+// Prediction-market wagering is intentionally absent — there is no settlement
+// engine to pay out or refund a pool, so no wager control is rendered.
 
 import { useState, useEffect } from "react";
-import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, Check, Plus, X, Vote, Clock, Sparkles, Users, Award } from "lucide-react";
+import { Check, Plus, Vote, Clock, Sparkles, Users } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useAppStore } from '../../store/appStore';
 import pollService from '../../services/pollService';
 const CATEGORIES = ['All', 'Tech & Trends', 'Gear & Studio', 'Creator Economy'];
 
@@ -30,25 +30,19 @@ function formatEndsIn(endsAt) {
 }
 
 export default function PollsScreen() {
-  const navigate = useNavigate();
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { currentUser, setAppState } = useAppStore();
   const isDark = theme === 'dark';
 
   const [polls, setPolls] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [wagerModalPoll, setWagerModalPoll] = useState(null);
-  const [selectedOptionId, setSelectedOptionId] = useState(null);
-  const [wagerCoins, setWagerCoins] = useState(250);
 
   // Create Poll modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newQuestion, setNewQuestion] = useState('');
   const [newCategory, setNewCategory] = useState('Tech & Trends');
   const [optionsList, setOptionsList] = useState(['', '']);
-  const [isPrediction, setIsPrediction] = useState(false);
 
   useEffect(() => {
     loadPolls();
@@ -69,51 +63,10 @@ export default function PollsScreen() {
   const handleVoteDirect = async (poll, optionId) => {
     if (poll.hasVoted) return;
 
-    if (poll.isPredictionMarket) {
-      setWagerModalPoll(poll);
-      setSelectedOptionId(optionId);
-      return;
-    }
-
     try {
       const updated = await pollService.votePoll(poll.id, optionId, 0, 0, user);
       setPolls(polls.map(p => p.id === poll.id ? { ...updated } : p));
       toast.success('Your vote has been recorded! 🗳️');
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleConfirmWager = async () => {
-    if (!wagerModalPoll || !selectedOptionId) return;
-    // balance from the ledger — never a fabricated default.
-    let currentCoins = null;
-    try {
-      const { getMonetizationService } = await import('../../services/monetizationService.js');
-      const bal = await getMonetizationService().getBalance(user?.uid);
-      currentCoins = typeof bal === 'number' ? bal : null;
-    } catch (e) {
-      // Server still validates the wager; the local pre-check is skipped.
-      console.warn('[Polls] coin balance fetch failed; skipping local wager pre-check', e);
-    }
-    if (currentCoins != null && currentCoins < wagerCoins) {
-      toast.error(`Insufficient coins. You have ${currentCoins} coins.`);
-      return;
-    }
-
-    try {
-      const updated = await pollService.votePoll(wagerModalPoll.id, selectedOptionId, currentCoins || 0, wagerCoins, user);
-      if (currentUser) {
-        setAppState({
-          currentUser: {
-            ...currentUser,
-            coins: currentCoins - wagerCoins
-          }
-        });
-      }
-      setPolls(polls.map(p => p.id === wagerModalPoll.id ? { ...updated } : p));
-      setWagerModalPoll(null);
-      toast.success(`Wagered ${wagerCoins} Coins on prediction! 🪙🎯 If correct, payout will trigger upon close.`);
     } catch (err) {
       toast.error(err.message);
     }
@@ -132,14 +85,13 @@ export default function PollsScreen() {
         question: newQuestion,
         category: newCategory,
         options: cleanOptions,
-        isPredictionMarket: isPrediction,
         creator: user
       });
       setPolls([created, ...polls]);
       setIsCreateOpen(false);
       setNewQuestion('');
       setOptionsList(['', '']);
-      toast.success('Your interactive poll is now live! 📊');
+      toast.success('Your poll is now live! 📊');
     } catch {
       toast.error('Failed to create poll');
     }
@@ -156,10 +108,10 @@ export default function PollsScreen() {
               <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">Community Voice & Insights</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
-              Polls & Prediction Markets <Vote className="w-7 h-7 text-blue-400" />
+              Community Polls <Vote className="w-7 h-7 text-blue-400" />
             </h1>
             <p className="text-gray-300 text-xs sm:text-sm mt-1 max-w-xl">
-              Vote on trending topics, wager coins in prediction markets, and discover audience consensus across the creator economy.
+              Ask the creator economy a question, vote on trending topics, and discover audience consensus.
             </p>
           </div>
 
@@ -243,11 +195,6 @@ export default function PollsScreen() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {poll.isPredictionMarket && (
-                      <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-extrabold flex items-center gap-1 border border-yellow-500/30">
-                        <Coins className="w-3.5 h-3.5" /> Pool: {poll.poolCoins.toLocaleString()} Coins
-                      </span>
-                    )}
                     <span className="text-xs text-gray-400 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" /> {formatEndsIn(poll.endsAt)}
                     </span>
@@ -305,80 +252,12 @@ export default function PollsScreen() {
                   <span className="flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-blue-400" /> {poll.totalVotes.toLocaleString()} Total Votes
                   </span>
-                  {poll.isPredictionMarket && (
-                    <span className="text-yellow-400 font-semibold flex items-center gap-1">
-                      <Award className="w-3.5 h-3.5" /> Prediction Market Active
-                    </span>
-                  )}
                 </div>
               </div>
             );
           })}
         </div>
       )}
-
-      {/* ==================== PREDICTION WAGER MODAL ==================== */}
-      <AnimatePresence>
-        {wagerModalPoll && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md"
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              className={`w-full max-w-md p-6 sm:p-7 rounded-3xl border ${
-                isDark ? 'bg-gray-900 border-gray-800' : 'bg-white'
-              } shadow-2xl space-y-5`}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Coins className="w-5 h-5 text-yellow-400" /> Place Prediction Wager
-                </h3>
-                <button onClick={() => setWagerModalPoll(null)} className="text-gray-400 hover:text-white">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-                <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider block mb-1">Your Prediction</span>
-                <p className="text-sm font-bold text-white">
-                  {wagerModalPoll.options.find(o => o.id === selectedOptionId)?.text}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coins to Wager</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[100, 250, 500, 1000].map((amt) => (
-                    <button
-                      key={amt}
-                      onClick={() => setWagerCoins(amt)}
-                      className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                        wagerCoins === amt
-                          ? 'border-yellow-400 bg-yellow-400/20 text-yellow-300'
-                          : isDark ? 'border-gray-800 bg-gray-800 text-gray-400' : 'border-gray-200'
-                      }`}
-                    >
-                      🪙 {amt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={handleConfirmWager}
-                className="w-full py-4 rounded-2xl font-bold bg-gradient-to-r from-yellow-500 to-amber-600 text-black shadow-xl shadow-yellow-500/20 flex items-center justify-center gap-2 hover:opacity-95"
-              >
-                Confirm Wager ({wagerCoins} Coins)
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ==================== CREATE POLL MODAL ==================== */}
       <AnimatePresence>
@@ -461,19 +340,6 @@ export default function PollsScreen() {
                       + Add Option
                     </button>
                   )}
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-xl bg-gray-800/40 border border-gray-700/60">
-                  <div>
-                    <span className="text-xs font-bold text-white block">Enable Prediction Market</span>
-                    <span className="text-[10px] text-gray-400">Allow users to wager coins on the outcome</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={isPrediction}
-                    onChange={(e) => setIsPrediction(e.target.checked)}
-                    className="w-4 h-4 accent-blue-500"
-                  />
                 </div>
 
                 <button

@@ -12,6 +12,7 @@ import PaymentModal from '../../components/Shared/PaymentModal';
 import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, LEVEL_GATES, getCreatorCapabilities } from '../../shared/levelConfig.cjs';
+import { unknownNumber } from '../../lib/unknownNumber';
 
 // Package amounts/prices come from the shared COIN_PACKAGES (the same table the
 // server prices from). The server credits `coins` exactly, so no bonus is
@@ -155,8 +156,11 @@ export default function WalletScreen() {
   };
 
   const filteredTxs = transactions.filter((tx) => {
-    if (activeTab === 'in') return (tx.amount || 0) > 0;
-    if (activeTab === 'out') return (tx.amount || 0) < 0;
+    // A transaction with no readable amount belongs to neither tab — it must
+    // not be fabricated as 0 and bucketed into "out".
+    const amount = unknownNumber(tx.amount);
+    if (activeTab === 'in') return amount != null && amount > 0;
+    if (activeTab === 'out') return amount != null && amount < 0;
     return true;
   });
 
@@ -369,13 +373,18 @@ export default function WalletScreen() {
           </div>
 
           <div className={`rounded-2xl border divide-y ${isDark ? 'bg-gray-900/40 border-gray-800 divide-gray-800' : 'bg-white border-gray-200 divide-gray-100'}`}>
-            {filteredTxs.map((tx) => (
+            {filteredTxs.map((tx) => {
+              // An unreadable amount renders as an explicit unavailable state
+              // ('—'), never a fabricated '+0 Coins' ledger row.
+              const amount = unknownNumber(tx.amount);
+              const isCredit = amount != null && amount >= 0;
+              return (
               <div key={tx.id} className="p-4 flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-3">
                   <div className={`p-2 rounded-xl ${
-                    (tx.amount || 0) >= 0 ? 'bg-emerald-950/40 text-emerald-400' : 'bg-red-950/40 text-red-400'
+                    isCredit ? 'bg-emerald-950/40 text-emerald-400' : 'bg-red-950/40 text-red-400'
                   }`}>
-                    {(tx.amount || 0) >= 0 ? (
+                    {isCredit ? (
                       <ArrowDownLeft className="w-4 h-4" />
                     ) : (
                       <ArrowUpRight className="w-4 h-4" />
@@ -389,14 +398,15 @@ export default function WalletScreen() {
 
                 <div className="text-right">
                   <span className={`font-mono font-bold block ${
-                    (tx.amount || 0) >= 0 ? 'text-emerald-400' : 'text-gray-300'
+                    isCredit ? 'text-emerald-400' : 'text-gray-300'
                   }`}>
-                    {(tx.amount || 0) >= 0 ? `+${tx.amount}` : tx.amount} Coins
+                    {amount == null ? '—' : `${isCredit ? '+' : ''}${amount}`} Coins
                   </span>
                   <span className="text-[10px] uppercase font-mono text-gray-500">{tx.status}</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {filteredTxs.length === 0 && (
               <div className="p-8 text-center text-xs text-gray-500">

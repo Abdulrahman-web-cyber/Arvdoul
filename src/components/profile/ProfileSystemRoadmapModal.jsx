@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { X, Crown, ShieldCheck, CheckCircle2, Lock, ArrowRight, Zap } from "lucide-react";
 import { cn } from '../../lib/utils';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 import { LEVEL_PERKS, CITIZEN_TIERS, ROYAL_ELIGIBILITY, getRankTitle, getCitizenTier, getRoyalEligibility, getLevelInfo } from "../../shared/levelConfig.cjs";
 
 // The royal checklist renders straight from the shared ROYAL_ELIGIBILITY rule
@@ -308,7 +309,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 rounded-full"
-                        style={{ width: `${levelInfo.progress || 0}%` }}
+                        style={{ width: `${unknownNumber(levelInfo.progress) ?? 0}%` }}
                       />
                     </div>
                   </div>

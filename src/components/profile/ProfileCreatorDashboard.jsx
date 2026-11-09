@@ -337,7 +337,10 @@ const ProfileCreatorDashboard = memo(({
         </div>
 
         {/* 5. Creator Standing / Ranking Badge Card */}
-        <div className={cn(
+        <button
+        type="button"
+        aria-label="View creator rankings"
+        className={cn(
           "rounded-2xl p-3 sm:p-3.5 border flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1 transition-all duration-200 group cursor-pointer",
           isDark
             ? "bg-purple-950/20 border-purple-500/20 hover:border-purple-500/40"
@@ -358,7 +361,7 @@ const ProfileCreatorDashboard = memo(({
           <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
             Among Creators
           </div>
-        </div>
+        </button>
       </div>
     </div>
   );

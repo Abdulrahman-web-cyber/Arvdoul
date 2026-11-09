@@ -72,7 +72,6 @@ export default function CreatePoll() {
   // ── REDUCER STATE (single source of truth) ─────────────────────────
   const poll = state.typeData.poll;
   const pollClosesAt = state.pollClosesAt;
-  const reward = state.pollReward ?? 0;
 
   // ── STABLE UUIDs FOR OPTIONS (ref‑managed) ────────────────────────
   const optionIdsRef = useRef([]);
@@ -228,9 +227,8 @@ export default function CreatePoll() {
       options: poll.options || [],
       allowMultiple: poll.allowMultiple,
       closesAt: pollClosesAt,
-      reward,
     });
-  }, [state.content, poll.options, poll.allowMultiple, pollClosesAt, reward]);
+  }, [state.content, poll.options, poll.allowMultiple, pollClosesAt]);
 
   useEffect(() => {
     if (!state.postType) return;
@@ -261,16 +259,6 @@ export default function CreatePoll() {
     }
     dispatch({ type: "SET_POLL_EXPIRY", payload: date ? date.toISOString() : null });
   };
-
-  // ── REWARD (wired to reducer) ─────────────────────────────────────
-  const handleRewardChange = useCallback(
-    (e) => {
-      const raw = parseInt(e.target.value) || 0;
-      const value = Math.max(0, Math.min(raw, 1000));
-      dispatch({ type: "SET_POLL_REWARD", payload: value });
-    },
-    [dispatch]
-  );
 
   // ── MANUAL SAVE ──────────────────────────────────────────────────
   const manualSave = useCallback(() => {
@@ -424,22 +412,6 @@ export default function CreatePoll() {
               />
             </Suspense>
           </div>
-
-          {/* Coin Reward */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">
-              Coin reward per voter
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="1000"
-              value={reward}
-              onChange={handleRewardChange}
-              className={INPUT_CLASS}
-              placeholder="0 = no reward"
-            />
-          </div>
         </div>
       </div>
 
@@ -516,8 +488,8 @@ export default function CreatePoll() {
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   The orchestrator (CreatePost.jsx) owns the poll expiry/reward state:
-     initialState: pollClosesAt / pollReward
-     reducer:      SET_POLL_EXPIRY / SET_POLL_REWARD
-     publishPost:  writes poll.closesAt + poll.rewardCoins
+   The orchestrator (CreatePost.jsx) owns the poll expiry state:
+     initialState: pollClosesAt
+     reducer:      SET_POLL_EXPIRY
+     publishPost:  writes poll.closesAt
    ──────────────────────────────────────────────────────────────────── */

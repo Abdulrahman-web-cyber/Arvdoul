@@ -563,25 +563,46 @@ describe('appStore - identity mirror only, no duplicate economy', () => {
   });
 });
 
-describe('Poll wagers - real coin debit', () => {
+describe('Poll wagers - no value sink without a settlement engine', () => {
   test('pollService.votePoll is server-authoritative (votePoll CF) and never writes the poll doc client-side', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
     expect(src).toContain('FUNCTIONS.VOTE_POLL'); // Cloud Function path
     expect(src).not.toContain('updateDoc(pollRef, updatePayload)'); // no direct poll writes
   });
 
-  test('functions/polls.js debits wagers through the double-entry ledger', () => {
+  test('functions/polls.js refuses wagers instead of debiting a pool nothing settles', () => {
     const src = fs.readFileSync(path.join(root, 'functions/polls.js'), 'utf8');
     expect(src).toContain('exports.votePoll');
-    expect(src).toContain('coin_transactions');
-    expect(src).toContain('coin_supply');
     expect(src).toContain('You have already voted on this poll');
+    // The wager path must not debit the ledger or burn supply until a real
+    // settlement engine (payout + refund + resolver) exists. A debit here is
+    // a value sink: the coins are destroyed and the pool is never released.
+    expect(src).toContain('there is no settlement engine');
+    expect(src).not.toContain("reason: 'poll_wager'");
+    expect(src).not.toContain('poolCoins: admin.firestore.FieldValue.increment(wager)');
   });
 
-  test('PollsScreen never falls back to fabricated 5000 coins', () => {
-    const src = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
-    expect(src).not.toContain('coins || 5000');
-    expect(src).toContain('getBalance(');
+  test('PollsScreen and pollService render no wager surface', () => {
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
+    expect(screen).not.toContain('isPredictionMarket');
+    expect(screen).not.toContain('poolCoins');
+    expect(screen).not.toContain('wagerCoins');
+    expect(screen).not.toContain('payout will trigger');
+    const svc = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
+    expect(svc).not.toContain('isPredictionMarket');
+    expect(svc).not.toContain('poolCoins');
+  });
+
+  test('no unfunded coin faucet: poll voter rewards credit nobody', () => {
+    // `votePostPoll` once minted `poll.rewardCoins` per first-time voter while
+    // debiting no balance — a creator could set 1000/voter and mint unlimited
+    // coins. The reward must stay gone until an escrow model exists.
+    const fn = fs.readFileSync(path.join(root, 'functions/polls.js'), 'utf8');
+    expect(fn).not.toContain("reason: 'poll_vote_reward'");
+    expect(fn).not.toContain('rewardCoins: firstVote');
+    const card = fs.readFileSync(path.join(root, 'src/screens/PostCard/PollCard.jsx'), 'utf8');
+    expect(card).not.toContain('rewardAmount');
+    expect(card).not.toContain('rewardCoins');
   });
 });
 
@@ -934,7 +955,10 @@ describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
   test('_canViewStory mirrors expiry/status/block/private rules', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
     expect(src).toContain("story.status === 'expired'");
-    expect(src).toContain("story.expiresAt.toDate().getTime() <= Date.now()");
+    // Expiry is mirrored through the single `_isStoryExpired` helper (shared by
+    // `getUserStories`) instead of an inline toDate()/Date comparison.
+    expect(src).toContain('this._isStoryExpired(story)');
+    expect(src).toMatch(/\n {2}_isStoryExpired\(/);
     // Block check goes through the graph spine: a point read of an absent edge
     // is denied by the `resource.data` rule and would silently skip the check.
     expect(src).toContain("getSocialGraphService().getRelationship(viewerId, story.userId)");
@@ -1605,14 +1629,20 @@ describe('Admin screens - server-authoritative admin gate', () => {
     // AdminDashboardScreen held the denial in `error` but never rendered it, so
     // a non-admin (or a failed count query) saw a full grid of zeros that read
     // like real, empty platform data. Every admin surface must render the
-    // denial explicitly.
+    // denial explicitly — now through the single shared PermissionDenied
+    // primitive (three hand-rolled copies were consolidated).
+    const primitive = fs.readFileSync(
+      path.join(root, 'src/design-system/PermissionDenied.jsx'),
+      'utf8'
+    );
+    expect(primitive).toContain('Access Denied');
     for (const file of [
       'AdminDashboardScreen.jsx',
       'AdminContentManagementScreen.jsx',
       'AdminModerationQueueScreen.jsx',
     ]) {
       const s = fs.readFileSync(path.join(root, 'src/screens/Admin', file), 'utf8');
-      expect(s).toContain('Access Denied');
+      expect(s).toMatch(/<PermissionDenied\b/);
     }
     const dash = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
     expect(dash).toMatch(/if \(error\)/);
@@ -3068,5 +3098,94 @@ describe('New-creator analytics fallback never invents a series or a reach estim
     const screen = read('src/screens/VideoAnalyticsScreen.jsx');
     expect(screen).not.toContain('totalViews: data.totalViews || 0');
     expect(screen).toContain("totalViews: typeof data.totalViews === 'number' ? data.totalViews : null");
+  });
+});
+
+describe('Displayed amounts/counts render unknown, never a fabricated 0 (N183)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the shared unknownNumber helper distinguishes 0 from unknown', async () => {
+    const { unknownNumber } = await import('../lib/unknownNumber.js');
+    expect(unknownNumber(0)).toBe(0);
+    expect(unknownNumber('0')).toBe(0);
+    expect(unknownNumber(12)).toBe(12);
+    expect(unknownNumber('1,200')).toBe(null);
+    expect(unknownNumber(undefined)).toBe(null);
+    expect(unknownNumber(null)).toBe(null);
+    expect(unknownNumber('')).toBe(null);
+    expect(unknownNumber(NaN)).toBe(null);
+    expect(unknownNumber(Infinity)).toBe(null);
+    expect(unknownNumber(false)).toBe(null);
+  });
+
+  test('admin economy renders payout/transaction amounts through the guard', () => {
+    const src = read('src/screens/Admin/AdminEconomyScreen.jsx');
+    expect(src).not.toContain('formatCoinsAsUsd(payout.amount || 0)');
+    expect(src).not.toContain('formatCoinsAsUsd(tx.amount || 0)');
+    // The approval toast must not announce a fabricated "$0.00" when the server
+    // omitted the settled amount.
+    expect(src).not.toContain('Number(result.usdAmount || 0).toFixed(2)');
+    expect(src).toContain('unknownNumber');
+  });
+
+  test('conversation settings never asserts a 0 member count', () => {
+    const src = read('src/screens/ConversationSettingsScreen.jsx');
+    expect(src).not.toContain('participants?.length || 0');
+    expect(src).toContain('unknownNumber');
+  });
+
+  test('question answers do not coerce a missing upvote count to 0', () => {
+    const src = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(src).not.toContain('answer.upvotes || 0');
+    expect(src).toContain('unknownNumber(answer.upvotes)');
+  });
+
+  test('QuestionCard does not default a missing viewer reputation to 0', () => {
+    // `userReputation = 0` fabricated a "Your reputation: 0" line when the
+    // parent passed null (unknown). PostCard passes null when the value is not
+    // a number, so the prop default must be null and render "—".
+    const src = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(src).not.toContain('userReputation = 0,');
+    expect(src).toContain('userReputation = null,');
+  });
+});
+
+describe('N184 — no fabricated counts sweep (round 2)', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+  test('highlights, sounds, collections, community and progress counts render unknown, not 0', () => {
+    const cases = [
+      ['src/screens/Profile/HighlightsScreen.jsx', 'highlight.storyCount || 0'],
+      ['src/screens/Sounds/SoundsScreen.jsx', 'snd.reelsCount || 0'],
+      ['src/components/Videos/VideoBottomSheet.jsx', 'col.itemCount || 0'],
+      ['src/screens/Community/CommunityDetailScreen.jsx', 'bannedUsers?.length || 0'],
+      ['src/screens/Admin/AdminCommunityManagementScreen.jsx', 'Number(comm.strikesCount) || 0'],
+      ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.xpToNext || 0'],
+      ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.progress || 0'],
+    ];
+    for (const [file, literal] of cases) {
+      const src = read(file);
+      expect(src).not.toContain(literal);
+      expect(src).toContain('unknownNumber');
+    }
+  });
+});
+
+describe('N184 — no fabricated counts sweep (round 3)', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('wallet ledger rows never fabricate a 0 amount', () => {
+    const src = read('src/screens/Economy/WalletScreen.jsx');
+    expect(src).not.toContain('(tx.amount || 0)');
+    expect(src).toContain('unknownNumber(tx.amount)');
+    // An unreadable amount renders as an explicit unavailable state.
+    expect(src).toContain("amount == null ? '—'");
+  });
+
+  test('post analytics counters render unknown, not 0', () => {
+    const src = read('src/services/firestoreService.js');
+    expect(src).toContain('totalLikes: unknownNumber(stats.likes)');
+    expect(src).toContain('totalComments: unknownNumber(stats.comments)');
+    expect(src).toContain('totalShares: unknownNumber(stats.shares)');
+    expect(src).not.toMatch(/totalLikes: stats\.likes \|\| 0/);
   });
 });

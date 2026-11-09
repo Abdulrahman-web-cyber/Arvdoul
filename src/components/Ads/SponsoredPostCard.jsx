@@ -315,9 +315,11 @@ export default function SponsoredPostCard({
 
         {/* Media creative (High-res image / preview) */}
         {ad.mediaUrl && (
-          <div
+          <button
+            type="button"
             onClick={handleCtaClick}
-            className="relative w-full aspect-video bg-black/40 cursor-pointer overflow-hidden group"
+            aria-label={ad.ctaText || 'Learn more about this sponsored post'}
+            className="relative block w-full aspect-video bg-black/40 cursor-pointer overflow-hidden group text-left"
           >
             <img
               src={ad.mediaUrl}
@@ -336,7 +338,7 @@ export default function SponsoredPostCard({
                 <ExternalLink className="w-3.5 h-3.5" />
               </div>
             </div>
-          </div>
+          </button>
         )}
 
         {/* Bottom CTA Bar */}

@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 
 const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Cinematic'];
 
@@ -245,7 +246,7 @@ export default function SoundsScreen() {
                 <div className="flex items-center gap-4 min-w-0">
                   <span className="text-sm font-extrabold text-gray-500 w-5">{index + 1}</span>
 
-                  <div className="relative w-14 h-14 rounded-2xl overflow-hidden shrink-0 group cursor-pointer" onClick={() => handlePlaySound(snd)}>
+                  <button type="button" aria-label={`${isThisPlaying ? 'Pause' : 'Play'} ${snd.title || 'sound'}`} className="relative w-14 h-14 rounded-2xl overflow-hidden shrink-0 group cursor-pointer" onClick={() => handlePlaySound(snd)}>
                     {snd.coverUrl ? (
                       <img src={snd.coverUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -260,7 +261,7 @@ export default function SoundsScreen() {
                         <Play className="w-6 h-6 text-white" />
                       )}
                     </div>
-                  </div>
+                  </button>
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -275,7 +276,7 @@ export default function SoundsScreen() {
                     <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
                       <span>⏱️ {snd.duration || '—'}</span>
                       {snd.bpm != null && <span>⚡️ {snd.bpm} BPM</span>}
-                      <span>🎬 {snd.reelsCount || 0} Reels</span>
+                      <span>🎬 {unknownNumber(snd.reelsCount) ?? '—'} Reels</span>
                     </div>
                   </div>
                 </div>

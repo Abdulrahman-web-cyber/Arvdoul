@@ -119,7 +119,7 @@ export default function MenuScreen() {
     { id: "spaces", category: "social", icon: Radio, label: "Live Audio Lounges", description: "Join interactive audio rooms with stage speakers", color: "#f43f5e", path: "/spaces", badge: "Active" },
     { id: "sounds", category: "social", icon: Music, label: "Viral Sounds & Soundtracks", description: "Browse and use trending audio tracks", color: "#ec4899", path: "/sounds", badge: "Hot" },
     { id: "marketplace", category: "social", icon: ShoppingBag, label: "Creator Marketplace", description: "Buy and sell digital LUTs, audio packs & presets", color: "#10b981", path: "/marketplace", badge: "Store" },
-    { id: "polls", category: "social", icon: TrendingUp, label: "Polls & Prediction Markets", description: "Wager virtual coins on community outcomes", color: "#3b82f6", path: "/polls", badge: "Wager" },
+    { id: "polls", category: "social", icon: TrendingUp, label: "Community Polls", description: "Ask the creator economy and see audience consensus", color: "#3b82f6", path: "/polls", badge: "Vote" },
     { id: "messages", category: "social", icon: MessageCircle, label: "Direct Messages", description: "Private messaging & group chats", color: "#06b6d4", path: "/messages", badge: unreadCounts?.messages ? `${unreadCounts.messages} new` : null },
     { id: "notifications", category: "social", icon: Bell, label: "Notifications & Alerts", description: "Live activity, comments, likes & coin tips", color: "#f59e0b", path: "/notifications", badge: unreadCounts?.notifications ? `${unreadCounts.notifications}` : null },
     { id: "saved", category: "social", icon: Bookmark, label: "Saved Items & Collections", description: "Bookmarked media, reels, and inspiration folders", color: "#8b5cf6", path: "/saved", badge: null },
@@ -336,7 +336,7 @@ export default function MenuScreen() {
                   </span>
                 </div>
                 <p className={`text-xs mt-0.5 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                  Tip creators, unlock premium effects, and wager coins on community predictions.
+                  Tip creators, unlock premium effects, and vote on community polls.
                 </p>
               </div>
             </div>

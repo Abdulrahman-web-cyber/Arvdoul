@@ -67,6 +67,12 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
     const viewSnap = await transaction.get(viewRef);
     if (viewSnap.exists) return false;
 
+    // Firestore requires every read before the first write; the previous order
+    // read `analyticsRef` AFTER `transaction.set(viewRef, …)`, so the SDK threw
+    // ("transactions require all reads before all writes") and profile views
+    // were never counted.
+    const analyticsSnap = await transaction.get(analyticsRef);
+
     transaction.set(viewRef, {
       viewerId,
       profileOwnerId,
@@ -74,7 +80,6 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
       viewedAt: FieldValue.serverTimestamp(),
     });
 
-    const analyticsSnap = await transaction.get(analyticsRef);
     if (!analyticsSnap.exists) {
       transaction.set(analyticsRef, {
         totalEngagement: 0,
@@ -161,9 +166,13 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
       const viewerSnap = await transaction.get(viewerRef);
       if (viewerSnap.exists) return false;
 
+      // All reads before all writes (see trackProfileView above): the daily-stat
+      // read must precede the `viewerRef` set or the SDK throws and post views
+      // are never counted.
+      const dailySnap = await transaction.get(dailyStatRef);
+
       transaction.set(viewerRef, { userId: viewerId, viewedAt: FieldValue.serverTimestamp() });
 
-      const dailySnap = await transaction.get(dailyStatRef);
       if (!dailySnap.exists) {
         transaction.set(dailyStatRef, {
           date: today,

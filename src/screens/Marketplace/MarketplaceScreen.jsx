@@ -180,7 +180,7 @@ export default function MarketplaceScreen() {
               }`}
             >
               <div>
-                <div className="relative h-48 overflow-hidden group cursor-pointer" onClick={() => setSelectedProduct(prod)}>
+                <button type="button" aria-label={`View ${prod.title || 'product'}`} className="relative h-48 w-full overflow-hidden group cursor-pointer text-left" onClick={() => setSelectedProduct(prod)}>
                   {prod.image ? (
                     <img src={prod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
@@ -196,7 +196,7 @@ export default function MarketplaceScreen() {
                       {prod.creator.badge}
                     </div>
                   )}
-                </div>
+                </button>
 
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2">

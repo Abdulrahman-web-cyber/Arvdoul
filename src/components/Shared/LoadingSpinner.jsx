@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { motion, useAnimation } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
 import { useInView } from "react-intersection-observer";
+import { tokens } from "../../design-system/tokens.js";
 
 const LoadingSpinner = React.memo(
   ({
@@ -23,9 +24,9 @@ const LoadingSpinner = React.memo(
     }, [controls, inView]);
 
     const colorSchemes = {
-      primary: { light: "#8B1EF3", dark: "#8B1EF3" },
-      secondary: { light: "#4431F7", dark: "#4431F7" },
-      blue: { light: "#055BFB", dark: "#055BFB" },
+      primary: { light: tokens.color.brand.violet, dark: tokens.color.brand.violet },
+      secondary: { light: tokens.color.brand.indigo, dark: tokens.color.brand.indigo },
+      blue: { light: tokens.color.brand.blue, dark: tokens.color.brand.blue },
       success: { light: "#059669", dark: "#10B981" },
       warning: { light: "#D97706", dark: "#F59E0B" },
       danger: { light: "#DC2626", dark: "#EF4444" },
@@ -34,7 +35,7 @@ const LoadingSpinner = React.memo(
     };
 
     const spinnerColor =
-      colorSchemes[color]?.[theme] || color || "#8B1EF3";
+      colorSchemes[color]?.[theme] || color || tokens.color.brand.violet;
 
     const radius = size / 2;
     const dotSize = size * 0.12;

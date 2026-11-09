@@ -9,6 +9,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { secureRandom } from '../lib/utils.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 class LRUCache {
   constructor(maxSize = 100, ttl = 60000) {
@@ -1104,10 +1105,10 @@ class EnterpriseFirestoreService {
   }
 
   // Post-embedded poll voting is server-authoritative: `functions/polls.js`
-  // `votePostPoll` validates eligibility/expiry/option, records one vote per
-  // viewer in a transaction and credits the reward. The posts update rule lets
-  // any signed-in user write `poll`, so a client transaction here would let a
-  // voter forge counts (the previous implementation did exactly that).
+  // `votePostPoll` validates eligibility/expiry/option and records one vote per
+  // viewer in a transaction. The posts update rule lets any signed-in user write
+  // `poll`, so a client transaction here would let a voter forge counts (the
+  // previous implementation did exactly that).
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
     if (!userId) throw new Error('Sign in to vote');
@@ -1118,7 +1119,7 @@ class EnterpriseFirestoreService {
         optionId: `opt_${optionIndex}`,
       });
       this.cache.delete(postId);
-      return { success: true, alreadyVoted: false, options: data?.options, totalVotes: data?.totalVotes, rewardCoins: data?.rewardCoins };
+      return { success: true, alreadyVoted: false, options: data?.options, totalVotes: data?.totalVotes };
     } catch (error) {
       const code = error?.code || '';
       if (String(code).includes('already-exists')) {
@@ -1172,16 +1173,18 @@ class EnterpriseFirestoreService {
     await this.ensureInitialized();
     const dailyStats = await this.getPostDailyViews(postId, days);
     if (!dailyStats.success) return { success: false, error: dailyStats.error };
-    const totalViews = dailyStats.dailyViews.reduce((sum, d) => sum + (d.views || 0), 0);
+    const totalViews = dailyStats.dailyViews.reduce((sum, d) => sum + (unknownNumber(d.views) ?? 0), 0);
     const post = await this.getPost(postId);
     const stats = post.success ? post.post.stats : {};
+    // An unread counter stays null (the panel renders '—'); coercing it to 0
+    // fabricated "0 Likes" for a post whose stats were never loaded.
     return {
       success: true,
       analytics: {
         totalViews,
-        totalLikes: stats.likes || 0,
-        totalComments: stats.comments || 0,
-        totalShares: stats.shares || 0,
+        totalLikes: unknownNumber(stats.likes),
+        totalComments: unknownNumber(stats.comments),
+        totalShares: unknownNumber(stats.shares),
         dailyBreakdown: dailyStats.dailyViews
       }
     };

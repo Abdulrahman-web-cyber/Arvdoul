@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, CheckCircle2, Lock, Globe, Flag } from "lucide-react";
 import { callFunction, FUNCTIONS } from '../../services/callableService.js';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 
 const AdminCommunityManagementScreen = () => {
   const navigate = useNavigate();
@@ -198,7 +199,7 @@ const AdminCommunityManagementScreen = () => {
                   <div>
                     <span className="text-gray-500">Strikes</span>
                     <div className={`font-bold ${Number(comm.strikesCount) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                      {Number(comm.strikesCount) || 0}
+                      {unknownNumber(comm.strikesCount) ?? '—'}
                     </div>
                   </div>
                 </div>

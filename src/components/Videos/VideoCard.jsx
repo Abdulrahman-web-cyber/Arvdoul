@@ -280,6 +280,10 @@ const VideoCard = memo(({
         ref={videoRef}
         src={videoSrc}
         poster={thumbnail}
+        // Only the on-screen card may buffer ahead; a vertical feed mounts
+        // every loaded card, so an unconditional 'auto' preload pulled
+        // full-resolution data for videos the viewer never reached.
+        preload={isActive ? 'auto' : 'metadata'}
         className="w-full h-full object-cover sm:object-contain"
         playsInline
         muted={isMuted}
@@ -814,6 +818,12 @@ const VideoCard = memo(({
 
         {/* Gradient Scrubber with Glow Knob */}
         <div
+          role="slider"
+          aria-label="Seek video"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration) || 0}
+          aria-valuenow={Math.round(currentTime)}
+          tabIndex={0}
           className="relative flex-1 h-1.5 hover:h-2.5 transition-all bg-white/20 rounded-full cursor-pointer overflow-visible group"
           onClick={handleProgressClick}
         >

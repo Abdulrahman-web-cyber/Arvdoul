@@ -88,12 +88,12 @@ export default function EditorHeader({
 
       {/* Center: Brand & Project Dropdown */}
       <div className="relative flex flex-col items-center justify-center" ref={menuRef}>
-        <div className="flex items-center gap-1.5 cursor-pointer select-none group" onClick={() => setShowProjectsMenu(!showProjectsMenu)}>
+        <button type="button" aria-label="Project menu" aria-expanded={showProjectsMenu} className="flex items-center gap-1.5 cursor-pointer select-none group" onClick={() => setShowProjectsMenu(!showProjectsMenu)}>
           <span className="text-sm sm:text-base font-black tracking-widest bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(139,92,246,0.35)]">
             ARVDOUL
           </span>
-          <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
-        </div>
+          <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" aria-hidden="true" />
+        </button>
 
         <div className="flex items-center gap-1">
           {isEditingTitle ? (

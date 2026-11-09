@@ -30,7 +30,6 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: true
 
   # ========== BUILD ==========
   build:
@@ -69,9 +68,16 @@ jobs:
 
   # ========== TEST ==========
   test:
-    name: Run Tests
+    name: Run Tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 22 is the Functions runtime + CI pin; Node 24 is the local dev
+        # runtime. Running both here means a `require(esm)`-only API (Node 24
+        # feature) can never silently pass CI while breaking on the runtime.
+        node: ['22', '24']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,7 +85,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ matrix.node }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -90,7 +96,6 @@ jobs:
 
       - name: Run unit tests
         run: npm run test -- --coverage --watchAll=false
-        continue-on-error: true
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -319,6 +324,15 @@ jobs:
           src/__tests__/sideEffectFailureGuard.test.js
           src/__tests__/functionsSilentCatchGuard.test.js
           src/__tests__/srcSilentCatchGuard.test.js
+          src/__tests__/firestoreQueryIndexMap.test.js
+          src/__tests__/a11yInteractiveGuard.test.js
+          src/__tests__/brandHexRatchetGuard.test.js
+          src/__tests__/sharedStatePrimitivesGuard.test.js
+          src/__tests__/storyExpiryGuard.test.js
+          src/__tests__/reportRoutingParity.test.js
+          src/__tests__/monetizationIdempotencyGuard.test.js
+          src/__tests__/transactionOrderGuard.test.js
+          src/__tests__/serviceOfflineQueueOwnerGuard.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
       # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Send, MessageCircle, X, Save, ChevronDown, ChevronUp, Lock, Sparkles, CheckCircle, Eye, EyeOff } from "lucide-react";
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
@@ -86,7 +87,7 @@ const AnswerItem = React.memo(({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(answer.answer || '');
   const [userVote, setUserVote] = useState(answer.userVote || null);
-  const [optimisticUpvotes, setOptimisticUpvotes] = useState(answer.upvotes || 0);
+  const [optimisticUpvotes, setOptimisticUpvotes] = useState(unknownNumber(answer.upvotes));
   const isAnswerAuthor = answer.userId === currentUserId;
   const canMarkBest = isAuthor && !isBest && !answer.isBest;
   const voteLock = useRef(false);
@@ -97,12 +98,12 @@ const AnswerItem = React.memo(({
     const newVote = userVote === direction ? null : direction;
     const delta = getVoteDelta(userVote, newVote);
     setUserVote(newVote);
-    setOptimisticUpvotes(prev => prev + delta);
+    setOptimisticUpvotes(prev => (prev === null ? null : prev + delta));
     try {
       await onVote(answer.id, newVote);
     } catch (err) {
       setUserVote(userVote);
-      setOptimisticUpvotes(answer.upvotes || 0);
+      setOptimisticUpvotes(unknownNumber(answer.upvotes));
       toast.error('Vote failed');
     } finally {
       voteLock.current = false;
@@ -202,7 +203,7 @@ const AnswerItem = React.memo(({
           className={cn("flex items-center gap-1 text-xs transition", userVote === 'up' ? 'text-green-500' : 'text-gray-400 hover:text-green-500')}
           aria-label="Upvote"
         >
-          <ThumbsUp className="w-3.5 h-3.5" /> {optimisticUpvotes}
+          <ThumbsUp className="w-3.5 h-3.5" /> {optimisticUpvotes === null ? '—' : optimisticUpvotes}
         </button>
         <button
           onClick={() => handleVote('down')}
@@ -255,7 +256,7 @@ const QuestionCard = React.memo(({
   currentUser,
   tokens,
   answers,
-  userReputation = 0,
+  userReputation = null,
   isAuthor,
   onSubmitAnswer,
   onVote,

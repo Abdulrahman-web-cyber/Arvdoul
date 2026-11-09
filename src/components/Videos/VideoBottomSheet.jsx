@@ -8,6 +8,7 @@ import { X, Share2, Bookmark, Download, Flag, Check, MessageCircle, Twitter, Fac
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { SPRING_ANIMATION, REPORT_REASONS, generateShareUrl } from '../../utils/videoUtils';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 
@@ -511,7 +512,7 @@ const VideoBottomSheet = memo(({
                         className={`w-full flex items-center justify-between p-4 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-black/[0.03] hover:bg-black/5 text-gray-900'} transition-colors disabled:opacity-50`}
                       >
                         <span className="font-medium text-sm truncate">{col.name}</span>
-                        <span className={`text-xs ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{col.itemCount || 0}</span>
+                        <span className={`text-xs ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{unknownNumber(col.itemCount) ?? '—'}</span>
                       </motion.button>
                     ))
                   )}

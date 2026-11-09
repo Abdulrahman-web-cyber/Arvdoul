@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import ErrorState from '../design-system/ErrorState.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import { cn } from '../lib/utils';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 export default function CollectionsScreen() {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ export default function CollectionsScreen() {
           id: c.id,
           title: c.name || c.title || 'Untitled',
           description: c.description || '',
-          itemCount: c.itemCount || 0,
+          itemCount: unknownNumber(c.itemCount),
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
@@ -90,7 +91,7 @@ export default function CollectionsScreen() {
           id: c.id,
           title: c.name || c.title || 'Untitled',
           description: c.description || '',
-          itemCount: c.itemCount || 0,
+          itemCount: unknownNumber(c.itemCount),
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
@@ -222,7 +223,7 @@ export default function CollectionsScreen() {
                 </div>
                 <p className="text-xs text-gray-300 line-clamp-1">{c.description}</p>
                 <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 font-semibold">
-                  <span>{c.itemCount} items</span>
+                  <span>{c.itemCount === null ? '— items' : `${c.itemCount} items`}</span>
                   <span>Updated {c.lastUpdated}</span>
                 </div>
               </div>

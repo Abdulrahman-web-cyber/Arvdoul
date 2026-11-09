@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 import { levelSystemService, getCitizenTier, getPerksForLevel, LEVEL_PERKS, getPrestigeInfo, XP_RULES } from "../../services/levelSystemService";
 import { Flame, ChevronRight, Lock, Coins, ShieldCheck, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
@@ -144,7 +145,7 @@ export default function ProgressScreen() {
                   ? 'Progress unavailable'
                   : levelInfo?.isMaxLevel
                     ? 'Ascendant'
-                    : `${levelInfo?.xpToNext || 0} XP to Level ${level + 1}`}
+                    : `${unknownNumber(levelInfo?.xpToNext) ?? '—'} XP to Level ${level + 1}`}
               </span>
             </div>
             <div
@@ -154,15 +155,15 @@ export default function ProgressScreen() {
             >
               <div
                 className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-700 rounded-full"
-                style={{ width: `${levelInfo?.progress || 0}%` }}
+                style={{ width: `${unknownNumber(levelInfo?.progress) ?? 0}%` }}
                 role="progressbar"
-                aria-valuenow={levelInfo?.progress || 0}
+                aria-valuenow={unknownNumber(levelInfo?.progress) ?? 0}
                 aria-valuemin={0}
                 aria-valuemax={100}
               />
             </div>
             <div className="flex justify-between items-center text-xs text-gray-500 pt-1">
-              <span>Stage Progress: {levelInfo?.progress || 0}%</span>
+              <span>Stage Progress: {unknownNumber(levelInfo?.progress) != null ? `${levelInfo.progress}%` : '—'}</span>
               <span>Total XP: {user?.experience != null ? Number(user.experience).toLocaleString() : '—'}</span>
             </div>
           </div>
