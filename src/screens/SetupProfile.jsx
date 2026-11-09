@@ -1085,14 +1085,18 @@ export default function SetupProfile() {
         try {
           const { useProfileStore } = await import("../store/profileStore.js");
           await useProfileStore.getState().loadProfile(user.uid, user.uid);
-        } catch {}
+        } catch (e) {
+          console.warn('Profile-store sync after setup failed', e?.message);
+        }
         try {
           const { useAppStore } = await import("../store/appStore.js");
           const cur = useAppStore.getState().currentUser;
           if (cur) {
             useAppStore.getState().setCurrentUser({ ...cur, ...freshProfile, isProfileComplete: true });
           }
-        } catch {}
+        } catch (e) {
+          console.warn('App-store current-user sync after setup failed', e?.message);
+        }
       }
     } catch (err) {
       console.warn("Failed to refresh profile", err);

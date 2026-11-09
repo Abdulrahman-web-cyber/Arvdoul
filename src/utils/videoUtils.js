@@ -425,7 +425,9 @@ export const generateTranscript = async (videoId) => {
       rec.onend = () => resolve(text);
       rec.onerror = () => resolve('');
       rec.start();
-      setTimeout(() => { try { rec.stop(); } catch (e) {} }, 15000);
+      setTimeout(() => { try { rec.stop(); } catch (e) {
+        console.warn('Speech recognition stop failed', e?.message);
+      } }, 15000);
     });
   } catch (err) {
     return '';

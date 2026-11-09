@@ -1195,7 +1195,9 @@ export default function HomeScreen() {
         feedRuntimeRef.current.insertedIds.add(hydrated.id);
         try {
           virtuosoRef.current?.scrollToIndex({ index: 0, align: 'start', behavior: 'smooth' });
-        } catch {}
+        } catch {
+          /* the list may not be measured yet; the item is still prepended */
+        }
       }
     };
     window.addEventListener('arvdoul:new_post_published', handleNewPost);

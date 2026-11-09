@@ -1032,7 +1032,9 @@ class UltimateNotificationsService {
     if (this.dedupeCleanupInterval) clearInterval(this.dedupeCleanupInterval);
     if (this.offlineQueue) this.offlineQueue.destroy();
     for (const unsub of this.realtimeSubscriptions.values()) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        console.warn('Notification listener unsubscribe failed', e?.message);
+      }
     }
     this.realtimeSubscriptions.clear();
     this.clearCache();

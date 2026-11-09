@@ -80,16 +80,19 @@ npm run build
   localforage, `searchService` skipped candidate, `ProfilePublicScreen` view
   tracking, `NotificationsScreen` follow-request hydration, `videoService`
   share counter.
-- New guard: `src/__tests__/sideEffectFailureGuard.test.js` (hard-failing
-  `guards` CI job) — fails when a known server-owned side-effect call is
-  followed by a bare no-op `.catch(() => {})`.
+- New guards: `src/__tests__/sideEffectFailureGuard.test.js`,
+  `src/__tests__/functionsSilentCatchGuard.test.js` and
+  `src/__tests__/srcSilentCatchGuard.test.js` (all hard-failing `guards` CI
+  job). The latter two make the class impossible to reintroduce: an empty
+  catch must carry an explanatory comment, in `functions/` and `src/` alike.
+  Every remaining empty catch in the repo now either logs or explains itself
+  (0 bare `catch {}` remain in `src` or `functions`).
 - Quality gates: `npm test` — **115 suites / 1358 tests passing**;
   `npm run build` — ✓ built; eslint `--quiet` — exit 0.
 
 ## Next exact tasks (updated)
 
-1. Extend the observability guard to the **server**: a `functions/*.js` empty
-   catch (`catch {}` / `catch (_) {}`) should fail CI unless it carries a log.
+1. (done) Observability guard extended to both `functions/` and `src`.
 2. Continue the "no fabricated state" pass on remaining screens (loading vs
    failed vs empty tri-state) where the guard has not yet pinned them.
 3. Keep chasing the "surpass major platforms" goal: profile highlight creation

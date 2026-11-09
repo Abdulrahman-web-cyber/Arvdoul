@@ -54,7 +54,9 @@ class GlobalErrorBoundaryBase extends Component {
           time: new Date().toISOString(),
         })
       );
-    } catch {}
+    } catch {
+      /* reporting must never throw */
+    }
 
     console.error("💥 ARVDOUL CRASH:", error, errorInfo);
 
@@ -68,8 +70,12 @@ class GlobalErrorBoundaryBase extends Component {
           source: 'GlobalErrorBoundary',
           componentStack: errorInfo?.componentStack,
         });
-      }).catch(() => {});
-    } catch {}
+      }).catch(() => {
+        /* remote reporting must never throw */
+      });
+    } catch {
+      /* reporting must never throw */
+    }
   }
 
   // A failed dynamic import() — "Failed to fetch dynamically imported module",

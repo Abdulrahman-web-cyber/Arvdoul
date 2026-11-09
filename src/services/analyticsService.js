@@ -893,7 +893,9 @@ class UltimateAnalyticsService {
     }
     
     for (const unsub of this.subscriptions.values()) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        console.warn('Analytics listener unsubscribe failed', e?.message);
+      }
     }
     this.subscriptions.clear();
     

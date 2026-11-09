@@ -1399,7 +1399,9 @@ function CreatePostProvider({ children }) {
               photoURL: current.photoURL || "",
             };
           }
-        } catch {}
+        } catch (e) {
+          console.warn('Stored auth-user read failed', e?.message);
+        }
       }
 
       if (!userNow?.uid) {
@@ -1411,7 +1413,9 @@ function CreatePostProvider({ children }) {
               userNow = parsed;
             }
           }
-        } catch {}
+        } catch (e) {
+          console.warn('Stored email-auth data read failed', e?.message);
+        }
       }
 
       if (!userNow?.uid) {

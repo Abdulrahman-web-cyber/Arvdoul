@@ -264,8 +264,12 @@ export default function ExportModal({
     // Stop recording.
     recorder.stop();
     const blob = await recorded;
-    Object.values(clipEls).forEach((v) => { try { v.removeAttribute('src'); v.load(); } catch {} });
-    if (audioCtx) audioCtx.close().catch(() => {});
+    Object.values(clipEls).forEach((v) => { try { v.removeAttribute('src'); v.load(); } catch {
+      /* teardown is best-effort */
+    } });
+    if (audioCtx) audioCtx.close().catch(() => {
+      /* context may already be closed */
+    });
 
     if (cancelRef.current || blob.size === 0) {
       setIsExporting(false);

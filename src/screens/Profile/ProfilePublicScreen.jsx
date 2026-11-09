@@ -86,7 +86,9 @@ export default function ProfilePublicScreen() {
     setViewMode(mode);
     try {
       localStorage.setItem('arvdoul_profile_view_mode', mode);
-    } catch {}
+    } catch {
+      /* view-mode persistence is a preference, not state */
+    }
   }, []);
   
   // Modals

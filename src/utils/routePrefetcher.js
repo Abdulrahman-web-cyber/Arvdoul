@@ -19,10 +19,13 @@ export const prefetchRoutesIdle = (importFns = []) => {
         try {
           fn().then(() => {
             prefetchedModules.add(index);
-          }).catch(() => {
-            // Non-critical, ignore
+          }).catch((err) => {
+            // Non-critical: a prefetch failure must not surface.
+            console.warn('Route prefetch failed', err?.message);
           });
-        } catch (_) {}
+        } catch (err) {
+          console.warn('Route prefetch scheduling failed', err?.message);
+        }
       }, index * 120);
     });
   };

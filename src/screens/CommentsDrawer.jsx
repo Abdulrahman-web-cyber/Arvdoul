@@ -449,7 +449,9 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
       if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       if (pointerIdRef.current !== null && buttonRef.current) {
-        try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (e) {}
+        try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (e) {
+          console.warn('Pointer capture release failed', e?.message);
+        }
       }
     };
   }, [recording]);
@@ -521,7 +523,9 @@ const VoiceRecorder = memo(({ onRecordingComplete, onCancel }) => {
     else if (locked) stopRecording();
     else stopRecording();
     if (pointerIdRef.current !== null && buttonRef.current) {
-      try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (ex) {}
+      try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (ex) {
+        console.warn('Pointer capture release failed', ex?.message);
+      }
       pointerIdRef.current = null;
     }
   };

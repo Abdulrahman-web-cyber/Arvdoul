@@ -1002,13 +1002,19 @@ class UltimateLiveService {
 
   destroy() {
     for (const [key, unsub] of this._activeStreamListeners) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Live stream listener unsubscribe failed', { key, error: e?.message });
+      }
     }
     for (const [key, unsub] of this._commentListeners) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Live comment listener unsubscribe failed', { key, error: e?.message });
+      }
     }
     for (const [key, unsub] of this._viewerListeners) {
-      try { unsub(); } catch (e) {}
+      try { unsub(); } catch (e) {
+        logger.warn('Live viewer listener unsubscribe failed', { key, error: e?.message });
+      }
     }
     
     this._activeStreamListeners.clear();

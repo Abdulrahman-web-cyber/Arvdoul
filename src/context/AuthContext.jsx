@@ -546,7 +546,9 @@ export function AuthProvider({ children }) {
                 localStorage.removeItem('signup_step1');
                 localStorage.removeItem('signup_data');
                 localStorage.removeItem('signup_data_persist');
-              } catch (e) {}
+              } catch (e) {
+                console.warn('Signup draft cleanup failed', e?.message);
+              }
               clearOnboardingRequired();
             }
 
@@ -557,7 +559,9 @@ export function AuthProvider({ children }) {
                 const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
                             sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
                 if (raw) step1Data = JSON.parse(raw);
-              } catch (e) {}
+              } catch (e) {
+                console.warn('Signup step-1 data parse failed', e?.message);
+              }
             }
 
             const hasStep1Names = Boolean(!isDocComplete && (step1Data?.firstName || step1Data?.lastName));
@@ -617,7 +621,9 @@ export function AuthProvider({ children }) {
               const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
                           sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
               if (raw) step1Data = JSON.parse(raw);
-            } catch (e) {}
+            } catch (e) {
+              console.warn('Signup step-1 data parse failed', e?.message);
+            }
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com');
             const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
@@ -773,7 +779,9 @@ export function AuthProvider({ children }) {
               localStorage.setItem('arvdoul_has_session', 'true');
               localStorage.setItem('arvdoul_uid', firebaseUser.uid);
               localStorage.setItem('uid', firebaseUser.uid);
-            } catch (e) {}
+            } catch (e) {
+              console.warn('Session marker write failed', e?.message);
+            }
 
             if (!initialProfileLoaded.current) {
               setLoading(true);
@@ -816,7 +824,9 @@ export function AuthProvider({ children }) {
               localStorage.removeItem('arvdoul_uid');
               localStorage.removeItem('uid');
               localStorage.removeItem('user');
-            } catch (e) {}
+            } catch (e) {
+              console.warn('Session marker clear failed', e?.message);
+            }
             initialProfileLoaded.current = false;
             setUser(null);
             setUserProfile(null);
@@ -1244,7 +1254,9 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('arvdoul_uid');
         localStorage.removeItem('uid');
         localStorage.removeItem('user');
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Sign-out session marker clear failed', e?.message);
+      }
       AuthStorageManager.clearAll();
       clearOnboardingRequired();
       broadcastRef.current?.postMessage({ type: 'signOut' });

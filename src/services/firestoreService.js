@@ -223,7 +223,9 @@ class EnterpriseFirestoreService {
             new Promise((res) => setTimeout(res, 1000))
           ]);
           currentUser = auth.currentUser;
-        } catch {}
+        } catch {
+          /* authStateReady raced the timeout; fall back to currentUser */
+        }
       }
       if (!currentUser) {
         currentUser = await new Promise((resolve) => {
@@ -1179,7 +1181,9 @@ class EnterpriseFirestoreService {
     const postRef = doc(this.firestore, 'posts', postId);
     const subKey = `post_${postId}`;
     if (this.subscriptions.has(subKey)) {
-      try { this.subscriptions.get(subKey)(); } catch (e) {}
+      try { this.subscriptions.get(subKey)(); } catch (e) {
+        logger.debug('Stale post subscription unsubscribe failed', { error: e?.message });
+      }
     }
     const unsubscribe = onSnapshot(postRef, (snap) => {
       if (snap.exists()) {
@@ -1246,7 +1250,9 @@ class EnterpriseFirestoreService {
   clearCache() { this.cache.clear(); logger.warn('// Firestore cache cleared'); }
 
   destroy() {
-    for (const unsub of this.subscriptions.values()) try { unsub(); } catch (e) {}
+    for (const unsub of this.subscriptions.values()) try { unsub(); } catch (e) {
+      logger.debug('Subscription unsubscribe failed', { error: e?.message });
+    }
     this.subscriptions.clear();
     this.clearCache();
     this.initialized = false;
