@@ -2347,3 +2347,20 @@ describe('Offline status screen reads the real queue, never a fixed count', () =
     expect(s).toContain("from '../offline/syncEngine.js'");
   });
 });
+
+describe('Composer moderation never claims a pass it did not verify', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+
+  test('a failed moderation call renders an "unavailable" state, not "passed"', () => {
+    // The catch branch used to dispatch `{ approved: true, fallback: true }`,
+    // so an unreachable moderation provider rendered "Content passed
+    // moderation" — a fabricated approval. It must surface the unknown state.
+    expect(src).not.toContain('approved: true, flags: [], fallback: true');
+    expect(src).toContain('unknown: true');
+    expect(src).toContain('Moderation check unavailable');
+  });
+
+  test('the approval copy is gated on a real approved flag', () => {
+    expect(src).toContain('state.moderationStatus.approved ? "Content passed moderation"');
+  });
+});

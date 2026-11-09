@@ -1329,9 +1329,14 @@ function CreatePostProvider({ children }) {
       const result = await callFunction(FUNCTIONS.MODERATE_POST, { content, mediaUrls });
       dispatch({ type: "SET_MODERATION_STATUS", payload: result });
       return result;
-    } catch {
-      dispatch({ type: "SET_MODERATION_STATUS", payload: { approved: true, flags: [], fallback: true } });
-      return null;
+    } catch (e) {
+      // The check could not run — never claim the content "passed". The server
+      // itself returns `unknown` when the provider is unconfigured; a failed
+      // call is the same state, not an approval.
+      console.warn('Moderation check unavailable', e?.message);
+      const unknown = { approved: false, unknown: true, flags: [], reason: 'moderation_unavailable' };
+      dispatch({ type: "SET_MODERATION_STATUS", payload: unknown });
+      return unknown;
     }
   }, []);
 
@@ -2280,10 +2285,16 @@ export function ModerationStatus({ defaultOpen = false }) {
   return (
     <Panel icon={Icons.Shield} title="Content Moderation" defaultOpen={defaultOpen}>
       {state.moderationStatus ? (
-        <div className={`p-2 rounded-lg text-xs ${state.moderationStatus.approved ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"}`}>
-          {state.moderationStatus.approved ? "✅ Content passed moderation" : `⚠️ Content flagged: ${(state.moderationStatus.flags || []).join(", ")}`}
-          {state.moderationStatus.fallback && <span className="ml-1 text-gray-400">(offline check)</span>}
-        </div>
+        state.moderationStatus.unknown ? (
+          <div className="p-2 rounded-lg text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
+            Moderation check unavailable — content was not screened.
+          </div>
+        ) : (
+          <div className={`p-2 rounded-lg text-xs ${state.moderationStatus.approved ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"}`}>
+            {state.moderationStatus.approved ? "Content passed moderation" : `Content flagged: ${(state.moderationStatus.flags || []).join(", ")}`}
+            {state.moderationStatus.needsReview && <span className="ml-1 text-gray-400">(flagged for review)</span>}
+          </div>
+        )
       ) : (
         <p className="text-xs text-gray-500">Typing will auto‑check content.</p>
       )}
