@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Users, FileText, Flag, AlertTriangle, Shield, TrendingUp, Clock, Activity, DollarSign, MessageCircle, Coins, ShieldCheck, UserCheck, Zap } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
 import { fetchAdminStatus } from '../../services/callableService.js';
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
 
 const AdminDashboardScreen = () => {
   const navigate = useNavigate();
@@ -139,13 +140,7 @@ const AdminDashboardScreen = () => {
 
   if (!isPermitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
-          <p className="text-gray-400">Admin privileges required.</p>
-          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">Go Home</button>
-        </div>
-      </div>
+      <PermissionDenied onGoHome={() => navigate('/')} />
     );
   }
 

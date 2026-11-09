@@ -1605,14 +1605,20 @@ describe('Admin screens - server-authoritative admin gate', () => {
     // AdminDashboardScreen held the denial in `error` but never rendered it, so
     // a non-admin (or a failed count query) saw a full grid of zeros that read
     // like real, empty platform data. Every admin surface must render the
-    // denial explicitly.
+    // denial explicitly — now through the single shared PermissionDenied
+    // primitive (three hand-rolled copies were consolidated).
+    const primitive = fs.readFileSync(
+      path.join(root, 'src/design-system/PermissionDenied.jsx'),
+      'utf8'
+    );
+    expect(primitive).toContain('Access Denied');
     for (const file of [
       'AdminDashboardScreen.jsx',
       'AdminContentManagementScreen.jsx',
       'AdminModerationQueueScreen.jsx',
     ]) {
       const s = fs.readFileSync(path.join(root, 'src/screens/Admin', file), 'utf8');
-      expect(s).toContain('Access Denied');
+      expect(s).toMatch(/<PermissionDenied\b/);
     }
     const dash = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
     expect(dash).toMatch(/if \(error\)/);
