@@ -246,7 +246,6 @@ export default function ProfilePublicScreen() {
       toast.info('Friend request already sent. Waiting for acceptance.');
       return;
     }
-
     setFriendRequestLoading(true);
     try {
       const userServiceModule = await import('../../services/userService.js');
@@ -269,6 +268,24 @@ export default function ProfilePublicScreen() {
       setFriendRequestLoading(false);
     }
   }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
+
+  // Withdraw an outgoing friend request. `cancelFriendRequest` had no caller,
+  // so a sent request was a permanent dead-end.
+  const handleCancelFriendRequest = useCallback(async () => {
+    if (!currentUser?.uid || !userId) return;
+    setFriendRequestLoading(true);
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      await getUserService().cancelFriendRequest(currentUser.uid, userId);
+      setFriendshipStatus('none');
+      setPendingRequestId(null);
+      toast.success('Friend request withdrawn.');
+    } catch (e) {
+      toast.error(e?.message || 'Could not withdraw the friend request.');
+    } finally {
+      setFriendRequestLoading(false);
+    }
+  }, [currentUser?.uid, userId]);
 
   // Base profile: real data only, no mock fallbacks and no privacy decisions.
   // Privacy is applied once, from the capability engine, in `effectiveProfile`
@@ -532,6 +549,7 @@ export default function ProfilePublicScreen() {
             friendshipStatus={friendshipStatus}
             friendRequestLoading={friendRequestLoading}
             onFriendRequestToggle={handleFriendRequestToggle}
+            onCancelFriendRequest={handleCancelFriendRequest}
             onOpenTipModal={() => setShowTipModal(true)}
             capabilities={capabilities}
           />

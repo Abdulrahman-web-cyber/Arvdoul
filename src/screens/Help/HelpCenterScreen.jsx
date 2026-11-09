@@ -260,6 +260,10 @@ export default function HelpCenterScreen() {
                 <Link to="/login" className="text-violet-500 hover:underline">Sign in</Link> to file a ticket.
               </p>
             )}
+            <p className={`text-xs ${muted}`}>
+              Prefer email? Reach us at{' '}
+              <a href="mailto:arvdoulplatforms@gmail.com" className="text-violet-500 hover:underline">arvdoulplatforms@gmail.com</a>.
+            </p>
           </form>
         </section>
 

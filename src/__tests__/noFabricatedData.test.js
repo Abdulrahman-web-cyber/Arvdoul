@@ -1069,7 +1069,9 @@ describe('CreateStory honest offline state (spec §53)', () => {
     const src = fs.readFileSync(path.join(root, 'src/screens/CreateStory.jsx'), 'utf8');
     expect(src).toContain("'Offline — saved as draft. Will publish when you are back online.'");
     expect(src).not.toContain("'Story shared to your followers! 🌟'");
-    expect(src).toContain("visibility: 'public'");
+    // Audience is now a real control: the payload sends the chosen visibility
+    // (public/followers/private), never a hardcoded claim.
+    expect(src).toMatch(/visibility:\s*audience/);
   });
 });
 
@@ -2325,5 +2327,18 @@ describe('Store and help copy read the shared config, never restated literals', 
     expect(src).toContain('CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS');
     expect(src).not.toContain('at least 1,000 followers');
     expect(src).not.toContain('last 90 days');
+  });
+});
+
+describe('Offline status screen reads the real queue, never a fixed count', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('OfflineStatusScreen subscribes to the canonical sync engine', () => {
+    const s = read('src/screens/OfflineStatusScreen.jsx');
+    // It once rendered a hardcoded "Pending writes: 3" — a fabricated number.
+    expect(s).not.toContain('Pending writes: 3');
+    expect(s).not.toMatch(/>\s*Pending writes:\s*\d/);
+    expect(s).toContain('subscribeSyncStatus');
+    expect(s).toContain("from '../offline/syncEngine.js'");
   });
 });

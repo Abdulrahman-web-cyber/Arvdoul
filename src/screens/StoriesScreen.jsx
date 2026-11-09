@@ -1,15 +1,17 @@
 // src/screens/StoriesScreen.jsx
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown } from "lucide-react";
+import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown, Users, Loader2, Trash2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
+import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
+import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 const CATEGORY_TABS = [
@@ -55,6 +57,7 @@ export default function StoriesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [archive, setArchive] = useState({ loading: false, error: null, items: [] });
 
   // Story Viewer State
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
@@ -67,6 +70,15 @@ export default function StoriesScreen() {
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
   const [highlightGroup, setHighlightGroup] = useState(null);
+
+  // Owner-only viewers panel. `getStoryViewers` is an owner-gated, paginated
+  // service method that had no UI — a creator could not see who watched.
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewers, setViewers] = useState({ loading: false, error: null, items: [] });
+  const [deletingStory, setDeletingStory] = useState(false);
+  const [confirmDeleteStory, setConfirmDeleteStory] = useState(false);
+  // Poll state for the current story item (interactive sticker).
+  const [poll, setPoll] = useState({ loading: false, data: null, voted: null, error: null });
 
   const progressIntervalRef = useRef(null);
   const storyAudioRef = useRef(null);
@@ -117,6 +129,9 @@ export default function StoriesScreen() {
               // The track chosen in CreateStory is persisted on the story doc;
               // the viewer has to read it back or the Music tool is a no-op.
               music: st.music || null,
+              // Interactive stickers (poll/quiz/...) are persisted on the doc;
+              // read them back so the poll is answerable in the viewer.
+              stickers: st.stickers || null,
             })),
           };
         });
@@ -167,6 +182,7 @@ export default function StoriesScreen() {
           ctaText: st.ctaText || '',
           ctaUrl: st.ctaUrl || '',
           music: st.music || null,
+          stickers: st.stickers || null,
         })).filter((st) => st.url || st.type === 'text');
         if (!items.length) return;
         const first = res.stories[0];
@@ -238,14 +254,126 @@ export default function StoriesScreen() {
     setActiveStoryIndex(null);
     setActiveItemIndex(0);
     setStoryProgress(0);
+    setViewersOpen(false);
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
+    }
+  };
+
+  // Owner-only: delete the current story (soft-delete + media cleanup server-side).
+  const handleDeleteStory = async () => {
+    const storyId = currentItem?.id;
+    if (!storyId || deletingStory) return;
+    setDeletingStory(true);
+    try {
+      await getStoryService().deleteStory(storyId);
+      // Drop the item locally so the viewer advances/closes without a refetch.
+      setStories((prev) => {
+        const next = prev.map((g) => {
+          if (g.id !== currentStory?.id) return g;
+          return { ...g, items: (g.items || []).filter((it) => it.id !== storyId) };
+        }).filter((g) => (g.items || []).length > 0);
+        return next;
+      });
+      toast.success('Vibe deleted.');
+      // Move to the next item, or close if that was the last one.
+      const remaining = (currentStory?.items || []).filter((it) => it.id !== storyId);
+      if (remaining.length === 0) {
+        handleCloseStory();
+      } else {
+        setActiveItemIndex((i) => Math.min(i, remaining.length - 1));
+        setStoryProgress(0);
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete this Vibe.');
+    } finally {
+      setDeletingStory(false);
+    }
+  };
+
+  // Owner-only: load the archive when the Memories modal opens.
+  const handleOpenArchive = useCallback(async () => {
+    setIsCalendarOpen(true);
+    if (!user?.uid) return;
+    setArchive({ loading: true, error: null, items: [] });
+    try {
+      const res = await getStoryService().getArchivedStories(user.uid, { limit: 24 });
+      const items = Array.isArray(res) ? res : (res?.stories || []);
+      setArchive({ loading: false, error: null, items });
+    } catch (err) {
+      setArchive({ loading: false, error: err?.message || 'Could not load your archive.', items: [] });
+    }
+  }, [user?.uid]);
+
+  // Owner-only: load who viewed the current story item.
+  const handleOpenViewers = async () => {
+    const storyId = currentItem?.id;
+    if (!storyId) return;
+    setIsPaused(true);
+    setViewersOpen(true);
+    setViewers({ loading: true, error: null, items: [] });
+    try {
+      const res = await getStoryService().getStoryViewers(storyId, { limit: 100 });
+      const items = (res?.viewers || []).map((v) => {
+        const p = v.profile || {};
+        const name = pickDisplayName([p.displayName, p.name], { fallback: 'Member' });
+        return {
+          userId: v.userId,
+          name,
+          handle: pickHandle([p.username]) || deriveHandle(name),
+          avatar: getSafeAvatarUrl(p.photoURL, name, v.userId),
+        };
+      });
+      setViewers({ loading: false, error: null, items });
+    } catch (err) {
+      setViewers({ loading: false, error: err?.message || 'Could not load viewers.', items: [] });
     }
   };
 
   // Current story being viewed
   const currentStory = activeStoryIndex !== null ? filteredStories[activeStoryIndex] : null;
   const currentItem = currentStory?.items?.[activeItemIndex] || currentStory?.items?.[0];
+  const isOwnStory = Boolean(user?.uid && currentStory?.user?.id === user.uid);
+  const pollSticker = (currentItem?.stickers || []).find((s) => s.type === 'poll' && s.data?.pollId) || null;
+
+  // Load the current item's poll (if any) so it can be answered.
+  useEffect(() => {
+    const sticker = (currentItem?.stickers || []).find((s) => s.type === 'poll' && s.data?.pollId);
+    if (!sticker || !currentItem?.id || !user?.uid) {
+      setPoll({ loading: false, data: null, voted: null, error: null });
+      return;
+    }
+    let cancelled = false;
+    setPoll({ loading: true, data: null, voted: null, error: null });
+    getStoryService()
+      .getPoll(currentItem.id, sticker.data.pollId)
+      .then((res) => {
+        if (cancelled) return;
+        setPoll({ loading: false, data: res?.poll || null, voted: res?.voted ?? null, error: null });
+      })
+      .catch((err) => {
+        if (!cancelled) setPoll({ loading: false, data: null, voted: null, error: err?.message || 'Could not load the poll.' });
+      });
+    return () => { cancelled = true; };
+  }, [currentItem?.id, user?.uid]);
+
+  const handleVotePoll = async (optionIndex) => {
+    if (!poll.data || poll.voted !== null || !currentItem?.id || poll.data.id == null) return;
+    const pollId = poll.data.id;
+    // Optimistic: bump the chosen option and lock further votes.
+    setPoll((p) => {
+      const votes = [...(p.data.votes || [])];
+      votes[optionIndex] = (votes[optionIndex] || 0) + 1;
+      return { ...p, data: { ...p.data, votes }, voted: optionIndex };
+    });
+    try {
+      await getStoryService().voteOnPoll(currentItem.id, pollId, optionIndex);
+    } catch (err) {
+      toast.error(err?.message || 'Could not record your vote.');
+      const res = await getStoryService().getPoll(currentItem.id, pollId).catch(() => null);
+      if (res) setPoll({ loading: false, data: res.poll, voted: res.voted, error: null });
+    }
+  };
 
   // Story playback timer
   useEffect(() => {
@@ -528,7 +656,7 @@ export default function StoriesScreen() {
 
           {/* Memories / Archive */}
           <button
-            onClick={() => setIsCalendarOpen(true)}
+            onClick={handleOpenArchive}
             aria-label="Story archive"
             className={cn(
               'w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-200 active:scale-95',
@@ -854,6 +982,25 @@ export default function StoriesScreen() {
 
               {/* Top Controls: Sound, Pause, Close */}
               <div className="flex items-center gap-2">
+                {isOwnStory && (
+                  <button
+                    onClick={handleOpenViewers}
+                    aria-label="See who viewed this Vibe"
+                    className="h-9 px-3 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center gap-1.5 text-white"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? 0}</span>
+                  </button>
+                )}
+                {isOwnStory && (
+                  <button
+                    onClick={() => setConfirmDeleteStory(true)}
+                    aria-label="Delete this Vibe"
+                    className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:text-red-400"
+                  >
+                    {deletingStory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                )}
                 <button
                   onClick={() => setIsMuted((m) => !m)}
                   aria-label={isMuted ? 'Unmute Vibe' : 'Mute Vibe'}
@@ -900,6 +1047,60 @@ export default function StoriesScreen() {
                   >
                     Close
                   </button>
+                </div>
+              )}
+
+              {/* Interactive Poll Sticker */}
+              {pollSticker && (
+                <div className="absolute bottom-32 left-4 right-4 z-20">
+                  <div className="bg-black/70 backdrop-blur-md rounded-2xl border border-white/15 p-3.5 text-white">
+                    {poll.loading ? (
+                      <div className="space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-white/10 animate-pulse" />
+                        <div className="h-9 rounded-xl bg-white/10 animate-pulse" />
+                        <div className="h-9 rounded-xl bg-white/10 animate-pulse" />
+                      </div>
+                    ) : poll.error ? (
+                      <p className="text-xs text-red-300">{poll.error}</p>
+                    ) : poll.data ? (
+                      <>
+                        <p className="text-sm font-bold mb-2.5 text-center">{poll.data.question}</p>
+                        <div className="space-y-2">
+                          {poll.data.options.map((opt, i) => {
+                            const total = (poll.data.votes || []).reduce((a, b) => a + (b || 0), 0);
+                            const count = poll.data.votes?.[i] || 0;
+                            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                            const revealed = poll.voted !== null;
+                            return (
+                              <button
+                                key={i}
+                                onClick={(e) => { e.stopPropagation(); handleVotePoll(i); }}
+                                disabled={revealed}
+                                className={cn(
+                                  'relative w-full text-left rounded-xl px-3 py-2 text-xs font-semibold overflow-hidden border transition-colors',
+                                  revealed
+                                    ? (poll.voted === i ? 'border-violet-400 bg-violet-500/20' : 'border-white/10 bg-white/5')
+                                    : 'border-white/15 bg-white/10 hover:bg-white/20 active:scale-[0.98]'
+                                )}
+                              >
+                                {revealed && (
+                                  <span
+                                    className="absolute inset-y-0 left-0 bg-violet-500/25"
+                                    style={{ width: `${pct}%` }}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                <span className="relative flex items-center justify-between">
+                                  <span>{opt}{poll.voted === i ? ' ✓' : ''}</span>
+                                  {revealed && <span className="text-white/70">{pct}%</span>}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               )}
 
@@ -1010,6 +1211,83 @@ export default function StoriesScreen() {
                 </button>
               </form>
             </div>
+
+            {/* Owner-only Viewers Sheet */}
+            <AnimatePresence>
+              {viewersOpen && (
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                  className="absolute inset-x-0 bottom-0 z-50 max-h-[70vh] rounded-t-3xl bg-[#0A102D]/98 backdrop-blur-xl border-t border-white/10 flex flex-col"
+                  role="dialog"
+                  aria-label="Vibe viewers"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                    <div className="flex items-center gap-2 text-white">
+                      <Users className="w-4 h-4 text-purple-400" />
+                      <span className="font-bold text-sm">
+                        {viewers.loading ? 'Viewers' : `${viewers.items.length} ${viewers.items.length === 1 ? 'viewer' : 'viewers'}`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => { setViewersOpen(false); setIsPaused(false); }}
+                      aria-label="Close viewers"
+                      className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="overflow-y-auto p-2">
+                    {viewers.loading ? (
+                      <div className="flex items-center justify-center py-10 text-white/60 gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" /> Loading viewers…
+                      </div>
+                    ) : viewers.error ? (
+                      <div className="text-center py-10 px-6">
+                        <p className="text-white font-semibold">Could not load viewers</p>
+                        <p className="text-white/50 text-sm mt-1">{viewers.error}</p>
+                        <button
+                          onClick={handleOpenViewers}
+                          className="mt-4 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : viewers.items.length === 0 ? (
+                      <div className="text-center py-10 px-6">
+                        <p className="text-white font-semibold">No views yet</p>
+                        <p className="text-white/50 text-sm mt-1">Viewers will appear here once people watch this Vibe.</p>
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {viewers.items.map((v) => (
+                          <li key={v.userId}>
+                            <button
+                              onClick={() => { setViewersOpen(false); navigate(`/profile/${v.userId}`); }}
+                              className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-white/5 text-left"
+                            >
+                              <img
+                                src={v.avatar}
+                                alt=""
+                                className="w-11 h-11 rounded-full object-cover border border-white/10"
+                                onError={(e) => { e.target.src = getSafeAvatarUrl(null, v.name, v.userId); }}
+                              />
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-white truncate">{v.name}</p>
+                                {v.handle && <p className="text-xs font-mono text-white/50 truncate">@{v.handle}</p>}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1046,19 +1324,48 @@ export default function StoriesScreen() {
               </div>
 
               <p className="text-xs text-slate-400 mb-4">
-                Review your 24-hour highlights, past saved moments, and monthly memory reels.
+                Your saved Vibes, kept past their 24-hour highlight window.
               </p>
 
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {stories.slice(0, 3).map((st) => (
-                  <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
-                    <img src={st.mediaUrl} alt={st.caption} className="w-full h-full object-cover" />
-                    <span className="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1 py-0.5 rounded text-white font-mono">
-                      {st.timeAgo}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {archive.loading ? (
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="aspect-square rounded-2xl bg-white/5 animate-pulse" />
+                  ))}
+                </div>
+              ) : archive.error ? (
+                <div className="mb-4 text-center py-6">
+                  <p className="text-xs text-red-400 mb-2">{archive.error}</p>
+                  <button
+                    onClick={handleOpenArchive}
+                    className="text-xs font-bold px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : archive.items.length === 0 ? (
+                <div className="mb-4 text-center py-6">
+                  <p className="text-xs text-slate-400">No archived Vibes yet.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Vibes you post are saved here automatically.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 mb-4 max-h-56 overflow-y-auto">
+                  {archive.items.slice(0, 12).map((st) => {
+                    const url = st.media?.url || st.mediaUrl;
+                    return (
+                      <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-white/5">
+                        {url ? (
+                          <img src={url} alt={st.content || 'Archived Vibe'} loading="lazy" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 px-1 text-center">
+                            {st.content || 'Text Vibe'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <button
                 onClick={() => {
@@ -1069,6 +1376,49 @@ export default function StoriesScreen() {
               >
                 Manage Profile Highlights
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Owner-only delete confirmation */}
+      <AnimatePresence>
+        {confirmDeleteStory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setConfirmDeleteStory(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              role="alertdialog"
+              aria-label="Delete Vibe confirmation"
+              className="w-full max-w-sm rounded-3xl p-6 border bg-[#0A102D] border-white/10 text-white shadow-2xl"
+            >
+              <h3 className="text-lg font-bold">Delete this Vibe?</h3>
+              <p className="text-sm text-white/60 mt-1.5">
+                This removes the Vibe from your story and deletes its media. This cannot be undone.
+              </p>
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => setConfirmDeleteStory(false)}
+                  className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/20 font-bold text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => { setConfirmDeleteStory(false); await handleDeleteStory(); }}
+                  disabled={deletingStory}
+                  className="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-500 font-bold text-sm disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

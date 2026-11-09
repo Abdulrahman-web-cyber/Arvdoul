@@ -421,3 +421,195 @@ describe('router wiring: every lazy screen is actually routed', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('safety-graph management is reachable from the UI', () => {
+  // `blockUser`/`muteUser`/`restrictUser` were writable from profile menus but
+  // nothing let a user REVIEW or REVERSE a block/mute — a permanent one-way
+  // action. BlockedAccountsScreen closes that gap.
+  test('BlockedAccountsScreen lists and lifts every safety edge', () => {
+    const src = read('src/screens/BlockedAccountsScreen.jsx');
+    for (const fn of ['getBlockedUsers', 'getMutedUsers', 'getRestrictedUsers',
+                      'unblockUser', 'unmuteUser', 'unrestrictUser']) {
+      expect(src).toContain(fn);
+    }
+  });
+
+  test('the blocked-accounts route and Settings entry point exist', () => {
+    expect(read('src/routes/AppRoutes.jsx')).toContain('/settings/blocked');
+    const settings = read('src/screens/SettingsScreen.jsx');
+    expect(settings).toContain("navigate('/settings/blocked')");
+  });
+});
+
+describe('story viewers are reachable by the owner', () => {
+  // `getStoryViewers` is an owner-gated, paginated service method; a creator
+  // could not see who watched their Vibe because nothing called it.
+  test('StoriesScreen consumes getStoryViewers and gates on ownership', () => {
+    const src = read('src/screens/StoriesScreen.jsx');
+    expect(src).toContain('getStoryViewers');
+    expect(src).toMatch(/isOwnStory/);
+  });
+
+  // `deleteStory` is owner-gated in the service but nothing called it, so a
+  // user could not delete their own Vibe.
+  test('StoriesScreen can delete the owner\'s story', () => {
+    expect(read('src/screens/StoriesScreen.jsx')).toContain('deleteStory');
+  });
+});
+
+describe('story audience is a real control', () => {
+  // The service and firestore.rules honour public/followers/private, but
+  // CreateStory hardcoded `visibility: 'public'` with no selector — the
+  // audience setting was unreachable.
+  test('CreateStory sends the chosen audience as visibility', () => {
+    const src = read('src/screens/CreateStory.jsx');
+    expect(src).toMatch(/visibility:\s*audience/);
+    expect(src).toContain("useState('public')");
+  });
+});
+
+describe('outgoing friend requests can be withdrawn', () => {
+  // `cancelFriendRequest` existed but no screen called it, so a sent request
+  // was a permanent dead-end. The public profile now offers withdrawal.
+  test('ProfilePublicScreen cancels the request via the service', () => {
+    expect(read('src/screens/Profile/ProfilePublicScreen.jsx')).toContain('cancelFriendRequest');
+  });
+
+  test('the hero renders a cancel affordance for a pending request', () => {
+    const src = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(src).toContain('onCancelFriendRequest');
+    expect(src).toMatch(/Cancel Request/);
+  });
+});
+
+describe('stories are archived before they expire', () => {
+  // `archived_stories` is read by the Memories/Archive surface and by highlight
+  // creation, but only `archiveStory` wrote it and nothing called it — so the
+  // archive stayed permanently empty and a highlight could never be created.
+  test('createStory self-archives the story', () => {
+    const src = read('src/services/storyService.js');
+    const createIdx = src.indexOf('async createStory(');
+    const archiveCall = src.indexOf('await this.archiveStory(storyId, currentUser.uid)');
+    expect(createIdx).toBeGreaterThan(-1);
+    expect(archiveCall).toBeGreaterThan(createIdx);
+  });
+
+  test('the Memories/Archive surface reads the real archive', () => {
+    expect(read('src/screens/StoriesScreen.jsx')).toContain('getArchivedStories');
+  });
+
+  // The expiry job deleted the media the archive still references.
+  test('expired-story cleanup keeps media for archived stories', () => {
+    const src = read('functions/stories.js');
+    const idx = src.indexOf('cleanupExpiredStories');
+    expect(idx).toBeGreaterThan(-1);
+    const body = src.slice(idx, idx + 3000);
+    expect(body).toContain("collection('archived_stories')");
+    expect(body).toMatch(/!archived && storyData\.media/);
+  });
+});
+
+describe('saved videos are surfaced', () => {
+  // `videoService.saveVideo` writes `users/{uid}/saved_videos`, but nothing
+  // read it — saving a video was a black hole. SavedScreen now merges them.
+  test('SavedScreen loads saved videos alongside saved posts', () => {
+    const src = read('src/screens/SavedScreen.jsx');
+    expect(src).toContain('getSavedVideos');
+    expect(src).toContain('unsaveVideo');
+  });
+});
+
+describe('notifications deep-link to their subject', () => {
+  // A notification row only marked itself read; the server-written
+  // metadata.postId / conversationId were never used, so a "liked your post"
+  // notification could not open the post.
+  test('the row click routes through a deep-link handler', () => {
+    const src = read('src/screens/NotificationsScreen.jsx');
+    expect(src).toContain('handleNotificationClick');
+    expect(src).toContain('notif.postId');
+    expect(src).toContain('conversationId');
+  });
+});
+
+describe('Do Not Disturb is a real, server-honoured control', () => {
+  // `muteNotifications` / `unmuteNotifications` existed but no screen called
+  // them, and the server gates every dispatch on `doNotDisturb` — so the
+  // setting was unreachable and the gate always saw "off".
+  test('SettingsScreen writes DND through notificationsService', () => {
+    const src = read('src/screens/SettingsScreen.jsx');
+    expect(src).toContain('muteNotifications');
+    expect(src).toContain('unmuteNotifications');
+    expect(src).toContain('getUserNotificationPreferences');
+  });
+});
+
+describe('story poll is a real, answerable feature', () => {
+  // CreateStory collected a poll question + options and `voteOnPoll`/rules
+  // existed, but createStory dropped the poll and no viewer rendered it — the
+  // control was pure input capture.
+  test('createStory persists the poll subcollection document', () => {
+    const src = read('src/services/storyService.js');
+    expect(src).toContain("storyData.poll");
+    expect(src).toContain("'stories', storyId, 'polls'");
+    expect(src).toContain("type: 'poll'");
+  });
+
+  test('StoriesScreen renders and answers the poll', () => {
+    const src = read('src/screens/StoriesScreen.jsx');
+    expect(src).toContain('pollSticker');
+    expect(src).toContain('handleVotePoll');
+    expect(src).toContain('voteOnPoll');
+    expect(src).toContain('stickers: st.stickers');
+  });
+});
+
+describe('video watch-next recommendations are surfaced', () => {
+  // `getWatchNext` wraps the real `getVideoRecommendations` callable but no
+  // screen called it, so recommendations were unreachable.
+  test('VideoDetailScreen loads and renders watch-next', () => {
+    const src = read('src/screens/VideoDetailScreen.jsx');
+    expect(src).toContain('getWatchNext');
+    expect(src).toContain('watchNext');
+    expect(src).toContain('More videos');
+  });
+});
+
+describe('message reporting reaches the moderator queue', () => {
+  // `messagesService.reportMessage` used to write `message_reports` directly
+  // with a `reportedBy` field while the rules authorise on `reporterId`, so the
+  // write was denied and the report never reached any queue. It now goes
+  // through the reportContent callable, which the admin queue reads.
+  test('client routes through the reportMessage callable', () => {
+    const svc = read('src/services/messagesService.js');
+    expect(svc).toContain('FUNCTIONS.REPORT_MESSAGE');
+    expect(svc).not.toMatch(/collection\(this\.firestore, 'message_reports'\)/);
+    expect(read('src/services/callableService.js')).toContain("REPORT_MESSAGE: 'reportMessage'");
+  });
+
+  test('server routes and exposes message reports', () => {
+    const mod = read('functions/moderation.js');
+    expect(mod).toContain("message: { collection: 'message_reports'");
+    expect(mod).toContain("exports.reportMessage = reportAlias('message')");
+    expect(read('functions/admin.js')).toContain("message: 'message_reports'");
+  });
+
+  test('ChatScreen surfaces a report action', () => {
+    const chat = read('src/screens/ChatScreen.jsx');
+    expect(chat).toContain('onReport=');
+    expect(chat).toContain('reportMessage(');
+    expect(chat).toContain('REPORT_REASONS');
+  });
+});
+
+describe('voice search is a real control, not a stub', () => {
+  // `useSearch` exposes a real Web Speech API `voiceSearch`, but no screen ever
+  // destructured it — the capability existed and nothing could reach it.
+  test('useSearch.voiceSearch reaches a screen', () => {
+    const hook = read('src/hooks/useSearch.js');
+    expect(hook).toContain('SpeechRecognition');
+    const screen = read('src/screens/SearchScreen.jsx');
+    expect(screen).toContain('voiceSearch');
+    expect(screen).toContain('handleVoiceSearch');
+    expect(screen).toMatch(/aria-label="Search by voice"/);
+  });
+});

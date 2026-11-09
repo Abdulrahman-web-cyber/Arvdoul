@@ -57,6 +57,11 @@ const REPORT_TARGETS = {
   user: { collection: 'user_reports', contentField: 'reportedUserId', contentCollection: 'users' },
   video: { collection: 'video_reports', contentField: 'videoId', contentCollection: 'videos' },
   story: { collection: 'story_reports', contentField: 'storyId', contentCollection: 'stories' },
+  // A reported chat message resolves to the *conversation* document (the
+  // message shards live under `conversations/{id}/messages_*`, which is not a
+  // single document the callable can fetch), so moderators still get the
+  // conversation context. The admin queue reads this collection too.
+  message: { collection: 'message_reports', contentField: 'messageId', contentCollection: 'conversations' },
 };
 
 // Exactly the field names the admin console reads (reporterName, content,
@@ -91,7 +96,7 @@ async function buildReportRecord(reporterId, type, targetId, reason, details) {
 // ----------------------------------------------------------------------
 async function handleReportContent(data, context) {
   const uid = validateAuth(context);
-  const { type, targetId, reason, details = '' } = data || {};
+  const { type, targetId, reason, details = '', conversationId = null } = data || {};
   const cleanedReason = stripHtml(reason).slice(0, 300);
 
   if (!REPORT_TARGETS[type]) {
@@ -117,6 +122,9 @@ async function handleReportContent(data, context) {
   }
 
   const record = await buildReportRecord(uid, type, targetId, cleanedReason, details);
+  // A message report also carries its conversation so a moderator can open the
+  // thread context (the message itself lives in a shard subcollection).
+  if (type === 'message' && conversationId) record.conversationId = conversationId;
 
   await reportRef.set({ [contentField]: targetId, ...record });
 
@@ -144,6 +152,8 @@ function reportAlias(type) {
     return handleReportContent({ ...data, type, targetId }, context);
   });
 }
+
+exports.reportMessage = reportAlias('message');
 
 exports.reportPost = reportAlias('post');
 exports.reportComment = reportAlias('comment');

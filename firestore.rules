@@ -687,7 +687,14 @@ service cloud.firestore {
       match /polls/{pollId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
         allow create, delete: if isSignedIn() && vibeData().userId == uid();
-        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        // A viewer may only add their own vote: the changed keys are limited to
+        // the vote fields, their choice must be recorded, and they must not
+        // have voted already. Nothing else on the poll may be rewritten.
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'userVotes', 'userChoices', 'updatedAt'])
+          && 'userChoices' in request.resource.data
+          && request.resource.data.userChoices[uid()] is int
+          && (!('userChoices' in resource.data) || !(uid() in resource.data.userChoices));
       }
       match /quizzes/{quizId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
@@ -1094,8 +1101,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /video_reports/{reportId} {
-      allow read: if isSignedIn() && (resource.data.reportedBy == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.reportedBy == uid();
+      // Written by the reportVideo/reportContent callable (Admin SDK), which
+      // stamps `reporterId`. The old `reportedBy` field name is never written,
+      // so keying the rule on it denied a reporter their own read.
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update, delete: if isAdmin();
     }
     // Post/story reports are written by the reportContent callable (Admin SDK),

@@ -36,6 +36,7 @@ export default function VideoDetailScreen() {
   const [likeCount, setLikeCount] = useState(0);
   const [saved, setSaved] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [watchNext, setWatchNext] = useState({ loading: false, items: [], error: null });
   const viewedRef = useRef(false);
 
   useEffect(() => {
@@ -138,6 +139,22 @@ export default function VideoDetailScreen() {
   };
 
   const handleMore = () => setShowMoreMenu(true);
+
+  // Load server-side "watch next" recommendations for the current video.
+  useEffect(() => {
+    const id = video?.id;
+    if (!id) return undefined;
+    let cancelled = false;
+    setWatchNext({ loading: true, items: [], error: null });
+    videoService.getWatchNext(id)
+      .then((items) => {
+        if (!cancelled) setWatchNext({ loading: false, items: Array.isArray(items) ? items : [], error: null });
+      })
+      .catch((err) => {
+        if (!cancelled) setWatchNext({ loading: false, items: [], error: err?.message || 'Could not load recommendations.' });
+      });
+    return () => { cancelled = true; };
+  }, [video?.id]);
 
   const togglePlay = () => {
     const el = videoRef.current;
@@ -254,6 +271,48 @@ export default function VideoDetailScreen() {
                 onMore={handleMore}
               />
             </div>
+
+            {/* Watch next — server recommendations (`getWatchNext`) had no UI */}
+            {(watchNext.loading || watchNext.items.length > 0 || watchNext.error) && (
+              <div className={cn('rounded-2xl p-4 border', colors.card)}>
+                <h3 className={cn('font-bold mb-3', colors.text)}>More videos</h3>
+                {watchNext.loading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="animate-pulse space-y-2">
+                        <div className="aspect-video rounded-xl bg-gray-500/20" />
+                        <div className="h-3 rounded bg-gray-500/20 w-3/4" />
+                      </div>
+                    ))}
+                  </div>
+                ) : watchNext.error ? (
+                  <p className={cn('text-sm', colors.secondary)}>{watchNext.error}</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {watchNext.items.slice(0, 9).map((item) => {
+                      const thumb = item.thumbnails?.[0] || item.thumbnailUrl || null;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => navigate(`/video/${item.id}`)}
+                          className="text-left group"
+                        >
+                          <div className="aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/10">
+                            {thumb ? (
+                              <img src={thumb} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Play className="w-6 h-6 text-white/60" /></div>
+                            )}
+                          </div>
+                          <p className={cn('mt-1.5 text-xs font-semibold line-clamp-2', colors.text)}>{item.title || 'Untitled'}</p>
+                          <p className={cn('text-[11px]', colors.secondary)}>{(item.stats?.views || 0).toLocaleString()} views</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Comments sheet */}
             <VideoComments

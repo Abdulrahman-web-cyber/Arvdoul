@@ -178,7 +178,10 @@
     "deleteAccountDesc": "Supprimer définitivement votre compte et vos données",
     "deleteWarning": "Cela supprimera définitivement votre compte, vos publications et vos données. Action irréversible.",
     "confirmDelete": "Supprimer mon compte",
-    "deleting": "Suppression..."
+    "deleting": "Suppression...",
+    "doNotDisturb": "Do Not Disturb",
+    "doNotDisturbDesc": "Pause push and in-app alerts",
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
   },
   "level": {
     "title": "Niveau et progression",

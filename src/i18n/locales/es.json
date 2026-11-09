@@ -178,7 +178,10 @@
     "deleteAccountDesc": "Eliminar permanentemente tu cuenta y datos",
     "deleteWarning": "Esto eliminará permanentemente tu cuenta, publicaciones y datos. Esta acción no se puede deshacer.",
     "confirmDelete": "Eliminar mi cuenta",
-    "deleting": "Eliminando..."
+    "deleting": "Eliminando...",
+    "doNotDisturb": "Do Not Disturb",
+    "doNotDisturbDesc": "Pause push and in-app alerts",
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
   },
   "level": {
     "title": "Nivel y progreso",
