@@ -81,8 +81,9 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
         coinsEarned: 0,
         dailyStats: { [today]: { views: 1, reach: 1, engagement: 0, coins: 0 } },
         topPosts: [],
-        growthRate: 0,
-        activeDays: 1,
+        // No writer maintains a growth rate or an active-day count on this
+        // doc; seeding `growthRate: 0` / `activeDays: 1` fabricated a measured
+        // trend (and the canonical active days live on `users/{uid}`).
         demographics: { ageGroups: {}, gender: {}, locations: {}, interests: {} },
         lastUpdated: FieldValue.serverTimestamp(),
       });

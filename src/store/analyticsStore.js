@@ -88,8 +88,9 @@ export const useAnalyticsStore = create(
           state.topPosts = [];
           state.ranking = null;
           state.demographics = null;
-          state.growthRate = 0;
-          state.activeDays = 0;
+          // A failed read is unknown, not a measured 0.
+          state.growthRate = null;
+          state.activeDays = null;
         });
       }
     },

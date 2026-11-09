@@ -376,3 +376,18 @@ only when they are real numbers (its `revenue.change` is no longer hardcoded
 
 Gates: `npm test` (noFabricatedData) — 314 passing; `eslint src/ --quiet` — 0
 errors; `npm run build` — ✓.
+
+### N172 follow-up — server seed + store fallback + PerksRewards floor
+
+The fabricated growth/active-days defaults existed in three more places that
+would have defeated the client fix:
+- `functions/analytics.js` seeded `growthRate: 0` / `activeDays: 1` on the
+  `profile_analytics` doc at create, so the tightened `typeof === 'number'`
+  check would have returned them. Seed removed.
+- `analyticsStore` set `growthRate`/`activeDays` to `0` in its failed-read
+  branch (the same unknown-is-not-zero bug as N154). Now `null`.
+- `PerksRewardsScreen` read `Number(profile?.activeDaysCount || …) || 1`, a
+  fabricated "1 day" that can bump a citizen tier. Now floors at 0.
+
+Gates: `npm test` — **119 suites / 1443 passing / 5 skipped**;
+`eslint src/ functions/ --quiet` — 0 errors.

@@ -2977,4 +2977,18 @@ describe('Creator dashboard never fabricates growth rate or active days (N172)',
     const ctx = read('src/context/AuthContext.jsx');
     expect(ctx).toContain('activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null');
   });
+
+  test('the server seed and store fallback never fabricate growth/active days', () => {
+    const fn = read('functions/analytics.js');
+    expect(fn).not.toContain('growthRate: 0,');
+    expect(fn).not.toContain('activeDays: 1,');
+    const store = read('src/store/analyticsStore.js');
+    expect(store).not.toContain('state.growthRate = 0;');
+    expect(store).not.toContain('state.activeDays = 0;');
+  });
+
+  test('PerksRewardsScreen does not floor an unknown active-day count to 1', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    expect(s).not.toContain('Number(profile?.activeDaysCount || profile?.activeDays) || 1');
+  });
 });

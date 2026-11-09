@@ -41,7 +41,10 @@ export default function PerksRewardsScreen() {
   // treasury, and `>= g.coins` would then wrongly show 'insufficient funds'.
   const coinsRaw = profile?.coins;
   const userCoins = coinsRaw === null || coinsRaw === undefined || Number.isNaN(Number(coinsRaw)) ? null : Number(coinsRaw);
-  const activeDays = Number(profile?.activeDaysCount || profile?.activeDays) || 1;
+  // An unknown active-day count is treated as the conservative floor (0), not a
+  // fabricated "1 day" that bumps a citizen tier; `getCitizenTier` floors at 0.
+  const activeDaysRaw = profile?.activeDaysCount ?? profile?.activeDays;
+  const activeDays = Number.isFinite(Number(activeDaysRaw)) ? Number(activeDaysRaw) : 0;
   const experience = Number(profile?.experience) || 0;
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'perks' | 'coins' | 'gifts' | 'prestige'
