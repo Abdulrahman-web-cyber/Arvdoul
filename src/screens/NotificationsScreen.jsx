@@ -135,8 +135,9 @@ export default function NotificationsScreen() {
           );
           const byId = new Map(profiles.map((p) => [p.uid || p.id, p]));
           setFollowRequests(rawFollowRequests.map((r) => ({ ...r, fromUser: byId.get(r.fromUserId) || null })));
-        } catch {
+        } catch (err) {
           // Keep the raw rows; the row falls back to a generic label.
+          console.warn('[Notifications] follow-request profile hydration failed', err?.message);
         }
       }
     } catch (err) {

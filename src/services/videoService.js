@@ -788,10 +788,11 @@ class UltimateVideoService {
     try {
       const res = await this.fns.shareVideo({ videoId, platform });
       return res.data;
-    } catch {
+    } catch (e) {
       // The share itself already happened client-side (native share/clipboard);
       // the server counter is a secondary metric. No direct-doc write here —
       // videos/{id} is owner-writable and would both over-count and fail.
+      logger.warn('Video share counter not recorded', { videoId, platform, error: e?.message });
       return { success: false, counted: false };
     }
   }

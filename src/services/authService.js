@@ -452,14 +452,20 @@ class ProductionAuthService {
       if (user.emailVerified) {
         const { getUserProfile, createUserProfile } = await import('./userService.js');
         let profile = null;
-        try { profile = await getUserProfile(user.uid); } catch (e) {}
+        try { profile = await getUserProfile(user.uid); } catch (e) {
+          logger.warn('Profile lookup after email verification failed', { uid: user.uid, error: e?.message });
+        }
         if (!profile) {
           const pending = this._getPendingProfile(user.uid);
           if (pending) {
             try {
               await createUserProfile(user.uid, pending);
               this._clearPendingProfile(user.uid);
-            } catch (e) {}
+            } catch (e) {
+              // The account is verified but has no profile document; the user
+              // would land in onboarding with nothing persisted. Log it.
+              logger.warn('Pending profile creation after verification failed', { uid: user.uid, error: e?.message });
+            }
           }
         }
       }

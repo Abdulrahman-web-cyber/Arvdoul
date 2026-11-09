@@ -776,7 +776,9 @@ class ProfessionalUserService {
     try {
       const { useProfileStore } = await import('../store/profileStore.js');
       useProfileStore.getState().loadProfile(userId, userId);
-    } catch {}
+    } catch (e) {
+      logger.warn('Profile store sync after create failed', { userId, error: e?.message });
+    }
 
     return { success: true, profile, username };
   }
@@ -884,7 +886,9 @@ class ProfessionalUserService {
           profile: { ...(state.profile || {}), ...sanitizedUpdates }
         }));
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('Profile store sync after update failed', { userId, error: e?.message });
+    }
 
     this._invalidateUserCache(userId);
 

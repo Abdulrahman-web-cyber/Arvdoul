@@ -170,8 +170,12 @@ export default function ProfilePublicScreen() {
           // 5. Track profile view
           try {
             const { getAnalyticsService } = await import('../../services/analyticsService.js');
-            getAnalyticsService().trackProfileView(currentUserId, targetUid).catch(() => {});
-          } catch {}
+            getAnalyticsService().trackProfileView(currentUserId, targetUid).catch((e) => {
+              console.warn('[Profile] view not tracked', e?.message);
+            });
+          } catch (e) {
+            console.warn('[Profile] analytics service unavailable for view tracking', e?.message);
+          }
         }
       } catch (err) {
         console.warn('Public profile fetch error:', err);
