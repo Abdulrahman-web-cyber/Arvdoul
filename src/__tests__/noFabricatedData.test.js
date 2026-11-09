@@ -3101,6 +3101,9 @@ describe('Displayed amounts/counts render unknown, never a fabricated 0 (N183)',
     const src = read('src/screens/Admin/AdminEconomyScreen.jsx');
     expect(src).not.toContain('formatCoinsAsUsd(payout.amount || 0)');
     expect(src).not.toContain('formatCoinsAsUsd(tx.amount || 0)');
+    // The approval toast must not announce a fabricated "$0.00" when the server
+    // omitted the settled amount.
+    expect(src).not.toContain('Number(result.usdAmount || 0).toFixed(2)');
     expect(src).toContain('unknownNumber');
   });
 

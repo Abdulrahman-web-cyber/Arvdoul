@@ -131,7 +131,12 @@ const AdminEconomyScreen = () => {
       setPayouts(prev => prev.map(p => (
         p.id === payoutId ? { ...p, status: 'completed', stripePayoutId: result.payoutId } : p
       )));
-      toast.success(`Payout of $${Number(result.usdAmount || 0).toFixed(2)} sent.`);
+      const usd = unknownNumber(result.usdAmount);
+      toast.success(
+        usd === null
+          ? 'Payout approved and sent.'
+          : `Payout of $${usd.toFixed(2)} sent.`
+      );
       loadData();
     } catch (err) {
       toast.error(err?.message || 'Failed to approve payout request');
