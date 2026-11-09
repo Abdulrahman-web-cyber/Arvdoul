@@ -814,6 +814,12 @@ const VideoCard = memo(({
 
         {/* Gradient Scrubber with Glow Knob */}
         <div
+          role="slider"
+          aria-label="Seek video"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration) || 0}
+          aria-valuenow={Math.round(currentTime)}
+          tabIndex={0}
           className="relative flex-1 h-1.5 hover:h-2.5 transition-all bg-white/20 rounded-full cursor-pointer overflow-visible group"
           onClick={handleProgressClick}
         >

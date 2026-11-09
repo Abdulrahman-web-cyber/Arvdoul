@@ -313,20 +313,21 @@ const LinkCard = React.memo(({
 
       {/* Video inline preview (YouTube/Vimeo) */}
       {isVideo && !showVideoPreview && videoEmbedUrl && (
-        <div className="relative w-full h-40 bg-black/50 flex items-center justify-center cursor-pointer" onClick={() => setShowVideoPreview(true)}>
+        <button type="button" aria-label="Watch video preview" className="relative w-full h-40 bg-black/50 flex items-center justify-center cursor-pointer" onClick={() => setShowVideoPreview(true)}>
           {metadata.image && <img src={metadata.image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" />}
           <div className="relative z-10 flex flex-col items-center">
             <div className="p-3 rounded-full bg-black/60 backdrop-blur-md">
-              <Play className="w-8 h-8 text-white" />
+              <Play className="w-8 h-8 text-white" aria-hidden="true" />
             </div>
             <span className="text-white text-xs mt-2">Watch preview</span>
           </div>
-        </div>
+        </button>
       )}
       {isVideo && showVideoPreview && videoEmbedUrl && (
         <div className="relative w-full h-40 bg-black">
           <iframe
             src={videoEmbedUrl}
+            title="Video preview"
             className="w-full h-full"
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

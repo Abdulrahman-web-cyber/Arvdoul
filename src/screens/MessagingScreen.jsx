@@ -213,7 +213,9 @@ export default function MessagingScreen() {
         <header className="flex items-center justify-between py-2">
           {/* Left: User Avatar with Luminous Gradient Ring + Brand Title */}
           <div className="flex items-center gap-3">
-            <div
+            <button
+              type="button"
+              aria-label="Open my profile"
               className="relative cursor-pointer"
               onClick={() => navigate('/profile')}
             >
@@ -225,7 +227,7 @@ export default function MessagingScreen() {
                 />
               </div>
               <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 ${isDark ? 'border-[#030614]' : 'border-white'}`} />
-            </div>
+            </button>
 
             <div>
               <div className="flex items-center gap-1.5">

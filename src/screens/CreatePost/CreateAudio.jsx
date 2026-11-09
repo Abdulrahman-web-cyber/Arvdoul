@@ -223,10 +223,13 @@ export default function CreateAudio() {
           />
 
           {/* Record Live Microphone Box */}
-          <div
+          <button
+            type="button"
+            aria-pressed={isRecording}
+            aria-label={isRecording ? 'Stop recording' : 'Record live voice'}
             onClick={isRecording ? stopRecording : startRecording}
             className={cn(
-              "p-6 rounded-2xl border-2 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition",
+              "w-full p-6 rounded-2xl border-2 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition",
               isRecording
                 ? "border-rose-500 bg-rose-500/10 animate-pulse"
                 : isDark
@@ -248,7 +251,7 @@ export default function CreateAudio() {
                 {isRecording ? "Tap to Stop & Use" : "Record voice note or acoustic beat"}
               </p>
             </div>
-          </div>
+          </button>
         </div>
       )}
 

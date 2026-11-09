@@ -137,7 +137,11 @@ const SortableThumbnail = React.memo(
             ? "border-purple-500 ring-2 ring-purple-500 shadow-[0_0_15px_rgba(139,92,246,0.4)]"
             : "border-transparent hover:border-purple-400/50"
         } ${isDark ? "bg-[#0C1426]" : "bg-white/10"}`}
+        role="button"
+        tabIndex={0}
+        aria-pressed={isSelected}
         onClick={() => onSelect(media.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(media.id); } }}
       >
         {media.thumbnailUrl ? (
           <img

@@ -482,8 +482,10 @@ const CommunityDetailScreen = () => {
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {members.map((member) => (
-                    <div
+                    <button
+                      type="button"
                       key={member.id}
+                      aria-label={`View ${member.name || 'member'}'s profile`}
                       className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                       onClick={() => navigate(`/profile/${member.id}`)}
                     >
@@ -496,7 +498,7 @@ const CommunityDetailScreen = () => {
                       <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${getRoleBadgeColor(member.role)}`}>
                         {member.role}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
