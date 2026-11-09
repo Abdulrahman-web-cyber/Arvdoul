@@ -35,6 +35,10 @@ merge(require('./feed.js'));
 merge(require('./comments.js'));
 merge(require('./stories.js'));
 merge(require('./video.js'));
+// Live-stream aggregates (viewer totals) — derived server-side because the
+// parent `live_streams` doc is owner-write-only and a viewer's client cannot
+// maintain it.
+merge(require('./live.js'));
 merge(require('./notifications.js'));
 merge(require('./messaging.js'));
 merge(require('./search.js'));

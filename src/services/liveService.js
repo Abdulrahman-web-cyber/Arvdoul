@@ -496,6 +496,12 @@ class UltimateLiveService {
         createdAt: snap.data().createdAt?.toDate?.()?.toISOString(),
       };
       await countersManager.apply({ data: stream, docPath: `live_streams/${streamId}`, fields: ['viewerCount'], scope: 'top' });
+      // `stats.totalViewers` is the cumulative distinct-viewer total, written by
+      // the `onLiveViewerCreate` trigger (the stream doc is owner-write-only, so
+      // a viewer's client cannot maintain it). Keep it at least the live count
+      // so the number is never below "watching now" if the trigger lags.
+      stream.stats = stream.stats || {};
+      stream.stats.totalViewers = Math.max(stream.stats.totalViewers || 0, stream.viewerCount || 0);
       
       this.cache.set(cacheKey, stream);
       return stream;
@@ -606,10 +612,6 @@ class UltimateLiveService {
         }
         
         await countersManager.incrementInTransaction(transaction, { docPath: `live_streams/${streamId}`, field: 'viewerCount' });
-        transaction.update(streamRef, {
-          'stats.totalViewers': ((streamSnap.data().stats?.totalViewers) || 0) + 1,
-          updatedAt: serverTimestamp(),
-        });
       });
       countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
       
@@ -632,27 +634,28 @@ class UltimateLiveService {
       
       let watchedMinutes = 0;
       const viewerRef = doc(this.firestore, 'live_viewers', `${streamId}_${viewerId}`);
-      const streamRef = doc(this.firestore, 'live_streams', streamId);
-      
+
+      // The viewer record and the sharded `viewerCount` are the viewer's to
+      // write. The parent `live_streams` doc is owner-write-only, so the old
+      // stream-doc update here (and in join) was denied for
+      // every non-owner — which failed the WHOLE join/leave transaction, so a
+      // viewer was never counted. `stats.totalViewers` is now derived from the
+      // sharded `viewerCount` on read instead.
       await runTransaction(this.firestore, async (transaction) => {
         const viewerSnap = await transaction.get(viewerRef);
-        const streamSnap = await transaction.get(streamRef);
-        
-        if (viewerSnap.exists() && streamSnap.exists()) {
+
+        if (viewerSnap.exists()) {
           const viewerData = viewerSnap.data();
           const joinedAt = viewerData.joinedAt?.toDate?.() || new Date();
           const watchDuration = Math.floor((Date.now() - joinedAt.getTime()) / 60000);
           watchedMinutes = watchDuration;
-          
+
           transaction.update(viewerRef, {
             leftAt: serverTimestamp(),
             watchDuration: (viewerData.watchDuration || 0) + watchDuration,
           });
-          
+
           await countersManager.incrementInTransaction(transaction, { docPath: `live_streams/${streamId}`, field: 'viewerCount', amount: -1 });
-          transaction.update(streamRef, {
-            updatedAt: serverTimestamp(),
-          });
         }
       });
       countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
@@ -911,14 +914,18 @@ class UltimateLiveService {
       }
       
       const data = snap.data();
-      
+      const viewerCount = await countersManager.get({
+        docPath: `live_streams/${streamId}`,
+        field: 'viewerCount',
+        fallback: data.viewerCount || 0,
+      });
       return {
         streamId,
         status: data.status,
         duration: data.duration || 0,
-        viewerCount: data.viewerCount || 0,
+        viewerCount,
         peakViewers: data.stats?.peakViewers || 0,
-        totalViewers: data.stats?.totalViewers || 0,
+        totalViewers: Math.max(data.stats?.totalViewers || 0, viewerCount),
         totalGifts: data.stats?.totalGifts || 0,
         totalTips: data.stats?.totalTips || 0,
         coinsEarned: data.stats?.coinsEarned || 0,
