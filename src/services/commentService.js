@@ -247,7 +247,9 @@ class UltimateCommentService {
           const current = JSON.parse(localStorage.getItem(key) || '[]');
           current.unshift({ ...commentData, id: commentId, createdAt: new Date().toISOString() });
           localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
-        } catch {}
+        } catch (e) {
+          logger.debug('Local comment cache write failed', { postId, error: e?.message });
+        }
       }
 
       auditLogger.log('content.comment', { userId, meta: { commentId, postId, parentId: options.parentId || null } });
@@ -357,7 +359,9 @@ class UltimateCommentService {
               }
             });
           }
-        } catch {}
+        } catch (e) {
+          logger.warn('Local comment cache read failed', { error: e?.message });
+        }
       }
 
       let processedComments = comments;

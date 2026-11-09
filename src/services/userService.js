@@ -479,7 +479,9 @@ class ProfessionalUserService {
       if (auth?.currentUser && (auth.currentUser.uid === userId || requesterId === userId)) {
         authUser = auth.currentUser;
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('Auth instance unavailable while building profile', { userId, error: e?.message });
+    }
 
     full.displayName = (full.displayName && full.displayName !== 'User')
       ? full.displayName

@@ -716,7 +716,9 @@ class UltimateMessagingService {
       if (now - last < 2000) {
         // Re-arm the expiry timer so the indicator stays fresh without writing.
         const t = setTimeout(async () => {
-          try { await this.rt.remove(typingRef); } catch (e) {}
+          try { await this.rt.remove(typingRef); } catch (e) {
+            logger.debug('Typing indicator clear failed', { error: e?.message });
+          }
           this.typingTimers.delete(timerKey);
         }, MESSAGING_CONFIG.PERFORMANCE.TYPING_INDICATOR_TIMEOUT);
         this.typingTimers.set(timerKey, t);
@@ -726,7 +728,9 @@ class UltimateMessagingService {
       await this.rt.set(typingRef, { isTyping: true, timestamp: Date.now() });
       this.rt.onDisconnect(typingRef).remove();
       const timer = setTimeout(async () => {
-        try { await this.rt.remove(typingRef); } catch (e) {}
+        try { await this.rt.remove(typingRef); } catch (e) {
+          logger.debug('Typing indicator clear failed', { error: e?.message });
+        }
         this.typingTimers.delete(timerKey);
       }, MESSAGING_CONFIG.PERFORMANCE.TYPING_INDICATOR_TIMEOUT);
       this.typingTimers.set(timerKey, timer);
@@ -1239,7 +1243,9 @@ class UltimateMessagingService {
       metricsService.incrementCounter(`messaging_message_sent_type_${validated.type || 'text'}`, 1);
       const latencyMs = Date.now() - (options.sentAt || Date.now());
       metricsService.recordHistogram('messaging_send_latency_ms', latencyMs);
-    } catch { /* telemetry is best-effort */ }
+    } catch (e) { /* telemetry is best-effort */
+      logger.debug('Send telemetry failed', { error: e?.message });
+    }
 
     // Rate limit: messages per user per minute (UX guard; server/RTDB rules enforce).
     rateLimiter.checkAndHit(`msg:send:${currentUser.uid}`, { max: MESSAGING_CONFIG.PERFORMANCE.SEND_RATE_LIMIT_MAX || 60, windowMs: 60000 });
@@ -1299,7 +1305,9 @@ class UltimateMessagingService {
       const { metricsService } = await import('./metricsService.js');
       metricsService.incrementCounter('messaging_message_failed', 1);
       metricsService.incrementCounter(`messaging_message_failed_type_${type}`, 1);
-    } catch { /* best-effort */ }
+    } catch (e) { /* best-effort */
+      logger.debug('Failure telemetry failed', { error: e?.message });
+    }
   }
 
   async _resolveMentions(text, participantIds) {
@@ -2497,7 +2505,9 @@ class UltimateMessagingService {
         senderName = profile.displayName || profile.username || null;
         senderAvatar = profile.photoURL || null;
       }
-    } catch { /* identity optional */ }
+    } catch (e) { /* identity optional */
+      logger.warn('System message sender identity read failed', { senderId, error: e?.message });
+    }
     await this.fs.setDoc(ref, {
       senderId,
       recipientId,

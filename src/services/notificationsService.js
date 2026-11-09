@@ -18,10 +18,14 @@ function safeLocalStorageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 function safeLocalStorageSet(key, value) {
-  try { localStorage.setItem(key, value); } catch {}
+  try { localStorage.setItem(key, value); } catch (e) {
+    logger.warn('Push-token localStorage write failed', { key, error: e?.message });
+  }
 }
 function safeLocalStorageRemove(key) {
-  try { localStorage.removeItem(key); } catch {}
+  try { localStorage.removeItem(key); } catch (e) {
+    logger.warn('Push-token localStorage remove failed', { key, error: e?.message });
+  }
 }
 
 //  OFFLINE QUEUE (IndexedDB with idb library, cursor iteration)
@@ -649,7 +653,9 @@ class UltimateNotificationsService {
     try {
       await this.messagingMethods.deleteToken(this.messaging);
     } catch (err) {
-      // Token deletion failed
+      // The server token doc is already removed; a stale FCM registration can
+      // still deliver. Log so a leaked registration is diagnosable.
+      logger.warn('FCM token deletion failed', { userId, error: err?.message });
     }
     safeLocalStorageRemove('device_id');
     return { success: true };
