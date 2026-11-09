@@ -67,42 +67,6 @@ const ANALYTICS_CONFIG = {
   SNAPSHOT_COLLECTION: 'user_daily_stats', // follower-count snapshots (migration: REFACTOR_PROGRESS.md)
 };
 
-class LRUCache {
-  constructor(maxSize = 100, ttl = ANALYTICS_CONFIG.CACHE_TTL) {
-    this.maxSize = maxSize;
-    this.ttl = ttl;
-    this.cache = new Map();
-  }
-
-  get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-    return entry.value;
-  }
-
-  set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
-    }
-    this.cache.set(key, { value, timestamp: Date.now() });
-  }
-
-  delete(key) {
-    this.cache.delete(key);
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-}
-
 function enhanceError(error, defaultMessage) {
   const errorMap = {
     'permission-denied': 'You do not have permission to access analytics.',
@@ -607,7 +571,7 @@ class UltimateAnalyticsService {
     try {
       await this._ensureInitialized();
       
-      const { doc, getDoc, collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+      const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
       
       // Real historical follower snapshots (user_daily_stats) when available.
       const snapshotsRef = collection(this.firestore, ANALYTICS_CONFIG.SNAPSHOT_COLLECTION);
@@ -904,7 +868,7 @@ class UltimateAnalyticsService {
     
     for (const unsub of this.subscriptions.values()) {
       try { unsub(); } catch (e) {
-        console.warn('Analytics listener unsubscribe failed', e?.message);
+        logger.warn('Analytics listener unsubscribe failed', { error: e?.message });
       }
     }
     this.subscriptions.clear();

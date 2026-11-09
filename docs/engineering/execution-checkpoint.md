@@ -440,3 +440,13 @@ Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**;
   `typeof === 'number'` guards → `null` when absent.
 
 Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**; build ✓.
+
+## Checkpoint — N180
+
+- **N180 (fixed)**: `analyticsService` carried a dead local `LRUCache` class
+  (superseded by `cacheManager.namespace('analytics', …)`), an unused
+  `doc, getDoc` destructure in `getFollowerGrowth`, and a `console.warn` in
+  `destroy()` (violates the Logger-only logging convention). Removed/replaced.
+
+Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**; build ✓;
+`eslint src/ functions/ --quiet` — 0 errors.
