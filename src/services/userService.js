@@ -1142,7 +1142,8 @@ class ProfessionalUserService {
     countersManager.invalidate({ docPath: `users/${followingId}`, field: 'followerCount' });
     countersManager.invalidate({ docPath: `users/${followerId}`, field: 'followingCount' });
     auditLogger.log('social.unfollow', { userId: followerId, meta: { followingId } });
-    this._recordFollowerSnapshotIfDue(followingId).catch(() => {});
+    this._recordFollowerSnapshotIfDue(followingId).catch((e) =>
+      logger.warn('Follower snapshot failed', { followingId, error: e?.message }));
     this._invalidateUserCache(followerId);
     this._invalidateUserCache(followingId);
     return result;
