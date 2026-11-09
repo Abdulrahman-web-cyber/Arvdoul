@@ -540,10 +540,14 @@ class UltimateNotificationsService {
       if (hasServiceWorker) {
         const base = import.meta.env.BASE_URL || '/';
         try {
+          // The app-wide SW (`public/sw.js`) already carries the `push` and
+          // `notificationclick` handlers, so registering `firebase-messaging-sw.js`
+          // here is what FCM's `getToken()` binds to. A previous line also
+          // registered `sw-notifications.js`, which does not exist — the
+          // registration rejected and an empty catch hid it.
           await navigator.serviceWorker.register(`${base}firebase-messaging-sw.js`);
-          // Also register our custom SW for background pushes
-          await navigator.serviceWorker.register(`${base}sw-notifications.js`);
         } catch (err) {
+          logger.warn('Push service worker registration failed', { error: err?.message });
         }
       }
       const token = await this._getFreshPushToken();
