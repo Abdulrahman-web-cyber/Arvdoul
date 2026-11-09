@@ -26,6 +26,7 @@ import { formatViewCount, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/vid
 import { formatCoinsAsUsd } from '../shared/levelConfig.cjs';
 import GlassCard from '../components/UI/GlassCard';
 import GlassButton from '../components/UI/GlassButton';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 /**
  * VideoAnalyticsScreen - Creator dashboard with analytics
@@ -431,7 +432,7 @@ const VideosTab = ({ videos }) => {
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${video.completionRate || 0}%`,
+                    width: `${unknownNumber(video.completionRate) ?? 0}%`,
                     background: ARVDOUL_GRADIENT,
                   }}
                 />

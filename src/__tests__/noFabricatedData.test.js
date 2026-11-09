@@ -3113,3 +3113,23 @@ describe('Displayed amounts/counts render unknown, never a fabricated 0 (N183)',
     expect(src).toContain('unknownNumber(answer.upvotes)');
   });
 });
+
+describe('N184 — no fabricated counts sweep (round 2)', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+  test('highlights, sounds, collections, community and progress counts render unknown, not 0', () => {
+    const cases = [
+      ['src/screens/Profile/HighlightsScreen.jsx', 'highlight.storyCount || 0'],
+      ['src/screens/Sounds/SoundsScreen.jsx', 'snd.reelsCount || 0'],
+      ['src/components/Videos/VideoBottomSheet.jsx', 'col.itemCount || 0'],
+      ['src/screens/Community/CommunityDetailScreen.jsx', 'bannedUsers?.length || 0'],
+      ['src/screens/Admin/AdminCommunityManagementScreen.jsx', 'Number(comm.strikesCount) || 0'],
+      ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.xpToNext || 0'],
+      ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.progress || 0'],
+    ];
+    for (const [file, literal] of cases) {
+      const src = read(file);
+      expect(src).not.toContain(literal);
+      expect(src).toContain('unknownNumber');
+    }
+  });
+});

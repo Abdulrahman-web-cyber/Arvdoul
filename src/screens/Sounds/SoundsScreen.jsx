@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 
 const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Cinematic'];
 
@@ -275,7 +276,7 @@ export default function SoundsScreen() {
                     <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
                       <span>⏱️ {snd.duration || '—'}</span>
                       {snd.bpm != null && <span>⚡️ {snd.bpm} BPM</span>}
-                      <span>🎬 {snd.reelsCount || 0} Reels</span>
+                      <span>🎬 {unknownNumber(snd.reelsCount) ?? '—'} Reels</span>
                     </div>
                   </div>
                 </div>

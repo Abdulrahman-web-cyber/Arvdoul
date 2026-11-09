@@ -8,6 +8,7 @@ import { ArrowLeft, Settings, Shield, Globe, Lock, UserPlus, UserMinus, MessageC
 import { getCommunityService } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 
 const CommunityDetailScreen = () => {
   const { communityId } = useParams();
@@ -611,7 +612,7 @@ const CommunityDetailScreen = () => {
                         <div>
                           <p className="font-medium text-gray-900 dark:text-white">Banned Users</p>
                           <p className="text-sm text-gray-500">
-                            {community.moderation?.bannedUsers?.length || 0} banned
+                            {unknownNumber(community.moderation?.bannedUsers?.length) ?? '—'} banned
                           </p>
                         </div>
                       </div>

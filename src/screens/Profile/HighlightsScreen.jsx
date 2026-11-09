@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import ErrorState from '../../design-system/ErrorState.jsx';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 
 const EMOJI_OPTIONS = ['✨', '🔥', '💖', '🎵', '✈️', '📸', '⚡', '🏆', '🌴', '🎨', '🚀', '🌟'];
 
@@ -251,7 +252,7 @@ export default function HighlightsScreen() {
                     {highlight.title}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    {highlight.storyCount || 0} stories
+                    {unknownNumber(highlight.storyCount) ?? '—'} stories
                   </p>
                 </button>
                 
