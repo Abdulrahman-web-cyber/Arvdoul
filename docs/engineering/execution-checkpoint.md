@@ -62,3 +62,35 @@ git log --oneline -5
 NODE_OPTIONS=--experimental-vm-modules npx jest --watchAll=false
 npm run build
 ```
+
+## Checkpoint — silent-catch sweep (client + server), N148
+
+- Branch: `reconstruction/arvdoul-platform-hardening`.
+- Completed: N142/N147 fire-and-forget sweep extended to the **server** runtime
+  and the profile/auth sync paths. Every remaining empty/comment-only catch in
+  `functions/*.js` and the flagged `src` sites now logs through the shared
+  logger (server: `functions.logger`/module `log`; client: `logger`/service
+  child `log`). Sites: `auth.isAdmin`/`getUserEmail`, `moderation` reportCount,
+  `stories` media deletes, `user.deleteUserData` push tokens, `monetization` ad
+  targeting, `authService` (rate-limit outage, attempt persist, phone/Google
+  onboarding flags, `verifyEmail` profile sync), `userService` (profile-store
+  sync, unfollow follower snapshot), `feedService` (interest vector, session
+  state, preferences, single post, ML source, ad prefetch), `analyticsService`
+  (identity + top posts), `marketplaceService`/`pollService`/`aiStudioService`
+  localforage, `searchService` skipped candidate, `ProfilePublicScreen` view
+  tracking, `NotificationsScreen` follow-request hydration, `videoService`
+  share counter.
+- New guard: `src/__tests__/sideEffectFailureGuard.test.js` (hard-failing
+  `guards` CI job) — fails when a known server-owned side-effect call is
+  followed by a bare no-op `.catch(() => {})`.
+- Quality gates: `npm test` — **115 suites / 1358 tests passing**;
+  `npm run build` — ✓ built; eslint `--quiet` — exit 0.
+
+## Next exact tasks (updated)
+
+1. Extend the observability guard to the **server**: a `functions/*.js` empty
+   catch (`catch {}` / `catch (_) {}`) should fail CI unless it carries a log.
+2. Continue the "no fabricated state" pass on remaining screens (loading vs
+   failed vs empty tri-state) where the guard has not yet pinned them.
+3. Keep chasing the "surpass major platforms" goal: profile highlight creation
+   UI, richer About/Preview surfaces, and PII boundary review.
