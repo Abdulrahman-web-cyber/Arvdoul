@@ -1444,7 +1444,9 @@ service cloud.firestore {
     match /message_reports/{reportId} {
       allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
-      allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      // Triage state is a moderator decision, exactly as in every other report
+      // queue: a reporter must not be able to resolve/rewrite their own report.
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
