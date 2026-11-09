@@ -51,7 +51,10 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
           );
           if (isMounted) setCreators(realList);
         }
-      } catch {
+      } catch (err) {
+        // The strip degrades to just "Your Story", but a failed feed read must
+        // still be observable rather than looking like "nobody has stories".
+        console.warn('InFeedStoriesModule: story feed load failed', err);
         if (isMounted) setCreators([]);
       }
     }

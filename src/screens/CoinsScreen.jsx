@@ -15,6 +15,7 @@ import { MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, SUBSCRI
 import { Coins, Crown, Zap, Rocket, Star, CheckCircle, Shield, Gift, TrendingUp, Play, History, Banknote, Loader2, Sparkles } from "lucide-react";
 import PaymentModal from '../components/Shared/PaymentModal';
 import CoinStackIcon from '../components/Shared/CoinStackIcon';
+import ErrorState from '../design-system/ErrorState.jsx';
 // Presentation-only icon/color, keyed by the canonical package id. Amounts and
 // prices come from COIN_PACKAGES in the shared levelConfig (same table the
 // server prices from), so the client can never advertise a price or coin amount
@@ -45,6 +46,7 @@ export default function CoinsScreen() {
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsError, setTransactionsError] = useState(null);
   const [transactionsCursor, setTransactionsCursor] = useState(null);
   const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
 
@@ -112,12 +114,16 @@ export default function CoinsScreen() {
   const loadTransactions = useCallback(async () => {
     if (!user?.uid) return;
     try {
+      setTransactionsLoading(true);
+      setTransactionsError(null);
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const page = await svc.getTransactionHistory(user.uid, 15);
       setTransactions(Array.isArray(page?.items) ? page.items : []);
       setTransactionsCursor(page?.nextCursor ?? null);
     } catch (err) {
-      // Non-fatal: history may be gated by rules until the P0 rules deploy.
+      // A failed history read must not render "No transactions yet" — that
+      // tells the user their wallet history is empty when the read failed.
+      setTransactionsError(err?.message || 'Could not load your transaction history.');
       setTransactions([]);
       setTransactionsCursor(null);
     } finally {
@@ -221,6 +227,7 @@ export default function CoinsScreen() {
       setAd(result || null);
       if (!result) toast.info('No ads available right now — check back soon.');
     } catch (err) {
+      console.warn('CoinsScreen: failed to fetch sponsored ad', err);
       setAd(null);
     } finally {
       setAdLoading(false);
@@ -529,6 +536,14 @@ export default function CoinsScreen() {
           {transactionsLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+            </div>
+          ) : transactionsError ? (
+            <div className="py-2">
+              <ErrorState
+                title="Could not load your transaction history"
+                message={transactionsError}
+                onRetry={() => loadTransactions()}
+              />
             </div>
           ) : transactions.length === 0 ? (
             <p className={cn("text-sm py-4", colors.secondary)}>No transactions yet — buy coins, watch ads, or send gifts to get started.</p>

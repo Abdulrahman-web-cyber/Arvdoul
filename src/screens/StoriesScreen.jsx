@@ -13,6 +13,7 @@ import { getMonetizationService } from '../services/monetizationService';
 import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
+import ErrorState from '../design-system/ErrorState.jsx';
 
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
@@ -69,6 +70,8 @@ export default function StoriesScreen() {
   const [flyingParticles, setFlyingParticles] = useState([]);
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
+  const [storiesError, setStoriesError] = useState(null);
+  const [storiesNonce, setStoriesNonce] = useState(0);
   const [highlightGroup, setHighlightGroup] = useState(null);
 
   // Owner-only viewers panel. `getStoryViewers` is an owner-gated, paginated
@@ -88,6 +91,8 @@ export default function StoriesScreen() {
     let cancelled = false;
     const load = async () => {
       try {
+        setStoriesLoading(true);
+        setStoriesError(null);
         const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
         if (cancelled) return;
         const groups = feed?.groups || [];
@@ -150,7 +155,9 @@ export default function StoriesScreen() {
           }
         }
       } catch (err) {
-        console.error('Failed to load stories:', err);
+        // A failed feed read must not render as "No vibes in feed" — surface
+        // a retry instead of an empty state that lies about the network.
+        if (!cancelled) setStoriesError(err?.message || 'Could not load Vibes.');
         if (!cancelled) setStories([]);
       } finally {
         if (!cancelled) setStoriesLoading(false);
@@ -158,7 +165,7 @@ export default function StoriesScreen() {
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid]);
+  }, [user?.uid, storiesNonce]);
 
   // Highlight deep links: /highlight/:highlightId (from HighlightsScreen) and
   // the legacy /stories?highlight=<id>. Nothing read either, so every
@@ -781,8 +788,19 @@ export default function StoriesScreen() {
           </span>
         </motion.div>
 
+        {/* A failed feed read shows a retry, never the "no vibes" empty state. */}
+        {storiesError && !storiesLoading && (
+          <div className="col-span-3">
+            <ErrorState
+              title="Could not load Vibes"
+              message={storiesError}
+              onRetry={() => setStoriesNonce((n) => n + 1)}
+            />
+          </div>
+        )}
+
         {/* EMPTY STATE IF ZERO STORIES */}
-        {filteredStories.length === 0 && !storiesLoading && (
+        {filteredStories.length === 0 && !storiesLoading && !storiesError && (
           <div className={cn(
             'col-span-2 aspect-[3/4.5] rounded-3xl p-4 flex flex-col items-center justify-center text-center border',
             isDark

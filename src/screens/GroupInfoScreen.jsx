@@ -31,6 +31,7 @@ export default function GroupInfoScreen() {
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [memberQuery, setMemberQuery] = useState('');
   const [memberResults, setMemberResults] = useState([]);
+  const [memberSearchError, setMemberSearchError] = useState(null);
   const [searchingMembers, setSearchingMembers] = useState(false);
   const [addingMemberId, setAddingMemberId] = useState(null);
 
@@ -202,9 +203,11 @@ export default function GroupInfoScreen() {
     const query = q.trim();
     if (query.length < 2) {
       setMemberResults([]);
+      setMemberSearchError(null);
       return;
     }
     setSearchingMembers(true);
+    setMemberSearchError(null);
     try {
       const res = await userService.searchUsers(query, { limit: 10 });
       const users = res?.users || [];
@@ -214,6 +217,8 @@ export default function GroupInfoScreen() {
         return uid && !participants.includes(uid);
       }));
     } catch (err) {
+      // A failed search must not silently look like "no matches".
+      setMemberSearchError(err?.message || 'Search failed. Try again.');
       setMemberResults([]);
     } finally {
       setSearchingMembers(false);
@@ -517,6 +522,10 @@ export default function GroupInfoScreen() {
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Searching...</span>
                 </div>
+              )}
+
+              {!searchingMembers && memberSearchError && (
+                <div className="py-2 text-xs text-red-500">{memberSearchError}</div>
               )}
 
               {memberResults.length > 0 && (

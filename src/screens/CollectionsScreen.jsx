@@ -10,6 +10,8 @@ import { FolderOpen, Plus, Trash2, Folder, Lock, Globe, X, FolderPlus } from "lu
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import ErrorState from '../design-system/ErrorState.jsx';
+import EmptyState from '../design-system/EmptyState.jsx';
 import { cn } from '../lib/utils';
 
 export default function CollectionsScreen() {
@@ -19,6 +21,9 @@ export default function CollectionsScreen() {
   const { user } = useAuth();
 
   const [collections, setCollections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -28,11 +33,14 @@ export default function CollectionsScreen() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) { setLoading(false); return; }
+      setLoading(true);
+      setLoadError(null);
       try {
         const { default: collectionsService } = await import('../services/collectionsService.js');
         const res = await collectionsService.getCollections(user?.uid, { cacheFirst: false });
         if (cancelled) return;
+        if (res && res.success === false) throw new Error(res.error || 'Could not load collections.');
         const mapped = (res.collections || []).map((c) => ({
           id: c.id,
           title: c.name || c.title || 'Untitled',
@@ -46,13 +54,18 @@ export default function CollectionsScreen() {
         }));
         setCollections(mapped);
       } catch (err) {
-        console.error('Failed to load collections:', err);
-        if (!cancelled) setCollections([]);
+        if (cancelled) return;
+        // Surface the failure with a retry; an empty grid would read as
+        // "you have no collections" when the read actually failed.
+        setLoadError(err?.message || 'Could not load your collections.');
+        setCollections([]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid]);
+  }, [user?.uid, reloadNonce]);
 
   // Create Collection ( persists via collectionsService)
   const handleCreateCollection = async (e) => {
@@ -153,8 +166,21 @@ export default function CollectionsScreen() {
             <p className="text-xs text-gray-400 mt-1">Group assets by theme</p>
           </button>
 
+          {/* Loading skeletons — the empty grid below would otherwise read as
+              "you have no collections" before the first read resolves. */}
+          {loading && [0, 1, 2].map((i) => (
+            <div
+              key={`sk-${i}`}
+              aria-hidden="true"
+              className={cn(
+                "aspect-[4/3] rounded-3xl border animate-pulse",
+                isDark ? "bg-white/[0.04] border-white/10" : "bg-gray-100 border-gray-200"
+              )}
+            />
+          ))}
+
           {/* Collection Cards */}
-          {collections.map((c) => (
+          {!loading && collections.map((c) => (
             <div
               key={c.id}
               onClick={() => navigate('/saved')}
@@ -205,6 +231,25 @@ export default function CollectionsScreen() {
             </div>
           ))}
         </div>
+
+        {!loading && loadError && (
+          <div className="mt-4">
+            <ErrorState
+              title="Could not load your collections"
+              message={loadError}
+              onRetry={() => setReloadNonce((n) => n + 1)}
+            />
+          </div>
+        )}
+
+        {!loading && !loadError && collections.length === 0 && (
+          <div className="mt-4">
+            <EmptyState
+              title="No collections yet"
+              description="Create a folder to organize your saved posts, sparks and audio presets."
+            />
+          </div>
+        )}
       </main>
 
       {/* Create Modal */}

@@ -5,10 +5,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Trash2, Search, Grid, List, Share2, Play, Plus, CheckSquare, Square, Folder, Sparkles, Film, Image as ImageIcon, Music, Loader2 } from "lucide-react";
+import { Bookmark, Trash2, Search, Grid, List, Share2, Play, Plus, CheckSquare, Square, Folder, Sparkles, Film, Image as ImageIcon, Music } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
 
 const COLLECTIONS = [
@@ -27,11 +28,15 @@ export default function SavedScreen() {
 
   const [items, setItems] = useState([]);
   const [savedLoading, setSavedLoading] = useState(true);
+  const [savedError, setSavedError] = useState(null);
+  const [savedNonce, setSavedNonce] = useState(0);
   // Load saved posts from firestoreService
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!user?.uid) { setSavedLoading(false); return; }
+      setSavedLoading(true);
+      setSavedError(null);
       try {
         const { getFirestoreService } = await import('../services/firestoreService.js');
         const { getVideoService } = await import('../services/videoService.js');
@@ -78,7 +83,8 @@ export default function SavedScreen() {
         }));
         setItems([...videoItems, ...postItems]);
       } catch (err) {
-        console.error('Failed to load saved posts:', err);
+        // A failed read must not render as "no saved items" — surface a retry.
+        if (!cancelled) setSavedError(err?.message || 'Could not load your saved items.');
         if (!cancelled) setItems([]);
       } finally {
         if (!cancelled) setSavedLoading(false);
@@ -86,7 +92,7 @@ export default function SavedScreen() {
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid]);
+  }, [user?.uid, savedNonce]);
 
   const [activeCollection, setActiveCollection] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -331,10 +337,23 @@ export default function SavedScreen() {
 
         {/* Items Display */}
         {savedLoading ? (
-          <div className="text-center py-16 text-gray-400">
-            <Loader2 className="w-8 h-8 mx-auto animate-spin" />
-            <p className="mt-3 text-xs">Loading saved items...</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" aria-busy="true" aria-label="Loading saved items">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={`saved-sk-${i}`}
+                className={cn(
+                  "aspect-square rounded-2xl border animate-pulse",
+                  isDark ? "bg-white/[0.04] border-white/10" : "bg-gray-100 border-gray-200"
+                )}
+              />
+            ))}
           </div>
+        ) : savedError ? (
+          <ErrorState
+            title="Could not load your saved items"
+            message={savedError}
+            onRetry={() => setSavedNonce((n) => n + 1)}
+          />
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-16 space-y-3">
             <div className="w-16 h-16 mx-auto rounded-3xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">

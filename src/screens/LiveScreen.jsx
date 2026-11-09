@@ -69,7 +69,13 @@ export default function LiveScreen() {
   useEffect(() => { const id = setInterval(loadStreams, 15000); return () => clearInterval(id); }, [loadStreams]);
 
   useEffect(() => {
-    try { setGiftTypes(svc().getLiveConfig().GIFT_TYPES || []); } catch (e) { setGiftTypes([]); }
+    try {
+      setGiftTypes(svc().getLiveConfig().GIFT_TYPES || []);
+    } catch (e) {
+      // A config read failure would leave the gift tray empty; log it.
+      console.warn('LiveScreen: failed to load gift types', e);
+      setGiftTypes([]);
+    }
   }, []);
 
   const handleStartLive = async () => {

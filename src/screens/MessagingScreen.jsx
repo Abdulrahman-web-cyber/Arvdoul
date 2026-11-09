@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import ErrorState from '../design-system/ErrorState.jsx';
 import { Search, SlidersHorizontal, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
 
 // Pinned Conversations data matching the exact screenshot
@@ -56,6 +57,8 @@ export default function MessagingScreen() {
     [conversations]
   );
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [conversationsError, setConversationsError] = useState(null);
+  const [conversationsNonce, setConversationsNonce] = useState(0);
 
   // Load conversations from messagesService (Firestore-backed, enriched
   // with participant details + unread counts). No mock data.
@@ -67,6 +70,8 @@ export default function MessagingScreen() {
         return;
       }
       try {
+        setLoadingConversations(true);
+        setConversationsError(null);
         const { getMessagingService } = await import('../services/messagesService.js');
         const res = await getMessagingService().getUserConversations(user.uid, { cacheFirst: false, limit: 50 });
         if (cancelled) return;
@@ -91,7 +96,9 @@ export default function MessagingScreen() {
         });
         setConversations(mapped);
       } catch (err) {
-        console.error('Failed to load conversations:', err);
+        // A failed inbox read must not render as "No conversations yet" —
+        // surface a retry instead of an empty state that lies.
+        if (!cancelled) setConversationsError(err?.message || 'Could not load your conversations.');
         if (!cancelled) setConversations([]);
       } finally {
         if (!cancelled) setLoadingConversations(false);
@@ -106,7 +113,7 @@ export default function MessagingScreen() {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
     };
-  }, [user?.uid]);
+  }, [user?.uid, conversationsNonce]);
   const [showSearchFilters, setShowSearchFilters] = useState(false);
   const [messageRequests, setMessageRequests] = useState([]);
 
@@ -478,7 +485,14 @@ export default function MessagingScreen() {
               ))}
             </div>
           )}
-          {!loadingConversations && filteredConversations.length === 0 && (
+          {!loadingConversations && conversationsError && (
+            <ErrorState
+              title="Could not load your conversations"
+              message={conversationsError}
+              onRetry={() => setConversationsNonce((n) => n + 1)}
+            />
+          )}
+          {!loadingConversations && !conversationsError && filteredConversations.length === 0 && (
             <div className={`text-center py-10 text-sm ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
               No conversations yet — start one with the + button.
             </div>

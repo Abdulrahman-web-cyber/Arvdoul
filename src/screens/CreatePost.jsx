@@ -732,16 +732,22 @@ function CreatePostProvider({ children }) {
   // monetization service). Never the store's in-memory number — the store is
   // not synced with the server.
   const [userCoins, setUserCoins] = useState(null);
+  const [userCoinsError, setUserCoinsError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    if (!user?.uid) { setUserCoins(null); return undefined; }
+    if (!user?.uid) { setUserCoins(null); setUserCoinsError(false); return undefined; }
     (async () => {
       try {
         const { getMonetizationService } = await import('../services/monetizationService.js');
         const bal = await getMonetizationService().getBalance(user.uid);
-        if (!cancelled) setUserCoins(typeof bal === 'number' ? bal : null);
+        if (!cancelled) {
+          setUserCoins(typeof bal === 'number' ? bal : null);
+          setUserCoinsError(false);
+        }
       } catch {
-        if (!cancelled) setUserCoins(null);
+        // Distinguish "failed" from "still loading" — the panel must not tell
+        // the user their balance is loading when the read failed.
+        if (!cancelled) { setUserCoins(null); setUserCoinsError(true); }
       }
     })();
     return () => { cancelled = true; };
@@ -1796,7 +1802,7 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const servicesValue = useMemo(() => ({
-    services: services.current, isOffline, offlineQueueItems, userCoins, isDark, prefersReducedMotion,
+    services: services.current, isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
     retryOfflineItem, deleteOfflineItem, searchUsers,
@@ -1804,7 +1810,7 @@ function CreatePostProvider({ children }) {
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
   }), [
-    isOffline, offlineQueueItems, userCoins, isDark, prefersReducedMotion,
+    isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
     retryOfflineItem, deleteOfflineItem, searchUsers,
@@ -1971,7 +1977,11 @@ export function LocationPanel({ defaultOpen = false }) {
         const data = await res.json();
         setSuggestions(data.map(d => d.display_name));
         setShow(true);
-      } catch { setSuggestions([]); }
+      } catch (err) {
+        // Geocoding is best-effort; log so a broken lookup is diagnosable.
+        console.warn('CreatePost: location lookup failed', err);
+        setSuggestions([]);
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
@@ -2034,7 +2044,7 @@ export function TaggingPanel({ defaultOpen = false }) {
 
 export function MonetizationPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
-  const { userCoins } = useCreatePostServices();
+  const { userCoins, userCoinsError } = useCreatePostServices();
   // userCoins is the ledger balance (null while loading / unauthenticated).
   const insufficient = state.monetization.type === "boost" &&
     userCoins != null && state.boost.budget > userCoins;
@@ -2055,7 +2065,11 @@ export function MonetizationPanel({ defaultOpen = false }) {
             className={INPUT_CLASS} />
           {insufficient && <p className="text-xs text-red-500">Insufficient coins (you have {userCoins})</p>}
           {state.monetization.type === "boost" && userCoins == null && (
-            <p className="text-xs text-gray-500">Balance loading… (server-side check still applies on publish)</p>
+            <p className="text-xs text-gray-500">
+              {userCoinsError
+                ? 'Could not load your balance — the server still verifies it on publish.'
+                : 'Balance loading… (server-side check still applies on publish)'}
+            </p>
           )}
         </div>
       )}

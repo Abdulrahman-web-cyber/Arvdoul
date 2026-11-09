@@ -13,6 +13,7 @@ import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 import { X, Search, UserPlus, Loader2, ArrowLeft, Camera } from 'lucide-react';
 import storageService from '../services/storageService';
+import ErrorState from '../design-system/ErrorState.jsx';
 
 const NewConversationScreen = () => {
   const navigate = useNavigate();
@@ -33,6 +34,10 @@ const NewConversationScreen = () => {
   const [loading, setLoading] = useState(Boolean(toUserId));
   const [friends, setFriends] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(true);
+  const [friendsError, setFriendsError] = useState(null);
+  const [friendsNonce, setFriendsNonce] = useState(0);
+  const [searchError, setSearchError] = useState(null);
+  const [searchNonce, setSearchNonce] = useState(0);
   const [groupName, setGroupName] = useState('');
   const [groupPhoto, setGroupPhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -107,18 +112,22 @@ const NewConversationScreen = () => {
     const loadFriends = async () => {
       try {
         setLoadingFriends(true);
+        setFriendsError(null);
         const result = await userService.getFriends(user.uid, { limit: 50 });
         if (result.success) {
           setFriends(result.friends || []);
+        } else {
+          setFriendsError(result.error || 'Could not load your friends.');
         }
       } catch (error) {
-        console.error('Failed to load friends:', error);
+        // A failed read must not render as "No friends yet".
+        setFriendsError(error?.message || 'Could not load your friends.');
       } finally {
         setLoadingFriends(false);
       }
     };
     loadFriends();
-  }, [user, toUserId]);
+  }, [user, toUserId, friendsNonce]);
 
   // Search users
   React.useEffect(() => {
@@ -130,19 +139,25 @@ const NewConversationScreen = () => {
     const search = async () => {
       try {
         setSearching(true);
+        setSearchError(null);
         const result = await userService.searchUsers(debouncedQuery, { limit: 20 });
         if (result.success) {
           setSearchResults(result.users || []);
+        } else {
+          setSearchError(result.error || 'Search failed.');
+          setSearchResults([]);
         }
       } catch (error) {
-        console.error('Search error:', error);
+        // "No users found" would be a lie when the query itself failed.
+        setSearchError(error?.message || 'Search failed.');
+        setSearchResults([]);
       } finally {
         setSearching(false);
       }
     };
 
     search();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, searchNonce]);
 
   const toggleUserSelection = useCallback((userToToggle) => {
     const targetId = userToToggle.uid || userToToggle.id;
@@ -429,6 +444,14 @@ const NewConversationScreen = () => {
         ) : loadingFriends && !debouncedQuery ? (
           <div className="p-4 text-center text-gray-500">
             Loading friends...
+          </div>
+        ) : (debouncedQuery ? searchError : friendsError) ? (
+          <div className="p-4">
+            <ErrorState
+              title={debouncedQuery ? 'Search failed' : 'Could not load your friends'}
+              message={debouncedQuery ? searchError : friendsError}
+              onRetry={() => (debouncedQuery ? setSearchNonce((n) => n + 1) : setFriendsNonce((n) => n + 1))}
+            />
           </div>
         ) : displayUsers.length === 0 ? (
           <div className="p-8 text-center">

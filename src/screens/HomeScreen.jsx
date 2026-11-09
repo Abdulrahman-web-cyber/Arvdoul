@@ -740,7 +740,8 @@ export default function HomeScreen() {
       const ad = await getAd('home', user.uid, {});
       setRewardAd(ad || null);
       if (!ad) toast.info('No sponsored ads available right now.');
-    } catch {
+    } catch (err) {
+      console.warn('HomeScreen: failed to fetch rewarded ad', err);
       setRewardAd(null);
     } finally {
       setRewardAdLoading(false);

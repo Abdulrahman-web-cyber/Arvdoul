@@ -42,9 +42,11 @@ const AdminEconomyScreen = () => {
 
   // Payout queue — live withdrawal_requests only.
   const [payouts, setPayouts] = useState([]);
+  const [payoutsError, setPayoutsError] = useState(null);
 
   // Recent transaction ledger — live coin_transactions only.
   const [transactions, setTransactions] = useState([]);
+  const [transactionsError, setTransactionsError] = useState(null);
 
   // Load live data: the admin summary comes from the server (aggregates over
   // users/coin_transactions that the client cannot compute), the queues come
@@ -71,7 +73,11 @@ const AdminEconomyScreen = () => {
       try {
         const rows = await admin.listWithdrawalRequests(100);
         setPayouts(rows);
-      } catch {
+        setPayoutsError(null);
+      } catch (err) {
+        // A denied/failed read must not read as "no payout requests" — that
+        // would tell an admin the queue is empty when it is merely unreadable.
+        setPayoutsError(err?.message || 'Could not load the payout queue.');
         setPayouts([]);
       }
 
@@ -80,7 +86,9 @@ const AdminEconomyScreen = () => {
       try {
         const rows = await admin.listCoinTransactions(100);
         setTransactions(rows);
-      } catch {
+        setTransactionsError(null);
+      } catch (err) {
+        setTransactionsError(err?.message || 'Could not load the ledger.');
         setTransactions([]);
       }
     } catch {
@@ -427,7 +435,11 @@ const AdminEconomyScreen = () => {
                     {filteredPayouts.length === 0 && (
                       <tr>
                         <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                          {loading ? 'Loading payout queue…' : 'No payout requests match this filter.'}
+                          {loading
+                            ? 'Loading payout queue…'
+                            : payoutsError
+                              ? `Could not load the payout queue: ${payoutsError}`
+                              : 'No payout requests match this filter.'}
                         </td>
                       </tr>
                     )}
@@ -532,7 +544,11 @@ const AdminEconomyScreen = () => {
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredTransactions.length === 0 && (
                   <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                    {loading ? 'Loading ledger…' : 'No ledger entries match this search.'}
+                    {loading
+                      ? 'Loading ledger…'
+                      : transactionsError
+                        ? `Could not load the ledger: ${transactionsError}`
+                        : 'No ledger entries match this search.'}
                   </div>
                 )}
                 {filteredTransactions.map(tx => (

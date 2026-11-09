@@ -28,6 +28,7 @@ const VideoGiftModal = memo(({
   const [sending, setSending] = useState(false);
   const [sentAnimation, setSentAnimation] = useState(null);
   const [balance, setBalance] = useState(null);
+  const [balanceError, setBalanceError] = useState(false);
 
   // balance from the ledger whenever the modal opens.
   useEffect(() => {
@@ -37,9 +38,11 @@ const VideoGiftModal = memo(({
       try {
         const { getMonetizationService } = await import('../../services/monetizationService.js');
         const b = await getMonetizationService().getBalance(user.uid);
-        if (!cancelled) setBalance(typeof b === 'number' ? b : null);
-      } catch {
-        if (!cancelled) setBalance(null);
+        if (!cancelled) { setBalance(typeof b === 'number' ? b : null); setBalanceError(false); }
+      } catch (err) {
+        // "—" must not stand in for both "loading" and "failed"; surface it.
+        console.warn('VideoGiftModal: failed to load balance', err);
+        if (!cancelled) { setBalance(null); setBalanceError(true); }
       }
     })();
     return () => { cancelled = true; };
@@ -148,9 +151,9 @@ const VideoGiftModal = memo(({
             {/* Balance */}
             <div className="flex items-center justify-between bg-black/30 rounded-2xl px-4 py-3 mb-5">
               <span className="text-xs text-gray-400">Your balance</span>
-              <span className="text-sm font-bold text-yellow-400 flex items-center gap-1">
+              <span className={`text-sm font-bold flex items-center gap-1 ${balanceError ? 'text-red-400' : 'text-yellow-400'}`}>
                 <Coins className="w-4 h-4" />
-                {balance == null ? '—' : balance.toLocaleString()}
+                {balanceError ? 'Unavailable' : balance == null ? '—' : balance.toLocaleString()}
               </span>
             </div>
 

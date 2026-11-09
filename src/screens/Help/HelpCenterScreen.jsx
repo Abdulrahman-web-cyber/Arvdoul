@@ -14,6 +14,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getSupportTicketService } from '../../services/supportTicketService.js';
 import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
+import ErrorState from '../../design-system/ErrorState.jsx';
 
 // Build the checklist copy from the same constants the verification reviewer
 // uses, so the FAQ can never advertise a threshold the app does not enforce.
@@ -94,6 +95,7 @@ export default function HelpCenterScreen() {
   const [openIndex, setOpenIndex] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState(null);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -101,11 +103,14 @@ export default function HelpCenterScreen() {
   const loadTickets = useCallback(async () => {
     if (!user?.uid) return;
     setTicketsLoading(true);
+    setTicketsError(null);
     try {
       const rows = await getSupportTicketService().listMyTickets(user.uid);
       setTickets(rows);
-    } catch {
-      // Index/offline failures should not block filing a new ticket.
+    } catch (err) {
+      // Filing a ticket is still possible, but the history must not read as
+      // "no tickets" when the read actually failed.
+      setTicketsError(err?.message || 'Could not load your tickets.');
       setTickets([]);
     } finally {
       setTicketsLoading(false);
@@ -274,6 +279,12 @@ export default function HelpCenterScreen() {
           </div>
           {ticketsLoading ? (
             <p className={`text-sm ${muted} flex items-center gap-2`}><Loader2 className="w-4 h-4 animate-spin" /> Loading…</p>
+          ) : ticketsError ? (
+            <ErrorState
+              title="Could not load your tickets"
+              message={ticketsError}
+              onRetry={() => loadTickets()}
+            />
           ) : tickets.length === 0 ? (
             <p className={`text-sm ${muted}`}>You have not filed any tickets yet.</p>
           ) : (

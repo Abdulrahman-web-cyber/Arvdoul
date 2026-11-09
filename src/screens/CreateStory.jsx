@@ -63,6 +63,7 @@ export default function CreateStory() {
   const musicLibraryEnabled = useFeatureFlag('stories.music_library');
   const [musicTracks, setMusicTracks] = useState([]);
   const [musicLoading, setMusicLoading] = useState(false);
+  const [musicError, setMusicError] = useState(null);
   const [mediaFile, setMediaFile] = useState(null);
   const [capturedPreview, setCapturedPreview] = useState(null);
   const [selectedGif, setSelectedGif] = useState(null);
@@ -84,11 +85,14 @@ export default function CreateStory() {
   // Music tool pulls the real catalog; there is no hardcoded default track.
   const loadMusicTracks = useCallback(async () => {
     setMusicLoading(true);
+    setMusicError(null);
     try {
       const { default: soundService } = await import('../services/soundService.js');
       const tracks = await soundService.getTrendingSounds('All');
       setMusicTracks(Array.isArray(tracks) ? tracks : []);
-    } catch {
+    } catch (err) {
+      // "No tracks available" would be wrong when the catalog read failed.
+      setMusicError(err?.message || 'Could not load the music catalog.');
       setMusicTracks([]);
     } finally {
       setMusicLoading(false);
@@ -478,6 +482,10 @@ export default function CreateStory() {
                 </div>
                 {musicLoading ? (
                   <p className="text-xs text-white/60 px-1 py-2">Loading tracks…</p>
+                ) : musicError ? (
+                  <p className="text-xs text-red-400 px-1 py-2">
+                    {musicError}
+                  </p>
                 ) : musicTracks.length === 0 ? (
                   <p className="text-xs text-white/60 px-1 py-2">
                     No tracks available yet.

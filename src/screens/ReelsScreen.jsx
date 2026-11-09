@@ -38,6 +38,8 @@ const formatDuration = (seconds) => {
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
   const [reels, setReels] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState(null);
+  const [feedNonce, setFeedNonce] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const cursorRef = useRef(null);
@@ -105,6 +107,7 @@ const formatDuration = (seconds) => {
     }
     try {
       setFeedLoading(true);
+      setFeedError(null);
       const res = await videoService.getVideoFeed(user.uid, {
         feedType: feedType === 'following' ? 'following' : 'for_you',
         limit: 10,
@@ -133,7 +136,9 @@ const formatDuration = (seconds) => {
       }
       setReels(mapped);
     } catch (err) {
-      console.error('Failed to load reels:', err);
+      // A failed read must not render the "No Sparks Yet" empty state, which
+      // claims the platform has no content rather than that the fetch failed.
+      setFeedError(err?.message || 'Could not load Sparks.');
       setReels([]);
       setHasMore(false);
       cursorRef.current = null;
@@ -141,6 +146,12 @@ const formatDuration = (seconds) => {
       setFeedLoading(false);
     }
   }, [user?.uid, targetReelId, mapVideoToReel]);
+
+  // Retry trigger for the error state below.
+  useEffect(() => {
+    if (feedNonce === 0) return;
+    loadReels(activeTab);
+  }, [feedNonce, activeTab, loadReels]);
 
   // Append the next page of reels so the feed does not stop at 10 videos.
   const loadMoreReels = useCallback(async () => {
@@ -418,6 +429,27 @@ const formatDuration = (seconds) => {
   }
 
   if (!feedLoading && (!reels || reels.length === 0 || !currentReel)) {
+    if (feedError) {
+      // The reel surface is always black; render a dark-native error block
+      // rather than the light-themed ErrorState (illegible here).
+      return (
+        <div className="h-full w-full bg-black flex flex-col items-center justify-center text-white p-6 text-center">
+          <div role="alert" className="max-w-sm space-y-4">
+            <div aria-hidden="true" className="w-14 h-14 mx-auto rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center text-2xl">
+              ⚠️
+            </div>
+            <h2 className="text-xl font-black">Could not load Sparks</h2>
+            <p className="text-white/60 text-sm">{feedError}</p>
+            <button
+              onClick={() => setFeedNonce((n) => n + 1)}
+              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="h-full w-full bg-black flex flex-col items-center justify-center text-white p-6 text-center">
         <Sparkles className="w-16 h-16 text-yellow-400 mb-4 animate-pulse" />

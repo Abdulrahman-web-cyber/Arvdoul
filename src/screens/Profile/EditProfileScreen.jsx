@@ -254,10 +254,12 @@ export default function EditProfileScreen() {
           const res = await userService.checkUsernameAvailability(raw);
           setUsernameAvailability(res?.available ? 'available' : 'taken');
         } else {
-          setUsernameAvailability('available');
+          // The check could not run — never claim the handle is available.
+          setUsernameAvailability('error');
         }
       } catch {
-        setUsernameAvailability(null);
+        // A failed availability check must not silently read as "no problem".
+        setUsernameAvailability('error');
       }
     }, 400);
     return () => clearTimeout(timer);
@@ -785,6 +787,12 @@ export default function EditProfileScreen() {
                   {usernameAvailability === 'invalid' && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400">
                       3-30 alphanumeric characters
+                    </span>
+                  )}
+                  {usernameAvailability === 'error' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400">
+                      <AlertCircle className="w-3 h-3" />
+                      Could not verify — we'll re-check on save
                     </span>
                   )}
 
