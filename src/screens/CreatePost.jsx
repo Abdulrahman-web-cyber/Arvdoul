@@ -1339,7 +1339,10 @@ function CreatePostProvider({ children }) {
         visibility: stateRef.current.visibility, boost: stateRef.current.boost,
       });
       dispatch({ type: "SET_INSIGHTS", payload: result });
-    } catch { /* silent */ }
+    } catch (insightsErr) {
+      // Non-fatal: the composer still works without the performance preview.
+      console.warn("Post performance prediction unavailable:", insightsErr);
+    }
   }, []);
 
   const debounceTimerRef = useRef(null);
@@ -1645,7 +1648,11 @@ function CreatePostProvider({ children }) {
             const updated = localList.map(p => p.id === instantPostId ? { ...p, id: result.postId, isOptimistic: false } : p);
             localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated));
             window.dispatchEvent(new CustomEvent('arvdoul:post_id_synced', { detail: { oldId: instantPostId, newId: result.postId } }));
-          } catch {}
+          } catch (syncErr) {
+            // The optimistic id could not be swapped for the real one; the local
+            // cache may keep a ghost entry until the next feed reconciliation.
+            console.warn("Post id sync failed:", syncErr);
+          }
 
           // Monetization coins boost
           if (current.boost?.type !== "none" && current.boost?.budget > 0) {
@@ -1653,7 +1660,10 @@ function CreatePostProvider({ children }) {
               const { getMonetizationService } = await import("../services/monetizationService.js");
               const monetizationService = services.current.monetization || getMonetizationService();
               await monetizationService.spendCoins(userNow.uid, current.boost.budget, "post_boost");
-            } catch {}
+            } catch (boostErr) {
+              console.warn("Post boost spend failed:", boostErr);
+              toast.error("Your post published, but the paid boost could not be applied.");
+            }
           }
 
           // Clear feed cache

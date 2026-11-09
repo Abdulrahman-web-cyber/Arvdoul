@@ -60,6 +60,7 @@ export default function ChatScreen() {
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [sharedMedia, setSharedMedia] = useState([]);
   const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search | saved
+  const [infoPanelError, setInfoPanelError] = useState(null);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [savedIds, setSavedIds] = useState({});
@@ -386,7 +387,21 @@ export default function ChatScreen() {
       setPinnedMessages(Array.isArray(pinnedIds) ? pinnedIds : []);
       const mediaList = mediaRes.status === 'fulfilled' ? mediaRes.value?.media : [];
       setSharedMedia(Array.isArray(mediaList) ? mediaList : []);
-    } catch { /* panel still opens with empty states */ }
+      const failed = [];
+      if (pinnedRes.status === 'rejected') failed.push('pinned messages');
+      if (mediaRes.status === 'rejected') failed.push('shared media');
+      if (failed.length) {
+        // The panel still opens, but say which sections could not be loaded so
+        // an empty section is not read as "there are none".
+        console.warn('[Chat] conversation info sections failed', { conversationId, failed });
+        setInfoPanelError(`Could not load ${failed.join(' or ')}.`);
+      } else {
+        setInfoPanelError(null);
+      }
+    } catch (err) {
+      console.warn('[Chat] conversation info panel load failed', err);
+      setInfoPanelError('Could not load conversation details.');
+    }
   }, [conversationId]);
 
   const runSearch = useCallback(async () => {
@@ -493,7 +508,10 @@ export default function ChatScreen() {
         list.forEach((m) => { if (m.conversationId === conversationId) ids[m.id] = true; });
         setSavedIds(ids);
       }
-    } catch { /* panel still opens */ }
+    } catch (err) {
+      console.warn('[Chat] saved messages load failed', err);
+      toastError('Could not load your saved messages.');
+    }
   }, [uid, conversationId]);
 
   const jumpToMessage = (messageId) => {
@@ -676,8 +694,8 @@ export default function ChatScreen() {
               onDelete={async () => {
                 try {
                   await getMessagingService().deleteMessage?.(msg.id, conversationId, uid);
-                } catch {
-                  /* best-effort */
+                } catch (err) {
+                  toastError(err?.message || 'Could not delete the message.');
                 }
               }}
               onSave={toggleSaveMessage}
@@ -763,6 +781,12 @@ export default function ChatScreen() {
                 );
               })}
             </div>
+
+            {infoPanelError && (
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">
+                {infoPanelError}
+              </div>
+            )}
 
             {infoTab === 'pinned' && (
               <div className="space-y-2">

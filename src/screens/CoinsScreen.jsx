@@ -214,7 +214,9 @@ export default function CoinsScreen() {
         const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
         const status = await svc.getSubscriptionStatus();
         if (status?.success && status.active) setCurrentSub(status.subscription);
-      } catch (err) { /* non-fatal */ }
+      } catch (err) {
+        console.warn('[Coins] subscription status unavailable', err);
+      }
     })();
   }, [user?.uid, monetization]);
 

@@ -1093,7 +1093,11 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         const blocked = await userService.getBlockedUsers(currentUser.uid);
         const ids = new Set(blocked?.blockedUsers?.map(u => u.id) || []);
         setBlockedUserIds(ids);
-      } catch { /* ignore */ }
+      } catch (err) {
+        // Without the block list, blocked users' comments would render; log so
+        // the degraded state is diagnosable.
+        console.warn('[Comments] blocked-users load failed', err);
+      }
       setBlockedLoading(false);
     })();
   }, [currentUser?.uid]);

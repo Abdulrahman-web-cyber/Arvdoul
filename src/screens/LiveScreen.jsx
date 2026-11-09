@@ -100,7 +100,9 @@ export default function LiveScreen() {
         try {
           const stream = await svc().getLiveStream(streamId);
           setViewerCount(stream?.viewerCount ?? stream?.stats?.totalViewers ?? 0);
-        } catch (e) { /* keep last count */ }
+        } catch (e) {
+          console.warn('[Live] viewer poll failed; keeping last count', e?.message);
+        }
       }, POLL_MS);
     } catch (err) {
       toast.error(err?.message || 'Could not start your stream.');
@@ -153,7 +155,9 @@ export default function LiveScreen() {
       try {
         const list = await svc().getLiveComments(watching.id, { limit: 50 });
         setComments(Array.isArray(list) ? list : []);
-      } catch (e) { /* keep */ }
+      } catch (e) {
+        console.warn('[Live] comment poll failed; keeping last list', e?.message);
+      }
     };
     loadComments();
     commentPollRef.current = setInterval(loadComments, POLL_MS);
@@ -164,7 +168,9 @@ export default function LiveScreen() {
           setWatching((w) => ({ ...w, ...fresh }));
           setWatchViewers(fresh.viewerCount ?? fresh.stats?.totalViewers ?? 0);
         } else { setWatching(null); toast.info('Stream has ended.'); }
-      } catch (e) { /* keep */ }
+      } catch (e) {
+        console.warn('[Live] stream poll failed; keeping last state', e?.message);
+      }
     }, POLL_MS);
 
     return () => {
