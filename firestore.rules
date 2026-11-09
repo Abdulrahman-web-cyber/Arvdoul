@@ -946,9 +946,13 @@ service cloud.firestore {
       // request.resource.data.userId == uid()` threw and denied EVERY read —
       // the wallet's pending-withdrawal breakdown and the admin payout queue
       // both silently showed zero. Reads key on the stored `resource.data`
-      // (owner or admin); creates key on the incoming `request.resource`.
+      // (owner or admin).
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      // Creation is server-authoritative: the `requestWithdrawal` callable locks
+      // the coins and writes the request in ONE transaction. A client `create`
+      // grant let a forged row exist with no coin lock behind it; no client code
+      // writes here, so close it.
+      allow create: if false;
       // The owner may only CANCEL their own pending request. Approval/paid/
       // rejected transitions are server-only (adminDecideWithdrawal), and the
       // amount/address are immutable once the request exists.

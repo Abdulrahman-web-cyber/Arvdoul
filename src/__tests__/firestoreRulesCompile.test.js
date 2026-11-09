@@ -237,6 +237,15 @@ describe('firestore.rules economy accounting (regression guards)', () => {
     expect(body).toMatch(/request\.resource\.data\.status in \['cancelled'\]/);
     expect(body).not.toMatch(/allow update: if isSignedIn\(\) && resource\.data\.userId == uid\(\) && resource\.data\.status == 'pending';\s*$/m);
   });
+
+  test('withdrawal requests are created only by the requestWithdrawal callable', () => {
+    // A client `create` grant let a forged request row exist with no coin lock
+    // behind it; the callable locks the coins and writes the row in one
+    // transaction. No client code writes here.
+    const body = blockBody('withdrawal_requests');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/allow create: if false;/);
+  });
 });
 
 describe('firestore.rules adversarial checks (emulator)', () => {
