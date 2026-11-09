@@ -625,8 +625,10 @@ class UltimateAnalyticsService {
           .reverse()
           .map(s => ({
             date: s.date,
-            followers: s.value || 0,
-            newFollowers: s.delta || 0,
+            // `_recordFollowerSnapshotIfDue` writes `value` only; a missing
+            // field is unknown, not a measured 0.
+            followers: typeof s.value === 'number' ? s.value : null,
+            newFollowers: typeof s.delta === 'number' ? s.delta : null,
           }));
         return growthData;
       }

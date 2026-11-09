@@ -431,3 +431,12 @@ Gates: `npm test` — **119 suites / 1446 passing / 5 skipped**;
 
 Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**;
 `npm run build` — ✓; `eslint src/ functions/ --quiet` — 0 errors.
+
+## Checkpoint — N179
+
+- **N179 (fixed)**: `getFollowerGrowth` mapped stored snapshots with
+  `followers: s.value || 0` / `newFollowers: s.delta || 0`. The snapshot writer
+  only writes `value`, so `delta` always collapsed to a fabricated 0. Now
+  `typeof === 'number'` guards → `null` when absent.
+
+Gates: `npm test` — **119 suites / 1448 passing / 5 skipped**; build ✓.
