@@ -2492,6 +2492,16 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
     expect(s).toContain('state.error =');
   });
 
+  test('analyticsService rethrows a failed read instead of caching fabricated zeros', () => {
+    const s = read('src/services/analyticsService.js');
+    // The old "resilient fallback" returned (and cached) 0 views / 0 reach /
+    // 0 coins as if measured, cleared the caller error branch and poisoned the
+    // cache so later reads never retried.
+    expect(s).not.toContain('fallbackAnalytics');
+    expect(s).toContain('Get user analytics failed');
+    expect(s).toMatch(/logger\.error\('Get user analytics failed'[\s\S]*?throw error;/);
+  });
+
   test('ProfileCreatorDashboard renders an unknown metric as —, not 0', () => {
     const s = read('src/components/profile/ProfileCreatorDashboard.jsx');
     expect(s).not.toMatch(/Number\(analytics\?\.totalViews\)\s*\|\|\s*0/);

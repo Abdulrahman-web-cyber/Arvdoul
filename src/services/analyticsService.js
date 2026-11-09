@@ -415,26 +415,14 @@ class UltimateAnalyticsService {
       this.cache.set(cacheKey, analytics);
       return analytics;
     } catch (error) {
-      logger.warn('Get user analytics error caught, returning resilient fallback:', { error: error.message, userId });
-      const fallbackAnalytics = {
-        userId,
-        timeframe,
-        hasData: false,
-        totalViews: 0,
-        totalReach: 0,
-        totalEngagement: 0,
-        coinsEarned: 0,
-        dailyStats: [],
-        topPosts: [],
-        growthRate: 0,
-        activeDays: 0,
-        demographics: { ageGroups: {}, gender: {}, locations: {}, interests: {} },
-        ranking: { rank: null, totalCreators: 0, percentile: null },
-        changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
-        lastUpdated: new Date().toISOString(),
-      };
-      this.cache.set(cacheKey, fallbackAnalytics);
-      return fallbackAnalytics;
+      // A failed read is *unknown*, not zero. Returning (and caching!) an
+      // all-zero "resilient fallback" rendered 0 views / 0 reach / 0 coins as
+      // measured data, cleared the caller's error branch and poisoned the cache
+      // so later reads returned the fabricated zeros without retrying. Surface
+      // the failure; the callers (analyticsStore, VideoAnalyticsScreen) already
+      // render an error state, and CreatePost treats analytics as advisory.
+      logger.error('Get user analytics failed', { error: error?.message, userId });
+      throw error;
     }
   }
 
