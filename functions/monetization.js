@@ -901,7 +901,9 @@ exports.getSponsoredSearchResult = functions.https.onCall(async (data, context) 
     try {
       const userSnap = await admin.firestore().collection('users').doc(uid).get();
       if (userSnap.exists) userProfile = userSnap.data();
-    } catch (_) {}
+    } catch (err) {
+      functions.logger.warn('Ad targeting profile read failed; using defaults', { uid, error: err.message });
+    }
 
     const adsSnapshot = await admin.firestore().collection('ads')
       .where('placements', 'array-contains', 'search')

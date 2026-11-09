@@ -293,7 +293,9 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
       const pushRef = db.collection('push_tokens').doc(userId);
       await deleteSubcollectionsSequentially(pushRef, ['devices']);
       await pushRef.delete();
-    } catch (_) {}
+    } catch (err) {
+      log('warn', 'push token cleanup failed during account deletion', { userId, error: err.message });
+    }
 
     // User feeds subcollection
     const feedsRef = db.collection('users').doc(userId).collection('feeds');
