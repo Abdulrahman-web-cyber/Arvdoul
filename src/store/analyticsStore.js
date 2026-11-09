@@ -14,6 +14,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { logger } from '../utils/Logger.js';
 const initialState = {
   // Analytics data
   analytics: null,
@@ -74,27 +75,15 @@ export const useAnalyticsStore = create(
           state.activeDays = analytics.activeDays || 0;
         });
       } catch (error) {
-        console.warn('❌ Load analytics fallback used:', error);
-        const fallbackAnalytics = {
-          userId,
-          timeframe: selectedTimeframe,
-          totalViews: 0,
-          totalReach: 0,
-          totalEngagement: 0,
-          coinsEarned: 0,
-          dailyStats: [],
-          topPosts: [],
-          ranking: null,
-          demographics: null,
-          growthRate: 0,
-          activeDays: 0,
-          changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
-          lastUpdated: new Date().toISOString(),
-        };
+        // A failed read is *unknown*, not zero: the fabricated all-zero
+        // fallback rendered "0 views / 0 reach / 0 engagement / 0 coins earned"
+        // as if measured, and cleared `error` so the dashboard's error branch
+        // was unreachable. Surface the failure and leave analytics null.
+        logger.error('Analytics load failed', { userId, error: error?.message });
         set((state) => {
-          state.analytics = fallbackAnalytics;
+          state.analytics = null;
           state.loading = false;
-          state.error = null;
+          state.error = error?.message || 'Could not load analytics.';
           state.dailyStats = [];
           state.topPosts = [];
           state.ranking = null;

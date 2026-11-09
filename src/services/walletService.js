@@ -20,9 +20,15 @@ class WalletService {
       const userSnap = await getDoc(doc(db, 'users', userId));
       const userData = userSnap.exists() ? userSnap.data() : {};
 
-      const coins = Number(userData.coins || userData.coinBalance || 0);
-      const totalEarned = Number(userData.totalEarned || userData.lifetimeCoinsEarned || 0);
-      const totalSpent = Number(userData.totalSpent || 0);
+      // An absent balance field is *unknown*, not 0: the wallet card would
+      // otherwise claim an empty ledger it never read. A present field of 0
+      // stays a real 0.
+      const rawCoins = userData.coins ?? userData.coinBalance ?? null;
+      const coins = rawCoins == null ? null : Number(rawCoins);
+      const rawEarned = userData.totalEarned ?? userData.lifetimeCoinsEarned ?? null;
+      const totalEarned = rawEarned == null ? null : Number(rawEarned);
+      const rawSpent = userData.totalSpent ?? null;
+      const totalSpent = rawSpent == null ? null : Number(rawSpent);
 
       // `lockedCoins` is the server's authoritative hold (functions/monetization.js
       // requestWithdrawal increments it in the same transaction that writes the
@@ -31,6 +37,7 @@ class WalletService {
       // ignored `pending_review`, letting the wallet advertise more spendable
       // coins than the server would actually allow. The query is now display-only.
       const lockedCoins = Number(userData.lockedCoins || 0);
+      const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);
 
       // Fetch pending withdrawals for the itemised breakdown only.
       let pendingWithdrawals = 0;
@@ -55,7 +62,7 @@ class WalletService {
       return {
         userId,
         coins,
-        availableCoins: Math.max(0, coins - lockedCoins),
+        availableCoins,
         pendingCoins: pendingWithdrawals,
         heldCoins: lockedCoins,
         totalEarned,

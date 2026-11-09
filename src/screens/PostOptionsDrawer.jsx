@@ -223,7 +223,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
           userService.getUserProfile(ownerId),
         ]);
         if (controller.signal.aborted || !mountedRef.current) return;
-        const score = profile?.creatorScore || Math.min(100, Math.floor((profile?.followerCount || 0) / 1000));
+        // A derived "score" from follower count is a fabricated metric; only a
+        // real creatorScore is shown, else the row stays hidden.
+        const score = typeof profile?.creatorScore === 'number' ? profile.creatorScore : null;
         const data = {
           position,
           followerCount: profile?.followerCount || post.followerCount || 0,

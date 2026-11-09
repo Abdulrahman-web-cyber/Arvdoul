@@ -130,7 +130,11 @@ export default function WalletScreen() {
       toast.error(`Minimum withdrawal amount is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins ($${MIN_WITHDRAWAL_USD} USD).`);
       return;
     }
-    if (amount > (wallet?.availableCoins || 0)) {
+    if (wallet?.availableCoins == null) {
+      toast.error('Your available balance could not be verified. Refresh and try again.');
+      return;
+    }
+    if (amount > wallet.availableCoins) {
       toast.error('Insufficient available coin balance.');
       return;
     }
@@ -253,7 +257,7 @@ export default function WalletScreen() {
                 {fmtCoins(wallet?.totalEarned)} Coins
               </span>
               <span className="text-[10px] text-gray-500 block">
-                ${formatCoinsAsUsd(wallet?.totalEarned ?? 0)} USD
+                {wallet?.totalEarned == null ? '—' : `$${formatCoinsAsUsd(wallet.totalEarned)} USD`}
               </span>
             </div>
             <div>

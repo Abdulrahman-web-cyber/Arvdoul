@@ -2154,7 +2154,10 @@ describe('Wallet availability mirrors the server hold (lockedCoins)', () => {
   test('walletService derives availableCoins from lockedCoins, not a partial status sum', () => {
     const s = read('src/services/walletService.js');
     expect(s).toContain('const lockedCoins = Number(userData.lockedCoins || 0)');
-    expect(s).toContain('availableCoins: Math.max(0, coins - lockedCoins)');
+    // Availability mirrors the server hold; an unknown balance stays null
+    // rather than advertising 0 spendable coins.
+    expect(s).toContain('const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);');
+    expect(s).toContain('availableCoins,');
     // `pending_review` requests lock coins too; omitting it over-reported balance.
     expect(s).toContain("['pending', 'pending_review', 'processing']");
   });
@@ -2475,5 +2478,64 @@ describe('Wallet/economy surfaces never fabricate an empty balance', () => {
     const s = read('src/screens/VideoAnalyticsScreen.jsx');
     expect(s).not.toContain("(walletRes.value?.pendingCoins || 0) : 0");
     expect(s).toContain('pendingCoins: null');
+  });
+});
+
+describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N154)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('analyticsStore surfaces the failure instead of an all-zero fallback', () => {
+    const s = read('src/store/analyticsStore.js');
+    expect(s).not.toContain('Load analytics fallback used');
+    expect(s).not.toContain('fallbackAnalytics');
+    expect(s).toContain('state.analytics = null');
+    expect(s).toContain('state.error =');
+  });
+
+  test('ProfileCreatorDashboard renders an unknown metric as —, not 0', () => {
+    const s = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    expect(s).not.toMatch(/Number\(analytics\?\.totalViews\)\s*\|\|\s*0/);
+    expect(s).toContain("views === null ? '—'");
+    expect(s).toContain("coins === null ? '—'");
+  });
+});
+
+describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileMetricsGrid formatNumber does not fabricate 0 for a missing count', () => {
+    const s = read('src/components/profile/ProfileMetricsGrid.jsx');
+    expect(s).not.toContain("if (num === undefined || num === null) return '0';");
+    expect(s).toContain("if (num === undefined || num === null) return '—';");
+    expect(s).not.toContain('profile?.followersCount ?? 0');
+  });
+
+  test('RankingsScreen renders an unknown score as —, not 0', () => {
+    const s = read('src/screens/Rankings/RankingsScreen.jsx');
+    expect(s).not.toContain('item.score?.toLocaleString() || 0');
+    expect(s).toContain("typeof item.score === 'number'");
+  });
+
+  test('ProgressScreen renders unknown XP/coins as —, not 0', () => {
+    const s = read('src/screens/Progression/ProgressScreen.jsx');
+    expect(s).not.toContain('Total XP: {(user?.experience || 0).toLocaleString()}');
+    expect(s).not.toContain('{user?.coins || 0}');
+  });
+
+  test('walletService leaves an unknown balance null instead of 0', () => {
+    const s = read('src/services/walletService.js');
+    expect(s).not.toContain("Number(userData.coins || userData.coinBalance || 0)");
+    expect(s).toContain('const rawCoins = userData.coins ?? userData.coinBalance ?? null;');
+  });
+
+  test('PostOptionsDrawer does not derive a creator score from follower count', () => {
+    const s = read('src/screens/PostOptionsDrawer.jsx');
+    expect(s).not.toContain('Math.floor((profile?.followerCount || 0) / 1000)');
+  });
+
+  test('WalletScreen gates withdrawal on a verified balance', () => {
+    const s = read('src/screens/Economy/WalletScreen.jsx');
+    expect(s).not.toContain('amount > (wallet?.availableCoins || 0)');
+    expect(s).toContain('wallet?.availableCoins == null');
   });
 });

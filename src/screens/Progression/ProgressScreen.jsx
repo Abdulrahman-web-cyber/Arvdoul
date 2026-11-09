@@ -138,7 +138,7 @@ export default function ProgressScreen() {
           {/* Progress Bar */}
           <div className="mt-6 space-y-2">
             <div className="flex justify-between text-xs text-gray-400">
-              <span>{levelInfo?.xpIntoLevel || 0} XP earned this level</span>
+              <span>{levelInfo?.xpIntoLevel != null ? `${levelInfo.xpIntoLevel} XP earned this level` : 'XP unavailable'}</span>
               <span>
                 {!hasLevel
                   ? 'Progress unavailable'
@@ -163,7 +163,7 @@ export default function ProgressScreen() {
             </div>
             <div className="flex justify-between items-center text-xs text-gray-500 pt-1">
               <span>Stage Progress: {levelInfo?.progress || 0}%</span>
-              <span>Total XP: {(user?.experience || 0).toLocaleString()}</span>
+              <span>Total XP: {user?.experience != null ? Number(user.experience).toLocaleString() : '—'}</span>
             </div>
           </div>
 
@@ -188,7 +188,7 @@ export default function ProgressScreen() {
             <div className="text-center">
               <div className="flex items-center justify-center space-x-1 text-purple-400">
                 <Coins className="w-4 h-4" />
-                <span className="text-lg font-bold">{user?.coins || 0}</span>
+                <span className="text-lg font-bold">{user?.coins != null ? Number(user.coins).toLocaleString() : '—'}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">Coins Balance</p>
             </div>

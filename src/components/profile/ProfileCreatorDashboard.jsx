@@ -139,16 +139,18 @@ const ProfileCreatorDashboard = memo(({
     onTimeframeChange?.(val);
   };
 
-  // Real metrics from analytics store without fabricated defaults
-  const views = Number(analytics?.totalViews) || 0;
-  const reach = Number(analytics?.totalReach) || 0;
-  const engagement = Number(analytics?.totalEngagement) || 0;
-  const coins = Number(analytics?.coinsEarned) || 0;
+  // Real metrics from analytics; an absent metric is *unknown* (rendered as —),
+  // never a fabricated 0 that claims a measured empty audience.
+  const metric = (v) => (v == null ? null : Number(v));
+  const views = metric(analytics?.totalViews);
+  const reach = metric(analytics?.totalReach);
+  const engagement = metric(analytics?.totalEngagement);
+  const coins = metric(analytics?.coinsEarned);
 
-  const viewsTrend = analytics?.changes?.views ?? analytics?.viewsGrowth ?? 0;
-  const reachTrend = analytics?.changes?.reach ?? analytics?.reachGrowth ?? 0;
-  const engagementTrend = analytics?.changes?.engagement ?? analytics?.engagementGrowth ?? 0;
-  const coinsTrend = analytics?.changes?.coins ?? analytics?.coinsGrowth ?? 0;
+  const viewsTrend = analytics?.changes?.views ?? analytics?.viewsGrowth ?? null;
+  const reachTrend = analytics?.changes?.reach ?? analytics?.reachGrowth ?? null;
+  const engagementTrend = analytics?.changes?.engagement ?? analytics?.engagementGrowth ?? null;
+  const coinsTrend = analytics?.changes?.coins ?? analytics?.coinsGrowth ?? null;
 
   // Extract real daily stats for sparklines if available. With fewer than two
   // points there is no trend to draw: we render an explicit "no trend data"
@@ -161,6 +163,7 @@ const ProfileCreatorDashboard = memo(({
   const coinsSeries = hasTrend ? dailyStats.map(d => Number(d.coins) || 0) : null;
 
   const formatTrend = (trend) => {
+    if (trend == null) return { text: '—', isNeutral: true };
     const num = Number(trend) || 0;
     if (num > 0) return { text: `▲ +${num.toFixed(1)}%`, isPositive: true };
     if (num < 0) return { text: `▼ ${num.toFixed(1)}%`, isPositive: false };
@@ -247,7 +250,7 @@ const ProfileCreatorDashboard = memo(({
               Profile Views
             </div>
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
-              {views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views}
+              {views === null ? '—' : views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views}
             </div>
             <div className={cn(
               "flex items-center gap-1 text-[10px] font-bold mt-0.5",
@@ -271,7 +274,7 @@ const ProfileCreatorDashboard = memo(({
               Reach
             </div>
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
-              {reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach}
+              {reach === null ? '—' : reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach}
             </div>
             <div className={cn(
               "flex items-center gap-1 text-[10px] font-bold mt-0.5",
@@ -295,7 +298,7 @@ const ProfileCreatorDashboard = memo(({
               Engagement
             </div>
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
-              {engagement >= 1000 ? `${(engagement / 1000).toFixed(1)}K` : engagement}
+              {engagement === null ? '—' : engagement >= 1000 ? `${(engagement / 1000).toFixed(1)}K` : engagement}
             </div>
             <div className={cn(
               "flex items-center gap-1 text-[10px] font-bold mt-0.5",
@@ -319,7 +322,7 @@ const ProfileCreatorDashboard = memo(({
               Coins Earned
             </div>
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
-              {coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins}
+              {coins === null ? '—' : coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins}
             </div>
             <div className={cn(
               "flex items-center gap-1 text-[10px] font-bold mt-0.5",

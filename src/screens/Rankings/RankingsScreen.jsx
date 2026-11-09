@@ -176,7 +176,7 @@ const RankCard = ({ rank, item, isDark }) => {
       {/* Score & Trend */}
       <div className="text-right shrink-0">
         <div className="font-black text-sm sm:text-base text-purple-400">
-          {item.score?.toLocaleString() || 0}
+          {typeof item.score === 'number' ? item.score.toLocaleString() : '—'}
         </div>
         <TrendIndicator trend={item.trend} />
       </div>
