@@ -36,7 +36,9 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
                   name = p.displayName || p.username || name;
                   avatar = p.photoURL;
                 }
-              } catch {}
+              } catch (e) {
+                console.warn('In-feed story author profile read failed', e?.message);
+              }
               return {
                 id: g.userId,
                 name,

@@ -195,7 +195,9 @@ const ProfileLocationModal = memo(({
           localAuth.location = finalLocation;
           localStorage.setItem('user', JSON.stringify(localAuth));
         }
-      } catch {}
+      } catch (e) {
+        console.warn('Cached auth-user location sync failed', e?.message);
+      }
 
       toast.success(finalLocation ? `Location updated to "${finalLocation}"!` : 'Location set to private');
       if (onLocationUpdated) onLocationUpdated(finalLocation);

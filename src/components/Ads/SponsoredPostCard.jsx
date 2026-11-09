@@ -114,7 +114,7 @@ export default function SponsoredPostCard({
             try {
               getMonetizationService().recordAdImpression(adId, placement);
             } catch (e) {
-              // silent catch
+              console.warn('Ad impression not recorded', e?.message);
             }
           }
         });
@@ -132,7 +132,9 @@ export default function SponsoredPostCard({
     if (!adId) return;
     try {
       getMonetizationService().recordAdImpression(adId, `${placement}_click`);
-    } catch {}
+    } catch (e) {
+      console.warn('Ad click impression not recorded', e?.message);
+    }
     if (ad && adClickUrl(ad)) {
       window.open(adClickUrl(ad), '_blank', 'noopener,noreferrer');
     }
@@ -186,7 +188,9 @@ export default function SponsoredPostCard({
       const key = hiddenAdsKey(user?.uid);
       const list = JSON.parse(localStorage.getItem(key) || '[]');
       if (!list.includes(ad.id)) localStorage.setItem(key, JSON.stringify([...list, ad.id].slice(-100)));
-    } catch {}
+    } catch (e) {
+      console.warn('Hidden-ad record write failed', e?.message);
+    }
     onAdHidden(ad.id);
     setAd(null);
     setAdState('empty');

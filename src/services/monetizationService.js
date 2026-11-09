@@ -702,7 +702,9 @@ class MonetizationService {
       try {
         const subDoc = await getDoc(doc(this.db, 'subscriptions', uid));
         if (subDoc.exists()) return subDoc.data();
-      } catch (e) {}
+      } catch (e) {
+        log.warn('Subscription fallback read failed', { uid, error: e?.message });
+      }
       return { active: false, tier: null };
     }
   }
@@ -743,7 +745,9 @@ class MonetizationService {
       try {
         const snap = await getDoc(doc(this.db, 'payout_settings', uid));
         if (snap.exists()) return snap.data();
-      } catch (e) {}
+      } catch (e) {
+        log.warn('Payout-settings fallback read failed', { uid, error: e?.message });
+      }
       // Honest unconfigured state — never claim an active payout account
       // that does not exist.
       return { enabled: false, accountStatus: 'unconfigured', currency: 'USD' };

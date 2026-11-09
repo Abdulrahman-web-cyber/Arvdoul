@@ -391,7 +391,9 @@ export const useProfileStore = create(
               }
             }
           }
-        } catch {}
+        } catch (e) {
+          console.warn('Local post merge into profile failed', e?.message);
+        }
         
         if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {

@@ -352,7 +352,9 @@ export function AuthProvider({ children }) {
             try {
               const data = JSON.parse(e.newValue);
               handleMessage({ data });
-            } catch (err) {}
+            } catch (err) {
+              console.warn('Cross-tab auth broadcast parse failed', err?.message);
+            }
           }
         };
         window.addEventListener('storage', storageHandler);
