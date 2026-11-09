@@ -784,6 +784,11 @@ export function AuthProvider({ children }) {
               import('../services/monetizationService.js')
                 .then(({ purgeMonetizationQueueForOwner }) => purgeMonetizationQueueForOwner(lastProfileUidRef.current))
                 .catch((err) => console.warn('[Auth] monetization-queue purge on switch failed', err?.message));
+              // The notifications queue is a third store; a queued send/mark-read
+              // must not replay under the incoming account.
+              import('../services/notificationsService.js')
+                .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] notification-queue purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -831,6 +836,9 @@ export function AuthProvider({ children }) {
               import('../services/monetizationService.js')
                 .then(({ purgeMonetizationQueueForOwner }) => purgeMonetizationQueueForOwner(departingUid))
                 .catch((err) => console.warn('[Auth] monetization-queue purge on logout failed', err?.message));
+              import('../services/notificationsService.js')
+                .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] notification-queue purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {

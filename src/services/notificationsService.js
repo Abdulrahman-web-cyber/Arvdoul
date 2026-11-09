@@ -29,10 +29,44 @@ function safeLocalStorageRemove(key) {
 }
 
 //  OFFLINE QUEUE (IndexedDB with idb library, cursor iteration)
+const NOTIFICATIONS_OFFLINE_DB = 'arvdoul_notifications_offline';
+
+/**
+ * Drop every queued notification op owned by `uid` from the device-local
+ * queue. Module-level so it can run on sign-out even when the notifications
+ * service was never initialized this session (in which case its instance queue
+ * is null but the IndexedDB store may still hold a previous session's ops).
+ */
+export async function purgeNotificationQueueForOwner(uid) {
+  if (!uid || typeof indexedDB === 'undefined') return 0;
+  try {
+    const db = await openDB(NOTIFICATIONS_OFFLINE_DB, 1, {
+      upgrade(upgradeDb) {
+        if (!upgradeDb.objectStoreNames.contains('queue')) {
+          upgradeDb.createObjectStore('queue', { autoIncrement: true });
+        }
+      },
+    });
+    const all = await db.getAll('queue');
+    const keys = await db.getAllKeys('queue');
+    let removed = 0;
+    for (let i = 0; i < all.length; i += 1) {
+      if (all[i].ownerUid === uid) {
+        await db.delete('queue', keys[i]);
+        removed += 1;
+      }
+    }
+    return removed;
+  } catch (e) {
+    logger.warn('notification offline queue purge failed', { error: e?.message });
+    return 0;
+  }
+}
+
 class OfflineNotificationQueue {
   constructor(service) {
     this.service = service;
-    this.dbPromise = openDB('arvdoul_notifications_offline', 1, {
+    this.dbPromise = openDB(NOTIFICATIONS_OFFLINE_DB, 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('queue')) {
           db.createObjectStore('queue', { autoIncrement: true });
@@ -47,12 +81,27 @@ class OfflineNotificationQueue {
   }
 
   async add(operation, params) {
+    // Resolve and persist the owner so a later drain can prove which account
+    // queued the op. Without this a notification queued by account A drained
+    // under account B on the same device — sending/marking-read as the wrong
+    // user. The owner comes from the live session; `params` never carries it.
+    const ownerUid = this.service?.authMethods?.getCurrentUser?.()?.uid || null;
     const db = await this.dbPromise;
     const tx = db.transaction('queue', 'readwrite');
     const store = tx.objectStore('queue');
-    await store.add({ operation, params, timestamp: Date.now() });
+    await store.add({ operation, params, ownerUid, timestamp: Date.now() });
     await tx.done;
     this.processAll();
+  }
+
+  /** Drop every queued op owned by `uid` (account switch / sign-out). */
+  async purgeOwner(uid) {
+    if (!uid) return 0;
+    const db = await this.dbPromise;
+    const all = await this.getAll();
+    const owned = all.filter((item) => item.ownerUid === uid);
+    for (const item of owned) await this.delete(item.id);
+    return owned.length;
   }
 
   async getAll() {
@@ -78,8 +127,14 @@ class OfflineNotificationQueue {
   async processAll() {
     if (!this.service || !this.service.initialized || this.isProcessing) return;
     this.isProcessing = true;
+    // Only replay ops owned by the live session. A queued notification belongs
+    // to the account that created it; replaying it under a different signed-in
+    // account would send/mark-read as the wrong user. Ops with no recorded
+    // owner (queued before this field existed) are skipped rather than guessed.
+    const sessionUid = this.service?.authMethods?.getCurrentUser?.()?.uid || null;
     const queue = await this.getAll();
     for (const item of queue) {
+      if (!sessionUid || item.ownerUid !== sessionUid) continue;
       try {
         if (item.operation === 'sendNotification') {
           await this.service._sendNotificationViaCF(item.params);
@@ -1082,6 +1137,10 @@ const notificationsService = {
   getStats: () => getNotificationsService().getStats(),
   clearCache: () => getNotificationsService().clearCache(),
   destroy: () => getNotificationsService().destroy(),
+  purgeQueueForOwner: (uid) => {
+    const svc = getNotificationsService();
+    return svc.offlineQueue ? svc.offlineQueue.purgeOwner(uid) : 0;
+  },
   TYPES: NOTIFICATIONS_CONFIG.TYPES
 };
 
