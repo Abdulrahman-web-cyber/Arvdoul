@@ -534,7 +534,9 @@ export default function ChatScreen() {
       // the message) and try again; otherwise the user can search for it.
       getMessagingService().getMessages(conversationId, { limit: 50 }).then((res) => {
         if (res?.success) setMessages(res.messages || []);
-      }).catch(() => {});
+      }).catch((e) => {
+        console.warn('Message search reload failed', e?.message);
+      });
       toastError('Message not in the loaded window — try searching.');
     }, 100);
   };

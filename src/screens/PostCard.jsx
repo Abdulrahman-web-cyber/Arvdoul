@@ -566,7 +566,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (!isAuthor && currentUser?.uid) {
       userService.getFollowStatus(currentUser.uid, post.authorId).then(res => {
         if (res.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
-      }).catch(() => {});
+      }).catch((e) => {
+        console.warn('Follow-state read failed', e?.message);
+      });
     }
   }, [currentUser?.uid, post.authorId, isAuthor]);
 
@@ -787,7 +789,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         if (newLiked && post.authorId && post.authorId !== userId) {
           notificationService.sendNotification?.({
             type: 'like', recipientId: post.authorId, senderId: userId, targetId: post.id
-          }).catch(() => {});
+          }).catch((e) => {
+            console.warn('Like notification not delivered', e?.message);
+          });
         }
       } catch (err) {
         // A thrown write (network/offline) rolls the optimistic state back.

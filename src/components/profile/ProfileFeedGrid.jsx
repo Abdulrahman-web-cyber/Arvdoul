@@ -179,7 +179,9 @@ const ProfileFeedGrid = memo(({
         title: post?.title || 'Arvdoul Post',
         text: post?.content || post?.caption || '',
         url,
-      }).catch(() => {});
+      }).catch(() => {
+        /* the user dismissed the native share sheet */
+      });
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
       toast.success('Post link copied to clipboard');

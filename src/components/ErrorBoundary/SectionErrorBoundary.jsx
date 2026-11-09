@@ -100,7 +100,9 @@ export class SectionErrorBoundary extends Component {
       navigator.clipboard.writeText(errText).then(() => {
         this.setState({ copied: true });
         setTimeout(() => this.setState({ copied: false }), 2000);
-      }).catch(() => {});
+      }).catch((e) => {
+        console.warn('Copy error details failed', e?.message);
+      });
     }
   };
 

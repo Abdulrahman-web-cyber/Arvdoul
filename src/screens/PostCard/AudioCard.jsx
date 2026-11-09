@@ -521,7 +521,9 @@ const AudioCard = React.memo(({
           // Background fetch for cache
           fetch(audio?.url, { signal }).then(res => res.blob()).then(b => {
             if (isMountedRef.current) audioCache.set(audio?.url, b);
-          }).catch(() => {});
+          }).catch((e) => {
+            console.warn('Audio cache prefetch failed', e?.message);
+          });
         }
         // Wait for metadata to be ready
         await new Promise((resolve, reject) => {

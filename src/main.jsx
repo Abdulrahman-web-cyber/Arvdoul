@@ -46,7 +46,9 @@ function setupServiceWorker() {
           // Keep the SW fresh: check for updates when the tab regains focus.
           document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-              registration.update().catch(() => {});
+              registration.update().catch((e) => {
+                console.warn('Service-worker update failed', e?.message);
+              });
             }
           });
         },
@@ -65,7 +67,9 @@ function setupServiceWorker() {
       }
     }).then(() => {
       console.info('🧹 Dev mode: stale service worker unregistered, caches cleared');
-    }).catch(() => {});
+    }).catch((e) => {
+      console.warn('Dev SW cleanup failed', e?.message);
+    });
   }
 }
 setupServiceWorker();

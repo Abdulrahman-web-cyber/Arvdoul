@@ -1483,7 +1483,9 @@ function CreatePostProvider({ children }) {
           thumbnailUrl: media[0]?.thumbnail || media[0]?.url || "",
           visibility: current.visibility || "public",
         });
-        if (current.draftId) deleteDraft(current.draftId).catch(() => {});
+        if (current.draftId) deleteDraft(current.draftId).catch((e) => {
+          console.warn('Draft cleanup after publish failed', e?.message);
+        });
         toast.success("Post updated!");
         publishLockRef.current = false;
         navigate(`/post/${editPostId}`);
@@ -1593,7 +1595,9 @@ function CreatePostProvider({ children }) {
 
       // 2. Clear draft
       if (current.draftId) {
-        deleteDraft(current.draftId).catch(() => {});
+        deleteDraft(current.draftId).catch((e) => {
+          console.warn('Draft cleanup after publish failed', e?.message);
+        });
       }
 
       // 3. Instant UI feedback & Navigation (User never waits!)
