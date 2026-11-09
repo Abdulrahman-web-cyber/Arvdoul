@@ -710,6 +710,10 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       // A "system" message may not smuggle real content.
       await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_evil'),
         { ...sysMsg({ userId: 'bob' }), text: 'free advertising' }));
+      // A non-admin may only emit the two self-service event types; a member
+      // cannot forge a "role_changed" notice about themselves.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_role'),
+        { ...sysMsg({ userId: 'bob' }), eventType: 'role_changed' }));
       // A member cannot author a normal message as someone else.
       await assertFails(setDoc(doc(bob, 'conversations/g1/messages/forged'),
         { type: 'text', text: 'hi', senderId: 'carol' }));
@@ -729,6 +733,28 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       // The admin may remove a member.
       await assertSucceeds(updateDoc(doc(alice, 'conversations/g1'), {
         participants: arrayRemove('carol'), participantCount: increment(-1),
+      }));
+
+      // A departing SOLE admin transfers first (they are no longer an admin
+      // when the `admin_transferred` notice is written) then leaves — both
+      // notices must still be creatable via the self carve-out.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/g2'), {
+          id: 'g2', type: 'group', participants: ['dave', 'erin'],
+          participantCount: 2, admins: ['dave'], roles: { dave: 'admin', erin: 'member' },
+          createdBy: 'dave',
+        });
+      });
+      const dave = env.authenticatedContext('dave').firestore();
+      await assertSucceeds(updateDoc(doc(dave, 'conversations/g2'), {
+        admins: ['erin'], 'roles.erin': 'admin',
+      }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/g2/messages/sys_xfer'),
+        { ...sysMsg({ from: 'dave', to: 'erin' }), eventType: 'admin_transferred' }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/g2/messages/sys_left2'),
+        sysMsg({ userId: 'dave' })));
+      await assertSucceeds(updateDoc(doc(dave, 'conversations/g2'), {
+        participants: arrayRemove('dave'), participantCount: increment(-1),
       }));
     } finally {
       await env.cleanup();
