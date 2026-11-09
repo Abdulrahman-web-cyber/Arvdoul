@@ -347,7 +347,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
         shared = true;
       }
       if (shared) {
-        await callWithRetry(() => firestoreService.sharePost(post.id, currentUser.uid)).catch(() => {});
+        await callWithRetry(() => firestoreService.sharePost(post.id, currentUser.uid)).catch((e) => {
+          console.warn('[PostOptions] share not recorded', e?.message);
+        });
         debouncedAnalytics('post_option_click', { action: 'share', postId: post.id });
       }
     } catch (err) {

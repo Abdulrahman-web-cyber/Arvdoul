@@ -75,7 +75,9 @@ export default function SpacesScreen() {
   const handleJoinSpace = async (space) => {
     const previous = activeSpace;
     if (previous?.id && previous.id !== space.id && user?.uid) {
-      spacesService.leaveSpace(previous.id, user.uid).catch(() => {});
+      spacesService.leaveSpace(previous.id, user.uid).catch((e) => {
+        console.warn('[Spaces] leave previous space failed', e?.message);
+      });
     }
     setActiveSpace(space);
     setIsHandRaised(false);

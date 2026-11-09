@@ -80,7 +80,9 @@ export default function VideoDetailScreen() {
         // Record a real view once
         if (!viewedRef.current && user?.uid) {
           viewedRef.current = true;
-          videoService.recordVideoView(data.id, { duration: 3 }).catch(() => {});
+          videoService.recordVideoView(data.id, { duration: 3 }).catch((e) => {
+            console.warn('[VideoDetail] view not recorded', e?.message);
+          });
         }
 
         // Resolve this viewer's like/save state (the public doc only carries
@@ -120,7 +122,9 @@ export default function VideoDetailScreen() {
       else { await navigator.clipboard.writeText(url); toast.success('Link copied!'); }
     } catch (err) { /* canceled */ }
     // Server-owned share counter (best-effort, never a local guess).
-    videoService.shareVideo(video.id).catch(() => {});
+    videoService.shareVideo(video.id).catch((e) => {
+      console.warn('[VideoDetail] share not recorded', e?.message);
+    });
   };
 
   const handleSave = async () => {

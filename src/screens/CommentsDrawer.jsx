@@ -1314,7 +1314,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (post?.authorId && post.authorId !== currentUser.uid && real.id) {
         notificationsService.createCommentNotification?.(
           postId, currentUser.uid, post.authorId, real.id, parentId ? 'reply' : 'comment'
-        ).catch(() => {});
+        ).catch((e) => console.warn('[Comments] comment notification failed', e?.message));
       }
       setReplyTarget(null);
     } catch (err) {

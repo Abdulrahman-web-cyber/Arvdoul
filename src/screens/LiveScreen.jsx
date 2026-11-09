@@ -132,7 +132,9 @@ export default function LiveScreen() {
       if (durationRef.current) clearInterval(durationRef.current);
       if (viewerPollRef.current) clearInterval(viewerPollRef.current);
       if (myStreamRef.current && user?.uid) {
-        svc().endLiveStream(myStreamRef.current.id, user.uid).catch(() => {});
+        svc().endLiveStream(myStreamRef.current.id, user.uid).catch((e) => {
+          console.warn('[Live] end-stream on unmount failed', e?.message);
+        });
       }
     };
   }, [user?.uid]);
@@ -149,7 +151,9 @@ export default function LiveScreen() {
     if (!watching || !user?.uid) return;
     if (!joinedRef.current) {
       joinedRef.current = true;
-      svc().joinLiveStream(watching.id, user.uid).catch(() => {});
+      svc().joinLiveStream(watching.id, user.uid).catch((e) => {
+        console.warn('[Live] join-stream failed; viewer may not be counted', e?.message);
+      });
     }
     const loadComments = async () => {
       try {
@@ -177,7 +181,9 @@ export default function LiveScreen() {
       if (commentPollRef.current) clearInterval(commentPollRef.current);
       if (watchPollRef.current) clearInterval(watchPollRef.current);
       if (joinedRef.current) {
-        svc().leaveLiveStream(watching.id, user.uid).catch(() => {});
+        svc().leaveLiveStream(watching.id, user.uid).catch((e) => {
+          console.warn('[Live] leave-stream failed; viewer count may linger', e?.message);
+        });
         joinedRef.current = false;
       }
     };
