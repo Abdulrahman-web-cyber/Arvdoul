@@ -170,6 +170,15 @@ describe('listEdges (bounded, index-backed)', () => {
     expect(page.ids).toHaveLength(2);
     expect(page.hasMore).toBe(true);
   });
+
+  test('blocked_by lists users who block the viewer (reverse direction)', async () => {
+    store.set('blocks/me_x', { blockerId: 'me', blockedId: 'x' });
+    store.set('blocks/y_me', { blockerId: 'y', blockedId: 'me' });
+    const blocked = await getSocialGraphService().listEdges('me', 'blocked');
+    const blockedBy = await getSocialGraphService().listEdges('me', 'blocked_by');
+    expect(blocked.ids).toEqual(['x']);
+    expect(blockedBy.ids).toEqual(['y']);
+  });
 });
 
 describe('listMutualConnections (friends = mutual follow)', () => {

@@ -6,8 +6,8 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 
 - Baseline: full Jest suite green (121 suites, 1464 passed, 5 skipped); `npm run
   build` green; `npm run lint` exit 0 (0 errors, warnings only).
-- Latest verified: 130 suites, 1534 passed, 5 skipped; `npm run build` green;
-  `npm run lint` exit 0 (0 errors, 866 warnings).
+- Latest verified: 132 suites, 1550 passed, 5 skipped; `npm run build` green;
+  `npm run lint` exit 0 (0 errors, 867 warnings).
 - Emulator enabled locally this session (openjdk installed) — the emulator-backed
   adversarial suites now actually execute instead of skipping.
 
@@ -41,11 +41,13 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N210 | `daily_upload_counters` trusted the `userId` field but not the document id — a user could write another user's daily upload counter | Rule now pins the shard id to the caller (`shardId.matches('upload_' + uid() + '_...')`), mirroring `unread_counters`. Emulator N210 check + static guard in `firestoreRulesCompile.test.js`. |
 | N211 | `functions/saml.js` claimed to reject encrypted assertions but did not; its attribute parser could not read the standard nested `<AttributeValue>` shape | Added an explicit encrypted-assertion rejection (was a misleading issuer-mismatch); `extractAttr` now tolerates the nested wrapper. New `privacyPropagationAndSaml.test.js` (real RSA-SHA256 verify; auth/issuer/audience/signature pins; propagation owner-scoping + bounded paging + audit). |
 | N212 | Withdrawal settlement accepted a caller-supplied coin→USD rate; the economy summary re-derived the rate by hand | Removed the `coinsPerDollar` override (settlement reads the shared config only); `getEconomySummary` uses `coinsToUsd`. Canonical model in `docs/engineering/money-model.md`; `functionsContract` + `sharedConfigSync` guards. |
+| N213 | Search returned blocked users' content — moderation was not enforced in `searchService` (the feed filtered blocks; search did not) | `_getBlockedUserIds(viewerId)` reads both block directions via the graph spine (`listConnections` `blocked` + new `blocked_by` kind, cached 60s); `_filterBlockedHits` (pre-fusion) and `_filterBlockedItems` (on built list) drop blocked authors; the cache key is per-viewer (`v: this._resolveViewerId(options)`); the sponsored slot is dropped when its author is blocked. `socialGraphService.LIST_SPECS` gained `blocked_by`. New `searchBlockFiltering.test.js` (guards job) + `socialGraphService.test.js` `blocked_by` case. |
+| N214 | `useSearch` read `response.hasNextPage`/`response.cursor`, but the service returns `hasMore`/`nextCursor` — search pagination was dead | Both the initial search and `loadMore` read non-existent keys, so `setHasMore(false)`/`setCursor(null)` ran on every success: the load-more never appeared and `loadMore` always re-queried page 1. Fixed to read `hasMore`/`nextCursor`. New `searchPaginationWiring.test.js` (guards job) drives the real hook against a mocked service. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
-`privacyPropagationAndSaml`.
+`privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`.
 
 ## Next exact tasks (dependency order)
 

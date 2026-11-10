@@ -76,6 +76,11 @@ const LIST_SPECS = Object.freeze({
   following: { collection: 'follows', field: 'followerId', order: 'followingId', pick: 'followingId' },
   friends: { collection: 'follows', field: 'followerId', order: 'followingId', pick: 'followingId' },
   blocked: { collection: 'blocks', field: 'blockerId', order: 'blockedId', pick: 'blockedId' },
+  // The reverse direction of a block: users who block `userId`. Read with an
+  // actor-equality + single-order query (`blockedId == userId`), the shape the
+  // blocks rule proves (`resource.data.blockedId == uid()`). A viewer who is
+  // blocked by someone must not see their content in search/explore.
+  blocked_by: { collection: 'blocks', field: 'blockedId', order: 'blockerId', pick: 'blockerId' },
   muted: { collection: 'mutes', field: 'muterId', order: 'mutedId', pick: 'mutedId' },
   restricted: { collection: 'restricts', field: 'restricterId', order: 'restrictedId', pick: 'restrictedId' },
 });
