@@ -1010,10 +1010,12 @@ class EnterpriseFirestoreService {
   async incrementCommentCount(postId, delta = 1) {
     await this.ensureInitialized();
     try {
-      const { doc, updateDoc, increment, serverTimestamp } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      await updateDoc(postRef, { 'stats.comments': increment(delta), updatedAt: serverTimestamp() });
+      // Route through the sharded counter: a direct `stats.comments` write on
+      // the post doc is a non-author document write the rules now refuse, and
+      // the sharded value is what `countersManager.apply` overlays on read.
+      await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments', amount: delta });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'comments' });
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }

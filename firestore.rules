@@ -416,17 +416,33 @@ service cloud.firestore {
       //    belong to the server (reportContent / adminModerateContent); without
       //    this an author could clear `moderationStatus` / `reportCount` on
       //    their own flagged content — "moderation fields changed by the owner".
-      //  - any signed-in user touching ONLY the engagement fields. Reactions,
-      //    gifts and poll votes live on the post doc, so an author-only rule
-      //    silently denied every non-author reaction/gift/vote.
+      //  - `poll` and `gifts` are server-owned: the vote tally is written by the
+      //    `votePostPoll` callable and the gift aggregate by `sendGift`, so no
+      //    client (author included) may move them on update.
+      //  - the ONLY `stats` field a client may move is `reactions.<emoji>`
+      //    (the per-user choice lives in `posts/{id}/reactions/{uid}`). A bare
+      //    `hasOnly([...])` on the top-level diff matched key NAMES only, so any
+      //    signed-in user could REPLACE the whole `stats` map (likes, views,
+      //    comments, pollVotes) on anyone's post — forging engagement — and the
+      //    author could rewrite `stats.giftValue`. The carve-out is now nested:
+      //    top-level keys are constrained AND, when `stats` changes, the changed
+      //    `stats` keys must be `reactions` only.
       allow update: if isAdmin() || (isSignedIn() && (
-        (request.auth.uid == resource.data.authorId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount'
-          ])) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'stats', 'gifts', 'poll', 'updatedAt'
-        ])
+        (
+          (request.auth.uid == resource.data.authorId &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
+              'poll', 'gifts'
+            ])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'stats', 'updatedAt'
+          ])
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['stats']) ||
+          request.resource.data.get('stats', {}).diff(resource.data.get('stats', {}))
+            .affectedKeys().hasOnly(['reactions'])
+        )
       ));
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.authorId);
       // View analytics are server-authoritative (the `recordPostView` callable
@@ -467,15 +483,20 @@ service cloud.firestore {
       //  - any signed-in user updating ONLY the reaction fields. The reaction
       //    arrays live on the comment doc, so without this a like by anyone but
       //    the author was denied and `likeComment` aborted.
+      //  - the numeric `likes`/`dislikes` tallies are the sharded counter, never
+      //    a client field: they are seeded to 0 at create and only
+      //    `countersManager` moves them. A bare `hasOnly([...])` matched key
+      //    NAMES, so a non-author could set `likes: 999999` on anyone's comment
+      //    and the author could inflate their own. They are excluded here.
       allow update: if isAdmin() || (isSignedIn() && (
         (request.auth.uid == resource.data.userId &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore',
             'moderationNotes', 'isHidden', 'hiddenAt', 'hiddenReason',
-            'autoModeratedAt', 'reports'
+            'autoModeratedAt', 'reports', 'likes', 'dislikes'
           ])) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'likes', 'likesBy', 'dislikes', 'dislikesBy', 'reactionCounts', 'updatedAt', 'lastActivityAt'
+          'likesBy', 'dislikesBy', 'reactionCounts', 'updatedAt', 'lastActivityAt'
         ])
       ));
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
@@ -844,9 +865,21 @@ service cloud.firestore {
               )
             )
           );
+        // Receipt-only updates: `markMessageAsRead`/`markMessageAsDelivered`
+        // append the CALLER's own uid via arrayUnion. A bare `hasOnly` on the
+        // key names let any participant REPLACE the whole `readBy`/`deliveredTo`
+        // array — forging another member's read receipt or wiping the evidence
+        // that someone read. The only permitted difference is the caller's own
+        // uid, so pin it with removeAll([uid()]).
         allow update, delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
           resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo']) &&
+            request.resource.data.get('readBy', []).removeAll([uid()]) ==
+              resource.data.get('readBy', []).removeAll([uid()]) &&
+            request.resource.data.get('deliveredTo', []).removeAll([uid()]) ==
+              resource.data.get('deliveredTo', []).removeAll([uid()])
+          )
         );
         // Reactions are per-user docs — no message-doc rewrites (spec §26).
         match /reactions/{userId} {
@@ -1302,12 +1335,29 @@ service cloud.firestore {
       // non-authoritative roster (raised hands, participants, listeners,
       // audience count). Without this carve-out a member's "raise hand" /
       // "join" write was silently DENIED, so the stage never updated.
+      //
+      // `hasOnly` checks KEY names, not values — on its own it let any signed-in
+      // user REPLACE the whole `participants` array (add/remove anyone, wipe the
+      // roster), and `participants` is what `signaling_rooms` authorises on, so
+      // that was an eavesdrop/DoS on any live space's WebRTC offer/answer. The
+      // roster change is therefore pinned to the caller: removing `uid()` from
+      // both the stored and incoming arrays must leave them identical (the only
+      // permitted difference is the caller's own membership). `audienceCount`
+      // must equal the listener array it summarises, and the listener array may
+      // grow/shrink by at most one entry (the caller).
       allow update: if isSignedIn() && (
         resource.data.host.id == uid() ||
         resource.data.userId == uid() ||
         isAdmin() ||
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount'])
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount']) &&
+          request.resource.data.participants.removeAll([uid()]) ==
+            resource.data.participants.removeAll([uid()]) &&
+          request.resource.data.audienceCount == request.resource.data.listeners.size() &&
+          request.resource.data.listeners.size() - resource.data.listeners.size() <= 1 &&
+          resource.data.listeners.size() - request.resource.data.listeners.size() <= 1
+        )
       );
       allow delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
     }
