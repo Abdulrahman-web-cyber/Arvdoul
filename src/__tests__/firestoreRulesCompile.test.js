@@ -207,6 +207,26 @@ describe('firestore.rules content-moderation ownership (regression guards)', () 
     // or `coinReward` and mint the reward on someone else's quiz.
     expect(body).not.toMatch(/allow update: if isSignedIn\(\) && vibeIsActive\(vibeData\(\)\) && vibeVisibleToViewer\(vibeData\(\), uid\(\)\);\s*$/m);
   });
+
+  test('story emoji sliders: a viewer may only record their own response (N202)', () => {
+    const body = blockBody('emoji_sliders');
+    expect(body).toBeTruthy();
+    // The old rule was an unconstrained `isSignedIn()` write: any viewer could
+    // rewrite the aggregate (`sum`/`count`/`average`).
+    expect(body).toMatch(/hasOnly\(\[\s*'sum', 'count', 'average', 'userVotes', 'updatedAt'\s*\]\)/);
+    expect(body).toMatch(/'userVotes' in request\.resource\.data/);
+    expect(body).not.toMatch(/allow update: if isSignedIn\(\) && vibeIsActive\(vibeData\(\)\) && vibeVisibleToViewer\(vibeData\(\), uid\(\)\);\s*$/m);
+  });
+
+  test('support tickets are updated by admins only, never the owner (N203)', () => {
+    const body = blockBody('support_tickets');
+    expect(body).toBeTruthy();
+    // No client path updates a ticket; the old owner carve-out only let a user
+    // self-resolve their ticket or inject fake agent replies into `messages[]`.
+    expect(body).toMatch(/allow update: if isAdmin\(\);/);
+    expect(body).not.toMatch(/allow update: if isAdmin\(\) \|\| \(isSignedIn\(\)/);
+    expect(body).toMatch(/allow create: if isSignedIn\(\) && request\.resource\.data\.userId == uid\(\)/);
+  });
 });
 
 describe('firestore.rules economy accounting (regression guards)', () => {

@@ -92,8 +92,14 @@ service cloud.firestore {
     }
     // The recipient explicitly consenting (accepting a pending request) overrides
     // their own allowDMs preference — otherwise a 'none' user could never accept.
+    // The status MUST be `pending`: nothing ever deletes a `message_requests`
+    // doc, so an existence-only check let a DECLINED request still authorise the
+    // conversation — a sender could re-open a DM a user had already refused.
+    // `exists()` first so a missing doc short-circuits before `.data` is read
+    // (a get() on an absent doc returns null and the property access raises).
     function dmRequestFrom(senderUid, recipientUid) {
-      return exists(/databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid));
+      let p = /databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid);
+      return exists(p) && get(p).data.status == 'pending';
     }
 
     // A pending friend request from `fromUid` to `toUid`. Used to authorise the
@@ -747,7 +753,15 @@ service cloud.firestore {
       match /emoji_sliders/{sliderId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
         allow create, delete: if isSignedIn() && vibeData().userId == uid();
-        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        // A viewer may only record their OWN slider response. The old rule was
+        // an unconstrained `isSignedIn()` write, so any viewer could rewrite the
+        // aggregate (`sum`/`count`/`average`) on someone else's slider. Mirror
+        // the poll/quiz shape: the changed keys are limited to the response
+        // fields, and the caller's uid must be newly added to `userVotes`.
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sum', 'count', 'average', 'userVotes', 'updatedAt'])
+          && 'userVotes' in request.resource.data
+          && (!('userVotes' in resource.data) || !(uid() in resource.data.userVotes));
       }
     }
     match /archived_stories/{storyId} {
@@ -1678,7 +1692,14 @@ service cloud.firestore {
     match /support_tickets/{ticketId} {
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.userId == uid();
-      allow update: if isAdmin() || (isSignedIn() && resource.data.userId == uid() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'userRating', 'updatedAt', 'messages']));
+      // Owner-update carve-out removed (N203). No client path updates a ticket:
+      // `supportTicketService` only files them and the Help screen only reads
+      // them (a `noFabricatedData` guard already asserts there is no client
+      // `updateDoc` on this collection). The carve-out therefore only enabled a
+      // user to self-resolve their ticket or inject fake `agent` messages into
+      // `messages[]`. Status/replies are written server-side by
+      // `adminResolveSupportTicket` (admin callable, audit-logged).
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
