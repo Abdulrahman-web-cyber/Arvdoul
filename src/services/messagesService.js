@@ -894,6 +894,10 @@ class UltimateMessagingService {
     graph.invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
+    // The direct thread is now hidden from the inbox — drop the cached list so
+    // the block takes effect on the next read instead of after the cache TTL.
+    this._invalidateUserConversationsCache(blockerId);
+    this._invalidateUserConversationsCache(blockedId);
     return { success: true };
   }
 
@@ -912,6 +916,9 @@ class UltimateMessagingService {
     getGraph().invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
+    // Unblocking must surface the thread again, so drop the cached inbox too.
+    this._invalidateUserConversationsCache(blockerId);
+    this._invalidateUserConversationsCache(blockedId);
     return { success: true };
   }
 
@@ -955,6 +962,25 @@ class UltimateMessagingService {
     const { getSocialGraphService } = await import('./socialGraphService.js');
     const res = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 100 });
     return res.connections.map((c) => c.id || c.uid).filter(Boolean);
+  }
+
+  /** Uids in a block relationship with `userId` in EITHER direction (viewer
+   *  blocked them, or they blocked the viewer). Bounded, rules-provable edge
+   *  lists; fails open (empty set) so a graph hiccup cannot blank the inbox. */
+  async _getBlockedPairs(userId) {
+    if (!userId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const graph = getSocialGraphService();
+      const [blocked, blockedBy] = await Promise.all([
+        graph.listEdges(userId, 'blocked', { limit: 500 }),
+        graph.listEdges(userId, 'blocked_by', { limit: 500 }),
+      ]);
+      return new Set([...(blocked.ids || []), ...(blockedBy.ids || [])]);
+    } catch (err) {
+      logger.warn('[messagesService] blocked-pair read failed; not filtering inbox', { error: err?.message });
+      return new Set();
+    }
   }
 
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }
@@ -1106,10 +1132,23 @@ class UltimateMessagingService {
     }
 
     const snap = await this.fs.getDocs(q);
+    // A block is terminal for messaging (N221): the direct thread between a
+    // blocked pair must not stay in the inbox either, or the block would hide
+    // the *creation* of a thread but not the existing one. Mutes are NOT
+    // filtered here — a muted conversation stays in the inbox, just quiet.
+    // Skip the graph read entirely when there is no direct thread to check.
+    const hasDirect = snap.docs.some((d) => d.data()?.type === 'direct');
+    const blockedPairs = (!options.includeHidden && hasDirect)
+      ? await this._getBlockedPairs(userId)
+      : new Set();
     let conversations = [];
     snap.forEach(doc => {
       const conv = { id: doc.id, ...doc.data() };
       if (!options.includeHidden && conv.hiddenFor?.includes(userId)) return;
+      if (blockedPairs.size && conv.type === 'direct' && Array.isArray(conv.participants)) {
+        const other = conv.participants.find(p => p !== userId);
+        if (other && blockedPairs.has(other)) return;
+      }
       conversations.push(conv);
     });
 
@@ -2645,8 +2684,16 @@ class UltimateMessagingService {
       this.fs.limit(options.limit || 20)
     );
     const snap = await this.fs.getDocs(q);
+    // A pending request from a user the recipient has since blocked (or who
+    // blocked them) must not render — otherwise the block leaves an actionable
+    // "accept" affordance for the very person it should hide.
+    const blockedPairs = await this._getBlockedPairs(userId);
     const items = [];
-    snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+    snap.forEach((d) => {
+      const data = d.data();
+      if (blockedPairs.has(data.senderId)) return;
+      items.push({ id: d.id, ...data });
+    });
     return { success: true, requests: items };
   }
 
