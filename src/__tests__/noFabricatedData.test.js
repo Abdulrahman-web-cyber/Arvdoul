@@ -863,6 +863,40 @@ describe('Unbounded queries bounded', () => {
     const screen = fs.readFileSync(path.join(root, 'src/screens/Event/EventDiscoveryScreen.jsx'), 'utf8');
     expect(screen).toContain('viewerId: user?.uid');
   });
+
+  test('poll and marketplace discovery hide blocked creators (N236)', () => {
+    // `pollService.getPolls` and `marketplaceService.getProducts` listed their
+    // collections with no block filter, so a blocked creator's polls/listings
+    // still surfaced in the Polls and Marketplace discovery screens.
+    const poll = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
+    expect(poll).toContain('getHiddenAuthorIds(viewerId)');
+    expect(poll).toContain('if (hiddenAuthors.has(data.creatorId)) return;');
+    const market = fs.readFileSync(path.join(root, 'src/services/marketplaceService.js'), 'utf8');
+    expect(market).toContain('getHiddenAuthorIds(viewerId)');
+    expect(market).toContain('if (hiddenAuthors.has(data.creatorId)) return;');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const pollsScreen = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
+    expect(pollsScreen).toContain('getPolls(selectedCategory, user?.uid)');
+    const marketScreen = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+    expect(marketScreen).toContain('getProducts(selectedCategory, user?.uid)');
+  });
+
+  test('sound catalog and live spaces hide blocked creators (N237)', () => {
+    // `soundService.getTrendingSounds` and `spacesService.getActiveSpaces` listed
+    // their collections with no block filter, so a blocked creator's sounds and a
+    // blocked host's live space still surfaced in the Sounds / Spaces rails.
+    const sound = fs.readFileSync(path.join(root, 'src/services/soundService.js'), 'utf8');
+    expect(sound).toContain('getHiddenAuthorIds(viewerId)');
+    expect(sound).toContain('if (hiddenAuthors.has(data.creatorId)) return;');
+    const spaces = fs.readFileSync(path.join(root, 'src/services/spacesService.js'), 'utf8');
+    expect(spaces).toContain('getHiddenAuthorIds(viewerId)');
+    expect(spaces).toContain('if (hiddenAuthors.has(data.hostId)) return;');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const soundsScreen = fs.readFileSync(path.join(root, 'src/screens/Sounds/SoundsScreen.jsx'), 'utf8');
+    expect(soundsScreen).toContain('getTrendingSounds(selectedGenre, user?.uid)');
+    const spacesScreen = fs.readFileSync(path.join(root, 'src/screens/Spaces/SpacesScreen.jsx'), 'utf8');
+    expect(spacesScreen).toContain('getActiveSpaces(selectedCategory, user?.uid)');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

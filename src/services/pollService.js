@@ -47,12 +47,28 @@ class PollService {
     }
   }
 
-  async getPolls(category = 'All') {
+  /**
+   * Creators whose polls must not surface for the viewer: blocked, blocked-by
+   * and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      log.warn('Poll hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  async getPolls(category = 'All', viewerId = null) {
     log.info('Fetching polls from Firestore', { category });
     try {
       const firestore = await getFirestoreInstance();
       const { collection, getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
       const colRef = collection(firestore, 'polls');
       let q = query(colRef, orderBy('createdAt', 'desc'), limit(40));
 
@@ -64,6 +80,7 @@ class PollService {
       const items = [];
       snap.forEach(docSnap => {
         const data = docSnap.data();
+        if (hiddenAuthors.has(data.creatorId)) return;
         const hasVoted = this.votedHistory.get(docSnap.id) || null;
         items.push({ id: docSnap.id, ...data, hasVoted });
       });

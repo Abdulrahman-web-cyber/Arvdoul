@@ -42,12 +42,12 @@ export default function SoundsScreen() {
 
   useEffect(() => {
     loadSounds();
-  }, [selectedGenre]);
+  }, [selectedGenre, user?.uid]);
 
   const loadSounds = async () => {
     setLoading(true);
     try {
-      const data = await soundService.getTrendingSounds(selectedGenre);
+      const data = await soundService.getTrendingSounds(selectedGenre, user?.uid);
       setSounds(data);
       if (!currentSound && data.length > 0) {
         setCurrentSound(data[0]);

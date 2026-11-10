@@ -113,12 +113,28 @@ class SpacesService {
   /**
    * Fetches active spaces from Firestore.
    */
-  async getActiveSpaces(category = 'All') {
+  /**
+   * Hosts whose live spaces must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      log.warn('Spaces hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  async getActiveSpaces(category = 'All', viewerId = null) {
     log.info('Fetching active spaces from Firestore', { category });
     try {
       const firestore = await getFirestoreInstance();
       const { collection, getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
       const spacesCol = collection(firestore, 'spaces');
       // Only genuinely live spaces: without the `isLive` filter the list
       // accumulated every space ever created (nothing ends a space), so the
@@ -132,7 +148,9 @@ class SpacesService {
       const snapshot = await getDocs(q);
       const items = [];
       snapshot.forEach(docSnap => {
-        items.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        if (hiddenAuthors.has(data.hostId)) return;
+        items.push({ id: docSnap.id, ...data });
       });
 
       return items;

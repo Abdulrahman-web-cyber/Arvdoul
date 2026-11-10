@@ -38,12 +38,12 @@ export default function MarketplaceScreen() {
 
   useEffect(() => {
     loadProducts();
-  }, [selectedCategory]);
+  }, [selectedCategory, user?.uid]);
 
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const data = await marketplaceService.getProducts(selectedCategory);
+      const data = await marketplaceService.getProducts(selectedCategory, user?.uid);
       setProducts(data);
     } catch {
       toast.error('Failed to load marketplace');
