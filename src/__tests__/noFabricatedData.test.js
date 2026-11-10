@@ -864,6 +864,16 @@ describe('Unbounded queries bounded', () => {
     expect(screen).toContain('viewerId: user?.uid');
   });
 
+  test('event discovery paginates on the raw page size, not the block-filtered length (N243)', () => {
+    // `listEvents` filtered hidden organizers out of the page and then derived
+    // `hasMore` from the filtered length. A hidden organizer on a full page
+    // shortened `events` below EVENTS_PER_PAGE and falsely reported the end of
+    // the list, stranding every later page.
+    const svc = fs.readFileSync(path.join(root, 'src/services/eventService.js'), 'utf8');
+    expect(svc).toContain('const hasMore = querySnapshot.docs.length === EVENTS_PER_PAGE;');
+    expect(svc).not.toContain('const hasMore = events.length === EVENTS_PER_PAGE;');
+  });
+
   test('poll and marketplace discovery hide blocked creators (N236)', () => {
     // `pollService.getPolls` and `marketplaceService.getProducts` listed their
     // collections with no block filter, so a blocked creator's polls/listings

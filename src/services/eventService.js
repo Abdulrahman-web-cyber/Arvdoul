@@ -328,7 +328,10 @@ class EventService {
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(e => !hiddenAuthors.has(e.organizerId) || e.organizerId === viewerId);
 
-    const hasMore = events.length === EVENTS_PER_PAGE;
+    // `hasMore` derives from the RAW page size, not the post-block-filter length:
+    // a hidden organizer on a full page shortens `events` below EVENTS_PER_PAGE
+    // and would falsely report the end of the list, stranding later pages.
+    const hasMore = querySnapshot.docs.length === EVENTS_PER_PAGE;
     return {
       events,
       hasMore,
