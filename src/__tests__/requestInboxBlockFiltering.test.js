@@ -76,6 +76,12 @@ jest.unstable_mockModule('../services/socialGraphService.js', () => ({
   socialGraphService: { listEdges, getRelationship },
 }));
 
+// Force the local tokenized fallback: the primary (Algolia) path is exercised
+// by searchService's own tests.
+jest.unstable_mockModule('../services/searchService.js', () => ({
+  searchUsers: async () => { throw new Error('algolia unavailable'); },
+}));
+
 const { getUserService } = await import('../services/userService.js');
 
 function primeService(svc) {
@@ -91,6 +97,7 @@ beforeEach(() => {
   globalThis.__docs = {};
   globalThis.__txDoc = {};
   listEdges.mockClear();
+  listEdges.mockImplementation(async (_uid, kind) => ({ ids: globalThis.__edges?.[kind] || [] }));
   getRelationship.mockReset();
   getRelationship.mockImplementation(async () => relationship);
   relationship = { isBlocking: false, isBlockedBy: false };
@@ -168,5 +175,29 @@ describe('consent writes refuse across a block', () => {
     getRelationship.mockRejectedValue(new Error('offline'));
     const svc = primeService(getUserService());
     expect(await svc._isBlockedPair('a', 'b')).toBe(true);
+  });
+});
+
+describe('searchUsers fallback hides blocked pairs (N248)', () => {
+  test('drops a blocked user from the tokenized fallback results', async () => {
+    globalThis.__docs = {
+      blockedUser: { id: 'blockedUser', username: 'blocked', searchTokens: ['blocked'] },
+      okUser: { id: 'okUser', username: 'okay', searchTokens: ['okay'] },
+    };
+    globalThis.__edges = { blocked: ['blockedUser'] };
+    const svc = primeService(getUserService());
+    svc.getAvatarUrl = (id) => id;
+
+    const res = await svc.searchUsers('okay blocked', { userId: 'viewer' });
+    expect(res.users.map((u) => u.id)).toEqual(['okUser']);
+  });
+
+  test('keeps results when the viewer has no block edges', async () => {
+    globalThis.__docs = { okUser: { id: 'okUser', username: 'okay', searchTokens: ['okay'] } };
+    const svc = primeService(getUserService());
+    svc.getAvatarUrl = (id) => id;
+
+    const res = await svc.searchUsers('okay', { userId: 'viewer' });
+    expect(res.users.map((u) => u.id)).toEqual(['okUser']);
   });
 });

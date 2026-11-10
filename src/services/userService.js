@@ -1176,9 +1176,10 @@ class ProfessionalUserService {
    * Uids on either side of a block with `userId`, resolved through the spine's
    * actor-scoped list reads (a point read of an absent edge is denied by the
    * `resource.data` rules, so we never point-read a possibly-missing edge).
-   * Used to keep blocked parties out of the request inboxes.
+   * Used to keep blocked parties out of the request inboxes and the
+   * search fallback.
    */
-  async _hiddenRequestSenders(userId) {
+  async _blockedPairIds(userId) {
     if (!userId) return new Set();
     try {
       const { getSocialGraphService } = await import('./socialGraphService.js');
@@ -1207,7 +1208,7 @@ class ProfessionalUserService {
     ));
     // A block is terminal: a pending request filed before the block must not
     // render an actionable "approve" affordance for the person it hides.
-    const hidden = await this._hiddenRequestSenders(userId);
+    const hidden = await this._blockedPairIds(userId);
     const requests = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((r) => !hidden.has(r.fromUserId));
@@ -1731,7 +1732,7 @@ class ProfessionalUserService {
     ));
     // A block is terminal: a pending friend request from a blocked party (or a
     // party who blocked the viewer) must not stay actionable in the inbox.
-    const hidden = await this._hiddenRequestSenders(userId);
+    const hidden = await this._blockedPairIds(userId);
     const otherField = type === 'received' ? 'fromUserId' : 'toUserId';
     const requests = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
@@ -2005,6 +2006,15 @@ class ProfessionalUserService {
           limit(options.limit || 10)
         ));
         users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+      // The primary path (searchService) filters blocked pairs; this fallback
+      // must too, or a blocked user reappears in the mention/people picker
+      // whenever Algolia is unavailable. A block hides both directions.
+      const viewerId = options.userId ||
+        (typeof window !== 'undefined' && window._arvdoul_auth?.currentUser?.uid) || null;
+      if (viewerId) {
+        const hidden = await this._blockedPairIds(viewerId);
+        if (hidden.size) users = users.filter((u) => !hidden.has(u.id));
       }
       // Hydrate avatars
       for (const u of users) {
