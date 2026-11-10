@@ -238,6 +238,22 @@ describe('feedService - hidden authors (block + mute)', () => {
     const hidden = await svc()._getHiddenAuthorsCached('viewer-2');
     expect(hidden.size).toBe(0);
   });
+
+  test('invalidateBlockCache drops the cached hidden set so a new block applies at once', async () => {
+    // The cache key written by `_getHiddenAuthorsCached` is `hidden_${userId}`.
+    // `invalidateBlockCache` deleted a different key (`blocked_${userId}`), a
+    // no-op that left a freshly blocked author in the cached set for the whole
+    // 5-minute TTL, so their posts kept appearing in the feed.
+    globalThis.__graphMock = { getHiddenAuthorIds: jest.fn(async () => new Set(['old'])) };
+    await svc()._getHiddenAuthorsCached('viewer-3');
+    expect(svc().blockCache.get('hidden_viewer-3')).not.toBeNull();
+
+    svc().invalidateBlockCache('viewer-3');
+    expect(svc().blockCache.get('hidden_viewer-3')).toBeNull();
+
+    globalThis.__graphMock = { getHiddenAuthorIds: jest.fn(async () => new Set(['new'])) };
+    expect((await svc()._getHiddenAuthorsCached('viewer-3')).has('new')).toBe(true);
+  });
 });
 
 afterAll(() => {

@@ -1323,7 +1323,10 @@ class UltimateFeedService {
   }
 
   invalidateBlockCache(userId) {
-    this.blockCache.delete(`blocked_${userId}`);
+    // `_getHiddenAuthorsCached` writes `hidden_${userId}`; deleting any other
+    // key is a no-op that leaves a blocked author in the cached hidden set for
+    // the whole TTL.
+    this.blockCache.delete(`hidden_${userId}`);
   }
 
   _getLastAuthor(userId) {
@@ -1581,7 +1584,7 @@ class UltimateFeedService {
     this.userPreferences.delete(userId);
     this.userFeedState.delete(userId);
     this.feedHistory.delete(userId);
-    this.blockCache.delete(`block_${userId}`);
+    this.blockCache.delete(`hidden_${userId}`);
     cacheManager.invalidateUser(userId);
     this.sessionBoosts.delete(userId);
     this.lastBoostTimes.delete(userId);
