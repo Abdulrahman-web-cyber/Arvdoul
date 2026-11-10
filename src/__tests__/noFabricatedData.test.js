@@ -796,6 +796,30 @@ describe('Unbounded queries bounded', () => {
     expect(drawer).toContain('getBlockedUserIds(currentUser.uid)');
     expect(drawer).not.toContain('getBlockedUsers(currentUser.uid)');
   });
+
+  test('the video comments sheet hides blocked authors in both directions (N229)', () => {
+    // `VideoComments` (used by ReelsScreen, VideoFeed and VideoDetailScreen)
+    // rendered every comment with no block filter, so a blocked user's comments
+    // showed on Sparks/Reels even though the post CommentsDrawer filtered them.
+    const sheet = fs.readFileSync(path.join(root, 'src/components/Videos/VideoComments.jsx'), 'utf8');
+    expect(sheet).toContain('userService.getBlockedUserIds(uid)');
+    expect(sheet).toContain('comments.filter((c) => !blockedUserIds.has(c.user?.id))');
+    // Replies are filtered too, not just top-level comments.
+    expect(sheet).toContain('comment.replies || []).filter((r) => !blockedUserIds?.has(r.user?.id))');
+  });
+
+  test('the story/Vibe feed hides blocked/blocked-by/muted authors (N230)', () => {
+    // The story fan-out writes a `users/{uid}/feeds/{storyId}` row for every
+    // follower, and neither the read path nor the write fan-out consulted the
+    // block graph, so a blocked/blocked-by/muted creator's Vibes still surfaced
+    // in the viewer's strip. The read path now drops hidden `ownerId`s.
+    const story = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(story).toContain('getHiddenAuthorIds(userId)');
+    expect(story).toContain('!hiddenAuthors.has(e.ownerId)');
+    // Both the paginated read and the realtime subscription must filter.
+    const matches = story.match(/filter\(e => !hiddenAuthors\.has\(e\.ownerId\)\)/g) || [];
+    expect(matches.length).toBe(2);
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

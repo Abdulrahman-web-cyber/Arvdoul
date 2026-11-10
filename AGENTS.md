@@ -164,6 +164,15 @@ as failures.
   to the party they blocked — the authoritative read must match the client's mutual-block
   model. `functionsModerationFilterGuard.test.js` (guards job) pins this; add a new read path
   to it rather than re-deriving the two-direction query.
+- **Every client content surface filters the same hidden set.** Use
+  `socialGraphService.getHiddenAuthorIds(uid)` (blocked + blocked_by + **muted**) or
+  `userService.getBlockedUserIds(uid)` (blocked + blocked_by, ids only) — never read
+  `blocks`/`mutes` directly, and never filter only the outgoing direction. Covered surfaces:
+  home/service feed, Sparks video feed, the post `CommentsDrawer`, the `VideoComments`
+  sheet (Sparks/Reels/VideoDetail — comments **and** replies), the story/Vibe strip
+  (`storyService.getStoriesFeed` + `subscribeToFeed`, matching the fan-out's `ownerId`),
+  search, and friend suggestions. A surface that renders user content without one of these
+  is the recurring N22x bug class.
 - **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
   `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
   (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the

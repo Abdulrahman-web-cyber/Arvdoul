@@ -1,6 +1,6 @@
 // src/components/Videos/VideoComments.jsx
 
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, Reply, Send, BadgeCheck, Smile, Crown, Sparkles } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
@@ -25,6 +25,34 @@ const VideoComments = memo(({
   const [replyTo, setReplyTo] = useState(null);
   const [sortBy, setSortBy] = useState('best');
   const [loading, setLoading] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState(new Set());
+
+  // Both block directions: a user who blocked the viewer (or whom the viewer
+  // blocked) must not have their comments rendered here. CommentsDrawer already
+  // filtered its thread; this sheet did not.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getAuthInstance } = await import('../../firebase/firebase.js');
+        const auth = await getAuthInstance();
+        const uid = auth?.currentUser?.uid;
+        if (!uid) return;
+        const { default: userService } = await import('../../services/userService.js');
+        const res = await userService.getBlockedUserIds(uid);
+        if (!cancelled) setBlockedUserIds(new Set(res?.ids || []));
+      } catch (err) {
+        console.warn('[VideoComments] blocked-users load failed', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  const visibleComments = useMemo(
+    () => comments.filter((c) => !blockedUserIds.has(c.user?.id)),
+    [comments, blockedUserIds]
+  );
 
   // Load comments from real service
   useEffect(() => {
@@ -189,7 +217,7 @@ const VideoComments = memo(({
   };
 
   // Sort comments
-  const sortedComments = [...comments].sort((a, b) => {
+  const sortedComments = [...visibleComments].sort((a, b) => {
     switch (sortBy) {
       case 'newest':
         return new Date(b.createdAt) - new Date(a.createdAt);
@@ -231,7 +259,7 @@ const VideoComments = memo(({
               <h2 className="text-white font-extrabold text-base tracking-tight">
                 Comments
                 <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  {comments.length}
+                  {visibleComments.length}
                 </span>
               </h2>
               
@@ -282,6 +310,7 @@ const VideoComments = memo(({
                 <CommentItem
                   key={comment.id}
                   comment={comment}
+                  blockedUserIds={blockedUserIds}
                   onLike={(isReply, parentId) => handleLike(comment.id, isReply, parentId)}
                   onReply={() => handleReply(comment)}
                 />
@@ -366,8 +395,10 @@ VideoComments.displayName = 'VideoComments';
 /**
  * Single comment item component
  */
-const CommentItem = memo(({ comment, onLike, onReply }) => {
+const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
   const [showReplies, setShowReplies] = useState(false);
+  const replies = (comment.replies || []).filter((r) => !blockedUserIds?.has(r.user?.id));
+  const replyCount = replies.length;
 
   return (
     <div className="flex gap-3 group">
@@ -425,26 +456,26 @@ const CommentItem = memo(({ comment, onLike, onReply }) => {
         </div>
 
         {/* Replies toggle */}
-        {comment.replies?.length > 0 && (
+        {replyCount > 0 && (
           <button
             onClick={() => setShowReplies(!showReplies)}
             className="text-purple-400 hover:text-purple-300 text-xs font-bold mt-2.5 flex items-center gap-1.5"
           >
             <span className="w-4 h-[1px] bg-purple-400/50" />
-            {showReplies ? 'Hide' : 'View'} {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
+            {showReplies ? 'Hide' : 'View'} {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
           </button>
         )}
 
         {/* Threaded Replies */}
         <AnimatePresence>
-          {showReplies && comment.replies?.length > 0 && (
+          {showReplies && replyCount > 0 && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="mt-3 pl-3 border-l border-white/10 space-y-3"
             >
-              {comment.replies.map((reply) => (
+              {replies.map((reply) => (
                 <div key={reply.id} className="flex gap-2.5">
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-[10px]">
                     {reply.user.name?.[0]?.toUpperCase() || '?'}
@@ -489,6 +520,7 @@ const CommentItem = memo(({ comment, onLike, onReply }) => {
 CommentItem.displayName = 'CommentItem';
 CommentItem.propTypes = {
   comment: PropTypes.object.isRequired,
+  blockedUserIds: PropTypes.instanceOf(Set),
   onLike: PropTypes.func.isRequired,
   onReply: PropTypes.func.isRequired,
 };
