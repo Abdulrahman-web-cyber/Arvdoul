@@ -397,8 +397,16 @@ service cloud.firestore {
     match /message_requests/{requestId} {
       allow read: if isSignedIn() &&
         (resource.data.senderId == uid() || resource.data.recipientId == uid());
+      // The doc id is `<recipientId>_<senderId>` and `dmRequestFrom()` trusts
+      // exactly that path, so the create MUST prove the id matches the payload —
+      // otherwise a sender could file the doc at an arbitrary id and forge the
+      // recipient's consent to a DM they set to 'none' (the helper reads only
+      // `.data.status`, never the fields). A sender also cannot address
+      // themselves.
       allow create: if isSignedIn() &&
         request.resource.data.senderId == uid() &&
+        request.resource.data.recipientId != uid() &&
+        requestId == request.resource.data.recipientId + '_' + request.resource.data.senderId &&
         request.resource.data.status == 'pending';
       allow update, delete: if isSignedIn() && resource.data.recipientId == uid();
     }
@@ -558,9 +566,14 @@ service cloud.firestore {
     match /follow_requests/{requestId} {
       allow read: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      // `followRequestFrom()` reads the consent at the deterministic id
+      // `${fromUserId}_${toUserId}`, so the create must pin the id to the
+      // payload — otherwise a request filed at an arbitrary id is dead to the
+      // approval path (and could impersonate a request that was never filed).
       allow create: if isSignedIn() &&
         request.resource.data.fromUserId == uid() &&
         request.resource.data.toUserId != uid() &&
+        requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
         request.resource.data.status == 'pending';
       allow update, delete: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
@@ -599,7 +612,15 @@ service cloud.firestore {
     match /friend_requests/{requestId} {
       allow read: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
-      allow create: if isSignedIn() && request.resource.data.fromUserId == uid();
+      // `friendRequestFrom()` trusts the deterministic id
+      // `${fromUserId}_${toUserId}`; pin the create to it so a forged id cannot
+      // masquerade as (or shadow) a request, and a user cannot request
+      // themselves.
+      allow create: if isSignedIn() &&
+        request.resource.data.fromUserId == uid() &&
+        request.resource.data.toUserId != uid() &&
+        requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
+        request.resource.data.status == 'pending';
       allow update, delete: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
     }

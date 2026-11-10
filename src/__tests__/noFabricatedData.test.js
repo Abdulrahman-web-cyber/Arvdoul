@@ -1082,7 +1082,8 @@ describe('Messaging saved messages (spec §33)', () => {
 describe('Message requests (spec §35)', () => {
   test('rules: create by sender, respond by recipient only', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    const block = rules.slice(rules.indexOf('match /message_requests'), rules.indexOf('match /message_requests') + 600);
+    const start = rules.indexOf('match /message_requests');
+    const block = rules.slice(start, start + 1200);
     expect(block).toContain('request.resource.data.senderId == uid()');
     expect(block).toContain('resource.data.recipientId == uid()');
   });

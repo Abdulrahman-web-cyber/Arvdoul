@@ -289,6 +289,24 @@ describe('firestore.rules economy accounting (regression guards)', () => {
     expect(viewers).toBeTruthy();
     expect(viewers).toMatch(/viewerId\.endsWith\('_' \+ uid\(\)\)/);
   });
+
+  test('request docs pin their deterministic id to the payload (N205)', () => {
+    // The consent helpers (`dmRequestFrom`/`friendRequestFrom`/`followRequestFrom`)
+    // trust the deterministic id `${from}_${to}` / `${recipient}_${sender}`. If
+    // the create rule only validated the payload fields, a user could file the
+    // doc at an ARBITRARY id — for `message_requests` that forged the recipient's
+    // consent to a DM they had set to 'none' (the helper reads only `.data.status`).
+    const mr = blockBody('message_requests');
+    expect(mr).toMatch(/requestId == request\.resource\.data\.recipientId \+ '_' \+ request\.resource\.data\.senderId/);
+    expect(mr).toMatch(/request\.resource\.data\.recipientId != uid\(\)/);
+
+    const fr = blockBody('friend_requests');
+    expect(fr).toMatch(/requestId == request\.resource\.data\.fromUserId \+ '_' \+ request\.resource\.data\.toUserId/);
+    expect(fr).toMatch(/request\.resource\.data\.toUserId != uid\(\)/);
+
+    const folr = blockBody('follow_requests');
+    expect(folr).toMatch(/requestId == request\.resource\.data\.fromUserId \+ '_' \+ request\.resource\.data\.toUserId/);
+  });
 });
 
 describe('firestore.rules messaging membership (regression guards)', () => {
@@ -619,6 +637,7 @@ describe('firestore.rules adversarial checks (emulator)', () => {
         await setDoc(doc(db, 'users/alice'), { settings: { privacy: { allowDMs: 'everyone' } } });
         await setDoc(doc(db, 'users/bob'), { settings: { privacy: { allowDMs: 'friends' } } });
         await setDoc(doc(db, 'users/carol'), { settings: { privacy: { allowDMs: 'none' } } });
+        await setDoc(doc(db, 'users/erin'), { settings: { privacy: { allowDMs: 'none' } } });
         await setDoc(doc(db, 'follows/alice_bob'), { followerId: 'alice', followingId: 'bob' });
         await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
       });
@@ -649,6 +668,30 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       });
       const carol = env.authenticatedContext('carol').firestore();
       await assertSucceeds(setDoc(doc(carol, 'conversations/direct_carol_dave'), dm('carol', 'dave')));
+
+      // N205 — the request doc id MUST match the payload. dave forges an id
+      // (`forged_1`) to impersonate a request to erin (allowDMs 'none'), which
+      // `dmRequestFrom(erin, dave)` reads by path, not by field. The create is
+      // rejected because the id must equal `<recipientId>_<senderId>`.
+      await assertFails(setDoc(doc(dave, 'message_requests/forged_1'), {
+        senderId: 'dave', recipientId: 'erin', status: 'pending',
+      }));
+      // The correctly-shaped request is accepted, and now authorises the DM.
+      await assertSucceeds(setDoc(doc(dave, 'message_requests/erin_dave'), {
+        senderId: 'dave', recipientId: 'erin', status: 'pending',
+      }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+
+      // N204 — a DECLINED request must NOT authorise the conversation. The
+      // recipient flips the status (the real respond path), after which
+      // `dmRequestFrom` no longer returns true.
+      const erin = env.authenticatedContext('erin').firestore();
+      await assertSucceeds(setDoc(doc(erin, 'message_requests/erin_dave'), {
+        senderId: 'dave', recipientId: 'erin', status: 'declined',
+      }, { merge: true }));
+      await assertFails(setDoc(doc(dave, 'conversations/direct_erin_dave_2'), {
+        id: 'direct_erin_dave_2', type: 'direct', participants: ['dave', 'erin'], createdBy: 'dave',
+      }));
     } finally {
       await env.cleanup();
     }
