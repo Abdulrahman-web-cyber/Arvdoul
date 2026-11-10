@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Video, Play, LayoutGrid, Smartphone, Flame } from "lucide-react";
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { useVideoStore } from '../store/videoStore';
 import { VideoFeed } from '../components/Videos';
 import videoService from '../services/videoService';
@@ -25,6 +26,7 @@ const VideosScreen = () => {
   const initialTab = searchParams.get('tab') || 'sparks';
 
   const { theme, isDark, spring, gradient } = useTheme();
+  const { user } = useAuth();
   const {
     videos,
     setVideos,
@@ -66,7 +68,7 @@ const VideosScreen = () => {
     setError(null);
 
     try {
-      const result = await videoService.getVideoFeed(null, {
+      const result = await videoService.getVideoFeed(user?.uid ?? null, {
         feedType: type,
         limit: 20,
       });
@@ -89,7 +91,7 @@ const VideosScreen = () => {
       setLoading(false);
       setBackgroundRefreshing(false);
     }
-  }, [feedType, videos, setVideos, setLoading, setHasMore, setNextCursor]);
+  }, [feedType, videos, user?.uid, setVideos, setLoading, setHasMore, setNextCursor]);
 
   // Load more pagination
   const loadMoreVideos = useCallback(async () => {
@@ -98,7 +100,7 @@ const VideosScreen = () => {
     setLoadingMore(true);
 
     try {
-      const result = await videoService.getVideoFeed(null, {
+      const result = await videoService.getVideoFeed(user?.uid ?? null, {
         feedType,
         cursor: nextCursor,
         limit: 20,
@@ -116,7 +118,7 @@ const VideosScreen = () => {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, nextCursor, feedType, appendVideos, setLoadingMore, setHasMore, setNextCursor]);
+  }, [loadingMore, hasMore, nextCursor, feedType, user?.uid, appendVideos, setLoadingMore, setHasMore, setNextCursor]);
 
   // Tab change handler
   const handleTabChange = useCallback((newTab) => {

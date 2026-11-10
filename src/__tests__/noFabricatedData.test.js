@@ -941,6 +941,17 @@ describe('Unbounded queries bounded', () => {
     const screen = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
     expect(screen).toContain('getActiveLiveStreams({ limit: 30, viewerId: user?.uid })');
   });
+
+  test('the Sparks grid feed hides blocked/blocked-by/muted creators (N242)', () => {
+    // `VideosScreen` called `getVideoFeed(null, …)`, so `safeUserId` became
+    // `'anonymous_user'` and the hidden-author filter was inert — a blocked or
+    // muted creator's Sparks still surfaced in the grid/list view.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/VideosScreen.jsx'), 'utf8');
+    expect(screen).not.toContain('videoService.getVideoFeed(null, {');
+    expect(screen).toContain('videoService.getVideoFeed(user?.uid ?? null, {');
+    expect(screen).toContain("import { useAuth } from '../context/AuthContext';");
+    expect(screen).toContain('const { user } = useAuth();');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {
