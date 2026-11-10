@@ -13,7 +13,7 @@ const functions = require('firebase-functions');
 const { checkRateLimit } = require('./rateLimit');
 const { assertAdmin, isAdmin, getUserIdFromContext } = require('./auth');
 const { settleWithdrawal } = require('./withdrawalSettlement');
-const { COINS_PER_DOLLAR, getRankTitle } = require('./levelConfig.cjs');
+const { COINS_PER_DOLLAR, getRankTitle, coinsToUsd } = require('./levelConfig.cjs');
 const { getMonetizationStripe } = require('./monetization');
 
 const db = admin.firestore();
@@ -539,7 +539,7 @@ exports.getEconomySummary = functions.https.onCall(async (data, context) => {
     completedPayoutCoins,
     completedPayoutCount: completedThisMonth.size,
     monthlyVolumeCoins,
-    treasuryReserveUsd: circulatingCoins === null ? null : circulatingCoins / COINS_PER_DOLLAR,
+    treasuryReserveUsd: circulatingCoins === null ? null : coinsToUsd(circulatingCoins),
     generatedAt: new Date().toISOString(),
   };
 });
@@ -550,7 +550,7 @@ exports.adminDecideWithdrawal = functions.https.onCall(async (data, context) => 
 
   const { withdrawalId, action, reason = '' } = data || {};
   const result = await settleWithdrawal(
-    { stripe: getMonetizationStripe(), createLedgerEntry: require('./monetization').createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+    { stripe: getMonetizationStripe(), createLedgerEntry: require('./monetization').createLedgerEntry },
     withdrawalId,
     action
   );

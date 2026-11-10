@@ -31,7 +31,6 @@ const MAX_DAILY_WITHDRAWAL_REQUESTS = functions.config().monetization?.max_daily
 const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_threshold || 50000;
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
-const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || require('./levelConfig.cjs').COINS_PER_DOLLAR;
 const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
@@ -808,7 +807,7 @@ exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
   const { withdrawalId, action } = req.body || {};
   try {
     const result = await settleWithdrawal(
-      { stripe, createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+      { stripe, createLedgerEntry },
       withdrawalId,
       action
     );

@@ -195,4 +195,14 @@ describe('shared config single source of truth', () => {
       expect(src).not.toMatch(/1\s*\/\s*COINS_PER_DOLLAR/);
     }
   });
+
+  test('the functions side converts through coinsToUsd too, never a raw division', () => {
+    // The economy summary divided `circulatingCoins / COINS_PER_DOLLAR` by hand;
+    // that re-implements the rounding policy the wallet/payout screens use.
+    for (const rel of ['functions/admin.js', 'functions/withdrawalSettlement.js']) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).not.toMatch(/\/\s*COINS_PER_DOLLAR/);
+      expect(src).not.toMatch(/1\s*\/\s*COINS_PER_DOLLAR/);
+    }
+  });
 });

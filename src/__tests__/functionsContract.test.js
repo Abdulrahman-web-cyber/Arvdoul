@@ -220,11 +220,13 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
       path.join(root, 'functions', 'withdrawalSettlement.js'), 'utf8'
     );
     // It used to hardcode `... : 200`, a shadow rate that would drift if
-    // COINS_PER_DOLLAR ever changed.
+    // COINS_PER_DOLLAR ever changed. The rate override was later removed
+    // entirely — a caller-supplied rate is a second source of truth for a
+    // real-money payout, so the module must read the shared config only.
     expect(settlement).toContain("require('./levelConfig.cjs')");
-    expect(settlement).toContain('COINS_PER_DOLLAR');
     expect(settlement).toContain('coinsToUsd(withdrawalData.amount)');
-    expect(settlement).not.toMatch(/coinsPerDollar\s*\)\s*:\s*200\b/);
+    expect(settlement).not.toMatch(/coinsPerDollar/);
+    expect(settlement).not.toMatch(/:\s*200\b/);
   });
 
   test('the settlement path verifies the balance BEFORE sending a Stripe payout', () => {
