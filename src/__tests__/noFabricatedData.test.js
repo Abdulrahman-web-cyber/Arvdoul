@@ -2868,6 +2868,14 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).toContain('p.stats?.likes ?? p.likeCount');
   });
 
+  test('SavedScreen does not map a fabricated `likes` field nothing renders', () => {
+    // The saved-items list never displays a like count, so `likes: p.likeCount || 0`
+    // (and a hardcoded `likes: 0` for videos) invented engagement on every card.
+    const s = read('src/screens/SavedScreen.jsx');
+    expect(s).not.toContain('likes: p.likeCount || 0,');
+    expect(s).not.toMatch(/likes:\s*0,/);
+  });
+
   test('LiveScreen viewer counts are unknown (null), never a fabricated 0', () => {
     const s = read('src/screens/LiveScreen.jsx');
     expect(s).not.toContain('const [viewerCount, setViewerCount] = useState(0)');
