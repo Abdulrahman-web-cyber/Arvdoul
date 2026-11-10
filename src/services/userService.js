@@ -1018,19 +1018,17 @@ class ProfessionalUserService {
     if (blockedReverse) throw new Error(`You have blocked this user`);
   }
 
-  /** True when either direction of a block edge exists between the pair. */
+  /**
+   * True when either direction of a block edge exists between the pair.
+   * A graph read error propagates: the consent writes run this inside their
+   * transaction, so the transaction aborts and mints no edge — failing closed
+   * without writing a destructive terminal status on a transient read blip.
+   */
   async _isBlockedPair(userA, userB) {
     if (!userA || !userB || userA === userB) return false;
-    try {
-      const { getSocialGraphService } = await import('./socialGraphService.js');
-      const edge = await getSocialGraphService().getRelationship(userA, userB);
-      return Boolean(edge.isBlocking || edge.isBlockedBy);
-    } catch (err) {
-      // Fail closed for a *consent* decision: if the graph cannot be read we
-      // must not mint a follow edge across a possible block.
-      logger.warn('[UserService] block-pair read failed; refusing consent write', { error: err?.message });
-      return true;
-    }
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const edge = await getSocialGraphService().getRelationship(userA, userB);
+    return Boolean(edge.isBlocking || edge.isBlockedBy);
   }
 
   async followUser(followerId, followingId) {

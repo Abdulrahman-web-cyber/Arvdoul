@@ -171,10 +171,10 @@ describe('consent writes refuse across a block', () => {
     expect(res).toEqual({ success: false, blocked: true });
   });
 
-  test('_isBlockedPair fails closed when the graph read throws', async () => {
+  test('_isBlockedPair propagates a graph read error so the write aborts (fails closed, no destructive status)', async () => {
     getRelationship.mockRejectedValue(new Error('offline'));
     const svc = primeService(getUserService());
-    expect(await svc._isBlockedPair('a', 'b')).toBe(true);
+    await expect(svc._isBlockedPair('a', 'b')).rejects.toThrow('offline');
   });
 });
 
