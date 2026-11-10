@@ -819,7 +819,6 @@ class UltimateCommentService {
         pinnedCommentId: pinned ? commentId : null,
         updatedAt: serverTimestamp(),
       });
-      this.cache.delete(targetId);
       this._invalidatePostCache(targetId);
       return { success: true, targetId, commentId, pinned };
     } catch (error) {

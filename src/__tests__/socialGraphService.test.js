@@ -213,6 +213,50 @@ describe('getHiddenAuthorIds + suggestions safety (N225)', () => {
   });
 });
 
+describe('listConnections / listMutualConnections hide blocked users (N240)', () => {
+  test('a blocked follower is dropped from the viewer\'s followers list', async () => {
+    seedFollow('blocked', 'me');
+    seedFollow('ok', 'me');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    store.set('users/ok', { uid: 'ok', displayName: 'Okay' });
+
+    const res = await getSocialGraphService().listConnections('me', 'followers', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['ok']);
+    expect(res.count).toBe(1);
+  });
+
+  test('a user who blocked the viewer is dropped from the following list', async () => {
+    seedFollow('me', 'blocker');
+    seedFollow('me', 'friend');
+    store.set('blocks/blocker_me', { blockerId: 'blocker', blockedId: 'me' });
+    store.set('users/blocker', { uid: 'blocker', displayName: 'Blocker' });
+    store.set('users/friend', { uid: 'friend', displayName: 'Friend' });
+
+    const res = await getSocialGraphService().listConnections('me', 'following', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['friend']);
+  });
+
+  test('a muted mutual connection is dropped from the friends list', async () => {
+    seedFollow('me', 'muted'); seedFollow('muted', 'me');
+    seedFollow('me', 'friend'); seedFollow('friend', 'me');
+    store.set('mutes/me_muted', { muterId: 'me', mutedId: 'muted' });
+    store.set('users/muted', { uid: 'muted', displayName: 'Muted' });
+    store.set('users/friend', { uid: 'friend', displayName: 'Friend' });
+
+    const res = await getSocialGraphService().listMutualConnections('me', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['friend']);
+  });
+
+  test('with no viewerId the raw list is returned unfiltered', async () => {
+    seedFollow('blocked', 'me');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    const res = await getSocialGraphService().listConnections('me', 'followers', { viewerId: null });
+    expect(res.connections.map((p) => p.id)).toEqual(['blocked']);
+  });
+});
+
 describe('listMutualConnections (friends = mutual follow)', () => {
   test('keeps only follow-backs and hydrates them', async () => {
     seedFollow('me', 'a'); seedFollow('a', 'me'); // mutual

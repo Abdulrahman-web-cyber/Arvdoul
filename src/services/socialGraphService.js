@@ -431,7 +431,11 @@ class SocialGraphService {
   /** List a relationship kind with hydrated, viewer-projected profiles. */
   async listConnections(userId, kind, { viewerId = null, limit = DEFAULT_PAGE_SIZE, cursor = null } = {}) {
     const { ids, hasMore, nextCursor } = await this.listEdges(userId, kind, { limit, cursor });
-    const connections = await this.hydrateProfiles(ids, { viewerId });
+    // A blocked/blocked-by/muted user must not appear in the viewer's own
+    // follower/following list — a masked row still leaks the account.
+    const hidden = viewerId ? await this.getHiddenAuthorIds(viewerId) : null;
+    const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;
+    const connections = await this.hydrateProfiles(visibleIds, { viewerId });
     return { success: true, connections, hasMore, nextCursor, count: connections.length };
   }
 
@@ -460,7 +464,9 @@ class SocialGraphService {
       pages++;
       if (!page.hasMore) break;
     }
-    const connections = await this.hydrateProfiles(mutualIds, { viewerId: viewerId || userId });
+    const hidden = viewerId ? await this.getHiddenAuthorIds(viewerId) : null;
+    const visibleIds = hidden ? mutualIds.filter((id) => id !== viewerId && !hidden.has(id)) : mutualIds;
+    const connections = await this.hydrateProfiles(visibleIds, { viewerId: viewerId || userId });
     return { success: true, connections, hasMore, nextCursor: pageCursor, count: connections.length };
   }
 

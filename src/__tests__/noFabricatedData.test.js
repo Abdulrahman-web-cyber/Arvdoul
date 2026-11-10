@@ -918,6 +918,15 @@ describe('Unbounded queries bounded', () => {
     expect(svc).not.toContain("this.blockCache.delete(`blocked_${userId}`)");
     expect(svc).not.toContain("this.blockCache.delete(`block_${userId}`)");
   });
+
+  test('follower/following/friends lists hide blocked users (N240)', () => {
+    // `listConnections`/`listMutualConnections` hydrated a masked profile for a
+    // blocked/blocked-by/muted user, so the row (and the account) still appeared
+    // in the viewer's own lists. Both now drop hidden ids.
+    const svc = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
+    expect(svc).toContain('const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;');
+    expect(svc).toContain('const visibleIds = hidden ? mutualIds.filter((id) => id !== viewerId && !hidden.has(id)) : mutualIds;');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {
