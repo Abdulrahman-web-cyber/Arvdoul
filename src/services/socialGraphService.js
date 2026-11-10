@@ -481,10 +481,19 @@ class SocialGraphService {
   /** Mutual connections, server-authoritative when the callable is available. */
   async getMutualConnections(viewerId, targetId, { limit = 20 } = {}) {
     if (!viewerId || !targetId || viewerId === targetId) return [];
+    // A blocked/blocked-by/muted user must never appear in the viewer's mutual
+    // list — the callable and the local fallback both returned the raw set, so
+    // a blocked party leaked back through the "mutual friends" surface.
+    const hidden = await this.getHiddenAuthorIds(viewerId);
+    const isVisible = (p) => {
+      const id = p?.uid || p?.id;
+      return id && id !== viewerId && !hidden.has(id);
+    };
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
       const data = await callFunction(FUNCTIONS.GET_MUTUAL_FRIENDS, { userId: viewerId, otherUserId: targetId });
-      return data?.mutualFriends || [];
+      const mutual = data?.mutualFriends || [];
+      if (mutual.length > 0) return mutual.filter(isVisible);
     } catch (err) {
       logger.debug('[SocialGraph] mutual fallback', { error: err?.message });
     }
@@ -493,7 +502,7 @@ class SocialGraphService {
       this.listEdges(targetId, 'following', { limit: 50 }),
     ]);
     const bSet = new Set(b.ids);
-    const mutualIds = a.ids.filter((id) => bSet.has(id)).slice(0, limit);
+    const mutualIds = a.ids.filter((id) => bSet.has(id) && id !== viewerId && !hidden.has(id)).slice(0, limit);
     return this.hydrateProfiles(mutualIds, { viewerId });
   }
 

@@ -262,6 +262,19 @@ describe('listConnections / listMutualConnections hide blocked users (N240)', ()
     const res = await getSocialGraphService().listConnections('me', 'blocked', { viewerId: 'me' });
     expect(res.connections.map((p) => p.id)).toEqual(['blocked']);
   });
+
+  test('getMutualConnections drops a blocked mutual (N247)', async () => {
+    // me and other both follow {blocked, friend}; a block must hide `blocked`
+    // from the "mutual friends" surface, not just the follower lists.
+    seedFollow('me', 'blocked'); seedFollow('other', 'blocked');
+    seedFollow('me', 'friend'); seedFollow('other', 'friend');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    store.set('users/friend', { uid: 'friend', displayName: 'Friend' });
+
+    const res = await getSocialGraphService().getMutualConnections('me', 'other');
+    expect(res.map((p) => p.id)).toEqual(['friend']);
+  });
 });
 
 describe('listMutualConnections (friends = mutual follow)', () => {
