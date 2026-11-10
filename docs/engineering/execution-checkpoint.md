@@ -47,12 +47,14 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N216 | Comment "load more" was dead — `CommentsDrawer.handleLoadMore` sent `startAfter` and read `result.hasMore`/`result.nextCursor`, but `commentService.getCommentsByPost` never applied a cursor and never returned `nextCursor` (and its cache hit dropped both fields) | `getCommentsByPost` now reads `options.startAfter || options.cursor`, applies `startAfter(cursorSnap)`, and computes/stores/returns `hasMore`+`nextCursor` on both the fresh and cached paths. New `commentPaginationWiring.test.js` (guards job) drives the real method against a stubbed Firestore; `integrationWiring.test.js` gains a source-level pin. |
 | N217 | `communityService.listCommunities` pushed a bare NUMBER into `query()` — every "Load More" (page > 1) threw; `hasMore` counted filtered rows | Real doc-id cursor pagination (`startAfterId` + `page` offset fallback); `hasMore` from the raw page size; returns `nextCursor`; the screen holds the cursor in a ref. |
 | N218 | `eventService.listEvents` ignored `page` and the screen's `status` filter — Load More re-fetched page 1 and Upcoming/Live showed every status | Honors `options.status`, applies cursor pagination (`startAfterId` + offset fallback), returns `nextCursor`; three missing composite indexes added (`(status,createdAt)`, `(status,type,stats.attendeeCount)`, `(status,type,createdAt)`). New `directoryPaginationService.test.js` (guards job) drives both list methods against a stubbed Firestore whose `query()` rejects a non-constraint. |
+| N219 | `messagesService.getUserConversations` fed its string `nextCursor` straight into `startAfter()` (needs a DocumentSnapshot) and set the cursor from the last doc of the 2× over-fetch window; the store re-sent that stale cursor on any non-refresh reload | Resolve the id cursor to a snapshot (`getDoc` → `startAfter(cursorSnap)`); `hasMore = snap.docs.length > pageSize` and `nextCursor` = last **returned** conversation id; the store now only continues from a cursor when the caller passes `startAfter` (a plain reload refetches page 1). New `conversationPaginationService.test.js` (guards job) drives the real method against a stubbed Firestore. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
 `privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,
-`searchPaginationService`, `commentPaginationWiring`, `directoryPaginationService`.
+`searchPaginationService`, `commentPaginationWiring`, `directoryPaginationService`,
+`conversationPaginationService`.
 
 ## Next exact tasks (dependency order)
 

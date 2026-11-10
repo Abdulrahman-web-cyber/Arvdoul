@@ -1094,7 +1094,16 @@ class UltimateMessagingService {
       this.fs.orderBy('lastActivity', 'desc'),
       this.fs.limit((options.limit || 50) * 2)
     );
-    if (options.startAfter) q = this.fs.query(q, this.fs.startAfter(options.startAfter));
+    // Callers paginate with the opaque `nextCursor` (a conversation id) they
+    // received from the previous page. Resolve it to a document snapshot here —
+    // `startAfter()` needs a DocumentSnapshot, not an id string, so passing the
+    // id straight in threw and every "load more" failed.
+    if (options.startAfter) {
+      const cursorSnap = await this.fs.getDoc(
+        this.fs.doc(this.firestore, 'conversations', String(options.startAfter))
+      );
+      if (cursorSnap.exists()) q = this.fs.query(q, this.fs.startAfter(cursorSnap));
+    }
 
     const snap = await this.fs.getDocs(q);
     let conversations = [];
@@ -1118,14 +1127,18 @@ class UltimateMessagingService {
       finalConversations = await this._injectConversationListAds(enriched, userId, options);
     }
 
-    const hasMore = snap.docs.length >= (options.limit || 50);
+    const pageSize = options.limit || 50;
+    const hasMore = snap.docs.length > pageSize;
+    // Cursor = the last conversation actually RETURNED. Using the last doc of
+    // the 2x over-fetch window skipped conversations the caller never saw.
+    const pageConvs = finalConversations.slice(0, pageSize);
     const result = {
       success: true,
-      conversations: finalConversations.slice(0, options.limit || 50),
+      conversations: pageConvs,
       total: finalConversations.length,
       unreadCount: finalConversations.reduce((sum, c) => sum + (c.unreadCounts?.[userId] || 0), 0),
       hasMore,
-      nextCursor: hasMore && snap.docs.length ? snap.docs[snap.docs.length - 1].id : null,
+      nextCursor: hasMore && pageConvs.length ? pageConvs[pageConvs.length - 1].id : null,
     };
 
     if (!this.messageKeysByConversation.has('user_convs')) this.messageKeysByConversation.set('user_convs', new Set());
