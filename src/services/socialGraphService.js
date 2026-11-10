@@ -85,6 +85,10 @@ const LIST_SPECS = Object.freeze({
   restricted: { collection: 'restricts', field: 'restricterId', order: 'restrictedId', pick: 'restrictedId' },
 });
 
+// Edge kinds that are a viewer's own safety-management lists, not a social
+// surface: a block/mute/restrict must stay visible in the list that manages it.
+const SAFETY_EDGE_KINDS = new Set(['blocked', 'blocked_by', 'muted', 'restricted']);
+
 function emptyEdge(uid = null, isOwner = false) {
   return {
     uid,
@@ -432,8 +436,12 @@ class SocialGraphService {
   async listConnections(userId, kind, { viewerId = null, limit = DEFAULT_PAGE_SIZE, cursor = null } = {}) {
     const { ids, hasMore, nextCursor } = await this.listEdges(userId, kind, { limit, cursor });
     // A blocked/blocked-by/muted user must not appear in the viewer's own
-    // follower/following list — a masked row still leaks the account.
-    const hidden = viewerId ? await this.getHiddenAuthorIds(viewerId) : null;
+    // follower/following/friends list — masking hides the bio but the row still
+    // leaks the account. The safety-management lists (`blocked`/`muted`/
+    // `restricted`) are the exception: hiding a blocked user there would make
+    // the block impossible to review or lift.
+    const isSafetyList = SAFETY_EDGE_KINDS.has(kind);
+    const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;
     const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;
     const connections = await this.hydrateProfiles(visibleIds, { viewerId });
     return { success: true, connections, hasMore, nextCursor, count: connections.length };

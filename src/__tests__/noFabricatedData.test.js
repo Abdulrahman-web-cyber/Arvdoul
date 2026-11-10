@@ -922,10 +922,13 @@ describe('Unbounded queries bounded', () => {
   test('follower/following/friends lists hide blocked users (N240)', () => {
     // `listConnections`/`listMutualConnections` hydrated a masked profile for a
     // blocked/blocked-by/muted user, so the row (and the account) still appeared
-    // in the viewer's own lists. Both now drop hidden ids.
+    // in the viewer's own lists. Both now drop hidden ids — but the safety
+    // management lists (blocked/muted/restricted) must stay intact.
     const svc = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(svc).toContain('const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;');
     expect(svc).toContain('const visibleIds = hidden ? mutualIds.filter((id) => id !== viewerId && !hidden.has(id)) : mutualIds;');
+    expect(svc).toContain("const SAFETY_EDGE_KINDS = new Set(['blocked', 'blocked_by', 'muted', 'restricted']);");
+    expect(svc).toContain('const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;');
   });
 });
 

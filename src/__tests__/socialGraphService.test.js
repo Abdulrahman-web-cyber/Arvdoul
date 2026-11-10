@@ -255,6 +255,13 @@ describe('listConnections / listMutualConnections hide blocked users (N240)', ()
     const res = await getSocialGraphService().listConnections('me', 'followers', { viewerId: null });
     expect(res.connections.map((p) => p.id)).toEqual(['blocked']);
   });
+
+  test('the blocked/muted management lists keep the hidden users (so a block can be lifted)', async () => {
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    const res = await getSocialGraphService().listConnections('me', 'blocked', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['blocked']);
+  });
 });
 
 describe('listMutualConnections (friends = mutual follow)', () => {
