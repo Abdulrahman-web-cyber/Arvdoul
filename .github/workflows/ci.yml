@@ -257,6 +257,8 @@ jobs:
           src/__tests__/securityServices.test.js
           src/__tests__/callableAuthGate.test.js
           src/__tests__/deployIntegrity.test.js
+          src/__tests__/functionsInventoryGuard.test.js
+          src/__tests__/adminAuditGuard.test.js
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/firestoreRulesCoverage.test.js

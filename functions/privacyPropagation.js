@@ -21,6 +21,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { getUserIdFromContext, assertAdmin } = require('./auth');
 const { checkRateLimit } = require('./rateLimit');
+const { writeAudit } = require('./admin');
 
 const db = admin.firestore();
 const BATCH_LIMIT = 400;
@@ -85,6 +86,12 @@ exports.backfillPostPrivacy = functions
       usersScanned += 1;
       postsUpdated += await propagateForAuthor(userDoc.id, userDoc.data().isPrivate === true);
     }
+    // Admin mutations are auditable (AGENTS.md: functions/admin.js#writeAudit).
+    await writeAudit(getUserIdFromContext(context), 'backfill_post_privacy', 'posts', {
+      usersScanned,
+      postsUpdated,
+      limit,
+    }, 'system');
     return { success: true, usersScanned, postsUpdated };
   });
 

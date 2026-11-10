@@ -6,9 +6,8 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 
 - Baseline: full Jest suite green (121 suites, 1464 passed, 5 skipped); `npm run
   build` green; `npm run lint` exit 0 (0 errors, warnings only).
-- Latest verified: 128 suites, 1527 passed, 5 skipped; `npm run build` green;
-  `npm run lint` exit 0 (0 errors); crash-bug gate (`eslint src/ functions/
-  --quiet`) exit 0.
+- Latest verified: 130 suites, 1534 passed, 5 skipped; `npm run build` green;
+  `npm run lint` exit 0 (0 errors, 866 warnings).
 - Emulator enabled locally this session (openjdk installed) — the emulator-backed
   adversarial suites now actually execute instead of skipping.
 
@@ -38,10 +37,11 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N206 | A private account's approved followers could not read its content | `postReadableByViewer`/`postListableShape` hard-required `authorIsPrivate == false` with no follower branch, so the profile grid returned 0 for every follower of a private account (the rule comment claimed the branch existed). Added `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`); the `follows` create rule now forbids self-creating an edge to a **private** target (`targetIsPrivate()`), closing the self-follow content leak the branch would otherwise open. Client grid omits the `authorIsPrivate` constraint only for an approved-follower view (`getPostsByUser({ constrainAuthorIsPrivate })` via `profileStore`); new `posts(authorId,authorIsPrivate,status,visibility,isDeleted,createdAt)` composite index. Emulator N206 + `profileFeedPagination` + `postVisibilityEnforcement` guards. |
 | N207 | `counter_shards` accepts a client-written `value` for any shard id (fabricated counts) | Confirmed; **deferred with justification** — not closable by a rule alone (a legit `increment(±1)` is indistinguishable from an absolute `{value: 999999}`, and the shard id is unbound). Needs every counter mutation moved server-side (Admin SDK bypasses rules) + `allow write: if false`, a multi-service change. Recorded in the ledger. |
 | N208 | A server-created community post had no `expiresAt`; the get-rule raised on the absent field | `postReadableByViewer` read `resource.data.expiresAt` directly (raises when absent → denies the read); `createCommunityPost` wrote no `expiresAt`, so the UI-created community post was unreadable by everyone. Rule now uses `.get('expiresAt', null)`; the callable writes `expiresAt: null`. Emulator N208 check. |
+| N209 | Admin-gated Cloud Functions changed state with no audit record; a deployed admin callable was unreachable | Added `writeAudit` to `deleteUserData`, `generateFriendRecommendations`, `createBulkNotificationJob`, `generateAudioFingerprint`, `updateViralScore`, `backfillPrivacyBoundary`; wired the dead `FUNCTIONS.BACKFILL_POST_PRIVACY` key into a new *Maintenance Operations* panel on `AdminSystemHealthScreen` (+ `callableService.backfillPostPrivacy()`). Two new hard-failing guards: `functionsInventoryGuard.test.js` (dead `FUNCTIONS` key / ad-hoc `httpsCallable` literal / frozen unreferenced-callable baseline — may only shrink) and `adminAuditGuard.test.js` (no admin write without an audit record). |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
-`storyExpiryGuard`.
+`storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`.
 
 ## Next exact tasks (dependency order)
 

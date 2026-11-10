@@ -13,6 +13,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
+const { writeAudit } = require('./admin');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -153,6 +154,13 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
   if (callerUid !== userId && !(await checkIsAdmin(context))) {
     throw new functions.https.HttpsError('permission-denied', 'You cannot delete this account.');
   }
+
+  // Record the deletion in the audit trail (AGENTS.md: admin mutations are
+  // auditable). A self-service deletion is audited too — it is the most
+  // destructive operation the platform performs.
+  await writeAudit(callerUid, 'delete_user_data', userId, {
+    selfInitiated: callerUid === userId,
+  }, 'user');
 
   const MAX_DIRECT_DELETIONS = 2000;
   let totalDeleted = 0;
@@ -416,6 +424,8 @@ exports.generateFriendRecommendations = functions.https.onCall(async (data, cont
   }
 
   const targetUserId = data.userId || uid;
+  // Admin-triggered write to another user's recommendations: audit it.
+  await writeAudit(uid, 'generate_friend_recommendations', targetUserId, {}, 'user');
   try {
     const recsRef = db.collection('user_recommendations').doc(targetUserId).collection('users');
     const existingSnap = await recsRef.limit(500).get();

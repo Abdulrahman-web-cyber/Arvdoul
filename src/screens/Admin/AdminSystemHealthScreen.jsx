@@ -15,11 +15,14 @@ import {
   Radio,
 } from 'lucide-react';
 import { rumService } from '../../services/rumService.js';
+import { backfillPostPrivacy } from '../../services/callableService.js';
 
 const AdminSystemHealthScreen = () => {
   const navigate = useNavigate();
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState(new Date().toLocaleTimeString());
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillResult, setBackfillResult] = useState(null);
 
   // Component probes. Each entry is measured for real (Firestore round-trip,
   // client heap, RUM vitals); a probe that cannot run reports `unknown` rather
@@ -79,6 +82,24 @@ const AdminSystemHealthScreen = () => {
   useEffect(() => {
     readSessionTelemetry();
   }, [readSessionTelemetry]);
+
+  // Admin maintenance: re-sync the denormalised `authorIsPrivate` flag on legacy
+  // posts. Admin-gated + audit-logged server-side; paged, so it can be re-run
+  // until it reports zero updates.
+  const runPrivacyBackfill = async () => {
+    setBackfillRunning(true);
+    setBackfillResult(null);
+    toast.info('Re-syncing post privacy flags…');
+    try {
+      const res = await backfillPostPrivacy();
+      setBackfillResult(res || { usersScanned: null, postsUpdated: null });
+      toast.success(`Scanned ${res?.usersScanned ?? '—'} users; updated ${res?.postsUpdated ?? '—'} posts.`);
+    } catch (err) {
+      toast.error(err?.message || 'Privacy backfill could not run.');
+    } finally {
+      setBackfillRunning(false);
+    }
+  };
 
   // Diagnostic Runner — every number below is measured, never estimated.
   const runLiveDiagnostics = async () => {
@@ -240,6 +261,46 @@ const AdminSystemHealthScreen = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Maintenance Operations — admin-gated, audit-logged server-side */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">Maintenance Operations</h2>
+            <span className="text-xs text-gray-500">Admin-only · recorded in the audit log</span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white">Re-sync post privacy flags</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Rewrites the denormalised <code>authorIsPrivate</code> flag on posts published before the field
+                existed, so a private account&apos;s history is not left world-readable. Paged and resumable —
+                re-run until it reports zero updates.
+              </p>
+              {backfillResult && (
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">
+                  Scanned{' '}
+                  <b className="text-gray-900 dark:text-white">
+                    {backfillResult.usersScanned === null ? '—' : backfillResult.usersScanned}
+                  </b>{' '}
+                  users · updated{' '}
+                  <b className="text-gray-900 dark:text-white">
+                    {backfillResult.postsUpdated === null ? '—' : backfillResult.postsUpdated}
+                  </b>{' '}
+                  posts
+                </p>
+              )}
+            </div>
+            <button
+              id="run-privacy-backfill-btn"
+              onClick={runPrivacyBackfill}
+              disabled={backfillRunning}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition shadow-sm disabled:opacity-50"
+            >
+              <Database className="w-3.5 h-3.5" />
+              {backfillRunning ? 'Running…' : 'Run privacy backfill'}
+            </button>
           </div>
         </div>
       </div>

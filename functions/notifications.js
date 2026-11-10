@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
 const { checkIsAdmin, getUserEmail } = require('./auth');
+const { writeAudit } = require('./admin');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -555,6 +556,11 @@ exports.createBulkNotificationJob = functions.https.onCall(async (data, context)
   // Fire a worker (Cloud Function or Cloud Task) to process in background
   // For simplicity, we'll just log and return; actual fan‑out should be done in a separate triggered function.
   log('INFO', 'Bulk notification job created', { jobId });
+  // Broadcasting to an audience is a high-reach admin action: audit it.
+  await writeAudit(context.auth?.uid || 'system', 'create_bulk_notification_job', jobId, {
+    audience,
+    template: typeof template === 'string' ? template.slice(0, 120) : undefined,
+  }, 'notification');
   return { success: true, jobId };
 });
 

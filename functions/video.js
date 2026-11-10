@@ -37,6 +37,7 @@ const logger = functions.logger;
 const { checkRateLimit } = require('./rateLimit');
 const { assertAdmin, checkIsAdmin, getUserIdFromContext } = require('./auth');
 const { awardXpSafe } = require('./xpAward');
+const { writeAudit } = require('./admin');
 
 // ----------------------------------------------------------------------
 //  MUX CLIENTS
@@ -868,6 +869,7 @@ exports.generateAudioFingerprint = onCall(async (data, context) => {
   await assertAdmin(context);
   const { videoId } = data || {};
   if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  await writeAudit(getUserIdFromContext(context), 'regenerate_audio_fingerprint', videoId, {}, 'video');
   try {
     return await generateAudioFingerprintInternal(videoId);
   } catch (error) {
@@ -907,6 +909,7 @@ exports.updateViralScore = onCall(async (data, context) => {
   await assertAdmin(context);
   const { videoId } = data || {};
   if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+  await writeAudit(getUserIdFromContext(context), 'recompute_viral_score', videoId, {}, 'video');
   try {
     return await updateViralScoreInternal(videoId);
   } catch (error) {

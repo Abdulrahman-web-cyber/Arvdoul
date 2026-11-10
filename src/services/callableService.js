@@ -254,6 +254,15 @@ export async function applyUserAdminAction(userId, action) {
   return callFunction(FUNCTIONS.APPLY_USER_ADMIN_ACTION, { userId, action });
 }
 
+/**
+ * Admin maintenance: re-sync the denormalised `authorIsPrivate` flag on legacy
+ * posts (published before the field existed). Admin-gated and audit-logged
+ * server-side; paged/resumable, so it can be re-run until it reports 0 updates.
+ */
+export async function backfillPostPrivacy(limit = 500) {
+  return callFunction(FUNCTIONS.BACKFILL_POST_PRIVACY, { limit });
+}
+
 export default {
   FUNCTIONS,
   callFunction,
@@ -265,4 +274,5 @@ export default {
   listAdmins,
   listUsers,
   applyUserAdminAction,
+  backfillPostPrivacy,
 };
