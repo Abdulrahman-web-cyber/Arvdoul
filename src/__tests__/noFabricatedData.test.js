@@ -930,6 +930,17 @@ describe('Unbounded queries bounded', () => {
     expect(svc).toContain("const SAFETY_EDGE_KINDS = new Set(['blocked', 'blocked_by', 'muted', 'restricted']);");
     expect(svc).toContain('const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;');
   });
+
+  test('the live discovery list hides blocked/blocked-by/muted hosts (N241)', () => {
+    // `getActiveLiveStreams` listed every live stream with no block filter, so a
+    // blocked/blocked-by/muted host's stream still surfaced in LiveScreen.
+    const svc = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
+    expect(svc).toContain('const hidden = await this._getHiddenAuthors(options.viewerId);');
+    expect(svc).toContain('return streams.filter((s) => !hidden.has(s.userId));');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
+    expect(screen).toContain('getActiveLiveStreams({ limit: 30, viewerId: user?.uid })');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

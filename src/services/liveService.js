@@ -526,11 +526,19 @@ class UltimateLiveService {
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const streams = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         startTime: doc.data().startTime?.toDate?.()?.toISOString(),
       }));
+      // A blocked/blocked-by/muted host's stream must not surface in the
+      // discovery list (same rule as the video feed and the other discovery
+      // surfaces). Only applied when a viewer is supplied.
+      if (options.viewerId) {
+        const hidden = await this._getHiddenAuthors(options.viewerId);
+        if (hidden.size > 0) return streams.filter((s) => !hidden.has(s.userId));
+      }
+      return streams;
     } catch (error) {
       logger.error('❌ Get active live streams failed:', error);
       return [];
