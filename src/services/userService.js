@@ -1018,6 +1018,21 @@ class ProfessionalUserService {
     if (blockedReverse) throw new Error(`You have blocked this user`);
   }
 
+  /** True when either direction of a block edge exists between the pair. */
+  async _isBlockedPair(userA, userB) {
+    if (!userA || !userB || userA === userB) return false;
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(userA, userB);
+      return Boolean(edge.isBlocking || edge.isBlockedBy);
+    } catch (err) {
+      // Fail closed for a *consent* decision: if the graph cannot be read we
+      // must not mint a follow edge across a possible block.
+      logger.warn('[UserService] block-pair read failed; refusing consent write', { error: err?.message });
+      return true;
+    }
+  }
+
   async followUser(followerId, followingId) {
     if (followerId === followingId) throw new Error('Cannot follow yourself');
     await this._ensureInitialized();
@@ -1157,6 +1172,29 @@ class ProfessionalUserService {
 
   // ---------- private-account follow requests ----------
 
+  /**
+   * Uids on either side of a block with `userId`, resolved through the spine's
+   * actor-scoped list reads (a point read of an absent edge is denied by the
+   * `resource.data` rules, so we never point-read a possibly-missing edge).
+   * Used to keep blocked parties out of the request inboxes.
+   */
+  async _hiddenRequestSenders(userId) {
+    if (!userId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const graph = getSocialGraphService();
+      const [blocked, blockedBy] = await Promise.all([
+        graph.listEdges(userId, 'blocked', { limit: 500 }),
+        graph.listEdges(userId, 'blocked_by', { limit: 500 }),
+      ]);
+      return new Set([...(blocked.ids || []), ...(blockedBy.ids || [])]);
+    } catch (err) {
+      // Fail open: an unreadable graph must not empty the request inbox.
+      logger.warn('[UserService] blocked-pair read failed; not filtering requests', { error: err?.message });
+      return new Set();
+    }
+  }
+
   /** Follow requests the user has received and not yet answered. */
   async getFollowRequests(userId) {
     await this._ensureInitialized();
@@ -1167,7 +1205,13 @@ class ProfessionalUserService {
       where('status', '==', 'pending'),
       fLimit(200)
     ));
-    return { success: true, requests: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+    // A block is terminal: a pending request filed before the block must not
+    // render an actionable "approve" affordance for the person it hides.
+    const hidden = await this._hiddenRequestSenders(userId);
+    const requests = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((r) => !hidden.has(r.fromUserId));
+    return { success: true, requests };
   }
 
   /** Whether `followerId` has a pending follow request outstanding to `followingId`. */
@@ -1201,6 +1245,14 @@ class ProfessionalUserService {
       if (req.status !== 'pending') throw new Error('Already processed');
       requesterId = req.fromUserId;
 
+      // A block is terminal: approving across a block would create the very
+      // follow edge the block removed (and grant a blocked party content
+      // access). Refuse and close the request instead.
+      if (await this._isBlockedPair(ownerId, req.fromUserId)) {
+        transaction.update(requestRef, { status: 'blocked', updatedAt: serverTimestamp() });
+        return { success: false, blocked: true };
+      }
+
       transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
       transaction.set(
         doc(this.firestore, 'follows', `${req.fromUserId}_${req.toUserId}`),
@@ -1210,6 +1262,14 @@ class ProfessionalUserService {
       await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followingCount' });
       return { success: true };
     });
+
+    // A blocked approval is a no-op write (status -> 'blocked'); skip the
+    // counters/notification/XP side effects that only make sense for a real
+    // accepted edge.
+    if (!result.success) {
+      this._invalidateUserCache(ownerId);
+      return result;
+    }
 
     countersManager.invalidate({ docPath: `users/${ownerId}`, field: 'followerCount' });
     countersManager.invalidate({ docPath: `users/${requesterId}`, field: 'followingCount' });
@@ -1585,6 +1645,13 @@ class ProfessionalUserService {
       if (req.status !== 'pending') throw new Error('Already processed');
       requesterId = req.fromUserId;
 
+      // A block is terminal: accepting would mint the mutual follow edges the
+      // block removed. Refuse and close the request instead.
+      if (await this._isBlockedPair(userId, req.fromUserId)) {
+        transaction.update(requestRef, { status: 'blocked', updatedAt: serverTimestamp() });
+        return { success: false, blocked: true };
+      }
+
       transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
 
       // Create mutual follow edges
@@ -1603,7 +1670,7 @@ class ProfessionalUserService {
       return { success: true };
     });
 
-    if (requesterId) {
+    if (requesterId && result.success) {
       try {
         const notif = await this._getNotificationsService();
         const accepter = await this.getUserProfile(userId);
@@ -1662,7 +1729,14 @@ class ProfessionalUserService {
       where('status', '==', 'pending'),
       fLimit(200)
     ));
-    return { success: true, requests: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+    // A block is terminal: a pending friend request from a blocked party (or a
+    // party who blocked the viewer) must not stay actionable in the inbox.
+    const hidden = await this._hiddenRequestSenders(userId);
+    const otherField = type === 'received' ? 'fromUserId' : 'toUserId';
+    const requests = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(r => !hidden.has(r[otherField]));
+    return { success: true, requests };
   }
 
   async blockUser(blockerId, blockedId) {
