@@ -309,6 +309,7 @@ jobs:
           src/__tests__/localContentCacheGuard.test.js
           src/__tests__/liveWiringGuard.test.js
           src/__tests__/notificationsWiringGuard.test.js
+          src/__tests__/notificationBlockFiltering.test.js
           src/__tests__/highlightsWiringGuard.test.js
           src/__tests__/subscriptionLifecycleGuard.test.js
           src/__tests__/orphanModuleGuard.test.js

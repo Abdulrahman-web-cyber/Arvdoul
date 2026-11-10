@@ -328,6 +328,10 @@ class UltimateNotificationsService {
     // Caches
     this.notificationsCache = new LRUCacheWithTTL(NOTIFICATIONS_CONFIG.PERFORMANCE.MAX_CACHE_ENTRIES, NOTIFICATIONS_CONFIG.PERFORMANCE.CACHE_EXPIRY);
     this.userPreferencesCache = new LRUCacheWithTTL(200, 5 * 60 * 1000);
+    // Notification docs carry the sender (`senderId`); a notification from a
+    // party the viewer has since blocked (either direction) or muted must not
+    // render. N231 stopped *new* writes; this hides already-delivered rows.
+    this.hiddenSendersCache = new LRUCacheWithTTL(200, 60 * 1000);
     this.realtimeSubscriptions = new Map();
     this.tokenRefreshInterval = null;
     this.offlineQueue = null; // set after init
@@ -520,8 +524,10 @@ class UltimateNotificationsService {
     try {
       const result = await this.cfGetNotifications({ userId, options });
       const data = result.data;
-      this.notificationsCache.set(cacheKey, data);
-      return data;
+      const hidden = await this._getHiddenSenders(userId);
+      const filtered = { ...data, notifications: this._filterHiddenSenders(data.notifications || [], hidden) };
+      this.notificationsCache.set(cacheKey, filtered);
+      return filtered;
     } catch (err) {
       throw enhanceError(err, 'Failed to fetch notifications');
     }
@@ -849,7 +855,7 @@ class UltimateNotificationsService {
       if (cancelled) return;
       const notifsRef = this.fs.collection(this.firestore, 'users', userId, 'notifications');
       const q = this.fs.query(notifsRef, this.fs.orderBy('createdAt', 'desc'), this.fs.limit(50));
-      const unsubscribe = this.fs.onSnapshot(q, (snapshot) => {
+      const unsubscribe = this.fs.onSnapshot(q, async (snapshot) => {
         if (cancelled) return;
         const changes = snapshot.docChanges();
         const added = [];
@@ -860,7 +866,14 @@ class UltimateNotificationsService {
           if (change.type === 'added') added.push(notification);
           else if (change.type === 'modified') modified.push(notification);
         });
-        callback({ type: 'update', added, modified, subscriptionId });
+        const hidden = await this._getHiddenSenders(userId);
+        if (cancelled) return;
+        callback({
+          type: 'update',
+          added: this._filterHiddenSenders(added, hidden),
+          modified: this._filterHiddenSenders(modified, hidden),
+          subscriptionId,
+        });
       }, (err) => {
         if (!cancelled) callback({ type: 'error', error: err.message, subscriptionId });
       });
@@ -1053,10 +1066,40 @@ class UltimateNotificationsService {
   }
 
   //  PRIVATE HELPERS
+  /**
+   * Senders whose notifications the viewer must not see: users the viewer
+   * blocked, users who blocked the viewer (either direction — a blocker must
+   * not keep surfacing in the viewer's inbox), and users the viewer muted.
+   * Delegates to the graph spine's shared, bounded reader; fails open (empty
+   * set) only when the graph read itself errors.
+   */
+  async _getHiddenSenders(userId) {
+    if (!userId) return new Set();
+    const cached = this.hiddenSendersCache.get(userId);
+    if (cached) return cached;
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const hidden = await getSocialGraphService().getHiddenAuthorIds(userId);
+      this.hiddenSendersCache.set(userId, hidden);
+      return hidden;
+    } catch (err) {
+      logger.warn('[Notifications] hidden-sender read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  /** Drop notifications authored by a hidden sender (system notifications have
+   *  no `senderId` and always survive). */
+  _filterHiddenSenders(notifications, hidden) {
+    if (!hidden || hidden.size === 0) return notifications;
+    return notifications.filter((n) => !n.senderId || !hidden.has(n.senderId));
+  }
+
   _invalidateUserCache(userId) {
     for (const key of this.notificationsCache.cache.keys()) {
       if (key.startsWith(`notifications_${userId}`)) this.notificationsCache.delete(key);
     }
+    this.hiddenSendersCache.delete(userId);
   }
 
   _getPlatform() {
