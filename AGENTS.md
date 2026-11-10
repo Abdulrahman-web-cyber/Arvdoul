@@ -88,7 +88,16 @@ as failures.
   relation through it. Every graph mutation funnels through `_invalidateUserCache`, which
   calls `socialGraphService.invalidate` — do not add a mutation that skips it.
   Blocks/mutes/restricts are party-readable only (`firestore.rules`); a world-readable
-  safety collection is an enumeration leak.
+  safety collection is an enumeration leak. A private account's content is readable by
+  its **approved followers**: `postReadableByViewer`/`postListableShape` gate on
+  `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`), and the
+  `follows` create rule forbids self-creating an edge to a **private** target
+  (`targetIsPrivate()`) — that edge is written only by the owner on approval, so the edge
+  proves consent. The profile-grid query must omit the `authorIsPrivate == false`
+  constraint for an approved-follower view (`getPostsByUser({ constrainAuthorIsPrivate })`
+  from `profileStore`) and keep it otherwise; the public shape is backed by the
+  `posts(authorId, authorIsPrivate, status, visibility, isDeleted, createdAt)` index.
+  Do not re-add a bare `authorIsPrivate == false` gate to the post read rules.
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
   the `deleteUserData` cloud function. The cloud function name and the client method name are
   intentionally different — do not rename one to match the other.

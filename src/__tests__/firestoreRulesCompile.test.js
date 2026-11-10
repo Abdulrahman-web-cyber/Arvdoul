@@ -498,9 +498,11 @@ describe('firestore.rules adversarial checks (emulator)', () => {
     try {
       await env.clearFirestore();
       await env.withSecurityRulesDisabled(async (ctx) => {
+        // dave is a fourth participant so carol can attempt to forge a
+        // receipt for someone other than herself.
         await setDoc(doc(ctx.firestore(), 'conversations/g1'), {
-          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol'],
-          participantCount: 3, admins: ['alice'], createdBy: 'alice',
+          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol', 'dave'],
+          participantCount: 4, admins: ['alice'], createdBy: 'alice',
         });
         await setDoc(doc(ctx.firestore(), 'conversations/g1/messages/m1'), {
           senderId: 'alice', type: 'text', text: 'hi',
@@ -513,9 +515,13 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       // The real receipt path: a participant appends ONLY their own uid.
       await assertSucceeds(updateDoc(doc(bob, 'conversations/g1/messages/m1'),
         { readBy: arrayUnion('bob') }));
-      // A participant cannot forge another member's read receipt...
+      // A participant cannot forge ANOTHER member's read receipt (the only
+      // permitted difference is the caller's own uid — carol appending dave).
       await assertFails(updateDoc(doc(carol, 'conversations/g1/messages/m1'),
-        { readBy: ['alice', 'carol', 'bob'] }));
+        { readBy: arrayUnion('dave') }));
+      // Carol may still append her own uid...
+      await assertSucceeds(updateDoc(doc(carol, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('carol') }));
       // ...nor wipe the record of who has read it.
       await assertFails(updateDoc(doc(carol, 'conversations/g1/messages/m1'), { readBy: [] }));
     } finally {
@@ -676,21 +682,26 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await assertFails(setDoc(doc(dave, 'message_requests/forged_1'), {
         senderId: 'dave', recipientId: 'erin', status: 'pending',
       }));
-      // The correctly-shaped request is accepted, and now authorises the DM.
+      // The correctly-shaped request is accepted. The SENDER cannot open the
+      // DM off their own request — consent belongs to the recipient, who is
+      // the only party the rule admits (`dmRequestFrom(erin, dave)` reads
+      // `message_requests/erin_dave`). This mirrors the real accept path:
+      // `respondToMessageRequest` → `createConversation` runs as the recipient.
       await assertSucceeds(setDoc(doc(dave, 'message_requests/erin_dave'), {
         senderId: 'dave', recipientId: 'erin', status: 'pending',
       }));
-      await assertSucceeds(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      const erin = env.authenticatedContext('erin').firestore();
+      await assertFails(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      await assertSucceeds(setDoc(doc(erin, 'conversations/direct_dave_erin'), dm('erin', 'dave')));
 
       // N204 — a DECLINED request must NOT authorise the conversation. The
       // recipient flips the status (the real respond path), after which
       // `dmRequestFrom` no longer returns true.
-      const erin = env.authenticatedContext('erin').firestore();
       await assertSucceeds(setDoc(doc(erin, 'message_requests/erin_dave'), {
         senderId: 'dave', recipientId: 'erin', status: 'declined',
       }, { merge: true }));
-      await assertFails(setDoc(doc(dave, 'conversations/direct_erin_dave_2'), {
-        id: 'direct_erin_dave_2', type: 'direct', participants: ['dave', 'erin'], createdBy: 'dave',
+      await assertFails(setDoc(doc(erin, 'conversations/direct_erin_dave_2'), {
+        id: 'direct_erin_dave_2', type: 'direct', participants: ['dave', 'erin'], createdBy: 'erin',
       }));
     } finally {
       await env.cleanup();
@@ -887,6 +898,66 @@ describe('firestore.rules adversarial checks (emulator)', () => {
 
       // ...and an unconstrained query is denied wholesale.
       await assertFails(getDocs(query(collection(bob, 'posts'), limit(50))));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a private author\'s approved follower reads the grid; a stranger cannot (N206)', async () => {
+    // The capability engine grants `canViewContent` to an approved follower of a
+    // private account, but the read rule hard-required `authorIsPrivate == false`
+    // with no follower branch, so a follower's profile grid silently returned 0
+    // (and the author-scoped query was denied). The follower shape must NOT
+    // constrain `authorIsPrivate` (the rule proves the edge from `authorId`).
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users/alice'), { isPrivate: true });
+        await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
+        for (let i = 0; i < 3; i++) {
+          await setDoc(doc(db, `posts/priv${i}`), { authorId: 'alice', authorIsPrivate: true, visibility: 'public', status: 'published', isDeleted: false, expiresAt: null, createdAt: i });
+        }
+      });
+      const bob = env.authenticatedContext('bob').firestore();   // approved follower
+      const dave = env.authenticatedContext('dave').firestore(); // stranger
+
+      // The approved-follower shape (no authorIsPrivate constraint) is admitted
+      // and returns the private author's posts.
+      const followerGrid = (db) => query(collection(db, 'posts'),
+        where('authorId', '==', 'alice'), where('status', '==', 'published'),
+        where('isDeleted', '==', false), where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'), limit(30));
+      const snap = await assertSucceeds(getDocs(followerGrid(bob)));
+      expect(snap.size).toBe(3);
+      await assertSucceeds(getDoc(doc(bob, 'posts/priv1')));
+
+      // A stranger cannot list or read the private author's posts.
+      await assertFails(getDocs(followerGrid(dave)));
+      await assertFails(getDoc(doc(dave, 'posts/priv1')));
+
+      // The bypass this depends on: a user cannot self-create a `follows` edge
+      // to a private account (that edge is only written by the owner on
+      // approval), or they would gain content access without consent.
+      await assertFails(setDoc(doc(dave, 'follows/dave_alice'), { followerId: 'dave', followingId: 'alice' }));
+
+      // The owner's approval path still writes the edge for the requester.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'follow_requests/erin_alice'), { fromUserId: 'erin', toUserId: 'alice', status: 'pending' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      await assertSucceeds(setDoc(doc(alice, 'follows/erin_alice'), { followerId: 'erin', followingId: 'alice' }));
     } finally {
       await env.cleanup();
     }

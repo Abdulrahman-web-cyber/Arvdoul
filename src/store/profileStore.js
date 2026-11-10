@@ -21,6 +21,27 @@ import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
 import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
 
+/**
+ * Whether a profile grid read must use the approved-follower query shape — i.e.
+ * omit the `authorIsPrivate == false` constraint the public shape requires.
+ *
+ * A private author's grid is only listable through the rule's follower branch
+ * (`followEdgeExists(uid(), authorId)`), which the rule proves from the
+ * constrained `authorId`; adding `authorIsPrivate == false` would exclude the
+ * private author's own posts and return an empty grid. Only use this shape when
+ * the target is private AND the viewer already follows it — everyone else keeps
+ * the public shape, so an unconstrained (denied) list is never issued.
+ */
+function isApprovedFollowerView(get, userId, options) {
+  const state = get();
+  const profile = options.profile || state.profile;
+  if (!profile || (profile.id !== userId && profile.uid !== userId)) return false;
+  if (profile.isPrivate !== true) return false;
+  const viewerUid = getStoredUid() || useAppStore.getState().currentUser?.uid || null;
+  if (!viewerUid || viewerUid === userId) return false;
+  return state.followStatus?.isFollowing === true;
+}
+
 const initialState = {
   // Profile data
   profile: null,
@@ -374,6 +395,11 @@ export const useProfileStore = create(
         const result = await firestoreService.getPostsByUser(userId, {
           limit: options.limit || 12,
           viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
+          // A private author's approved follower reads the grid through the
+          // follower shape, which must NOT constrain `authorIsPrivate` (the rule
+          // proves the edge from `authorId`). Everyone else keeps the public
+          // shape — an unconstrained list is denied wholesale.
+          constrainAuthorIsPrivate: !isApprovedFollowerView(get, userId, options),
           ...options,
         });
 
@@ -437,6 +463,7 @@ export const useProfileStore = create(
           limit: 12,
           cursor: postsCursor,
           viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
+          constrainAuthorIsPrivate: !isApprovedFollowerView(get, userId, {}),
         });
 
         if (!get()._isLoadCurrent('posts', __seq)) return;
