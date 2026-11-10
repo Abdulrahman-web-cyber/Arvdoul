@@ -39,10 +39,13 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N208 | A server-created community post had no `expiresAt`; the get-rule raised on the absent field | `postReadableByViewer` read `resource.data.expiresAt` directly (raises when absent → denies the read); `createCommunityPost` wrote no `expiresAt`, so the UI-created community post was unreadable by everyone. Rule now uses `.get('expiresAt', null)`; the callable writes `expiresAt: null`. Emulator N208 check. |
 | N209 | Admin-gated Cloud Functions changed state with no audit record; a deployed admin callable was unreachable | Added `writeAudit` to `deleteUserData`, `generateFriendRecommendations`, `createBulkNotificationJob`, `generateAudioFingerprint`, `updateViralScore`, `backfillPrivacyBoundary`; wired the dead `FUNCTIONS.BACKFILL_POST_PRIVACY` key into a new *Maintenance Operations* panel on `AdminSystemHealthScreen` (+ `callableService.backfillPostPrivacy()`). Two new hard-failing guards: `functionsInventoryGuard.test.js` (dead `FUNCTIONS` key / ad-hoc `httpsCallable` literal / frozen unreferenced-callable baseline — may only shrink) and `adminAuditGuard.test.js` (no admin write without an audit record). |
 | N210 | `daily_upload_counters` trusted the `userId` field but not the document id — a user could write another user's daily upload counter | Rule now pins the shard id to the caller (`shardId.matches('upload_' + uid() + '_...')`), mirroring `unread_counters`. Emulator N210 check + static guard in `firestoreRulesCompile.test.js`. |
+| N211 | `functions/saml.js` claimed to reject encrypted assertions but did not; its attribute parser could not read the standard nested `<AttributeValue>` shape | Added an explicit encrypted-assertion rejection (was a misleading issuer-mismatch); `extractAttr` now tolerates the nested wrapper. New `privacyPropagationAndSaml.test.js` (real RSA-SHA256 verify; auth/issuer/audience/signature pins; propagation owner-scoping + bounded paging + audit). |
+| N212 | Withdrawal settlement accepted a caller-supplied coin→USD rate; the economy summary re-derived the rate by hand | Removed the `coinsPerDollar` override (settlement reads the shared config only); `getEconomySummary` uses `coinsToUsd`. Canonical model in `docs/engineering/money-model.md`; `functionsContract` + `sharedConfigSync` guards. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
-`storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`.
+`storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
+`privacyPropagationAndSaml`.
 
 ## Next exact tasks (dependency order)
 
