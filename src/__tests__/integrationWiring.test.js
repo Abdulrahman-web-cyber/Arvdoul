@@ -344,6 +344,22 @@ describe('comment reliability: moderation-visible states stay in the thread', ()
     expect(drawer).toMatch(/getReplies\([\s\S]*startAfter/);
     expect(src).toMatch(/const afterId = options\.startAfter \|\| options\.cursor/);
   });
+
+  test('getCommentsByPost applies the drawer\'s `startAfter` cursor and returns hasMore/nextCursor', () => {
+    const src = read('src/services/commentService.js');
+    const drawer = read('src/screens/CommentsDrawer.jsx');
+    // The drawer's "load more" sends the cursor and reads both fields back.
+    expect(drawer).toMatch(/getCommentsByPost\([\s\S]*startAfter: postState\.nextCursor/);
+    expect(drawer).toMatch(/appendComments\(postId, result\.comments, result\.hasMore, result\.nextCursor\)/);
+    // The service must read the cursor name and return the pagination fields —
+    // previously it did neither, so load-more re-fetched page 1 forever. Scope
+    // the slice to getCommentsByPost only (getReplies has the same helpers).
+    const start = src.indexOf('async getCommentsByPost');
+    const method = src.slice(start, src.indexOf('async getComment(', start));
+    expect(method).toMatch(/const afterId = options\.startAfter \|\| options\.cursor/);
+    expect(method).toMatch(/startAfter\(cursorSnap\)/);
+    expect(method).toMatch(/nextCursor = hasMore && snapshot\.docs\?\.length/);
+  });
 });
 
 describe('AudioCard playback state stays in sync', () => {
