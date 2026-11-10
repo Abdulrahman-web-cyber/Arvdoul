@@ -219,14 +219,9 @@ describe('feedService - hidden authors (block + mute)', () => {
     svc().initialized = true;
   });
 
-  test('_getHiddenAuthorsCached unions blocked, blocked-by and muted edges', async () => {
+  test('_getHiddenAuthorsCached delegates to the spine hidden-author reader', async () => {
     globalThis.__graphMock = {
-      listConnections: jest.fn(async (_uid, kind) => ({
-        connections:
-          kind === 'blocked' ? [{ id: 'blocked-1' }, { uid: 'blocked-2' }]
-            : kind === 'blocked_by' ? [{ id: 'blocker-1' }]
-              : [{ id: 'muted-1' }],
-      })),
+      getHiddenAuthorIds: jest.fn(async () => new Set(['blocked-1', 'blocked-2', 'blocker-1', 'muted-1'])),
     };
     const hidden = await svc()._getHiddenAuthorsCached('viewer');
     expect(hidden.has('blocked-1')).toBe(true);
@@ -235,13 +230,11 @@ describe('feedService - hidden authors (block + mute)', () => {
     expect(hidden.has('blocker-1')).toBe(true);
     // The mute must be honoured too — muting was a dead control before this.
     expect(hidden.has('muted-1')).toBe(true);
-    expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'blocked', expect.any(Object));
-    expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'blocked_by', expect.any(Object));
-    expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'muted', expect.any(Object));
+    expect(globalThis.__graphMock.getHiddenAuthorIds).toHaveBeenCalledWith('viewer');
   });
 
   test('a failed graph read hides nobody (fails open, no throw)', async () => {
-    globalThis.__graphMock = { listConnections: jest.fn(async () => { throw new Error('offline'); }) };
+    globalThis.__graphMock = { getHiddenAuthorIds: jest.fn(async () => { throw new Error('offline'); }) };
     const hidden = await svc()._getHiddenAuthorsCached('viewer-2');
     expect(hidden.size).toBe(0);
   });

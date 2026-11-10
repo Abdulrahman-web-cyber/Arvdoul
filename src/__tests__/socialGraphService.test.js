@@ -181,6 +181,38 @@ describe('listEdges (bounded, index-backed)', () => {
   });
 });
 
+describe('getHiddenAuthorIds + suggestions safety (N225)', () => {
+  test('unions blocked, blocked-by and muted edges', async () => {
+    store.set('blocks/me_x', { blockerId: 'me', blockedId: 'x' });
+    store.set('blocks/y_me', { blockerId: 'y', blockedId: 'me' });
+    store.set('mutes/me_z', { muterId: 'me', mutedId: 'z' });
+    const hidden = await getSocialGraphService().getHiddenAuthorIds('me');
+    expect([...hidden].sort()).toEqual(['x', 'y', 'z']);
+  });
+
+  test('fails open (empty set) when the graph read throws', async () => {
+    const svc = getSocialGraphService();
+    const spy = jest.spyOn(svc, 'listEdges').mockRejectedValue(new Error('offline'));
+    const hidden = await svc.getHiddenAuthorIds('me');
+    expect(hidden.size).toBe(0);
+    spy.mockRestore();
+  });
+
+  test('a blocked friends-of-friends candidate is not suggested', async () => {
+    // me -> a -> {blocked, ok}; a blocked candidate must be dropped.
+    seedFollow('me', 'a');
+    seedFollow('a', 'blocked');
+    seedFollow('a', 'ok');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    store.set('users/ok', { uid: 'ok', displayName: 'Okay' });
+    const recs = await getSocialGraphService().getSuggestions('me', { limit: 10 });
+    const ids = recs.map((r) => r.id || r.uid);
+    expect(ids).toContain('ok');
+    expect(ids).not.toContain('blocked');
+  });
+});
+
 describe('listMutualConnections (friends = mutual follow)', () => {
   test('keeps only follow-backs and hydrates them', async () => {
     seedFollow('me', 'a'); seedFollow('a', 'me'); // mutual

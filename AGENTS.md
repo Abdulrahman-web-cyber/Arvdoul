@@ -93,7 +93,10 @@ as failures.
   unions the `blocked`, `blocked_by` (reverse block) and `muted` edge lists through the spine,
   and every feed builder drops those authors — do not filter `blocks` alone, and do not read
   only the outgoing block direction. A block additionally denies messaging and profile access;
-  a mute is a viewer preference only. A private account's content is readable by
+  a mute is a viewer preference only. Reuse `socialGraphService.getHiddenAuthorIds(uid)` (the
+  union of blocked + blocked_by + muted, bounded, fails open) rather than re-reading the three
+  edge lists per surface — suggestions (`getSuggestions`) and the Sparks video fallback
+  (`videoService.getVideoFeed`) already do. A private account's content is readable by
   its **approved followers**: `postReadableByViewer`/`postListableShape` gate on
   `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`), and the
   `follows` create rule forbids self-creating an edge to a **private** target

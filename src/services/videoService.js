@@ -639,22 +639,15 @@ class UltimateVideoService {
   }
 
   /**
-   * Authors whose videos must not appear in the viewer's Sparks feed: anyone
-   * the viewer blocked, anyone who blocked the viewer, and anyone the viewer
-   * muted. Read through the graph spine (bounded, rules-provable). Fails open
-   * (hides nobody) only when the graph read errors.
+   * Authors whose videos must not appear in the viewer's Sparks feed: blocked,
+   * blocked-by and muted. Delegates to the graph spine's shared hidden-author
+   * reader (bounded, fails open on error).
    */
   async _getHiddenAuthors(userId) {
     if (!userId || userId === 'anonymous_user') return new Set();
     try {
       const { getSocialGraphService } = await import('./socialGraphService.js');
-      const graph = getSocialGraphService();
-      const [blocked, blockedBy, muted] = await Promise.all([
-        graph.listEdges(userId, 'blocked', { limit: 500 }),
-        graph.listEdges(userId, 'blocked_by', { limit: 500 }),
-        graph.listEdges(userId, 'muted', { limit: 500 }),
-      ]);
-      return new Set([...(blocked.ids || []), ...(blockedBy.ids || []), ...(muted.ids || [])]);
+      return await getSocialGraphService().getHiddenAuthorIds(userId);
     } catch (err) {
       logger.warn('[Video] hidden-author read failed; not filtering', { error: err?.message });
       return new Set();

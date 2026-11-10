@@ -407,24 +407,14 @@ class UltimateFeedService {
     if (cached && Date.now() - cached.ts < FEED_CONFIG.BLOCK_CACHE_TTL) return cached.data;
     try {
       await this._ensureInitialized();
-      // Single graph reader: the spine owns the rules-provable edge queries.
-      // A MUTE must also hide the author's posts from the feed — it was written
-      // by `userService.muteUser` but nothing read it, so muting did nothing.
-      // `blocked_by` is the reverse block: someone who blocks the viewer must
-      // not keep surfacing their posts to the viewer (search already reads both
-      // directions; the feed read only outgoing blocks and leaked the blocker's
-      // content back to the blocked party).
+      // Single graph reader: the spine's `getHiddenAuthorIds` unions blocked +
+      // blocked_by + muted through the rules-provable edge lists (ids only — no
+      // wasted profile hydration, unlike `listConnections`). A MUTE must hide
+      // the author's posts (it was written but never read = dead control), and
+      // the reverse block must too (someone who blocks the viewer must not keep
+      // surfacing their posts).
       const { getSocialGraphService } = await import('./socialGraphService.js');
-      const graph = getSocialGraphService();
-      const [blocked, blockedBy, muted] = await Promise.all([
-        graph.listConnections(userId, 'blocked', { viewerId: userId, limit: 500 }),
-        graph.listConnections(userId, 'blocked_by', { viewerId: userId, limit: 500 }),
-        graph.listConnections(userId, 'muted', { viewerId: userId, limit: 500 }),
-      ]);
-      const hidden = new Set(
-        [...blocked.connections, ...blockedBy.connections, ...muted.connections]
-          .map((c) => c.id || c.uid).filter(Boolean)
-      );
+      const hidden = await getSocialGraphService().getHiddenAuthorIds(userId);
       this.blockCache.set(key, { data: hidden, ts: Date.now() });
       return hidden;
     } catch (e) { return new Set(); }

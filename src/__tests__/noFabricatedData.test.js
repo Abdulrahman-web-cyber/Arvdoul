@@ -767,21 +767,21 @@ describe('Unbounded queries bounded', () => {
     // list; the feed must delegate rather than query `blocks`/`mutes` itself,
     // and it must honour a MUTE as well as a block (muting was a dead control).
     const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
-    expect(feed).toContain("graph.listConnections(userId, 'blocked'");
-    expect(feed).toContain("graph.listConnections(userId, 'blocked_by'");
-    expect(feed).toContain("graph.listConnections(userId, 'muted'");
+    expect(feed).toContain('getHiddenAuthorIds(userId)');
     expect(feed).not.toMatch(/collection\(\s*this\.firestore,\s*'(blocks|mutes)'/);
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(spine).toContain('MAX_PAGE_SIZE');
+    // The shared hidden-author reader unions all three safety edges (N223/N225).
+    expect(spine).toContain("this.listEdges(userId, 'blocked'");
+    expect(spine).toContain("this.listEdges(userId, 'blocked_by'");
+    expect(spine).toContain("this.listEdges(userId, 'muted'");
   });
 
   test('the Sparks video feed hides blocked/blocked-by/muted authors (N224)', () => {
     // `videoService.getVideoFeed`'s direct `videos`/`posts` fallback query had no
     // moderation filter, so a blocked or muted creator's Sparks still surfaced.
     const video = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
-    expect(video).toContain("graph.listEdges(userId, 'blocked'");
-    expect(video).toContain("graph.listEdges(userId, 'blocked_by'");
-    expect(video).toContain("graph.listEdges(userId, 'muted'");
+    expect(video).toContain('getHiddenAuthorIds(userId)');
     expect(video).toContain('await this._getHiddenAuthors(safeUserId)');
   });
 });
