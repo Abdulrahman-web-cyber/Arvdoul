@@ -305,10 +305,26 @@ class CommunityService {
     return result?.post;
   }
 
+  /**
+   * Authors whose community posts must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('[Community] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getCommunityPosts(communityId, options = {}) {
     await this.initialize();
-    
-    const { page = 1, sortBy = 'recent', status = 'published' } = options;
+
+    const { page = 1, sortBy = 'recent', status = 'published', viewerId = null } = options;
+    const hiddenAuthors = await this._getHiddenAuthors(viewerId);
     
     // The list rule proves a community feed only via
     // `communityId == X` + `visibility == 'community'` + `status == 'published'`
@@ -332,7 +348,9 @@ class CommunityService {
     q = query(q, limit(COMMUNITIES_PER_PAGE));
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(p => !hiddenAuthors.has(p.authorId || p.userId));
   }
 
   // Moderation actions are audited server-side by the community callables

@@ -49,7 +49,7 @@ const CommunityDetailScreen = () => {
 
       // Load posts
       if (data.privacy === 'public' || data.members?.[user?.uid]) {
-        const communityPosts = await communityService.getCommunityPosts(communityId);
+        const communityPosts = await communityService.getCommunityPosts(communityId, { viewerId: user?.uid });
         setPosts(communityPosts);
       }
 

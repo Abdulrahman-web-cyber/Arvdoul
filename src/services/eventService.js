@@ -246,6 +246,21 @@ class EventService {
    * @param {Object} options - Query options
    * @returns {Promise<Object>} List of events and pagination info
    */
+  /**
+   * Authors whose events must not surface for the viewer: blocked, blocked-by
+   * and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('[Events] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async listEvents(options = {}) {
     await this.initialize();
     
@@ -257,8 +272,11 @@ class EventService {
       type = null,
       communityId = null,
       userId = null,
-      startAfterId = null
+      startAfterId = null,
+      viewerId = null
     } = options;
+
+    const hiddenAuthors = await this._getHiddenAuthors(viewerId);
 
     let q = collection(this.db, 'events');
     // `status` is the caller's explicit lifecycle filter (the discovery screen
@@ -304,10 +322,11 @@ class EventService {
 
     const querySnapshot = await getDocs(query(q, ...constraints));
     
-    const events = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // An event is hidden when its organizer is blocked/blocked-by/muted; an
+    // event the viewer organizes is always theirs to see.
+    const events = querySnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(e => !hiddenAuthors.has(e.organizerId) || e.organizerId === viewerId);
 
     const hasMore = events.length === EVENTS_PER_PAGE;
     return {

@@ -841,6 +841,28 @@ describe('Unbounded queries bounded', () => {
     // The viewer must be threaded in, or the filter never runs.
     expect(card).toContain('currentUser={currentUser}');
   });
+
+  test('community posts hide blocked/blocked-by/muted authors (N234)', () => {
+    // `communityService.getCommunityPosts` queried the community feed with no
+    // block filter, so a blocked member's posts still rendered in the community.
+    const svc = fs.readFileSync(path.join(root, 'src/services/communityService.js'), 'utf8');
+    expect(svc).toContain('getHiddenAuthorIds(viewerId)');
+    expect(svc).toContain('.filter(p => !hiddenAuthors.has(p.authorId || p.userId))');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Community/CommunityDetailScreen.jsx'), 'utf8');
+    expect(screen).toContain('getCommunityPosts(communityId, { viewerId: user?.uid })');
+  });
+
+  test('the event discovery feed hides blocked/blocked-by/muted organizers (N235)', () => {
+    // `eventService.listEvents` queried the discovery feed with no block
+    // filter, so a blocked organizer's event still appeared in Explore/Events.
+    const svc = fs.readFileSync(path.join(root, 'src/services/eventService.js'), 'utf8');
+    expect(svc).toContain('getHiddenAuthorIds(viewerId)');
+    expect(svc).toContain('.filter(e => !hiddenAuthors.has(e.organizerId) || e.organizerId === viewerId)');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Event/EventDiscoveryScreen.jsx'), 'utf8');
+    expect(screen).toContain('viewerId: user?.uid');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

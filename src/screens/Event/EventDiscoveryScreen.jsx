@@ -45,7 +45,8 @@ const EventDiscoveryScreen = () => {
       const options = {
         page: currentPage,
         startAfterId,
-        sortBy
+        sortBy,
+        viewerId: user?.uid
       };
 
       if (type !== 'all') {
@@ -75,7 +76,7 @@ const EventDiscoveryScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [eventService, page, sortBy, type, filter]);
+  }, [eventService, page, sortBy, type, filter, user?.uid]);
 
   // Load user's events
   const loadMyEvents = useCallback(async () => {
