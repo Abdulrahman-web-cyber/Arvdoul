@@ -483,6 +483,9 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     publishedAt: FieldValue.serverTimestamp(),
+    // Canonical post shape: `expiresAt` is present (null = never expires) so the
+    // client's `postReadableByViewer` get-rule never hits an absent field.
+    expiresAt: null,
     status: community.moderation?.contentApproval ? 'pending' : 'published',
     isDeleted: false,
   };

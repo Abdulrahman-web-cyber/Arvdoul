@@ -963,6 +963,44 @@ describe('firestore.rules adversarial checks (emulator)', () => {
     }
   });
 
+  test('a post without an expiresAt field is still readable (N208)', async () => {
+    // The get-rule read `resource.data.expiresAt` directly, which RAISES when the
+    // field is absent — denying the whole read. A post that never expires
+    // legitimately omits `expiresAt` (the server's `createCommunityPost` did),
+    // so the member who created the community post could not read it back. The
+    // rule now uses `.get('expiresAt', null)`.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'communities/c1'), { privacy: 'private', members: { bob: { role: 'member' } } });
+        // Exactly the server `createCommunityPost` shape (no `expiresAt`).
+        await setDoc(doc(db, 'posts/comm1'), { authorId: 'alice', authorIsPrivate: false, communityId: 'c1', content: 'hi', type: 'text', media: [], visibility: 'community', status: 'published', isDeleted: false, createdAt: 1 });
+        await setDoc(doc(db, 'posts/pub1'), { authorId: 'alice', authorIsPrivate: false, content: 'hi', type: 'text', media: [], visibility: 'public', status: 'published', isDeleted: false, createdAt: 2 });
+      });
+      const bob = env.authenticatedContext('bob').firestore();   // community member
+      const dave = env.authenticatedContext('dave').firestore(); // non-member
+
+      await assertSucceeds(getDoc(doc(bob, 'posts/comm1')));
+      await assertSucceeds(getDoc(doc(dave, 'posts/pub1')));
+      // Membership is still enforced — a non-member is denied the community post.
+      await assertFails(getDoc(doc(dave, 'posts/comm1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
   test('the owner story grid lists while another user\'s grid is denied (N-story-list)', async () => {
     // A story `list` rule may only read fields the query constrains: the old
     // combined `allow read` read isDeleted/status/expiresAt/moderationStatus/

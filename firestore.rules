@@ -159,7 +159,12 @@ service cloud.firestore {
       return (isSignedIn() && resource.data.authorId == uid()) ||
         isAdmin() ||
         (resource.data.isDeleted == false &&
-          (resource.data.expiresAt == null || resource.data.expiresAt > request.time) &&
+          // `expiresAt` is optional: a post that never expires legitimately
+          // omits it (the server's `createCommunityPost` does). Reading
+          // `resource.data.expiresAt` directly RAISES on an absent field, which
+          // denies the whole `get` — so a member could not read their own
+          // community's post. `.get(field, null)` treats "absent" as "no expiry".
+          (resource.data.get('expiresAt', null) == null || resource.data.expiresAt > request.time) &&
           (
             // A community post is readable when its community is public or the
             // viewer is a member. Community posts carry no `authorIsPrivate`
