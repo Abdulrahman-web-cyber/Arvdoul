@@ -831,6 +831,16 @@ describe('Unbounded queries bounded', () => {
     const screen = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
     expect(screen).toContain('getLiveComments(watching.id, { limit: 50, viewerId: user.uid })');
   });
+
+  test('the PostCard inline comment preview hides blocked authors (N233)', () => {
+    // `PostCard`'s `InlineComments` previewed the two latest comments with no
+    // block filter, so a blocked user's comment surfaced under every post card.
+    const card = fs.readFileSync(path.join(root, 'src/screens/PostCard.jsx'), 'utf8');
+    expect(card).toContain('userService.getBlockedUserIds(uid)');
+    expect(card).toContain('preview.filter((c) => !blockedUserIds.has(c.userId || c.user?.id))');
+    // The viewer must be threaded in, or the filter never runs.
+    expect(card).toContain('currentUser={currentUser}');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

@@ -426,9 +426,19 @@ const DoubleTapHeart = React.memo(({ position, onFinish, prefersReducedMotion })
 });
 
 // 8. INLINE COMMENT PREVIEW (abort controller only, no mounted flag)
-const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible, tokens }) => {
+const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible, tokens, currentUser }) => {
   const [preview, setPreview] = useState([]);
+  const [blockedUserIds, setBlockedUserIds] = useState(new Set());
   const abortRef = useRef(null);
+  useEffect(() => {
+    let cancelled = false;
+    const uid = currentUser?.uid;
+    if (!uid) { setBlockedUserIds(new Set()); return; }
+    userService.getBlockedUserIds(uid)
+      .then((ids) => { if (!cancelled) setBlockedUserIds(ids instanceof Set ? ids : new Set(ids || [])); })
+      .catch(() => { if (!cancelled) setBlockedUserIds(new Set()); });
+    return () => { cancelled = true; };
+  }, [currentUser?.uid]);
   useEffect(() => {
     if (!isVisible || totalComments === 0) return;
     if (abortRef.current) abortRef.current.abort();
@@ -441,13 +451,18 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
       });
     return () => abortRef.current?.abort();
   }, [postId, isVisible, totalComments]);
-  if (!preview.length) return null;
+  // A block is mutual: never preview a commenter the viewer blocked or who blocked them.
+  const visiblePreview = useMemo(
+    () => preview.filter((c) => !blockedUserIds.has(c.userId || c.user?.id)),
+    [preview, blockedUserIds]
+  );
+  if (!visiblePreview.length) return null;
   return (
     <div className="px-4 pb-2">
       <button onClick={onViewAll} className="text-xs hover:underline mb-1" style={{ color: tokens.textSecondary }}>
         {typeof totalComments === 'number' ? `View all ${totalComments} comments` : 'View all comments'}
       </button>
-      {preview.map(comment => (
+      {visiblePreview.map(comment => (
         <div key={comment.id} className="flex gap-2 py-1">
           <img src={comment.userAvatar || '/assets/default-profile.png'} className="w-6 h-6 rounded-full" alt="" />
           <div>
@@ -1157,7 +1172,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}
-      <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} />
+      <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} currentUser={currentUser} />
 
       {/* ENGAGEMENT STATS (simplified – only analytics toggle for creators) */}
       <div className="px-3 py-1 flex justify-end items-center text-sm">
