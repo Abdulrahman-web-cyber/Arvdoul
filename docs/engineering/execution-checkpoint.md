@@ -55,14 +55,15 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N224 | The Sparks video feed had **no** moderation filter: `videoService.getVideoFeed`'s direct `videos`/`posts` fallback filtered only `isDeleted`, so blocked/blocked-by/muted creators' videos still surfaced | `videoService._getHiddenAuthors(userId)` delegates to the spine's `getHiddenAuthorIds`; the fallback filters those ids. `noFabricatedData.test.js` gains a pin. |
 | N225 | `socialGraphService.getSuggestions` returned the server callable's recommendations and its friends-of-friends fallback with **no** safety filter, so a blocked/blocked-by/muted user could be suggested back | New `socialGraphService.getHiddenAuthorIds(userId)` (blocked + blocked_by + muted, bounded, fails open); `getSuggestions` drops hidden ids and the viewer on both paths. `socialGraphService.test.js` gains union + fail-open + blocked-candidate tests. |
 | N226 | A block hid content in only one direction on comments (`CommentsDrawer`) and the home feed's own optimistic filter (`HomeScreen`): both read the outgoing-only `getBlockedUsers`, so a user who **blocked the viewer** still had their comments/posts rendered | New `userService.getBlockedUserIds(uid)` unions `blocked` + `blocked_by` via the spine; both surfaces use it (`getBlockedUsers` stays only for the manage-my-blocks screen). New `userServiceBlockReaders.test.js` (guards job); `noFabricatedData.test.js` pins the drawer's switch. |
-| N227 | The **server** feed engine (`functions/feed.js`) read only the outgoing block direction in all three builders, so it served a blocker's posts into the blocked party's feed | New `resolveHiddenAuthorIds(userId)` unions `blockerId == userId` + `blockedId == userId`; all three builders use it. New `functionsFeedBlockFilter.test.js` (guards job) pins the two-direction helper. |
+| N227 | The **server** feed engine (`functions/feed.js`) read only the outgoing block direction in all three builders, so it served a blocker's posts into the blocked party's feed | New `resolveHiddenAuthorIds(userId)` unions `blockerId == userId` + `blockedId == userId`; all three builders use it. New `functionsModerationFilterGuard.test.js` (guards job) pins the two-direction helper. |
+| N228 | `functions/video.js#getVideoRecommendations` ("watch next") had **no** block filter, so a blocked creator's videos surfaced in the "More videos" rail under the video being watched | The callable now loads both block directions (bounded, fails open) and drops hidden authors on the same-creator and tag paths. `functionsModerationFilterGuard.test.js` pins it. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
 `privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,
 `searchPaginationService`, `commentPaginationWiring`, `directoryPaginationService`,
-`conversationPaginationService`, `userServiceBlockReaders`, `functionsFeedBlockFilter`.
+`conversationPaginationService`, `userServiceBlockReaders`, `functionsModerationFilterGuard`.
 
 ## Next exact tasks (dependency order)
 

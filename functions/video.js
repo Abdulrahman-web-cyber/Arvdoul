@@ -699,10 +699,25 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
     if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
     const video = videoDoc.data();
 
+    // Hide recommendations from creators the viewer blocked (and who blocked the
+    // viewer). A block is a mutual denial; the recommendation read had no filter.
+    const hiddenAuthors = new Set();
+    try {
+      const uid = context.auth.uid;
+      const [outgoing, incoming] = await Promise.all([
+        db.collection('blocks').where('blockerId', '==', uid).get(),
+        db.collection('blocks').where('blockedId', '==', uid).get(),
+      ]);
+      outgoing.docs.forEach((d) => hiddenAuthors.add(d.data().blockedId));
+      incoming.docs.forEach((d) => hiddenAuthors.add(d.data().blockerId));
+    } catch (err) {
+      logger.warn('getVideoRecommendations: block filter unavailable', { error: err.message });
+    }
+
     const seenIds = new Set([videoId]);
     const recommendations = [];
 
-    if (video.userId) {
+    if (video.userId && !hiddenAuthors.has(video.userId)) {
       const snap = await db.collection('videos').where('userId', '==', video.userId).where('isDeleted', '==', false).orderBy('createdAt', 'desc').limit(5).get();
       snap.forEach(doc => { if (!seenIds.has(doc.id) && doc.data().status === 'ready') { seenIds.add(doc.id); recommendations.push({ id: doc.id, ...doc.data() }); } });
     }
@@ -711,7 +726,7 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
     for (const tag of tags) {
       if (recommendations.length >= 10) break;
       const snap = await db.collection('videos').where('tags', 'array-contains', tag).where('isDeleted', '==', false).orderBy('createdAt', 'desc').limit(5).get();
-      snap.forEach(doc => { if (!seenIds.has(doc.id) && doc.data().status === 'ready') { seenIds.add(doc.id); recommendations.push({ id: doc.id, ...doc.data() }); } });
+      snap.forEach(doc => { if (!seenIds.has(doc.id) && doc.data().status === 'ready' && !hiddenAuthors.has(doc.data().userId)) { seenIds.add(doc.id); recommendations.push({ id: doc.id, ...doc.data() }); } });
     }
 
     recommendations.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));

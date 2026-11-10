@@ -156,6 +156,14 @@ as failures.
   (`getUserIdFromContext`, `isAdmin`, `checkIsAdmin`, `assertAdmin`). Do not re-declare
   `isAdmin` in a module — a divergent check means an account can be admin for one endpoint
   and not another.
+- **Server content reads must filter blocks in both directions.** `functions/feed.js`
+  `resolveHiddenAuthorIds(uid)` and `functions/stories.js` read `blockerId == uid` **and**
+  `blockedId == uid`; `functions/video.js#getVideoRecommendations` (the "watch next" rail)
+  filters hidden authors on both its paths. A server read that only queries
+  `blockerId == uid` (or skips the filter entirely) serves a blocker's content straight back
+  to the party they blocked — the authoritative read must match the client's mutual-block
+  model. `functionsModerationFilterGuard.test.js` (guards job) pins this; add a new read path
+  to it rather than re-deriving the two-direction query.
 - **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
   `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
   (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the
