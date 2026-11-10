@@ -159,11 +159,13 @@ as failures.
 - **Server content reads must filter blocks in both directions.** `functions/feed.js`
   `resolveHiddenAuthorIds(uid)` and `functions/stories.js` read `blockerId == uid` **and**
   `blockedId == uid`; `functions/video.js#getVideoRecommendations` (the "watch next" rail)
-  filters hidden authors on both its paths. A server read that only queries
-  `blockerId == uid` (or skips the filter entirely) serves a blocker's content straight back
-  to the party they blocked — the authoritative read must match the client's mutual-block
-  model. `functionsModerationFilterGuard.test.js` (guards job) pins this; add a new read path
-  to it rather than re-deriving the two-direction query.
+  filters hidden authors on both its paths, and `functions/notifications.js#sendNotification`
+  skips delivery when either `blocks/{sender}_{recipient}` or `blocks/{recipient}_{sender}`
+  exists (a block must cut the notification/push channel too, not just the feed). A server
+  read that only queries `blockerId == uid` (or skips the filter entirely) serves a blocker's
+  content straight back to the party they blocked — the authoritative read must match the
+  client's mutual-block model. `functionsModerationFilterGuard.test.js` (guards job) pins
+  this; add a new read path to it rather than re-deriving the two-direction query.
 - **Every client content surface filters the same hidden set.** Use
   `socialGraphService.getHiddenAuthorIds(uid)` (blocked + blocked_by + **muted**) or
   `userService.getBlockedUserIds(uid)` (blocked + blocked_by, ids only) — never read
