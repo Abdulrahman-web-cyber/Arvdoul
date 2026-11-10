@@ -45,12 +45,14 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N214 | `useSearch` read `response.hasNextPage`/`response.cursor`, but the service returns `hasMore`/`nextCursor` — search pagination was dead | Both the initial search and `loadMore` read non-existent keys, so `setHasMore(false)`/`setCursor(null)` ran on every success: the load-more never appeared and `loadMore` always re-queried page 1. Fixed to read `hasMore`/`nextCursor`. New `searchPaginationWiring.test.js` (guards job) drives the real hook against a mocked service. |
 | N215 | `searchService.search` returned an EMPTY page for every `page > 0` and `hasMore` was always false (asked the provider for page N, then sliced `finalHits[page*hitsPerPage…]` out of a one-page fusion list) | Now fetches a window of pages in one provider query (`SEARCH_CONFIG.PAGINATION.FETCH_PAGES`, default 5) and slices the requested page out of it; `total` reports the provider `nbHits`; `hasMore` = window overflows / provider total > consumed / window full. New `searchPaginationService.test.js` (guards job) pins page-1 content, `hasMore`/`total`/`totalPages`/`nextCursor`, short sets and the windowed provider call. |
 | N216 | Comment "load more" was dead — `CommentsDrawer.handleLoadMore` sent `startAfter` and read `result.hasMore`/`result.nextCursor`, but `commentService.getCommentsByPost` never applied a cursor and never returned `nextCursor` (and its cache hit dropped both fields) | `getCommentsByPost` now reads `options.startAfter || options.cursor`, applies `startAfter(cursorSnap)`, and computes/stores/returns `hasMore`+`nextCursor` on both the fresh and cached paths. New `commentPaginationWiring.test.js` (guards job) drives the real method against a stubbed Firestore; `integrationWiring.test.js` gains a source-level pin. |
+| N217 | `communityService.listCommunities` pushed a bare NUMBER into `query()` — every "Load More" (page > 1) threw; `hasMore` counted filtered rows | Real doc-id cursor pagination (`startAfterId` + `page` offset fallback); `hasMore` from the raw page size; returns `nextCursor`; the screen holds the cursor in a ref. |
+| N218 | `eventService.listEvents` ignored `page` and the screen's `status` filter — Load More re-fetched page 1 and Upcoming/Live showed every status | Honors `options.status`, applies cursor pagination (`startAfterId` + offset fallback), returns `nextCursor`; three missing composite indexes added (`(status,createdAt)`, `(status,type,stats.attendeeCount)`, `(status,type,createdAt)`). New `directoryPaginationService.test.js` (guards job) drives both list methods against a stubbed Firestore whose `query()` rejects a non-constraint. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
 `privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,
-`searchPaginationService`, `commentPaginationWiring`.
+`searchPaginationService`, `commentPaginationWiring`, `directoryPaginationService`.
 
 ## Next exact tasks (dependency order)
 

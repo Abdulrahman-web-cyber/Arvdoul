@@ -275,6 +275,7 @@ jobs:
           src/__tests__/searchPaginationWiring.test.js
           src/__tests__/searchPaginationService.test.js
           src/__tests__/commentPaginationWiring.test.js
+          src/__tests__/directoryPaginationService.test.js
           src/__tests__/offlineQueueSingleOwner.test.js
           src/__tests__/offlineDrainIntegrity.test.js
           src/__tests__/profileFeedGridLikeCount.test.jsx

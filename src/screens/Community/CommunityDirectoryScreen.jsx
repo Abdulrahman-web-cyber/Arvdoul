@@ -1,6 +1,6 @@
 // src/screens/Community/CommunityDirectoryScreen.jsx
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -28,15 +28,21 @@ const CommunityDirectoryScreen = () => {
   const [hasMore, setHasMore] = useState(true);
   const [myCommunities, setMyCommunities] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const nextCursorRef = useRef(null);
 
-  // Load communities
+  // Load communities. `reset` reloads page 1 (filter/sort/search change or
+  // first mount); otherwise it appends the next page via the doc-id cursor.
+  // Cursor state lives in a ref, not the render closure, so "Load More" cannot
+  // re-send a stale/null cursor while React re-renders.
   const loadCommunities = useCallback(async (reset = false) => {
     try {
       setLoading(true);
+      const startAfterId = reset ? null : nextCursorRef.current;
       const currentPage = reset ? 1 : page;
-      
+
       const result = await communityService.listCommunities({
         page: currentPage,
+        startAfterId,
         sortBy,
         filter: filter === 'all' ? null : filter,
         searchQuery
@@ -47,8 +53,8 @@ const CommunityDirectoryScreen = () => {
       } else {
         setCommunities(prev => [...prev, ...result.communities]);
       }
-      
-      setHasMore(result.hasMore);
+      nextCursorRef.current = result.nextCursor ?? null;
+      setHasMore(Boolean(result.hasMore));
       setPage(currentPage + 1);
     } catch (error) {
       console.error('Failed to load communities:', error);

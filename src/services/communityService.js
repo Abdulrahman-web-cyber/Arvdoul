@@ -1,7 +1,7 @@
 // src/services/communityService.js
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore";
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { logger } from '../utils/Logger.js';
 
@@ -89,7 +89,8 @@ class CommunityService {
       sortBy = 'popular',
       filter = 'all',
       searchQuery = '',
-      category = null
+      category = null,
+      startAfterId = null
     } = options;
 
     let q = collection(this.db, 'communities');
@@ -110,12 +111,19 @@ class CommunityService {
       constraints.push(orderBy('stats.activityScore', 'desc'));
     }
 
-    constraints.push(limit(COMMUNITIES_PER_PAGE));
-
-    if (page > 1) {
-      const startAfter = (page - 1) * COMMUNITIES_PER_PAGE;
-      constraints.push(startAfter);
+    // Real cursor pagination. The previous code pushed a bare NUMBER
+    // (`(page - 1) * COMMUNITIES_PER_PAGE`) into the constraint list, which
+    // `query()` rejects — every "Load More" (page > 1) threw and the screen
+    // toasted "Failed to load communities".
+    if (startAfterId) {
+      const cursorSnap = await getDoc(doc(this.db, 'communities', startAfterId));
+      if (cursorSnap.exists()) constraints.push(startAfter(cursorSnap));
+    } else if (page > 1) {
+      const offsetSnap = await getDocs(query(q, ...constraints, limit((page - 1) * COMMUNITIES_PER_PAGE)));
+      if (offsetSnap.docs.length) constraints.push(startAfter(offsetSnap.docs[offsetSnap.docs.length - 1]));
     }
+
+    constraints.push(limit(COMMUNITIES_PER_PAGE));
 
     const querySnapshot = await getDocs(query(q, ...constraints));
     
@@ -132,10 +140,12 @@ class CommunityService {
       );
     }
 
+    const hasMore = querySnapshot.docs.length === COMMUNITIES_PER_PAGE;
     return {
       communities,
-      hasMore: communities.length === COMMUNITIES_PER_PAGE,
-      page
+      hasMore,
+      page,
+      nextCursor: hasMore && querySnapshot.docs.length ? querySnapshot.docs[querySnapshot.docs.length - 1].id : null
     };
   }
 

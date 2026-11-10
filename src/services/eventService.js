@@ -2,7 +2,7 @@ import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, startAfter, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 const EVENTS_PER_PAGE = 20;
 // Hard ceiling for any single event read (registrations/organizer/feedback).
@@ -253,14 +253,20 @@ class EventService {
       page = 1,
       sortBy = 'upcoming',
       filter = 'all',
+      status = null,
       type = null,
       communityId = null,
-      userId = null
+      userId = null,
+      startAfterId = null
     } = options;
 
     let q = collection(this.db, 'events');
+    // `status` is the caller's explicit lifecycle filter (the discovery screen
+    // maps Upcoming → ['published','open'], Live → ['live']). Honor it; fall
+    // back to the default discovery set otherwise.
+    const statusFilter = Array.isArray(status) && status.length ? status : ['published', 'open', 'live'];
     const constraints = [
-      where('status', 'in', ['published', 'open', 'live'])
+      where('status', 'in', statusFilter)
     ];
 
     if (type) {
@@ -283,6 +289,17 @@ class EventService {
       constraints.push(orderBy('createdAt', 'desc'));
     }
 
+    // Real cursor pagination: `page` was accepted but never applied, so every
+    // "Load More" re-fetched page 1. Prefer a doc-id cursor; keep the numeric
+    // `page` fallback for callers that pass only `page`.
+    if (startAfterId) {
+      const cursorSnap = await getDoc(doc(this.db, 'events', startAfterId));
+      if (cursorSnap.exists()) constraints.push(startAfter(cursorSnap));
+    } else if (page > 1) {
+      const offsetSnap = await getDocs(query(q, ...constraints, limit((page - 1) * EVENTS_PER_PAGE)));
+      if (offsetSnap.docs.length) constraints.push(startAfter(offsetSnap.docs[offsetSnap.docs.length - 1]));
+    }
+
     constraints.push(limit(EVENTS_PER_PAGE));
 
     const querySnapshot = await getDocs(query(q, ...constraints));
@@ -292,10 +309,12 @@ class EventService {
       ...doc.data()
     }));
 
+    const hasMore = events.length === EVENTS_PER_PAGE;
     return {
       events,
-      hasMore: events.length === EVENTS_PER_PAGE,
-      page
+      hasMore,
+      page,
+      nextCursor: hasMore && querySnapshot.docs.length ? querySnapshot.docs[querySnapshot.docs.length - 1].id : null
     };
   }
 
