@@ -43,11 +43,13 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N212 | Withdrawal settlement accepted a caller-supplied coin→USD rate; the economy summary re-derived the rate by hand | Removed the `coinsPerDollar` override (settlement reads the shared config only); `getEconomySummary` uses `coinsToUsd`. Canonical model in `docs/engineering/money-model.md`; `functionsContract` + `sharedConfigSync` guards. |
 | N213 | Search returned blocked users' content — moderation was not enforced in `searchService` (the feed filtered blocks; search did not) | `_getBlockedUserIds(viewerId)` reads both block directions via the graph spine (`listConnections` `blocked` + new `blocked_by` kind, cached 60s); `_filterBlockedHits` (pre-fusion) and `_filterBlockedItems` (on built list) drop blocked authors; the cache key is per-viewer (`v: this._resolveViewerId(options)`); the sponsored slot is dropped when its author is blocked. `socialGraphService.LIST_SPECS` gained `blocked_by`. New `searchBlockFiltering.test.js` (guards job) + `socialGraphService.test.js` `blocked_by` case. |
 | N214 | `useSearch` read `response.hasNextPage`/`response.cursor`, but the service returns `hasMore`/`nextCursor` — search pagination was dead | Both the initial search and `loadMore` read non-existent keys, so `setHasMore(false)`/`setCursor(null)` ran on every success: the load-more never appeared and `loadMore` always re-queried page 1. Fixed to read `hasMore`/`nextCursor`. New `searchPaginationWiring.test.js` (guards job) drives the real hook against a mocked service. |
+| N215 | `searchService.search` returned an EMPTY page for every `page > 0` and `hasMore` was always false (asked the provider for page N, then sliced `finalHits[page*hitsPerPage…]` out of a one-page fusion list) | Now fetches a window of pages in one provider query (`SEARCH_CONFIG.PAGINATION.FETCH_PAGES`, default 5) and slices the requested page out of it; `total` reports the provider `nbHits`; `hasMore` = window overflows / provider total > consumed / window full. New `searchPaginationService.test.js` (guards job) pins page-1 content, `hasMore`/`total`/`totalPages`/`nextCursor`, short sets and the windowed provider call. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
-`privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`.
+`privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,
+`searchPaginationService`.
 
 ## Next exact tasks (dependency order)
 

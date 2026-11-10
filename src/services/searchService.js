@@ -72,6 +72,15 @@ const SEARCH_CONFIG = {
   DEFAULT_HITS_PER_PAGE: 20,
   MAX_HITS_PER_PAGE: 100,
 
+  // The provider (Algolia / Firestore) is asked for the first
+  // PAGINATION.FETCH_PAGES pages in ONE query; the page the user asked for is
+  // then a slice of that window. Asking the provider for only page N and then
+  // slicing `finalHits[page*hitsPerPage …]` returned an EMPTY page for N > 0,
+  // because the fusion list only ever held one page of hits.
+  PAGINATION: {
+    FETCH_PAGES: 5,
+  },
+
   TYPO_TOLERANCE: 'min',
   HIGHLIGHT_PRE_TAG: '<em class="search-highlight">',
   HIGHLIGHT_POST_TAG: '</em>',
@@ -527,16 +536,24 @@ class UltimateSearchService {
     let nextCursorByIndex = null;
     let sponsoredItem = null;
 
+    // Fetch a window of pages in one provider query, then slice the requested
+    // page out of the fused window. Without this, asking the provider for page
+    // N and then slicing `finalHits[page*hitsPerPage …]` returned an empty page
+    // for N > 0 (the fusion list only held the single fetched page).
+    const windowPages = Math.max(1, SEARCH_CONFIG.PAGINATION.FETCH_PAGES);
+    const windowSize = Math.min(hitsPerPage * windowPages, SEARCH_CONFIG.MAX_HITS_PER_PAGE * windowPages);
+    const windowPage = Math.floor((page * hitsPerPage) / windowSize);
+
     try {
       if (this.client) {
         try {
-          resultsByType = await this._algoliaSearch(query, indices, page, hitsPerPage, filters, facetFilters, sortBy, userId, resolvedIndexMap);
+          resultsByType = await this._algoliaSearch(query, indices, windowPage, windowSize, filters, facetFilters, sortBy, userId, resolvedIndexMap);
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
           source = 'algolia';
         } catch (algoliaError) {
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
           if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
-            const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+            const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage: windowSize, cursorByIndex });
             if (this.currentRequestId !== requestId) return { success: false, aborted: true };
             resultsByType = fallbackResult.resultsByType;
             nextCursorByIndex = fallbackResult.nextCursorByIndex;
@@ -547,7 +564,7 @@ class UltimateSearchService {
         }
       } else {
         // Strict fallback when credentials aren't defined
-        const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+        const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage: windowSize, cursorByIndex });
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         resultsByType = fallbackResult.resultsByType;
         nextCursorByIndex = fallbackResult.nextCursorByIndex;
@@ -594,8 +611,23 @@ class UltimateSearchService {
 
       const start = page * hitsPerPage;
       const paginated = finalHits.slice(start, start + hitsPerPage);
-      const total = finalHits.length;
-      const totalPages = Math.ceil(total / hitsPerPage);
+      // The fused window holds up to `windowSize` ranked hits. The provider's
+      // own hit count (`nbHits`) is the real total when Algolia answered;
+      // otherwise report what the window can prove (never a fabricated total).
+      const windowTotal = finalHits.length;
+      const providerNbHits = indices.reduce((sum, idx) => {
+        const nb = resultsByType[`_${idx}_metadata`]?.nbHits;
+        return Number.isFinite(nb) ? sum + nb : sum;
+      }, 0);
+      const total = source === 'algolia' && providerNbHits > 0 ? providerNbHits : windowTotal;
+      // More pages exist when the window overflows, the provider reported more
+      // hits than the window already contains, or the window is full (a further
+      // window may exist — the client confirms with the next query).
+      const windowFull = finalHits.length >= windowSize;
+      const hasMore = finalHits.length > start + paginated.length
+        || (source === 'algolia' && providerNbHits > start + paginated.length)
+        || windowFull;
+      const totalPages = hitsPerPage > 0 ? Math.ceil(total / hitsPerPage) : 1;
 
       const response = {
         success: true,
@@ -608,8 +640,8 @@ class UltimateSearchService {
         sponsored: sponsoredItem ? new SearchResultItem(sponsoredItem.raw || sponsoredItem, sponsoredItem.type, 'sponsored', 0) : null,
         query,
         nextCursorByIndex,
-        nextCursor: page + 1 < totalPages ? String(page + 1) : null,
-        hasMore: page + 1 < totalPages,
+        nextCursor: hasMore ? String(page + 1) : null,
+        hasMore,
       };
 
       if (userId) {
