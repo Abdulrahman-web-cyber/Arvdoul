@@ -768,6 +768,7 @@ describe('Unbounded queries bounded', () => {
     // and it must honour a MUTE as well as a block (muting was a dead control).
     const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
     expect(feed).toContain("graph.listConnections(userId, 'blocked'");
+    expect(feed).toContain("graph.listConnections(userId, 'blocked_by'");
     expect(feed).toContain("graph.listConnections(userId, 'muted'");
     expect(feed).not.toMatch(/collection\(\s*this\.firestore,\s*'(blocks|mutes)'/);
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');

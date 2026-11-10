@@ -219,19 +219,24 @@ describe('feedService - hidden authors (block + mute)', () => {
     svc().initialized = true;
   });
 
-  test('_getHiddenAuthorsCached unions blocked and muted edges', async () => {
+  test('_getHiddenAuthorsCached unions blocked, blocked-by and muted edges', async () => {
     globalThis.__graphMock = {
       listConnections: jest.fn(async (_uid, kind) => ({
         connections:
-          kind === 'blocked' ? [{ id: 'blocked-1' }, { uid: 'blocked-2' }] : [{ id: 'muted-1' }],
+          kind === 'blocked' ? [{ id: 'blocked-1' }, { uid: 'blocked-2' }]
+            : kind === 'blocked_by' ? [{ id: 'blocker-1' }]
+              : [{ id: 'muted-1' }],
       })),
     };
     const hidden = await svc()._getHiddenAuthorsCached('viewer');
     expect(hidden.has('blocked-1')).toBe(true);
     expect(hidden.has('blocked-2')).toBe(true);
+    // Someone who blocks the viewer must not keep surfacing their posts.
+    expect(hidden.has('blocker-1')).toBe(true);
     // The mute must be honoured too — muting was a dead control before this.
     expect(hidden.has('muted-1')).toBe(true);
     expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'blocked', expect.any(Object));
+    expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'blocked_by', expect.any(Object));
     expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'muted', expect.any(Object));
   });
 

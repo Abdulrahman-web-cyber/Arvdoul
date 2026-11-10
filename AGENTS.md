@@ -90,9 +90,10 @@ as failures.
   Blocks/mutes/restricts are party-readable only (`firestore.rules`); a world-readable
   safety collection is an enumeration leak. A **mute must hide the author's content from
   the feed** (a mute that only persists is a dead control): `feedService._getHiddenAuthorsCached`
-  unions the `blocked` and `muted` edge lists through the spine, and every feed builder
-  drops those authors — do not filter `blocks` alone. A block additionally denies messaging
-  and profile access; a mute is a viewer preference only. A private account's content is readable by
+  unions the `blocked`, `blocked_by` (reverse block) and `muted` edge lists through the spine,
+  and every feed builder drops those authors — do not filter `blocks` alone, and do not read
+  only the outgoing block direction. A block additionally denies messaging and profile access;
+  a mute is a viewer preference only. A private account's content is readable by
   its **approved followers**: `postReadableByViewer`/`postListableShape` gate on
   `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`), and the
   `follows` create rule forbids self-creating an edge to a **private** target
