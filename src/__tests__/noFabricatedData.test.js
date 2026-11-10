@@ -820,6 +820,17 @@ describe('Unbounded queries bounded', () => {
     const matches = story.match(/filter\(e => !hiddenAuthors\.has\(e\.ownerId\)\)/g) || [];
     expect(matches.length).toBe(2);
   });
+
+  test('the live comment list hides blocked/blocked-by/muted authors (N232)', () => {
+    // `liveService.getLiveComments` polled `live_comments` with no block filter,
+    // so a blocked viewer-blocker's comments still appeared in the live chat.
+    const live = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
+    expect(live).toContain('getHiddenAuthorIds(viewerId)');
+    expect(live).toContain('.filter(c => !hiddenAuthors.has(c.userId))');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
+    expect(screen).toContain('getLiveComments(watching.id, { limit: 50, viewerId: user.uid })');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

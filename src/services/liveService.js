@@ -752,11 +752,26 @@ class UltimateLiveService {
     }
   }
 
+  /**
+   * Authors whose live comments must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('[Live] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getLiveComments(streamId, options = {}) {
     try {
       await this._ensureInitialized();
       const { collection, query, where, orderBy, limit, startAfter, getDocs } = await import('firebase/firestore');
-      
+      const hiddenAuthors = await this._getHiddenAuthors(options.viewerId);
       const commentsRef = collection(this.firestore, 'live_comments');
       let q = query(
         commentsRef,
@@ -776,11 +791,14 @@ class UltimateLiveService {
       }
       
       const snapshot = await getDocs(q);
-      const comments = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
-      })).reverse();
+      const comments = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
+        }))
+        .filter(c => !hiddenAuthors.has(c.userId))
+        .reverse();
       const hasMore = snapshot.docs.length === pageSize;
       comments.nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
       comments.hasMore = hasMore;

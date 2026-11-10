@@ -157,7 +157,7 @@ export default function LiveScreen() {
     }
     const loadComments = async () => {
       try {
-        const list = await svc().getLiveComments(watching.id, { limit: 50 });
+        const list = await svc().getLiveComments(watching.id, { limit: 50, viewerId: user.uid });
         setComments(Array.isArray(list) ? list : []);
       } catch (e) {
         console.warn('[Live] comment poll failed; keeping last list', e?.message);
