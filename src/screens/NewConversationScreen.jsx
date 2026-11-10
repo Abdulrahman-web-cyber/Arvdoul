@@ -56,6 +56,10 @@ const NewConversationScreen = () => {
         await userService.getUserProfile(toUserId);
         if (cancelled) return;
         const result = await messagingService.startDirectConversation(toUserId, user.uid);
+        if (result.status === 'blocked') {
+          toast.error('You cannot message this user.');
+          return;
+        }
         if (result.status === 'request') {
           toast.info('Message request sent. You can chat once they accept.');
           navigate('/messages', { replace: true });
@@ -207,6 +211,10 @@ const NewConversationScreen = () => {
       // honoured: a refused DM becomes a message request instead of a hard error.
       if (selectedUsers.length === 1) {
         const direct = await messagingService.startDirectConversation(participants[0], user.uid);
+        if (direct.status === 'blocked') {
+          toast.error('You cannot message this user.');
+          return;
+        }
         if (direct.status === 'request') {
           toast.info('Message request sent. You can chat once they accept.');
           navigate('/messages');

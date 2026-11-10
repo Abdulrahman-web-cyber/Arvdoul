@@ -110,6 +110,14 @@ service cloud.firestore {
       let p = /databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid);
       return exists(p) && get(p).data.status == 'pending';
     }
+    // A block edge between two users (either direction). A block is terminal:
+    // the blocked party must not be able to open a DM with their blocker, even
+    // via a message request. The client gate (`checkMessagePermission`) already
+    // refuses to file a request on a block, but rules are the authority.
+    function blockEdgeBetween(aUid, bUid) {
+      return exists(/databases/$(database)/documents/blocks/$(aUid + '_' + bUid)) ||
+        exists(/databases/$(database)/documents/blocks/$(bUid + '_' + aUid));
+    }
 
     // A pending friend request from `fromUid` to `toUid`. Used to authorise the
     // mutual-follow edges that accepting a friend request creates: the accepter
@@ -874,6 +882,10 @@ service cloud.firestore {
       // nowhere) that let anyone open a DM with anyone.
       allow create: if isSignedIn() &&
         uid() in request.resource.data.participants &&
+        (
+          request.resource.data.participants.size() != 2 ||
+          !blockEdgeBetween(request.resource.data.participants[0], request.resource.data.participants[1])
+        ) &&
         (
           request.resource.data.participants.size() != 2 ||
           (request.resource.data.participants[0] == uid() &&

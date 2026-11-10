@@ -1181,8 +1181,10 @@ class UltimateMessagingService {
           await this.checkMessagePermission(currentUser.uid, other);
         } catch (err) {
           // Privacy gate: offer a real MESSAGE REQUEST instead of a dead end
-          // (spec §35). The request is idempotent.
-          if (err.code === 'messaging/privacy' || err.code === 'messaging/blocked') {
+          // (spec §35). The request is idempotent. A BLOCK is terminal and must
+          // NOT be downgraded to a request — doing so let a blocked sender still
+          // reach their blocker through the request inbox, defeating the block.
+          if (err.code === 'messaging/privacy') {
             const req = await this.sendMessageRequest(other, currentUser.uid).catch(() => null);
             if (req?.success) {
               const reqErr = new Error('Message request sent — they will be notified.');
@@ -2563,6 +2565,13 @@ class UltimateMessagingService {
     if (!recipientId || !senderId || recipientId === senderId) {
       throw new Error('Invalid request');
     }
+    // A block is terminal: never file a message request that would let a blocked
+    // party reach their blocker (the rules also deny the resulting conversation,
+    // but refusing here keeps the request inbox clean and returns an honest
+    // status instead of a phantom "pending" request).
+    if ((await this.isBlocked(senderId, recipientId)) || (await this.isBlocked(recipientId, senderId))) {
+      return { success: false, blocked: true };
+    }
     // Idempotent: an existing pending/blocked request is not re-created.
     const ref = this.fs.doc(this.firestore, 'message_requests', `${recipientId}_${senderId}`);
     const existing = await this.fs.getDoc(ref);
@@ -2621,6 +2630,7 @@ class UltimateMessagingService {
     }
 
     const req = await this.sendMessageRequest(recipientId, senderId);
+    if (req?.blocked) return { status: 'blocked' };
     return { status: 'request', requestStatus: req?.status || 'pending' };
   }
 

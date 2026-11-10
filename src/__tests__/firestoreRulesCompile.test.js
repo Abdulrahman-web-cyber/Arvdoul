@@ -713,6 +713,54 @@ describe('firestore.rules adversarial checks (emulator)', () => {
     }
   });
 
+  test('a block edge forbids opening a direct conversation, even with consent (N221)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const dm = (self, other) => ({
+      id: `direct_${[self, other].sort().join('_')}`,
+      type: 'direct',
+      participants: [self, other],
+      createdBy: self,
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        // Both allow DMs; a block edge exists dave -> erin (dave blocked erin).
+        await setDoc(doc(db, 'users/dave'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'users/erin'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'blocks/dave_erin'), { blockerId: 'dave', blockedId: 'erin' });
+        // erin even consented (a pending request), which must NOT override the block.
+        await setDoc(doc(db, 'message_requests/dave_erin'), {
+          senderId: 'erin', recipientId: 'dave', status: 'pending',
+        });
+      });
+
+      const erin = env.authenticatedContext('erin').firestore();
+      const dave = env.authenticatedContext('dave').firestore();
+
+      // The blocked party (erin) cannot open a DM with her blocker (dave) …
+      await assertFails(setDoc(doc(erin, 'conversations/direct_dave_erin'), dm('erin', 'dave')));
+      // … nor can the blocker re-open one to the blocked party.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      // A group is unaffected by a block between two of its members.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/group_bk'), {
+        id: 'group_bk', type: 'group', participants: ['dave', 'erin', 'carol'], createdBy: 'dave',
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
   test('message reactions are readable via the collection-group query (N098)', async () => {
     // `messagesService.getMessages` merges reactions with ONE
     // `collectionGroup('reactions')` query. Firestore authorizes a
