@@ -33,6 +33,26 @@ const STUCK_TASK_TIMEOUT_MS = 10 * 60 * 1000;
 // ----------------------------------------------------------------------
 // UTILITIES
 // ----------------------------------------------------------------------
+/**
+ * Ids of users the viewer must not see content from: those the viewer blocked
+ * AND those who blocked the viewer. A block is a mutual denial — reading only
+ * the outgoing direction (`blockerId == userId`) lets someone who blocked the
+ * viewer keep surfacing their posts into the viewer's feed. Mirrors the client
+ * graph spine's both-direction block model (search/stories already read both).
+ */
+async function resolveHiddenAuthorIds(userId) {
+  if (!userId) return new Set();
+  const [outgoing, incoming] = await Promise.all([
+    db.collection('blocks').where('blockerId', '==', userId).get(),
+    db.collection('blocks').where('blockedId', '==', userId).get(),
+  ]);
+  const ids = new Set();
+  outgoing.docs.forEach((d) => ids.add(d.data().blockedId));
+  incoming.docs.forEach((d) => ids.add(d.data().blockerId));
+  ids.delete(userId);
+  return ids;
+}
+
 async function commitBatchWithRetry(batch, maxRetries = 5) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -465,10 +485,7 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
       (doc.data().topics || []).forEach(t => userTopics.add(t));
     });
 
-    const blockedSnap = await db.collection('blocks')
-      .where('blockerId', '==', userId)
-      .get();
-    const blockedIds = new Set(blockedSnap.docs.map(d => d.data().blockedId));
+    const blockedIds = await resolveHiddenAuthorIds(userId);
 
     let query = db.collection('posts')
       .where('status', '==', 'published')
@@ -588,8 +605,7 @@ exports.getPersonalizedFeedML = functions.https.onCall(async (data, context) => 
       (doc.data().topics || []).forEach((t) => userTopics.add(t));
     });
 
-    const blockedSnap = await db.collection('blocks').where('blockerId', '==', userId).get();
-    const blockedIds = new Set(blockedSnap.docs.map((d) => d.data().blockedId));
+    const blockedIds = await resolveHiddenAuthorIds(userId);
 
     let query = db.collection('posts')
       .where('status', '==', 'published')
@@ -657,11 +673,8 @@ exports.getFollowingFeed = functions.https.onCall(async (data, context) => {
     const followedIds = followsSnap.docs.map(doc => doc.data().followingId);
     if (followedIds.length === 0) return { feed: [], hasMore: false };
 
-    // 2. Blocked users filter
-    const blockedSnap = await db.collection('blocks')
-      .where('blockerId', '==', userId)
-      .get();
-    const blockedIds = new Set(blockedSnap.docs.map(d => d.data().blockedId));
+    // 2. Blocked users filter (both directions)
+    const blockedIds = await resolveHiddenAuthorIds(userId);
 
     // 3. Fetch posts from followed users using batched IN queries (max 30 per batch)
     const posts = [];

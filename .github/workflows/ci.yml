@@ -273,6 +273,7 @@ jobs:
           src/__tests__/socialGraphService.test.js
           src/__tests__/searchBlockFiltering.test.js
           src/__tests__/userServiceBlockReaders.test.js
+          src/__tests__/functionsFeedBlockFilter.test.js
           src/__tests__/searchPaginationWiring.test.js
           src/__tests__/searchPaginationService.test.js
           src/__tests__/commentPaginationWiring.test.js
