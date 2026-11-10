@@ -288,6 +288,11 @@ describe('firestore.rules economy accounting (regression guards)', () => {
     const viewers = blockBody('live_viewers');
     expect(viewers).toBeTruthy();
     expect(viewers).toMatch(/viewerId\.endsWith\('_' \+ uid\(\)\)/);
+    // N210: the daily upload counter was gated only on the `userId` FIELD, so a
+    // user could write a shard under another user's id and defeat their limit.
+    const uploads = blockBody('daily_upload_counters');
+    expect(uploads).toBeTruthy();
+    expect(uploads).toMatch(/shardId\.matches\('upload_' \+ uid\(\)/);
   });
 
   test('request docs pin their deterministic id to the payload (N205)', () => {
@@ -1000,6 +1005,48 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await env.cleanup();
     }
   });
+
+  test('a user cannot write another user\'s daily upload counter shard (N210)', async () => {
+    // The rule was `isOwner(request.resource.data.userId)` — it trusted the
+    // `userId` FIELD but never bound the document ID to the caller. Any
+    // signed-in user could create `daily_upload_counters/upload_{victim}_...`
+    // with `userId: victim`, resetting/inflating the victim's daily video-upload
+    // counter and defeating the per-tier upload limit. The id is now pinned to
+    // the caller (`shardId.matches('upload_' + uid() + '_...')`), mirroring
+    // `unread_counters`.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      const alice = env.authenticatedContext('alice').firestore();
+      const mallory = env.authenticatedContext('mallory').firestore();
+
+      // The owner increments their own shard.
+      await assertSucceeds(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 1,
+      }));
+      // A different user cannot create a shard under alice's id…
+      await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_alice_2026-11-08_shard_1'), {
+        userId: 'alice', date: '2026-11-08', shard: 1, count: 0,
+      }));
+      // …nor an arbitrary id that merely carries alice's userId field.
+      await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_mallory_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 0,
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
 
   test('the owner story grid lists while another user\'s grid is denied (N-story-list)', async () => {
     // A story `list` rule may only read fields the query constrains: the old

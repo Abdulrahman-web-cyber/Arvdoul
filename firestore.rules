@@ -1812,9 +1812,18 @@ service cloud.firestore {
     }
 
     // ==================== DAILY UPLOAD COUNTERS (owner-scoped shards) ====================
+    // Doc id format: upload_{userId}_{YYYY-MM-DD}_shard_{n}. The id is pinned to
+    // the caller (mirrors `unread_counters`): without it, any signed-in user
+    // could create shards under another user's id and reset/inflate that user's
+    // daily video-upload counter, defeating the per-tier upload limit (and
+    // making the legitimate owner's own increment exceed the limit and fail).
     match /daily_upload_counters/{shardId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create, update: if isOwner(request.resource.data.userId);
+      allow read, delete: if isSignedIn() &&
+        resource.data.userId == uid() &&
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
+      allow create, update: if isSignedIn() &&
+        request.resource.data.userId == uid() &&
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
     }
 
     // ==================== ENGAGEMENT COIN EVENTS (server-authored, immutable) ====================
