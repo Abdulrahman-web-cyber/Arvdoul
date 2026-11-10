@@ -54,13 +54,14 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N223 | The feed filtered only the **outgoing** block direction: it read `blocked` but not `blocked_by`, so a viewer blocked by someone kept seeing that person's posts (search already read both directions) | Folded into the shared `getHiddenAuthorIds` union, which includes `blocked_by`; both `blocks` composite indexes already exist. `noFabricatedData.test.js` pins all three spine reads. |
 | N224 | The Sparks video feed had **no** moderation filter: `videoService.getVideoFeed`'s direct `videos`/`posts` fallback filtered only `isDeleted`, so blocked/blocked-by/muted creators' videos still surfaced | `videoService._getHiddenAuthors(userId)` delegates to the spine's `getHiddenAuthorIds`; the fallback filters those ids. `noFabricatedData.test.js` gains a pin. |
 | N225 | `socialGraphService.getSuggestions` returned the server callable's recommendations and its friends-of-friends fallback with **no** safety filter, so a blocked/blocked-by/muted user could be suggested back | New `socialGraphService.getHiddenAuthorIds(userId)` (blocked + blocked_by + muted, bounded, fails open); `getSuggestions` drops hidden ids and the viewer on both paths. `socialGraphService.test.js` gains union + fail-open + blocked-candidate tests. |
+| N226 | A block hid content in only one direction on comments (`CommentsDrawer`) and the home feed's own optimistic filter (`HomeScreen`): both read the outgoing-only `getBlockedUsers`, so a user who **blocked the viewer** still had their comments/posts rendered | New `userService.getBlockedUserIds(uid)` unions `blocked` + `blocked_by` via the spine; both surfaces use it (`getBlockedUsers` stays only for the manage-my-blocks screen). New `userServiceBlockReaders.test.js` (guards job); `noFabricatedData.test.js` pins the drawer's switch. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
 `privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,
 `searchPaginationService`, `commentPaginationWiring`, `directoryPaginationService`,
-`conversationPaginationService`.
+`conversationPaginationService`, `userServiceBlockReaders`.
 
 ## Next exact tasks (dependency order)
 

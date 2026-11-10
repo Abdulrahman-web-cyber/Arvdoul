@@ -1090,8 +1090,11 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     if (!currentUser?.uid) { setBlockedLoading(false); return; }
     (async () => {
       try {
-        const blocked = await userService.getBlockedUsers(currentUser.uid);
-        const ids = new Set(blocked?.blockedUsers?.map(u => u.id) || []);
+        // Both block directions: a user who blocked the viewer must not have
+        // their comments rendered to the viewer (reading only the outgoing
+        // direction leaked the blocker's comments — N226).
+        const res = await userService.getBlockedUserIds(currentUser.uid);
+        const ids = new Set(res?.ids || []);
         setBlockedUserIds(ids);
       } catch (err) {
         // Without the block list, blocked users' comments would render; log so

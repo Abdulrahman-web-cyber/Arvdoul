@@ -829,8 +829,11 @@ export default function HomeScreen() {
       return blockedCacheRef.current.ids;
     }
     try {
-      const blocked = await userService.getBlockedUsers?.(user?.uid);
-      const ids = new Set(blocked?.blockedUsers?.map(u => u.id) || []);
+      // Both block directions: a user who blocked the viewer must not keep
+      // appearing in the viewer's feed (reading only the outgoing direction
+      // leaked the blocker's posts — N226).
+      const res = await userService.getBlockedUserIds?.(user?.uid);
+      const ids = new Set(res?.ids || []);
       blockedCacheRef.current = { ids, lastFetched: now };
       feedRuntimeRef.current.blockedIds = ids;
       return ids;

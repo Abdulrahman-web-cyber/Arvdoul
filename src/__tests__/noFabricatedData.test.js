@@ -784,6 +784,18 @@ describe('Unbounded queries bounded', () => {
     expect(video).toContain('getHiddenAuthorIds(userId)');
     expect(video).toContain('await this._getHiddenAuthors(safeUserId)');
   });
+
+  test('comments hide authors blocked in either direction (N226)', () => {
+    // `CommentsDrawer` filtered blocked commenters from the outgoing `blocked`
+    // list only, so a user who blocked the viewer still had their comments
+    // rendered to the viewer. It now uses the both-direction reader.
+    const svc = fs.readFileSync(path.join(root, 'src/services/userService.js'), 'utf8');
+    expect(svc).toContain('async getBlockedUserIds(userId)');
+    expect(svc).toContain("graph.listEdges(userId, 'blocked_by'");
+    const drawer = fs.readFileSync(path.join(root, 'src/screens/CommentsDrawer.jsx'), 'utf8');
+    expect(drawer).toContain('getBlockedUserIds(currentUser.uid)');
+    expect(drawer).not.toContain('getBlockedUsers(currentUser.uid)');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

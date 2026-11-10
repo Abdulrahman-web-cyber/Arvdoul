@@ -1760,6 +1760,23 @@ class ProfessionalUserService {
     return { success: true, blockedUsers: res.connections };
   }
 
+  /**
+   * Ids of users blocked in EITHER direction (the viewer blocks them, or they
+   * block the viewer). A block is a mutual denial, so a surface that hides
+   * blocked content must hide both sides — reading only the outgoing direction
+   * let someone who blocked the viewer keep leaving content the viewer saw
+   * (comments; the feed and search already read both directions).
+   */
+  async getBlockedUserIds(userId) {
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const graph = getSocialGraphService();
+    const [blocked, blockedBy] = await Promise.all([
+      graph.listEdges(userId, 'blocked', { limit: 500 }),
+      graph.listEdges(userId, 'blocked_by', { limit: 500 }),
+    ]);
+    return { success: true, ids: [...new Set([...(blocked.ids || []), ...(blockedBy.ids || [])])] };
+  }
+
   async muteUser(muterId, mutedId) {
     if (muterId === mutedId) throw new Error('Cannot mute yourself');
     await this._ensureInitialized();
@@ -2060,6 +2077,7 @@ export const blockUser = (bid, bd) => getUserService().blockUser(bid, bd);
 export const unblockUser = (bid, bd) => getUserService().unblockUser(bid, bd);
 export const isBlocked = (bid, bd) => getUserService().isBlocked(bid, bd);
 export const getBlockedUsers = (uid) => getUserService().getBlockedUsers(uid);
+export const getBlockedUserIds = (uid) => getUserService().getBlockedUserIds(uid);
 export const muteUser = (mid, md) => getUserService().muteUser(mid, md);
 export const unmuteUser = (mid, md) => getUserService().unmuteUser(mid, md);
 export const isMuted = (mid, md) => getUserService().isMuted(mid, md);

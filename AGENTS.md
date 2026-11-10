@@ -96,7 +96,13 @@ as failures.
   a mute is a viewer preference only. Reuse `socialGraphService.getHiddenAuthorIds(uid)` (the
   union of blocked + blocked_by + muted, bounded, fails open) rather than re-reading the three
   edge lists per surface — suggestions (`getSuggestions`) and the Sparks video fallback
-  (`videoService.getVideoFeed`) already do. A private account's content is readable by
+  (`videoService.getVideoFeed`) already do. **A block hides content in both directions**: any
+  surface that hides a blocked author must union the outgoing and reverse lists — use
+  `userService.getBlockedUserIds(uid)` (blocked + blocked_by) for an id set, not the
+  outgoing-only `getBlockedUsers`. Comments (`CommentsDrawer`), the home feed's own optimistic
+  filter (`HomeScreen`) and search all read both directions; `getBlockedUsers` is only correct
+  for the manage-my-blocks screen (`BlockedAccountsScreen`), where you legitimately list only
+  the blocks you created. A private account's content is readable by
   its **approved followers**: `postReadableByViewer`/`postListableShape` gate on
   `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`), and the
   `follows` create rule forbids self-creating an edge to a **private** target
