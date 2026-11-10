@@ -15,6 +15,12 @@ jest.unstable_mockModule('../firebase/firebase.js', () => ({
   }),
 }));
 
+// The feed reads blocked + muted edges through the graph spine; stub it so the
+// union can be asserted without a database.
+jest.unstable_mockModule('../services/socialGraphService.js', () => ({
+  getSocialGraphService: () => globalThis.__graphMock,
+}));
+
 const { getFeedService, feedService } = await import('../services/feedService.js');
 
 // The real UltimateFeedService instance (facade lazily creates it).
@@ -203,6 +209,36 @@ describe('feedService - stats & cache hygiene', () => {
     svc().clearUserCache('u-999');
     expect(svc().userFeedState.has('u-999')).toBe(false);
     expect(svc().feedHistory.has('u-999')).toBe(false);
+  });
+});
+
+describe('feedService - hidden authors (block + mute)', () => {
+  beforeEach(() => {
+    svc().blockCache.clear();
+    svc().offlineMode = false;
+    svc().initialized = true;
+  });
+
+  test('_getHiddenAuthorsCached unions blocked and muted edges', async () => {
+    globalThis.__graphMock = {
+      listConnections: jest.fn(async (_uid, kind) => ({
+        connections:
+          kind === 'blocked' ? [{ id: 'blocked-1' }, { uid: 'blocked-2' }] : [{ id: 'muted-1' }],
+      })),
+    };
+    const hidden = await svc()._getHiddenAuthorsCached('viewer');
+    expect(hidden.has('blocked-1')).toBe(true);
+    expect(hidden.has('blocked-2')).toBe(true);
+    // The mute must be honoured too — muting was a dead control before this.
+    expect(hidden.has('muted-1')).toBe(true);
+    expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'blocked', expect.any(Object));
+    expect(globalThis.__graphMock.listConnections).toHaveBeenCalledWith('viewer', 'muted', expect.any(Object));
+  });
+
+  test('a failed graph read hides nobody (fails open, no throw)', async () => {
+    globalThis.__graphMock = { listConnections: jest.fn(async () => { throw new Error('offline'); }) };
+    const hidden = await svc()._getHiddenAuthorsCached('viewer-2');
+    expect(hidden.size).toBe(0);
   });
 });
 

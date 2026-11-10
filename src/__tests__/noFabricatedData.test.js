@@ -763,10 +763,13 @@ describe('Unbounded queries bounded', () => {
   test('collections items + blocks reads are bounded', () => {
     const cols = fs.readFileSync(path.join(root, 'src/services/collectionsService.js'), 'utf8');
     expect(cols).toContain('limit(200)');
-    // The block read moved onto the graph spine, which bounds every edge list;
-    // the feed must delegate rather than query `blocks` itself.
+    // The block/mute reads moved onto the graph spine, which bounds every edge
+    // list; the feed must delegate rather than query `blocks`/`mutes` itself,
+    // and it must honour a MUTE as well as a block (muting was a dead control).
     const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
-    expect(feed).toContain("getSocialGraphService().listConnections(userId, 'blocked'");
+    expect(feed).toContain("graph.listConnections(userId, 'blocked'");
+    expect(feed).toContain("graph.listConnections(userId, 'muted'");
+    expect(feed).not.toMatch(/collection\(\s*this\.firestore,\s*'(blocks|mutes)'/);
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(spine).toContain('MAX_PAGE_SIZE');
   });
