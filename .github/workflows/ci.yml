@@ -282,6 +282,7 @@ jobs:
           src/__tests__/conversationPaginationService.test.js
           src/__tests__/messagingInboxBlockFiltering.test.js
           src/__tests__/requestInboxBlockFiltering.test.js
+          src/__tests__/feedService.test.js
           src/__tests__/offlineQueueSingleOwner.test.js
           src/__tests__/offlineDrainIntegrity.test.js
           src/__tests__/profileFeedGridLikeCount.test.jsx

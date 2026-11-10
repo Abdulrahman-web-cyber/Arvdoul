@@ -256,6 +256,33 @@ describe('feedService - hidden authors (block + mute)', () => {
   });
 });
 
+describe('feedService - getFollowSuggestions delegates to the safety-filtered spine (N249)', () => {
+  beforeEach(() => {
+    svc().cache.clear();
+    svc().offlineMode = false;
+    svc().initialized = true;
+  });
+
+  test('returns the spine suggestions (which exclude blocked/muted pairs)', async () => {
+    globalThis.__graphMock = {
+      getSuggestions: jest.fn(async () => [{ id: 'safe-1' }]),
+    };
+    const res = await svc().getFollowSuggestions('viewer', 5);
+    expect(res.success).toBe(true);
+    expect(res.suggestions).toEqual([{ id: 'safe-1' }]);
+    expect(globalThis.__graphMock.getSuggestions).toHaveBeenCalledWith('viewer', { limit: 5 });
+  });
+
+  test('fails closed instead of reporting an empty success when the spine throws', async () => {
+    globalThis.__graphMock = {
+      getSuggestions: jest.fn(async () => { throw new Error('graph down'); }),
+    };
+    const res = await svc().getFollowSuggestions('viewer-2', 5);
+    expect(res.success).toBe(false);
+    expect(res.suggestions).toEqual([]);
+  });
+});
+
 afterAll(() => {
   svc().destroy();
   jest.clearAllTimers();
