@@ -638,6 +638,29 @@ class UltimateVideoService {
     return { success: true, chapters };
   }
 
+  /**
+   * Authors whose videos must not appear in the viewer's Sparks feed: anyone
+   * the viewer blocked, anyone who blocked the viewer, and anyone the viewer
+   * muted. Read through the graph spine (bounded, rules-provable). Fails open
+   * (hides nobody) only when the graph read errors.
+   */
+  async _getHiddenAuthors(userId) {
+    if (!userId || userId === 'anonymous_user') return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const graph = getSocialGraphService();
+      const [blocked, blockedBy, muted] = await Promise.all([
+        graph.listEdges(userId, 'blocked', { limit: 500 }),
+        graph.listEdges(userId, 'blocked_by', { limit: 500 }),
+        graph.listEdges(userId, 'muted', { limit: 500 }),
+      ]);
+      return new Set([...(blocked.ids || []), ...(blockedBy.ids || []), ...(muted.ids || [])]);
+    } catch (err) {
+      logger.warn('[Video] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getVideoFeed(userId, options = {}) {
     await this.ensureInitialized();
     const { feedType = 'for_you', limit = 20, type = null, signal, cursor } = options;
@@ -751,6 +774,14 @@ class UltimateVideoService {
         );
         const postSnap = await getDocs(postQ).catch(() => ({ docs: [] }));
         rawVideos = postSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+
+      // Moderation/safety: a blocked, blocked-by or muted author's videos must
+      // not surface here (the primary feed path filters through feedService;
+      // this direct query did not, so a blocked/muted creator's Sparks leaked).
+      const hiddenAuthors = await this._getHiddenAuthors(safeUserId);
+      if (hiddenAuthors.size > 0) {
+        rawVideos = rawVideos.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId));
       }
 
       const formatted = rawVideos.map(formatVideoItem);

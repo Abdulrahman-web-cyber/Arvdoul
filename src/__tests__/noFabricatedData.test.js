@@ -774,6 +774,16 @@ describe('Unbounded queries bounded', () => {
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(spine).toContain('MAX_PAGE_SIZE');
   });
+
+  test('the Sparks video feed hides blocked/blocked-by/muted authors (N224)', () => {
+    // `videoService.getVideoFeed`'s direct `videos`/`posts` fallback query had no
+    // moderation filter, so a blocked or muted creator's Sparks still surfaced.
+    const video = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
+    expect(video).toContain("graph.listEdges(userId, 'blocked'");
+    expect(video).toContain("graph.listEdges(userId, 'blocked_by'");
+    expect(video).toContain("graph.listEdges(userId, 'muted'");
+    expect(video).toContain('await this._getHiddenAuthors(safeUserId)');
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {
