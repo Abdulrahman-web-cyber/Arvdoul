@@ -897,6 +897,27 @@ describe('Unbounded queries bounded', () => {
     const spacesScreen = fs.readFileSync(path.join(root, 'src/screens/Spaces/SpacesScreen.jsx'), 'utf8');
     expect(spacesScreen).toContain('getActiveSpaces(selectedCategory, user?.uid)');
   });
+
+  test('the leaderboards hide blocked/blocked-by/muted users (N239)', () => {
+    // `RankingsScreen` lists users from the `rankings` collections with no block
+    // filter, so a blocked user could still be ranked and shown.
+    const svc = fs.readFileSync(path.join(root, 'src/services/rankingService.js'), 'utf8');
+    expect(svc).toContain('getHiddenAuthorIds(userId)');
+    expect(svc).toContain('this._isHidden(hidden, r.userId, viewerId)');
+    // The facade must forward the viewer id, or the screen's argument is dropped.
+    expect(svc).toContain('getCreatorRankings: (c, t, o, v) => getRankingService().getCreatorRankings(c, t, o, v)');
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Rankings/RankingsScreen.jsx'), 'utf8');
+    expect(screen).toContain('getCreatorRankings(activeCategory, activeTimeRange, offset, user?.uid)');
+  });
+
+  test('the feed block-cache invalidators target the key the writer uses (N238)', () => {
+    // `_getHiddenAuthorsCached` writes `hidden_${userId}`; the invalidators
+    // deleted `blocked_${userId}` / `block_${userId}`, so both were no-ops.
+    const svc = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
+    expect(svc).toContain("this.blockCache.delete(`hidden_${userId}`)");
+    expect(svc).not.toContain("this.blockCache.delete(`blocked_${userId}`)");
+    expect(svc).not.toContain("this.blockCache.delete(`block_${userId}`)");
+  });
 });
 
 describe('searchService - honest trending hashtags, never fabricated counts', () => {

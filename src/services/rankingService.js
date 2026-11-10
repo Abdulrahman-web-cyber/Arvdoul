@@ -119,10 +119,33 @@ class RankingService {
     this.cache.clear();
   }
 
-  async getCreatorRankings(category = 'engagement', timeRange = 'month', offset = 0) {
+  /**
+   * Author ids whose leaderboard rows the viewer must not see: blocked,
+   * blocked-by and muted users, read through the graph spine's bounded,
+   * rules-provable edge lists. Fails open (empty set) only when the read errors.
+   */
+  async _getHiddenAuthors(userId) {
+    if (!userId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(userId);
+    } catch (err) {
+      logger.warn('[RankingService] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  _isHidden(hidden, id, viewerId) {
+    if (!id) return false;
+    if (viewerId && id === viewerId) return false;
+    return hidden.has(id);
+  }
+
+  async getCreatorRankings(category = 'engagement', timeRange = 'month', offset = 0, viewerId = null) {
     await this.ensureInitialized();
 
-    const cacheKey = this._getCacheKey(`creator_${category}`, timeRange, offset);
+    const hidden = await this._getHiddenAuthors(viewerId);
+    const cacheKey = this._getCacheKey(`creator_${category}`, timeRange, offset) + (viewerId ? `_v_${viewerId}` : '');
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
@@ -163,8 +186,10 @@ class RankingService {
         });
       }
 
-      this._setCache(cacheKey, rankings);
-      return rankings;
+      const visible = rankings.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
+      visible.forEach((r, i) => { r.rank = offset + i + 1; });
+      this._setCache(cacheKey, visible);
+      return visible;
     } catch (error) {
       logger.error('[RankingService] Creator rankings unavailable (no fabricated data):', error);
       return [];
@@ -189,10 +214,11 @@ class RankingService {
     }
   }
 
-  async getWealthRankings(category = 'net_worth', timeRange = 'month', offset = 0) {
+  async getWealthRankings(category = 'net_worth', timeRange = 'month', offset = 0, viewerId = null) {
     await this.ensureInitialized();
 
-    const cacheKey = this._getCacheKey(`wealth_${category}`, timeRange, offset);
+    const hidden = await this._getHiddenAuthors(viewerId);
+    const cacheKey = this._getCacheKey(`wealth_${category}`, timeRange, offset) + (viewerId ? `_v_${viewerId}` : '');
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
@@ -233,18 +259,21 @@ class RankingService {
         });
       }
 
-      this._setCache(cacheKey, rankings);
-      return rankings;
+      const visible = rankings.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
+      visible.forEach((r, i) => { r.rank = offset + i + 1; });
+      this._setCache(cacheKey, visible);
+      return visible;
     } catch (error) {
       logger.error('[RankingService] Failed to get wealth rankings:', error);
       return [];
     }
   }
 
-  async getReputationRankings(category = 'trust', timeRange = 'month', offset = 0) {
+  async getReputationRankings(category = 'trust', timeRange = 'month', offset = 0, viewerId = null) {
     await this.ensureInitialized();
 
-    const cacheKey = this._getCacheKey(`reputation_${category}`, timeRange, offset);
+    const hidden = await this._getHiddenAuthors(viewerId);
+    const cacheKey = this._getCacheKey(`reputation_${category}`, timeRange, offset) + (viewerId ? `_v_${viewerId}` : '');
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
@@ -286,8 +315,10 @@ class RankingService {
         });
       }
 
-      this._setCache(cacheKey, rankings);
-      return rankings;
+      const visible = rankings.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
+      visible.forEach((r, i) => { r.rank = offset + i + 1; });
+      this._setCache(cacheKey, visible);
+      return visible;
     } catch (error) {
       logger.error('[RankingService] Failed to get reputation rankings:', error);
       return [];
@@ -373,10 +404,11 @@ class RankingService {
     }
   }
 
-  async getRisingCreators(timeRange = 'week', offset = 0) {
+  async getRisingCreators(timeRange = 'week', offset = 0, viewerId = null) {
     await this.ensureInitialized();
 
-    const cacheKey = this._getCacheKey('rising_creators', timeRange, offset);
+    const hidden = await this._getHiddenAuthors(viewerId);
+    const cacheKey = this._getCacheKey('rising_creators', timeRange, offset) + (viewerId ? `_v_${viewerId}` : '');
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
@@ -417,8 +449,10 @@ class RankingService {
         });
       }
 
-      this._setCache(cacheKey, rising);
-      return rising;
+      const visible = rising.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
+      visible.forEach((r, i) => { r.rank = offset + i + 1; });
+      this._setCache(cacheKey, visible);
+      return visible;
     } catch (error) {
       logger.error('[RankingService] Failed to get rising creators:', error);
       return [];
@@ -612,13 +646,13 @@ export function getRankingService() {
 const rankingService = {
   initialize: () => getRankingService().initialize(),
   ensureInitialized: () => getRankingService().ensureInitialized(),
-  getCreatorRankings: (c, t, o) => getRankingService().getCreatorRankings(c, t, o),
+  getCreatorRankings: (c, t, o, v) => getRankingService().getCreatorRankings(c, t, o, v),
   getCreatorRank: (uid, c) => getRankingService().getCreatorRank(uid, c),
-  getWealthRankings: (c, t, o) => getRankingService().getWealthRankings(c, t, o),
-  getReputationRankings: (c, t, o) => getRankingService().getReputationRankings(c, t, o),
+  getWealthRankings: (c, t, o, v) => getRankingService().getWealthRankings(c, t, o, v),
+  getReputationRankings: (c, t, o, v) => getRankingService().getReputationRankings(c, t, o, v),
   getCommunityRankings: (c, t, o) => getRankingService().getCommunityRankings(c, t, o),
   getTrendingContent: (t, r, o) => getRankingService().getTrendingContent(t, r, o),
-  getRisingCreators: (t, o) => getRankingService().getRisingCreators(t, o),
+  getRisingCreators: (t, o, v) => getRankingService().getRisingCreators(t, o, v),
   getUserReputation: (uid) => getRankingService().getUserReputation(uid),
   getUserBadges: (uid) => getRankingService().getUserBadges(uid),
   refresh: () => getRankingService().refresh(),
