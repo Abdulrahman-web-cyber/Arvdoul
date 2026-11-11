@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { unknownNumber } from '../lib/unknownNumber.js';
-import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info } from 'lucide-react';
+import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info, Archive, ArchiveRestore } from 'lucide-react';
 
 export default function ConversationSettingsScreen() {
   const navigate = useNavigate();
@@ -22,6 +22,7 @@ export default function ConversationSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [muted, setMuted] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [archived, setArchived] = useState(false);
   const [acting, setActing] = useState(false);
 
   const colors = {
@@ -42,6 +43,7 @@ export default function ConversationSettingsScreen() {
         setConv(res.conversation);
         setMuted(res.conversation.mutedBy?.includes(user?.uid) || false);
         setPinned(res.conversation.pinnedBy?.includes(user?.uid) || false);
+        setArchived(res.conversation.archivedBy?.includes(user?.uid) || false);
       } else {
         toast.error('Conversation not found.');
         navigate('/messages');
@@ -82,6 +84,23 @@ export default function ConversationSettingsScreen() {
       else await service.pinConversation(conversationId, user.uid);
       setPinned(!pinned);
       toast.success(pinned ? 'Conversation unpinned.' : 'Conversation pinned 📌');
+    } catch (err) {
+      toast.error('Action failed.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const toggleArchive = async () => {
+    if (!user?.uid || acting) return;
+    setActing(true);
+    try {
+      const mod = await import('../services/messagesService.js');
+      const service = mod.getMessagingService ? mod.getMessagingService() : mod.default?.getMessagingService?.() || mod;
+      if (archived) await service.unarchiveConversation(conversationId, user.uid);
+      else await service.archiveConversation(conversationId, user.uid);
+      setArchived(!archived);
+      toast.success(archived ? 'Conversation unarchived.' : 'Conversation archived.');
     } catch (err) {
       toast.error('Action failed.');
     } finally {
@@ -173,6 +192,21 @@ export default function ConversationSettingsScreen() {
                 <p className={cn("text-xs", colors.secondary)}>{muted ? 'You will receive notifications again' : 'Stop receiving notifications'}</p>
               </div>
               {acting && <Loader2 className="w-4 h-4 animate-spin text-violet-500" />}
+            </button>
+
+            <button
+              onClick={toggleArchive}
+              disabled={acting}
+              className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center">
+                {archived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
+              </div>
+              <div className="flex-1 text-left">
+                <p className={cn("font-medium text-sm", colors.text)}>{archived ? 'Unarchive Conversation' : 'Archive Conversation'}</p>
+                <p className={cn("text-xs", colors.secondary)}>{archived ? 'Move back to your main inbox' : 'Move to the Archived folder'}</p>
+              </div>
+              {acting && <Loader2 className="w-4 h-4 animate-spin text-amber-500" />}
             </button>
 
             {conv?.type === 'group' && (

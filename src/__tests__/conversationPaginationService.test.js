@@ -9,6 +9,11 @@
  */
 
 import { jest } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 const QueryConstraintBrand = Symbol('QueryConstraint');
 const isConstraint = (c) => c && c[QueryConstraintBrand] === true;
@@ -37,13 +42,13 @@ const firestoreMock = {
   limit: (n) => ({ [QueryConstraintBrand]: true, __limit: n }),
   startAfter: (snap) => ({ [QueryConstraintBrand]: true, __startAfter: true, __cursorId: snap.id }),
   setDoc: async () => {},
-  updateDoc: async () => {},
+  updateDoc: async (ref, patch) => { (globalThis.__updates ||= []).push({ ref, patch }); },
   deleteDoc: async () => {},
   addDoc: async () => ({ id: 'new' }),
   serverTimestamp: () => null,
   increment: (n) => n,
-  arrayUnion: () => ({}),
-  arrayRemove: () => ({}),
+  arrayUnion: (...v) => ({ __op: 'union', v }),
+  arrayRemove: (...v) => ({ __op: 'remove', v }),
   writeBatch: () => ({ set: () => {}, update: () => {}, commit: async () => {} }),
   runTransaction: async () => {},
   onSnapshot: () => () => {},
@@ -115,4 +120,27 @@ test('getUserConversations resolves the string cursor and returns the last RETUR
   expect(page2.conversations.map((c) => c.id)).toEqual(convs(40).slice(20).map((c) => c.id));
   expect(page2.hasMore).toBe(false);
   expect(page2.nextCursor).toBeNull();
+});
+
+test('archive/unarchive write archivedBy, the field the Archived inbox tab reads', async () => {
+  const svc = getMessagingService();
+  svc.initialized = true;
+  svc.firestore = {};
+  svc.fs = firestoreMock;
+
+  // `archivedBy` was written ONLY by these two methods, and neither had a caller,
+  // so MessagingScreen's "Archived" filter tab could never match a conversation.
+  globalThis.__updates = [];
+  await svc.archiveConversation('conv1', 'viewer');
+  const archived = globalThis.__updates.at(-1).patch;
+  expect(archived.archivedBy).toMatchObject({ __op: 'union', v: ['viewer'] });
+
+  await svc.unarchiveConversation('conv1', 'viewer');
+  const unarchived = globalThis.__updates.at(-1).patch;
+  expect(unarchived.archivedBy).toMatchObject({ __op: 'remove', v: ['viewer'] });
+
+  // The screen must call both methods (the wiring this test guards).
+  const screen = fs.readFileSync(path.join(root, 'src/screens/ConversationSettingsScreen.jsx'), 'utf8');
+  expect(screen).toContain('archiveConversation(');
+  expect(screen).toContain('unarchiveConversation(');
 });
