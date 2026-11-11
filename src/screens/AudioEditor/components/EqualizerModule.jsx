@@ -10,6 +10,7 @@ import { Power, ChevronDown } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';
 import { EQ_PRESET_NAMES, getPresetBands, EQ_RANGES } from '../audioPresets';
+import { tokens } from '../../../design-system/tokens.js';
 
 const { minFreq, maxFreq, minGain, maxGain } = EQ_RANGES;
 
@@ -124,7 +125,7 @@ export default function EqualizerModule({
       if (i === 0) ctx.moveTo(i, y);
       else ctx.lineTo(i, y);
     }
-    ctx.strokeStyle = '#8B1EF3';
+    ctx.strokeStyle = tokens.color.brand.violet;
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
@@ -295,7 +296,7 @@ export default function EqualizerModule({
                   className={cn(
                     "p-2.5 rounded-xl border text-center cursor-pointer transition-all",
                     isSel
-                      ? "ring-1 ring-[#8B1EF3] border-[#8B1EF3] bg-[#8B1EF3]/10"
+                      ? "ring-1 ring-arvdoul-purple border-arvdoul-purple bg-arvdoul-purple/10"
                       : isDark
                       ? "bg-white/5 border-white/5 hover:border-white/20"
                       : "bg-gray-50 border-gray-200 hover:border-gray-300"

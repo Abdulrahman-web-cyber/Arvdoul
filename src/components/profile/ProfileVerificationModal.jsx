@@ -196,9 +196,9 @@ export const ProfileVerificationModal = memo(({
           {isVerified ? (
             /* Mode 1: Already Verified */
             <div className="space-y-4 text-center py-4">
-              <div className="relative mx-auto w-20 h-20 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)] flex items-center justify-center">
+              <div className="relative mx-auto w-20 h-20 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)] flex items-center justify-center">
                 <div className="w-full h-full rounded-full bg-[#0b1021] flex items-center justify-center">
-                  <BadgeCheck className="w-10 h-10 fill-[#8B1EF3] text-white" />
+                  <BadgeCheck className="w-10 h-10 fill-arvdoul-purple text-white" />
                 </div>
                 <div className="absolute -top-1 -right-1 text-cyan-400">
                   <Sparkles className="w-6 h-6 fill-cyan-400" />

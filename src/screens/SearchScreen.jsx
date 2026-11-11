@@ -19,7 +19,7 @@ import TrendingSection from '../components/search/TrendingSection';
 import CreatorCarousel from '../components/search/CreatorCarousel';
 import SearchFilters from '../components/search/SearchFilters';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
-import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens } from '../design-system/tokens.js';
 
 /**
  * ARVDOUL Design Tokens — the brand gradient comes from the design system so
@@ -411,7 +411,7 @@ const SearchScreen = memo(() => {
                 className={cn(
                   "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
                   isSelected
-                    ? "bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white shadow-md shadow-purple-500/25"
+                    ? "bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue text-white shadow-md shadow-purple-500/25"
                     : isDark
                     ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white"
                     : "bg-black/[0.05] text-gray-700 hover:bg-black/[0.09] hover:text-gray-900"
@@ -472,7 +472,7 @@ const RecentSearches = memo(({ recent, onSelect, onRemove, onClear, isDark }) =>
       <div className="flex items-center gap-2">
         <div className={cn(
           'w-8 h-8 rounded-xl flex items-center justify-center',
-          'bg-gradient-to-r from-[#8B1EF3] to-[#055BFB]'
+          'bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue'
         )}>
           <Clock className="w-4 h-4 text-white" />
         </div>
@@ -487,9 +487,9 @@ const RecentSearches = memo(({ recent, onSelect, onRemove, onClear, isDark }) =>
         onClick={onClear}
         className={cn(
           'text-xs font-medium px-3 py-1.5 rounded-full',
-          'bg-gradient-to-r from-[#8B1EF3]/10 to-[#055BFB]/10',
-          'hover:from-[#8B1EF3]/20 hover:to-[#055BFB]/20',
-          isDark ? 'text-[#8B1EF3]' : 'text-[#4431F7]',
+          'bg-gradient-to-r from-arvdoul-purple/10 to-arvdoul-blue/10',
+          'hover:from-arvdoul-purple/20 hover:to-arvdoul-blue/20',
+          isDark ? 'text-arvdoul-purple' : 'text-arvdoul-indigo',
           'transition-all duration-200'
         )}
       >
@@ -548,7 +548,7 @@ const ForYouSection = memo(({ isDark }) => (
     className="mb-6"
   >
     <div className="flex items-center gap-2 mb-4">
-      <Sparkles className="w-5 h-5" style={{ color: '#8B1EF3' }} />
+      <Sparkles className="w-5 h-5" style={{ color: tokens.color.brand.violet }} />
       <h2 className={cn(
         'text-lg font-bold',
         isDark ? 'text-white' : 'text-gray-900'
@@ -589,7 +589,7 @@ const ForYouSection = memo(({ isDark }) => (
             <p className="text-white/70 text-xs mt-0.5">{item.subtitle}</p>
           </div>
           {/* Gradient overlay on hover */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#8B1EF3]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-arvdoul-purple/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
         </motion.div>
       ))}
     </div>
@@ -628,7 +628,7 @@ const ExploreCategories = memo(({ onCategoryClick, isDark }) => (
               'flex flex-col items-center justify-center p-3 rounded-2xl',
               'backdrop-blur-xl border border-white/10',
               'transition-all duration-200',
-              'focus:outline-none focus:ring-2 focus:ring-[#8B1EF3]/50',
+              'focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50',
               isDark 
                 ? 'bg-white/5 hover:bg-white/10' 
                 : 'bg-white/50 hover:bg-white/70',

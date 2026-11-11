@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { tokens } from '../../design-system/tokens.js';
 import {
   LEVEL_PERKS,
   LEVELS,
@@ -79,7 +80,7 @@ export default function PerksRewardsScreen() {
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-0 h-[2px] z-30"
         style={{
-          background: "linear-gradient(90deg, #8B1EF3 0%, #4431F7 50%, #00F0FF 100%)",
+          background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`,
         }}
       />
 
@@ -114,7 +115,7 @@ export default function PerksRewardsScreen() {
               onClick={() => navigate('/wallet')}
               className="px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm cursor-pointer"
               style={{
-                background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 100%)"
+                background: `linear-gradient(135deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 100%)`
               }}
             >
               Coins Treasury
@@ -220,7 +221,7 @@ export default function PerksRewardsScreen() {
                 className="h-full rounded-full transition-all duration-700"
                 style={{
                   width: `${levelInfo.progress}%`,
-                  background: "linear-gradient(90deg, #8B1EF3 0%, #4431F7 50%, #00F0FF 100%)"
+                  background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`
                 }}
               />
             </div>

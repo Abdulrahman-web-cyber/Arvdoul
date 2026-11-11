@@ -147,12 +147,15 @@ not load unlimited full-res videos; moderation must reach the video report queue
 - **Effort**: 25–40 ED (large; can be phased per screen group).
 
 ### 12. Design-system consolidation (System: Design system)
-`tokens.js` is canonical and drift-guarded, but only **24 of 209 UI files** import tokens;
-raw hex appears 146× (`#8B1EF3`), 91× (`#FFFFFF`), 80× (`#4431F7`).
+`tokens.js` is canonical and drift-guarded. Raw brand hex has been ratcheted down from
+**349 across 44 files** to **58 across 7 files**; the remaining 7 are the signup/login/
+onboarding screens (`IntroScreen`, `LoginScreen`, `OtpVerification`, `SetupProfile`,
+`SignupStep1Personal`, `SignupStep2VerifyContact`, `VerifyEmailScreen`), which carry their
+own 125deg/52% geometry and are **policy-frozen** — do not migrate them.
 - **Sub-systems**: `src/design-system/*`, all screens/components, `themePalettes.js`.
-- **Deliverable**: migrate raw hex to `--arv-*` vars; extend the drift guard to forbid
-  raw brand hex in UI; document every primitive's states.
-- **Effort**: 10 ED.
+- **Deliverable**: done for every non-frozen module; `scripts/brandHexBaseline.json` is the
+  ratchet (may only shrink) and `brandHexRatchetGuard.test.js` enforces it.
+- **Effort**: done (remaining work is the frozen auth screens, by policy).
 
 ### 13. Shared component library + state completeness (System: UI components)
 The 20 largest components (QuickAccessPanel 1999, BottomNav 1380, ProfileFeedGrid 1025…)

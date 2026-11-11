@@ -27,7 +27,7 @@ import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 // Clean SVG Sparklines matching image curves. `data === null` means the trend
 // is genuinely unknown (fewer than two daily points), so we render an explicit
 // placeholder instead of drawing a line through fabricated zeros.
-const Sparkline = ({ color = '#8B1EF3', data = null }) => {
+const Sparkline = ({ color = 'var(--arv-brand-violet)', data = null }) => {
   const safeData = Array.isArray(data) && data.length >= 2 ? data : null;
   if (!safeData) {
     return (
@@ -260,7 +260,7 @@ const ProfileCreatorDashboard = memo(({
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#8B1EF3" data={viewsSeries} />
+            <Sparkline color="var(--arv-brand-violet)" data={viewsSeries} />
           </div>
         </div>
 
@@ -349,7 +349,7 @@ const ProfileCreatorDashboard = memo(({
         onClick={() => navigate('/rankings')}
         >
           {/* Circular Crown Icon */}
-          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#8B1EF3] to-[#D946EF] flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
+          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple to-[#D946EF] flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
             <div className="w-full h-full rounded-full bg-white dark:bg-[#0b1021] flex items-center justify-center">
               <Crown className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>

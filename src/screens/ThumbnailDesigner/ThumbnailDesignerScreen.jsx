@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
+import { tokens } from '../../design-system/tokens.js';
 import { ChevronLeft, Undo2, Redo2, Layers, Sparkles, Wand2, Scissors, ChevronDown, Crop, Sliders, Sparkle, Zap, Minus, Plus, Maximize2, Image as ImageIcon, Type, Pencil, Smile, Square, MoreHorizontal, Columns, RotateCcw, Clock, SlidersHorizontal, Download, Eye, EyeOff, Trash2, X } from "lucide-react";
 
 // Studio base canvas presets (vector gradient artwork, self-contained SVG)
@@ -152,7 +153,7 @@ export default function ThumbnailDesignerScreen() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Drawing state
-  const [drawColor, setDrawColor] = useState('#8B1EF3');
+  const [drawColor, setDrawColor] = useState(tokens.color.brand.violet);
   const [drawSize, setDrawSize] = useState(8);
 
   // Crop aspect
@@ -328,7 +329,7 @@ export default function ThumbnailDesignerScreen() {
 
         // Frames
         if (activeFrame === 'neon') {
-          ctx.strokeStyle = '#8B1EF3';
+          ctx.strokeStyle = tokens.color.brand.violet;
           ctx.lineWidth = 36;
           ctx.strokeRect(18, 18, exportW - 36, exportH - 36);
         } else if (activeFrame === 'cinematic') {
@@ -499,7 +500,7 @@ export default function ThumbnailDesignerScreen() {
               <path
                 d="M 0 39 Q 30 10, 55 14 T 85 5 T 100 30"
                 fill="none"
-                stroke="#8B1EF3"
+                stroke={tokens.color.brand.violet}
                 strokeWidth="1.5"
                 opacity="0.9"
               />
@@ -510,7 +511,7 @@ export default function ThumbnailDesignerScreen() {
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-[#8B1EF3] via-[#7015E0] to-[#055BFB] text-white text-xs sm:text-sm font-bold tracking-wide shadow-[0_0_20px_rgba(139,30,243,0.5)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5"
+            className="px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-arvdoul-purple via-[#7015E0] to-arvdoul-blue text-white text-xs sm:text-sm font-bold tracking-wide shadow-[0_0_20px_rgba(139,30,243,0.5)] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>Export</span>
@@ -1041,7 +1042,7 @@ export default function ThumbnailDesignerScreen() {
                 <div className="flex items-center gap-4 text-xs font-semibold">
                   <div className="flex items-center gap-2">
                     <span>Color:</span>
-                    {['#8B1EF3', '#EF4444', '#10B981', '#3B82F6', '#F59E0B', '#FFFFFF'].map((color) => (
+                    {[tokens.color.brand.violet, '#EF4444', '#10B981', '#3B82F6', '#F59E0B', '#FFFFFF'].map((color) => (
                       <button
                         key={color}
                         onClick={() => setDrawColor(color)}

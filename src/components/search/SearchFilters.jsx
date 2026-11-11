@@ -238,7 +238,7 @@ const SearchFilters = memo(({
                 onClick={handleApply}
                 className={cn(
                   'flex-1 py-3.5 rounded-full font-semibold',
-                  'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]',
+                  'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue',
                   'text-white shadow-lg',
                   'hover:shadow-xl transition-shadow'
                 )}
@@ -285,7 +285,7 @@ const FilterChip = memo(({ label, selected, onClick, isDark }) => (
       'flex items-center gap-2',
       'transition-all duration-200',
       selected
-        ? 'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-lg'
+        ? 'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue text-white shadow-lg'
         : isDark
           ? 'backdrop-blur-xl border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
           : 'backdrop-blur-xl border border-gray-200 bg-white/50 text-gray-700 hover:bg-white/70'

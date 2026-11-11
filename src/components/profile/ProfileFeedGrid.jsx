@@ -477,7 +477,7 @@ const ProfileFeedGrid = memo(({
             <button
               type="button"
               onClick={currentEmpty.action}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] text-white shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
             >
               <span>{currentEmpty.cta}</span>
             </button>

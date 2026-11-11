@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { RotateCcw, Activity, Radio } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';
+import { tokens } from '../../../design-system/tokens.js';
 
 function formatClock(seconds) {
   if (!Number.isFinite(seconds)) return '—';
@@ -86,9 +87,9 @@ export default function ClipInspectorModule({
           const value = isPlaying ? (freqData[i * 2] || 0) : 0;
           const barHeight = (value / 255) * (height - 10);
           const grad = ctx.createLinearGradient(0, height, 0, 0);
-          grad.addColorStop(0, '#055BFB');
-          grad.addColorStop(0.6, '#8B1EF3');
-          grad.addColorStop(1, '#C82BFF');
+          grad.addColorStop(0, tokens.color.brand.blue);
+          grad.addColorStop(0.6, tokens.color.brand.violet);
+          grad.addColorStop(1, tokens.color.brand.pink);
           ctx.fillStyle = grad;
           ctx.fillRect(i * (barWidth + 2), height - barHeight, barWidth, barHeight);
         }

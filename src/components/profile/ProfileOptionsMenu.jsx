@@ -194,7 +194,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
           style={{
-            background: "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
+            background: "linear-gradient(90deg, var(--arv-brand-pink) 0%, var(--arv-brand-violet) 34%, var(--arv-brand-indigo) 66%, var(--arv-brand-cyan) 100%)",
           }}
         />
 
@@ -206,7 +206,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
           <div className="flex items-center gap-2">
             <span className="text-sm font-black tracking-tight">Profile Options</span>
             {profile?.username && (
-              <span className="text-xs font-mono text-[#8B1EF3] dark:text-[#B978FF]">
+              <span className="text-xs font-mono text-arvdoul-purple dark:text-[#B978FF]">
                 @{profile.username}
               </span>
             )}

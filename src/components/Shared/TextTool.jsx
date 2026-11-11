@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
+import { tokens } from '../../design-system/tokens.js';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Type, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Italic, Underline, Strikethrough, Search, ChevronDown, ChevronUp, RotateCw, Copy, Layers, Sparkles, Plus } from "lucide-react";
@@ -54,8 +55,8 @@ const POPULAR_FONTS = [
 const COLOR_PRESETS = [
   '#FFFFFF', '#000000', '#FF0000', '#00FF00', '#0000FF',
   '#FFFF00', '#FF00FF', '#00FFFF', '#FF8800', '#88FF00',
-  '#8800FF', '#00FF88', '#FF0088', '#0088FF', '#808080',
-  '#8B1EF3', '#4431F7', '#055BFB', '#0088FF', '#FF6B6B',
+  '#8800FF', '#00FF88', '#FF0088', tokens.color.brand.cyan, '#808080',
+  tokens.color.brand.violet, tokens.color.brand.indigo, tokens.color.brand.blue, tokens.color.brand.cyan, '#FF6B6B',
 ];
 
 /**

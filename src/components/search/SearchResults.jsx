@@ -111,7 +111,7 @@ const SearchResults = memo(({
                   'whitespace-nowrap font-medium text-sm',
                   'transition-all duration-200',
                   isSelected
-                    ? 'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-lg'
+                    ? 'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue text-white shadow-lg'
                     : isDark
                       ? 'bg-white/8 text-gray-300 hover:bg-white/12'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

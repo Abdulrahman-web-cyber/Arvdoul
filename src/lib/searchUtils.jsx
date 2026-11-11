@@ -49,7 +49,7 @@ export function highlightText(text, query) {
   const parts = text.split(new RegExp(`(${escapeRegex(query)})`, 'gi'));
   return parts.map((part, i) => 
     part.toLowerCase() === query.toLowerCase() 
-      ? <mark key={i} className="bg-gradient-to-r from-[#8B1EF3]/20 via-[#4431F7]/20 to-[#055BFB]/20 text-transparent bg-clip-text">{part}</mark>
+      ? <mark key={i} className="bg-gradient-to-r from-arvdoul-purple/20 via-arvdoul-indigo/20 to-arvdoul-blue/20 text-transparent bg-clip-text">{part}</mark>
       : part
   );
 }
@@ -141,7 +141,7 @@ export function getResultColor(type) {
     audio: 'from-violet-400 to-purple-400',
     place: 'from-emerald-400 to-green-400',
   };
-  return colors[type?.toLowerCase()] || 'from-[#8B1EF3] to-[#055BFB]';
+  return colors[type?.toLowerCase()] || 'from-arvdoul-purple to-arvdoul-blue';
 }
 
 /**

@@ -187,7 +187,7 @@ export const ProfileLevelProgressCard = memo(({
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm">
               <polygon
                 points="50 3, 90 25, 90 75, 50 97, 10 75, 10 25"
-                className="fill-[#8B1EF3] stroke-purple-400/40"
+                className="fill-arvdoul-purple stroke-purple-400/40"
                 strokeWidth="4"
               />
             </svg>
@@ -225,7 +225,7 @@ export const ProfileLevelProgressCard = memo(({
             className="h-full rounded-full transition-all duration-700"
             style={{
               width: `${progressPercent}%`,
-              background: 'linear-gradient(90deg, #8B1EF3 0%, #00F0FF 100%)',
+              background: 'linear-gradient(90deg, var(--arv-brand-violet) 0%, #00F0FF 100%)',
             }}
           />
         </div>
@@ -333,7 +333,7 @@ export const ProfileHeroSection = memo(({
     if (aura === 'cyan') return 'bg-gradient-to-tr from-cyan-400 via-teal-500 to-sky-300 shadow-[0_0_25px_rgba(34,211,238,0.45)]';
     if (aura === 'emerald') return 'bg-gradient-to-tr from-emerald-400 via-green-600 to-teal-300 shadow-[0_0_25px_rgba(52,211,153,0.45)]';
     if (aura === 'gold') return 'bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.45)]';
-    return 'bg-gradient-to-tr from-[#8B1EF3] via-[#D946EF] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)]';
+    return 'bg-gradient-to-tr from-arvdoul-purple via-[#D946EF] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)]';
   }, [profile?.crestAura, userLevel]);
 
   // Royal status determination per shared level system
@@ -466,7 +466,7 @@ export const ProfileHeroSection = memo(({
                   title="Verified Account • Click to view credentials"
                   className="text-blue-500 shrink-0 cursor-pointer hover:scale-110 transition-transform"
                 >
-                  <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-[#8B1EF3] text-white" />
+                  <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-arvdoul-purple text-white" />
                 </button>
               )}
             </div>
@@ -818,7 +818,7 @@ export const ProfileHeroSection = memo(({
               "flex-1 min-w-[140px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer",
               isFollowing || requestStatus === 'pending'
                 ? (isDark ? "bg-white/10 hover:bg-white/15 text-slate-200" : "bg-slate-200 hover:bg-slate-300 text-slate-800")
-                : "bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] hover:brightness-110 shadow-purple-600/30"
+                : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo hover:brightness-110 shadow-purple-600/30"
             )}
           >
             {isFollowing ? (

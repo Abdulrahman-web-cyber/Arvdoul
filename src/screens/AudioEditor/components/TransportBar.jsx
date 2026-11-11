@@ -168,7 +168,7 @@ export default function TransportBar({
           {(spectrum.length ? spectrum : new Array(8).fill(0)).map((value, i) => (
             <div
               key={i}
-              className="w-1 rounded-full bg-gradient-to-t from-[#055BFB] to-[#C82BFF] transition-all duration-75"
+              className="w-1 rounded-full bg-gradient-to-t from-arvdoul-blue to-arvdoul-glow-magenta transition-all duration-75"
               style={{ height: `${Math.max(2, (value / 255) * 18)}px` }}
             />
           ))}

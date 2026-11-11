@@ -60,7 +60,7 @@ import TextTool from '../../components/Shared/TextTool';
 import DrawingTool from '../../components/Shared/DrawingTool';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Icons (resolved defensively so a lucide-react rename can never crash render)
@@ -158,7 +158,7 @@ const THEMES = {
     '--text': '#101735',
     '--text-2': '#4D587B',
     '--text-3': '#7783A5',
-    '--accent-text': '#4431F7',
+    '--accent-text': tokens.color.brand.indigo,
     '--card-border': 'rgba(80,91,177,0.18)',
     '--card-shadow': '0 24px 56px -26px rgba(48,56,140,0.27), 0 10px 26px -18px rgba(68,49,247,0.20)',
     '--field-bg': 'rgba(255,255,255,0.55)',
@@ -166,7 +166,7 @@ const THEMES = {
     '--field-bg-solid': '#FFFFFF',
     '--field-border': 'rgba(61,76,147,0.18)',
     '--field-border-hover': 'rgba(68,49,247,0.38)',
-    '--field-focus': '#4431F7',
+    '--field-focus': tokens.color.brand.indigo,
     '--field-ring': 'rgba(68,49,247,0.15)',
     '--danger': '#D42A49',
     '--danger-ring': 'rgba(212,42,73,0.13)',
@@ -181,7 +181,7 @@ const THEMES = {
     '--glow-a': 'rgba(139,30,243,0.07)',
     '--glow-b': 'rgba(5,91,251,0.07)',
     '--btn-shadow': '0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)',
-    '--focus-outline': '#4431F7',
+    '--focus-outline': tokens.color.brand.indigo,
     '--ie-canvas': '#E6ECF7',
   },
 };
@@ -412,7 +412,7 @@ const DEFAULT_ADJUSTMENTS = {
   brightness: 0, contrast: 0, saturation: 0, hue: 0, blur: 0, temperature: 0, vignette: 0,
 };
 
-const SWATCHES = ['#FFFFFF', '#000000', '#FF3B5C', '#FF9F1C', '#FFD60A', '#34D399', '#22D3EE', '#4431F7', '#8B1EF3', '#F472B6'];
+const SWATCHES = ['#FFFFFF', '#000000', '#FF3B5C', '#FF9F1C', '#FFD60A', '#34D399', '#22D3EE', tokens.color.brand.indigo, tokens.color.brand.violet, '#F472B6'];
 
 const SHAPES = [
   { id: 'rect', label: 'Rectangle' },
@@ -1312,7 +1312,7 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
   const [drawColor, setDrawColor] = useState('#FFFFFF');
   const [drawBrushSize, setDrawBrushSize] = useState(5);
   const [brushKind, setBrushKind] = useState('pen');
-  const [shapeStyle, setShapeStyle] = useState({ fill: '#8B1EF3', stroke: '#FFFFFF', strokeWidth: 0 });
+  const [shapeStyle, setShapeStyle] = useState({ fill: tokens.color.brand.violet, stroke: '#FFFFFF', strokeWidth: 0 });
   const [stickerSet, setStickerSet] = useState('Smileys');
   const [cropRotation, setCropRotation] = useState(0);
 

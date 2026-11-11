@@ -87,7 +87,10 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 
 | N274 | **`event_feedback/{feedbackId}` (each attendee's event rating + comment) was readable by every signed-in user.** The row is keyed `event_${eventId}_${uid}`; the only client reader fetched the whole list to find the caller's own rating. | Read scoped to the attendee + admins; `eventService.getMyEventFeedback` now point-reads the caller's own doc (replaces the list `getEventFeedback`); `EventDetailScreen` updated. Guard (static) pins it. |
 
-| N275 | **`creator_profiles/{userId}` (creator bio/links + eligibility/standing) was readable by every signed-in user.** Only reader is the owner's own status view. | Read scoped to owner + admins. Guard (static) pins it. |New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
+| N275 | **`creator_profiles/{userId}` (creator bio/links + eligibility/standing) was readable by every signed-in user.** Only reader is the owner's own status view. | Read scoped to owner + admins. Guard (static) pins it. |
+| #12 | Design-system consolidation (continued): raw brand hex ratcheted **349 across 44 files → 58 across 7 files**. Migrated profile components, search components, Shared nav/appbar, theme context, AudioEditor, ThumbnailDesigner, PerksRewards, Rankings, CreatePost, Reels, Stories, Search, EditProfile, ImageEditor. Remaining 7 files are the policy-frozen signup/login/onboarding screens. | `brandHexRatchetGuard` (baseline lowered); build + full suite green. |
+
+New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
 `privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,

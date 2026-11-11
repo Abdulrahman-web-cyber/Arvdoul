@@ -11,14 +11,14 @@ import { useProfileStore } from "../../store/profileStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
-import { BRAND_GRADIENT } from "../../design-system/tokens.js";
+import { BRAND_GRADIENT, tokens } from "../../design-system/tokens.js";
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
    ========================================================================== */
 
 const BRAND_LINE =
-  "linear-gradient(90deg,#C82BFF 0%,#8B1EF3 34%,#4431F7 66%,#0088FF 100%)";
+  `linear-gradient(90deg,${tokens.color.brand.pink} 0%,${tokens.color.brand.violet} 34%,${tokens.color.brand.indigo} 66%,${tokens.color.brand.cyan} 100%)`;
 const MAX_WIDTH = 1320;
 const NAV_HEIGHT = 82;
 const HANDLE_LONG_PRESS_MS = 560;
@@ -194,9 +194,9 @@ const HomeIcon = memo(function HomeIcon({ active }) {
     <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="7" y1="4" x2="26" y2="29" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#C82BFF" />
-          <stop offset=".48" stopColor="#8B1EF3" />
-          <stop offset="1" stopColor="#055BFB" />
+          <stop stopColor={tokens.color.brand.pink} />
+          <stop offset=".48" stopColor={tokens.color.brand.violet} />
+          <stop offset="1" stopColor={tokens.color.brand.blue} />
         </linearGradient>
       </defs>
       <path
@@ -229,9 +229,9 @@ const ReelsIcon = memo(function ReelsIcon({ active }) {
     <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#C82BFF" />
-          <stop offset=".48" stopColor="#8B1EF3" />
-          <stop offset="1" stopColor="#055BFB" />
+          <stop stopColor={tokens.color.brand.pink} />
+          <stop offset=".48" stopColor={tokens.color.brand.violet} />
+          <stop offset="1" stopColor={tokens.color.brand.blue} />
         </linearGradient>
       </defs>
       <rect
@@ -304,9 +304,9 @@ const ProfileIcon = memo(function ProfileIcon({ active }) {
     <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id={gradientId} x1="5" y1="5" x2="27" y2="27" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#C82BFF" />
-          <stop offset=".48" stopColor="#8B1EF3" />
-          <stop offset="1" stopColor="#055BFB" />
+          <stop stopColor={tokens.color.brand.pink} />
+          <stop offset=".48" stopColor={tokens.color.brand.violet} />
+          <stop offset="1" stopColor={tokens.color.brand.blue} />
         </linearGradient>
       </defs>
       <circle
@@ -366,9 +366,9 @@ const VibesIcon = memo(function VibesIcon({ active, dark }) {
     >
       <defs>
         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#C82BFF" />
-          <stop offset="48%" stopColor="#8B1EF3" />
-          <stop offset="100%" stopColor="#055BFB" />
+          <stop offset="0%" stopColor={tokens.color.brand.pink} />
+          <stop offset="48%" stopColor={tokens.color.brand.violet} />
+          <stop offset="100%" stopColor={tokens.color.brand.blue} />
         </linearGradient>
       </defs>
       {/* Outer segmented story vibe halo */}
@@ -517,7 +517,7 @@ const NavigationItem = memo(function NavigationItem({
         group relative flex h-[82px] min-w-0 flex-1 touch-manipulation flex-col items-center
         justify-start overflow-visible rounded-[20px] px-0 pt-[9px] outline-none
         transition-all duration-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.05]
-        focus-visible:ring-2 focus-visible:ring-[#8B1EF3]/70
+        focus-visible:ring-2 focus-visible:ring-arvdoul-purple/70
       "
     >
       {active && (
@@ -846,7 +846,7 @@ const NavigationHandle = memo(function NavigationHandle({
       className="
         absolute left-1/2 top-[-25px] z-[100] flex h-[30px] w-[72px] -translate-x-1/2
         touch-none items-center justify-center rounded-full outline-none
-        focus-visible:ring-2 focus-visible:ring-[#8B1EF3]/80 pointer-events-auto
+        focus-visible:ring-2 focus-visible:ring-arvdoul-purple/80 pointer-events-auto
         bg-transparent border-0 p-0
       "
     >

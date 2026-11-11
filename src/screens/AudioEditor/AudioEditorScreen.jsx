@@ -10,6 +10,7 @@ import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
+import { tokens } from '../../design-system/tokens.js';
 import StudioHeader from './components/StudioHeader';
 import MultiTrackConsole from './components/MultiTrackConsole';
 import TransportBar from './components/TransportBar';
@@ -83,7 +84,7 @@ export default function AudioEditorScreen() {
         const track = {
           id: 'source_track',
           name: location.state?.title || 'Source Audio',
-          color: '#8B1EF3',
+          color: tokens.color.brand.violet,
           volume: 0,
           pan: 0,
           muted: false,

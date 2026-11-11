@@ -39,7 +39,7 @@ const CreatorCarousel = memo(({
         <div className="flex items-center gap-3">
           <div className={cn(
             'w-10 h-10 rounded-2xl flex items-center justify-center',
-            'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]'
+            'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue'
           )}>
             <Users className="w-5 h-5 text-white" />
           </div>
@@ -196,10 +196,10 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
           onClick={handleFollow}
           className={cn(
             'w-full py-2.5 rounded-full font-semibold text-sm',
-            'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]',
+            'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue',
             'text-white shadow-lg',
             'hover:shadow-xl transition-shadow duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-[#8B1EF3]/50'
+            'focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50'
           )}
         >
           {creator.isFollowing ? 'Following' : 'Follow'}
