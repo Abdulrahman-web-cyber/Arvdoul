@@ -115,3 +115,43 @@ describe('reels feed paginates (N110)', () => {
     expect(svc).toMatch(/if \(!lastDocSnapshot && cursor\)/);
   });
 });
+
+describe('message menu actions are wired, not dead (N254)', () => {
+  const chat = read('src/screens/ChatScreen.jsx');
+  const bubble = read('src/components/messaging/MessageBubble.jsx');
+  const svc = read('src/services/messagesService.js');
+
+  test('MessageBubble menu renders Reply / Forward / Edit / Pin', () => {
+    // The bubble always rendered these items, but ChatScreen never passed the
+    // handlers, so tapping them did nothing.
+    expect(bubble).toMatch(/onReply\?\.\(message\)/);
+    expect(bubble).toMatch(/onForward\?\.\(message\)/);
+    expect(bubble).toMatch(/onEdit\?\.\(message\)/);
+    expect(bubble).toMatch(/onPin\(message\)/);
+  });
+
+  test('ChatScreen supplies every handler the bubble renders', () => {
+    expect(chat).toMatch(/onReply=\{handleReply\}/);
+    expect(chat).toMatch(/onForward=\{openForwardPicker\}/);
+    expect(chat).toMatch(/onEdit=\{/);
+    expect(chat).toMatch(/onPin=\{/);
+  });
+
+  test('a reply attaches replyTo metadata to the outgoing message', () => {
+    expect(chat).toMatch(/replyTo: \{/);
+    expect(chat).toMatch(/messageId: replyTo\.id/);
+    // The service persists it on the canonical schema.
+    expect(svc).toMatch(/replyTo: validated\.replyTo \|\| null/);
+  });
+
+  test('forward uses the real service method (no fabricated cross-post)', () => {
+    expect(chat).toMatch(/forwardMessage\(conversationId, forwardTarget\.id, targetConversationId, uid\)/);
+    expect(svc).toMatch(/async forwardMessage\(sourceConversationId, messageId, targetConversationId, userId, options = \{\}\)/);
+  });
+
+  test('edit and pin go through the real service methods', () => {
+    expect(chat).toMatch(/\.editMessage\(msg\.id, conversationId, uid, trimmed\)/);
+    expect(chat).toMatch(/svc\.pinMessage\(conversationId, msg\.id, uid\)/);
+    expect(chat).toMatch(/svc\.unpinMessage\(conversationId, msg\.id, uid\)/);
+  });
+});

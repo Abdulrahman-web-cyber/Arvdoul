@@ -30,7 +30,7 @@ import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X } from "lucide-react";
+import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply } from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { format, isSameDay } from "date-fns";
 
@@ -65,6 +65,11 @@ export default function ChatScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [savedIds, setSavedIds] = useState({});
   const [savedMessages, setSavedMessages] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
+  const [forwardConversations, setForwardConversations] = useState([]);
+  const [forwarding, setForwarding] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState([]);
   const [reportTarget, setReportTarget] = useState(null);
   const [reportReason, setReportReason] = useState('');
   const [reportDetails, setReportDetails] = useState('');
@@ -261,12 +266,27 @@ export default function ChatScreen() {
           senderId: uid,
           type: 'text',
           content: data.content,
+          replyTo: replyTo ? { senderName: replyTo.senderName, content: replyTo.content } : null,
           createdAt: new Date(),
         },
       ]);
       try {
-        const res = await getMessagingService().sendMessage(conversationId, { type: 'text', content: data.content });
+        const res = await getMessagingService().sendMessage(conversationId, {
+          type: 'text',
+          content: data.content,
+          ...(replyTo
+            ? {
+                replyTo: {
+                  messageId: replyTo.id,
+                  senderId: replyTo.senderId,
+                  senderName: replyTo.senderName,
+                  contentPreview: (replyTo.content || '').slice(0, 80),
+                },
+              }
+            : {}),
+        });
         reconcileSentMessage(localId, res);
+        setReplyTo(null);
       } catch (err) {
         toastError(err.message || 'Failed to send message');
         // Roll back the optimistic message so the UI never lies
@@ -274,7 +294,7 @@ export default function ChatScreen() {
         setMessages((prev) => prev.filter((m) => m.id !== localId));
       }
     },
-    [conversationId, uid, reconcileSentMessage]
+    [conversationId, uid, reconcileSentMessage, replyTo]
   );
 
   const handleSendMedia = useCallback(
@@ -389,6 +409,7 @@ export default function ChatScreen() {
       ]);
       const pinnedIds = pinnedRes.status === 'fulfilled' ? pinnedRes.value?.pinnedMessageIds : [];
       setPinnedMessages(Array.isArray(pinnedIds) ? pinnedIds : []);
+      setPinnedIds(Array.isArray(pinnedIds) ? pinnedIds : []);
       const mediaList = mediaRes.status === 'fulfilled' ? mediaRes.value?.media : [];
       setSharedMedia(Array.isArray(mediaList) ? mediaList : []);
       const failed = [];
@@ -517,6 +538,76 @@ export default function ChatScreen() {
       toastError('Could not load your saved messages.');
     }
   }, [uid, conversationId]);
+
+  // Reply / Edit / Forward / Pin handlers. MessageBubble renders these menu
+  // actions unconditionally, so a missing handler was a control that did
+  // nothing when tapped.
+  const handleReply = useCallback((msg) => {
+    setReplyTo({
+      id: msg.id,
+      senderId: msg.senderId,
+      senderName: msg.senderId === uid ? 'You' : (conversation?.participantNames?.[msg.senderId] || msg.senderName || 'User'),
+      content: msg.content || '',
+    });
+  }, [uid, conversation]);
+
+  const handleEdit = useCallback(async (msg) => {
+    const next = window.prompt('Edit message', msg.content || '');
+    if (next == null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === msg.content) return;
+    try {
+      await getMessagingService().editMessage(msg.id, conversationId, uid, trimmed);
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, content: trimmed, isEdited: true } : m)));
+      toastSuccess('Message edited');
+    } catch (err) {
+      toastError(err?.message || 'Could not edit the message.');
+    }
+  }, [conversationId, uid]);
+
+  const openForwardPicker = useCallback(async (msg) => {
+    setForwardTarget(msg);
+    setForwardConversations([]);
+    try {
+      const res = await getMessagingService().getUserConversations(uid, { limit: 50 });
+      setForwardConversations((res?.conversations || []).filter((c) => c.id !== conversationId));
+    } catch (err) {
+      toastError('Could not load your conversations.');
+    }
+  }, [uid, conversationId]);
+
+  const handleForwardTo = useCallback(async (targetConversationId) => {
+    if (!forwardTarget || forwarding) return;
+    setForwarding(true);
+    try {
+      await getMessagingService().forwardMessage(conversationId, forwardTarget.id, targetConversationId, uid);
+      toastSuccess('Message forwarded');
+      setForwardTarget(null);
+    } catch (err) {
+      toastError(err?.message || 'Could not forward the message.');
+    } finally {
+      setForwarding(false);
+    }
+  }, [forwardTarget, forwarding, conversationId, uid]);
+
+  const handleTogglePin = useCallback(async (msg) => {
+    try {
+      const svc = getMessagingService();
+      if (pinnedIds.includes(msg.id)) {
+        await svc.unpinMessage(conversationId, msg.id, uid);
+        setPinnedIds((p) => p.filter((id) => id !== msg.id));
+        setPinnedMessages((p) => p.filter((id) => id !== msg.id));
+        toastSuccess('Message unpinned');
+      } else {
+        await svc.pinMessage(conversationId, msg.id, uid);
+        setPinnedIds((p) => [...p, msg.id]);
+        setPinnedMessages((p) => [...p, msg.id]);
+        toastSuccess('Message pinned');
+      }
+    } catch (err) {
+      toastError(err?.message || 'Could not update the pin.');
+    }
+  }, [conversationId, uid, pinnedIds]);
 
   const jumpToMessage = (messageId) => {
     setShowInfoPanel(false);
@@ -706,6 +797,11 @@ export default function ChatScreen() {
               }}
               onSave={toggleSaveMessage}
               isSaved={Boolean(savedIds[msg.id])}
+              onReply={handleReply}
+              onForward={openForwardPicker}
+              onEdit={isOwn ? handleEdit : undefined}
+              onPin={isOwn || conversation?.participantCount > 2 ? handleTogglePin : undefined}
+              isPinned={pinnedIds.includes(msg.id)}
               onReport={(m) => { setReportTarget(m); setReportReason(''); setReportDetails(''); }}
               isGroup={conversation?.participantCount > 2}
               isGroupStart={item.groupStart}
@@ -999,6 +1095,27 @@ export default function ChatScreen() {
         </div>
       )}
 
+      {/* Reply / editing banner */}
+      {replyTo && (
+        <div className={cn('max-w-3xl mx-auto w-full px-3')}>
+          <div className={cn('flex items-center gap-2 rounded-t-xl border-l-2 border-purple-500 px-3 py-2', isDark ? 'bg-white/5' : 'bg-slate-100')}>
+            <Reply className="w-4 h-4 text-purple-400 shrink-0" aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold text-purple-400">Replying to {replyTo.senderName}</p>
+              <p className="text-[11px] truncate opacity-70">{replyTo.content || '(media message)'}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              aria-label="Cancel reply"
+              className={cn('p-1.5 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-200 text-gray-600')}
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Typing indicator */}
       {typingText && !loading && (
         <div className="max-w-3xl mx-auto w-full px-4 pb-1 text-[11px] text-purple-400">
@@ -1016,6 +1133,47 @@ export default function ChatScreen() {
           disabled={!conversation}
         />
       </div>
+
+      {/* Forward picker */}
+      {forwardTarget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={() => !forwarding && setForwardTarget(null)}>
+          <div
+            className={cn('w-full sm:max-w-md max-h-[70vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col', isDark ? 'bg-[#0B0F17] border border-white/10' : 'bg-white border border-gray-200')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={cn('flex items-center justify-between px-4 py-3 border-b', isDark ? 'border-white/10' : 'border-gray-200')}>
+              <h3 className="font-bold text-sm">Forward to</h3>
+              <button type="button" onClick={() => setForwardTarget(null)} aria-label="Close" className={cn('p-1.5 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}>
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {forwardConversations.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No other conversations to forward to.</p>
+              ) : (
+                forwardConversations.map((c) => {
+                  const other = (c.participantDetails || []).find((p) => p.id !== uid);
+                  const name = c.title || other?.displayName || other?.name || 'Conversation';
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={forwarding}
+                      onClick={() => handleForwardTo(c.id)}
+                      className={cn('w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}
+                    >
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium truncate">{name}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
