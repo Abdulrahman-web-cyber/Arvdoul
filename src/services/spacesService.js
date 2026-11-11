@@ -185,30 +185,6 @@ class SpacesService {
     }
   }
 
-  /**
-   * Subscribes to real-time updates for active spaces.
-   */
-  async subscribeSpaces(category = 'All', callback) {
-    try {
-      const firestore = await getFirestoreInstance();
-      const { collection, onSnapshot, query, orderBy, limit } = await import('firebase/firestore');
-
-      const q = query(collection(firestore, 'spaces'), orderBy('startedAt', 'desc'), limit(30));
-      return onSnapshot(q, (snapshot) => {
-        const items = [];
-        snapshot.forEach(d => items.push({ id: d.id, ...d.data() }));
-        if (category !== 'All') {
-          callback(items.filter(s => s.category?.toLowerCase() === category.toLowerCase()));
-        } else {
-          callback(items);
-        }
-      }, (err) => log.warn('[spacesService] subscription error', err));
-    } catch (err) {
-      log.error('Error subscribing to spaces', err);
-      return () => {};
-    }
-  }
-
   async getSpaceById(spaceId) {
     try {
       const firestore = await getFirestoreInstance();

@@ -31,7 +31,7 @@
     "src/services/messagesService.js": 4,
     "src/services/notificationsService.js": 2,
     "src/services/settingsService.js": 1,
-    "src/services/spacesService.js": 5,
+    "src/services/spacesService.js": 4,
     "src/services/storyService.js": 2,
     "src/services/videoService.js": 1
   },

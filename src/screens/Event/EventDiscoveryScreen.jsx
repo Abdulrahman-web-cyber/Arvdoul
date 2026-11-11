@@ -49,6 +49,11 @@ const EventDiscoveryScreen = () => {
         viewerId: user?.uid
       };
 
+      const trimmedSearch = searchQuery.trim();
+      if (trimmedSearch) {
+        options.searchQuery = trimmedSearch;
+      }
+
       if (type !== 'all') {
         options.type = type;
       }
@@ -76,7 +81,7 @@ const EventDiscoveryScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [eventService, page, sortBy, type, filter, user?.uid]);
+  }, [eventService, page, sortBy, type, filter, user?.uid, searchQuery]);
 
   // Load user's events
   const loadMyEvents = useCallback(async () => {

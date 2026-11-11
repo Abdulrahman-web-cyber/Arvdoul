@@ -31,7 +31,7 @@ jest.unstable_mockModule('firebase/firestore', () => ({
     const ids = globalThis.__pages[q.__cursorId ?? '__start__'] ?? [];
     const limited = q.__limit ? ids.slice(0, q.__limit) : ids;
     return {
-      docs: limited.map((id) => ({ id, data: () => ({ id }) })),
+      docs: limited.map((id) => ({ id, data: () => globalThis.__docData?.[id] ?? { id } })),
       size: limited.length,
       empty: limited.length === 0,
     };
@@ -98,4 +98,28 @@ test('listEvents applies the startAfter cursor and honors the status filter', as
   expect(page2.events.map((e) => e.id)).toEqual(['e20']);
   expect(page2.hasMore).toBe(false);
   expect(page2.nextCursor).toBeNull();
+});
+
+test('listEvents applies the free-text searchQuery (previously a dead input)', async () => {
+  const svc = getEventService();
+  svc.initialized = true;
+  svc.db = {};
+
+  globalThis.__pages = { __start__: ['e0', 'e1', 'e2'] };
+  globalThis.__docData = {
+    e0: { id: 'e0', title: 'Design Summit', location: 'Berlin' },
+    e1: { id: 'e1', title: 'Coffee Meetup', location: 'Berlin' },
+    e2: { id: 'e2', title: 'Design Jam', description: 'a design evening' },
+  };
+
+  // Title match and description match both surface; a non-match is dropped.
+  const res = await svc.listEvents({ page: 1, searchQuery: 'design' });
+  expect(res.events.map((e) => e.id)).toEqual(['e0', 'e2']);
+  // A search is a single window: never advertise more pages.
+  expect(res.hasMore).toBe(false);
+  expect(res.nextCursor).toBeNull();
+
+  // No match -> empty result, not the whole collection.
+  const none = await svc.listEvents({ page: 1, searchQuery: 'zzz' });
+  expect(none.events).toEqual([]);
 });
