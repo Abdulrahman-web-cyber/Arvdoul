@@ -67,15 +67,13 @@ describe('ui-state wiring guard: every useState setter is reachable', () => {
   // The inverse defect: a setter that IS called (so the previous test passes)
   // but whose value is never rendered — "write-only state". It looks wired up
   // and does nothing: a spinner that never shows, a denial flag that never
-  // gates the UI, a progress value no one reads. The auth screens keep a
-  // deliberate recaptchaError value (do-not-touch), so they are exempt.
-  const WRITE_ONLY_EXEMPT = new Set(['src/screens/SignupStep2VerifyContact.jsx']);
-
+  // gates the UI, a progress value no one reads. There are no exemptions: the
+  // signup screen's recaptcha error is rendered by `InvisibleRecaptcha` itself,
+  // so the parent keeps no write-only duplicate.
   test('no useState value is written but never rendered', () => {
     const violations = [];
     for (const file of collect(SRC)) {
       const rel = path.relative(root, file);
-      if (WRITE_ONLY_EXEMPT.has(rel)) continue;
       const source = fs.readFileSync(file, 'utf8');
       const re = /const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*useState/g;
       let match;

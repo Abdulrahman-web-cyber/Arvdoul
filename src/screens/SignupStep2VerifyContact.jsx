@@ -1289,9 +1289,7 @@ export default function SignupStep2VerifyContact() {
   const [errors, setErrors] = useState({});
   const [step1Data, setStep1Data] = useState(null);
 
-  const [recaptchaReady, setRecaptchaReady] = useState(false);
   const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
-  const [recaptchaError, setRecaptchaError] = useState(null);
 
   const [isPhoneValid, setIsPhoneValid] = useState(false);
   const [shakeCard, setShakeCard] = useState(false);
@@ -1395,7 +1393,6 @@ export default function SignupStep2VerifyContact() {
       try {
         verifier = await auth.createRecaptchaVerifier('signup-recaptcha-container');
         setRecaptchaVerifier(verifier);
-        setRecaptchaReady(true);
       } catch (rErr) {
         toast.error("Security check failed. Please tap retry and try again.");
         navigationLock.current = false;
@@ -1500,14 +1497,12 @@ export default function SignupStep2VerifyContact() {
   }, [triggerShake]);
 
   const handleRecaptchaReady = useCallback((verifier) => {
-    setRecaptchaReady(true);
     setRecaptchaVerifier(verifier);
-    setRecaptchaError(null);
   }, []);
 
-  const handleRecaptchaError = useCallback((error) => {
-    setRecaptchaError(error);
-    setRecaptchaReady(false);
+  const handleRecaptchaError = useCallback(() => {
+    // InvisibleRecaptcha renders its own error + Retry affordance; the parent
+    // only needs to drop the now-invalid verifier so the next attempt rebuilds it.
     setRecaptchaVerifier(null);
     triggerShake();
   }, [triggerShake]);
@@ -1519,7 +1514,7 @@ export default function SignupStep2VerifyContact() {
       case 'google': return true;
       default: return false;
     }
-  }, [method, phoneNumber, isPhoneValid, emailForm, errors, phoneLoading, recaptchaReady]);
+  }, [method, phoneNumber, isPhoneValid, emailForm, errors, phoneLoading]);
 
   const rootVariables = resolvedTheme === 'dark' ? THEMES.dark : THEMES.light;
   const year = new Date().getFullYear();
