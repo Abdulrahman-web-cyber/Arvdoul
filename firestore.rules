@@ -787,7 +787,12 @@ service cloud.firestore {
         ]);
       }
       match /analytics_shards/{shardId} {
-        allow read: if isSignedIn();
+        // Private creator analytics (forward/back taps, completions, comments,
+        // replies). The roll-up runs server-side and the creator sees the
+        // aggregates on the story document's `stats`, so no client reads the
+        // raw shards — a signed-in read leaked one creator's engagement to
+        // every other user. Scope the read to the creator and admins.
+        allow read: if isSignedIn() && (vibeData().userId == uid() || isAdmin());
         allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
           'forwardTaps', 'backTaps', 'completions', 'comments', 'replies', 'updatedAt'
         ]);
@@ -1311,8 +1316,11 @@ service cloud.firestore {
       match /items/{itemId} {
         // Items are bounded by the parent collection's ownership: only the
         // collection owner (or an admin) may add/remove entries. The previous
-        // `if isSignedIn()` let any user write into anyone's collection.
-        allow read: if isSignedIn();
+        // `if isSignedIn()` let any user write into anyone's collection. The
+        // read follows the parent too — a collection is private to its owner,
+        // so a signed-in read of its saved posts leaked another user's saves.
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid() || isAdmin());
         allow create: if isSignedIn() &&
           get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid();
         allow update, delete: if isSignedIn() &&

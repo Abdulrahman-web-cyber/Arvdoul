@@ -144,6 +144,24 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/resource\.data\.userId == uid\(\)/);
   });
 
+  test('analytics_shards read is scoped to the creator', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /analytics_shards/{shardId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/vibeData\(\)\.userId == uid\(\)/);
+  });
+
+  test('collections items read follows the parent collection ownership', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /items/{itemId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, start + 900);
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/allow read: if isSignedIn\(\) && \(\s*get\(/);
+  });
+
   test('a stranger cannot read a share record (emulator)', async () => {
     if (!reachable) return;
     const env = await makeEnv('arvdoul-shares-privacy');
