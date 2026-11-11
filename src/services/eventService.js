@@ -365,48 +365,6 @@ class EventService {
   }
 
   /**
-   * Get upcoming events
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} Upcoming events
-   */
-  async getUpcomingEvents(limitNum = 10) {
-    await this.initialize();
-    
-    const now = serverTimestamp();
-    const q = query(
-      collection(this.db, 'events'),
-      where('status', 'in', ['published', 'open']),
-      where('startDate', '>=', now),
-      orderBy('startDate', 'asc'),
-      limit(limitNum)
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  }
-
-  /**
-   * Get community events
-   * @param {string} communityId - Community ID
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} Community events
-   */
-  async getCommunityEvents(communityId, limitNum = 20) {
-    await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'events'),
-      where('communityId', '==', communityId),
-      where('status', 'not-in', ['cancelled', 'deleted']),
-      orderBy('startDate', 'desc'),
-      limit(limitNum)
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  }
-
-  /**
    * Get user's events (as organizer)
    * @param {string} userId - User ID
    * @returns {Promise<Array>} Organized events

@@ -20,9 +20,13 @@ const EventDetailScreen = () => {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [stats, setStats] = useState(null);
+  const [myRating, setMyRating] = useState(0);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   // Load event
   const loadEvent = useCallback(async () => {
@@ -47,13 +51,25 @@ const EventDetailScreen = () => {
       const eventStats = await eventService.getEventStats(eventId);
       setStats(eventStats);
 
+      // Load the viewer's own feedback (if any) so re-rating shows the
+      // current value rather than resetting to 0.
+      if (user?.uid && data.attendees?.[user.uid]) {
+        try {
+          const feedback = await eventService.getEventFeedback(eventId);
+          const mine = feedback.find((f) => f.userId === user.uid);
+          if (mine) setMyRating(Number(mine.rating) || 0);
+        } catch (fbErr) {
+          console.warn('Could not load your event feedback:', fbErr?.message);
+        }
+      }
+
     } catch (error) {
       console.error('Failed to load event:', error);
       toast.error('Failed to load event');
     } finally {
       setLoading(false);
     }
-  }, [eventId, eventService, navigate]);
+  }, [eventId, eventService, navigate, user?.uid]);
 
   // Initial load
   useEffect(() => {
@@ -108,6 +124,71 @@ const EventDetailScreen = () => {
       toast.error(error.message || 'Failed to cancel registration');
     }
   }, [eventId, user?.uid, eventService, loadEvent]);
+
+  // Organizer: cancel (soft-delete) the event. `deleteEvent` is the only path
+  // that sets status:'cancelled', which the registration card already renders.
+  const handleCancelEvent = useCallback(async () => {
+    if (!window.confirm('Cancel this event? Attendees will be notified and registration will close.')) return;
+    setCancelling(true);
+    try {
+      await eventService.deleteEvent(eventId, user.uid);
+      toast.success('Event cancelled');
+      loadEvent();
+    } catch (error) {
+      console.error('Cancel event failed:', error);
+      toast.error(error.message || 'Failed to cancel event');
+    } finally {
+      setCancelling(false);
+    }
+  }, [eventId, user?.uid, eventService, loadEvent]);
+
+  // Organizer: check an attendee in (server-authoritative, organizer-only).
+  const handleCheckIn = useCallback(async (attendeeId) => {
+    try {
+      await eventService.checkInAttendee(eventId, attendeeId, user.uid);
+      toast.success('Attendee checked in');
+      loadEvent();
+    } catch (error) {
+      console.error('Check-in failed:', error);
+      toast.error(error.message || 'Failed to check in attendee');
+    }
+  }, [eventId, user?.uid, eventService, loadEvent]);
+
+  // Organizer: promote the next waitlisted attendee.
+  const handlePromote = useCallback(async () => {
+    setPromoting(true);
+    try {
+      const promotedUserId = await eventService.promoteFromWaitlist(eventId);
+      if (promotedUserId) toast.success('Next waitlisted attendee promoted');
+      else toast.info('No one is on the waitlist');
+      loadEvent();
+    } catch (error) {
+      console.error('Promote waitlist failed:', error);
+      toast.error(error.message || 'Failed to promote waitlist');
+    } finally {
+      setPromoting(false);
+    }
+  }, [eventId, eventService, loadEvent]);
+
+  // Attendee: submit (or update) a 1-5 rating. Server enforces registered-only.
+  const handleSubmitFeedback = useCallback(async (rating) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to rate this event');
+      return;
+    }
+    setSubmittingFeedback(true);
+    try {
+      await eventService.submitFeedback(eventId, user.uid, rating);
+      setMyRating(rating);
+      toast.success('Thanks for your feedback!');
+      loadEvent();
+    } catch (error) {
+      console.error('Feedback failed:', error);
+      toast.error(error.message || 'Failed to submit feedback');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  }, [isAuthenticated, eventId, user?.uid, eventService, loadEvent]);
 
   // Copy a canonical link to this event so "Copy Event Link" / "Share Event"
   // actually hand the user a working URL.
@@ -327,6 +408,14 @@ const EventDetailScreen = () => {
                         </div>
                         <div className="text-sm text-gray-500">Waitlisted</div>
                       </div>
+                      {typeof event.stats?.feedbackScore === 'number' && event.stats.feedbackScore > 0 && (
+                        <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                          <div className="text-2xl font-bold text-indigo-600">
+                            {event.stats.feedbackScore.toFixed(1)}
+                          </div>
+                          <div className="text-sm text-gray-500">Rating</div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Progress bar for capacity */}
@@ -405,26 +494,38 @@ const EventDetailScreen = () => {
                           .filter(([_, data]) => data.status !== 'waitlisted')
                           .slice(0, 16)
                           .map(([userId, data]) => (
-                            <button
-                              type="button"
+                            <div
                               key={userId}
-                              aria-label="View attendee profile"
-                              className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                              onClick={() => navigate(`/profile/${userId}`)}
+                              className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center"
                             >
-                              <div className="w-16 h-16 mx-auto rounded-full bg-gray-200 mb-2">
-                                <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500" />
-                              </div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                {data.displayName || 'User'}
-                              </p>
-                              {data.status === 'checked_in' && (
+                              <button
+                                type="button"
+                                aria-label="View attendee profile"
+                                className="cursor-pointer w-full"
+                                onClick={() => navigate(`/profile/${userId}`)}
+                              >
+                                <div className="w-16 h-16 mx-auto rounded-full bg-gray-200 mb-2">
+                                  <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full" />
+                                </div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {data.displayName || 'User'}
+                                </p>
+                              </button>
+                              {data.status === 'checked_in' ? (
                                 <span className="text-xs text-green-600 flex items-center justify-center gap-1 mt-1">
                                   <Check className="w-3 h-3" />
                                   Checked In
                                 </span>
-                              )}
-                            </button>
+                              ) : isOrganizer ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCheckIn(userId)}
+                                  className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                >
+                                  Check in
+                                </button>
+                              ) : null}
+                            </div>
                           ))}
                       </div>
                     ) : (
@@ -439,6 +540,16 @@ const EventDetailScreen = () => {
                         <p className="text-sm text-gray-500">
                           {event.stats.waitlistCount} people are on the waitlist
                         </p>
+                        {isOrganizer && (
+                          <button
+                            type="button"
+                            onClick={handlePromote}
+                            disabled={promoting}
+                            className="mt-3 px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium disabled:opacity-50"
+                          >
+                            {promoting ? 'Promoting...' : 'Promote next attendee'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </motion.div>
@@ -475,6 +586,16 @@ const EventDetailScreen = () => {
                       Copy Event Link
                     </button>
                   </div>
+                  {event.status !== 'cancelled' && (
+                    <button
+                      onClick={handleCancelEvent}
+                      disabled={cancelling}
+                      className="w-full py-3 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-xl font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <X className="w-5 h-5" />
+                      {cancelling ? 'Cancelling...' : 'Cancel Event'}
+                    </button>
+                  )}
                 </div>
               ) : isRegistered || isWaitlisted ? (
                 <div className="space-y-3">
@@ -495,6 +616,29 @@ const EventDetailScreen = () => {
                   >
                     Cancel Registration
                   </button>
+                  {isRegistered && (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {myRating > 0 ? 'Your rating' : 'Rate this event'}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            disabled={submittingFeedback}
+                            aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                            onClick={() => handleSubmitFeedback(star)}
+                            className={`text-2xl leading-none transition-colors disabled:opacity-50 ${
+                              star <= myRating ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600 hover:text-amber-300'
+                            }`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : event.status === 'cancelled' ? (
                 <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl text-center">
