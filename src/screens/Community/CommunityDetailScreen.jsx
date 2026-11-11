@@ -25,11 +25,13 @@ const CommunityDetailScreen = () => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isMember, setIsMember] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Load community
   const loadCommunity = useCallback(async () => {
     try {
       setLoading(true);
+      setAccessDenied(false);
       
       const data = await communityService.getCommunity(communityId);
       if (!data) {
@@ -61,8 +63,15 @@ const CommunityDetailScreen = () => {
       setMembers(memberList.slice(0, 12)); // Show first 12
 
     } catch (error) {
-      console.error('Failed to load community:', error);
-      toast.error('Failed to load community');
+      // A secret community a non-member requests is denied by the rules (the
+      // document read rejects). That is an authorization outcome, not a
+      // transport failure — show the members-only state instead of a toast.
+      if (error?.code === 'permission-denied') {
+        setAccessDenied(true);
+      } else {
+        console.error('Failed to load community:', error);
+        toast.error('Failed to load community');
+      }
     } finally {
       setLoading(false);
     }
@@ -167,6 +176,30 @@ const CommunityDetailScreen = () => {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <Shield className="w-8 h-8 text-gray-500 dark:text-gray-400" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            This community is private
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            Secret communities are visible only to their members. Ask a member to invite you.
+          </p>
+          <button
+            onClick={() => navigate('/community')}
+            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            Back to Communities
+          </button>
+        </div>
       </div>
     );
   }

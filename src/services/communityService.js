@@ -51,22 +51,6 @@ class CommunityService {
     return { id: snap.id, ...snap.data() };
   }
 
-  async getCommunityWithAccess(communityId, userId) {
-    const community = await this.getCommunity(communityId);
-    
-    if (!community) return null;
-    
-    if (community.privacy === 'public') {
-      return community;
-    }
-    
-    if (community.members && community.members[userId]) {
-      return community;
-    }
-    
-    return null;
-  }
-
   async updateCommunity(communityId, data, userId) {
     await this.initialize();
     // The community document is server-write-only; the callable re-checks the
@@ -99,7 +83,16 @@ class CommunityService {
       where('discoveryEnabled', '==', true)
     ];
 
-    if (filter !== 'all') {
+    // Secret communities are members-only (see firestore.rules). A directory
+    // query may not *potentially* return one, so every public-facing list must
+    // constrain privacy to the non-secret set — otherwise the rules deny the
+    // whole list (all-or-nothing). The "secret" filter therefore has nothing to
+    // return to a non-member and is handled as an empty page.
+    if (!filter || filter === 'all') {
+      constraints.push(where('privacy', 'in', ['public', 'private']));
+    } else if (filter === 'secret') {
+      return { communities: [], hasMore: false, page, nextCursor: null };
+    } else {
       constraints.push(where('privacy', '==', filter));
     }
 
@@ -156,6 +149,7 @@ class CommunityService {
       collection(this.db, 'communities'),
       where('isDeleted', '==', false),
       where('discoveryEnabled', '==', true),
+      where('privacy', 'in', ['public', 'private']),
       orderBy('stats.memberCount', 'desc'),
       limit(limitNum * 2)
     );
@@ -416,6 +410,7 @@ class CommunityService {
       collection(this.db, 'communities'),
       where('isDeleted', '==', false),
       where('discoveryEnabled', '==', true),
+      where('privacy', 'in', ['public', 'private']),
       orderBy('stats.memberCount', 'desc'),
       limit(limitNum + 5)
     );

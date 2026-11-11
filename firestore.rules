@@ -221,6 +221,18 @@ service cloud.firestore {
       return isSignedIn() &&
         uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.get('members', {});
     }
+    // A "secret" community is members-only: its document, join requests and
+    // member roster must not be readable by a non-member. "public" and
+    // "private" stay world-readable (private means "anyone can see, request to
+    // join"). Read via get() so the same helper works for the community's
+    // subcollections; the community document's own rule must NOT use
+    // `.get(field, default)` on `resource.data` — that form silently defeats the
+    // all-or-nothing list-query check (an unfiltered directory query would then
+    // leak secret rows; see firestoreRulesCompile + communityPrivacyRules).
+    function communityPrivacyOpen(communityId) {
+      let c = get(/databases/$(database)/documents/communities/$(communityId)).data;
+      return c.privacy != 'secret' || (isSignedIn() && uid() in c.get('members', {})) || isAdmin();
+    }
     function postListableShape() {
       return resource.data.isDeleted == false &&
         resource.data.status == 'published' &&
@@ -1197,11 +1209,24 @@ service cloud.firestore {
       // permissions), moderation state and derived counters. A client write
       // could therefore grant itself `role: 'owner'`, so every mutation goes
       // through the server-authoritative `community*` callables in
-      // functions/communities.js. Reads stay public for the directory.
-      allow read: if true;
+      // functions/communities.js.
+      // Reads: public + private communities stay world-readable for the
+      // directory, but a *secret* community is members-only — its name,
+      // description, rules and member roster must not leak to a non-member.
+      // The check reads `resource.data.privacy` directly (NOT `.get(..., 'public')`):
+      // the `.get()` default form makes an unfiltered list query return secret
+      // rows, because the rule can no longer prove a single permission outcome
+      // for the whole potential result set.
+      allow read: if resource.data.privacy != 'secret' ||
+        (isSignedIn() && uid() in resource.data.members) ||
+        isAdmin();
       allow write: if false; // server-verified
       match /{subcollection}/{docId} {
-        allow read: if true;
+        // Subcollection content (join requests, pending members, ...) follows
+        // the parent community's visibility: only a non-secret community or a
+        // member (or admin) may read it. `communityPrivacyOpen` get()s the
+        // parent, so a missing parent denies the read.
+        allow read: if communityPrivacyOpen(communityId);
         // Members may create their own content; only the author (or admin) may edit/delete.
         allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
         allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());

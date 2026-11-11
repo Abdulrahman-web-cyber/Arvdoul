@@ -262,6 +262,7 @@ jobs:
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/firestoreRulesCoverage.test.js
+          src/__tests__/communityPrivacyRules.test.js
           src/__tests__/notificationCounterRuleShape.test.js
           src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js
@@ -359,7 +360,7 @@ jobs:
           npx firebase-tools emulators:exec
           --only firestore
           --project demo-arvdoul
-          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js src/__tests__/spacesRosterWiringGuard.test.js"
+          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js src/__tests__/spacesRosterWiringGuard.test.js src/__tests__/communityPrivacyRules.test.js"
 
       # Storage rules are a separate emulator. This boots it and runs the live
       # half of the storage path-alignment guard: every canonical client upload
