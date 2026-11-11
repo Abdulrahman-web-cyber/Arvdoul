@@ -86,7 +86,8 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N273 | **`posts/{postId}/daily_stats` was world-readable — via the posts-subcollection wildcard** (`match /{subcollection}/{docId}` granted any signed-in read, overriding the specific block). | Specific block reads author/admin; wildcard now excludes `daily_stats` so it cannot re-open the read. Guard pins both. |
 
 | N274 | **`event_feedback/{feedbackId}` (each attendee's event rating + comment) was readable by every signed-in user.** The row is keyed `event_${eventId}_${uid}`; the only client reader fetched the whole list to find the caller's own rating. | Read scoped to the attendee + admins; `eventService.getMyEventFeedback` now point-reads the caller's own doc (replaces the list `getEventFeedback`); `EventDetailScreen` updated. Guard (static) pins it. |
-New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
+
+| N275 | **`creator_profiles/{userId}` (creator bio/links + eligibility/standing) was readable by every signed-in user.** Only reader is the owner's own status view. | Read scoped to owner + admins. Guard (static) pins it. |New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
 `a11yInteractiveGuard`, `brandHexRatchetGuard`, `sharedStatePrimitivesGuard`,
 `storyExpiryGuard`, `functionsInventoryGuard`, `adminAuditGuard`,
 `privacyPropagationAndSaml`, `searchBlockFiltering`, `searchPaginationWiring`,

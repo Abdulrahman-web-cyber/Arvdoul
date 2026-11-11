@@ -375,7 +375,11 @@ service cloud.firestore {
 
     // ==================== CREATOR PROFILES ====================
     match /creator_profiles/{userId} {
-      allow read: if isSignedIn();
+      // Official creator record (application bio/links + eligibility status).
+      // Server-written on approval; the only client reader is the owner's own
+      // application/status view (creatorService.getCreatorProfile). A bare
+      // `isSignedIn()` read exposed every creator's eligibility/standing.
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && request.resource.data.tier == 'NONE';
       allow update: if isAdmin() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tier', 'eligibilityStatus', 'monetizationEligible', 'policyStanding', 'approvedAt']));
       allow delete: if isAdmin();

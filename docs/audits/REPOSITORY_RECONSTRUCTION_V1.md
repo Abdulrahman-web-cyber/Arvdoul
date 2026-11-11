@@ -444,6 +444,7 @@ rules-provable-read invariant (N033) is frozen even in the unit run.
 
 | N274 **`event_feedback/{feedbackId}` (each attendee's event rating + comment) was readable by every signed-in user.** The row is keyed `event_${eventId}_${uid}` and the only client reader (`EventDetailScreen`) fetched the whole list just to find the caller's own rating, so a bare `isSignedIn()` read exposed every attendee's rating/comment. The aggregate `stats.feedbackScore` on the event document is the public signal. | ✅ **now closed** | Read is scoped to the attendee and admins (`resource.data.userId == uid() || isAdmin()`); the service now does a deterministic point read (`getMyEventFeedback`) of the caller's own doc instead of the list. `livePresenceAndHealthPrivacyRules.test.js` (static) pins the rule. |
 
+| N275 **`creator_profiles/{userId}` (official creator record: application bio/links, tier, `eligibilityStatus`, `monetizationEligible`, `policyStanding`, `approvedAt`) was readable by every signed-in user.** The only client reader is the owner's own application/status view (`creatorService.getCreatorProfile`, currently uncalled), so a bare `isSignedIn()` read exposed every creator's eligibility and policy standing. | ✅ **now closed** | Read is scoped to the owner and admins (`isOwner(userId) || isAdmin()`). `livePresenceAndHealthPrivacyRules.test.js` (static) pins it. |
 
 
 

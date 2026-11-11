@@ -181,6 +181,15 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/allow read: if isOwner\(userId\) \|\| isAdmin\(\);/);
   });
 
+  test('creator_profiles read is owner/admin only', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /creator_profiles/{userId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/allow read: if isOwner\(userId\) \|\| isAdmin\(\);/);
+  });
+
   test('post_analytics read is author/admin only', () => {
     const rulesSrc = readFile('firestore.rules');
     const start = rulesSrc.indexOf('match /post_analytics/{postId}');
