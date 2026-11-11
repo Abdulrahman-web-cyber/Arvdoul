@@ -1272,6 +1272,16 @@ export function AuthProvider({ children }) {
     navigationLock.current = true;
     isLoggingOutRef.current = true;
     try {
+      // Deregister this device's FCM token before the session ends, while the
+      // rules still authorise the write (push_tokens/{uid}/devices/{deviceId}
+      // is owner-gated). Otherwise a signed-out device keeps receiving the
+      // account's push notifications. Best-effort: never block sign-out.
+      const uidForToken = authService?.getCurrentUser?.()?.uid || user?.uid;
+      if (uidForToken) {
+        import('../services/notificationsService.js')
+          .then(({ getNotificationsService }) => getNotificationsService().removePushToken(uidForToken))
+          .catch((err) => console.warn('[Auth] push-token cleanup on logout failed', err?.message));
+      }
       await authService.signOut();
       if (isMounted.current) {
         setUser(null);
@@ -1300,7 +1310,7 @@ export function AuthProvider({ children }) {
       navigationLock.current = false;
       isLoggingOutRef.current = false;
     }
-  }, [authService, navigate]);
+  }, [authService, navigate, user?.uid]);
 
   const getCurrentUser = useCallback(() => user, [user]);
   const clearError = useCallback(() => setError(null), []);

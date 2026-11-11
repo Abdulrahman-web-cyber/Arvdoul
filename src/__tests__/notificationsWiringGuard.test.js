@@ -54,3 +54,17 @@ describe('NotificationsScreen consumes the real subscription payload', () => {
     expect(body).toMatch(/notificationsService\.markNotificationAsRead\(/);
   });
 });
+
+describe('push-token lifecycle is complete', () => {
+  const auth = read('src/context/AuthContext.jsx');
+
+  test('sign-out deregisters the device push token (removePushToken)', () => {
+    // removePushToken is the only writer that deletes push_tokens/{uid}/devices
+    // /{deviceId}; without a sign-out call the device kept receiving the
+    // account's notifications after logout. It must be invoked before signOut().
+    const start = auth.indexOf('const signOut = useCallback');
+    const body = auth.slice(start, auth.indexOf('}, [authService, navigate', start));
+    expect(body).toContain('removePushToken');
+    expect(body.indexOf('removePushToken')).toBeLessThan(body.indexOf('authService.signOut()'));
+  });
+});
