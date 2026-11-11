@@ -1671,7 +1671,13 @@ service cloud.firestore {
 
     // ==================== STORY REPLIES ====================
     match /story_replies/{replyId} {
-      allow read: if true;
+      // A story reply is a private interaction between the replier and the
+      // story owner: the document records `userId` (replier) and `toUserId`
+      // (owner). It was world-readable, which exposed the replier -> owner
+      // relationship graph to any client. Only the two parties (or an admin)
+      // may read it; no client currently reads the collection.
+      allow read: if isSignedIn() &&
+        (resource.data.userId == uid() || resource.data.toUserId == uid() || isAdmin());
       allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
       allow update, delete: if isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid() || isAdmin());
     }
