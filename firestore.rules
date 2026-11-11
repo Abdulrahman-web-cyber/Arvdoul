@@ -383,7 +383,11 @@ service cloud.firestore {
 
     // ==================== REPUTATION ====================
     match /reputation/{userId} {
-      allow read: if isSignedIn();
+      // A user's trust/reliability/contribution standing is their own record.
+      // It is server-written only (isAdmin), and the only reader is the subject
+      // (and admins); a bare `isSignedIn()` exposed every user's standing to
+      // every other user.
+      allow read: if isOwner(userId) || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -531,7 +535,12 @@ service cloud.firestore {
         allow write: if false;
       }
       match /daily_stats/{statId} {
-        allow read: if true;
+        // Per-day view stats for a post: server-written only, and the only
+        // reader is the post author (the analytics panel) — a public read
+        // exposed every author's traffic to any client.
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/posts/$(postId)).data.authorId == uid());
         allow write: if false;
       }
       // post subcollections (likes, saves, gifts, reactions): the doc id
@@ -541,7 +550,12 @@ service cloud.firestore {
       // the Admin SDK, so a client cannot forge a vote or enumerate voters
       // (poll_votes is readable only by the voter, keyed on their own uid).
       match /{subcollection}/{docId} {
+        // Social-signal subcollections (likes/reactions/gifts/saves) are public
+        // by design. `answer_votes`/`poll_votes` are vote records, and
+        // `daily_stats` is per-post author analytics — none of those may be read
+        // through the wildcard (the specific blocks above/below own them).
         allow read: if subcollection != 'answer_votes' &&
+          subcollection != 'daily_stats' &&
           (subcollection != 'poll_votes' || docId == uid());
         allow write: if isSignedIn() &&
           subcollection != 'answer_votes' && subcollection != 'poll_votes' &&
@@ -1344,8 +1358,14 @@ service cloud.firestore {
       allow write: if false;
     }
     match /post_analytics/{postId} {
-      allow read: if true;
-      // Aggregate post analytics are server-computed (sharded counters); never client-written.
+      // Aggregate per-post analytics are server-computed (sharded counters) and
+      // never client-written. There is no writer of this collection, so a public
+      // read exposed nothing today, but the correct authorization is the post
+      // author only — a public read would leak any future analytics the moment a
+      // server writer lands.
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (resource.data.authorId != null && resource.data.authorId == uid()));
       allow write: if false;
     }
     // A profile view record is written by the trackProfileView callable and

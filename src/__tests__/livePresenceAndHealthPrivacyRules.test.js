@@ -172,6 +172,75 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/allow read: if isSignedIn\(\) && \(\s*get\(/);
   });
 
+  test('reputation read is owner/admin only', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /reputation/{userId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/allow read: if isOwner\(userId\) \|\| isAdmin\(\);/);
+  });
+
+  test('post_analytics read is author/admin only', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /post_analytics/{postId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, start + 700);
+    expect(block).not.toMatch(/allow read: if true;/);
+    expect(block).toMatch(/resource\.data\.authorId == uid\(\)/);
+  });
+
+  test('post daily_stats read is author/admin only', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /daily_stats/{statId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, start + 400);
+    expect(block).not.toMatch(/allow read: if true;/);
+    expect(block).toMatch(/posts\/\$\(postId\)\)\.data\.authorId == uid\(\)/);
+  });
+
+  test('a stranger cannot read another user\'s reputation (emulator)', async () => {
+    if (!reachable) return;
+    const env = await makeEnv('arvdoul-reputation-privacy');
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await fsMod.setDoc(fsMod.doc(db, 'reputation/subject'), { trust: 90, totalScore: 90 });
+      });
+      const stranger = env.authenticatedContext('stranger').firestore();
+      const subject = env.authenticatedContext('subject').firestore();
+      await expect(fsMod.getDoc(fsMod.doc(stranger, 'reputation/subject'))).rejects.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(subject, 'reputation/subject'))).resolves.toBeDefined();
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('only the post author can read post analytics and daily stats (emulator)', async () => {
+    if (!reachable) return;
+    const env = await makeEnv('arvdoul-post-analytics-privacy');
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await fsMod.setDoc(fsMod.doc(db, 'posts/p1'), {
+          authorId: 'author', status: 'published', visibility: 'public', isDeleted: false,
+        });
+        await fsMod.setDoc(fsMod.doc(db, 'post_analytics/p1'), { authorId: 'author', views: 10 });
+        await fsMod.setDoc(fsMod.doc(db, 'posts/p1/daily_stats/2026-01-01'), { date: '2026-01-01', views: 3 });
+      });
+      const stranger = env.authenticatedContext('stranger').firestore();
+      const author = env.authenticatedContext('author').firestore();
+      await expect(fsMod.getDoc(fsMod.doc(stranger, 'post_analytics/p1'))).rejects.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(author, 'post_analytics/p1'))).resolves.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(stranger, 'posts/p1/daily_stats/2026-01-01'))).rejects.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(author, 'posts/p1/daily_stats/2026-01-01'))).resolves.toBeDefined();
+    } finally {
+      await env.cleanup();
+    }
+  });
+
   test('a stranger cannot read a share record (emulator)', async () => {
     if (!reachable) return;
     const env = await makeEnv('arvdoul-shares-privacy');
