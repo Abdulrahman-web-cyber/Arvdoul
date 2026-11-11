@@ -233,6 +233,15 @@ service cloud.firestore {
       let c = get(/databases/$(database)/documents/communities/$(communityId)).data;
       return c.privacy != 'secret' || (isSignedIn() && uid() in c.get('members', {})) || isAdmin();
     }
+
+    // A live viewer presence record (`live_viewers/{streamId}_{viewerId}`) names
+    // WHO is watching a stream. A bare signed-in read exposed that presence graph
+    // to every user; the only client read is `getLiveViewers` (a host-only
+    // viewer list), so scope the read to the viewer themself, the stream host and
+    // admins. Unknown/absent streams fall closed.
+    function liveStreamHost(streamId) {
+      return get(/databases/$(database)/documents/live_streams/$(streamId)).data.get('userId', '');
+    }
     function postListableShape() {
       return resource.data.isDeleted == false &&
         resource.data.status == 'published' &&
@@ -1187,7 +1196,12 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
     match /live_viewers/{viewerId} {
-      allow read: if isSignedIn();
+      // A viewer's own presence is readable by them, by the stream's host (who
+      // runs the "viewers" list) and by admins. `getLiveViewers` filters
+      // `where('streamId','==',...)`, so the list query proves one stream and the
+      // host lookup resolves to a single document.
+      allow read: if isSignedIn() &&
+        (resource.data.userId == uid() || liveStreamHost(resource.data.streamId) == uid() || isAdmin());
       // Doc id is `<streamId>_<viewerId>`; a write keyed only on the incoming
       // userId let a signed-in user overwrite another viewer's watch record.
       allow write: if isSignedIn() && viewerId.endsWith('_' + uid()) &&
@@ -1820,7 +1834,11 @@ service cloud.firestore {
 
     // ==================== SYSTEM HEALTH / TELEMETRY ====================
     match /system_health/{docId} {
-      allow read: if isSignedIn();
+      // Platform telemetry. The only client reader is the admin health screen's
+      // round-trip probe (`adminService.probeDatabase`), and nothing writes it
+      // from the client, so a bare signed-in read exposed platform internals
+      // for no product reason.
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
 
