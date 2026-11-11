@@ -144,14 +144,6 @@ class EnterpriseFirestoreService {
     return this.ensureInitialized();
   }
 
-  async ensureinitialize() {
-    return this.ensureInitialized();
-  }
-
-  async _ensureinitialize() {
-    return this.ensureInitialized();
-  }
-
   async saveDraft(draftId, userId, draftData) {
     await this.ensureInitialized();
     try {
