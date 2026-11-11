@@ -91,4 +91,28 @@ describe('ui-state wiring guard: every useState setter is reachable', () => {
     }
     expect(violations).toEqual([]);
   });
+
+  // A derived value (`useMemo`/`useCallback`) or a `useRef` that is declared
+  // but never referenced is dead computation the linter does not flag:
+  // `LoginScreen` computed `isFormValid` but gated its buttons on a different
+  // pair (`canSubmitEmail`/`canSubmitPhone`), and `AudioCard` declared an
+  // `animationId` ref while its animation loop used a local `rafId`. Spread
+  // usage (`{...props}`) counts as a reference.
+  test('no useMemo/useCallback/useRef value is declared and never referenced', () => {
+    const violations = [];
+    for (const file of collect(SRC)) {
+      const rel = path.relative(root, file);
+      const source = fs.readFileSync(file, 'utf8');
+      const re = /^[ \t]*const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:React\.)?(?:useCallback|useMemo|useRef)\(/gm;
+      let match;
+      while ((match = re.exec(source))) {
+        const [declaration, name] = match;
+        const rest = source.slice(0, match.index) + source.slice(match.index + declaration.length);
+        if (occurrences(rest, name) === 0) {
+          violations.push(`${rel}: "${name}" is declared but never used`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });

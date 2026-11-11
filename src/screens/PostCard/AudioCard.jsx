@@ -330,7 +330,6 @@ const AudioCard = React.memo(({
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  const animationId = useRef(null);
   const resizeObserverRef = useRef(null);
   const abortControllerRef = useRef(null);
   const blobUrlRef = useRef(null);

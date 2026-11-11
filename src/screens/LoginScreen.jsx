@@ -1185,15 +1185,6 @@ export default function LoginScreen() {
     navigate(`/forgot-password?email=${encodeURIComponent(email)}`);
   };
 
-  const isFormValid = useMemo(() => {
-    switch (method) {
-      case 'email': return email && password && !errors.email && !errors.password;
-      case 'phone': return phoneNumber && isPhoneValid && !errors.phone;
-      case 'google': return true;
-      default: return false;
-    }
-  }, [method, email, password, phoneNumber, isPhoneValid, errors, recaptchaVerifier]);
-
   const rootVariables = resolvedTheme === 'dark' ? THEMES.dark : THEMES.light;
   const year = new Date().getFullYear();
   const canSubmitEmail = !loading && !!email && !!password;
