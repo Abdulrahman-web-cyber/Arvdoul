@@ -27,6 +27,8 @@ import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.jsx';
 import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 import { getAdaptiveTuning } from '../utils/deviceCapabilities.js';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import PullToRefresh from '../components/Shared/PullToRefresh';
 import { scheduleIdleTask, cancelIdleTask } from '../performance/optimizer.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
@@ -1186,6 +1188,14 @@ export default function HomeScreen() {
     loadFeedRef.current?.(true, true);
   }, []);
 
+  // Native pull-to-refresh on the Virtuoso scroller. `handleRefresh` already
+  // guards re-entry (status === REFRESHING) and shows its own toast.
+  const { pull, isRefreshing, threshold } = usePullToRefresh({
+    element: scrollerRootEl,
+    onRefresh: handleRefresh,
+    enabled: !isInitialLoading && status !== STATUS.LOADING,
+  });
+
   // Listen for realtime locally published posts
   useEffect(() => {
     const handleNewPost = (e) => {
@@ -1366,7 +1376,8 @@ export default function HomeScreen() {
         </div>
 
         {/* Feed container */}
-        <div className="flex-1 min-h-0 w-full">
+        <div className="relative flex-1 min-h-0 w-full">
+          <PullToRefresh pull={pull} threshold={threshold} isRefreshing={isRefreshing} />
           {isInitialLoading && <FeedLoadingBanner />}
           {showErrorState ? (
             <div className="min-h-[60vh] flex items-center justify-center px-4">

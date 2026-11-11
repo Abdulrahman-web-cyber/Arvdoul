@@ -10,9 +10,9 @@
  *  - Danger zone: real account deletion via userService.deleteAccount
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap } from "lucide-react";
+import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap, Gauge } from "lucide-react";
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -23,6 +23,7 @@ import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES }
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
 import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
+import { getAdaptiveTuning, setLiteModePreference, getDeviceCapabilities } from '../utils/deviceCapabilities.js';
 import { Dialog } from '../components/UI/Dialog.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
 import { cn } from '../lib/utils';
@@ -127,6 +128,18 @@ export default function SettingsScreen() {
   // gates every dispatch on `doNotDisturb` but nothing ever set it.
   const [dnd, setDnd] = useState({ loading: true, enabled: false, until: null });
   const [dndBusy, setDndBusy] = useState(false);
+
+  // Lite Mode / Data Saver: reactive read of the canonical device heuristics
+  // (which live in `deviceCapabilities.js`). Toggling persists the preference
+  // and the module re-dispatches `arvdoul-litemode-change`, which HomeScreen
+  // listens to, so the tuning applies without a reload.
+  const [liteMode, setLiteMode] = useState(() => getAdaptiveTuning().isLiteMode);
+  const deviceCaps = useMemo(() => getDeviceCapabilities(), []);
+  useEffect(() => {
+    const refresh = () => setLiteMode(getAdaptiveTuning().isLiteMode);
+    window.addEventListener('arvdoul-litemode-change', refresh);
+    return () => window.removeEventListener('arvdoul-litemode-change', refresh);
+  }, []);
 
   const storeProfile = useProfileStore((state) => state.profile);
   const [profilePrivacy, setProfilePrivacy] = useState(DEFAULT_PROFILE_PRIVACY);
@@ -272,6 +285,12 @@ export default function SettingsScreen() {
   const handleReduceMotion = (value) => {
     document.documentElement.classList.toggle('arvdoul-reduce-motion', value);
     updateSetting('appearance.reduceMotion', value);
+  };
+
+  const handleLiteMode = (value) => {
+    setLiteModePreference(value);
+    setLiteMode(value);
+    toast.success(value ? 'Lite Mode on — reduced data usage' : 'Lite Mode off — full quality');
   };
 
   // Push/email toggles persist to `users/{uid}.settings` (so the UI reads a
@@ -784,6 +803,18 @@ export default function SettingsScreen() {
 
         {/* ============ DATA & CACHE ============ */}
         <Section id="settings-data" icon={Database} title={t('settings.dataSection')}>
+          <ToggleRow
+            icon={Gauge}
+            label={t('settings.liteMode')}
+            description={t('settings.liteModeDesc')}
+            checked={liteMode}
+            onChange={handleLiteMode}
+          />
+          {deviceCaps.isLowEndDevice && !liteMode && (
+            <p className="px-1 pb-2 -mt-1 text-xs text-amber-500 dark:text-amber-400">
+              {t('settings.liteModeRecommended')}
+            </p>
+          )}
           <button onClick={handleClearCache} className="w-full py-3.5 flex items-center justify-between text-left group">
             <div className="flex items-start gap-3">
               <RefreshCw className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
