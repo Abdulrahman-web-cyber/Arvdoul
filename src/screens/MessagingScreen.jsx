@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ErrorState from '../design-system/ErrorState.jsx';
-import { Search, SlidersHorizontal, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
+import { Search, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
 
 // Pinned Conversations data matching the exact screenshot
 // Master Conversation List matching the screenshots
@@ -89,7 +89,13 @@ export default function MessagingScreen() {
             unread: c.unreadCounts?.[user.uid] || 0,
             muted: Boolean(c.mutedBy?.includes(user.uid)),
             pinned: Boolean(c.pinnedBy?.includes(user.uid)),
-            category: (c.archivedBy?.includes(user.uid)) ? 'archived' : (c.category || 'personal'),
+            // The filter tabs key off `category`, but conversations store their
+            // kind in `type` ('direct' | 'group' | 'channel'). Deriving category
+            // from `c.category` (which no writer ever sets) meant the Groups,
+            // Personal and Channels tabs matched nothing.
+            category: (c.archivedBy?.includes(user.uid))
+              ? 'archived'
+              : (c.type === 'group' ? 'groups' : c.type === 'channel' ? 'channels' : 'personal'),
             activeDot: Boolean(c.presenceOnline),
             participantCount: c.participantCount || (c.participants?.length || 2),
           };
@@ -114,7 +120,6 @@ export default function MessagingScreen() {
       document.removeEventListener('visibilitychange', handleFocus);
     };
   }, [user?.uid, conversationsNonce]);
-  const [showSearchFilters, setShowSearchFilters] = useState(false);
   const [messageRequests, setMessageRequests] = useState([]);
 
   // Load pending message requests (spec §35) — users who were blocked by
@@ -298,17 +303,6 @@ export default function MessagingScreen() {
                 isDark ? 'text-white placeholder-gray-500' : 'text-slate-900 placeholder-slate-400'
               }`}
             />
-            <button
-              onClick={() => setShowSearchFilters(!showSearchFilters)}
-              className={cn(
-                "p-1 rounded-lg transition-colors",
-                showSearchFilters
-                  ? "text-purple-500 bg-purple-500/20"
-                  : isDark ? "text-gray-400 hover:text-white" : "text-slate-400 hover:text-slate-700"
-              )}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
@@ -496,7 +490,11 @@ export default function MessagingScreen() {
           )}
           {!loadingConversations && !conversationsError && filteredConversations.length === 0 && (
             <div className={`text-center py-10 text-sm ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
-              No conversations yet — start one with the + button.
+              {conversations.length === 0
+                ? 'No conversations yet — start one with the + button.'
+                : (searchQuery.trim()
+                    ? `No conversations match “${searchQuery.trim()}”.`
+                    : 'No conversations in this view.')}
             </div>
           )}
           {filteredConversations.map((item) => (
