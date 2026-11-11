@@ -153,6 +153,16 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/vibeData\(\)\.userId == uid\(\)/);
   });
 
+  test('live_gifts read is scoped to the gift parties', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /live_gifts/{giftId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/resource\.data\.senderId == uid\(\)/);
+    expect(block).toMatch(/resource\.data\.recipientId == uid\(\)/);
+  });
+
   test('collections items read follows the parent collection ownership', () => {
     const rulesSrc = readFile('firestore.rules');
     const start = rulesSrc.indexOf('match /items/{itemId}');

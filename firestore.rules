@@ -1233,7 +1233,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }
     match /live_gifts/{giftId} {
-      allow read: if isSignedIn();
+      // Economic record (sender/recipient/coinValue), written by sendLiveGift
+      // (Admin SDK). No client reads it, so a signed-in read exposed the whole
+      // live-gift ledger; scope it to the two parties like gift_transactions.
+      allow read: if isSignedIn() && (
+        resource.data.senderId == uid() || resource.data.recipientId == uid() || isAdmin());
       allow write: if false; // server-verified
     }
 
