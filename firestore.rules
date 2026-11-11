@@ -1494,7 +1494,12 @@ service cloud.firestore {
       allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
       allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
       match /votes/{voteId} {
-        allow read: if true;
+        // Message polls default to `anonymousVotes: true` (messagesService
+        // createPoll), yet the vote doc id IS the voter's uid and the read was
+        // world-readable — any client could enumerate who voted on a
+        // conversation poll and how. The only reader (`getPollResults`) is dead
+        // code, so scope the read to the voter and admins.
+        allow read: if isSignedIn() && (voteId == uid() || isAdmin());
         allow write: if isSignedIn() && voteId == uid();
       }
     }
