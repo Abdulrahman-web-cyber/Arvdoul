@@ -72,13 +72,23 @@ describe('posts list rule proves the query shape', () => {
     expect(rules).toMatch(/resource\.data\.authorId == uid\(\) \|\| postListableShape\(\)/);
   });
 
-  test('the public list shape requires published, non-deleted, public, non-private', () => {
+  test('the public list shape requires published, non-deleted, public, author-visible', () => {
     const body = rules.slice(rules.indexOf('function postListableShape'), rules.indexOf('function postListableByViewer'));
     expect(body).toMatch(/isDeleted == false/);
     expect(body).toMatch(/status == 'published'/);
     expect(body).toMatch(/visibility == 'public'/);
-    expect(body).toMatch(/authorIsPrivate == false/);
+    // Author visibility is delegated to `authorContentVisible()` (public author
+    // OR an approved follower of a private author), not a bare
+    // `authorIsPrivate == false` — a private account's approved followers must
+    // be able to read its grid.
+    expect(body).toMatch(/authorContentVisible\(\)/);
     expect(body).toMatch(/visibility == 'community'/);
+  });
+
+  test('author visibility admits the public author and the approved follower (N206)', () => {
+    const body = rules.slice(rules.indexOf('function authorContentVisible'), rules.indexOf('function postReadableByViewer'));
+    expect(body).toMatch(/authorIsPrivate == false/);
+    expect(body).toMatch(/followEdgeExists\(uid\(\), resource\.data\.authorId\)/);
   });
 });
 

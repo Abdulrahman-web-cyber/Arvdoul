@@ -311,6 +311,12 @@ describe('Spaces & Live - no free-money tips/gifts', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/spacesService.js'), 'utf8');
     expect(src).toContain('transferCoins(');
     expect(src).toContain('Sign in to send a tip');
+    // The space's running tip total is bumped by the SAME server transaction
+    // that moves the coins. A client `updateDoc(... increment(...))` on
+    // `spaces/{id}` is always denied (only the host may update a space, and a
+    // self-tip is rejected), so the previous client write was a dead control
+    // and the "Tips" total never moved.
+    expect(src).not.toMatch(/updateDoc\([\s\S]{0,80}tipsTotalCoins/);
   });
 
   test('liveService delegates gifts/tips to the server callable (no client debit or write)', () => {
@@ -383,6 +389,19 @@ describe('Poll + marketplace rules compliance', () => {
   test('pollService writes top-level creatorId (rules require it)', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
     expect(src).toContain('creatorId: creator.uid');
+  });
+
+  test('marketplace purchase credits the seller instead of burning the coins', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    const start = src.indexOf('exports.purchaseMarketplaceItem');
+    const body = src.slice(start, src.indexOf('exports.', start + 10));
+    // The buyer's coins must reach the seller (0% fee), not the supply sink.
+    expect(body).toContain('sellerNewBalance');
+    expect(body).toContain("reason: 'marketplace_sale'");
+    expect(body).toContain('`users:${sellerId}`');
+    // The old value sink: debit the buyer, burn from system:coin_supply.
+    expect(body).not.toContain("'system:coin_supply', price");
+    expect(body).not.toContain('increment(-price)');
   });
 });
 
@@ -469,11 +488,18 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
     expect(src).toContain("status: 'unconfigured'"); // honest when SendGrid missing
   });
 
-  test('verifyPurchase never mints coins without real receipt validation', () => {
+  test('the fabricated IAP verifyPurchase faucet is gone', () => {
     const src = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
-    expect(src).not.toContain("we'll just simulate success and award coins");
-    expect(src).toContain('Receipt required for purchase verification');
-    expect(src).toContain('appstore.*');
+    // verifyPurchase checked only that App Store / Play *config keys existed*
+    // and then minted coins WITHOUT ever validating the receipt against Apple
+    // or Google — a fabricated verification. It had no client caller and was
+    // not in the FUNCTIONS registry. Coin purchases go through the real
+    // Stripe-verified monetization.js purchaseCoins path.
+    expect(src).not.toContain('exports.verifyPurchase');
+    expect(src).not.toContain('Receipt required for purchase verification');
+    // No generic coin-mint helper may remain in the entry point either.
+    expect(src).not.toContain('async function _addCoins');
+    expect(src).not.toContain("reason, 'iap'");
   });
 
   test('processVideo storage trigger never fabricates ready', () => {
@@ -737,12 +763,204 @@ describe('Unbounded queries bounded', () => {
   test('collections items + blocks reads are bounded', () => {
     const cols = fs.readFileSync(path.join(root, 'src/services/collectionsService.js'), 'utf8');
     expect(cols).toContain('limit(200)');
-    // The block read moved onto the graph spine, which bounds every edge list;
-    // the feed must delegate rather than query `blocks` itself.
+    // The block/mute reads moved onto the graph spine, which bounds every edge
+    // list; the feed must delegate rather than query `blocks`/`mutes` itself,
+    // and it must honour a MUTE as well as a block (muting was a dead control).
     const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
-    expect(feed).toContain("getSocialGraphService().listConnections(userId, 'blocked'");
+    expect(feed).toContain('getHiddenAuthorIds(userId)');
+    expect(feed).not.toMatch(/collection\(\s*this\.firestore,\s*'(blocks|mutes)'/);
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(spine).toContain('MAX_PAGE_SIZE');
+    // The shared hidden-author reader unions all three safety edges (N223/N225).
+    expect(spine).toContain("this.listEdges(userId, 'blocked'");
+    expect(spine).toContain("this.listEdges(userId, 'blocked_by'");
+    expect(spine).toContain("this.listEdges(userId, 'muted'");
+  });
+
+  test('the Sparks video feed hides blocked/blocked-by/muted authors (N224)', () => {
+    // `videoService.getVideoFeed`'s direct `videos`/`posts` fallback query had no
+    // moderation filter, so a blocked or muted creator's Sparks still surfaced.
+    const video = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
+    expect(video).toContain('getHiddenAuthorIds(userId)');
+    expect(video).toContain('await this._getHiddenAuthors(safeUserId)');
+  });
+
+  test('comments hide authors blocked in either direction (N226)', () => {
+    // `CommentsDrawer` filtered blocked commenters from the outgoing `blocked`
+    // list only, so a user who blocked the viewer still had their comments
+    // rendered to the viewer. It now uses the both-direction reader.
+    const svc = fs.readFileSync(path.join(root, 'src/services/userService.js'), 'utf8');
+    expect(svc).toContain('async getBlockedUserIds(userId)');
+    expect(svc).toContain("graph.listEdges(userId, 'blocked_by'");
+    const drawer = fs.readFileSync(path.join(root, 'src/screens/CommentsDrawer.jsx'), 'utf8');
+    expect(drawer).toContain('getBlockedUserIds(currentUser.uid)');
+    expect(drawer).not.toContain('getBlockedUsers(currentUser.uid)');
+  });
+
+  test('the video comments sheet hides blocked authors in both directions (N229)', () => {
+    // `VideoComments` (used by ReelsScreen, VideoFeed and VideoDetailScreen)
+    // rendered every comment with no block filter, so a blocked user's comments
+    // showed on Sparks/Reels even though the post CommentsDrawer filtered them.
+    const sheet = fs.readFileSync(path.join(root, 'src/components/Videos/VideoComments.jsx'), 'utf8');
+    expect(sheet).toContain('userService.getBlockedUserIds(uid)');
+    expect(sheet).toContain('comments.filter((c) => !blockedUserIds.has(c.user?.id))');
+    // Replies are filtered too, not just top-level comments.
+    expect(sheet).toContain('comment.replies || []).filter((r) => !blockedUserIds?.has(r.user?.id))');
+  });
+
+  test('the story/Vibe feed hides blocked/blocked-by/muted authors (N230)', () => {
+    // The story fan-out writes a `users/{uid}/feeds/{storyId}` row for every
+    // follower, and neither the read path nor the write fan-out consulted the
+    // block graph, so a blocked/blocked-by/muted creator's Vibes still surfaced
+    // in the viewer's strip. The read path now drops hidden `ownerId`s.
+    const story = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(story).toContain('getHiddenAuthorIds(userId)');
+    expect(story).toContain('!hiddenAuthors.has(e.ownerId)');
+    // Both the paginated read and the realtime subscription must filter.
+    const matches = story.match(/filter\(e => !hiddenAuthors\.has\(e\.ownerId\)\)/g) || [];
+    expect(matches.length).toBe(2);
+  });
+
+  test('the live comment list hides blocked/blocked-by/muted authors (N232)', () => {
+    // `liveService.getLiveComments` polled `live_comments` with no block filter,
+    // so a blocked viewer-blocker's comments still appeared in the live chat.
+    const live = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
+    expect(live).toContain('getHiddenAuthorIds(viewerId)');
+    expect(live).toContain('.filter(c => !hiddenAuthors.has(c.userId))');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
+    expect(screen).toContain('getLiveComments(watching.id, { limit: 50, viewerId: user.uid })');
+  });
+
+  test('the PostCard inline comment preview hides blocked authors (N233)', () => {
+    // `PostCard`'s `InlineComments` previewed the two latest comments with no
+    // block filter, so a blocked user's comment surfaced under every post card.
+    const card = fs.readFileSync(path.join(root, 'src/screens/PostCard.jsx'), 'utf8');
+    expect(card).toContain('userService.getBlockedUserIds(uid)');
+    expect(card).toContain('preview.filter((c) => !blockedUserIds.has(c.userId || c.user?.id))');
+    // The viewer must be threaded in, or the filter never runs.
+    expect(card).toContain('currentUser={currentUser}');
+  });
+
+  test('community posts hide blocked/blocked-by/muted authors (N234)', () => {
+    // `communityService.getCommunityPosts` queried the community feed with no
+    // block filter, so a blocked member's posts still rendered in the community.
+    const svc = fs.readFileSync(path.join(root, 'src/services/communityService.js'), 'utf8');
+    expect(svc).toContain('getHiddenAuthorIds(viewerId)');
+    expect(svc).toContain('.filter(p => !hiddenAuthors.has(p.authorId || p.userId))');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Community/CommunityDetailScreen.jsx'), 'utf8');
+    expect(screen).toContain('getCommunityPosts(communityId, { viewerId: user?.uid })');
+  });
+
+  test('the event discovery feed hides blocked/blocked-by/muted organizers (N235)', () => {
+    // `eventService.listEvents` queried the discovery feed with no block
+    // filter, so a blocked organizer's event still appeared in Explore/Events.
+    const svc = fs.readFileSync(path.join(root, 'src/services/eventService.js'), 'utf8');
+    expect(svc).toContain('getHiddenAuthorIds(viewerId)');
+    expect(svc).toContain('.filter(e => !hiddenAuthors.has(e.organizerId) || e.organizerId === viewerId)');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Event/EventDiscoveryScreen.jsx'), 'utf8');
+    expect(screen).toContain('viewerId: user?.uid');
+  });
+
+  test('event discovery paginates on the raw page size, not the block-filtered length (N243)', () => {
+    // `listEvents` filtered hidden organizers out of the page and then derived
+    // `hasMore` from the filtered length. A hidden organizer on a full page
+    // shortened `events` below EVENTS_PER_PAGE and falsely reported the end of
+    // the list, stranding every later page.
+    const svc = fs.readFileSync(path.join(root, 'src/services/eventService.js'), 'utf8');
+    expect(svc).toContain('const hasMore = querySnapshot.docs.length === EVENTS_PER_PAGE;');
+    expect(svc).not.toContain('const hasMore = events.length === EVENTS_PER_PAGE;');
+  });
+
+  test('poll and marketplace discovery hide blocked creators (N236)', () => {
+    // `pollService.getPolls` and `marketplaceService.getProducts` listed their
+    // collections with no block filter, so a blocked creator's polls/listings
+    // still surfaced in the Polls and Marketplace discovery screens.
+    const poll = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
+    expect(poll).toContain('getHiddenAuthorIds(viewerId)');
+    expect(poll).toContain('if (hiddenAuthors.has(data.creatorId)) return;');
+    const market = fs.readFileSync(path.join(root, 'src/services/marketplaceService.js'), 'utf8');
+    expect(market).toContain('getHiddenAuthorIds(viewerId)');
+    expect(market).toContain('if (hiddenAuthors.has(data.creatorId)) return;');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const pollsScreen = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
+    expect(pollsScreen).toContain('getPolls(selectedCategory, user?.uid)');
+    const marketScreen = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+    expect(marketScreen).toContain('getProducts(selectedCategory, user?.uid)');
+  });
+
+  test('sound catalog and live spaces hide blocked creators (N237)', () => {
+    // `soundService.getTrendingSounds` and `spacesService.getActiveSpaces` listed
+    // their collections with no block filter, so a blocked creator's sounds and a
+    // blocked host's live space still surfaced in the Sounds / Spaces rails.
+    const sound = fs.readFileSync(path.join(root, 'src/services/soundService.js'), 'utf8');
+    expect(sound).toContain('getHiddenAuthorIds(viewerId)');
+    expect(sound).toContain('if (hiddenAuthors.has(data.creatorId)) return;');
+    const spaces = fs.readFileSync(path.join(root, 'src/services/spacesService.js'), 'utf8');
+    expect(spaces).toContain('getHiddenAuthorIds(viewerId)');
+    expect(spaces).toContain('if (hiddenAuthors.has(data.hostId)) return;');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const soundsScreen = fs.readFileSync(path.join(root, 'src/screens/Sounds/SoundsScreen.jsx'), 'utf8');
+    expect(soundsScreen).toContain('getTrendingSounds(selectedGenre, user?.uid)');
+    const spacesScreen = fs.readFileSync(path.join(root, 'src/screens/Spaces/SpacesScreen.jsx'), 'utf8');
+    expect(spacesScreen).toContain('getActiveSpaces(selectedCategory, user?.uid)');
+  });
+
+  test('the leaderboards hide blocked/blocked-by/muted users (N239)', () => {
+    // `RankingsScreen` lists users from the `rankings` collections with no block
+    // filter, so a blocked user could still be ranked and shown.
+    const svc = fs.readFileSync(path.join(root, 'src/services/rankingService.js'), 'utf8');
+    expect(svc).toContain('getHiddenAuthorIds(userId)');
+    expect(svc).toContain('this._isHidden(hidden, r.userId, viewerId)');
+    // The facade must forward the viewer id, or the screen's argument is dropped.
+    expect(svc).toContain('getCreatorRankings: (c, t, o, v) => getRankingService().getCreatorRankings(c, t, o, v)');
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Rankings/RankingsScreen.jsx'), 'utf8');
+    expect(screen).toContain('getCreatorRankings(activeCategory, activeTimeRange, offset, user?.uid)');
+  });
+
+  test('the feed block-cache invalidators target the key the writer uses (N238)', () => {
+    // `_getHiddenAuthorsCached` writes `hidden_${userId}`; the invalidators
+    // deleted `blocked_${userId}` / `block_${userId}`, so both were no-ops.
+    const svc = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
+    expect(svc).toContain("this.blockCache.delete(`hidden_${userId}`)");
+    expect(svc).not.toContain("this.blockCache.delete(`blocked_${userId}`)");
+    expect(svc).not.toContain("this.blockCache.delete(`block_${userId}`)");
+  });
+
+  test('follower/following/friends lists hide blocked users (N240)', () => {
+    // `listConnections`/`listMutualConnections` hydrated a masked profile for a
+    // blocked/blocked-by/muted user, so the row (and the account) still appeared
+    // in the viewer's own lists. Both now drop hidden ids — but the safety
+    // management lists (blocked/muted/restricted) must stay intact.
+    const svc = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
+    expect(svc).toContain('const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;');
+    expect(svc).toContain('const visibleIds = hidden ? mutualIds.filter((id) => id !== viewerId && !hidden.has(id)) : mutualIds;');
+    expect(svc).toContain("const SAFETY_EDGE_KINDS = new Set(['blocked', 'blocked_by', 'muted', 'restricted']);");
+    expect(svc).toContain('const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;');
+  });
+
+  test('the live discovery list hides blocked/blocked-by/muted hosts (N241)', () => {
+    // `getActiveLiveStreams` listed every live stream with no block filter, so a
+    // blocked/blocked-by/muted host's stream still surfaced in LiveScreen.
+    const svc = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
+    expect(svc).toContain('const hidden = await this._getHiddenAuthors(options.viewerId);');
+    expect(svc).toContain('return streams.filter((s) => !hidden.has(s.userId));');
+    // The viewer id must actually be passed in, or the filter is inert.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
+    expect(screen).toContain('getActiveLiveStreams({ limit: 30, viewerId: user?.uid })');
+  });
+
+  test('the Sparks grid feed hides blocked/blocked-by/muted creators (N242)', () => {
+    // `VideosScreen` called `getVideoFeed(null, …)`, so `safeUserId` became
+    // `'anonymous_user'` and the hidden-author filter was inert — a blocked or
+    // muted creator's Sparks still surfaced in the grid/list view.
+    const screen = fs.readFileSync(path.join(root, 'src/screens/VideosScreen.jsx'), 'utf8');
+    expect(screen).not.toContain('videoService.getVideoFeed(null, {');
+    expect(screen).toContain('videoService.getVideoFeed(user?.uid ?? null, {');
+    expect(screen).toContain("import { useAuth } from '../context/AuthContext';");
+    expect(screen).toContain('const { user } = useAuth();');
   });
 });
 
@@ -1056,7 +1274,8 @@ describe('Messaging saved messages (spec §33)', () => {
 describe('Message requests (spec §35)', () => {
   test('rules: create by sender, respond by recipient only', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    const block = rules.slice(rules.indexOf('match /message_requests'), rules.indexOf('match /message_requests') + 600);
+    const start = rules.indexOf('match /message_requests');
+    const block = rules.slice(start, start + 1200);
     expect(block).toContain('request.resource.data.senderId == uid()');
     expect(block).toContain('resource.data.recipientId == uid()');
   });
@@ -2839,6 +3058,14 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).not.toContain('views: p.views || 0,');
     expect(s).not.toContain('likes: p.likeCount || 0,');
     expect(s).toContain('p.stats?.likes ?? p.likeCount');
+  });
+
+  test('SavedScreen does not map a fabricated `likes` field nothing renders', () => {
+    // The saved-items list never displays a like count, so `likes: p.likeCount || 0`
+    // (and a hardcoded `likes: 0` for videos) invented engagement on every card.
+    const s = read('src/screens/SavedScreen.jsx');
+    expect(s).not.toContain('likes: p.likeCount || 0,');
+    expect(s).not.toMatch(/likes:\s*0,/);
   });
 
   test('LiveScreen viewer counts are unknown (null), never a fabricated 0', () => {

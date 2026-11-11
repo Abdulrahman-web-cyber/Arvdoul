@@ -1,0 +1,41 @@
+{
+  "_note": "Frozen inventory of the functions<->client boundary. May only shrink. See docs/audits/REPOSITORY_RECONSTRUCTION_V1.md (N209).",
+  "_classification": {
+    "backfillPrivacyBoundary": "operator/migration tool (privacyMigration.js), admin-only, run ad hoc",
+    "callSignaling": "superseded by callService.js Firestore signaling (calls/{id})",
+    "createLiveStream": "superseded by liveService client path",
+    "deleteVideo": "superseded by the generic post delete path",
+    "feedHealthCheck": "operator probe",
+    "generateAudioFingerprint": "pipeline internal (video.js calls *Internal in-process)",
+    "generateSignedUrl": "superseded by Storage SDK client uploads",
+    "getFollowingFeed": "superseded by feedService client query",
+    "getPersonalizedFeed": "superseded by feedService client query (ML variant used)",
+    "getReports": "superseded by adminListModerationReports callable",
+    "personalizeFeed": "superseded by feedService client path",
+    "reportContent": "base callable; clients use the reportPost/reportComment/... aliases",
+    "resolveReport": "superseded by resolveUserReport + admin moderation callables",
+    "sendEmailNotification": "server-side helper exposed as a callable but only invoked internally",
+    "stopLiveStream": "superseded by liveService client path",
+    "updateViralScore": "pipeline internal (video.js calls *Internal in-process)"
+  },
+  "deadFunctionKeys": [],
+  "adhocCallableLiterals": [],
+  "unreferencedCallables": [
+    "backfillPrivacyBoundary",
+    "callSignaling",
+    "createLiveStream",
+    "deleteVideo",
+    "feedHealthCheck",
+    "generateAudioFingerprint",
+    "generateSignedUrl",
+    "getFollowingFeed",
+    "getPersonalizedFeed",
+    "getReports",
+    "personalizeFeed",
+    "reportContent",
+    "resolveReport",
+    "sendEmailNotification",
+    "stopLiveStream",
+    "updateViralScore"
+  ]
+}

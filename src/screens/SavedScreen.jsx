@@ -57,7 +57,6 @@ export default function SavedScreen() {
           type: p.type || 'post',
           thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
           savedAt: p.savedAt || 'Recently',
-          likes: p.likeCount || 0,
           collection: p.collection || 'Saved',
           tags: p.hashtags || [],
         }));
@@ -77,7 +76,6 @@ export default function SavedScreen() {
           thumbnail: v.thumbnail || '/assets/default-profile.png',
           videoUrl: v.videoUrl || '',
           savedAt: v.savedAt || 'Recently',
-          likes: 0,
           collection: 'Saved',
           tags: [],
         }));

@@ -498,6 +498,22 @@ class UltimateStoryService {
     return { success: true, storyId, story };
   }
 
+  /**
+   * Authors whose stories must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine's shared hidden-author
+   * reader (bounded, ids only, fails open on error).
+   */
+  async _getHiddenAuthors(userId) {
+    if (!userId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(userId);
+    } catch (err) {
+      logger.warn('[Story] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getStoriesFeed(userId, options = {}) {
     await this.ensureInitialized();
     const { limit: feedLimit = STORY_CONFIG.FEED.LIMIT, lastDocId = null, cacheFirst = true } = options;
@@ -511,6 +527,7 @@ class UltimateStoryService {
     }
     this.metrics.cacheMisses++;
 
+    const hiddenAuthors = await this._getHiddenAuthors(userId);
     const feedRef = this.fs.collection(this.firestore, 'users', userId, 'feeds');
     let q = this.fs.query(feedRef,
       this.fs.orderBy('createdAt', 'desc'),
@@ -522,7 +539,12 @@ class UltimateStoryService {
       }
     }
     const feedSnap = await this.fs.getDocs(q);
-    const feedEntries = feedSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const feedEntries = feedSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      // The fan-out writes the author as `ownerId`; hide blocked/blocked-by/muted
+      // authors here, in the read path (the write fan-out cannot know the future
+      // relationship, and the server-side story feed does not filter per viewer).
+      .filter(e => !hiddenAuthors.has(e.ownerId));
 
     const storyIds = feedEntries.map(e => e.storyId).filter(s => s);
     // Batch fetch stories in parallel (fixed)
@@ -567,7 +589,10 @@ class UltimateStoryService {
       this.fs.orderBy('createdAt', 'desc'),
       this.fs.limit(50));
     const unsubscribe = this.fs.onSnapshot(q, async (snapshot) => {
-      const feedEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const hiddenAuthors = await this._getHiddenAuthors(userId);
+      const feedEntries = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(e => !hiddenAuthors.has(e.ownerId));
       const storyIds = feedEntries.map(e => e.storyId).filter(s => s);
       const batchSize = STORY_CONFIG.BATCH_SIZE.STORY_FETCH;
       const stories = [];

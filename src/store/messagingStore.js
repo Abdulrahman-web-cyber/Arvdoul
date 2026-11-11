@@ -34,15 +34,19 @@ export const useMessagingStore = create((set, get) => ({
     set({ conversationsLoading: true, conversationsError: null });
 
     try {
+      // Only continue from a cursor when the caller explicitly asks for the next
+      // page. A plain reload (e.g. after creating a conversation) must refetch
+      // page 1; otherwise the store's stale cursor was sent and the list
+      // silently appended an old page instead of refreshing.
       const result = await messagingService.getUserConversations(userId, {
         limit: options.limit || 20,
-        startAfter: options.startAfter || (options.refresh ? null : state.conversationsNextCursor),
+        startAfter: options.startAfter || null,
       });
 
       if (result.success) {
         set(
           produce((draft) => {
-            if (options.startAfter || (options.refresh && state.conversations.length > 0)) {
+            if (options.startAfter) {
               draft.conversations = [...draft.conversations, ...result.conversations];
             } else {
               draft.conversations = result.conversations;

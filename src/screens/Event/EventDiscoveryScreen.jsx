@@ -1,6 +1,6 @@
 // src/screens/Event/EventDiscoveryScreen.jsx
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -31,22 +31,34 @@ const EventDiscoveryScreen = () => {
   const [hasMore, setHasMore] = useState(true);
   const [myEvents, setMyEvents] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const nextCursorRef = useRef(null);
 
-  // Load events
+  // Load events. `reset` reloads page 1 (filter/sort/type/search change or
+  // first mount); otherwise it appends the next page via the doc-id cursor.
+  // The cursor lives in a ref so "Load More" cannot re-send a stale cursor.
   const loadEvents = useCallback(async (reset = false) => {
     try {
       setLoading(true);
       const currentPage = reset ? 1 : page;
-      
+      const startAfterId = reset ? null : nextCursorRef.current;
+
       const options = {
         page: currentPage,
-        sortBy
+        startAfterId,
+        sortBy,
+        viewerId: user?.uid
       };
+
+      const trimmedSearch = searchQuery.trim();
+      if (trimmedSearch) {
+        options.searchQuery = trimmedSearch;
+      }
 
       if (type !== 'all') {
         options.type = type;
       }
 
+      // Upcoming / Live are lifecycle filters; the service honors `status`.
       if (filter === 'upcoming') {
         options.status = ['published', 'open'];
       } else if (filter === 'live') {
@@ -60,8 +72,8 @@ const EventDiscoveryScreen = () => {
       } else {
         setEvents(prev => [...prev, ...result.events]);
       }
-      
-      setHasMore(result.hasMore);
+      nextCursorRef.current = result.nextCursor ?? null;
+      setHasMore(Boolean(result.hasMore));
       setPage(currentPage + 1);
     } catch (error) {
       console.error('Failed to load events:', error);
@@ -69,7 +81,7 @@ const EventDiscoveryScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [eventService, page, sortBy, type, filter]);
+  }, [eventService, page, sortBy, type, filter, user?.uid, searchQuery]);
 
   // Load user's events
   const loadMyEvents = useCallback(async () => {

@@ -170,6 +170,111 @@ describe('listEdges (bounded, index-backed)', () => {
     expect(page.ids).toHaveLength(2);
     expect(page.hasMore).toBe(true);
   });
+
+  test('blocked_by lists users who block the viewer (reverse direction)', async () => {
+    store.set('blocks/me_x', { blockerId: 'me', blockedId: 'x' });
+    store.set('blocks/y_me', { blockerId: 'y', blockedId: 'me' });
+    const blocked = await getSocialGraphService().listEdges('me', 'blocked');
+    const blockedBy = await getSocialGraphService().listEdges('me', 'blocked_by');
+    expect(blocked.ids).toEqual(['x']);
+    expect(blockedBy.ids).toEqual(['y']);
+  });
+});
+
+describe('getHiddenAuthorIds + suggestions safety (N225)', () => {
+  test('unions blocked, blocked-by and muted edges', async () => {
+    store.set('blocks/me_x', { blockerId: 'me', blockedId: 'x' });
+    store.set('blocks/y_me', { blockerId: 'y', blockedId: 'me' });
+    store.set('mutes/me_z', { muterId: 'me', mutedId: 'z' });
+    const hidden = await getSocialGraphService().getHiddenAuthorIds('me');
+    expect([...hidden].sort()).toEqual(['x', 'y', 'z']);
+  });
+
+  test('fails open (empty set) when the graph read throws', async () => {
+    const svc = getSocialGraphService();
+    const spy = jest.spyOn(svc, 'listEdges').mockRejectedValue(new Error('offline'));
+    const hidden = await svc.getHiddenAuthorIds('me');
+    expect(hidden.size).toBe(0);
+    spy.mockRestore();
+  });
+
+  test('a blocked friends-of-friends candidate is not suggested', async () => {
+    // me -> a -> {blocked, ok}; a blocked candidate must be dropped.
+    seedFollow('me', 'a');
+    seedFollow('a', 'blocked');
+    seedFollow('a', 'ok');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    store.set('users/ok', { uid: 'ok', displayName: 'Okay' });
+    const recs = await getSocialGraphService().getSuggestions('me', { limit: 10 });
+    const ids = recs.map((r) => r.id || r.uid);
+    expect(ids).toContain('ok');
+    expect(ids).not.toContain('blocked');
+  });
+});
+
+describe('listConnections / listMutualConnections hide blocked users (N240)', () => {
+  test('a blocked follower is dropped from the viewer\'s followers list', async () => {
+    seedFollow('blocked', 'me');
+    seedFollow('ok', 'me');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    store.set('users/ok', { uid: 'ok', displayName: 'Okay' });
+
+    const res = await getSocialGraphService().listConnections('me', 'followers', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['ok']);
+    expect(res.count).toBe(1);
+  });
+
+  test('a user who blocked the viewer is dropped from the following list', async () => {
+    seedFollow('me', 'blocker');
+    seedFollow('me', 'friend');
+    store.set('blocks/blocker_me', { blockerId: 'blocker', blockedId: 'me' });
+    store.set('users/blocker', { uid: 'blocker', displayName: 'Blocker' });
+    store.set('users/friend', { uid: 'friend', displayName: 'Friend' });
+
+    const res = await getSocialGraphService().listConnections('me', 'following', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['friend']);
+  });
+
+  test('a muted mutual connection is dropped from the friends list', async () => {
+    seedFollow('me', 'muted'); seedFollow('muted', 'me');
+    seedFollow('me', 'friend'); seedFollow('friend', 'me');
+    store.set('mutes/me_muted', { muterId: 'me', mutedId: 'muted' });
+    store.set('users/muted', { uid: 'muted', displayName: 'Muted' });
+    store.set('users/friend', { uid: 'friend', displayName: 'Friend' });
+
+    const res = await getSocialGraphService().listMutualConnections('me', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['friend']);
+  });
+
+  test('with no viewerId the raw list is returned unfiltered', async () => {
+    seedFollow('blocked', 'me');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    const res = await getSocialGraphService().listConnections('me', 'followers', { viewerId: null });
+    expect(res.connections.map((p) => p.id)).toEqual(['blocked']);
+  });
+
+  test('the blocked/muted management lists keep the hidden users (so a block can be lifted)', async () => {
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    const res = await getSocialGraphService().listConnections('me', 'blocked', { viewerId: 'me' });
+    expect(res.connections.map((p) => p.id)).toEqual(['blocked']);
+  });
+
+  test('getMutualConnections drops a blocked mutual (N247)', async () => {
+    // me and other both follow {blocked, friend}; a block must hide `blocked`
+    // from the "mutual friends" surface, not just the follower lists.
+    seedFollow('me', 'blocked'); seedFollow('other', 'blocked');
+    seedFollow('me', 'friend'); seedFollow('other', 'friend');
+    store.set('blocks/me_blocked', { blockerId: 'me', blockedId: 'blocked' });
+    store.set('users/blocked', { uid: 'blocked', displayName: 'Blocked' });
+    store.set('users/friend', { uid: 'friend', displayName: 'Friend' });
+
+    const res = await getSocialGraphService().getMutualConnections('me', 'other');
+    expect(res.map((p) => p.id)).toEqual(['friend']);
+  });
 });
 
 describe('listMutualConnections (friends = mutual follow)', () => {

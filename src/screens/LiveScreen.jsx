@@ -55,7 +55,7 @@ export default function LiveScreen() {
 
   const loadStreams = useCallback(async () => {
     try {
-      const streams = await svc().getActiveLiveStreams({ limit: 30 });
+      const streams = await svc().getActiveLiveStreams({ limit: 30, viewerId: user?.uid });
       setActiveStreams(streams || []);
       setError(null);
     } catch (err) {
@@ -63,7 +63,7 @@ export default function LiveScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.uid]);
 
   useEffect(() => { loadStreams(); }, [loadStreams]);
   useEffect(() => { const id = setInterval(loadStreams, 15000); return () => clearInterval(id); }, [loadStreams]);
@@ -157,7 +157,7 @@ export default function LiveScreen() {
     }
     const loadComments = async () => {
       try {
-        const list = await svc().getLiveComments(watching.id, { limit: 50 });
+        const list = await svc().getLiveComments(watching.id, { limit: 50, viewerId: user.uid });
         setComments(Array.isArray(list) ? list : []);
       } catch (e) {
         console.warn('[Live] comment poll failed; keeping last list', e?.message);

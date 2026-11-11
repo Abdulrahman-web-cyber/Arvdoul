@@ -31,7 +31,6 @@ const MAX_DAILY_WITHDRAWAL_REQUESTS = functions.config().monetization?.max_daily
 const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_threshold || 50000;
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
-const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || require('./levelConfig.cjs').COINS_PER_DOLLAR;
 const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
@@ -416,6 +415,18 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
       if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
       if (!receiverSnap.exists) throw new functions.https.HttpsError('not-found', 'Receiver not found.');
 
+      // Space tips also bump the space's running tip total. The client cannot
+      // write `spaces/{id}` (only the host may update it, and a self-tip is
+      // rejected), so the previous client-side `increment` was always denied
+      // and the "Tips" total stayed at 0. Bump it here, in the same settled
+      // transaction, so the aggregate tracks a real transfer.
+      let spaceRef = null;
+      if (reason === 'space_tip' && typeof metadata.spaceId === 'string' && metadata.spaceId) {
+        spaceRef = admin.firestore().collection('spaces').doc(metadata.spaceId);
+        const spaceSnap = await t.get(spaceRef);
+        if (!spaceSnap.exists) spaceRef = null;
+      }
+
       const senderData = senderSnap.data();
       const available = getAvailableBalance(senderData);
       if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available balance.');
@@ -438,6 +449,10 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
       t.set(receiverTxRef, { userId: toUserId, type: 'credit', amount, balanceAfter: receiverNewBalance, relatedUserId: senderUid, ...baseTx });
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${toUserId}`, amount, { reason, transactionId: senderTxRef.id });
+
+      if (spaceRef) {
+        t.update(spaceRef, { tipsTotalCoins: admin.firestore.FieldValue.increment(amount) });
+      }
 
       const resultData = { success: true, senderNewBalance, receiverNewBalance, transactionId: senderTxRef.id };
       t.set(ledgerRef, {
@@ -792,7 +807,7 @@ exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
   const { withdrawalId, action } = req.body || {};
   try {
     const result = await settleWithdrawal(
-      { stripe, createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+      { stripe, createLedgerEntry },
       withdrawalId,
       action
     );
@@ -1649,6 +1664,10 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
       const price = Number(product.priceCoins) || 0;
       if (price <= 0) throw new functions.https.HttpsError('invalid-argument', 'Product has no valid coin price.');
 
+      const sellerId = product.creatorId || null;
+      if (!sellerId) throw new functions.https.HttpsError('failed-precondition', 'This listing has no seller and cannot be purchased.');
+      if (sellerId === uid) throw new functions.https.HttpsError('invalid-argument', 'You cannot purchase your own listing.');
+
       const userRef = db.collection('users').doc(uid);
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
@@ -1657,22 +1676,41 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError('failed-precondition', `Insufficient Arvdoul Coins. You need ${price} coins, but have ${available}.`);
       }
 
-      // 1. Debit coins (same double-entry ledger as spendCoins)
+      const sellerRef = db.collection('users').doc(sellerId);
+      const sellerSnap = await t.get(sellerRef);
+      if (!sellerSnap.exists) throw new functions.https.HttpsError('failed-precondition', 'The seller account is unavailable.');
+
+      // 1. Move the coins buyer -> seller. The marketplace is 0% fee (see
+      //    MarketplaceScreen copy), so the seller receives the full price and
+      //    total supply is unchanged. The old path debited the buyer and
+      //    burned the coins from system/coin_supply, so every purchase
+      //    destroyed value and the seller was never paid.
       const newBalance = (userSnap.data().coins || 0) - price;
-      t.update(userRef, { coins: newBalance });
+      const sellerNewBalance = (sellerSnap.data().coins || 0) + price;
+      t.update(userRef, { coins: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      t.update(sellerRef, { coins: sellerNewBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
       const txRef = db.collection('coin_transactions').doc();
       t.set(txRef, {
         userId: uid, type: 'debit', amount: price,
         reason: 'marketplace_purchase',
+        relatedUserId: sellerId,
         metadata: { productId, productTitle: product.title || '' },
         idempotencyKey: key, balanceAfter: newBalance,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       });
-      createLedgerEntry(t, `users:${uid}`, 'system:coin_supply', price, { reason: 'marketplace_purchase', transactionId: txRef.id });
-      t.set(db.collection('system').doc('coin_supply'),
-        { totalCoins: admin.firestore.FieldValue.increment(-price) }, { merge: true });
+      const saleRef = db.collection('coin_transactions').doc();
+      t.set(saleRef, {
+        userId: sellerId, type: 'credit', amount: price,
+        reason: 'marketplace_sale',
+        relatedUserId: uid,
+        metadata: { productId, productTitle: product.title || '', orderId: key },
+        idempotencyKey: `${key}_seller`, balanceAfter: sellerNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+      createLedgerEntry(t, `users:${uid}`, `users:${sellerId}`, price, { reason: 'marketplace_purchase', transactionId: txRef.id });
 
       // 2. Stock + sales
       t.update(productRef, {
@@ -1688,7 +1726,7 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
         productTitle: product.title || '',
         product,
         buyerId: uid,
-        sellerId: product.creatorId || null,
+        sellerId,
         purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
         amountPaidCoins: price,
         downloadUrl: product.downloadUrl || null,

@@ -46,12 +46,12 @@ export default function PollsScreen() {
 
   useEffect(() => {
     loadPolls();
-  }, [selectedCategory]);
+  }, [selectedCategory, user?.uid]);
 
   const loadPolls = async () => {
     setLoading(true);
     try {
-      const data = await pollService.getPolls(selectedCategory);
+      const data = await pollService.getPolls(selectedCategory, user?.uid);
       setPolls(data);
     } catch {
       toast.error('Failed to load polls');

@@ -47,12 +47,12 @@ export default function SpacesScreen() {
 
   useEffect(() => {
     loadSpaces();
-  }, [selectedCategory]);
+  }, [selectedCategory, user?.uid]);
 
   const loadSpaces = async () => {
     setLoading(true);
     try {
-      const data = await spacesService.getActiveSpaces(selectedCategory);
+      const data = await spacesService.getActiveSpaces(selectedCategory, user?.uid);
       setSpaces(data);
       if (!activeSpace && data.length > 0) {
         setActiveSpace(data[0]);

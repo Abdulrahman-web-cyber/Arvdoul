@@ -39,7 +39,7 @@ describe('profile feed pagination', () => {
     expect(state.posts.map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(state.postsHasMore).toBe(true);
     expect(state.postsCursor).toBe('p2');
-    expect(spy).toHaveBeenCalledWith('u1', { limit: 12, viewerId: null });
+    expect(spy).toHaveBeenCalledWith('u1', { limit: 12, viewerId: null, constrainAuthorIsPrivate: true });
   });
 
   test('loadMorePosts appends the next page and advances the cursor', async () => {
@@ -53,7 +53,7 @@ describe('profile feed pagination', () => {
     });
     await useProfileStore.getState().loadMorePosts('u1');
 
-    expect(spy).toHaveBeenLastCalledWith('u1', { limit: 12, cursor: 'p1', viewerId: null });
+    expect(spy).toHaveBeenLastCalledWith('u1', { limit: 12, cursor: 'p1', viewerId: null, constrainAuthorIsPrivate: true });
     const state = useProfileStore.getState();
     expect(state.posts.map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(state.postsHasMore).toBe(false);
@@ -86,6 +86,44 @@ describe('profile feed pagination', () => {
     await useProfileStore.getState().loadMorePosts('u1');
 
     expect(useProfileStore.getState().posts.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  test('an approved follower of a private author omits the authorIsPrivate constraint (N206)', async () => {
+    // The follower shape must not constrain `authorIsPrivate` — the read rule
+    // proves the follower edge from the constrained `authorId`, and a
+    // `authorIsPrivate == false` filter would return an empty grid.
+    spy.mockResolvedValue({ success: true, posts: [{ id: 'p1' }], hasMore: false, nextCursor: null });
+    useProfileStore.setState({
+      profile: { id: 'privateAuthor', isPrivate: true },
+      followStatus: { isFollowing: true },
+    });
+    const appStoreModule = await import('../store/appStore.js');
+    const prevUser = appStoreModule.useAppStore.getState().currentUser;
+    appStoreModule.useAppStore.setState({ currentUser: { uid: 'viewer1' } });
+
+    try {
+      await useProfileStore.getState().loadPosts('privateAuthor', { limit: 12 });
+
+      expect(spy).toHaveBeenLastCalledWith('privateAuthor', {
+        limit: 12, viewerId: 'viewer1', constrainAuthorIsPrivate: false,
+      });
+    } finally {
+      appStoreModule.useAppStore.setState({ currentUser: prevUser });
+    }
+  });
+
+  test('a non-follower of a private author keeps the public constraint (N206)', async () => {
+    spy.mockResolvedValue({ success: true, posts: [], hasMore: false, nextCursor: null });
+    useProfileStore.setState({
+      profile: { id: 'privateAuthor', isPrivate: true },
+      followStatus: { isFollowing: false },
+    });
+
+    await useProfileStore.getState().loadPosts('privateAuthor', { limit: 12 });
+
+    expect(spy).toHaveBeenLastCalledWith('privateAuthor', {
+      limit: 12, viewerId: null, constrainAuthorIsPrivate: true,
+    });
   });
 });
 

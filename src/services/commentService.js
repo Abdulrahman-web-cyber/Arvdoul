@@ -281,6 +281,13 @@ class UltimateCommentService {
           return {
             success: true,
             comments: cached.comments,
+            total: cached.total,
+            // A cache hit must carry the pagination fields too: returning only
+            // `comments` left `hasMore`/`nextCursor` undefined, which the
+            // drawer reads as "no more" (load-more disabled on a warm cache).
+            hasMore: cached.hasMore,
+            nextCursor: cached.nextCursor,
+            lastComment: cached.lastComment ?? null,
             cached: true,
             duration: Date.now() - startTime
           };
@@ -288,6 +295,16 @@ class UltimateCommentService {
       }
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+
+      // Callers pass the cursor as `startAfter` (the drawer's name); accept
+      // `cursor` too. The paginated query never applied a cursor, so the
+      // drawer's "load more" re-fetched page 1 forever and (deduped by id)
+      // never appended anything.
+      const afterId = options.startAfter || options.cursor;
+      const pageSize = Math.min(
+        Number(options.limit) || COMMENTS_CONFIG.PAGINATION_LIMIT,
+        COMMENTS_CONFIG.MAX_FETCH_LIMIT
+      );
 
       let snapshot;
       try {
@@ -298,9 +315,14 @@ class UltimateCommentService {
           this.firestoreMethods.where('moderationStatus', 'in', VISIBLE_COMMENT_MODERATION_STATUSES),
           this.firestoreMethods.orderBy('createdAt', 'desc')
         ];
-        conditions.push(this.firestoreMethods.limit(
-          Math.min(Number(options.limit) || COMMENTS_CONFIG.PAGINATION_LIMIT, COMMENTS_CONFIG.MAX_FETCH_LIMIT)
-        ));
+        if (afterId) {
+          const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', afterId);
+          const cursorSnap = await this.firestoreMethods.getDoc(cursorRef);
+          if (cursorSnap.exists()) {
+            conditions.push(this.firestoreMethods.startAfter(cursorSnap));
+          }
+        }
+        conditions.push(this.firestoreMethods.limit(pageSize));
         const q = this.firestoreMethods.query(commentsRef, ...conditions);
         snapshot = await this.firestoreMethods.getDocs(q);
       } catch (indexErr) {
@@ -373,17 +395,25 @@ class UltimateCommentService {
         processedComments = this._sortComments(processedComments, options.sortBy);
       }
 
+      const hasMore = snapshot.size === pageSize;
+      const nextCursor = hasMore && snapshot.docs?.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
       this.cache.set(cacheKey, {
         comments: processedComments,
         timestamp: Date.now(),
-        count: processedComments.length
+        count: processedComments.length,
+        total: snapshot.size,
+        hasMore,
+        nextCursor,
+        lastComment: comments.length > 0 ? comments[comments.length - 1] : null
       });
 
       return {
         success: true,
         comments: processedComments,
         total: snapshot.size,
-        hasMore: options.limit ? comments.length === options.limit : false,
+        hasMore,
+        nextCursor,
         lastComment: comments.length > 0 ? comments[comments.length - 1] : null,
         cached: false,
         duration: Date.now() - startTime
@@ -789,7 +819,6 @@ class UltimateCommentService {
         pinnedCommentId: pinned ? commentId : null,
         updatedAt: serverTimestamp(),
       });
-      this.cache.delete(targetId);
       this._invalidatePostCache(targetId);
       return { success: true, targetId, commentId, pinned };
     } catch (error) {

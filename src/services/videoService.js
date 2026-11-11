@@ -638,6 +638,22 @@ class UltimateVideoService {
     return { success: true, chapters };
   }
 
+  /**
+   * Authors whose videos must not appear in the viewer's Sparks feed: blocked,
+   * blocked-by and muted. Delegates to the graph spine's shared hidden-author
+   * reader (bounded, fails open on error).
+   */
+  async _getHiddenAuthors(userId) {
+    if (!userId || userId === 'anonymous_user') return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(userId);
+    } catch (err) {
+      logger.warn('[Video] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getVideoFeed(userId, options = {}) {
     await this.ensureInitialized();
     const { feedType = 'for_you', limit = 20, type = null, signal, cursor } = options;
@@ -751,6 +767,14 @@ class UltimateVideoService {
         );
         const postSnap = await getDocs(postQ).catch(() => ({ docs: [] }));
         rawVideos = postSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+
+      // Moderation/safety: a blocked, blocked-by or muted author's videos must
+      // not surface here (the primary feed path filters through feedService;
+      // this direct query did not, so a blocked/muted creator's Sparks leaked).
+      const hiddenAuthors = await this._getHiddenAuthors(safeUserId);
+      if (hiddenAuthors.size > 0) {
+        rawVideos = rawVideos.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId));
       }
 
       const formatted = rawVideos.map(formatVideoItem);

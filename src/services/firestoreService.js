@@ -436,12 +436,15 @@ class EnterpriseFirestoreService {
       const postsRef = collection(this.firestore, 'posts');
       const viewerId = options.viewerId || null;
       const isOwnerView = Boolean(viewerId && viewerId === userId);
-      // The list rule only admits two shapes (rules are not filters): the
-      // owner's own shape (`authorId == uid()`) and the public-feed shape
+      // The list rule admits three shapes (rules are not filters): the owner's
+      // own shape (`authorId == uid()`), the public-feed shape
       // (`authorIsPrivate == false` + `visibility == 'public'` +
-      // `status == 'published'` + `isDeleted == false`). A non-owner can
-      // therefore only list public published posts; drafts/scheduled/only-me
-      // posts stay invisible even though the query is author-scoped.
+      // `status == 'published'` + `isDeleted == false`), and — for a private
+      // author — the approved-follower shape, which must NOT constrain
+      // `authorIsPrivate` (the rule evaluates the follower edge from the
+      // constrained `authorId`). A caller that knows the viewer is an approved
+      // follower passes `constrainAuthorIsPrivate: false`; everyone else keeps
+      // the public shape, so drafts/scheduled/only-me posts stay invisible.
       const conditions = [
         where('authorId', '==', userId),
         orderBy('createdAt', 'desc'),
@@ -451,7 +454,9 @@ class EnterpriseFirestoreService {
         conditions.push(where('isDeleted', '==', false));
         if (options.status) conditions.push(where('status', '==', options.status));
       } else {
-        conditions.push(where('authorIsPrivate', '==', false));
+        if (options.constrainAuthorIsPrivate !== false) {
+          conditions.push(where('authorIsPrivate', '==', false));
+        }
         conditions.push(where('status', '==', 'published'));
         conditions.push(where('isDeleted', '==', false));
         conditions.push(where('visibility', '==', 'public'));
@@ -1010,10 +1015,12 @@ class EnterpriseFirestoreService {
   async incrementCommentCount(postId, delta = 1) {
     await this.ensureInitialized();
     try {
-      const { doc, updateDoc, increment, serverTimestamp } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      await updateDoc(postRef, { 'stats.comments': increment(delta), updatedAt: serverTimestamp() });
+      // Route through the sharded counter: a direct `stats.comments` write on
+      // the post doc is a non-author document write the rules now refuse, and
+      // the sharded value is what `countersManager.apply` overlays on read.
+      await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments', amount: delta });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'comments' });
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }

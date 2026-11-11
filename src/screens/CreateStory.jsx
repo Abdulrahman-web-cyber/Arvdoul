@@ -88,7 +88,7 @@ export default function CreateStory() {
     setMusicError(null);
     try {
       const { default: soundService } = await import('../services/soundService.js');
-      const tracks = await soundService.getTrendingSounds('All');
+      const tracks = await soundService.getTrendingSounds('All', user?.uid);
       setMusicTracks(Array.isArray(tracks) ? tracks : []);
     } catch (err) {
       // "No tracks available" would be wrong when the catalog read failed.
@@ -97,7 +97,7 @@ export default function CreateStory() {
     } finally {
       setMusicLoading(false);
     }
-  }, []);
+  }, [user?.uid]);
 
   // Initialize WebRTC Camera Stream
   const initCamera = useCallback(async () => {

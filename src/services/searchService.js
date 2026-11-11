@@ -72,6 +72,15 @@ const SEARCH_CONFIG = {
   DEFAULT_HITS_PER_PAGE: 20,
   MAX_HITS_PER_PAGE: 100,
 
+  // The provider (Algolia / Firestore) is asked for the first
+  // PAGINATION.FETCH_PAGES pages in ONE query; the page the user asked for is
+  // then a slice of that window. Asking the provider for only page N and then
+  // slicing `finalHits[page*hitsPerPage …]` returned an EMPTY page for N > 0,
+  // because the fusion list only ever held one page of hits.
+  PAGINATION: {
+    FETCH_PAGES: 5,
+  },
+
   TYPO_TOLERANCE: 'min',
   HIGHLIGHT_PRE_TAG: '<em class="search-highlight">',
   HIGHLIGHT_POST_TAG: '</em>',
@@ -142,6 +151,14 @@ const SEARCH_CONFIG = {
   },
 
   DEBOUNCE_MS: 300,
+
+  // Blocked-pair filtering: a blocked user's content must never surface in
+  // search (moderation enforcement, AGENTS.md §7.17). The block set is read
+  // through the social-graph spine and cached briefly.
+  BLOCK_FILTER: {
+    TTL: 60 * 1000,
+    MAX_BLOCKED: 500,
+  },
 };
 
 const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -303,6 +320,80 @@ class UltimateSearchService {
     this.pendingSearchPromise = null;
     this.lastSearchKey = null;
     this.insightsClient = null;
+    this.blockCache = new Map();
+  }
+
+  /**
+   * The set of user ids the viewer cannot see in results: everyone they block
+   * or who blocks them (both directions, matching the feed). Read once through
+   * the graph spine and cached for `BLOCK_FILTER.TTL`. Fails open (an empty
+   * set) only when the graph read errors — a block read is a bounded
+   * actor-scoped query, not a scan.
+   */
+  async _getBlockedUserIds(viewerId) {
+    if (!viewerId) return new Set();
+    const cached = this.blockCache.get(viewerId);
+    if (cached && Date.now() - cached.ts < SEARCH_CONFIG.BLOCK_FILTER.TTL) return cached.ids;
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const graph = getSocialGraphService();
+      // `listEdges` returns ids only (no profile hydration) and is the
+      // actor-equality, index-backed shape the `blocks` rule can prove.
+      const [outgoing, incoming] = await Promise.all([
+        graph.listEdges(viewerId, 'blocked', { limit: SEARCH_CONFIG.BLOCK_FILTER.MAX_BLOCKED }),
+        graph.listEdges(viewerId, 'blocked_by', { limit: SEARCH_CONFIG.BLOCK_FILTER.MAX_BLOCKED }),
+      ]);
+      const ids = new Set([...(outgoing.ids || []), ...(incoming.ids || [])]);
+      this.blockCache.set(viewerId, { ids, ts: Date.now() });
+      return ids;
+    } catch (err) {
+      logger.debug('[Search] block set unavailable; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  /** Resolve the author of a hit (users use their own id). `type` may be the
+   * base-index name (`users`) or the singular result type (`user`). */
+  static _hitAuthorId(hit, type) {
+    if (type === 'users' || type === 'user') return hit.objectID || hit.id;
+    return hit.authorId || hit.userId || hit.creatorId || hit.uid || null;
+  }
+
+  /** Drop hits authored by a blocked pair (either direction). */
+  _filterBlockedHits(resultsByType, blocked) {
+    if (!blocked || blocked.size === 0) return resultsByType;
+    const out = {};
+    for (const [type, hits] of Object.entries(resultsByType)) {
+      if (type.startsWith('_') || !Array.isArray(hits)) {
+        out[type] = hits;
+        continue;
+      }
+      out[type] = hits.filter((hit) => {
+        const authorId = UltimateSearchService._hitAuthorId(hit, type);
+        return !authorId || !blocked.has(authorId);
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Drop `SearchResultItem`s authored by a blocked pair. Applied to the built
+   * result list (cache-hit and fresh alike) so a cached page cannot leak a
+   * newly-blocked user.
+   */
+  _filterBlockedItems(items, blocked) {
+    if (!blocked || blocked.size === 0 || !Array.isArray(items)) return items;
+    return items.filter((item) => {
+      const raw = item.raw || {};
+      const authorId = UltimateSearchService._hitAuthorId({ ...raw, id: raw.id || item.id }, item.type);
+      return !authorId || !blocked.has(authorId);
+    });
+  }
+
+  /** The viewer whose blocks should be applied: explicit option, else session. */
+  _resolveViewerId(options = {}) {
+    if (options.userId) return options.userId;
+    return (typeof window !== 'undefined' && window._arvdoul_auth?.currentUser?.uid) || null;
   }
 
   async ensureInitialized() {
@@ -361,6 +452,9 @@ class UltimateSearchService {
       f: options.filters || '',
       ff: this._normalizeFacetFilters(options.facetFilters),
       s: options.sortBy || '',
+      // Per-viewer cache: results are block-filtered for the viewer, so two
+      // viewers must not share a cached page.
+      v: this._resolveViewerId(options) || '',
     };
     const cacheKey = fastHash(cacheKeyObj);
 
@@ -424,7 +518,10 @@ class UltimateSearchService {
       if (!cached) cached = this.localCache.get(cacheKey);
       if (cached) {
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
-        return { ...cached, cached: true };
+        const viewerId = this._resolveViewerId(options);
+        const blocked = await this._getBlockedUserIds(viewerId);
+        const filteredItems = this._filterBlockedItems(cached.items, blocked);
+        return { ...cached, items: filteredItems, cached: true };
       }
     }
 
@@ -439,16 +536,24 @@ class UltimateSearchService {
     let nextCursorByIndex = null;
     let sponsoredItem = null;
 
+    // Fetch a window of pages in one provider query, then slice the requested
+    // page out of the fused window. Without this, asking the provider for page
+    // N and then slicing `finalHits[page*hitsPerPage …]` returned an empty page
+    // for N > 0 (the fusion list only held the single fetched page).
+    const windowPages = Math.max(1, SEARCH_CONFIG.PAGINATION.FETCH_PAGES);
+    const windowSize = Math.min(hitsPerPage * windowPages, SEARCH_CONFIG.MAX_HITS_PER_PAGE * windowPages);
+    const windowPage = Math.floor((page * hitsPerPage) / windowSize);
+
     try {
       if (this.client) {
         try {
-          resultsByType = await this._algoliaSearch(query, indices, page, hitsPerPage, filters, facetFilters, sortBy, userId, resolvedIndexMap);
+          resultsByType = await this._algoliaSearch(query, indices, windowPage, windowSize, filters, facetFilters, sortBy, userId, resolvedIndexMap);
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
           source = 'algolia';
         } catch (algoliaError) {
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
           if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
-            const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+            const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage: windowSize, cursorByIndex });
             if (this.currentRequestId !== requestId) return { success: false, aborted: true };
             resultsByType = fallbackResult.resultsByType;
             nextCursorByIndex = fallbackResult.nextCursorByIndex;
@@ -459,7 +564,7 @@ class UltimateSearchService {
         }
       } else {
         // Strict fallback when credentials aren't defined
-        const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+        const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage: windowSize, cursorByIndex });
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         resultsByType = fallbackResult.resultsByType;
         nextCursorByIndex = fallbackResult.nextCursorByIndex;
@@ -471,6 +576,12 @@ class UltimateSearchService {
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         resultsByType = this._mergeVectorResults(resultsByType, vectorResults);
       }
+
+      // Moderation enforcement: a blocked pair (either direction) must not
+      // surface in results. Applied before fusion so ranking sees the real set.
+      const viewerId = this._resolveViewerId(options);
+      const blockedIds = await this._getBlockedUserIds(viewerId);
+      resultsByType = this._filterBlockedHits(resultsByType, blockedIds);
 
       let userProfile = null;
       if (userId && SEARCH_CONFIG.PERSONALIZATION.ENABLED && source === 'algolia') {
@@ -487,6 +598,12 @@ class UltimateSearchService {
       if (SEARCH_CONFIG.SPONSORED.ENABLED && userId && this.monetizationService && page === 0) {
         sponsoredItem = await this._getSponsoredResult(query, userId);
         if (sponsoredItem) {
+          const sponsoredAuthor = UltimateSearchService._hitAuthorId(sponsoredItem.raw || {}, sponsoredItem.type);
+          if (sponsoredAuthor && blockedIds.has(sponsoredAuthor)) {
+            sponsoredItem = null;
+          }
+        }
+        if (sponsoredItem) {
           const pos = Math.min(SEARCH_CONFIG.SPONSORED.DEFAULT_POSITION, finalHits.length);
           finalHits.splice(pos, 0, sponsoredItem);
         }
@@ -494,8 +611,23 @@ class UltimateSearchService {
 
       const start = page * hitsPerPage;
       const paginated = finalHits.slice(start, start + hitsPerPage);
-      const total = finalHits.length;
-      const totalPages = Math.ceil(total / hitsPerPage);
+      // The fused window holds up to `windowSize` ranked hits. The provider's
+      // own hit count (`nbHits`) is the real total when Algolia answered;
+      // otherwise report what the window can prove (never a fabricated total).
+      const windowTotal = finalHits.length;
+      const providerNbHits = indices.reduce((sum, idx) => {
+        const nb = resultsByType[`_${idx}_metadata`]?.nbHits;
+        return Number.isFinite(nb) ? sum + nb : sum;
+      }, 0);
+      const total = source === 'algolia' && providerNbHits > 0 ? providerNbHits : windowTotal;
+      // More pages exist when the window overflows, the provider reported more
+      // hits than the window already contains, or the window is full (a further
+      // window may exist — the client confirms with the next query).
+      const windowFull = finalHits.length >= windowSize;
+      const hasMore = finalHits.length > start + paginated.length
+        || (source === 'algolia' && providerNbHits > start + paginated.length)
+        || windowFull;
+      const totalPages = hitsPerPage > 0 ? Math.ceil(total / hitsPerPage) : 1;
 
       const response = {
         success: true,
@@ -508,8 +640,8 @@ class UltimateSearchService {
         sponsored: sponsoredItem ? new SearchResultItem(sponsoredItem.raw || sponsoredItem, sponsoredItem.type, 'sponsored', 0) : null,
         query,
         nextCursorByIndex,
-        nextCursor: page + 1 < totalPages ? String(page + 1) : null,
-        hasMore: page + 1 < totalPages,
+        nextCursor: hasMore ? String(page + 1) : null,
+        hasMore,
       };
 
       if (userId) {

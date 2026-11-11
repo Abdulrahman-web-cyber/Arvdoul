@@ -1,7 +1,7 @@
 // src/services/communityService.js
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore";
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { logger } from '../utils/Logger.js';
 
@@ -89,7 +89,8 @@ class CommunityService {
       sortBy = 'popular',
       filter = 'all',
       searchQuery = '',
-      category = null
+      category = null,
+      startAfterId = null
     } = options;
 
     let q = collection(this.db, 'communities');
@@ -110,12 +111,19 @@ class CommunityService {
       constraints.push(orderBy('stats.activityScore', 'desc'));
     }
 
-    constraints.push(limit(COMMUNITIES_PER_PAGE));
-
-    if (page > 1) {
-      const startAfter = (page - 1) * COMMUNITIES_PER_PAGE;
-      constraints.push(startAfter);
+    // Real cursor pagination. The previous code pushed a bare NUMBER
+    // (`(page - 1) * COMMUNITIES_PER_PAGE`) into the constraint list, which
+    // `query()` rejects — every "Load More" (page > 1) threw and the screen
+    // toasted "Failed to load communities".
+    if (startAfterId) {
+      const cursorSnap = await getDoc(doc(this.db, 'communities', startAfterId));
+      if (cursorSnap.exists()) constraints.push(startAfter(cursorSnap));
+    } else if (page > 1) {
+      const offsetSnap = await getDocs(query(q, ...constraints, limit((page - 1) * COMMUNITIES_PER_PAGE)));
+      if (offsetSnap.docs.length) constraints.push(startAfter(offsetSnap.docs[offsetSnap.docs.length - 1]));
     }
+
+    constraints.push(limit(COMMUNITIES_PER_PAGE));
 
     const querySnapshot = await getDocs(query(q, ...constraints));
     
@@ -132,10 +140,12 @@ class CommunityService {
       );
     }
 
+    const hasMore = querySnapshot.docs.length === COMMUNITIES_PER_PAGE;
     return {
       communities,
-      hasMore: communities.length === COMMUNITIES_PER_PAGE,
-      page
+      hasMore,
+      page,
+      nextCursor: hasMore && querySnapshot.docs.length ? querySnapshot.docs[querySnapshot.docs.length - 1].id : null
     };
   }
 
@@ -295,10 +305,26 @@ class CommunityService {
     return result?.post;
   }
 
+  /**
+   * Authors whose community posts must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('[Community] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getCommunityPosts(communityId, options = {}) {
     await this.initialize();
-    
-    const { page = 1, sortBy = 'recent', status = 'published' } = options;
+
+    const { page = 1, sortBy = 'recent', status = 'published', viewerId = null } = options;
+    const hiddenAuthors = await this._getHiddenAuthors(viewerId);
     
     // The list rule proves a community feed only via
     // `communityId == X` + `visibility == 'community'` + `status == 'published'`
@@ -322,7 +348,9 @@ class CommunityService {
     q = query(q, limit(COMMUNITIES_PER_PAGE));
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(p => !hiddenAuthors.has(p.authorId || p.userId));
   }
 
   // Moderation actions are audited server-side by the community callables

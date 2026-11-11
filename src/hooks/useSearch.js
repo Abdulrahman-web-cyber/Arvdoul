@@ -103,8 +103,12 @@ export function useSearch() {
 
       if (response.success) {
         setResults(response.items || []);
-        setHasMore(response.hasNextPage || false);
-        setCursor(response.cursor || null);
+        // `searchService.search` returns `hasMore`/`nextCursor` (not
+        // `hasNextPage`/`cursor`). Reading the wrong keys left `hasMore` pinned
+        // to `false`, so `SearchScreen`'s load-more never fired and `loadMore`
+        // always passed a null cursor.
+        setHasMore(response.hasMore || false);
+        setCursor(response.nextCursor || null);
         addRecent(normalizedQuery);
       } else {
         setResults([]);
@@ -143,8 +147,8 @@ export function useSearch() {
 
       if (response.success) {
         appendResults(response.items || []);
-        setHasMore(response.hasNextPage || false);
-        setCursor(response.cursor || null);
+        setHasMore(response.hasMore || false);
+        setCursor(response.nextCursor || null);
       } else {
         setHasMore(false);
       }

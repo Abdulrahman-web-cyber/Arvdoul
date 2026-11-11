@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { Trophy, Crown, Medal, ArrowUp, ArrowDown, Minus, Star, Users, Flame, LineChart, Coins, ShieldCheck, Check, ChevronRight } from "lucide-react";
 import { RANKING_CONFIG } from '../../services/rankingService.js';
 import rankingService from '../../services/rankingService.js';
@@ -197,6 +198,7 @@ const RankCard = ({ rank, item, isDark }) => {
 
 export default function RankingsScreen() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const isDark = theme === 'dark' || theme === 'midnight';
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('creators');
@@ -218,19 +220,19 @@ export default function RankingsScreen() {
       
       switch (activeTab) {
         case 'creators':
-          data = await rankingService.getCreatorRankings(activeCategory, activeTimeRange, offset);
+          data = await rankingService.getCreatorRankings(activeCategory, activeTimeRange, offset, user?.uid);
           break;
         case 'wealth':
-          data = await rankingService.getWealthRankings(activeCategory, activeTimeRange, offset);
+          data = await rankingService.getWealthRankings(activeCategory, activeTimeRange, offset, user?.uid);
           break;
         case 'reputation':
-          data = await rankingService.getReputationRankings(activeCategory, activeTimeRange, offset);
+          data = await rankingService.getReputationRankings(activeCategory, activeTimeRange, offset, user?.uid);
           break;
         case 'communities':
           data = await rankingService.getCommunityRankings(activeCategory, activeTimeRange, offset);
           break;
         case 'rising':
-          data = await rankingService.getRisingCreators(activeTimeRange, offset);
+          data = await rankingService.getRisingCreators(activeTimeRange, offset, user?.uid);
           break;
         default:
           data = [];
@@ -248,7 +250,7 @@ export default function RankingsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, activeCategory, activeTimeRange, offset]);
+  }, [activeTab, activeCategory, activeTimeRange, offset, user?.uid]);
 
   useEffect(() => {
     fetchRankings();

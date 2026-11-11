@@ -894,6 +894,10 @@ class UltimateMessagingService {
     graph.invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
+    // The direct thread is now hidden from the inbox — drop the cached list so
+    // the block takes effect on the next read instead of after the cache TTL.
+    this._invalidateUserConversationsCache(blockerId);
+    this._invalidateUserConversationsCache(blockedId);
     return { success: true };
   }
 
@@ -912,6 +916,9 @@ class UltimateMessagingService {
     getGraph().invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
+    // Unblocking must surface the thread again, so drop the cached inbox too.
+    this._invalidateUserConversationsCache(blockerId);
+    this._invalidateUserConversationsCache(blockedId);
     return { success: true };
   }
 
@@ -955,6 +962,25 @@ class UltimateMessagingService {
     const { getSocialGraphService } = await import('./socialGraphService.js');
     const res = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 100 });
     return res.connections.map((c) => c.id || c.uid).filter(Boolean);
+  }
+
+  /** Uids in a block relationship with `userId` in EITHER direction (viewer
+   *  blocked them, or they blocked the viewer). Bounded, rules-provable edge
+   *  lists; fails open (empty set) so a graph hiccup cannot blank the inbox. */
+  async _getBlockedPairs(userId) {
+    if (!userId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const graph = getSocialGraphService();
+      const [blocked, blockedBy] = await Promise.all([
+        graph.listEdges(userId, 'blocked', { limit: 500 }),
+        graph.listEdges(userId, 'blocked_by', { limit: 500 }),
+      ]);
+      return new Set([...(blocked.ids || []), ...(blockedBy.ids || [])]);
+    } catch (err) {
+      logger.warn('[messagesService] blocked-pair read failed; not filtering inbox', { error: err?.message });
+      return new Set();
+    }
   }
 
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }
@@ -1094,13 +1120,35 @@ class UltimateMessagingService {
       this.fs.orderBy('lastActivity', 'desc'),
       this.fs.limit((options.limit || 50) * 2)
     );
-    if (options.startAfter) q = this.fs.query(q, this.fs.startAfter(options.startAfter));
+    // Callers paginate with the opaque `nextCursor` (a conversation id) they
+    // received from the previous page. Resolve it to a document snapshot here —
+    // `startAfter()` needs a DocumentSnapshot, not an id string, so passing the
+    // id straight in threw and every "load more" failed.
+    if (options.startAfter) {
+      const cursorSnap = await this.fs.getDoc(
+        this.fs.doc(this.firestore, 'conversations', String(options.startAfter))
+      );
+      if (cursorSnap.exists()) q = this.fs.query(q, this.fs.startAfter(cursorSnap));
+    }
 
     const snap = await this.fs.getDocs(q);
+    // A block is terminal for messaging (N221): the direct thread between a
+    // blocked pair must not stay in the inbox either, or the block would hide
+    // the *creation* of a thread but not the existing one. Mutes are NOT
+    // filtered here — a muted conversation stays in the inbox, just quiet.
+    // Skip the graph read entirely when there is no direct thread to check.
+    const hasDirect = snap.docs.some((d) => d.data()?.type === 'direct');
+    const blockedPairs = (!options.includeHidden && hasDirect)
+      ? await this._getBlockedPairs(userId)
+      : new Set();
     let conversations = [];
     snap.forEach(doc => {
       const conv = { id: doc.id, ...doc.data() };
       if (!options.includeHidden && conv.hiddenFor?.includes(userId)) return;
+      if (blockedPairs.size && conv.type === 'direct' && Array.isArray(conv.participants)) {
+        const other = conv.participants.find(p => p !== userId);
+        if (other && blockedPairs.has(other)) return;
+      }
       conversations.push(conv);
     });
 
@@ -1118,14 +1166,18 @@ class UltimateMessagingService {
       finalConversations = await this._injectConversationListAds(enriched, userId, options);
     }
 
-    const hasMore = snap.docs.length >= (options.limit || 50);
+    const pageSize = options.limit || 50;
+    const hasMore = snap.docs.length > pageSize;
+    // Cursor = the last conversation actually RETURNED. Using the last doc of
+    // the 2x over-fetch window skipped conversations the caller never saw.
+    const pageConvs = finalConversations.slice(0, pageSize);
     const result = {
       success: true,
-      conversations: finalConversations.slice(0, options.limit || 50),
+      conversations: pageConvs,
       total: finalConversations.length,
       unreadCount: finalConversations.reduce((sum, c) => sum + (c.unreadCounts?.[userId] || 0), 0),
       hasMore,
-      nextCursor: hasMore && snap.docs.length ? snap.docs[snap.docs.length - 1].id : null,
+      nextCursor: hasMore && pageConvs.length ? pageConvs[pageConvs.length - 1].id : null,
     };
 
     if (!this.messageKeysByConversation.has('user_convs')) this.messageKeysByConversation.set('user_convs', new Set());
@@ -1168,8 +1220,10 @@ class UltimateMessagingService {
           await this.checkMessagePermission(currentUser.uid, other);
         } catch (err) {
           // Privacy gate: offer a real MESSAGE REQUEST instead of a dead end
-          // (spec §35). The request is idempotent.
-          if (err.code === 'messaging/privacy' || err.code === 'messaging/blocked') {
+          // (spec §35). The request is idempotent. A BLOCK is terminal and must
+          // NOT be downgraded to a request — doing so let a blocked sender still
+          // reach their blocker through the request inbox, defeating the block.
+          if (err.code === 'messaging/privacy') {
             const req = await this.sendMessageRequest(other, currentUser.uid).catch(() => null);
             if (req?.success) {
               const reqErr = new Error('Message request sent — they will be notified.');
@@ -2043,13 +2097,18 @@ class UltimateMessagingService {
       }
     }
 
+    // Send the "left" notice BEFORE the membership update: the create rule
+    // requires the sender to still be a participant, and after the removal the
+    // departing member no longer is. (The admin-transfer notice above is
+    // likewise sent while the member is still present.)
+    await this._sendSystemMessage(conversationId, 'user_left', { userId });
+
     await this.fs.updateDoc(convRef, {
       participants: arrayRemove(userId),
       participantCount: increment(-1),
       hiddenFor: arrayUnion(userId),
       updatedAt: this.fs.serverTimestamp(),
     });
-    await this._sendSystemMessage(conversationId, 'user_left', { userId });
     this.conversationsCache.delete(conversationId);
     return { success: true };
   }
@@ -2545,6 +2604,13 @@ class UltimateMessagingService {
     if (!recipientId || !senderId || recipientId === senderId) {
       throw new Error('Invalid request');
     }
+    // A block is terminal: never file a message request that would let a blocked
+    // party reach their blocker (the rules also deny the resulting conversation,
+    // but refusing here keeps the request inbox clean and returns an honest
+    // status instead of a phantom "pending" request).
+    if ((await this.isBlocked(senderId, recipientId)) || (await this.isBlocked(recipientId, senderId))) {
+      return { success: false, blocked: true };
+    }
     // Idempotent: an existing pending/blocked request is not re-created.
     const ref = this.fs.doc(this.firestore, 'message_requests', `${recipientId}_${senderId}`);
     const existing = await this.fs.getDoc(ref);
@@ -2603,6 +2669,7 @@ class UltimateMessagingService {
     }
 
     const req = await this.sendMessageRequest(recipientId, senderId);
+    if (req?.blocked) return { status: 'blocked' };
     return { status: 'request', requestStatus: req?.status || 'pending' };
   }
 
@@ -2617,8 +2684,16 @@ class UltimateMessagingService {
       this.fs.limit(options.limit || 20)
     );
     const snap = await this.fs.getDocs(q);
+    // A pending request from a user the recipient has since blocked (or who
+    // blocked them) must not render — otherwise the block leaves an actionable
+    // "accept" affordance for the very person it should hide.
+    const blockedPairs = await this._getBlockedPairs(userId);
     const items = [];
-    snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+    snap.forEach((d) => {
+      const data = d.data();
+      if (blockedPairs.has(data.senderId)) return;
+      items.push({ id: d.id, ...data });
+    });
     return { success: true, requests: items };
   }
 
@@ -2917,17 +2992,24 @@ class UltimateMessagingService {
   async _sendSystemMessage(conversationId, eventType, eventData) {
     const msgId = `sys_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const msgRef = this.fs.doc(this.firestore, 'conversations', conversationId, 'messages', msgId);
-    await this.fs.setDoc(msgRef, {
-      id: msgId,
-      conversationId,
-      type: MESSAGING_CONFIG.MESSAGE_TYPES.SYSTEM,
-      eventType,
-      eventData,
-      senderId: 'system',
-      senderName: 'System',
-      createdAt: this.fs.serverTimestamp(),
-      isSystem: true,
-    });
+    try {
+      await this.fs.setDoc(msgRef, {
+        id: msgId,
+        conversationId,
+        type: MESSAGING_CONFIG.MESSAGE_TYPES.SYSTEM,
+        eventType,
+        eventData,
+        senderId: 'system',
+        senderName: 'System',
+        createdAt: this.fs.serverTimestamp(),
+        isSystem: true,
+      });
+    } catch (e) {
+      // The membership/role mutation that triggered this notice is the primary
+      // operation and has already succeeded; a missing timeline chip must not
+      // roll it back. Log so a persistent rules denial is still visible.
+      logger.warn('System message write failed', { conversationId, eventType, error: e?.message });
+    }
   }
 
   async _recordRateLimit(userId) {

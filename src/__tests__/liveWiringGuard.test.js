@@ -53,4 +53,26 @@ describe('LiveScreen viewer count is the polled value, not the stale stream obje
     expect(body).toMatch(/where\('status', '==', 'live'\)/);
     expect(body).toMatch(/where\('isDeleted', '==', false\)/);
   });
+
+  test('join/leave never write the owner-only live_streams doc from a viewer', () => {
+    // `live_streams/{id}` is owner-write-only. The old join/leave transaction
+    // did `transaction.update(streamRef, …)`, which the rules denied for every
+    // non-owner viewer — failing the WHOLE transaction, so the viewer was never
+    // recorded or counted. The viewer record + sharded count are the viewer's
+    // to write; the stream aggregate is derived server-side (functions/live.js).
+    const service = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
+    for (const method of ['async joinLiveStream', 'async leaveLiveStream']) {
+      const start = service.indexOf(method);
+      const body = service.slice(start, service.indexOf('\n  async ', start + 1));
+      expect(body).not.toMatch(/transaction\.update\(streamRef/);
+    }
+  });
+
+  test('a server trigger maintains stats.totalViewers', () => {
+    const live = fs.readFileSync(path.join(root, 'functions/live.js'), 'utf8');
+    expect(live).toMatch(/onLiveViewerCreate/);
+    expect(live).toMatch(/'stats\.totalViewers'/);
+    const index = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(index).toContain("merge(require('./live.js'))");
+  });
 });

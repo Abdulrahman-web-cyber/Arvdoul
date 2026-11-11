@@ -257,6 +257,8 @@ jobs:
           src/__tests__/securityServices.test.js
           src/__tests__/callableAuthGate.test.js
           src/__tests__/deployIntegrity.test.js
+          src/__tests__/functionsInventoryGuard.test.js
+          src/__tests__/adminAuditGuard.test.js
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/firestoreRulesCoverage.test.js
@@ -269,6 +271,18 @@ jobs:
           src/__tests__/serviceReachability.test.js
           src/__tests__/serviceContract.test.js
           src/__tests__/socialGraphService.test.js
+          src/__tests__/searchBlockFiltering.test.js
+          src/__tests__/userServiceBlockReaders.test.js
+          src/__tests__/rankingBlockFiltering.test.js
+          src/__tests__/functionsModerationFilterGuard.test.js
+          src/__tests__/searchPaginationWiring.test.js
+          src/__tests__/searchPaginationService.test.js
+          src/__tests__/commentPaginationWiring.test.js
+          src/__tests__/directoryPaginationService.test.js
+          src/__tests__/conversationPaginationService.test.js
+          src/__tests__/messagingInboxBlockFiltering.test.js
+          src/__tests__/requestInboxBlockFiltering.test.js
+          src/__tests__/feedService.test.js
           src/__tests__/offlineQueueSingleOwner.test.js
           src/__tests__/offlineDrainIntegrity.test.js
           src/__tests__/profileFeedGridLikeCount.test.jsx
@@ -298,6 +312,7 @@ jobs:
           src/__tests__/localContentCacheGuard.test.js
           src/__tests__/liveWiringGuard.test.js
           src/__tests__/notificationsWiringGuard.test.js
+          src/__tests__/notificationBlockFiltering.test.js
           src/__tests__/highlightsWiringGuard.test.js
           src/__tests__/subscriptionLifecycleGuard.test.js
           src/__tests__/orphanModuleGuard.test.js
@@ -310,6 +325,7 @@ jobs:
           src/__tests__/serverOnlyCollectionWriteGuard.test.js
           src/__tests__/messagingSupportGuard.test.js
           src/__tests__/functionsContract.test.js
+          src/__tests__/privacyPropagationAndSaml.test.js
           src/__tests__/featureFlagConsumption.test.js
           src/__tests__/userServiceContract.test.js
           src/__tests__/designTokenDriftGuard.test.js

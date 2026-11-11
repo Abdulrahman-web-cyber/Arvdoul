@@ -15,6 +15,7 @@
 const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 const { assertAdmin } = require('./auth');
+const { writeAudit } = require('./admin');
 
 const db = admin.firestore();
 
@@ -181,6 +182,8 @@ exports.backfillPrivacyBoundary = functions.https.onCall(async (data, context) =
   const maxUsers = Math.min(Math.max(Number(data?.maxUsers) || MAX_USERS_PER_RUN, 1), 5000);
   const summary = await sweep({ maxUsers });
   console.log('privacy boundary backfill', { actorUid, ...summary });
+  // Admin data migration: record the run in the audit trail (AGENTS.md).
+  await writeAudit(actorUid, 'backfill_privacy_boundary', 'users', { maxUsers, ...summary }, 'system');
   return { success: true, ...summary };
 });
 

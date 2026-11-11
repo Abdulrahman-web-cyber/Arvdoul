@@ -496,6 +496,12 @@ class UltimateLiveService {
         createdAt: snap.data().createdAt?.toDate?.()?.toISOString(),
       };
       await countersManager.apply({ data: stream, docPath: `live_streams/${streamId}`, fields: ['viewerCount'], scope: 'top' });
+      // `stats.totalViewers` is the cumulative distinct-viewer total, written by
+      // the `onLiveViewerCreate` trigger (the stream doc is owner-write-only, so
+      // a viewer's client cannot maintain it). Keep it at least the live count
+      // so the number is never below "watching now" if the trigger lags.
+      stream.stats = stream.stats || {};
+      stream.stats.totalViewers = Math.max(stream.stats.totalViewers || 0, stream.viewerCount || 0);
       
       this.cache.set(cacheKey, stream);
       return stream;
@@ -520,11 +526,19 @@ class UltimateLiveService {
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const streams = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         startTime: doc.data().startTime?.toDate?.()?.toISOString(),
       }));
+      // A blocked/blocked-by/muted host's stream must not surface in the
+      // discovery list (same rule as the video feed and the other discovery
+      // surfaces). Only applied when a viewer is supplied.
+      if (options.viewerId) {
+        const hidden = await this._getHiddenAuthors(options.viewerId);
+        if (hidden.size > 0) return streams.filter((s) => !hidden.has(s.userId));
+      }
+      return streams;
     } catch (error) {
       logger.error('❌ Get active live streams failed:', error);
       return [];
@@ -606,10 +620,6 @@ class UltimateLiveService {
         }
         
         await countersManager.incrementInTransaction(transaction, { docPath: `live_streams/${streamId}`, field: 'viewerCount' });
-        transaction.update(streamRef, {
-          'stats.totalViewers': ((streamSnap.data().stats?.totalViewers) || 0) + 1,
-          updatedAt: serverTimestamp(),
-        });
       });
       countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
       
@@ -632,27 +642,28 @@ class UltimateLiveService {
       
       let watchedMinutes = 0;
       const viewerRef = doc(this.firestore, 'live_viewers', `${streamId}_${viewerId}`);
-      const streamRef = doc(this.firestore, 'live_streams', streamId);
-      
+
+      // The viewer record and the sharded `viewerCount` are the viewer's to
+      // write. The parent `live_streams` doc is owner-write-only, so the old
+      // stream-doc update here (and in join) was denied for
+      // every non-owner — which failed the WHOLE join/leave transaction, so a
+      // viewer was never counted. `stats.totalViewers` is now derived from the
+      // sharded `viewerCount` on read instead.
       await runTransaction(this.firestore, async (transaction) => {
         const viewerSnap = await transaction.get(viewerRef);
-        const streamSnap = await transaction.get(streamRef);
-        
-        if (viewerSnap.exists() && streamSnap.exists()) {
+
+        if (viewerSnap.exists()) {
           const viewerData = viewerSnap.data();
           const joinedAt = viewerData.joinedAt?.toDate?.() || new Date();
           const watchDuration = Math.floor((Date.now() - joinedAt.getTime()) / 60000);
           watchedMinutes = watchDuration;
-          
+
           transaction.update(viewerRef, {
             leftAt: serverTimestamp(),
             watchDuration: (viewerData.watchDuration || 0) + watchDuration,
           });
-          
+
           await countersManager.incrementInTransaction(transaction, { docPath: `live_streams/${streamId}`, field: 'viewerCount', amount: -1 });
-          transaction.update(streamRef, {
-            updatedAt: serverTimestamp(),
-          });
         }
       });
       countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
@@ -749,11 +760,26 @@ class UltimateLiveService {
     }
   }
 
+  /**
+   * Authors whose live comments must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('[Live] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async getLiveComments(streamId, options = {}) {
     try {
       await this._ensureInitialized();
       const { collection, query, where, orderBy, limit, startAfter, getDocs } = await import('firebase/firestore');
-      
+      const hiddenAuthors = await this._getHiddenAuthors(options.viewerId);
       const commentsRef = collection(this.firestore, 'live_comments');
       let q = query(
         commentsRef,
@@ -773,11 +799,14 @@ class UltimateLiveService {
       }
       
       const snapshot = await getDocs(q);
-      const comments = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
-      })).reverse();
+      const comments = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
+        }))
+        .filter(c => !hiddenAuthors.has(c.userId))
+        .reverse();
       const hasMore = snapshot.docs.length === pageSize;
       comments.nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
       comments.hasMore = hasMore;
@@ -911,14 +940,18 @@ class UltimateLiveService {
       }
       
       const data = snap.data();
-      
+      const viewerCount = await countersManager.get({
+        docPath: `live_streams/${streamId}`,
+        field: 'viewerCount',
+        fallback: data.viewerCount || 0,
+      });
       return {
         streamId,
         status: data.status,
         duration: data.duration || 0,
-        viewerCount: data.viewerCount || 0,
+        viewerCount,
         peakViewers: data.stats?.peakViewers || 0,
-        totalViewers: data.stats?.totalViewers || 0,
+        totalViewers: Math.max(data.stats?.totalViewers || 0, viewerCount),
         totalGifts: data.stats?.totalGifts || 0,
         totalTips: data.stats?.totalTips || 0,
         coinsEarned: data.stats?.coinsEarned || 0,

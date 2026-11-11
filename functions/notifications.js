@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
 const { checkIsAdmin, getUserEmail } = require('./auth');
+const { writeAudit } = require('./admin');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -340,6 +341,23 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('invalid-argument', 'welcome notifications are server-issued only');
   }
 
+  // A block is a mutual denial: a user who blocked (or was blocked by) the
+  // sender must not receive notifications from them. Without this, a blocked
+  // user could keep sending in-app notifications and push messages — the
+  // block would hide their content but not their harassment channel.
+  try {
+    const [outgoingBlock, incomingBlock] = await Promise.all([
+      db.collection('blocks').doc(`${senderId}_${recipientId}`).get(),
+      db.collection('blocks').doc(`${recipientId}_${senderId}`).get(),
+    ]);
+    if (outgoingBlock.exists || incomingBlock.exists) {
+      log('INFO', 'Notification suppressed by block', { senderId, recipientId });
+      return { success: false, skipped: true, reason: 'blocked' };
+    }
+  } catch (err) {
+    log('WARNING', 'Block check failed; allowing notification', { senderId, recipientId, error: err.message });
+  }
+
   // Recipient cap: at most N notifications from the same sender per hour.
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const recentCount = await db.collection('users').doc(recipientId).collection('notifications')
@@ -555,6 +573,11 @@ exports.createBulkNotificationJob = functions.https.onCall(async (data, context)
   // Fire a worker (Cloud Function or Cloud Task) to process in background
   // For simplicity, we'll just log and return; actual fan‑out should be done in a separate triggered function.
   log('INFO', 'Bulk notification job created', { jobId });
+  // Broadcasting to an audience is a high-reach admin action: audit it.
+  await writeAudit(context.auth?.uid || 'system', 'create_bulk_notification_job', jobId, {
+    audience,
+    template: typeof template === 'string' ? template.slice(0, 120) : undefined,
+  }, 'notification');
   return { success: true, jobId };
 });
 

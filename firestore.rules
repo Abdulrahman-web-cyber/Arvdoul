@@ -70,6 +70,15 @@ service cloud.firestore {
     function followEdgeExists(a, b) {
       return exists(/databases/$(database)/documents/follows/$(a + '_' + b));
     }
+    // Whether `userId`'s account is private. Used by the `follows` create rule:
+    // a follower may only self-create an edge to a PUBLIC (or not-yet-created)
+    // target. A private target's edge is written by the owner on approval, so
+    // without this anyone could forge a `follows` edge to a private account and
+    // read its content without the owner ever consenting.
+    function targetIsPrivate(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.get('isPrivate', false) == true;
+    }
     // Collection-group authorization. `messagesService.getMessages` merges
     // message reactions with ONE `collectionGroup('reactions')` query, and
     // Firestore authorizes a collection-group query ONLY through a
@@ -92,8 +101,22 @@ service cloud.firestore {
     }
     // The recipient explicitly consenting (accepting a pending request) overrides
     // their own allowDMs preference — otherwise a 'none' user could never accept.
+    // The status MUST be `pending`: nothing ever deletes a `message_requests`
+    // doc, so an existence-only check let a DECLINED request still authorise the
+    // conversation — a sender could re-open a DM a user had already refused.
+    // `exists()` first so a missing doc short-circuits before `.data` is read
+    // (a get() on an absent doc returns null and the property access raises).
     function dmRequestFrom(senderUid, recipientUid) {
-      return exists(/databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid));
+      let p = /databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid);
+      return exists(p) && get(p).data.status == 'pending';
+    }
+    // A block edge between two users (either direction). A block is terminal:
+    // the blocked party must not be able to open a DM with their blocker, even
+    // via a message request. The client gate (`checkMessagePermission`) already
+    // refuses to file a request on a block, but rules are the authority.
+    function blockEdgeBetween(aUid, bUid) {
+      return exists(/databases/$(database)/documents/blocks/$(aUid + '_' + bUid)) ||
+        exists(/databases/$(database)/documents/blocks/$(bUid + '_' + aUid));
     }
 
     // A pending friend request from `fromUid` to `toUid`. Used to authorise the
@@ -131,11 +154,25 @@ service cloud.firestore {
     //     wholesale (rules are not filters). The field must always be present: a
     //     missing value evaluates false, so only the owner branch can still admit
     //     it — everyone else is denied (fail closed).
+    // The content is visible when the author is public, OR the viewer is an
+    // approved follower of the (private) author. The follower edge is only
+    // created by the owner's approval (`approveFollowRequest`); the `follows`
+    // create rule forbids self-creating an edge to a private target, so the edge
+    // proves consent.
+    function authorContentVisible() {
+      return resource.data.authorIsPrivate == false ||
+        (isSignedIn() && followEdgeExists(uid(), resource.data.authorId));
+    }
     function postReadableByViewer() {
       return (isSignedIn() && resource.data.authorId == uid()) ||
         isAdmin() ||
         (resource.data.isDeleted == false &&
-          (resource.data.expiresAt == null || resource.data.expiresAt > request.time) &&
+          // `expiresAt` is optional: a post that never expires legitimately
+          // omits it (the server's `createCommunityPost` does). Reading
+          // `resource.data.expiresAt` directly RAISES on an absent field, which
+          // denies the whole `get` — so a member could not read their own
+          // community's post. `.get(field, null)` treats "absent" as "no expiry".
+          (resource.data.get('expiresAt', null) == null || resource.data.expiresAt > request.time) &&
           (
             // A community post is readable when its community is public or the
             // viewer is a member. Community posts carry no `authorIsPrivate`
@@ -146,7 +183,7 @@ service cloud.firestore {
               (get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.get('privacy', 'public') == 'public' ||
                 isCommunityMember(resource.data.communityId))) ||
             // Otherwise the public/private-account shape.
-            (resource.data.authorIsPrivate == false &&
+            (authorContentVisible() &&
               resource.data.status == 'published' &&
               (resource.data.visibility == 'public' ||
                 (resource.data.visibility == 'followers' &&
@@ -193,7 +230,7 @@ service cloud.firestore {
             (get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.get('privacy', 'public') == 'public' ||
               isCommunityMember(resource.data.communityId))) ||
           (resource.data.visibility == 'public' &&
-            resource.data.authorIsPrivate == false)
+            authorContentVisible())
         );
     }
     function postListableByViewer() {
@@ -354,8 +391,11 @@ service cloud.firestore {
       allow create: if isOwner(userId);
     }
     match /user_daily_stats/{statId} {
+      // Doc id is `<userId>_<YYYY-MM-DD>`; a write keyed only on the incoming
+      // userId let a signed-in user overwrite another user's snapshot doc.
       allow read: if isSignedIn() && (request.auth.uid == resource.data.userId);
-      allow write: if isSignedIn() && request.resource.data.userId == uid();
+      allow write: if isSignedIn() && statId.startsWith(uid() + '_') &&
+        request.resource.data.userId == uid();
     }
     match /user_preferences/{userId} {
       allow read, write: if isOwner(userId);
@@ -388,8 +428,16 @@ service cloud.firestore {
     match /message_requests/{requestId} {
       allow read: if isSignedIn() &&
         (resource.data.senderId == uid() || resource.data.recipientId == uid());
+      // The doc id is `<recipientId>_<senderId>` and `dmRequestFrom()` trusts
+      // exactly that path, so the create MUST prove the id matches the payload —
+      // otherwise a sender could file the doc at an arbitrary id and forge the
+      // recipient's consent to a DM they set to 'none' (the helper reads only
+      // `.data.status`, never the fields). A sender also cannot address
+      // themselves.
       allow create: if isSignedIn() &&
         request.resource.data.senderId == uid() &&
+        request.resource.data.recipientId != uid() &&
+        requestId == request.resource.data.recipientId + '_' + request.resource.data.senderId &&
         request.resource.data.status == 'pending';
       allow update, delete: if isSignedIn() && resource.data.recipientId == uid();
     }
@@ -413,17 +461,33 @@ service cloud.firestore {
       //    belong to the server (reportContent / adminModerateContent); without
       //    this an author could clear `moderationStatus` / `reportCount` on
       //    their own flagged content — "moderation fields changed by the owner".
-      //  - any signed-in user touching ONLY the engagement fields. Reactions,
-      //    gifts and poll votes live on the post doc, so an author-only rule
-      //    silently denied every non-author reaction/gift/vote.
+      //  - `poll` and `gifts` are server-owned: the vote tally is written by the
+      //    `votePostPoll` callable and the gift aggregate by `sendGift`, so no
+      //    client (author included) may move them on update.
+      //  - the ONLY `stats` field a client may move is `reactions.<emoji>`
+      //    (the per-user choice lives in `posts/{id}/reactions/{uid}`). A bare
+      //    `hasOnly([...])` on the top-level diff matched key NAMES only, so any
+      //    signed-in user could REPLACE the whole `stats` map (likes, views,
+      //    comments, pollVotes) on anyone's post — forging engagement — and the
+      //    author could rewrite `stats.giftValue`. The carve-out is now nested:
+      //    top-level keys are constrained AND, when `stats` changes, the changed
+      //    `stats` keys must be `reactions` only.
       allow update: if isAdmin() || (isSignedIn() && (
-        (request.auth.uid == resource.data.authorId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount'
-          ])) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'stats', 'gifts', 'poll', 'updatedAt'
-        ])
+        (
+          (request.auth.uid == resource.data.authorId &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
+              'poll', 'gifts'
+            ])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'stats', 'updatedAt'
+          ])
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['stats']) ||
+          request.resource.data.get('stats', {}).diff(resource.data.get('stats', {}))
+            .affectedKeys().hasOnly(['reactions'])
+        )
       ));
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.authorId);
       // View analytics are server-authoritative (the `recordPostView` callable
@@ -464,15 +528,20 @@ service cloud.firestore {
       //  - any signed-in user updating ONLY the reaction fields. The reaction
       //    arrays live on the comment doc, so without this a like by anyone but
       //    the author was denied and `likeComment` aborted.
+      //  - the numeric `likes`/`dislikes` tallies are the sharded counter, never
+      //    a client field: they are seeded to 0 at create and only
+      //    `countersManager` moves them. A bare `hasOnly([...])` matched key
+      //    NAMES, so a non-author could set `likes: 999999` on anyone's comment
+      //    and the author could inflate their own. They are excluded here.
       allow update: if isAdmin() || (isSignedIn() && (
         (request.auth.uid == resource.data.userId &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore',
             'moderationNotes', 'isHidden', 'hiddenAt', 'hiddenReason',
-            'autoModeratedAt', 'reports'
+            'autoModeratedAt', 'reports', 'likes', 'dislikes'
           ])) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'likes', 'likesBy', 'dislikes', 'dislikesBy', 'reactionCounts', 'updatedAt', 'lastActivityAt'
+          'likesBy', 'dislikesBy', 'reactionCounts', 'updatedAt', 'lastActivityAt'
         ])
       ));
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
@@ -503,15 +572,23 @@ service cloud.firestore {
     // ==================== SOCIAL GRAPH ====================
     match /follows/{followId} {
       allow read: if isSignedIn();
-      // You can only create your own follow edge (follower must be you), UNLESS
-      // you are accepting a pending friend/follow request addressed to you:
-      // accepting creates the requester's edge (`followerId` = requester,
-      // `followingId` = you), which the self-follow rule alone would refuse. A
-      // private account's content is gated on `authorIsPrivate`, so this consent
-      // path is the only way a non-follower ever gains access.
+      // You can only create your own follow edge (follower must be you) against
+      // a PUBLIC target, UNLESS you are accepting a pending friend/follow
+      // request addressed to you: accepting creates the requester's edge
+      // (`followerId` = requester, `followingId` = you), which the self-follow
+      // rule alone would refuse. A private target's edge is written only by the
+      // owner on approval, so this consent path is the only way a non-follower
+      // ever gains access.
       allow create: if isSignedIn() &&
         request.resource.data.followerId != request.resource.data.followingId &&
-        (request.resource.data.followerId == uid() ||
+        (
+          // A follower may only self-create an edge to a PUBLIC (or not-yet-
+          // created) target. A private target's edge is written by the OWNER on
+          // approval (the second branch), so without this check anyone could
+          // forge `follows/{me}_{privateUser}` and read the private account's
+          // content without consent.
+          (request.resource.data.followerId == uid() &&
+            !targetIsPrivate(request.resource.data.followingId)) ||
           (request.resource.data.followingId == uid() &&
             (friendRequestFrom(request.resource.data.followerId, uid()) ||
               followRequestFrom(request.resource.data.followerId, uid()))));
@@ -528,9 +605,14 @@ service cloud.firestore {
     match /follow_requests/{requestId} {
       allow read: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      // `followRequestFrom()` reads the consent at the deterministic id
+      // `${fromUserId}_${toUserId}`, so the create must pin the id to the
+      // payload — otherwise a request filed at an arbitrary id is dead to the
+      // approval path (and could impersonate a request that was never filed).
       allow create: if isSignedIn() &&
         request.resource.data.fromUserId == uid() &&
         request.resource.data.toUserId != uid() &&
+        requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
         request.resource.data.status == 'pending';
       allow update, delete: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
@@ -569,7 +651,15 @@ service cloud.firestore {
     match /friend_requests/{requestId} {
       allow read: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
-      allow create: if isSignedIn() && request.resource.data.fromUserId == uid();
+      // `friendRequestFrom()` trusts the deterministic id
+      // `${fromUserId}_${toUserId}`; pin the create to it so a forged id cannot
+      // masquerade as (or shadow) a request, and a user cannot request
+      // themselves.
+      allow create: if isSignedIn() &&
+        request.resource.data.fromUserId == uid() &&
+        request.resource.data.toUserId != uid() &&
+        requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
+        request.resource.data.status == 'pending';
       allow update, delete: if isSignedIn() &&
         (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
     }
@@ -707,7 +797,13 @@ service cloud.firestore {
       match /quizzes/{quizId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
         allow create, delete: if isSignedIn() && vibeData().userId == uid();
-        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        // A viewer may only record their own answer — never rewrite the quiz
+        // itself. The old blanket rule let any viewer change `correctOption`
+        // or `coinReward` (and mint the reward) on someone else's quiz.
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'userAnswers', 'updatedAt'])
+          && 'userAnswers' in request.resource.data
+          && (!('userAnswers' in resource.data) || !(uid() in resource.data.userAnswers));
       }
       match /countdowns/{countdownId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
@@ -717,7 +813,15 @@ service cloud.firestore {
       match /emoji_sliders/{sliderId} {
         allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
         allow create, delete: if isSignedIn() && vibeData().userId == uid();
-        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        // A viewer may only record their OWN slider response. The old rule was
+        // an unconstrained `isSignedIn()` write, so any viewer could rewrite the
+        // aggregate (`sum`/`count`/`average`) on someone else's slider. Mirror
+        // the poll/quiz shape: the changed keys are limited to the response
+        // fields, and the caller's uid must be newly added to `userVotes`.
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sum', 'count', 'average', 'userVotes', 'updatedAt'])
+          && 'userVotes' in request.resource.data
+          && (!('userVotes' in resource.data) || !(uid() in resource.data.userVotes));
       }
     }
     match /archived_stories/{storyId} {
@@ -758,12 +862,17 @@ service cloud.firestore {
       // Updates: participants may update their own state (lastRead, mutedBy,
       // archivedBy, pinnedBy...) but CANNOT mutate admins/roles/participants
       // unless they are an admin (prevents self-promotion / member tampering).
+      // The one exception is leaving: a participant may remove THEMSELVES from
+      // `participants` (the non-admin "leave group" path), and only themselves.
       allow update: if isSignedIn() && uid() in resource.data.participants && (
         isConvAdmin() ||
         (request.resource.data.admins == resource.data.admins &&
          request.resource.data.roles == resource.data.roles &&
-         request.resource.data.participants == resource.data.participants &&
-         request.resource.data.createdBy == resource.data.createdBy)
+         request.resource.data.createdBy == resource.data.createdBy &&
+         (
+           request.resource.data.participants == resource.data.participants ||
+           resource.data.participants.removeAll([uid()]) == request.resource.data.participants
+         ))
       );
       allow delete: if isSignedIn() && (uid() in resource.data.participants && isConvAdmin());
       // A 1:1 conversation may only be opened if the *other* participant's
@@ -773,6 +882,10 @@ service cloud.firestore {
       // nowhere) that let anyone open a DM with anyone.
       allow create: if isSignedIn() &&
         uid() in request.resource.data.participants &&
+        (
+          request.resource.data.participants.size() != 2 ||
+          !blockEdgeBetween(request.resource.data.participants[0], request.resource.data.participants[1])
+        ) &&
         (
           request.resource.data.participants.size() != 2 ||
           (request.resource.data.participants[0] == uid() &&
@@ -796,13 +909,55 @@ service cloud.firestore {
       // validated so both layouts get identical ownership rules.
       match /{messageShardCollection}/{messageId} {
         allow read: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants();
+        // A normal message must be authored by the caller. A *system* message
+        // (`senderId: 'system'`, written by the client alongside a membership
+        // mutation) has no real author. This match previously required
+        // `senderId == uid()` for EVERY message, so every system message
+        // ("X left", "participants added", …) was denied and the whole
+        // membership call that sent it failed.
+        //
+        // A system message is admitted only from a conversation admin, or — for
+        // the one self-service event — from the member who is themselves
+        // leaving (`user_left` naming their own uid). It may never carry the
+        // shape of a real user message (`text`/`media`), so it cannot be used
+        // to inject content, and a member cannot forge another member's "left".
         allow create: if isSignedIn() &&
           isMessageShardCollection(messageShardCollection) &&
           uid() in convParticipants() &&
-          request.resource.data.senderId == uid();
+          (
+            request.resource.data.senderId == uid() ||
+            (
+              request.resource.data.senderId == 'system' &&
+              request.resource.data.isSystem == true &&
+              request.resource.data.type == 'system' &&
+              !('text' in request.resource.data) &&
+              !('media' in request.resource.data) &&
+              (
+                isConvAdmin() ||
+                (
+                  (request.resource.data.get('eventType', '') == 'user_left' ||
+                    request.resource.data.get('eventType', '') == 'admin_transferred') &&
+                  (request.resource.data.get('eventData', {}).get('userId', '') == uid() ||
+                    request.resource.data.get('eventData', {}).get('from', '') == uid())
+                )
+              )
+            )
+          );
+        // Receipt-only updates: `markMessageAsRead`/`markMessageAsDelivered`
+        // append the CALLER's own uid via arrayUnion. A bare `hasOnly` on the
+        // key names let any participant REPLACE the whole `readBy`/`deliveredTo`
+        // array — forging another member's read receipt or wiping the evidence
+        // that someone read. The only permitted difference is the caller's own
+        // uid, so pin it with removeAll([uid()]).
         allow update, delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
           resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo']) &&
+            request.resource.data.get('readBy', []).removeAll([uid()]) ==
+              resource.data.get('readBy', []).removeAll([uid()]) &&
+            request.resource.data.get('deliveredTo', []).removeAll([uid()]) ==
+              resource.data.get('deliveredTo', []).removeAll([uid()])
+          )
         );
         // Reactions are per-user docs — no message-doc rewrites (spec §26).
         match /reactions/{userId} {
@@ -940,9 +1095,13 @@ service cloud.firestore {
       // request.resource.data.userId == uid()` threw and denied EVERY read —
       // the wallet's pending-withdrawal breakdown and the admin payout queue
       // both silently showed zero. Reads key on the stored `resource.data`
-      // (owner or admin); creates key on the incoming `request.resource`.
+      // (owner or admin).
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      // Creation is server-authoritative: the `requestWithdrawal` callable locks
+      // the coins and writes the request in ONE transaction. A client `create`
+      // grant let a forged row exist with no coin lock behind it; no client code
+      // writes here, so close it.
+      allow create: if false;
       // The owner may only CANCEL their own pending request. Approval/paid/
       // rejected transitions are server-only (adminDecideWithdrawal), and the
       // amount/address are immutable once the request exists.
@@ -1017,7 +1176,10 @@ service cloud.firestore {
     }
     match /live_viewers/{viewerId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.resource.data.userId == uid();
+      // Doc id is `<streamId>_<viewerId>`; a write keyed only on the incoming
+      // userId let a signed-in user overwrite another viewer's watch record.
+      allow write: if isSignedIn() && viewerId.endsWith('_' + uid()) &&
+        request.resource.data.userId == uid();
     }
     match /live_comments/{commentId} {
       allow read: if true;
@@ -1251,17 +1413,31 @@ service cloud.firestore {
       // non-authoritative roster (raised hands, participants, listeners,
       // audience count). Without this carve-out a member's "raise hand" /
       // "join" write was silently DENIED, so the stage never updated.
+      //
+      // `hasOnly` checks KEY names, not values — on its own it let any signed-in
+      // user REPLACE the whole `participants` array (add/remove anyone, wipe the
+      // roster), and `participants` is what `signaling_rooms` authorises on, so
+      // that was an eavesdrop/DoS on any live space's WebRTC offer/answer. The
+      // roster change is therefore pinned to the caller: removing `uid()` from
+      // both the stored and incoming arrays must leave them identical (the only
+      // permitted difference is the caller's own membership). `audienceCount`
+      // must equal the listener array it summarises, and the listener array may
+      // grow/shrink by at most one entry (the caller).
       allow update: if isSignedIn() && (
         resource.data.host.id == uid() ||
         resource.data.userId == uid() ||
         isAdmin() ||
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount'])
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount']) &&
+          request.resource.data.participants.removeAll([uid()]) ==
+            resource.data.participants.removeAll([uid()]) &&
+          request.resource.data.audienceCount == request.resource.data.listeners.size() &&
+          request.resource.data.listeners.size() - resource.data.listeners.size() <= 1 &&
+          resource.data.listeners.size() - request.resource.data.listeners.size() <= 1
+        )
       );
       allow delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
-      match /signals/{signalId} {
-        allow read, write: if isSignedIn();
-      }
     }
     match /sounds/{soundId} {
       allow read: if true;
@@ -1580,7 +1756,14 @@ service cloud.firestore {
     match /support_tickets/{ticketId} {
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.userId == uid();
-      allow update: if isAdmin() || (isSignedIn() && resource.data.userId == uid() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'userRating', 'updatedAt', 'messages']));
+      // Owner-update carve-out removed (N203). No client path updates a ticket:
+      // `supportTicketService` only files them and the Help screen only reads
+      // them (a `noFabricatedData` guard already asserts there is no client
+      // `updateDoc` on this collection). The carve-out therefore only enabled a
+      // user to self-resolve their ticket or inject fake `agent` messages into
+      // `messages[]`. Status/replies are written server-side by
+      // `adminResolveSupportTicket` (admin callable, audit-logged).
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -1641,9 +1824,18 @@ service cloud.firestore {
     }
 
     // ==================== DAILY UPLOAD COUNTERS (owner-scoped shards) ====================
+    // Doc id format: upload_{userId}_{YYYY-MM-DD}_shard_{n}. The id is pinned to
+    // the caller (mirrors `unread_counters`): without it, any signed-in user
+    // could create shards under another user's id and reset/inflate that user's
+    // daily video-upload counter, defeating the per-tier upload limit (and
+    // making the legitimate owner's own increment exceed the limit and fail).
     match /daily_upload_counters/{shardId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create, update: if isOwner(request.resource.data.userId);
+      allow read, delete: if isSignedIn() &&
+        resource.data.userId == uid() &&
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
+      allow create, update: if isSignedIn() &&
+        request.resource.data.userId == uid() &&
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
     }
 
     // ==================== ENGAGEMENT COIN EVENTS (server-authored, immutable) ====================

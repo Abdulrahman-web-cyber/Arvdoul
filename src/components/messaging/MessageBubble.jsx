@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { cn } from '../../lib/utils';
-import { Copy, Reply, Share, Trash2, Edit3, Flag, Lock, MoreVertical, CheckCheck, Clock, AlertCircle, Bookmark, MapPin, ExternalLink, User, X, Play, Pause, Volume2 } from "lucide-react";
+import { Copy, Reply, Share, Trash2, Edit3, Flag, Lock, MoreVertical, CheckCheck, Clock, AlertCircle, Bookmark, Pin, MapPin, ExternalLink, User, X, Play, Pause, Volume2 } from "lucide-react";
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -21,7 +21,9 @@ const MessageBubble = React.memo(({
   onDelete,
   onReport,
   onSave,
+  onPin,
   isSaved = false,
+  isPinned = false,
   theme,
   isGroup,
   isGroupStart = true,
@@ -511,6 +513,23 @@ const MessageBubble = React.memo(({
                 <Bookmark className="w-3.5 h-3.5" />
                 <span>{isSaved ? 'Unsave' : 'Save'}</span>
               </button>
+
+              {onPin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPin(message);
+                    setShowMenu(false);
+                  }}
+                  className={cn(
+                    'w-full text-left px-3 py-2 text-xs font-semibold flex items-center gap-2 rounded-xl transition-colors',
+                    theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                  )}
+                >
+                  <Pin className="w-3.5 h-3.5" />
+                  <span>{isPinned ? 'Unpin' : 'Pin'}</span>
+                </button>
+              )}
 
               {isOwn ? (
                 <>

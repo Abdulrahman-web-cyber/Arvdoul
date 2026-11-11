@@ -165,10 +165,10 @@ describe('shared config single source of truth', () => {
     expect(monetization).not.toContain('coins_1200: { coins: 1200');
     expect(monetization).not.toContain('basic: { priceUsdCents: 499');
 
-    // IAP mapping must not diverge from the web store catalog (it used to list
-    // coins_1000, an id that does not exist in COIN_PACKAGES).
+    // The fabricated IAP path (verifyPurchase) is gone from the entry point;
+    // no coin-package mapping may be re-declared here.
     const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
-    expect(index).toContain('COIN_PACKAGES_BY_ID[productId]');
+    expect(index).not.toContain('COIN_PACKAGES_BY_ID');
     expect(index).not.toContain('coins_1000: 1000');
 
     // The client screens read the shared tables, not their own literals.
@@ -191,6 +191,16 @@ describe('shared config single source of truth', () => {
     for (const rel of screens) {
       const src = fs.readFileSync(path.join(root, rel), 'utf8');
       // No surface may re-derive the rate or hand-roll the rounding.
+      expect(src).not.toMatch(/\/\s*COINS_PER_DOLLAR/);
+      expect(src).not.toMatch(/1\s*\/\s*COINS_PER_DOLLAR/);
+    }
+  });
+
+  test('the functions side converts through coinsToUsd too, never a raw division', () => {
+    // The economy summary divided `circulatingCoins / COINS_PER_DOLLAR` by hand;
+    // that re-implements the rounding policy the wallet/payout screens use.
+    for (const rel of ['functions/admin.js', 'functions/withdrawalSettlement.js']) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
       expect(src).not.toMatch(/\/\s*COINS_PER_DOLLAR/);
       expect(src).not.toMatch(/1\s*\/\s*COINS_PER_DOLLAR/);
     }

@@ -30,12 +30,15 @@ const db = admin.firestore();
 
 /** Extracts an attribute value from a SAML assertion body (lightweight). */
 function extractAttr(decoded, name) {
-  // <saml:Attribute Name="email">value</saml:Attribute> or Name="email"
-  const re = new RegExp(`Name=["']${name}["'][^>]*>([^<]+)<`, 'i');
+  // Handles both the flat `<saml:Attribute Name="email">value</...>` shape and
+  // the standard nested `<saml:Attribute Name="email"><saml:AttributeValue>
+  // value</saml:AttributeValue></saml:Attribute>` shape a real IdP sends.
+  const re = new RegExp(
+    `Name=["']${name}["'][^>]*>\\s*(?:<[^>]*>\\s*)?([^<]+)`,
+    'i'
+  );
   const m = decoded.match(re);
-  if (m) return m[1];
-  const re2 = new RegExp(`<[^>]+>([^<]*)</[^>]+>`, 'g');
-  return null;
+  return m ? m[1].trim() : null;
 }
 
 function extractNameID(decoded) {
@@ -101,6 +104,16 @@ exports.verifySAMLAssertion = functions
     }
     if (!decoded.includes('<') || (!decoded.includes('Assertion') && !decoded.includes('Response'))) {
       throw new functions.https.HttpsError('invalid-argument', 'assertion is not a SAML document');
+    }
+    // Encrypted assertions cannot be validated here (no decryption key path) and
+    // the issuer/audience are unreadable in the ciphertext, so reject them
+    // explicitly rather than letting a later structural check fail with a
+    // misleading error.
+    if (decoded.includes('EncryptedAssertion') || decoded.includes('EncryptedData')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Encrypted SAML assertions are not supported by this endpoint'
+      );
     }
 
     // 3. Issuer check

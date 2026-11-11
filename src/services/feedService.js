@@ -121,7 +121,6 @@ const FEED_CONFIG = {
 
 let firestoreModule = null;
 let monetizationService = null;
-let userService = null;
 
 async function _lazyImportFirestore() {
   if (firestoreModule) return firestoreModule;
@@ -141,13 +140,6 @@ async function _getMonetization() {
   const mod = await import('./monetizationService.js');
   monetizationService = mod.default || mod.getMonetizationService?.() || mod;
   return monetizationService;
-}
-
-async function _getUserService() {
-  if (userService) return userService;
-  const mod = await import('./userService.js');
-  userService = mod.default || mod.getUserService?.() || mod;
-  return userService;
 }
 
 class UltimateFeedService {
@@ -400,19 +392,23 @@ class UltimateFeedService {
     if (hist.posts.length > FEED_CONFIG.SESSION.SEEN_POSTS_MAX) hist.posts = hist.posts.slice(0, FEED_CONFIG.SESSION.SEEN_POSTS_MAX);
   }
 
-  async _getBlockedUsersCached(userId) {
+  async _getHiddenAuthorsCached(userId) {
     if (this.offlineMode) return new Set();
-    const key = `block_${userId}`;
+    const key = `hidden_${userId}`;
     const cached = this.blockCache.get(key);
     if (cached && Date.now() - cached.ts < FEED_CONFIG.BLOCK_CACHE_TTL) return cached.data;
     try {
       await this._ensureInitialized();
-      // Single graph reader: the spine owns the rules-provable block query.
+      // Single graph reader: the spine's `getHiddenAuthorIds` unions blocked +
+      // blocked_by + muted through the rules-provable edge lists (ids only — no
+      // wasted profile hydration, unlike `listConnections`). A MUTE must hide
+      // the author's posts (it was written but never read = dead control), and
+      // the reverse block must too (someone who blocks the viewer must not keep
+      // surfacing their posts).
       const { getSocialGraphService } = await import('./socialGraphService.js');
-      const { connections } = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 500 });
-      const blocked = new Set(connections.map((c) => c.id || c.uid).filter(Boolean));
-      this.blockCache.set(key, { data: blocked, ts: Date.now() });
-      return blocked;
+      const hidden = await getSocialGraphService().getHiddenAuthorIds(userId);
+      this.blockCache.set(key, { data: hidden, ts: Date.now() });
+      return hidden;
     } catch (e) { return new Set(); }
   }
 
@@ -445,7 +441,7 @@ class UltimateFeedService {
       const followedIds = followsSnap.docs.map(doc => doc.data().followingId);
       if (followedIds.length === 0) return [];
 
-      const blocked = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
 
       const posts = [];
       const chunkSize = 30;
@@ -461,7 +457,7 @@ class UltimateFeedService {
         const snap = await this.firestoreMethods.getDocs(q);
         snap.forEach(doc => {
           const data = doc.data();
-          if (!blocked.has(data.authorId)) {
+          if (!hiddenAuthors.has(data.authorId)) {
             posts.push({
               id: doc.id,
               ...data,
@@ -498,7 +494,7 @@ class UltimateFeedService {
   async _getForYouFeedPaginated(userId, preferences, options) {
     if (this.offlineMode) return [];
     try {
-      const blockedUsers = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const { limit = 20, lastDoc } = options;
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
@@ -516,7 +512,7 @@ class UltimateFeedService {
         if (data.isDeleted === true) return;
         if (data.status === 'draft') return;
         if (data.visibility === 'private' && data.authorId !== userId) return;
-        if (blockedUsers.has(data.authorId)) return;
+        if (hiddenAuthors.has(data.authorId)) return;
         
         posts.push({
           id: doc.id,
@@ -545,7 +541,7 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       await this._ensureInitialized();
-      const blockedUsers = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const { limit = 20 } = options;
       const { collection, query, where, limit: firestoreLimit, getDocs, orderBy } = this.firestoreMethods || {};
       if (!collection) return [];
@@ -562,7 +558,7 @@ class UltimateFeedService {
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
+        if (data.isDeleted === true || hiddenAuthors.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
@@ -578,7 +574,7 @@ class UltimateFeedService {
           if (Array.isArray(localPosts) && localPosts.length > 0) {
             const existingIds = new Set(posts.map(p => p.id));
             for (const lp of localPosts) {
-              if (lp && lp.id && lp.visibility !== 'community' && !existingIds.has(lp.id) && !blockedUsers.has(lp.authorId)) {
+              if (lp && lp.id && lp.visibility !== 'community' && !existingIds.has(lp.id) && !hiddenAuthors.has(lp.authorId)) {
                 posts.unshift({
                   ...lp,
                   _source: 'local_storage',
@@ -605,7 +601,7 @@ class UltimateFeedService {
   async _getTrendingFeedPaginated(userId, options) {
     if (this.offlineMode) return [];
     try {
-      const blockedUsers = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const { limit = 20 } = options;
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
@@ -620,7 +616,7 @@ class UltimateFeedService {
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
+        if (data.isDeleted === true || hiddenAuthors.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
@@ -641,7 +637,7 @@ class UltimateFeedService {
   async _getDiscoverFeedPaginated(userId, preferences, options) {
     if (this.offlineMode) return [];
     try {
-      const blockedUsers = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const { limit = 20 } = options;
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
@@ -656,7 +652,7 @@ class UltimateFeedService {
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
+        if (data.isDeleted === true || hiddenAuthors.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
@@ -676,7 +672,7 @@ class UltimateFeedService {
   async _getVideoFeedPaginated(userId, options) {
     if (this.offlineMode) return [];
     try {
-      const blockedUsers = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const { limit = 20 } = options;
       const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
@@ -691,7 +687,7 @@ class UltimateFeedService {
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
+        if (data.isDeleted === true || hiddenAuthors.has(data.authorId)) return;
         const isVideo = data.type === 'video' || data.videoUrl || data.mediaType === 'video' || data.media?.some?.(m => m.type === 'video');
         if (isVideo) {
           posts.push({
@@ -761,7 +757,7 @@ class UltimateFeedService {
           return { ...cached.data, cached: true };
         }
       }
-      const blockedUsers = await this._getBlockedUsersCached(userId);
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
       const postsRef = this.firestoreMethods.collection(this.firestore, 'posts');
       let q = this.firestoreMethods.query(
         postsRef,
@@ -779,7 +775,7 @@ class UltimateFeedService {
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (blockedUsers.has(data.authorId)) return;
+        if (hiddenAuthors.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
@@ -1319,7 +1315,10 @@ class UltimateFeedService {
   }
 
   invalidateBlockCache(userId) {
-    this.blockCache.delete(`blocked_${userId}`);
+    // `_getHiddenAuthorsCached` writes `hidden_${userId}`; deleting any other
+    // key is a no-op that leaves a blocked author in the cached hidden set for
+    // the whole TTL.
+    this.blockCache.delete(`hidden_${userId}`);
   }
 
   _getLastAuthor(userId) {
@@ -1458,38 +1457,11 @@ class UltimateFeedService {
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) return cached.data;
     try {
-      const userSvc = await _getUserService();
-      const friends = await userSvc.getFriends(userId, { limit: 50 });
-      const friendIds = friends.friends.map(f => f.id);
-      const excluded = new Set([userId, ...friendIds]);
-      const candidateMap = new Map();
-      for (const friendId of friendIds.slice(0, 10)) {
-        const friendFriends = await userSvc.getFriends(friendId, { limit: 30 });
-        for (const ff of friendFriends.friends) {
-          if (!excluded.has(ff.id)) {
-            candidateMap.set(ff.id, (candidateMap.get(ff.id) || 0) + 1);
-          }
-        }
-      }
-      const popularQuery = this.firestoreMethods.query(
-        this.firestoreMethods.collection(this.firestore, 'users'),
-        this.firestoreMethods.where('isCreator', '==', true),
-        this.firestoreMethods.orderBy('followerCount', 'desc'),
-        this.firestoreMethods.limit(30)
-      );
-      const popularSnap = await this.firestoreMethods.getDocs(popularQuery);
-      popularSnap.forEach(doc => {
-        const id = doc.id;
-        if (!excluded.has(id)) {
-          candidateMap.set(id, (candidateMap.get(id) || 0) + 0.5);
-        }
-      });
-      const sorted = Array.from(candidateMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit);
-      const suggestions = [];
-      for (const [uid] of sorted) {
-        const profile = await userSvc.getUserProfile(uid);
-        if (profile) suggestions.push(profile);
-      }
+      // Delegate to the canonical, safety-filtered implementation. The former
+      // local friends-of-friends + popular-creator scan had no block/mute
+      // filter, so a blocked or muted creator could be suggested.
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const suggestions = await getSocialGraphService().getSuggestions(userId, { limit });
       const result = { success: true, suggestions };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
@@ -1577,7 +1549,7 @@ class UltimateFeedService {
     this.userPreferences.delete(userId);
     this.userFeedState.delete(userId);
     this.feedHistory.delete(userId);
-    this.blockCache.delete(`block_${userId}`);
+    this.blockCache.delete(`hidden_${userId}`);
     cacheManager.invalidateUser(userId);
     this.sessionBoosts.delete(userId);
     this.lastBoostTimes.delete(userId);

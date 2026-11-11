@@ -2,7 +2,7 @@ import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, startAfter, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 const EVENTS_PER_PAGE = 20;
 // Hard ceiling for any single event read (registrations/organizer/feedback).
@@ -246,6 +246,21 @@ class EventService {
    * @param {Object} options - Query options
    * @returns {Promise<Object>} List of events and pagination info
    */
+  /**
+   * Authors whose events must not surface for the viewer: blocked, blocked-by
+   * and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('[Events] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async listEvents(options = {}) {
     await this.initialize();
     
@@ -253,14 +268,29 @@ class EventService {
       page = 1,
       sortBy = 'upcoming',
       filter = 'all',
+      status = null,
       type = null,
       communityId = null,
-      userId = null
+      userId = null,
+      startAfterId = null,
+      viewerId = null,
+      searchQuery = null
     } = options;
 
+    const hiddenAuthors = await this._getHiddenAuthors(viewerId);
+
+    // Free-text search: Firestore cannot substring-match, so a search is a
+    // single bounded window filtered client-side. It deliberately skips cursor
+    // pagination — a filtered page cannot serve a stable cursor.
+    const searchTerm = typeof searchQuery === 'string' ? searchQuery.trim().toLowerCase() : '';
+
     let q = collection(this.db, 'events');
+    // `status` is the caller's explicit lifecycle filter (the discovery screen
+    // maps Upcoming → ['published','open'], Live → ['live']). Honor it; fall
+    // back to the default discovery set otherwise.
+    const statusFilter = Array.isArray(status) && status.length ? status : ['published', 'open', 'live'];
     const constraints = [
-      where('status', 'in', ['published', 'open', 'live'])
+      where('status', 'in', statusFilter)
     ];
 
     if (type) {
@@ -283,91 +313,55 @@ class EventService {
       constraints.push(orderBy('createdAt', 'desc'));
     }
 
-    constraints.push(limit(EVENTS_PER_PAGE));
+    // Real cursor pagination: `page` was accepted but never applied, so every
+    // "Load More" re-fetched page 1. Prefer a doc-id cursor; keep the numeric
+    // `page` fallback for callers that pass only `page`. A search skips both:
+    // it fetches one bounded window and filters it, so there is no cursor.
+    if (!searchTerm) {
+      if (startAfterId) {
+        const cursorSnap = await getDoc(doc(this.db, 'events', startAfterId));
+        if (cursorSnap.exists()) constraints.push(startAfter(cursorSnap));
+      } else if (page > 1) {
+        const offsetSnap = await getDocs(query(q, ...constraints, limit((page - 1) * EVENTS_PER_PAGE)));
+        if (offsetSnap.docs.length) constraints.push(startAfter(offsetSnap.docs[offsetSnap.docs.length - 1]));
+      }
+    }
+
+    constraints.push(limit(searchTerm ? MAX_EVENT_READ : EVENTS_PER_PAGE));
 
     const querySnapshot = await getDocs(query(q, ...constraints));
     
-    const events = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // An event is hidden when its organizer is blocked/blocked-by/muted; an
+    // event the viewer organizes is always theirs to see.
+    const events = querySnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(e => !hiddenAuthors.has(e.organizerId) || e.organizerId === viewerId);
 
+    if (searchTerm) {
+      // Client-side substring match over the bounded window (Firestore cannot
+      // substring-match). `MAX_EVENT_READ` caps the window at 200 docs.
+      return {
+        events: events.filter(e =>
+          e.title?.toLowerCase().includes(searchTerm) ||
+          e.description?.toLowerCase().includes(searchTerm) ||
+          e.location?.toLowerCase().includes(searchTerm)
+        ).slice(0, EVENTS_PER_PAGE),
+        hasMore: false,
+        page,
+        nextCursor: null
+      };
+    }
+
+    // `hasMore` derives from the RAW page size, not the post-block-filter length:
+    // a hidden organizer on a full page shortens `events` below EVENTS_PER_PAGE
+    // and would falsely report the end of the list, stranding later pages.
+    const hasMore = querySnapshot.docs.length === EVENTS_PER_PAGE;
     return {
       events,
-      hasMore: events.length === EVENTS_PER_PAGE,
-      page
+      hasMore,
+      page,
+      nextCursor: hasMore && querySnapshot.docs.length ? querySnapshot.docs[querySnapshot.docs.length - 1].id : null
     };
-  }
-
-  /**
-   * Search events
-   * @param {string} searchQuery - Search query
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} Matching events
-   */
-  async searchEvents(searchQuery, limitNum = 10) {
-    await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'events'),
-      where('status', 'in', ['published', 'open']),
-      orderBy('startDate', 'asc'),
-      limit(limitNum * 2)
-    );
-
-    const snapshot = await getDocs(q);
-    const lowerQuery = searchQuery.toLowerCase();
-    
-    return snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(e =>
-        e.title?.toLowerCase().includes(lowerQuery) ||
-        e.description?.toLowerCase().includes(lowerQuery) ||
-        e.location?.toLowerCase().includes(lowerQuery)
-      )
-      .slice(0, limitNum);
-  }
-
-  /**
-   * Get upcoming events
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} Upcoming events
-   */
-  async getUpcomingEvents(limitNum = 10) {
-    await this.initialize();
-    
-    const now = serverTimestamp();
-    const q = query(
-      collection(this.db, 'events'),
-      where('status', 'in', ['published', 'open']),
-      where('startDate', '>=', now),
-      orderBy('startDate', 'asc'),
-      limit(limitNum)
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  }
-
-  /**
-   * Get community events
-   * @param {string} communityId - Community ID
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} Community events
-   */
-  async getCommunityEvents(communityId, limitNum = 20) {
-    await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'events'),
-      where('communityId', '==', communityId),
-      where('status', 'not-in', ['cancelled', 'deleted']),
-      orderBy('startDate', 'desc'),
-      limit(limitNum)
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   /**

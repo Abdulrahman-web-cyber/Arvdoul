@@ -12,12 +12,28 @@ class SoundService {
     this.savedSoundIds = new Set();
   }
 
-  async getTrendingSounds(genre = 'All') {
+  /**
+   * Creators whose sounds must not surface for the viewer: blocked, blocked-by
+   * and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      log.warn('Sound hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  async getTrendingSounds(genre = 'All', viewerId = null) {
     log.info('Fetching trending sounds from Firestore', { genre });
     try {
       const firestore = await getFirestoreInstance();
       const { collection, getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
       const colRef = collection(firestore, 'sounds');
       let q = query(colRef, orderBy('reelsCountNum', 'desc'), limit(40));
 
@@ -28,7 +44,9 @@ class SoundService {
       const snap = await getDocs(q);
       const items = [];
       snap.forEach(docSnap => {
-        items.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        if (hiddenAuthors.has(data.creatorId)) return;
+        items.push({ id: docSnap.id, ...data });
       });
 
       return items;

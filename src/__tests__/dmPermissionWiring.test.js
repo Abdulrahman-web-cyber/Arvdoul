@@ -38,4 +38,13 @@ describe('DM permission wiring', () => {
     // comment describing what was removed).
     expect(src).not.toMatch(/data\(\)\.messagePermission/);
   });
+
+  test('a DECLINED message request no longer authorises the conversation (N204)', () => {
+    // `dmRequestFrom` once checked only `exists()`. Nothing ever deletes a
+    // `message_requests` doc, so a request the recipient declined still granted
+    // the sender permission to open the DM — the decline was not enforced.
+    const rules = read('firestore.rules');
+    const helper = rules.slice(rules.indexOf('function dmRequestFrom'));
+    expect(helper).toMatch(/function dmRequestFrom\(senderUid, recipientUid\) \{[\s\S]*?status == 'pending'[\s\S]*?\}/);
+  });
 });

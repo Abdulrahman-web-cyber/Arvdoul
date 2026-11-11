@@ -15,6 +15,12 @@ jest.unstable_mockModule('../firebase/firebase.js', () => ({
   }),
 }));
 
+// The feed reads blocked + muted edges through the graph spine; stub it so the
+// union can be asserted without a database.
+jest.unstable_mockModule('../services/socialGraphService.js', () => ({
+  getSocialGraphService: () => globalThis.__graphMock,
+}));
+
 const { getFeedService, feedService } = await import('../services/feedService.js');
 
 // The real UltimateFeedService instance (facade lazily creates it).
@@ -203,6 +209,77 @@ describe('feedService - stats & cache hygiene', () => {
     svc().clearUserCache('u-999');
     expect(svc().userFeedState.has('u-999')).toBe(false);
     expect(svc().feedHistory.has('u-999')).toBe(false);
+  });
+});
+
+describe('feedService - hidden authors (block + mute)', () => {
+  beforeEach(() => {
+    svc().blockCache.clear();
+    svc().offlineMode = false;
+    svc().initialized = true;
+  });
+
+  test('_getHiddenAuthorsCached delegates to the spine hidden-author reader', async () => {
+    globalThis.__graphMock = {
+      getHiddenAuthorIds: jest.fn(async () => new Set(['blocked-1', 'blocked-2', 'blocker-1', 'muted-1'])),
+    };
+    const hidden = await svc()._getHiddenAuthorsCached('viewer');
+    expect(hidden.has('blocked-1')).toBe(true);
+    expect(hidden.has('blocked-2')).toBe(true);
+    // Someone who blocks the viewer must not keep surfacing their posts.
+    expect(hidden.has('blocker-1')).toBe(true);
+    // The mute must be honoured too — muting was a dead control before this.
+    expect(hidden.has('muted-1')).toBe(true);
+    expect(globalThis.__graphMock.getHiddenAuthorIds).toHaveBeenCalledWith('viewer');
+  });
+
+  test('a failed graph read hides nobody (fails open, no throw)', async () => {
+    globalThis.__graphMock = { getHiddenAuthorIds: jest.fn(async () => { throw new Error('offline'); }) };
+    const hidden = await svc()._getHiddenAuthorsCached('viewer-2');
+    expect(hidden.size).toBe(0);
+  });
+
+  test('invalidateBlockCache drops the cached hidden set so a new block applies at once', async () => {
+    // The cache key written by `_getHiddenAuthorsCached` is `hidden_${userId}`.
+    // `invalidateBlockCache` deleted a different key (`blocked_${userId}`), a
+    // no-op that left a freshly blocked author in the cached set for the whole
+    // 5-minute TTL, so their posts kept appearing in the feed.
+    globalThis.__graphMock = { getHiddenAuthorIds: jest.fn(async () => new Set(['old'])) };
+    await svc()._getHiddenAuthorsCached('viewer-3');
+    expect(svc().blockCache.get('hidden_viewer-3')).not.toBeNull();
+
+    svc().invalidateBlockCache('viewer-3');
+    expect(svc().blockCache.get('hidden_viewer-3')).toBeNull();
+
+    globalThis.__graphMock = { getHiddenAuthorIds: jest.fn(async () => new Set(['new'])) };
+    expect((await svc()._getHiddenAuthorsCached('viewer-3')).has('new')).toBe(true);
+  });
+});
+
+describe('feedService - getFollowSuggestions delegates to the safety-filtered spine (N249)', () => {
+  beforeEach(() => {
+    svc().cache.clear();
+    svc().offlineMode = false;
+    svc().initialized = true;
+  });
+
+  test('returns the spine suggestions (which exclude blocked/muted pairs)', async () => {
+    globalThis.__graphMock = {
+      getSuggestions: jest.fn(async () => [{ id: 'safe-1' }]),
+    };
+    const res = await svc().getFollowSuggestions('viewer', 5);
+    expect(res.success).toBe(true);
+    expect(res.suggestions).toEqual([{ id: 'safe-1' }]);
+    expect(globalThis.__graphMock.getSuggestions).toHaveBeenCalledWith('viewer', { limit: 5 });
+  });
+
+  test('fails closed instead of reporting an empty success when the spine throws', async () => {
+    globalThis.__graphMock = {
+      getSuggestions: jest.fn(async () => { throw new Error('graph down'); }),
+    };
+    const res = await svc().getFollowSuggestions('viewer-2', 5);
+    expect(res.success).toBe(false);
+    expect(res.suggestions).toEqual([]);
   });
 });
 

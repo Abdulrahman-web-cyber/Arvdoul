@@ -88,7 +88,30 @@ as failures.
   relation through it. Every graph mutation funnels through `_invalidateUserCache`, which
   calls `socialGraphService.invalidate` — do not add a mutation that skips it.
   Blocks/mutes/restricts are party-readable only (`firestore.rules`); a world-readable
-  safety collection is an enumeration leak.
+  safety collection is an enumeration leak. A **mute must hide the author's content from
+  the feed** (a mute that only persists is a dead control): `feedService._getHiddenAuthorsCached`
+  unions the `blocked`, `blocked_by` (reverse block) and `muted` edge lists through the spine,
+  and every feed builder drops those authors — do not filter `blocks` alone, and do not read
+  only the outgoing block direction. A block additionally denies messaging and profile access;
+  a mute is a viewer preference only. Reuse `socialGraphService.getHiddenAuthorIds(uid)` (the
+  union of blocked + blocked_by + muted, bounded, fails open) rather than re-reading the three
+  edge lists per surface — suggestions (`getSuggestions`) and the Sparks video fallback
+  (`videoService.getVideoFeed`) already do. **A block hides content in both directions**: any
+  surface that hides a blocked author must union the outgoing and reverse lists — use
+  `userService.getBlockedUserIds(uid)` (blocked + blocked_by) for an id set, not the
+  outgoing-only `getBlockedUsers`. Comments (`CommentsDrawer`), the home feed's own optimistic
+  filter (`HomeScreen`) and search all read both directions; `getBlockedUsers` is only correct
+  for the manage-my-blocks screen (`BlockedAccountsScreen`), where you legitimately list only
+  the blocks you created. A private account's content is readable by
+  its **approved followers**: `postReadableByViewer`/`postListableShape` gate on
+  `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`), and the
+  `follows` create rule forbids self-creating an edge to a **private** target
+  (`targetIsPrivate()`) — that edge is written only by the owner on approval, so the edge
+  proves consent. The profile-grid query must omit the `authorIsPrivate == false`
+  constraint for an approved-follower view (`getPostsByUser({ constrainAuthorIsPrivate })`
+  from `profileStore`) and keep it otherwise; the public shape is backed by the
+  `posts(authorId, authorIsPrivate, status, visibility, isDeleted, createdAt)` index.
+  Do not re-add a bare `authorIsPrivate == false` gate to the post read rules.
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
   the `deleteUserData` cloud function. The cloud function name and the client method name are
   intentionally different — do not rename one to match the other.
@@ -133,6 +156,25 @@ as failures.
   (`getUserIdFromContext`, `isAdmin`, `checkIsAdmin`, `assertAdmin`). Do not re-declare
   `isAdmin` in a module — a divergent check means an account can be admin for one endpoint
   and not another.
+- **Server content reads must filter blocks in both directions.** `functions/feed.js`
+  `resolveHiddenAuthorIds(uid)` and `functions/stories.js` read `blockerId == uid` **and**
+  `blockedId == uid`; `functions/video.js#getVideoRecommendations` (the "watch next" rail)
+  filters hidden authors on both its paths, and `functions/notifications.js#sendNotification`
+  skips delivery when either `blocks/{sender}_{recipient}` or `blocks/{recipient}_{sender}`
+  exists (a block must cut the notification/push channel too, not just the feed). A server
+  read that only queries `blockerId == uid` (or skips the filter entirely) serves a blocker's
+  content straight back to the party they blocked — the authoritative read must match the
+  client's mutual-block model. `functionsModerationFilterGuard.test.js` (guards job) pins
+  this; add a new read path to it rather than re-deriving the two-direction query.
+- **Every client content surface filters the same hidden set.** Use
+  `socialGraphService.getHiddenAuthorIds(uid)` (blocked + blocked_by + **muted**) or
+  `userService.getBlockedUserIds(uid)` (blocked + blocked_by, ids only) — never read
+  `blocks`/`mutes` directly, and never filter only the outgoing direction. Covered surfaces:
+  home/service feed, Sparks video feed, the post `CommentsDrawer`, the `VideoComments`
+  sheet (Sparks/Reels/VideoDetail — comments **and** replies), the story/Vibe strip
+  (`storyService.getStoriesFeed` + `subscribeToFeed`, matching the fan-out's `ownerId`),
+  search, and friend suggestions. A surface that renders user content without one of these
+  is the recurring N22x bug class.
 - **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
   `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
   (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the
@@ -349,9 +391,14 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
 - `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS` and
   `AD_REWARD_COINS` own store pricing, the monthly subscription grant and the
   rewarded-ad payout. `functions/monetization.js` (`purchaseCoins`,
-  `createSubscription`), `functions/index.js` (`verifyPurchase`) and the store
-  screens (`CoinsScreen`, `Economy/WalletScreen`) all read these tables. Never
-  re-declare a package id, price or coin amount in a screen or a function.
+  `createSubscription`) and the store screens (`CoinsScreen`,
+  `Economy/WalletScreen`) all read these tables. Never re-declare a package id,
+  price or coin amount in a screen or a function. IAP (`verifyPurchase`) was
+  removed: it checked only that appstore/play *config keys existed* and then
+  minted coins without validating the receipt against Apple/Google — a
+  fabricated verification. Coin purchases go through the real Stripe-verified
+  `monetization.js` `purchaseCoins` path; if IAP returns, the receipt must be
+  validated against Apple/Google before any coin is granted.
 - Coin -> USD is display-only: use `coinsToUsd` / `formatCoinsAsUsd` from the
   shared config. Dividing by `COINS_PER_DOLLAR` by hand (or deriving a
   `1 / COINS_PER_DOLLAR` rate) in a screen is a bug — it re-implements the

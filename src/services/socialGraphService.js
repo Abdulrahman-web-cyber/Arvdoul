@@ -76,9 +76,18 @@ const LIST_SPECS = Object.freeze({
   following: { collection: 'follows', field: 'followerId', order: 'followingId', pick: 'followingId' },
   friends: { collection: 'follows', field: 'followerId', order: 'followingId', pick: 'followingId' },
   blocked: { collection: 'blocks', field: 'blockerId', order: 'blockedId', pick: 'blockedId' },
+  // The reverse direction of a block: users who block `userId`. Read with an
+  // actor-equality + single-order query (`blockedId == userId`), the shape the
+  // blocks rule proves (`resource.data.blockedId == uid()`). A viewer who is
+  // blocked by someone must not see their content in search/explore.
+  blocked_by: { collection: 'blocks', field: 'blockedId', order: 'blockerId', pick: 'blockerId' },
   muted: { collection: 'mutes', field: 'muterId', order: 'mutedId', pick: 'mutedId' },
   restricted: { collection: 'restricts', field: 'restricterId', order: 'restrictedId', pick: 'restrictedId' },
 });
+
+// Edge kinds that are a viewer's own safety-management lists, not a social
+// surface: a block/mute/restrict must stay visible in the list that manages it.
+const SAFETY_EDGE_KINDS = new Set(['blocked', 'blocked_by', 'muted', 'restricted']);
 
 function emptyEdge(uid = null, isOwner = false) {
   return {
@@ -426,7 +435,15 @@ class SocialGraphService {
   /** List a relationship kind with hydrated, viewer-projected profiles. */
   async listConnections(userId, kind, { viewerId = null, limit = DEFAULT_PAGE_SIZE, cursor = null } = {}) {
     const { ids, hasMore, nextCursor } = await this.listEdges(userId, kind, { limit, cursor });
-    const connections = await this.hydrateProfiles(ids, { viewerId });
+    // A blocked/blocked-by/muted user must not appear in the viewer's own
+    // follower/following/friends list — masking hides the bio but the row still
+    // leaks the account. The safety-management lists (`blocked`/`muted`/
+    // `restricted`) are the exception: hiding a blocked user there would make
+    // the block impossible to review or lift.
+    const isSafetyList = SAFETY_EDGE_KINDS.has(kind);
+    const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;
+    const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;
+    const connections = await this.hydrateProfiles(visibleIds, { viewerId });
     return { success: true, connections, hasMore, nextCursor, count: connections.length };
   }
 
@@ -455,17 +472,28 @@ class SocialGraphService {
       pages++;
       if (!page.hasMore) break;
     }
-    const connections = await this.hydrateProfiles(mutualIds, { viewerId: viewerId || userId });
+    const hidden = viewerId ? await this.getHiddenAuthorIds(viewerId) : null;
+    const visibleIds = hidden ? mutualIds.filter((id) => id !== viewerId && !hidden.has(id)) : mutualIds;
+    const connections = await this.hydrateProfiles(visibleIds, { viewerId: viewerId || userId });
     return { success: true, connections, hasMore, nextCursor: pageCursor, count: connections.length };
   }
 
   /** Mutual connections, server-authoritative when the callable is available. */
   async getMutualConnections(viewerId, targetId, { limit = 20 } = {}) {
     if (!viewerId || !targetId || viewerId === targetId) return [];
+    // A blocked/blocked-by/muted user must never appear in the viewer's mutual
+    // list — the callable and the local fallback both returned the raw set, so
+    // a blocked party leaked back through the "mutual friends" surface.
+    const hidden = await this.getHiddenAuthorIds(viewerId);
+    const isVisible = (p) => {
+      const id = p?.uid || p?.id;
+      return id && id !== viewerId && !hidden.has(id);
+    };
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
       const data = await callFunction(FUNCTIONS.GET_MUTUAL_FRIENDS, { userId: viewerId, otherUserId: targetId });
-      return data?.mutualFriends || [];
+      const mutual = data?.mutualFriends || [];
+      if (mutual.length > 0) return mutual.filter(isVisible);
     } catch (err) {
       logger.debug('[SocialGraph] mutual fallback', { error: err?.message });
     }
@@ -474,20 +502,48 @@ class SocialGraphService {
       this.listEdges(targetId, 'following', { limit: 50 }),
     ]);
     const bSet = new Set(b.ids);
-    const mutualIds = a.ids.filter((id) => bSet.has(id)).slice(0, limit);
+    const mutualIds = a.ids.filter((id) => bSet.has(id) && id !== viewerId && !hidden.has(id)).slice(0, limit);
     return this.hydrateProfiles(mutualIds, { viewerId });
   }
 
-  /** Friend suggestions, server-authoritative when the callable is available. */
+  /**
+   * Ids whose content/suggestions the viewer must never see: users the viewer
+   * blocked, users who blocked the viewer (reverse block — otherwise a blocker
+   * leaks back into the viewer's surfaces), and users the viewer muted. Read
+   * through the spine's bounded, rules-provable edge lists. Fails open (empty
+   * set) only when the graph read errors.
+   */
+  async getHiddenAuthorIds(userId) {
+    if (!userId) return new Set();
+    try {
+      const [blocked, blockedBy, muted] = await Promise.all([
+        this.listEdges(userId, 'blocked', { limit: 500 }),
+        this.listEdges(userId, 'blocked_by', { limit: 500 }),
+        this.listEdges(userId, 'muted', { limit: 500 }),
+      ]);
+      return new Set([...(blocked.ids || []), ...(blockedBy.ids || []), ...(muted.ids || [])]);
+    } catch (err) {
+      logger.warn('[SocialGraph] hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
+  /** Friend suggestions, server-authoritative when the callable is available.
+   *  Blocked/blocked-by/muted users are excluded from both paths. */
   async getSuggestions(userId, { limit = 20 } = {}) {
     if (!userId) return [];
+    // A blocked, blocked-by or muted user must never be suggested — the
+    // server callable and the friends-of-friends fallback both ran without a
+    // safety filter, so a blocker could reappear in the viewer's list.
+    const hidden = await this.getHiddenAuthorIds(userId);
+    const isHidden = (id) => !id || id === userId || hidden.has(id);
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
       const data = await callFunction(FUNCTIONS.GENERATE_FRIEND_RECOMMENDATIONS, { userId, limit });
       const recs = data?.recommendations || [];
       if (recs.length > 0) {
-        const ids = recs.map((r) => r.userId || r.id || r.uid).filter(Boolean);
-        return ids.length ? await this.hydrateProfiles(ids, { viewerId: userId }) : recs;
+        const ids = recs.map((r) => r.userId || r.id || r.uid).filter((id) => !isHidden(id));
+        return ids.length ? await this.hydrateProfiles(ids, { viewerId: userId }) : [];
       }
     } catch (err) {
       logger.debug('[SocialGraph] suggestions fallback', { error: err?.message });
@@ -501,7 +557,7 @@ class SocialGraphService {
     const pages = await Promise.all(sample.map((fid) => this.listEdges(fid, 'following', { limit: 30 })));
     for (const page of pages) {
       for (const candId of page.ids) {
-        if (candId === userId || mySet.has(candId)) continue;
+        if (isHidden(candId) || mySet.has(candId)) continue;
         candidateCounts.set(candId, (candidateCounts.get(candId) || 0) + 1);
       }
     }
