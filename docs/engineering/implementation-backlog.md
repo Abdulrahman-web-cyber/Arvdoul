@@ -27,7 +27,7 @@ total work._
 | `onSnapshot` listeners | 32 |
 | `getDocs` call sites | 163 |
 | i18n | 7 locales, only 2/132 screens use `useTranslation`, 71 `t()` calls total |
-| Audit findings closed | N001–N263 (all but N175) |
+| Audit findings closed | N001–N264 (all but N175) |
 | Audit findings open | N175 (rankings writer; needs a product ranking formula) |
 
 ---

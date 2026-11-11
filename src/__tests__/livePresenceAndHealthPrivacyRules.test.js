@@ -114,4 +114,48 @@ describe('live presence and system health are least-privilege', () => {
       await env.cleanup();
     }
   });
+
+  test('system and enterprise_tenants reads are admin-only', () => {
+    const rulesSrc = readFile('firestore.rules');
+    for (const marker of ['match /system/{docId}', 'match /enterprise_tenants/{tenantId}']) {
+      const start = rulesSrc.indexOf(marker);
+      expect(start).toBeGreaterThan(-1);
+      const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+      expect(block).not.toMatch(/allow read: if isSignedIn\(\)/);
+      expect(block).toMatch(/allow read: if isAdmin\(\)/);
+    }
+  });
+
+  test('collaboration_projects read is membership-scoped', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /collaboration_projects/{projectId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/allow read: if collabProjectAccess\(projectId\)/);
+  });
+
+  test('only the owner, a team member and admins can read a collaboration project (emulator)', async () => {
+    if (!reachable) return;
+    const env = await makeEnv('arvdoul-collab-privacy');
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await fsMod.setDoc(fsMod.doc(db, 'collaboration_projects/p1'), { ownerId: 'owner', name: 'Secret cut' });
+        await fsMod.setDoc(fsMod.doc(db, 'collaboration_projects/p1/team/owner'), { userId: 'owner', role: 'owner' });
+        await fsMod.setDoc(fsMod.doc(db, 'collaboration_projects/p1/team/editor'), { userId: 'editor', role: 'editor' });
+      });
+      const stranger = env.authenticatedContext('stranger').firestore();
+      const owner = env.authenticatedContext('owner').firestore();
+      const editor = env.authenticatedContext('editor').firestore();
+
+      await expect(fsMod.getDoc(fsMod.doc(stranger, 'collaboration_projects/p1'))).rejects.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(stranger, 'collaboration_projects/p1/team/editor'))).rejects.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(owner, 'collaboration_projects/p1'))).resolves.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(editor, 'collaboration_projects/p1/team/editor'))).resolves.toBeDefined();
+    } finally {
+      await env.cleanup();
+    }
+  });
 });

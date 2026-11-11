@@ -242,6 +242,18 @@ service cloud.firestore {
     function liveStreamHost(streamId) {
       return get(/databases/$(database)/documents/live_streams/$(streamId)).data.get('userId', '');
     }
+
+    // A collaboration project and its `team` roster carry membership + role
+    // (privilege) data. Only the owner, a team member or an admin may read them;
+    // the owner is the first `team/{uid}` entry, so the membership check covers
+    // both. Absent project/team docs fall closed.
+    function collabProjectAccess(projectId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/collaboration_projects/$(projectId)).data.ownerId == uid() ||
+        exists(/databases/$(database)/documents/collaboration_projects/$(projectId)/team/$(uid()))
+      );
+    }
     function postListableShape() {
       return resource.data.isDeleted == false &&
         resource.data.status == 'published' &&
@@ -1185,7 +1197,10 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']);
     }
     match /system/{docId} {
-      allow read: if isSignedIn();
+      // Server bookkeeping (coin_supply, scheduler cursors) written by Cloud
+      // Functions with the Admin SDK. No client reads it, so a signed-in read
+      // exposed platform internals for nothing.
+      allow read: if isAdmin();
       allow write: if false;
     }
 
@@ -1267,10 +1282,14 @@ service cloud.firestore {
     // inviting, saving, submitting, reviewing and publishing were all denied.
     // Every mutation now goes through functions/collaboration.js.
     match /collaboration_projects/{projectId} {
-      allow read: if isSignedIn();
+      // The project document (settings) and its `team` roster carry membership +
+      // role (privilege) data, so only the owner, a team member or an admin may
+      // read them. The dashboard lists the viewer's OWN projects
+      // (`where('ownerId','==',uid())`), so the list query proves access.
+      allow read: if collabProjectAccess(projectId);
       allow write: if false;
       match /{subcollection}/{docId} {
-        allow read: if isSignedIn();
+        allow read: if collabProjectAccess(projectId);
         allow write: if false;
       }
     }
@@ -1613,9 +1632,10 @@ service cloud.firestore {
 
     // ==================== ENTERPRISE SSO ====================
     match /enterprise_tenants/{tenantId} {
-      // SAML tenant configuration - readable by signed-in users (SSO
-      // initiation), writable only via admin/server.
-      allow read: if isSignedIn();
+      // SAML tenant configuration (IdP metadata, ACS URLs) is read and written
+      // only by the server (`functions/saml.js`); no client surface reads it, so
+      // a signed-in read leaked tenant SSO config to every user.
+      allow read: if isAdmin();
       allow write: if false;
     }
 
