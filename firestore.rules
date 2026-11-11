@@ -1403,7 +1403,11 @@ service cloud.firestore {
 
     // ==================== MISC (bounded write surfaces) ====================
     match /shares/{shareId} {
-      allow read: if true;
+      // A share record names the sharer (`userId`) and the `postId` they
+      // shared. No client ever reads it (the share counter is a separate sharded
+      // counter), so a world-readable rule only exposed who shared what to any
+      // client. Scope the read to the sharer and admins.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       // A share record is immutable and must name the sharer as its author;
       // `if isSignedIn()` let anyone rewrite or delete another user's shares.
       allow create: if isSignedIn() && request.resource.data.userId == uid();

@@ -135,6 +135,33 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/allow read: if collabProjectAccess\(projectId\)/);
   });
 
+  test('shares read is scoped to the sharer', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /shares/{shareId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if true/);
+    expect(block).toMatch(/resource\.data\.userId == uid\(\)/);
+  });
+
+  test('a stranger cannot read a share record (emulator)', async () => {
+    if (!reachable) return;
+    const env = await makeEnv('arvdoul-shares-privacy');
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await fsMod.setDoc(fsMod.doc(db, 'shares/s1'), { postId: 'p1', userId: 'sharer' });
+      });
+      const stranger = env.authenticatedContext('stranger').firestore();
+      const sharer = env.authenticatedContext('sharer').firestore();
+      await expect(fsMod.getDoc(fsMod.doc(stranger, 'shares/s1'))).rejects.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(sharer, 'shares/s1'))).resolves.toBeDefined();
+    } finally {
+      await env.cleanup();
+    }
+  });
+
   test('only the owner, a team member and admins can read a collaboration project (emulator)', async () => {
     if (!reachable) return;
     const env = await makeEnv('arvdoul-collab-privacy');
