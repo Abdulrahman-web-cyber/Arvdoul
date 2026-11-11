@@ -398,22 +398,24 @@ class EventService {
   }
 
   /**
-   * Get event feedback
+   * Get the viewer's own feedback for an event.
+   *
+   * A feedback row is private to the attendee who wrote it (rules:
+   * `resource.data.userId == uid()`) and its id is deterministic
+   * (`event_${eventId}_${uid}`), so this is a point read of the caller's own
+   * document — a public list read is neither possible nor needed (the aggregate
+   * rating lives on the event document's `stats.feedbackScore`).
    * @param {string} eventId - Event ID
-   * @returns {Promise<Array>} Feedback list
+   * @param {string} userId - Viewer's uid
+   * @returns {Promise<Object|null>} The viewer's feedback, or null
    */
-  async getEventFeedback(eventId) {
+  async getMyEventFeedback(eventId, userId) {
     await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'event_feedback'),
-      where('eventId', '==', eventId),
-      orderBy('createdAt', 'desc'),
-      limit(MAX_EVENT_READ)
-    );
+    if (!eventId || !userId) return null;
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const ref = doc(this.db, 'event_feedback', `event_${eventId}_${userId}`);
+    const snap = await getDoc(ref);
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   }
 
   /**

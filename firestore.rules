@@ -1677,7 +1677,10 @@ service cloud.firestore {
 
     // ==================== EVENTS (feedback) ====================
     match /event_feedback/{feedbackId} {
-      allow read: if isSignedIn();
+      // A feedback row (rating + comment) belongs to the attendee who wrote it;
+      // the only client reader fetches the caller's own row, so a bare
+      // `isSignedIn()` read exposed every attendee's rating/comment.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }

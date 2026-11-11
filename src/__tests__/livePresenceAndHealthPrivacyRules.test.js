@@ -199,6 +199,15 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/posts\/\$\(postId\)\)\.data\.authorId == uid\(\)/);
   });
 
+  test('event_feedback read is scoped to the attendee', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /event_feedback/{feedbackId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, start + 400);
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(block).toMatch(/allow read: if isSignedIn\(\) && \(resource\.data\.userId == uid\(\) \|\| isAdmin\(\)\)/);
+  });
+
   test('a stranger cannot read another user\'s reputation (emulator)', async () => {
     if (!reachable) return;
     const env = await makeEnv('arvdoul-reputation-privacy');
