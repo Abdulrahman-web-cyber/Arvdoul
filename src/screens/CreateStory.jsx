@@ -344,6 +344,7 @@ export default function CreateStory() {
             </p>
 
             {/* Creative Tools Drawer */}
+            {toolsExpanded && (
             <div className="mt-8">
               <span className="text-[11px] font-bold uppercase tracking-widest text-violet-400 block mb-3">
                 Creative Tools
@@ -373,11 +374,12 @@ export default function CreateStory() {
                 })}
               </div>
             </div>
+            )}
           </div>
 
           <div className="text-[11px] text-arvdoul-text-secondary flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-            <span>Tap to expand creative tools</span>
+            <span>{toolsExpanded ? 'Tools shown' : 'Tap to expand creative tools'}</span>
           </div>
         </div>
 
@@ -681,11 +683,48 @@ export default function CreateStory() {
           <div className="relative z-20 px-3 flex items-center">
             <button
               onClick={() => setToolsExpanded(!toolsExpanded)}
+              aria-label="Toggle creative tools"
+              aria-expanded={toolsExpanded}
               className="p-2 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-colors lg:hidden"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Mobile Creative Tools Drawer — the desktop tool column is
+              `hidden lg:flex`, so on small screens there was no way to pick a
+              creative tool at all. This surfaces the same CREATIVE_TOOLS list
+              behind the toggle. */}
+          {toolsExpanded && (
+            <div className="relative z-20 px-3 lg:hidden">
+              <div className="bg-white/[0.06] border border-white/10 rounded-3xl p-2 backdrop-blur-xl shadow-2xl">
+                <div className="grid grid-cols-3 gap-1">
+                  {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
+                    const Icon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(isSelected ? null : tool.id);
+                          if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
+                        }}
+                        className={cn(
+                          "flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl text-[10px] font-semibold transition-all duration-200",
+                          isSelected
+                            ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{tool.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Bottom Viewfinder Controls */}
           <div className="relative z-20 pb-6 px-5 space-y-4">

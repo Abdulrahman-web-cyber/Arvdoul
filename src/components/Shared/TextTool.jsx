@@ -289,7 +289,6 @@ const TextTool = memo(({
     effects: false,
     layers: false,
   });
-  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Toggle section
   const toggleSection = useCallback((section) => {
@@ -502,12 +501,6 @@ const TextTool = memo(({
             <div className="space-y-2">
               <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Color</label>
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => setShowColorPicker(!showColorPicker)}
-                  className="w-10 h-10 rounded-xl border-2 border-white/20 overflow-hidden"
-                  style={{ backgroundColor: selectedText.color || '#FFFFFF' }}
-                  aria-label="Pick color"
-                />
                 <input
                   type="color"
                   value={selectedText.color || '#FFFFFF'}

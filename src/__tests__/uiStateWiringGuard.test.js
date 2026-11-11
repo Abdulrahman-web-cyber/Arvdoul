@@ -115,4 +115,51 @@ describe('ui-state wiring guard: every useState setter is reachable', () => {
     }
     expect(violations).toEqual([]);
   });
+
+  // A value read ONLY inside its own setter expression (`setX(!x)`) is still
+  // dead: the toggle flips a flag no branch renders. `CreateStory` toggled
+  // `toolsExpanded` from two buttons while no drawer read it, and `TextTool`
+  // toggled `showColorPicker` beside an always-visible native color input.
+  // Both pass the setter-reachable and write-only checks above, so they need
+  // their own scan: strip every `setter(...)` invocation, then require the
+  // value identifier to survive.
+  test('no useState value is read only inside its own setter', () => {
+    const violations = [];
+    for (const file of collect(SRC)) {
+      const rel = path.relative(root, file);
+      const source = fs.readFileSync(file, 'utf8');
+      const re = /const\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*useState/g;
+      let match;
+      while ((match = re.exec(source))) {
+        const [declaration, value, setter] = match;
+        let rest = source.slice(0, match.index) + source.slice(match.index + declaration.length);
+        // Drop each `setter( ... )` call (balanced parens) so only genuine
+        // reads of the value remain.
+        let stripped = '';
+        let i = 0;
+        while (i < rest.length) {
+          const idx = rest.indexOf(`${setter}(`, i);
+          if (idx === -1) {
+            stripped += rest.slice(i);
+            break;
+          }
+          stripped += rest.slice(i, idx);
+          let j = idx + setter.length;
+          let depth = 0;
+          for (; j < rest.length; j++) {
+            if (rest[j] === '(') depth++;
+            else if (rest[j] === ')') {
+              depth--;
+              if (depth === 0) { j++; break; }
+            }
+          }
+          i = j;
+        }
+        if (occurrences(stripped, value) === 0) {
+          violations.push(`${rel}: "${value}" is read only inside its own setter — the toggle drives nothing`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });
