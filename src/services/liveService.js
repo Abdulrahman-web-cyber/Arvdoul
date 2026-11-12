@@ -447,7 +447,8 @@ class UltimateLiveService {
       // No writer maintains a peak-concurrent-viewer value, so do not report one.
       const coinsEarned = streamData.stats?.coinsEarned || 0;
 
-      auditLogger.log('live.ended', { userId, meta: { streamId, duration: durationMinutes, coinsEarned } });
+      // Fire-and-forget: the local audit queue swallows its own write errors.
+      void auditLogger.log('live.ended', { userId, meta: { streamId, duration: durationMinutes, coinsEarned } });
 
       // Clean up signaling peer
       if (this.peerConnection) {
