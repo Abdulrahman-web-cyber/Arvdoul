@@ -46,6 +46,7 @@ import { getNotificationsService } from "../services/notificationsService";
 import { getFeedService } from "../services/feedService";
 import { getUserService } from "../services/userService";
 import { LOCAL_POSTS_KEY } from "../utils/localContentCache.js";
+import { pickDisplayName, deriveHandle } from "../services/profileReadModel.js";
 import { BRAND_GRADIENT, tokens } from "../design-system/tokens.js";
 
 // ── CONSTANTS & DESIGN TOKENS ──────────────────────────────────────────
@@ -1378,7 +1379,7 @@ function CreatePostProvider({ children }) {
           if (current) {
             userNow = {
               uid: current.uid,
-              displayName: current.displayName || "Arvdoul User",
+              displayName: current.displayName || "",
               email: current.email || "",
               photoURL: current.photoURL || "",
             };
@@ -1501,8 +1502,12 @@ function CreatePostProvider({ children }) {
         videoUrl: videoInstantMedia?.url || current.typeData.video?.url || "",
         thumbnailUrl: firstInstantMedia?.thumbnail || firstInstantMedia?.url || "",
         authorId: userNow.uid,
-        authorName: userNow.displayName || userNow.name || "Arvdoul User",
-        authorUsername: userNow.username || userNow.email?.split("@")[0] || `user_${userNow.uid.slice(0, 8)}`,
+        // A display name falls back to a neutral, honest label ("Creator")
+        // rather than inventing a person; a handle is derived from the real
+        // name/email or left empty (the UI then renders no `@handle`) — never
+        // a synthetic `user_<uid>` that reads as a real account.
+        authorName: pickDisplayName([userNow.displayName, userNow.name, userNow.username]),
+        authorUsername: deriveHandle(userNow.username) || deriveHandle(userNow.email) || "",
         authorPhoto: userNow.photoURL || userNow.photo || "",
         visibility: communityId ? "community" : (current.visibility || "public"),
         communityId: communityId || null,
@@ -2288,8 +2293,8 @@ function PostPreview() {
   const { user } = useAuth();
   const isDark = useTheme().theme === "dark";
 
-  const authorName = state.coAuthors[0]?.name || user?.displayName || "You";
-  const authorUsername = user?.username || (user?.email ? user.email.split("@")[0] : "creator");
+  const authorName = state.coAuthors[0]?.name || pickDisplayName([user?.displayName, user?.username], { fallback: "You" });
+  const authorUsername = deriveHandle(user?.username) || deriveHandle(user?.email) || "";
   const authorPhoto = user?.photoURL || "";
 
   const mediaPreviews = useMemo(() => {
@@ -2330,7 +2335,9 @@ function PostPreview() {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-bold text-gray-900 dark:text-white">{authorName}</span>
-              <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">@{authorUsername}</span>
+              {authorUsername && (
+                <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">@{authorUsername}</span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <span>Just now</span>

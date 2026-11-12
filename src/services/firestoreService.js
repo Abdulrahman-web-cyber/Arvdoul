@@ -9,6 +9,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { secureRandom } from '../lib/utils.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { unknownNumber } from '../lib/unknownNumber.js';
 
 class LRUCache {
@@ -299,10 +300,10 @@ class EnterpriseFirestoreService {
         videoUrl: postData.videoUrl || postData.video?.url || videoItem?.url || '',
         thumbnailUrl: postData.thumbnailUrl || firstMedia?.thumbnail || firstMedia?.url || '',
         authorId: postData.authorId,
-        authorName: postData.authorName || currentUser.displayName || 'Arvdoul User',
-        authorUsername: postData.authorUsername || `user_${postData.authorId?.slice(0,8)}`,
+        authorName: pickDisplayName([postData.authorName, currentUser.displayName, currentUser.displayName]),
+        authorUsername: deriveHandle(postData.authorUsername) || '',
         authorIsPrivate,
-        authorPhoto: getSafeAvatarUrl(postData.authorPhoto, postData.authorName || 'Arvdoul User', postData.authorId),
+        authorPhoto: getSafeAvatarUrl(postData.authorPhoto, pickDisplayName([postData.authorName, currentUser.displayName]), postData.authorId),
         ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0, allowMultiple: !!postData.poll?.allowMultiple } }),
         ...(postData.type === 'question' && { question: this._normaliseQuestion(postData.question, postData.content) }),
         ...(postData.type === 'link' && { link: postData.link }),
@@ -843,7 +844,7 @@ class EnterpriseFirestoreService {
 
       const userSnap = await getDoc(doc(this.firestore, 'users', uid));
       const me = userSnap.exists() ? userSnap.data() : {};
-      const myName = me.displayName || auth?.currentUser?.displayName || 'Arvdoul User';
+      const myName = pickDisplayName([me.displayName, auth?.currentUser?.displayName, me.username]);
 
       // A repost copies the original's content, so reposting a private account's
       // post would publish that content to the reposter's (public) followers —
@@ -857,7 +858,7 @@ class EnterpriseFirestoreService {
         content: '',
         authorId: uid,
         authorName: myName,
-        authorUsername: me.username || `user_${uid.slice(0, 8)}`,
+        authorUsername: deriveHandle(me.username) || deriveHandle(me.email) || '',
         authorPhoto: getSafeAvatarUrl(me.photoURL, myName, uid),
         // Must mirror users/{uid}.isPrivate (the create rule enforces it).
         authorIsPrivate: me.isPrivate === true,

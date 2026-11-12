@@ -1060,8 +1060,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             )}
           </div>
           <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: tokens.textSecondary }}>
-            <span>@{post.authorUsername}</span>
-            <span>·</span>
+            {post.authorUsername && <span>@{post.authorUsername}</span>}
+            {post.authorUsername && <span>·</span>}
             <span>{postedDateTime}</span>
             {post.visibility === 'public' && <Globe className="w-3 h-3" />}
             {post.visibility === 'followers' && <Users className="w-3 h-3" />}

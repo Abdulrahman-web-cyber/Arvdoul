@@ -105,6 +105,16 @@ New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexM
 `conversationPaginationService`, `userServiceBlockReaders`, `functionsModerationFilterGuard`,
 `communityPrivacyRules`, `storyReplyPrivacyRules`, `livePresenceAndHealthPrivacyRules`.
 
+## Fabrication / integrity sweep (this session)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N283 | `CreatePost.publishPost` fabricated a synthetic uid + "Arvdoul Creator" when no session resolved | `publishPost` throws "You must be signed in to publish"; `noFabricatedData` pin |
+| N284 | `firestoreService.createPost` signed in anonymously / trusted a caller-supplied `authorId` | both fallbacks removed; `noFabricatedData` pin |
+| N285 | Placeholder author identity (`"Arvdoul User"`, `User_<uid>`, `user_<uid>`, `'creator'`) across write + hydrate paths | read-model `pickDisplayName`/`deriveHandle` in CreatePost, firestoreService, HomeScreen, commentService, SavedScreen, videoService; render sites omit empty handles; `noFabricatedData` block |
+
+Verification: 152 suites / 1,711 passed (5 skipped); eslint 0 errors; build green.
+
 ## Next exact tasks (dependency order)
 
 1. **#12 Design-system consolidation** (continued) - migrate the remaining ~44 files

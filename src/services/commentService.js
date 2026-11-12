@@ -18,6 +18,7 @@ const COMMENTS_CONFIG = {
 import { cacheManager } from '../utils/CacheManager.js';
 import { LOCAL_COMMENTS_PREFIX } from '../utils/localContentCache.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { logger } from '../utils/Logger.js';
@@ -156,12 +157,17 @@ class UltimateCommentService {
 
       const extracted = this._extractMetadata(content);
 
+      // Identity honesty: a missing name renders the neutral label "Creator"
+      // (never an invented `User_<uid>` person) and a missing handle stays empty
+      // (the UI omits the `@handle`) — never a synthetic `user_<uid>` that reads
+      // as a real account.
+      const commentAuthorName = pickDisplayName([options.userName]);
       const commentData = {
         postId,
         userId,
-        userAvatar: getSafeAvatarUrl(options.userAvatar, options.userName || `User_${userId.slice(0, 8)}`, userId),
-        userName: options.userName || `User_${userId.slice(0, 8)}`,
-        userUsername: options.userUsername || `user_${userId.slice(0, 8)}`,
+        userAvatar: getSafeAvatarUrl(options.userAvatar, commentAuthorName, userId),
+        userName: commentAuthorName,
+        userUsername: deriveHandle(options.userUsername) || '',
         content: content.trim(),
         parentId: options.parentId || null,
         replyToId: options.replyToId || null,
@@ -876,7 +882,7 @@ class UltimateCommentService {
           commentId: result.commentId,
           parentCommentId,
           replyAuthorId: userId,
-          replyAuthorName: options.userName || `User_${userId.slice(0, 8)}`,
+          replyAuthorName: pickDisplayName([options.userName]),
           postId: parentComment.comment.postId,
           content: content.substring(0, 100)
         }).catch((e) => logger.warn('Reply notification failed', { parentCommentId, error: e?.message }));

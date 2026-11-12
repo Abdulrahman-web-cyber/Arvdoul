@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import ErrorState from '../design-system/ErrorState.jsx';
+import { pickDisplayName, deriveHandle } from '../services/profileReadModel.js';
 import { cn } from '../lib/utils';
 
 const COLLECTIONS = [
@@ -50,8 +51,8 @@ export default function SavedScreen() {
           source: 'post',
           title: p.caption || p.content?.slice(0, 60) || 'Saved post',
           author: {
-            name: p.authorName || 'Creator',
-            username: p.authorHandle || p.authorUsername || 'creator',
+            name: pickDisplayName([p.authorName]),
+            username: deriveHandle(p.authorHandle) || deriveHandle(p.authorUsername) || '',
             avatar: p.authorPhoto || '/assets/default-profile.png',
           },
           type: p.type || 'post',
@@ -68,8 +69,8 @@ export default function SavedScreen() {
           source: 'video',
           title: v.title || 'Saved video',
           author: {
-            name: v.creator?.name || 'Creator',
-            username: v.creator?.username || 'creator',
+            name: pickDisplayName([v.creator?.name]),
+            username: deriveHandle(v.creator?.username) || '',
             avatar: v.creator?.avatar || '/assets/default-profile.png',
           },
           type: 'video',
@@ -410,7 +411,7 @@ export default function SavedScreen() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 text-white">
                     <p className="text-xs font-bold line-clamp-1">{item.title}</p>
                     <div className="flex items-center justify-between text-[11px] text-gray-300 mt-1">
-                      <span>@{item.author.username}</span>
+                      {item.author.username && <span>@{item.author.username}</span>}
                       <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => {
@@ -482,7 +483,7 @@ export default function SavedScreen() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-sm truncate">{item.title}</h3>
                     <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                      <span>@{item.author.username}</span>
+                      {item.author.username && <span>@{item.author.username}</span>}
                       <span>•</span>
                       <span>{item.savedAt}</span>
                       <span>•</span>

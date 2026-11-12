@@ -414,9 +414,11 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-white font-bold text-xs tracking-tight">
-            @{comment.user.username}
-          </span>
+          {comment.user.username && (
+            <span className="text-white font-bold text-xs tracking-tight">
+              @{comment.user.username}
+            </span>
+          )}
           {comment.user.isCreator && (
             <span className="px-1.5 py-0.2 rounded-md bg-pink-500/20 text-pink-300 border border-pink-500/40 text-[9px] font-bold flex items-center gap-0.5">
               <Crown className="w-2.5 h-2.5" /> Creator
@@ -482,9 +484,11 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-white font-semibold text-xs">
-                        @{reply.user.username}
-                      </span>
+                      {reply.user.username && (
+                        <span className="text-white font-semibold text-xs">
+                          @{reply.user.username}
+                        </span>
+                      )}
                       {reply.user.isCreator && (
                         <span className="px-1 py-0.2 rounded bg-pink-500/20 text-pink-300 text-[8px] font-bold">
                           Creator

@@ -24,6 +24,7 @@ import { openDB } from 'idb';
 import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import { pickDisplayName, deriveHandle } from '../services/profileReadModel';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.jsx';
 import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 import { getAdaptiveTuning } from '../utils/deviceCapabilities.js';
@@ -370,11 +371,15 @@ class FeedSessionEngine {
 }
 
 function hydratePost(post) {
-  const authorName = post.authorName || 'Arvdoul User';
+  // Honest identity: a missing name renders a neutral label, never the
+  // invented person "Arvdoul User"; a missing handle stays empty so the card
+  // omits the `@handle` rather than showing a synthetic `user_<uid>`.
+  const authorName = pickDisplayName([post.authorName, post.authorUsername]);
   const authorId = post.authorId || post.userId || '';
   return {
     ...post,
     authorName,
+    authorUsername: deriveHandle(post.authorUsername) || '',
     authorPhoto: getSafeAvatarUrl(post.authorPhoto, authorName, authorId),
     content: post.content || '',
     media: post.media || [],

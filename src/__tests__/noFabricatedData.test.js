@@ -3163,6 +3163,50 @@ describe('CreatePost publish fails closed without a real identity', () => {
   });
 });
 
+describe('Author identity is never fabricated across write + hydrate paths', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('CreatePost derives the author name/handle from real identity only', () => {
+    const src = read('src/screens/CreatePost.jsx');
+    expect(src).not.toContain('"Arvdoul User"');
+    expect(src).not.toContain('`user_${userNow.uid.slice(0, 8)}`');
+    expect(src).toContain('pickDisplayName([userNow.displayName, userNow.name, userNow.username])');
+    expect(src).toContain('deriveHandle(userNow.username) || deriveHandle(userNow.email)');
+  });
+
+  test('firestoreService derives names/handles via the read model, never literals', () => {
+    const src = read('src/services/firestoreService.js');
+    expect(src).not.toContain("'Arvdoul User'");
+    expect(src).not.toContain('`user_${uid.slice(0, 8)}`');
+    expect(src).not.toContain('`user_${postData.authorId?.slice(0,8)}`');
+    expect(src).toContain('pickDisplayName([me.displayName, auth?.currentUser?.displayName, me.username])');
+    expect(src).toContain("deriveHandle(me.username) || deriveHandle(me.email)");
+  });
+
+  test('HomeScreen.hydratePost never invents "Arvdoul User"', () => {
+    const src = read('src/screens/HomeScreen.jsx');
+    expect(src).not.toContain("'Arvdoul User'");
+    expect(src).toContain('pickDisplayName([post.authorName, post.authorUsername])');
+  });
+
+  test('commentService never mints User_<uid> / user_<uid> identities', () => {
+    const src = read('src/services/commentService.js');
+    expect(src).not.toContain('`User_${userId.slice(0, 8)}`');
+    expect(src).not.toContain('`user_${userId.slice(0, 8)}`');
+    expect(src).toContain('pickDisplayName([options.userName])');
+    expect(src).toContain("deriveHandle(options.userUsername) || ''");
+  });
+
+  test('SavedScreen + videoService use the read model for saved-item authors', () => {
+    const saved = read('src/screens/SavedScreen.jsx');
+    expect(saved).not.toContain("|| 'creator'");
+    expect(saved).toContain('deriveHandle(p.authorHandle)');
+    const video = read('src/services/videoService.js');
+    expect(video).toContain('username: deriveHandle(data.authorUsername)');
+    expect(video).not.toContain("username: data.authorUsername || 'creator'");
+  });
+});
+
 describe('firestoreService.createPost fails closed on identity', () => {
   const src = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
 

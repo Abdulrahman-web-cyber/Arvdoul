@@ -8,6 +8,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { featureFlagService } from './featureFlagService.js';
 
 const VIDEO_CONFIG = {
@@ -983,9 +984,9 @@ class UltimateVideoService {
           videoUrl: data.videoUrl || data.url || (Array.isArray(data.media) ? data.media.find(m => m.type === 'video')?.url : '') || '',
           thumbnail: data.thumbnail || data.thumbnailUrl || (Array.isArray(data.media) ? data.media.find(m => m.preview)?.preview : '') || '',
           creator: data.creator || {
-            name: data.authorName || 'Creator',
-            username: data.authorUsername || 'creator',
-            avatar: getSafeAvatarUrl(data.authorPhoto, data.authorName || 'Creator', data.authorId || data.userId),
+            name: pickDisplayName([data.authorName]),
+            username: deriveHandle(data.authorUsername) || '',
+            avatar: getSafeAvatarUrl(data.authorPhoto, pickDisplayName([data.authorName]), data.authorId || data.userId),
             id: data.authorId || data.userId,
           },
           authorId: data.authorId || data.userId || null,
