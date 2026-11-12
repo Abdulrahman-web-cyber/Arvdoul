@@ -1215,12 +1215,15 @@ class EnterpriseFirestoreService {
     return this.subscribeToPost(postId, (data) => {
       if (!data) return callback(null);
       const stats = data.stats || {};
+      // A counter the post document never wrote is unknown, not a measured 0:
+      // the card's reducer keeps its prior value for a null (`?? state.x`) and
+      // renders '—' when nothing has ever been known.
       callback({
-        likes: stats.likes ?? 0,
-        comments: stats.comments ?? 0,
-        shares: stats.shares ?? 0,
-        gifts: stats.gifts ?? 0,
-        views: stats.views ?? 0,
+        likes: unknownNumber(stats.likes),
+        comments: unknownNumber(stats.comments),
+        shares: unknownNumber(stats.shares),
+        gifts: unknownNumber(stats.gifts),
+        views: unknownNumber(stats.views),
       });
     });
   }

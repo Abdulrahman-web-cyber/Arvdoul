@@ -2826,6 +2826,24 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
   });
 });
 
+describe('Live post stats never fabricate 0 for an unwritten counter (N293)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('subscribeToPostStats reports unknown counters as null, not 0', () => {
+    const s = read('src/services/firestoreService.js');
+    // `stats.likes ?? 0` fired a fabricated 0 into PostCard's UPDATE_STATS on
+    // every realtime tick for a post whose stats block was never written.
+    expect(s).not.toContain('likes: stats.likes ?? 0,');
+    expect(s).toContain('likes: unknownNumber(stats.likes),');
+    expect(s).toContain('views: unknownNumber(stats.views),');
+  });
+
+  test('PostCard keeps its prior count for a null realtime payload', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).toContain('likeCount: action.payload.likes ?? state.likeCount');
+  });
+});
+
 describe('Verification standing bar never fabricates 5% progress (N292)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
