@@ -46,7 +46,11 @@ export default function PerksRewardsScreen() {
   // fabricated "1 day" that bumps a citizen tier; `getCitizenTier` floors at 0.
   const activeDaysRaw = profile?.activeDaysCount ?? profile?.activeDays;
   const activeDays = Number.isFinite(Number(activeDaysRaw)) ? Number(activeDaysRaw) : 0;
-  const experience = Number(profile?.experience) || 0;
+  // An unwritten experience total is unknown, not 0 XP — deriving the level
+  // bar from a fabricated 0 would claim progress the profile has not earned.
+  const experienceRaw = profile?.experience;
+  const hasExperience = experienceRaw != null && Number.isFinite(Number(experienceRaw));
+  const experience = hasExperience ? Number(experienceRaw) : 0;
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'perks' | 'coins' | 'gifts' | 'prestige'
 
@@ -213,17 +217,25 @@ export default function PerksRewardsScreen() {
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-medium">Stage Experience Progress</span>
               <span className="font-mono text-purple-400 font-bold">
-                {levelInfo.isMaxLevel ? 'Ascendant' : `${levelInfo.xpToNext} XP to Level ${levelInfo.level + 1}`}
+                {!hasExperience
+                  ? '—'
+                  : levelInfo.isMaxLevel
+                    ? 'Ascendant'
+                    : `${levelInfo.xpToNext} XP to Level ${levelInfo.level + 1}`}
               </span>
             </div>
             <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/[0.08]">
-              <div 
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${levelInfo.progress}%`,
-                  background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`
-                }}
-              />
+              {hasExperience ? (
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${levelInfo.progress}%`,
+                    background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`
+                  }}
+                />
+              ) : (
+                <div className="h-full w-full bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,rgba(148,163,184,0.25)_6px,rgba(148,163,184,0.25)_12px)]" />
+              )}
             </div>
           </div>
         </section>

@@ -2839,6 +2839,20 @@ describe('Ranking badge aggregates stay unknown when a post counter is missing (
   });
 });
 
+describe('Perks screen never derives an XP bar from a fabricated 0 experience (N300)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PerksRewardsScreen keeps an unwritten experience total unknown', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    // `Number(profile?.experience) || 0` fed a fabricated 0 into getLevelInfo,
+    // rendering a measured "0 XP to Level 2" bar for a profile that stored none.
+    expect(s).not.toContain('const experience = Number(profile?.experience) || 0;');
+    expect(s).toContain('const hasExperience = experienceRaw != null && Number.isFinite(Number(experienceRaw));');
+    expect(s).toContain("{!hasExperience");
+    expect(s).toContain('{hasExperience ? (');
+  });
+});
+
 describe('Story insights and coin leaderboard never fabricate 0 (N299)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
