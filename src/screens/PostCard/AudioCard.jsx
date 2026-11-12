@@ -6,6 +6,7 @@ import { Play, Pause, Volume2, VolumeX, Music, RotateCcw, RotateCw, Loader2 } fr
 import { create } from 'zustand';
 import { openDB } from 'idb';
 import { pickDisplayName } from '../../services/profileReadModel.js';
+import { tokens as designTokens, BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // 1. ZUSTAND STORE – Single source of truth for playback state
 const useAudioStore = create((set, get) => ({
@@ -312,14 +313,14 @@ const safeLocalStorage = {
 };
 
 // Exact neon gradient (matches play button)
-const getNeonWaveGradient = (ctx, width, height, tokens) => {
-  const primary = tokens.audioNeonPrimary || '#9333ea';
-  const secondary = tokens.audioNeonSecondary || '#c026d3';
-  const accent = tokens.audioNeonAccent || '#00c2ff';
+const getNeonWaveGradient = (ctx, width, height) => {
+  const primary = designTokens.color.brand.violet;
+  const secondary = designTokens.color.brand.indigo;
+  const accent = designTokens.color.brand.cyan;
   const gradient = ctx.createLinearGradient(0, 0, width, 0);
   gradient.addColorStop(0, primary);
   gradient.addColorStop(0.4, secondary);
-  gradient.addColorStop(0.8, '#ec4899');
+  gradient.addColorStop(0.8, designTokens.color.brand.pink);
   gradient.addColorStop(1, accent);
   return gradient;
 };
@@ -454,7 +455,7 @@ const AudioCard = React.memo(({
 
       // Prepare gradient (cached)
       if (!gradientCacheRef.current) {
-        gradientCacheRef.current = getNeonWaveGradient(ctx, width, height, tokens);
+        gradientCacheRef.current = getNeonWaveGradient(ctx, width, height);
       }
       const gradient = gradientCacheRef.current;
       const progressRatio = duration ? currentTime / duration : 0;
@@ -485,7 +486,7 @@ const AudioCard = React.memo(({
           barHeight = (bars[i] || 0.3) * height * 0.7 + 3;
         }
         const x = i * (barWidth + 1);
-        ctx.fillStyle = x < playedX ? gradient : `${tokens.audioNeonPrimary || '#9333ea'}80`;
+        ctx.fillStyle = x < playedX ? gradient : `${designTokens.color.brand.violet}80`;
         ctx.fillRect(x, height - barHeight, barWidth, barHeight);
       }
 
@@ -699,10 +700,10 @@ const AudioCard = React.memo(({
   }, []);
 
   const progress = duration ? (currentTime / duration) * 100 : 0;
-  const neonButtonGradient = `linear-gradient(135deg, ${tokens.audioNeonPrimary || '#9333ea'}, ${tokens.audioNeonSecondary || '#c026d3'}, #ec4899)`;
+  const neonButtonGradient = BRAND_GRADIENT;
   const buttonGlow = `0 0 20px rgba(236, 72, 153, 0.45), 0 0 40px rgba(147, 51, 234, 0.3)`;
   const volumeFillPercent = (volume / 1) * 100;
-  const volumeGradient = `linear-gradient(90deg, ${tokens.audioNeonPrimary || '#9333ea'} ${volumeFillPercent}%, #444 ${volumeFillPercent}%)`;
+  const volumeGradient = `linear-gradient(90deg, ${designTokens.color.brand.violet} ${volumeFillPercent}%, #444 ${volumeFillPercent}%)`;
   const equaliserBars = [4, 8, 12, 8, 6, 10, 14, 8];
 
   return (
@@ -856,7 +857,7 @@ const AudioCard = React.memo(({
                 height: 12px;
                 border-radius: 50%;
                 background: white;
-                box-shadow: 0 0 6px ${tokens.audioNeonPrimary || '#9333ea'};
+                box-shadow: 0 0 6px ${designTokens.color.brand.violet};
                 cursor: pointer;
               }
               input[type="range"]::-moz-range-thumb {
@@ -864,7 +865,7 @@ const AudioCard = React.memo(({
                 height: 12px;
                 border-radius: 50%;
                 background: white;
-                box-shadow: 0 0 6px ${tokens.audioNeonPrimary || '#9333ea'};
+                box-shadow: 0 0 6px ${designTokens.color.brand.violet};
                 cursor: pointer;
               }
             `}</style>

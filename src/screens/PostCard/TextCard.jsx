@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Volume2, Languages, BookOpen, Heart, Smile, Frown, Copy, Check, MicOff, Settings, Hash, Play } from "lucide-react";
 import DOMPurify from 'dompurify';
 import { marked } from 'marked'; // optional – we'll handle safely
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // 1. SOLID BACKGROUND COLOURS (random but stable per post)
 const TEXT_BACKGROUNDS = [
@@ -319,7 +320,7 @@ const TextCard = React.memo(({
 
   // Button styling (subtle)
   const buttonGlow = `0 0 8px rgba(236, 72, 153, 0.4), 0 0 12px rgba(147, 51, 234, 0.2)`;
-  const neonGradient = `linear-gradient(135deg, ${tokens?.audioNeonPrimary || '#9333ea'}, ${tokens?.audioNeonSecondary || '#c026d3'}, #06b6d4)`;
+  const neonGradient = BRAND_GRADIENT;
 
   // Floating shadow
   const floatingShadow = isDark

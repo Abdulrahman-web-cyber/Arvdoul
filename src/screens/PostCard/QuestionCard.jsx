@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { unknownNumber } from '../../lib/unknownNumber.js';
 import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Send, MessageCircle, X, Save, ChevronDown, ChevronUp, Lock, Sparkles, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -331,7 +332,7 @@ const QuestionCard = React.memo(({
   const bountyAmount = unknownNumber(question?.bounty);
 
   // Neon purple styling (works in both light and dark themes)
-  const neonGradient = `linear-gradient(135deg, ${tokens.audioNeonPrimary || '#9333ea'}, ${tokens.audioNeonSecondary || '#c026d3'}, #ec4899)`;
+  const neonGradient = BRAND_GRADIENT;
   const buttonGlow = `0 0 8px rgba(236, 72, 153, 0.4)`;
   const cardShadow = tokens.shadowDirectional || '0 8px 24px -6px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.1)';
 

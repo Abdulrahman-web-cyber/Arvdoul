@@ -339,6 +339,7 @@ jobs:
           src/__tests__/featureFlagConsumption.test.js
           src/__tests__/userServiceContract.test.js
           src/__tests__/designTokenDriftGuard.test.js
+          src/__tests__/semanticColorRatchetGuard.test.js
           src/__tests__/tailwindUtilities.test.js
           src/__tests__/reelsAndMessagesWiring.test.js
           src/__tests__/callFlowWiring.test.js

@@ -8,6 +8,7 @@ import {
   UserPlus, UserCheck, Image
 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // Safe date normalizer
 const toDate = (dateish) => {
@@ -144,11 +145,13 @@ const EventCard = React.memo(({
       : 'shadow-md border-white/10';
 
   // Neon gradient for buttons & date card (Arvdoul identity)
-  const neonGradient = `linear-gradient(135deg, ${tokens.audioNeonPrimary || '#9333ea'}, ${tokens.audioNeonSecondary || '#c026d3'}, #ec4899)`;
+  const neonGradient = BRAND_GRADIENT;
   const buttonGlow = `0 0 8px rgba(236, 72, 153, 0.5)`;
 
-  // Fallback gradient (premium, NOT Arvdoul neon purple) – from-rose-700 via-pink-600 to-purple-500
-  const fallbackGradient = 'linear-gradient(135deg, #be123c, #db2777, #9333ea)';
+  // Fallback gradient for a banner-less event card. A second brand gradient
+  // (rose → pink → purple) was a rogue stand-in; the canonical Arvdoul gradient
+  // is the single source of truth.
+  const fallbackGradient = BRAND_GRADIENT;
   // The writer stores the cover under `coverImage` (CreatePost + eventService);
   // `banner` is never written, so reading only it made the real cover never show.
   const bannerUrl = event.banner || event.coverImage || '';
