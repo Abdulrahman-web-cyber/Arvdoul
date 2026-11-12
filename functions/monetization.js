@@ -1263,6 +1263,35 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
+    // Charge the card BEFORE opening the transaction. A Stripe network call
+    // inside the `createFirestoreTransaction` callback runs on every SDK retry
+    // (up to 5x) and the callback can be retried after the charge already
+    // settled, so the old shape re-charged on each attempt (masked only by
+    // Stripe's idempotency key) and re-ran the whole money path on a
+    // transaction-contention retry. Idempotency is now owned by the ledger row
+    // inside the transaction; the charge itself is keyed by `pi_${key}`.
+    const customer = await getOrCreateStripeCustomer(uid);
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: pkg.priceUsdCents,
+      currency: 'usd',
+      payment_method: paymentMethodId,
+      customer: customer.id,
+      confirm: true,
+      off_session: true,
+      metadata: { userId: uid, packageId },
+    }, { idempotencyKey: `pi_${key}` });
+
+    // Only credit coins for a charge that actually settled. `confirm: true`
+    // with a card that needs 3DS returns `requires_action` (it does not
+    // throw), and an async method returns `processing` — crediting either
+    // would mint coins the user never paid for.
+    if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        `Payment not completed (status: ${paymentIntent?.status || 'unknown'}). Please complete authentication and try again.`
+      );
+    }
+
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
       if (ledgerSnap.exists) {
@@ -1270,29 +1299,6 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
           throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
         }
         return ledgerSnap.data().result;
-      }
-
-      // Real revenue path: charge the card (payment method validated above).
-      const customer = await getOrCreateStripeCustomer(uid);
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: pkg.priceUsdCents,
-        currency: 'usd',
-        payment_method: paymentMethodId,
-        customer: customer.id,
-        confirm: true,
-        off_session: true,
-        metadata: { userId: uid, packageId },
-      }, { idempotencyKey: `pi_${key}` });
-
-      // Only credit coins for a charge that actually settled. `confirm: true`
-      // with a card that needs 3DS returns `requires_action` (it does not
-      // throw), and an async method returns `processing` — crediting either
-      // would mint coins the user never paid for.
-      if (!paymentIntent || paymentIntent.status !== 'succeeded') {
-        throw new functions.https.HttpsError(
-          'failed-precondition',
-          `Payment not completed (status: ${paymentIntent?.status || 'unknown'}). Please complete authentication and try again.`
-        );
       }
 
       const userRef = admin.firestore().collection('users').doc(uid);
@@ -1367,51 +1373,62 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
+    // All Stripe network calls run BEFORE the transaction. A call inside the
+    // retryable `createFirestoreTransaction` callback would re-create the
+    // price/subscription on every retry (Stripe idempotency keys are not
+    // supplied here), so a transient Firestore conflict could start multiple
+    // subscriptions and charge the card repeatedly.
+    const price = await stripe.prices.create({
+      unit_amount: tierCfg.priceUsdCents,
+      currency: 'usd',
+      recurring: { interval: 'month' },
+      product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
+    });
+    const customer = await getOrCreateStripeCustomer(uid);
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
+    await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: paymentMethodId } });
+    // `error_if_incomplete` charges the first invoice off-session and THROWS
+    // if the card cannot be charged (declined, needs 3DS). The previous
+    // `default_incomplete` created the subscription with an unpaid invoice,
+    // so the code below still marked it `active` and credited the first
+    // month's coins to a subscriber who had paid nothing.
+    const sub = await stripe.subscriptions.create({
+      customer: customer.id,
+      items: [{ price: price.id }],
+      payment_behavior: 'error_if_incomplete',
+      metadata: { userId: uid, tier },
+    });
+    if (!sub || (sub.status !== 'active' && sub.status !== 'trialing')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        `Subscription not active (status: ${sub?.status || 'unknown'}). Please complete payment and try again.`
+      );
+    }
+    const stripeSubscriptionId = sub.id;
+
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
-
-      // Real recurring subscription: create a monthly price from the tier
-      // config, attach the payment method, and set the default invoice to
-      // auto-charge it.
-      const price = await stripe.prices.create({
-        unit_amount: tierCfg.priceUsdCents,
-        currency: 'usd',
-        recurring: { interval: 'month' },
-        product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
-      });
-      const customer = await getOrCreateStripeCustomer(uid);
-      await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
-      await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: paymentMethodId } });
-      // `error_if_incomplete` charges the first invoice off-session and THROWS
-      // if the card cannot be charged (declined, needs 3DS). The previous
-      // `default_incomplete` created the subscription with an unpaid invoice,
-      // so the code below still marked it `active` and credited the first
-      // month's coins to a subscriber who had paid nothing.
-      const sub = await stripe.subscriptions.create({
-        customer: customer.id,
-        items: [{ price: price.id }],
-        payment_behavior: 'error_if_incomplete',
-        metadata: { userId: uid, tier },
-      });
-      if (!sub || (sub.status !== 'active' && sub.status !== 'trialing')) {
-        throw new functions.https.HttpsError(
-          'failed-precondition',
-          `Subscription not active (status: ${sub?.status || 'unknown'}). Please complete payment and try again.`
-        );
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
       }
-      const stripeSubscriptionId = sub.id;
 
       const subRef = admin.firestore().collection('subscriptions').doc(uid);
+
+      // Credit first month coins FIRST (same double-entry path as purchases).
+      // `creditSubscriptionCoins` reads `users/{uid}`; a `t.set()` before that
+      // read would violate Firestore's read-before-write rule and throw, so the
+      // read must precede the subscription-doc write.
+      await creditSubscriptionCoins(t, {
+        userId: uid, tier, coinsPerMonth: tierCfg.coinsPerMonth, idempotencyKey: `${key}_first`,
+      });
+
       t.set(subRef, {
         userId: uid, tier, status: 'active', coinsPerMonth: tierCfg.coinsPerMonth,
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         stripeSubscriptionId, createdAt: serverTS(), updatedAt: serverTS(),
-      });
-
-      // Credit first month coins (same double-entry path as purchases).
-      await creditSubscriptionCoins(t, {
-        userId: uid, tier, coinsPerMonth: tierCfg.coinsPerMonth, idempotencyKey: `${key}_first`,
       });
 
       const resultData = { success: true, tier, stripeSubscriptionId };
@@ -1433,21 +1450,31 @@ exports.cancelSubscription = functions.https.onCall(async (data, context) => {
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
+    // Read the subscription + cancel in Stripe BEFORE the transaction. A Stripe
+    // call inside the retryable callback would fire once per retry.
+    const subRef = admin.firestore().collection('subscriptions').doc(uid);
+    const subSnap = await subRef.get();
+    if (!subSnap.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
+    const stripeSubscriptionId = subSnap.data().stripeSubscriptionId;
+    if (stripeSubscriptionId && stripe) {
+      try {
+        await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: true });
+      } catch (stripeErr) {
+        // Non-fatal: still mark locally; Stripe webhook reconciles.
+        logEvent('stripe_cancel_failed', { uid, error: stripeErr.message });
+      }
+    }
+
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
-      const subRef = admin.firestore().collection('subscriptions').doc(uid);
-      const subSnap = await t.get(subRef);
-      if (!subSnap.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
-
-      if (subSnap.data().stripeSubscriptionId && stripe) {
-        try {
-          await stripe.subscriptions.update(subSnap.data().stripeSubscriptionId, { cancel_at_period_end: true });
-        } catch (stripeErr) {
-          // Non-fatal: still mark locally; Stripe webhook reconciles.
-          logEvent('stripe_cancel_failed', { uid, error: stripeErr.message });
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
         }
+        return ledgerSnap.data().result;
       }
+      const freshSub = await t.get(subRef);
+      if (!freshSub.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
       t.update(subRef, { status: 'canceled', cancelAtPeriodEnd: true, canceledAt: serverTS(), updatedAt: serverTS() });
 
       const resultData = { success: true, message: 'Subscription will end at the current period.' };

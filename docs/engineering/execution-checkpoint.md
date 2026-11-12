@@ -4,8 +4,16 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 ## Current state
 
-- Latest verified: **158 suites, 1801 passed, 5 skipped**; `npm run build`
+- Latest verified: **158 suites, 1802 passed, 5 skipped**; `npm run build`
   green; `npm run lint` exit 0 (0 errors, 876 warnings).
+- N330 closed this session (money-in integrity): the three Stripe-backed
+  economy callables ran their Stripe network calls **inside** the retryable
+  Firestore transaction callback — `purchaseCoins` re-charged the card each
+  retry, `createSubscription` re-created the price/subscription with no
+  idempotency key (a contention retry could start several paid subscriptions),
+  and it also read `users/{uid}` after writing `subscriptions/{uid}` (a
+  read-after-write that throws). All Stripe calls now run before the
+  transaction; `transactionOrderGuard` gains a hard-zero assertion.
 - N326–N329 closed this session (financial-integrity + payout-contract +
   dead-route): see the table below. The headline is N326 — a PayPal-selected
   withdrawal settled as a Stripe payout **from the platform account** with
@@ -50,6 +58,7 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 | # | Item | Evidence |
 | --- | --- | --- |
+| N330 | `purchaseCoins`/`createSubscription`/`cancelSubscription` ran **Stripe network calls inside the retryable transaction callback** (`createFirestoreTransaction` retries 5×; the SDK re-runs on write-conflict). `purchaseCoins` re-charged the card each retry; `createSubscription` had **no** Stripe idempotency key, so a transient conflict could start multiple paid subscriptions; it also read `users/{uid}` **after** writing `subscriptions/{uid}` (read-after-write → throws, so subscribing failed outright). | all Stripe calls moved BEFORE the transaction; `creditSubscriptionCoins` runs before the sub-doc write so reads precede writes; `cancelSubscription` reads+cancels in Stripe first; both now reject a foreign idempotency key; `transactionOrderGuard.test.js` gains a hard-zero "no `stripe.*` inside a `runTransaction` callback" assertion |
 | N326 | A PayPal-selected withdrawal settled as a Stripe payout **from the platform account** (`settleWithdrawal` always called `stripe.payouts.create` and took the destination from the client-supplied `paymentDetails.stripeAccountId`; the payout UI offered PayPal with no PayPal integration) | settlement now resolves the provider server-side (`resolvePayoutProvider`): PayPal/unknown are terminal (reject + release locked coins), a Stripe method requires `payout_settings.status === 'ready'` and the account id comes from `payout_settings`; `requestWithdrawal` validates the method before locking; `stripeWebhook` handles `account.updated` → `ready`; PayPal control removed from `CoinsScreen`/`CreatorPayoutScreen`/`VideoAnalyticsScreen`; `withdrawalSettlementProvider.test.js` (8 emulator tests) pins it |
 | N327 | `walletService.requestPayout` passed the details object as `paymentMethod`, so every `WalletScreen` withdrawal threw "paymentMethod and paymentDetails required" | signature fixed to `(userId, amount, paymentMethod='stripe_connected', paymentDetails={})`; `WalletScreen` passes `'stripe_connected'` |
 | N328 | `getPayoutSettings()` returned the `{ success, settings }` envelope and screens read `accountStatus`, a field the server never writes (server writes `status`) — a fully-onboarded creator showed "Not connected" forever | service unwraps `data.settings ?? data`; fallback returns honest `status: 'unconfigured'`; `CreatorPayoutScreen`/`VideoAnalyticsScreen` gate on `status === 'ready'`; `noFabricatedData` pin |
