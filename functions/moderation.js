@@ -76,7 +76,10 @@ async function buildReportRecord(reporterId, type, targetId, reason, details) {
 
   return {
     reporterId,
-    reporterName: reporter.username || reporter.displayName || reporter.name || 'Arvdoul user',
+    // Resolved display name when the reporter document exists; otherwise left
+    // absent so the admin queue falls back to the real `reporterId` rather than
+    // a fabricated placeholder handle.
+    reporterName: reporter.username || reporter.displayName || reporter.name || null,
     reportedUserId: content.userId || content.authorId || (type === 'user' ? targetId : null),
     reason,
     details: stripHtml(details).slice(0, 1000),

@@ -216,7 +216,11 @@ export default function LiveScreen() {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return [h, m, sec].map((n) => String(n).padStart(2, '0')).join(':');
   };
-  const streamerName = (stream) => stream?.streamerName || stream?.userName || (stream?.userProfile?.displayName) || 'Streamer';
+  // Resolve the host's real name; never invent "Streamer"/"Anonymous". An
+  // unresolved host renders its real uid prefix (the same convention the live
+  // chat uses), and only a stream with no identity at all stays blank.
+  const streamerName = (stream) => stream?.streamerName || stream?.userName
+    || stream?.userProfile?.displayName || stream?.userId?.slice(0, 6) || '';
 
   const colors = {
     card: isDark ? 'bg-gray-900/80 border-gray-800' : 'bg-white/90 border-gray-200',
@@ -321,7 +325,7 @@ export default function LiveScreen() {
                 )}
                 {comments.map((c, i) => (
                   <div key={c.id || i} className="text-sm">
-                    <span className="font-semibold text-violet-400">{c.userName || c.userId?.slice(0, 6) || 'User'}</span>
+                    <span className="font-semibold text-violet-400">{c.displayName || c.userName || c.userId?.slice(0, 6)}</span>
                     <span className="text-gray-300 ml-2">{c.content || c.comment}</span>
                   </div>
                 ))}

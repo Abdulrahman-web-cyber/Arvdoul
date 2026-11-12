@@ -743,7 +743,9 @@ class UltimateLiveService {
       const commentData = {
         streamId,
         userId,
-        displayName: userData.displayName || userData.username || 'Anonymous',
+        // Never fabricate an identity: an unresolved author stays null (the
+        // render site resolves a real uid prefix), not a fake "Anonymous".
+        displayName: userData.displayName || userData.username || null,
         avatar: userData.photoURL || null,
         content: comment.trim(),
         createdAt: serverTimestamp(),

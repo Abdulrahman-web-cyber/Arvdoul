@@ -3385,6 +3385,44 @@ describe('Author identity is never fabricated across write + hydrate paths', () 
     expect(video).toContain('username: deriveHandle(data.authorUsername)');
     expect(video).not.toContain("username: data.authorUsername || 'creator'");
   });
+
+  test('liveService never stamps a comment author "Anonymous"', () => {
+    // An unresolved author must stay null; the LiveScreen render site then
+    // shows the real uid prefix rather than a fabricated "Anonymous"/"User".
+    const src = read('src/services/liveService.js');
+    expect(src).not.toContain("|| 'Anonymous'");
+    expect(src).toContain('displayName: userData.displayName || userData.username || null');
+  });
+
+  test('LiveScreen resolves a real host name, never a "Streamer" placeholder', () => {
+    const src = read('src/screens/LiveScreen.jsx');
+    expect(src).not.toContain("|| 'Streamer'");
+    expect(src).not.toContain("|| 'User'");
+    expect(src).toContain("stream?.userId?.slice(0, 6) || ''");
+  });
+
+  test('moderation + monetization reports never write "Arvdoul user"', () => {
+    const mod = read('functions/moderation.js');
+    expect(mod).not.toContain("'Arvdoul user'");
+    expect(mod).toContain("reporter.username || reporter.displayName || reporter.name || null");
+    const mon = read('functions/monetization.js');
+    expect(mon).not.toContain("'Arvdoul user'");
+    expect(mon).toContain('reporter.username || reporter.displayName || null');
+  });
+
+  test('the notification fallback body is a real sentence, not "<name> like"', () => {
+    const src = read('functions/notifications.js');
+    expect(src).not.toContain('`${senderName} ${notificationData.type}`');
+    expect(src).toContain('sent you a notification');
+  });
+
+  test('the admin moderation queue never renders an undefined reporter handle', () => {
+    const src = read('src/screens/Admin/AdminModerationQueueScreen.jsx');
+    expect(src).not.toContain('@{report.reporterName}');
+    expect(src).not.toContain('@{selectedReport.reportedItemName}');
+    expect(src).toContain('const reporterLabel = (report)');
+    expect(src).toContain('const reportedItemLabel = (report)');
+  });
 });
 
 describe('firestoreService.createPost fails closed on identity', () => {
