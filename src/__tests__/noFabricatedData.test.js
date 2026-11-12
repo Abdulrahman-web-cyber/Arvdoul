@@ -2839,6 +2839,21 @@ describe('Ranking badge aggregates stay unknown when a post counter is missing (
   });
 });
 
+describe('Creator payout rows show the real amount and settlement state (N296)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('a withdrawal row never renders a fabricated amount or a hardcoded "Completed"', () => {
+    const s = read('src/screens/CreatorPayoutScreen.jsx');
+    // `tx.amount?.toLocaleString?.() || tx.amount` printed the raw (possibly
+    // undefined) value and a hardcoded "Completed" badge claimed a settlement
+    // the ledger never reported.
+    expect(s).not.toContain("tx.amount?.toLocaleString?.() || tx.amount");
+    expect(s).toContain('const amt = unknownNumber(tx.amount);');
+    expect(s).toContain("state === 'completed' || state === 'settled'");
+    expect(s).toContain("state === 'pending' || state === 'processing' || state === 'pending_review'");
+  });
+});
+
 describe('Audio card media session shows the real author, not a fabricated one (N295)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
