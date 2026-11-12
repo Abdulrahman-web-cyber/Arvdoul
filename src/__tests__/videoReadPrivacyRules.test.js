@@ -132,7 +132,12 @@ describe('videos read authorization (N301)', () => {
       await expect(fsMod.getDoc(fsMod.doc(stranger, 'videos/deleted1'))).rejects.toBeDefined();
       await expect(fsMod.getDoc(fsMod.doc(stranger, 'videos/followers1'))).rejects.toBeDefined();
       await expect(fsMod.getDoc(fsMod.doc(bob, 'videos/followers1'))).resolves.toBeDefined();
-      await expect(fsMod.getDoc(fsMod.doc(anon, 'videos/public1'))).rejects.toBeDefined();
+      // A PUBLIC video is world-readable, exactly like a public post/community —
+      // an anonymous client may read it (the rule has no `isSignedIn()` gate on
+      // the public branch). The fix here was to stop anonymous reads of a
+      // PRIVATE/processing/deleted video by id, not to hide public content.
+      await expect(fsMod.getDoc(fsMod.doc(anon, 'videos/public1'))).resolves.toBeDefined();
+      await expect(fsMod.getDoc(fsMod.doc(anon, 'videos/private1'))).rejects.toBeDefined();
       await expect(fsMod.getDoc(fsMod.doc(alice, 'videos/private1'))).resolves.toBeDefined();
       await expect(fsMod.getDoc(fsMod.doc(stranger, 'videos/private1/stats/s1'))).rejects.toBeDefined();
       await expect(fsMod.getDoc(fsMod.doc(alice, 'videos/private1/stats/s1'))).resolves.toBeDefined();
