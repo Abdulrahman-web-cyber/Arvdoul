@@ -176,6 +176,25 @@ describe('collaborationService - no sample projects', () => {
       expect(src).not.toContain(phantom);
     }
   });
+
+  test('LinkCard renders no fabricated safety verdict, view count or dead tip control', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/LinkCard.jsx'), 'utf8');
+    // The card has no metadata/safety/classify backend (PostCard passes only
+    // link/tokens/onAnalytics/postId), so it must not invent any of these.
+    for (const phantom of [
+      'Trusted domain', 'Potentially unsafe', 'Unverified',
+      'domainScore', 'aiSummary', 'aiConfidence', 'safetyWarning',
+      'engagement.views', 'handleTip', 'showCoinMenu', 'Saved to bookmarks',
+      'link_impression',
+    ]) {
+      expect(src).not.toContain(phantom);
+    }
+    // It renders only the publisher-supplied Open Graph fields.
+    expect(src).toContain('link.title');
+    expect(src).toContain('link.description');
+    expect(src).toContain('link.image');
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {
