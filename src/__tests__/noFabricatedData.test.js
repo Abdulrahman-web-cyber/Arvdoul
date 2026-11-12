@@ -224,6 +224,16 @@ describe('collaborationService - no sample projects', () => {
     expect(src).toContain('const verticalHandler = dy < 0 ? onNext : onPrev;');
     expect(src).not.toMatch(/setGestureHint\(dx > 0 \? 'share' : 'details'\);\s*setTimeout\(\(\) => setGestureHint\(null\), 800\);\s*if \(dx > 0\) \{ onShare\?\.\(\);/);
   });
+
+  test('VideoCard only shows the quality picker when a quality ladder exists', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/VideoCard.jsx'), 'utf8');
+    // PostCard passes no `qualities`, so an always-on Settings button opened an
+    // empty menu; the picker must be gated on `qualities.length > 0`.
+    expect(src).toContain('{qualities.length > 0 && (');
+    // The unused `index` prop is gone.
+    expect(src).not.toMatch(/\n\s*index = 0,/);
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {

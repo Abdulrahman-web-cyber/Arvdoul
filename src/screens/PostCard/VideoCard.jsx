@@ -332,7 +332,6 @@ const VideoCard = React.memo(({
   prevVideoUrl = null,
   onAnalytics,
   currentUser,
-  index = 0,
   isVisible = true,
 }) => {
   // DOM refs
@@ -871,32 +870,37 @@ const VideoCard = React.memo(({
                 <button onClick={(e) => { e.stopPropagation(); cycleSpeed(); }} className="text-white/80 hover:text-white transition text-xs font-mono px-1">
                   {playbackSpeed}x
                 </button>
-                <div className="relative">
-                  <button onClick={(e) => { e.stopPropagation(); setShowQualityMenu(!showQualityMenu); }} className="text-white/80 hover:text-white transition">
-                    <Settings className="w-5 h-5" />
-                  </button>
-                  <AnimatePresence>
-                    {showQualityMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="absolute bottom-full left-0 mb-2 p-1.5 rounded-xl shadow-lg"
-                        style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: REDUCED_EFFECTS ? 'none' : 'blur(12px)', border: '1px solid rgba(147,51,234,0.3)' }}
-                      >
-                        {qualities.map(q => (
-                          <button
-                            key={q.label}
-                            onClick={() => handleQualityChange(q.label, q.src)}
-                            className={`block w-full text-left px-3 py-1 rounded text-sm ${selectedQuality === q.label ? 'text-white font-medium bg-purple-500/20' : 'text-white/70'} hover:bg-white/10 transition`}
-                          >
-                            {q.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {/* The quality picker only exists when the card was given a real
+                    quality ladder. PostCard renders this card with no `qualities`,
+                    so an always-on button opened an empty menu (a dead control). */}
+                {qualities.length > 0 && (
+                  <div className="relative">
+                    <button onClick={(e) => { e.stopPropagation(); setShowQualityMenu(!showQualityMenu); }} className="text-white/80 hover:text-white transition">
+                      <Settings className="w-5 h-5" />
+                    </button>
+                    <AnimatePresence>
+                      {showQualityMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="absolute bottom-full left-0 mb-2 p-1.5 rounded-xl shadow-lg"
+                          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: REDUCED_EFFECTS ? 'none' : 'blur(12px)', border: '1px solid rgba(147,51,234,0.3)' }}
+                        >
+                          {qualities.map(q => (
+                            <button
+                              key={q.label}
+                              onClick={() => handleQualityChange(q.label, q.src)}
+                              className={`block w-full text-left px-3 py-1 rounded text-sm ${selectedQuality === q.label ? 'text-white font-medium bg-purple-500/20' : 'text-white/70'} hover:bg-white/10 transition`}
+                            >
+                              {q.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
               </div>
               <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="text-white/80 hover:text-white transition">
                 {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
