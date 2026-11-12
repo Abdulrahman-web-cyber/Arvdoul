@@ -1,9 +1,1 @@
-{
-  "src/screens/IntroScreen.jsx": 7,
-  "src/screens/LoginScreen.jsx": 6,
-  "src/screens/OtpVerification.jsx": 11,
-  "src/screens/SetupProfile.jsx": 8,
-  "src/screens/SignupStep1Personal.jsx": 6,
-  "src/screens/SignupStep2VerifyContact.jsx": 7,
-  "src/screens/VerifyEmailScreen.jsx": 13
-}
+{}

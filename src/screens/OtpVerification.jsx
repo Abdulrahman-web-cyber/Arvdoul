@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext.jsx";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { markOnboardingRequired, clearOnboardingRequired } from "../utils/profileCompletion.js";
+import { tokens } from "../design-system/tokens.js";
 
 const DIGIT_COUNT = 6;
 const INITIAL_COUNTDOWN = 120;
@@ -70,8 +71,7 @@ const triggerHaptic = (pattern = "light") => {
  * Design system (shared with Signup Step 1 / Step 2 and Login)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const GRADIENT =
-  "linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)";
+const GRADIENT = `linear-gradient(125deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 52%, ${tokens.color.brand.blue} 100%)`;
 
 const STEPS = [
   { number: 1, label: "Personal" },
@@ -141,7 +141,7 @@ const THEMES = {
     "--text": "#101735",
     "--text-2": "#4D587B",
     "--text-3": "#7783A5",
-    "--accent-text": "#4431F7",
+    "--accent-text": tokens.color.brand.indigo,
 
     "--card-bg":
       "linear-gradient(145deg, rgba(255,255,255,0.60), rgba(255,255,255,0.30) 48%, rgba(237,242,255,0.35))",
@@ -156,7 +156,7 @@ const THEMES = {
     "--field-bg-solid": "#FFFFFF",
     "--field-border": "rgba(61,76,147,0.18)",
     "--field-border-hover": "rgba(68,49,247,0.38)",
-    "--field-focus": "#4431F7",
+    "--field-focus": tokens.color.brand.indigo,
     "--field-ring": "rgba(68,49,247,0.15)",
     "--sel-glow": "rgba(68,49,247,0.12)",
 
@@ -182,7 +182,7 @@ const THEMES = {
     "--btn-shadow":
       "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
 
-    "--focus-outline": "#4431F7",
+    "--focus-outline": tokens.color.brand.indigo,
     "--rim-1": "rgba(139,30,243,0.34)",
     "--rim-2": "rgba(5,91,251,0.30)",
     "--spec": "rgba(255,255,255,0.67)",
@@ -389,7 +389,7 @@ const STYLES = `
 .av2-success {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:320px;text-align:center}
 .av2-success-mark {
   display:grid;place-items:center;width:88px;height:88px;margin-bottom:6px;border-radius:50%;color:#fff;
-  background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 60%,#055BFB));
+  background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 60%,${tokens.color.brand.blue}));
   box-shadow:0 0 0 8px color-mix(in srgb,var(--success) 16%,transparent),0 20px 36px -14px color-mix(in srgb,var(--success) 70%,transparent);
 }
 .av2-success-title {margin:0;color:var(--success);font-size:22px;font-weight:800;letter-spacing:-.025em}
@@ -605,9 +605,9 @@ const CircularProgressRing = React.memo(({ progress, size = 48, strokeWidth = 4,
       <svg width={size} height={size} aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="av2-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#8B1EF3" />
-            <stop offset="55%" stopColor="#4431F7" />
-            <stop offset="100%" stopColor="#055BFB" />
+            <stop offset="0%" stopColor={tokens.color.brand.violet} />
+            <stop offset="55%" stopColor={tokens.color.brand.indigo} />
+            <stop offset="100%" stopColor={tokens.color.brand.blue} />
           </linearGradient>
         </defs>
         <circle stroke="var(--line)" strokeWidth={strokeWidth} fill="transparent" r={radius} cx={size / 2} cy={size / 2} />
@@ -1115,7 +1115,7 @@ export default function OTPVerification() {
         </div>
         <main className="av2-shell" style={{ alignItems: "center", justifyContent: "center" }}>
           <div className="av2-loading" role="status">
-            <SpinnerIcon size={38} stroke={2.2} style={{ color: "#8B1EF3" }} />
+            <SpinnerIcon size={38} stroke={2.2} style={{ color: tokens.color.brand.violet }} />
             <p style={{ margin: 0 }}>Preparing verification...</p>
           </div>
         </main>

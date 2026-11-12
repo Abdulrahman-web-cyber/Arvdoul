@@ -15,13 +15,13 @@ import {
   getUserProfile,
 } from "../services/userService.js";
 import storageService from "../services/storageService.js";
+import { tokens } from "../design-system/tokens.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Design system (shared with Signup, Login, OTP and Verify Email screens)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const GRADIENT =
-  "linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)";
+const GRADIENT = `linear-gradient(125deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 52%, ${tokens.color.brand.blue} 100%)`;
 
 const STEPS = [
   { number: 1, label: "Personal" },
@@ -92,7 +92,7 @@ const THEMES = {
     "--text": "#101735",
     "--text-2": "#4D587B",
     "--text-3": "#7783A5",
-    "--accent-text": "#4431F7",
+    "--accent-text": tokens.color.brand.indigo,
 
     "--card-bg":
       "linear-gradient(145deg, rgba(255,255,255,0.60), rgba(255,255,255,0.30) 48%, rgba(237,242,255,0.35))",
@@ -107,7 +107,7 @@ const THEMES = {
     "--field-bg-solid": "#FFFFFF",
     "--field-border": "rgba(61,76,147,0.18)",
     "--field-border-hover": "rgba(68,49,247,0.38)",
-    "--field-focus": "#4431F7",
+    "--field-focus": tokens.color.brand.indigo,
     "--field-ring": "rgba(68,49,247,0.15)",
     "--sel-glow": "rgba(68,49,247,0.12)",
 
@@ -134,7 +134,7 @@ const THEMES = {
     "--btn-shadow":
       "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
 
-    "--focus-outline": "#4431F7",
+    "--focus-outline": tokens.color.brand.indigo,
     "--rim-1": "rgba(139,30,243,0.34)",
     "--rim-2": "rgba(5,91,251,0.30)",
     "--spec": "rgba(255,255,255,0.67)",
@@ -336,7 +336,7 @@ const STYLES = `
 .av2-btn:disabled::after {display:none}
 .av2-btn[data-loading="true"] {background:${GRADIENT};color:#fff;cursor:progress;box-shadow:var(--btn-shadow);border-color:rgba(255,255,255,.18)}
 .av2-btn[data-done="true"] {
-  background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 60%,#055BFB));
+  background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 60%,${tokens.color.brand.blue}));
   color:#fff;cursor:default;border-color:rgba(255,255,255,.18);box-shadow:0 12px 26px -12px var(--success)
 }
 .av2-secondary {
@@ -1260,7 +1260,7 @@ export default function SetupProfile() {
         </div>
         <main className="av2-shell" style={{ alignItems: "center", justifyContent: "center" }}>
           <div className="av2-loading" role="status">
-            <SpinnerIcon size={38} stroke={2.2} style={{ color: "#8B1EF3" }} />
+            <SpinnerIcon size={38} stroke={2.2} style={{ color: tokens.color.brand.violet }} />
             <p style={{ margin: 0 }}>Redirecting to login…</p>
           </div>
         </main>

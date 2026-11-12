@@ -7,13 +7,13 @@ import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext";
 import { useTheme } from "@context/ThemeContext";
 import { getOnboardingSession, clearOnboardingRequired } from "../utils/profileCompletion.js";
+import { tokens } from "../design-system/tokens.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Design system (shared with Signup, Login and OTP screens)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const GRADIENT =
-  "linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)";
+const GRADIENT = `linear-gradient(125deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 52%, ${tokens.color.brand.blue} 100%)`;
 
 const STEPS = [
   { number: 1, label: "Personal" },
@@ -21,7 +21,7 @@ const STEPS = [
   { number: 3, label: "Complete" },
 ];
 
-const CONFETTI_COLORS = ["#8B1EF3", "#4431F7", "#055BFB", "#49E3AC", "#FFC46B", "#FF879B", "#B8AAFF"];
+const CONFETTI_COLORS = [tokens.color.brand.violet, tokens.color.brand.indigo, tokens.color.brand.blue, "#49E3AC", "#FFC46B", "#FF879B", "#B8AAFF"];
 
 const THEMES = {
   dark: {
@@ -85,7 +85,7 @@ const THEMES = {
     "--text": "#101735",
     "--text-2": "#4D587B",
     "--text-3": "#7783A5",
-    "--accent-text": "#4431F7",
+    "--accent-text": tokens.color.brand.indigo,
 
     "--card-bg":
       "linear-gradient(145deg, rgba(255,255,255,0.60), rgba(255,255,255,0.30) 48%, rgba(237,242,255,0.35))",
@@ -100,7 +100,7 @@ const THEMES = {
     "--field-bg-solid": "#FFFFFF",
     "--field-border": "rgba(61,76,147,0.18)",
     "--field-border-hover": "rgba(68,49,247,0.38)",
-    "--field-focus": "#4431F7",
+    "--field-focus": tokens.color.brand.indigo,
     "--field-ring": "rgba(68,49,247,0.15)",
     "--sel-glow": "rgba(68,49,247,0.12)",
 
@@ -126,7 +126,7 @@ const THEMES = {
     "--btn-shadow":
       "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
 
-    "--focus-outline": "#4431F7",
+    "--focus-outline": tokens.color.brand.indigo,
     "--rim-1": "rgba(139,30,243,0.34)",
     "--rim-2": "rgba(5,91,251,0.30)",
     "--spec": "rgba(255,255,255,0.67)",
@@ -215,7 +215,7 @@ const STYLES = `
   box-shadow:var(--btn-shadow),0 0 0 6px var(--field-ring);transition:background .3s,box-shadow .3s;
 }
 .av2-mark[data-state="verified"] {
-  background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 60%,#055BFB));
+  background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 60%,${tokens.color.brand.blue}));
   box-shadow:0 12px 26px -12px var(--success),0 0 0 6px color-mix(in srgb,var(--success) 18%,transparent);
 }
 .av2-mark[data-state="error"] {background:var(--danger);box-shadow:0 12px 26px -12px var(--danger),0 0 0 6px var(--danger-ring)}
@@ -586,9 +586,9 @@ const CircularProgressRing = React.memo(({ progress, size = 48, strokeWidth = 4,
       <svg width={size} height={size} aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="av2-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#8B1EF3" />
-            <stop offset="55%" stopColor="#4431F7" />
-            <stop offset="100%" stopColor="#055BFB" />
+            <stop offset="0%" stopColor={tokens.color.brand.violet} />
+            <stop offset="55%" stopColor={tokens.color.brand.indigo} />
+            <stop offset="100%" stopColor={tokens.color.brand.blue} />
           </linearGradient>
         </defs>
         <circle stroke="var(--line)" strokeWidth={strokeWidth} fill="transparent" r={radius} cx={size / 2} cy={size / 2} />
