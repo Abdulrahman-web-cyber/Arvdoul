@@ -53,6 +53,11 @@ service cloud.firestore {
         'monetizationEligible', 'coins', 'coinBalance', 'earnings',
         'totalEarned', 'isVerified', 'accountStatus', 'roles', 'role',
         'policyStanding',
+        // The withdrawal hold. `getAvailableBalance = coins - lockedCoins`, so a
+        // client that could lower its own `lockedCoins` would raise its spendable
+        // balance and could file a second withdrawal against coins already held
+        // (two payouts from one balance). Written only by requestWithdrawal.
+        'lockedCoins',
         // Live presence moved to the scope-gated user_presence/{uid} (N321); a
         // client write of these on users/{uid} would re-open the leak.
         'isOnline', 'lastActive'
@@ -383,6 +388,8 @@ service cloud.firestore {
           'longestStreak', 'lastActiveDate', 'lastActiveDay', 'coinBalance',
           'earnings', 'totalEarned', 'reputationScore', 'reputationTier', 'influence',
           'influenceScore', 'contribution', 'contributionScore',
+          // The withdrawal hold is server-only (see touchesServerAuthoritativeFields).
+          'lockedCoins',
           // Live presence lives in user_presence/{uid} (N321).
           'isOnline', 'lastActive'
         ]);

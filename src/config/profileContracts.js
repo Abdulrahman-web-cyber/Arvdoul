@@ -124,6 +124,13 @@ export const SERVER_AUTHORITATIVE_FIELDS = [
   'monetizationEligible',
   'coins',
   'coinBalance',
+  // `lockedCoins` is the server's withdrawal hold. It is written only by
+  // `functions/monetization.js requestWithdrawal` (and released by
+  // `withdrawalSettlement`). It is server-authoritative because
+  // `getAvailableBalance = coins - lockedCoins`: a client that could lower it
+  // would raise its own spendable balance and could request two withdrawals
+  // against one balance (the second would settle from the same coins).
+  'lockedCoins',
   'earnings',
   'totalEarned',
   'isVerified',
