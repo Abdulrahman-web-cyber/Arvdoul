@@ -122,19 +122,31 @@ export default function CreatorPayoutScreen() {
     try {
       // Stripe Express onboarding via the Cloud Function
       // (functions/monetization.js createPayoutAccount). No timers, no
-      // simulated success — the account is only "connected" when the
-      // server actually created it.
+      // simulated success — the account is only "connected" once the server
+      // reports `payouts_enabled`, so we re-read the real status afterwards
+      // rather than trusting the creation response (which is returned before
+      // onboarding and is not proof of a payable account).
       const returnUrl = `${window.location.origin}/creator-payout`;
       const result = await getMonetizationService().createPayoutAccount('US', returnUrl);
       if (result?.onboardingUrl) {
         // Real Stripe-hosted onboarding — send the creator there.
         window.open(result.onboardingUrl, '_blank', 'noopener');
         toast.info('Complete onboarding in the Stripe window that just opened.');
-      } else if (result?.success || result?.status === 'verified' || result?.accountId) {
-        setStripeConnected(true);
-        toast.success('Payout account connected');
-      } else {
+      } else if (!result?.success && !result?.accountId) {
         toast.error(result?.message || 'Could not create the payout account. Is the Cloud Function deployed?');
+        return;
+      } else {
+        toast.info('Onboarding link unavailable — reload once onboarding completes.');
+      }
+      // Re-read the authoritative status; only `ready` means payable.
+      try {
+        const settings = await getMonetizationService().getPayoutSettings();
+        const connected = settings?.status === 'ready';
+        setStripeConnected(connected);
+        setPayoutAccountId(settings?.stripeAccountId || null);
+        if (connected) toast.success('Payout account connected');
+      } catch {
+        // Status stays as previously loaded; the reload will reconcile.
       }
     } catch (err) {
       toast.error(err?.message || 'Failed to connect payout account. The Stripe Connect Cloud Function must be deployed.');
