@@ -215,11 +215,21 @@ class UltimateAnalyticsService {
       const cached = this.cache.get(cacheKey);
       if (cached) return cached;
 
-      const { doc, getDoc, collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+      const { doc, getDoc } = await import('firebase/firestore');
       
       // Get profile analytics document
       const profileAnalyticsRef = doc(this.firestore, 'profile_analytics', userId);
       const profileAnalyticsSnap = await getDoc(profileAnalyticsRef);
+
+      // `profile_analytics.totalEngagement`/`coinsEarned` are seeded to 0 at
+      // creation and NO writer ever increments them, so the stored fields are
+      // always fabricated measured zeros. Derive both live instead: the
+      // engagement total from the creator's recent public posts, the earnings
+      // figure from the wallet balance on the user doc.
+      const [liveCoins, liveEngagement] = await Promise.all([
+        this._readLiveCoinBalance(userId),
+        this._computeRecentEngagement(userId, { withTopPosts: true }),
+      ]);
       
       let analytics = {
         userId,
@@ -227,8 +237,10 @@ class UltimateAnalyticsService {
         hasData: false,
         totalViews: 0,
         totalReach: 0,
-        totalEngagement: 0,
-        coinsEarned: 0,
+        // Overwritten with the live-derived values in both branches below;
+        // never leave a fabricated measured 0 here.
+        totalEngagement: null,
+        coinsEarned: null,
         dailyStats: [],
         topPosts: [],
         // Nothing computes a growth rate or an active-day count into
@@ -272,12 +284,12 @@ class UltimateAnalyticsService {
           hasData: true,
           totalViews,
           totalReach,
-          // Nothing on the server increments `totalEngagement`, so an absent
-          // value is unknown (rendered '—'), not a measured zero.
-          totalEngagement: typeof data.totalEngagement === 'number' ? data.totalEngagement : null,
-          coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null,
+          // Live-derived (the stored `totalEngagement`/`coinsEarned` are never
+          // written past their 0 seed). Unknown stays null (rendered '—').
+          totalEngagement: liveEngagement.totalEngagement,
+          coinsEarned: liveCoins,
           dailyStats: this._extractDailyStats(data.dailyStats, startDate),
-          topPosts: data.topPosts || [],
+          topPosts: liveEngagement.topPosts.length ? liveEngagement.topPosts : (data.topPosts || []),
           // Nothing writes a growth rate, so a stored value is the only real
           // one; an absent one is unknown (the dashboard hides the card).
           growthRate: typeof data.growthRate === 'number' ? data.growthRate : null,
@@ -314,54 +326,17 @@ class UltimateAnalyticsService {
           };
         }
       } else {
-        // Fallback for new creators: load live sharded views, coins, and post engagement
+        // Fallback for new creators: load live sharded views plus the live
+        // engagement/earnings computed above (both derived from real data, not
+        // the never-incremented stored counters).
         const docPath = `profile_analytics/${userId}`;
         const [totalViews, totalReach] = await Promise.all([
           countersManager.get({ docPath, field: 'totalViews', fallback: 0 }),
           countersManager.get({ docPath, field: 'totalReach', fallback: 0 }),
         ]);
 
-        let coinsEarned = null;
-        try {
-          const userRef = doc(this.firestore, 'users', userId);
-          const uSnap = await getDoc(userRef);
-          if (uSnap.exists()) {
-            const uData = uSnap.data();
-            // A failed/absent identity read leaves coins unknown (rendered '—'),
-            // not a fabricated "0 coins earned".
-            const rawCoins = uData.coins ?? uData.coinBalance;
-            coinsEarned = typeof rawCoins === 'number' ? rawCoins : null;
-          }
-        } catch (e) {
-          logger.warn('Analytics identity read failed; coins unknown', { userId, error: e?.message });
-        }
-
-        let topPosts = [];
-        let totalEngagement = 0;
-        try {
-          const postsRef = collection(this.firestore, 'posts');
-          const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(10)));
-          topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Engagement is stored under `stats`. Sum only while every counter
-          // is known: a post whose `stats` block was never written contributes
-          // an unknown count, and adding it as 0 reported a measured-looking
-          // engagement that understated the real total. Any unknown makes the
-          // whole aggregate null (rendered '—').
-          let engagementComplete = true;
-          const addEngagement = (raw) => {
-            const n = unknownNumber(raw);
-            if (n === null) { engagementComplete = false; return 0; }
-            return n;
-          };
-          totalEngagement = topPosts.reduce((sum, p) => {
-            const s = p.stats || {};
-            return sum + addEngagement(s.likes) + addEngagement(s.comments) + addEngagement(s.shares);
-          }, 0);
-          if (!engagementComplete) totalEngagement = null;
-        } catch (e) {
-          totalEngagement = null;
-          logger.warn('Analytics top-posts read failed; engagement is unavailable', { userId, error: e?.message });
-        }
+        const coinsEarned = liveCoins;
+        const { totalEngagement, topPosts } = liveEngagement;
 
         // No per-day series is stored for a brand-new creator, and a synthetic
         // flat-then-spike series would render as measured daily data in the
@@ -425,6 +400,70 @@ class UltimateAnalyticsService {
     }
     
     return stats.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /**
+   * Live engagement total for a creator's recent public posts.
+   *
+   * `profile_analytics.totalEngagement` is seeded to `0` at creation and no
+   * writer ever increments it, so the stored field is always a fabricated
+   * measured zero. Compute the total from the posts themselves instead: sum
+   * only while every counter is known (a post whose `stats` block was never
+   * written contributes an unknown count; adding it as 0 understated the real
+   * total). Any unknown makes the whole aggregate null (rendered '—').
+   */
+  async _computeRecentEngagement(userId, { withTopPosts = false } = {}) {
+    const empty = { totalEngagement: null, topPosts: [] };
+    try {
+      const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+      const postsRef = collection(this.firestore, 'posts');
+      const pSnap = await getDocs(query(
+        postsRef,
+        where('authorId', '==', userId),
+        where('isDeleted', '==', false),
+        where('status', '==', 'published'),
+        where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'),
+        limit(10),
+      ));
+      const topPosts = pSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      let complete = true;
+      const add = (raw) => {
+        const n = unknownNumber(raw);
+        if (n === null) { complete = false; return 0; }
+        return n;
+      };
+      let totalEngagement = topPosts.reduce((sum, p) => {
+        const s = p.stats || {};
+        return sum + add(s.likes) + add(s.comments) + add(s.shares);
+      }, 0);
+      if (!complete) totalEngagement = null;
+      return { totalEngagement, topPosts: withTopPosts ? topPosts : [] };
+    } catch (e) {
+      logger.warn('Analytics top-posts read failed; engagement is unavailable', { userId, error: e?.message });
+      return empty;
+    }
+  }
+
+  /**
+   * Live coin balance (creator earnings) read from `users/{uid}`.
+   *
+   * `profile_analytics.coinsEarned` is seeded to `0` and never incremented
+   * server-side; the wallet balance on the user doc is the real figure. An
+   * absent/unreadable balance is unknown (null, rendered '—'), never a
+   * fabricated "0 coins earned".
+   */
+  async _readLiveCoinBalance(userId) {
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const uSnap = await getDoc(doc(this.firestore, 'users', userId));
+      if (!uSnap.exists()) return null;
+      const raw = uSnap.data().coins ?? uSnap.data().coinBalance;
+      return typeof raw === 'number' ? raw : null;
+    } catch (e) {
+      logger.warn('Analytics identity read failed; coins unknown', { userId, error: e?.message });
+      return null;
+    }
   }
 
   /**

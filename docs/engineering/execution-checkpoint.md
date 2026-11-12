@@ -1,11 +1,20 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (HEAD `4edab7b`)._
+_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (HEAD `357a695`)._
 
 ## Current state
 
 - Latest verified: **156 suites, 1781 passed, 5 skipped**; `npm run build`
   green; `npx eslint src/ functions/ --quiet` exit 0 (0 errors).
+- N320 closed this session: the creator dashboard's "Engagement"/"Coins Earned"
+  cards rendered a fabricated measured `0` — `functions/analytics.js`
+  seeds `profile_analytics.totalEngagement`/`coinsEarned` to `0` and no writer
+  ever increments them, and `analyticsService.getUserAnalytics` read the stored
+  value in the doc-exists branch (its `typeof === 'number'` guard passes on the
+  seed), *replacing* the live values the else branch derived. Both figures are
+  now derived live in every branch (`_computeRecentEngagement` from recent
+  public posts, `_readLiveCoinBalance` from `users/{uid}`); the server seed no
+  longer writes the two never-incremented fields.
 - N319 closed this session: the rogue `ARVDOUL_GRADIENT`
   (`#9333ea → #c026d3 → #06b6d4`/`#ec4899`) second-brand-gradient family across
   the post cards / video cards / SplashScreen is migrated onto `BRAND_GRADIENT`
