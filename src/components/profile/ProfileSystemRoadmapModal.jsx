@@ -160,7 +160,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
           {/* Header */}
           <div className="p-4 sm:p-6 border-b border-white/10 flex items-start justify-between gap-4 shrink-0 bg-gradient-to-r from-purple-950/30 via-indigo-950/20 to-transparent">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#8B1EF3] to-[#055BFB] flex items-center justify-center text-white shadow-lg shadow-purple-500/25 shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white shadow-lg shadow-purple-500/25 shrink-0">
                 {activeTab === 'royals' ? (
                   <Crown className="w-6 h-6 text-amber-300" />
                 ) : activeTab === 'citizenship' ? (

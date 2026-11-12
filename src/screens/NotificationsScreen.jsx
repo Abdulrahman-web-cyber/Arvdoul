@@ -42,6 +42,15 @@ const NOTIFICATION_TYPE_ALIASES = {
 };
 const normalizeNotificationType = (type) => NOTIFICATION_TYPE_ALIASES[type] || type || 'system';
 
+// Notification types that are platform-generated (no human sender). They map to
+// the "System" filter tab. Mirrors NOTIFICATIONS_CONFIG.TYPES entries whose
+// notifications are emitted with `senderId: 'system'`.
+const SYSTEM_NOTIFICATION_TYPES = new Set([
+  'system', 'system_alert', 'maintenance', 'policy_update', 'security_alert',
+  'verification', 'new_feature', 'reminder', 'level_up', 'badge_earned',
+  'milestone_reached', 'achievement_unlocked', 'trending',
+]);
+
 export default function NotificationsScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -295,10 +304,15 @@ export default function NotificationsScreen() {
         ? createdAt.toLocaleString()
         : (fn.timestamp ? String(fn.timestamp) : '');
       const type = normalizeNotificationType(fn.type);
+      // The filter tabs bucket by `category`. Stories/Mentions/Live/Coins also
+      // have a `type`-based fallback in the filter, but the System tab keyed on
+      // `category === 'System'` alone and nothing ever produced that category,
+      // so the tab matched nothing. Platform-generated types now map to it.
       const category = type === 'message' || type === 'story_reply' ? 'Messages'
         : type?.includes('friend') ? 'Friends'
           : type === 'coin_gift' ? 'Coins'
-            : 'All';
+            : SYSTEM_NOTIFICATION_TYPES.has(type) ? 'System'
+              : 'All';
       return {
         id: fn.id || `fn-${idx}`,
         category,

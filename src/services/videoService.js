@@ -8,6 +8,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { featureFlagService } from './featureFlagService.js';
 
 const VIDEO_CONFIG = {
@@ -604,13 +605,30 @@ class UltimateVideoService {
   async getVideosByUser(userId, options = {}) {
     await this.ensureInitialized();
     const videosRef = collection(this.firestore, 'videos');
-    let q = query(
-      videosRef,
-      where('userId', '==', userId),
-      where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(options.limit || VIDEO_CONFIG.PERFORMANCE.PAGE_LIMIT)
-    );
+    const isOwnerView = Boolean(options.viewerId && options.viewerId === userId);
+    const pageLimit = options.limit || VIDEO_CONFIG.PERFORMANCE.PAGE_LIMIT;
+    // The list rule admits two shapes (rules are not filters): the owner's own
+    // shape (`userId == uid()`, any status/visibility) and the public shape
+    // (`isDeleted == false` + `status == 'ready'` + `visibility == 'public'`).
+    // A query that omits the public constraints is denied wholesale for a
+    // non-owner, so a visitor's video tab would silently show nothing.
+    let q = isOwnerView
+      ? query(
+        videosRef,
+        where('userId', '==', userId),
+        where('isDeleted', '==', false),
+        orderBy('createdAt', 'desc'),
+        limit(pageLimit)
+      )
+      : query(
+        videosRef,
+        where('userId', '==', userId),
+        where('isDeleted', '==', false),
+        where('status', '==', VIDEO_CONFIG.STATUS.READY),
+        where('visibility', '==', VIDEO_CONFIG.VISIBILITY.PUBLIC),
+        orderBy('createdAt', 'desc'),
+        limit(pageLimit)
+      );
     if (options.startAfterDoc) {
       q = query(q, startAfter(options.startAfterDoc));
     }
@@ -739,9 +757,14 @@ class UltimateVideoService {
 
     try {
       const videosRef = collection(this.firestore, 'videos');
+      // The list rule (videoListableByViewer) requires the QUERY to prove a
+      // public shape — rules are not filters — so the equality constraints must
+      // be present or every non-owner list is denied (a silent empty feed).
       let q = query(
         videosRef,
         where('isDeleted', '==', false),
+        where('status', '==', VIDEO_CONFIG.STATUS.READY),
+        where('visibility', '==', VIDEO_CONFIG.VISIBILITY.PUBLIC),
         orderBy('rankingScore', 'desc'),
         limit(limit * VIDEO_CONFIG.PERFORMANCE.FEED_FETCH_MULTIPLIER)
       );
@@ -983,9 +1006,9 @@ class UltimateVideoService {
           videoUrl: data.videoUrl || data.url || (Array.isArray(data.media) ? data.media.find(m => m.type === 'video')?.url : '') || '',
           thumbnail: data.thumbnail || data.thumbnailUrl || (Array.isArray(data.media) ? data.media.find(m => m.preview)?.preview : '') || '',
           creator: data.creator || {
-            name: data.authorName || 'Creator',
-            username: data.authorUsername || 'creator',
-            avatar: getSafeAvatarUrl(data.authorPhoto, data.authorName || 'Creator', data.authorId || data.userId),
+            name: pickDisplayName([data.authorName]),
+            username: deriveHandle(data.authorUsername) || '',
+            avatar: getSafeAvatarUrl(data.authorPhoto, pickDisplayName([data.authorName]), data.authorId || data.userId),
             id: data.authorId || data.userId,
           },
           authorId: data.authorId || data.userId || null,

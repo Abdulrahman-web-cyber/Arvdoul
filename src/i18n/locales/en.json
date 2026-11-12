@@ -158,7 +158,6 @@
     "privacySection": "Privacy & Security",
     "privateProfile": "Private profile",
     "privateProfileDesc": "Only followers can see your content",
-    "activeStatus": "Show active status",
     "allowDMs": "Who can message you",
     "dmOption": {
       "everyone": "Everyone",
@@ -170,6 +169,9 @@
     "dataSection": "Data & Cache",
     "clearCache": "Clear application cache",
     "clearCacheDesc": "Removes cached content and offline data",
+    "liteMode": "Lite Mode (Data Saver)",
+    "liteModeDesc": "Reduce data usage: lower media quality, fewer autoplays and smaller feed pages",
+    "liteModeRecommended": "Your device or network is low-end — Lite Mode is recommended.",
     "about": "About Arvdoul",
     "dangerSection": "Account",
     "signOut": "Sign out",
@@ -181,7 +183,18 @@
     "deleting": "Deleting...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Two-factor authentication",
+    "mfaDesc": "Add a time-based code from an authenticator app as a second step.",
+    "mfaEnable": "Enable 2FA",
+    "mfaEnabled": "2FA is on",
+    "mfaScanHint": "Enter this setup key in your authenticator app, then enter the 6-digit code.",
+    "mfaCodeLabel": "6-digit code",
+    "mfaVerify": "Verify & enable",
+    "mfaDisable": "Disable 2FA",
+    "mfaError": "Something went wrong. Please try again.",
+    "mfaDisabled": "Two-factor authentication disabled.",
+    "mfaStatusUnavailable": "Two-factor status is unavailable right now. Reopen this dialog to retry."
   },
   "level": {
     "title": "Level & Progress",

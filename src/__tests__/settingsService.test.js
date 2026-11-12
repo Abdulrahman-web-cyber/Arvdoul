@@ -27,7 +27,6 @@ describe('settings merge (pure)', () => {
   test('merges partial docs over defaults without losing groups', () => {
     const merged = mergeSettings({ privacy: { allowDMs: 'friends' } });
     expect(merged.privacy.allowDMs).toBe('friends');
-    expect(merged.privacy.showActiveStatus).toBe(true);
     expect(merged.notifications.push).toBe(true);
     expect(merged.playback.autoPlayVideos).toBe(true);
   });

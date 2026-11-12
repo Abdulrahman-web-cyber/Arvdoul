@@ -332,7 +332,6 @@ const VideoCard = React.memo(({
   prevVideoUrl = null,
   onAnalytics,
   currentUser,
-  index = 0,
   isVisible = true,
 }) => {
   // DOM refs
@@ -521,21 +520,30 @@ const VideoCard = React.memo(({
       const swipeThresholdX = viewportWidth * 0.1; // 10% of width
       const swipeThresholdY = window.innerHeight * 0.1;
 
+      // Only advertise and act on a swipe when the card was actually given a
+      // handler for it. PostCard renders this card without onShare/onOpenDetails/
+      // onNext/onPrev, so the hints used to promise an action that never ran.
       if (absX > swipeThresholdX && absY < swipeThresholdY) {
-        setGestureHint(dx > 0 ? 'share' : 'details');
-        setTimeout(() => setGestureHint(null), 800);
-        if (dx > 0) { onShare?.(); pushAnalytics('video_swipe_right_share', { postId }); }
-        else { onOpenDetails?.(postId); pushAnalytics('video_swipe_left_details', { postId }); }
-        haptic(10);
-        return;
+        const horizontalHandler = dx > 0 ? onShare : onOpenDetails;
+        if (horizontalHandler) {
+          setGestureHint(dx > 0 ? 'share' : 'details');
+          setTimeout(() => setGestureHint(null), 800);
+          if (dx > 0) { onShare(); pushAnalytics('video_swipe_right_share', { postId }); }
+          else { onOpenDetails(postId); pushAnalytics('video_swipe_left_details', { postId }); }
+          haptic(10);
+          return;
+        }
       }
       if (absY > swipeThresholdY && absX < swipeThresholdX) {
-        setGestureHint(dy < 0 ? 'next' : 'prev');
-        setTimeout(() => setGestureHint(null), 800);
-        if (dy < 0) { onNext?.(); pushAnalytics('video_swipe_up_next', { postId }); }
-        else { onPrev?.(); pushAnalytics('video_swipe_down_prev', { postId }); }
-        haptic(10);
-        return;
+        const verticalHandler = dy < 0 ? onNext : onPrev;
+        if (verticalHandler) {
+          setGestureHint(dy < 0 ? 'next' : 'prev');
+          setTimeout(() => setGestureHint(null), 800);
+          verticalHandler();
+          pushAnalytics(dy < 0 ? 'video_swipe_up_next' : 'video_swipe_down_prev', { postId });
+          haptic(10);
+          return;
+        }
       }
       if (velocity < 0.3 && absX < 10 && absY < 10) {
         togglePlay();
@@ -862,32 +870,37 @@ const VideoCard = React.memo(({
                 <button onClick={(e) => { e.stopPropagation(); cycleSpeed(); }} className="text-white/80 hover:text-white transition text-xs font-mono px-1">
                   {playbackSpeed}x
                 </button>
-                <div className="relative">
-                  <button onClick={(e) => { e.stopPropagation(); setShowQualityMenu(!showQualityMenu); }} className="text-white/80 hover:text-white transition">
-                    <Settings className="w-5 h-5" />
-                  </button>
-                  <AnimatePresence>
-                    {showQualityMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="absolute bottom-full left-0 mb-2 p-1.5 rounded-xl shadow-lg"
-                        style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: REDUCED_EFFECTS ? 'none' : 'blur(12px)', border: '1px solid rgba(147,51,234,0.3)' }}
-                      >
-                        {qualities.map(q => (
-                          <button
-                            key={q.label}
-                            onClick={() => handleQualityChange(q.label, q.src)}
-                            className={`block w-full text-left px-3 py-1 rounded text-sm ${selectedQuality === q.label ? 'text-white font-medium bg-purple-500/20' : 'text-white/70'} hover:bg-white/10 transition`}
-                          >
-                            {q.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {/* The quality picker only exists when the card was given a real
+                    quality ladder. PostCard renders this card with no `qualities`,
+                    so an always-on button opened an empty menu (a dead control). */}
+                {qualities.length > 0 && (
+                  <div className="relative">
+                    <button onClick={(e) => { e.stopPropagation(); setShowQualityMenu(!showQualityMenu); }} className="text-white/80 hover:text-white transition">
+                      <Settings className="w-5 h-5" />
+                    </button>
+                    <AnimatePresence>
+                      {showQualityMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="absolute bottom-full left-0 mb-2 p-1.5 rounded-xl shadow-lg"
+                          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: REDUCED_EFFECTS ? 'none' : 'blur(12px)', border: '1px solid rgba(147,51,234,0.3)' }}
+                        >
+                          {qualities.map(q => (
+                            <button
+                              key={q.label}
+                              onClick={() => handleQualityChange(q.label, q.src)}
+                              className={`block w-full text-left px-3 py-1 rounded text-sm ${selectedQuality === q.label ? 'text-white font-medium bg-purple-500/20' : 'text-white/70'} hover:bg-white/10 transition`}
+                            >
+                              {q.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
               </div>
               <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="text-white/80 hover:text-white transition">
                 {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}

@@ -51,4 +51,18 @@ describe('shared state primitives — one implementation, reused', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  test('no design-system state primitive uses an emoji as its icon', () => {
+    // The design language bans emoji as interface icons. ErrorState (⚠️) and
+    // PermissionDenied (🔒) shipped with emoji glyphs; they now use lucide icons.
+    const EMOJI = /\p{Extended_Pictographic}/u;
+    const dsDir = path.join(SRC, 'design-system');
+    const offenders = [];
+    for (const entry of fs.readdirSync(dsDir)) {
+      if (!entry.endsWith('.jsx')) continue;
+      const text = fs.readFileSync(path.join(dsDir, entry), 'utf8');
+      if (EMOJI.test(text)) offenders.push(`src/design-system/${entry}`);
+    }
+    expect(offenders).toEqual([]);
+  });
 });

@@ -90,6 +90,15 @@ const AdminModerationQueueScreen = () => {
     }
   };
 
+  // The reporter's display name may be absent (no resolved profile) — fall back
+  // to the real reporter uid, never a fabricated handle. `reportedItemName` is
+  // never written by the server; the real target id is the report's own field.
+  const reporterLabel = (report) => report?.reporterName || report?.reporterId || null;
+  const reportedItemLabel = (report) =>
+    report?.reportedItemName
+    || report?.postId || report?.videoId || report?.commentId || report?.storyId
+    || report?.messageId || report?.reportedUserId || report?.adId || null;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
@@ -183,7 +192,7 @@ const AdminModerationQueueScreen = () => {
                         {report.reason || 'No reason provided'}
                       </p>
                       <p className="text-sm text-gray-500 mt-1">
-                        Reported by @{report.reporterName} • {new Date(report.createdAt).toLocaleDateString()}
+                        Reported by {reporterLabel(report) ? `@${reporterLabel(report)}` : 'unknown'} • {new Date(report.createdAt).toLocaleDateString()}
                       </p>
                     </div>
 
@@ -276,11 +285,11 @@ const AdminModerationQueueScreen = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Reported By</h3>
-                  <p className="font-medium text-gray-900 dark:text-white">@{selectedReport.reporterName}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{reporterLabel(selectedReport) ? `@${reporterLabel(selectedReport)}` : 'unknown'}</p>
                 </div>
                 <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Reported Item</h3>
-                  <p className="font-medium text-gray-900 dark:text-white">@{selectedReport.reportedItemName}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{reportedItemLabel(selectedReport) ? `@${reportedItemLabel(selectedReport)}` : '—'}</p>
                 </div>
               </div>
             </div>

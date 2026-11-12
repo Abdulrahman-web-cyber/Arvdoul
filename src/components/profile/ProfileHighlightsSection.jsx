@@ -144,7 +144,7 @@ const ProfileHighlightsSection = memo(({
             aria-label={`Highlight: ${item.title}`}
           >
             {/* Glowing Ring Container */}
-            <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full p-[2px] bg-gradient-to-tr from-[#8B1EF3] via-[#D946EF] to-[#00F0FF] shadow-sm group-hover:shadow-[0_0_15px_rgba(139,30,243,0.4)] group-hover:scale-105 active:scale-95 transition-all duration-200">
+            <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple via-[#D946EF] to-[#00F0FF] shadow-sm group-hover:shadow-[0_0_15px_rgba(139,30,243,0.4)] group-hover:scale-105 active:scale-95 transition-all duration-200">
               <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0b1021]">
                 <img
                   src={item.cover}

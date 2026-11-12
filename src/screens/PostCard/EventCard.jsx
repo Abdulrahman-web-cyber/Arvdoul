@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-  Calendar, MapPin, Users, CheckCircle, TrendingUp, Clock,
-  Sparkles, UserPlus, UserCheck, Heart, Image
+  Calendar, MapPin, CheckCircle, Clock,
+  UserPlus, UserCheck, Image
 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 
@@ -42,13 +42,6 @@ function getCountdownDetails(startDate) {
   return { text, urgent };
 }
 
-function getGravityLevel(gravity) {
-  if (gravity >= 80) return 'exploding';
-  if (gravity >= 40) return 'high';
-  if (gravity >= 15) return 'medium';
-  return 'low';
-}
-
 // MAIN COMPONENT
 const EventCard = React.memo(({
   event,
@@ -56,11 +49,6 @@ const EventCard = React.memo(({
   tokens,
   userStatus,
   onRSVP,             // async (newStatus) => void
-  friendProximity = 0,
-  userAffinity = 0.5,
-  distanceKm = null,
-  attendanceVelocity = 0,
-  matchScore = 0,
   onOpenEvent,
   hostName = null,
   hostUsername = null,
@@ -87,16 +75,6 @@ const EventCard = React.memo(({
   const attendeeCount = typeof event?.stats?.attendeeCount === 'number'
     ? event.stats.attendeeCount
     : (typeof event?.attendeeCount === 'number' ? event.attendeeCount : null);
-  const interestedCount = typeof event?.stats?.interested === 'number' ? event.stats.interested : null;
-  const gravity = useMemo(() => {
-    if (typeof event?.gravity === 'number') return event.gravity;
-    if (attendeeCount === null) return null;
-    return attendeeCount * 2 + (interestedCount ?? 0);
-  }, [event?.gravity, attendeeCount, interestedCount]);
-  const gravityLevel = gravity === null ? 'low' : getGravityLevel(gravity);
-  const friendsGoing = event?.friendsGoing ?? 0;
-  const coinReward = event?.coinReward ?? 0;
-  const scarcity = event?.scarcity || { seatsLeft: null, closingHours: null };
   const hostDisplay = hostUsername || hostName || event?.host?.username || event?.host?.name || event?.authorUsername || event?.authorName || null;
   const isVerified = hostVerified || event?.host?.verified || false;
   const shortDescription = event?.shortDescription || (event?.content ? truncateSafe(event.content, 80) : '');
@@ -157,15 +135,13 @@ const EventCard = React.memo(({
     }
   }, [currentUser, isLoading, optimisticStatus, onRSVP, onOpenEvent, event]);
 
-  // Dynamic glow based on emotional state
-  const glowIntensity = (urgent || isLive) ? 'high' : gravityLevel;
-  const getGlowClass = () => {
-    if (glowIntensity === 'high' || glowIntensity === 'exploding')
-      return 'shadow-[0_0_20px_rgba(236,72,153,0.4)] border-pink-500/30';
-    if (glowIntensity === 'medium')
-      return 'shadow-[0_0_10px_rgba(147,51,234,0.3)] border-purple-500/20';
-    return 'shadow-md border-white/10';
-  };
+  // Glow reflects the only states the card actually knows: an urgent/live
+  // event glows. (A "gravity"/"exploding" tier was derived from fields nothing
+  // writes and has been removed rather than left as a dead branch.)
+  const getGlowClass = () =>
+    (urgent || isLive)
+      ? 'shadow-[0_0_20px_rgba(236,72,153,0.4)] border-pink-500/30'
+      : 'shadow-md border-white/10';
 
   // Neon gradient for buttons & date card (Arvdoul identity)
   const neonGradient = `linear-gradient(135deg, ${tokens.audioNeonPrimary || '#9333ea'}, ${tokens.audioNeonSecondary || '#c026d3'}, #ec4899)`;
@@ -226,17 +202,7 @@ const EventCard = React.memo(({
               <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
             </div>
           )}
-          {scarcity.seatsLeft !== null && !isLive && !isEnded && (
-            <div className="bg-red-500/80 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow">
-              {scarcity.seatsLeft} left
-            </div>
-          )}
         </div>
-        {coinReward > 0 && !isEnded && (
-          <div className="absolute top-1 right-1 bg-yellow-500/80 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow">
-            <Sparkles className="w-2.5 h-2.5" /> +{coinReward}
-          </div>
-        )}
       </div>
 
       <div className="p-2.5 space-y-1.5">
@@ -245,18 +211,6 @@ const EventCard = React.memo(({
           <h3 className="text-sm font-bold flex-1 pr-2 line-clamp-1" style={{ color: tokens.text }}>
             {event.title}
           </h3>
-          <div className="flex gap-1">
-            {matchScore > 70 && (
-              <div className="text-[8px] font-semibold text-green-400 bg-green-500/20 px-1 py-0.5 rounded-full">
-                {matchScore}%
-              </div>
-            )}
-            {attendanceVelocity > 10 && (
-              <div className="text-[8px] font-semibold text-green-400 bg-green-500/20 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                <TrendingUp className="w-2 h-2" /> +{attendanceVelocity}%
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Host and location */}
@@ -270,7 +224,6 @@ const EventCard = React.memo(({
             <div className="flex items-center gap-1">
               <MapPin className="w-2.5 h-2.5" />
               <span className="truncate max-w-[110px]">{event.location}</span>
-              {distanceKm !== null && <span className="text-purple-300">· {distanceKm}km</span>}
             </div>
           )}
         </div>
@@ -323,8 +276,6 @@ const EventCard = React.memo(({
                 {attendeeCount === null ? '—' : attendeeCount}
               </span>{' '}
               going
-              {interestedCount !== null && interestedCount > 0 && ` · ${interestedCount} interested`}
-              {friendsGoing > 0 && ` · ${friendsGoing} friend${friendsGoing !== 1 ? 's' : ''}`}
             </span>
           </div>
 
@@ -359,37 +310,6 @@ const EventCard = React.memo(({
               Interested
             </button>
           </div>
-        </div>
-
-        {/* Friend / affinity badges */}
-        {(friendProximity > 1 || userAffinity > 0.7) && (
-          <div className="flex flex-wrap gap-1">
-            {friendProximity > 1 && (
-              <div className="flex items-center gap-0.5 text-[8px] text-pink-300 bg-pink-500/20 px-1 py-0.5 rounded-full">
-                <Users className="w-2 h-2" /> {friendProximity} close friends
-              </div>
-            )}
-            {userAffinity > 0.7 && (
-              <div className="flex items-center gap-0.5 text-[8px] text-purple-300 bg-purple-500/20 px-1 py-0.5 rounded-full">
-                <Heart className="w-2 h-2" /> Matches you
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Gravity label - emotional signal */}
-        <div className="flex justify-end items-center gap-1 text-[8px] pt-0.5 border-t border-white/10">
-          {gravityLevel === 'exploding' && (
-            <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 0.8, repeat: Infinity }} className="flex items-center gap-1 text-pink-400">
-              <Sparkles className="w-2 h-2" /> Exploding
-            </motion.span>
-          )}
-          {gravityLevel === 'high' && (
-            <span className="flex items-center gap-1 text-purple-400"><TrendingUp className="w-2 h-2" /> Trending</span>
-          )}
-          {gravityLevel === 'medium' && (
-            <span className="flex items-center gap-1 text-blue-400"><Users className="w-2 h-2" /> Growing</span>
-          )}
         </div>
       </div>
     </motion.div>

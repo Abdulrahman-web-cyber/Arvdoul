@@ -1,4 +1,5 @@
 import { logger } from '../utils/Logger.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy, limit } from "firebase/firestore";
@@ -495,8 +496,12 @@ class RankingService {
       const userSnap = await getDoc(doc(this.firestore, 'users', userId));
       const userData = userSnap.exists() ? userSnap.data() : {};
 
-      const followerCount = Number(userData.followerCount || userData.stats?.followers || 0);
-      const followingCount = Number(userData.followingCount || userData.stats?.following || 0);
+      // A missing/never-read count is unknown (progress null → '—'), never a
+      // measured 0. `Number(x || 0)` reported "0 followers" — which reads as a
+      // real measurement and marks `first_follower`/`influencer` as genuinely
+      // unearned — when the sharded counter had simply not been read.
+      const followerCount = unknownNumber(userData.followerCount ?? userData.stats?.followers);
+      const followingCount = unknownNumber(userData.followingCount ?? userData.stats?.following);
       const createdAt = userData.createdAt?.toDate?.() || (userData.createdAt ? new Date(userData.createdAt) : null);
       const accountDays = createdAt && !Number.isNaN(createdAt.getTime())
         ? Math.max(0, Math.floor((today.getTime() - createdAt.getTime()) / 86400000))
@@ -515,15 +520,30 @@ class RankingService {
         logger.warn('[RankingService] posts stats unavailable:', err.message);
       }
 
+      // Sum the per-post counters, but only while every counter is known: a
+      // post whose `stats` block was never written contributes an *unknown*
+      // count, and adding it as 0 would understate the badge total as if it
+      // were measured. Any unknown makes the aggregate null (rendered '—').
       let totalLikes = 0;
       let totalViews = 0;
       let totalComments = 0;
       let sparkCount = 0;
+      let countsComplete = true;
+      const addKnown = (raw) => {
+        const n = unknownNumber(raw);
+        if (n === null) { countsComplete = false; return 0; }
+        return n;
+      };
       for (const p of posts) {
-        totalLikes += Number(p.stats?.likes || p.likes || 0);
-        totalViews += Number(p.stats?.views || p.views || 0);
-        totalComments += Number(p.stats?.comments || p.comments || 0);
+        totalLikes += addKnown(p.stats?.likes ?? p.likes);
+        totalViews += addKnown(p.stats?.views ?? p.views);
+        totalComments += addKnown(p.stats?.comments ?? p.comments);
         if (p.type === 'spark') sparkCount += 1;
+      }
+      if (!countsComplete) {
+        totalLikes = null;
+        totalViews = null;
+        totalComments = null;
       }
 
       let storyCount = 0;

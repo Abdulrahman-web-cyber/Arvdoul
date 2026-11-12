@@ -1,9 +1,11 @@
+import { tokens } from '../../design-system/tokens.js';
+
 // src/screens/AudioEditor/audioPresets.js
 //
 // Canonical EQ preset table for the Audio Studio. These are real parametric
 // settings (frequency / gain / Q) applied to the mixing graph — not cosmetic
 
-export const EQ_BAND_COLORS = ['#8B1EF3', '#00C4FF', '#10B981', '#F59E0B', '#EF4444'];
+export const EQ_BAND_COLORS = [tokens.color.brand.violet, '#00C4FF', tokens.color.semantic.success, tokens.color.semantic.warning, tokens.color.semantic.error];
 
 export const EQ_RANGES = {
   minFreq: 20,

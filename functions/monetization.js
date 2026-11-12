@@ -889,7 +889,7 @@ exports.reportAd = functions.https.onCall(async (data, context) => {
   await reportRef.set({
     adId,
     reporterId: uid,
-    reporterName: reporter.username || reporter.displayName || 'Arvdoul user',
+    reporterName: reporter.username || reporter.displayName || null,
     reason: cleanedReason,
     details: String(details).replace(/<[^>]*>/g, '').trim().slice(0, 1000),
     content: ad.title || ad.brandName || '',

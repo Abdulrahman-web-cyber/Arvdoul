@@ -733,22 +733,26 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     await firestoreService.acceptAnswer?.(post.id, answerId);
   }, [post.id]);
 
-  // Reporting an answer reports its parent question post through the canonical
-  // reportContent path (rate-limited + de-duplicated server-side); the flag
-  // button was otherwise a dead control.
-  const handleReportAnswer = useCallback(async () => {
+  // Reporting a post (or one of its answers) goes through the canonical
+  // reportContent path — rate-limited and de-duplicated server-side.
+  const handleReportPost = useCallback(async (reason = 'Inappropriate content', details = '') => {
+    if (!currentUser?.uid) { toast.error('Sign in to report'); return; }
     try {
       const { callFunction, FUNCTIONS } = await import('../services/callableService.js');
-      await callFunction(FUNCTIONS.REPORT_POST, {
-        targetId: post.id,
-        reason: 'Inappropriate answer',
-        details: 'Reported from a Q&A answer',
-      });
+      await callFunction(FUNCTIONS.REPORT_POST, { targetId: post.id, reason, details });
       toast.success('Report submitted');
     } catch (err) {
       toast.error(err.message || 'Report failed');
     }
-  }, [post.id]);
+  }, [currentUser, post.id]);
+
+  const handleReportAnswer = useCallback(
+    () => handleReportPost('Inappropriate answer', 'Reported from a Q&A answer'),
+    [handleReportPost]);
+
+  const handleReportImage = useCallback(
+    () => handleReportPost('Inappropriate image', 'Reported from a post image'),
+    [handleReportPost]);
 
   // Cleanup timers
   useEffect(() => {
@@ -1060,8 +1064,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             )}
           </div>
           <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: tokens.textSecondary }}>
-            <span>@{post.authorUsername}</span>
-            <span>·</span>
+            {post.authorUsername && <span>@{post.authorUsername}</span>}
+            {post.authorUsername && <span>·</span>}
             <span>{postedDateTime}</span>
             {post.visibility === 'public' && <Globe className="w-3 h-3" />}
             {post.visibility === 'followers' && <Users className="w-3 h-3" />}
@@ -1163,9 +1167,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
         </div>
       )}
-      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} postId={post.id} onAnalytics={handleAnalytics} />}
+      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} onSave={handleSave} onReport={handleReportImage} postId={post.id} onAnalytics={handleAnalytics} />}
       {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} currentUser={currentUser} onAnalytics={handleAnalytics} />}
-      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} />}
+      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
       {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={post.isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}

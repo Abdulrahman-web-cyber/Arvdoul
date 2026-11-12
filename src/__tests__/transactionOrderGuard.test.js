@@ -112,4 +112,24 @@ describe('Firestore transaction read-before-write ordering', () => {
     const hits = files.filter((f) => /runTransaction\(/.test(fs.readFileSync(f, 'utf8')));
     expect(hits.length).toBeGreaterThan(0);
   });
+
+  test('no runTransaction callback awaits a money callable or callableFunction', () => {
+    // A transaction callback can be retried by the SDK, so a network call in
+    // the callback (a coin credit, a callable) can run more than once for a
+    // single logical write — a double-mint. `storyService.answerQuiz` credited
+    // the quiz reward via `monetization.addCoins(...)` inside its transaction;
+    // the credit now runs after commit with a deterministic idempotency key.
+    const offenders = [];
+    for (const file of files) {
+      const src = stripNonCode(fs.readFileSync(file, 'utf8'));
+      for (const { body, offset } of transactionCallbacks(src)) {
+        const m = body.search(/\b(?:addCoins|spendCoins|transferCoins|callFunction|httpsCallable)\s*\(/);
+        if (m >= 0) {
+          const line = src.slice(0, offset + m).split('\n').length;
+          offenders.push(`${path.relative(root, file)}:${line}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

@@ -306,11 +306,9 @@ export default function ForgotPasswordScreen() {
             </motion.div>
 
             <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-600">
-              <span>🔒</span>
-              <span>End-to-end encrypted</span>
+              <span>Encrypted in transit (TLS)</span>
               <span>•</span>
-              <span>🛡️</span>
-              <span>Military-grade security</span>
+              <span>Protected by Firebase Auth</span>
             </div>
           </motion.div>
         </div>

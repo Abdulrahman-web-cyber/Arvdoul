@@ -10,9 +10,9 @@
  *  - Danger zone: real account deletion via userService.deleteAccount
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap } from "lucide-react";
+import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap, Gauge } from "lucide-react";
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -23,8 +23,10 @@ import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES }
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
 import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
+import { getAdaptiveTuning, setLiteModePreference, getDeviceCapabilities } from '../utils/deviceCapabilities.js';
 import { Dialog } from '../components/UI/Dialog.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
+import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
 
 /* ---------- Reusable row primitives ---------- */
@@ -118,15 +120,37 @@ export default function SettingsScreen() {
   const uid = user?.uid;
 
   const [settings, setSettings] = useState(null); // null = loading
+  const [loadError, setLoadError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [levelInfo, setLevelInfo] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [roadmapTab, setRoadmapTab] = useState('levels');
+  // Two-factor auth (TOTP). `factors` is the real enrolled list; `enroll` holds
+  // the in-progress session until the user confirms a code.
+  const [mfaFactors, setMfaFactors] = useState([]);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaEnroll, setMfaEnroll] = useState(null); // { secret, session }
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaLoadFailed, setMfaLoadFailed] = useState(false);
+  const [showMfaDialog, setShowMfaDialog] = useState(false);
   // Real Do Not Disturb state, read back from `user_settings` — the server
   // gates every dispatch on `doNotDisturb` but nothing ever set it.
   const [dnd, setDnd] = useState({ loading: true, enabled: false, until: null });
   const [dndBusy, setDndBusy] = useState(false);
+
+  // Lite Mode / Data Saver: reactive read of the canonical device heuristics
+  // (which live in `deviceCapabilities.js`). Toggling persists the preference
+  // and the module re-dispatches `arvdoul-litemode-change`, which HomeScreen
+  // listens to, so the tuning applies without a reload.
+  const [liteMode, setLiteMode] = useState(() => getAdaptiveTuning().isLiteMode);
+  const deviceCaps = useMemo(() => getDeviceCapabilities(), []);
+  useEffect(() => {
+    const refresh = () => setLiteMode(getAdaptiveTuning().isLiteMode);
+    window.addEventListener('arvdoul-litemode-change', refresh);
+    return () => window.removeEventListener('arvdoul-litemode-change', refresh);
+  }, []);
 
   const storeProfile = useProfileStore((state) => state.profile);
   const [profilePrivacy, setProfilePrivacy] = useState(DEFAULT_PROFILE_PRIVACY);
@@ -134,30 +158,37 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     let mounted = true;
+    setLoadError(null);
     (async () => {
-      const [loaded, level] = await Promise.all([
-        settingsService.getSettings(uid),
-        levelSystemService.getLevelInfo(uid),
-      ]);
-      if (!mounted) return;
-      setSettings(loaded);
-      setLevelInfo(level);
-      // Initialize profile privacy from storeProfile or loaded doc
-      if (storeProfile?.privacy) {
-        setProfilePrivacy({ ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy });
-      }
-      // Profile privacy is owned by the user profile (`users/{uid}.isPrivate`),
-      // never by the settings document - read it from the profile store only.
-      setProfileIsPrivate(Boolean(storeProfile?.isPrivate));
-      // Apply persisted reduce-motion override
-      if (loaded?.appearance?.reduceMotion) {
-        document.documentElement.classList.add('arvdoul-reduce-motion');
+      try {
+        const [loaded, level] = await Promise.all([
+          settingsService.getSettings(uid),
+          levelSystemService.getLevelInfo(uid),
+        ]);
+        if (!mounted) return;
+        setSettings(loaded);
+        setLevelInfo(level);
+        // Initialize profile privacy from storeProfile or loaded doc
+        if (storeProfile?.privacy) {
+          setProfilePrivacy({ ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy });
+        }
+        // Profile privacy is owned by the user profile (`users/{uid}.isPrivate`),
+        // never by the settings document - read it from the profile store only.
+        setProfileIsPrivate(Boolean(storeProfile?.isPrivate));
+        // Apply persisted reduce-motion override
+        if (loaded?.appearance?.reduceMotion) {
+          document.documentElement.classList.add('arvdoul-reduce-motion');
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setSettings({});
+        setLoadError(err?.message || 'Could not load your settings.');
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [uid, storeProfile]);
+  }, [uid, storeProfile, reloadKey]);
 
   // Read the real DND state once so the toggle reflects the server's view.
   useEffect(() => {
@@ -189,6 +220,78 @@ export default function SettingsScreen() {
       toast.error(err?.message || 'Could not update Do Not Disturb.');
     } finally {
       setDndBusy(false);
+    }
+  };
+
+  // Read the real enrolled second factors for the signed-in user.
+  useEffect(() => {
+    if (!uid) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const { getAuthService } = await import('../services/authService.js');
+        const factors = await getAuthService().getEnrolledMFAFactors();
+        if (mounted) setMfaFactors(factors);
+      } catch {
+        // Surface the failure so the dialog reports "status unavailable"
+        // instead of implying the account has no second factor.
+        if (mounted) { setMfaLoadFailed(true); setMfaFactors([]); }
+      }
+    })();
+    return () => { mounted = false; };
+  }, [uid]);
+
+  const handleStartMFAEnrollment = async () => {
+    if (mfaBusy) return;
+    setMfaBusy(true);
+    try {
+      const { getAuthService } = await import('../services/authService.js');
+      const res = await getAuthService().enrollMFA();
+      setMfaEnroll({ secret: res.secret, session: res.session });
+      setMfaCode('');
+    } catch (err) {
+      toast.error(err?.message || t('settings.mfaError'));
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleConfirmMFAEnrollment = async () => {
+    if (!mfaEnroll || mfaBusy) return;
+    if (!/^\d{6}$/.test(mfaCode.trim())) {
+      toast.error(t('settings.mfaError'));
+      return;
+    }
+    setMfaBusy(true);
+    try {
+      const { getAuthService } = await import('../services/authService.js');
+      const svc = getAuthService();
+      await svc.finalizeMFAEnrollment(mfaCode.trim(), mfaEnroll.session);
+      const factors = await svc.getEnrolledMFAFactors();
+      setMfaFactors(factors);
+      setMfaEnroll(null);
+      setMfaCode('');
+      setShowMfaDialog(false);
+      toast.success(t('settings.mfaEnabled'));
+    } catch (err) {
+      toast.error(err?.message || t('settings.mfaError'));
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleDisableMFA = async () => {
+    if (mfaBusy || mfaFactors.length === 0) return;
+    setMfaBusy(true);
+    try {
+      const { getAuthService } = await import('../services/authService.js');
+      await getAuthService().disableMFA(mfaFactors);
+      setMfaFactors([]);
+      toast.success(t('settings.mfaDisabled'));
+    } catch (err) {
+      toast.error(err?.message || t('settings.mfaError'));
+    } finally {
+      setMfaBusy(false);
     }
   };
 
@@ -274,6 +377,12 @@ export default function SettingsScreen() {
     updateSetting('appearance.reduceMotion', value);
   };
 
+  const handleLiteMode = (value) => {
+    setLiteModePreference(value);
+    setLiteMode(value);
+    toast.success(value ? 'Lite Mode on — reduced data usage' : 'Lite Mode off — full quality');
+  };
+
   // Push/email toggles persist to `users/{uid}.settings` (so the UI reads a
   // single document) AND mirror to `user_settings/{uid}.notificationPreferences`
   // — the document the server actually reads when dispatching a notification.
@@ -343,6 +452,18 @@ export default function SettingsScreen() {
       /* noop */
     }
   }, [toggleTheme]);
+
+  if (loadError) {
+    return (
+      <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+        <ErrorState
+          title="Settings couldn't load"
+          message={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      </div>
+    );
+  }
 
   if (!settings) {
     return (
@@ -516,6 +637,12 @@ export default function SettingsScreen() {
         <Section icon={User} title={t('settings.accountSection')}>
           <NavRow icon={User} label={t('settings.editProfile')} description={t('settings.editProfileDesc')} onClick={() => navigate('/profile/edit')} />
           <NavRow icon={ShieldCheck} label={t('settings.securityPassword')} description={t('settings.securityPasswordDesc')} onClick={() => navigate('/reset-password')} />
+          <NavRow
+            icon={Lock}
+            label={mfaFactors.length > 0 ? t('settings.mfaEnabled') : t('settings.mfaTitle')}
+            description={t('settings.mfaDesc')}
+            onClick={() => { setMfaEnroll(null); setMfaCode(''); setShowMfaDialog(true); }}
+          />
           <NavRow icon={DollarSign} label={t('settings.wallet')} description={t('settings.walletDesc')} onClick={() => navigate('/coins')} />
           <NavRow icon={Activity} label={t('settings.dataUsage')} description={t('settings.dataUsageDesc')} onClick={() => navigate('/settings/data-usage')} />
         </Section>
@@ -590,16 +717,6 @@ export default function SettingsScreen() {
             description={t('settings.privateProfileDesc')}
             checked={profileIsPrivate}
             onChange={handleToggleProfilePrivate}
-          />
-          <ToggleRow
-            icon={Activity}
-            label={t('settings.activeStatus')}
-            description="Broadcast your live presence status to permitted circles"
-            checked={settings.privacy.showActiveStatus}
-            onChange={(v) => {
-              updateSetting('privacy.showActiveStatus', v);
-              handleUpdateProfilePrivacyScope('presence', v ? VISIBILITY_SCOPES.FOLLOWERS : VISIBILITY_SCOPES.ONLY_ME);
-            }}
           />
 
           <NavRow
@@ -784,6 +901,18 @@ export default function SettingsScreen() {
 
         {/* ============ DATA & CACHE ============ */}
         <Section id="settings-data" icon={Database} title={t('settings.dataSection')}>
+          <ToggleRow
+            icon={Gauge}
+            label={t('settings.liteMode')}
+            description={t('settings.liteModeDesc')}
+            checked={liteMode}
+            onChange={handleLiteMode}
+          />
+          {deviceCaps.isLowEndDevice && !liteMode && (
+            <p className="px-1 pb-2 -mt-1 text-xs text-amber-500 dark:text-amber-400">
+              {t('settings.liteModeRecommended')}
+            </p>
+          )}
           <button onClick={handleClearCache} className="w-full py-3.5 flex items-center justify-between text-left group">
             <div className="flex items-start gap-3">
               <RefreshCw className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
@@ -846,6 +975,21 @@ export default function SettingsScreen() {
           </div>
         </div>
       </Dialog>
+      {/* Two-factor authentication (TOTP) */}
+        <Dialog isOpen={showMfaDialog} onClose={() => { setShowMfaDialog(false); setMfaEnroll(null); setMfaCode(''); }} title={t('settings.mfaTitle')} size="sm">
+          <MfaDialogBody
+            loadFailed={mfaLoadFailed}
+            factors={mfaFactors}
+            enroll={mfaEnroll}
+            code={mfaCode}
+            onCodeChange={setMfaCode}
+            busy={mfaBusy}
+            onDisable={handleDisableMFA}
+            onStart={handleStartMFAEnrollment}
+            onConfirm={handleConfirmMFAEnrollment}
+            t={t}
+          />
+        </Dialog>
       {/* Interactive Level Perks & Appearance Roadmap Modal */}
       {showRoadmapModal && (
         <ProfileSystemRoadmapModal
@@ -857,6 +1001,83 @@ export default function SettingsScreen() {
           userId={uid}
         />
       )}
+    </div>
+  );
+}
+
+// Two-factor dialog body. Extracted so each state (status unavailable /
+// enrolled / enrolling / idle) renders as its own branch instead of a nested
+// ternary.
+function MfaDialogBody({ loadFailed, factors, enroll, code, onCodeChange, busy, onDisable, onStart, onConfirm, t }) {
+  if (loadFailed && factors.length === 0 && !enroll) {
+    return (
+      <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20" role="alert">
+        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-sm text-gray-700 dark:text-gray-200">{t('settings.mfaStatusUnavailable')}</p>
+      </div>
+    );
+  }
+  if (factors.length > 0) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-gray-700 dark:text-gray-200">{t('settings.mfaEnabled')}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onDisable}
+          disabled={busy}
+          className="w-full py-2.5 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-500 shadow-lg disabled:opacity-60 min-h-[44px]"
+        >
+          {t('settings.mfaDisable')}
+        </button>
+      </div>
+    );
+  }
+  if (enroll) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-300">{t('settings.mfaScanHint')}</p>
+        <div className="rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3">
+          <code className="block text-xs font-mono break-all select-all text-gray-800 dark:text-gray-100">{enroll.secret}</code>
+        </div>
+        <div>
+          <label htmlFor="mfa-code" className="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-300">{t('settings.mfaCodeLabel')}</label>
+          <input
+            id="mfa-code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(e) => onCodeChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 text-gray-900 dark:text-white tracking-[0.4em] text-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            placeholder="000000"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          className="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg disabled:opacity-60 min-h-[44px]"
+        >
+          {t('settings.mfaVerify')}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600 dark:text-gray-300">{t('settings.mfaDesc')}</p>
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={busy}
+        className="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg disabled:opacity-60 min-h-[44px]"
+      >
+        {t('settings.mfaEnable')}
+      </button>
     </div>
   );
 }

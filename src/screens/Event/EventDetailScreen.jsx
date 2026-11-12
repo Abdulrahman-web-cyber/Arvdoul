@@ -55,8 +55,7 @@ const EventDetailScreen = () => {
       // current value rather than resetting to 0.
       if (user?.uid && data.attendees?.[user.uid]) {
         try {
-          const feedback = await eventService.getEventFeedback(eventId);
-          const mine = feedback.find((f) => f.userId === user.uid);
+          const mine = await eventService.getMyEventFeedback(eventId, user.uid);
           if (mine) setMyRating(Number(mine.rating) || 0);
         } catch (fbErr) {
           console.warn('Could not load your event feedback:', fbErr?.message);

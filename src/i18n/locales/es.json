@@ -158,7 +158,6 @@
     "privacySection": "Privacidad y seguridad",
     "privateProfile": "Perfil privado",
     "privateProfileDesc": "Solo los seguidores pueden ver tu contenido",
-    "activeStatus": "Mostrar estado activo",
     "allowDMs": "Quién puede escribirte",
     "dmOption": {
       "everyone": "Todos",
@@ -170,6 +169,9 @@
     "dataSection": "Datos y caché",
     "clearCache": "Borrar caché de la aplicación",
     "clearCacheDesc": "Elimina contenido en caché y datos sin conexión",
+    "liteMode": "Modo ligero (ahorro de datos)",
+    "liteModeDesc": "Reduce el consumo de datos: menor calidad multimedia, menos reproducción automática y páginas más pequeñas",
+    "liteModeRecommended": "Tu dispositivo o red es de gama baja: se recomienda el modo ligero.",
     "about": "Acerca de Arvdoul",
     "dangerSection": "Cuenta",
     "signOut": "Cerrar sesión",
@@ -181,7 +183,18 @@
     "deleting": "Eliminando...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Autenticación en dos pasos",
+    "mfaDesc": "Añade un código temporal de una app de autenticación como segundo paso.",
+    "mfaEnable": "Activar 2FA",
+    "mfaEnabled": "2FA activada",
+    "mfaScanHint": "Introduce esta clave de configuración en tu app de autenticación y luego el código de 6 dígitos.",
+    "mfaCodeLabel": "Código de 6 dígitos",
+    "mfaVerify": "Verificar y activar",
+    "mfaDisable": "Desactivar 2FA",
+    "mfaError": "Algo salió mal. Inténtalo de nuevo.",
+    "mfaDisabled": "Autenticación en dos pasos desactivada.",
+    "mfaStatusUnavailable": "El estado de la autenticación en dos pasos no está disponible ahora. Vuelve a abrir este cuadro de diálogo para reintentar."
   },
   "level": {
     "title": "Nivel y progreso",

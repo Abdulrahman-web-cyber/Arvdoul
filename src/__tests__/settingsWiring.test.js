@@ -68,7 +68,16 @@ describe('settings wiring', () => {
     const src = read('src/services/settingsService.js');
     expect(src).not.toContain('spatialAudio');
     expect(src).not.toContain('streamQuality');
-    expect(read('src/screens/SettingsScreen.jsx')).not.toContain('spatialAudio');
-    expect(read('src/screens/SettingsScreen.jsx')).not.toContain('streamQuality');
+    // `privacy.showActiveStatus` was written by a toggle that only ever called
+    // handleUpdateProfilePrivacyScope('presence', …) — the setting key itself had
+    // no reader; presence visibility is owned by `profile.privacy.presence`
+    // (resolveCapabilities). The toggle duplicated the "Live Online Presence"
+    // scope selector below it, so both the key and the toggle were removed.
+    expect(src).not.toContain('showActiveStatus');
+    const screen = read('src/screens/SettingsScreen.jsx');
+    expect(screen).not.toContain('spatialAudio');
+    expect(screen).not.toContain('streamQuality');
+    expect(screen).not.toMatch(/updateSetting\('privacy\.showActiveStatus'/);
+    expect(screen).not.toMatch(/settings\.privacy\.showActiveStatus/);
   });
 });

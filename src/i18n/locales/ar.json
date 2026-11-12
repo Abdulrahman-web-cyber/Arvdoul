@@ -158,7 +158,6 @@
     "privacySection": "الخصوصية والأمان",
     "privateProfile": "ملف شخصي خاص",
     "privateProfileDesc": "المتابعون فقط يمكنهم رؤية محتواك",
-    "activeStatus": "إظهار الحالة النشطة",
     "allowDMs": "من يمكنه مراسلتك",
     "dmOption": {
       "everyone": "الجميع",
@@ -170,6 +169,9 @@
     "dataSection": "البيانات وذاكرة التخزين",
     "clearCache": "مسح ذاكرة التخزين المؤقت",
     "clearCacheDesc": "إزالة المحتوى المخزن والبيانات دون اتصال",
+    "liteMode": "الوضع الخفيف (موفّر البيانات)",
+    "liteModeDesc": "تقليل استهلاك البيانات: جودة وسائط أقل وتشغيل تلقائي أقل وصفحات أصغر",
+    "liteModeRecommended": "جهازك أو شبكتك محدودة — يُنصح بالوضع الخفيف.",
     "about": "حول Arvdoul",
     "dangerSection": "الحساب",
     "signOut": "تسجيل الخروج",
@@ -181,7 +183,18 @@
     "deleting": "جارٍ الحذف...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "المصادقة الثنائية",
+    "mfaDesc": "أضف رمزًا زمنيًا من تطبيق المصادقة كخطوة ثانية.",
+    "mfaEnable": "تفعيل المصادقة الثنائية",
+    "mfaEnabled": "المصادقة الثنائية مفعّلة",
+    "mfaScanHint": "أدخل مفتاح الإعداد هذا في تطبيق المصادقة ثم أدخل الرمز المكوّن من 6 أرقام.",
+    "mfaCodeLabel": "رمز مكوّن من 6 أرقام",
+    "mfaVerify": "تحقّق وفعّل",
+    "mfaDisable": "إيقاف المصادقة الثنائية",
+    "mfaError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    "mfaDisabled": "تم إيقاف المصادقة الثنائية.",
+    "mfaStatusUnavailable": "حالة المصادقة الثنائية غير متاحة الآن. أعد فتح هذا الحوار للمحاولة مرة أخرى."
   },
   "level": {
     "title": "المستوى والتقدم",

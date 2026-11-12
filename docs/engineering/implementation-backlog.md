@@ -27,7 +27,7 @@ total work._
 | `onSnapshot` listeners | 32 |
 | `getDocs` call sites | 163 |
 | i18n | 7 locales, only 2/132 screens use `useTranslation`, 71 `t()` calls total |
-| Audit findings closed | N001–N184 (175 tracked) |
+| Audit findings closed | N001–N275 (+ N266/N270 deferred) (all but N175) |
 | Audit findings open | N175 (rankings writer; needs a product ranking formula) |
 
 ---
@@ -147,12 +147,15 @@ not load unlimited full-res videos; moderation must reach the video report queue
 - **Effort**: 25–40 ED (large; can be phased per screen group).
 
 ### 12. Design-system consolidation (System: Design system)
-`tokens.js` is canonical and drift-guarded, but only **24 of 209 UI files** import tokens;
-raw hex appears 146× (`#8B1EF3`), 91× (`#FFFFFF`), 80× (`#4431F7`).
+`tokens.js` is canonical and drift-guarded. Raw brand hex has been ratcheted down from
+**349 across 44 files** to **58 across 7 files**; the remaining 7 are the signup/login/
+onboarding screens (`IntroScreen`, `LoginScreen`, `OtpVerification`, `SetupProfile`,
+`SignupStep1Personal`, `SignupStep2VerifyContact`, `VerifyEmailScreen`), which carry their
+own 125deg/52% geometry and are **policy-frozen** — do not migrate them.
 - **Sub-systems**: `src/design-system/*`, all screens/components, `themePalettes.js`.
-- **Deliverable**: migrate raw hex to `--arv-*` vars; extend the drift guard to forbid
-  raw brand hex in UI; document every primitive's states.
-- **Effort**: 10 ED.
+- **Deliverable**: done for every non-frozen module; `scripts/brandHexBaseline.json` is the
+  ratchet (may only shrink) and `brandHexRatchetGuard.test.js` enforces it.
+- **Effort**: done (remaining work is the frozen auth screens, by policy).
 
 ### 13. Shared component library + state completeness (System: UI components)
 The 20 largest components (QuickAccessPanel 1999, BottomNav 1380, ProfileFeedGrid 1025…)
@@ -179,6 +182,7 @@ error-boundary reporting to a backend.
 - **Deliverable**: pluggable sink (Sentry/Datadog adapter), structured events, alert
   definitions, `docs/engineering/production-readiness.md`.
 - **Effort**: 5 ED (+ vendor decision/cost).
+- **Delivered so far**: pluggable `Logger` sink (`setLogSink`/`flushLogSink` + batched fetch transport via `VITE_LOG_ENDPOINT`), `loggerSink.test.js`, `docs/engineering/production-readiness.md`. Hosted vendor + dashboards/alerts remain **BLOCKED** on a budget decision.
 
 ### 16. Test infrastructure + Node-version parity (System: CI/QA)
 `guards` now runs green on Node 22 (fixed N182), but the `lint`/`test` CI jobs are

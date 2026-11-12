@@ -98,14 +98,14 @@ export default function IncomingCallBanner() {
           initial={{ y: -80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -80, opacity: 0 }}
-          className="fixed top-3 inset-x-3 z-[100] max-w-md mx-auto rounded-2xl border border-[#8B1EF3]/40 bg-[#0b1220]/95 backdrop-blur-xl shadow-arvdoul-glass p-3 flex items-center gap-3"
+          className="fixed top-3 inset-x-3 z-[100] max-w-md mx-auto rounded-2xl border border-arvdoul-purple/40 bg-[#0b1220]/95 backdrop-blur-xl shadow-arvdoul-glass p-3 flex items-center gap-3"
           role="dialog"
           aria-label="Incoming call"
         >
           <img
             src={caller?.avatar}
             alt=""
-            className="w-11 h-11 rounded-full object-cover border border-[#8B1EF3]/50"
+            className="w-11 h-11 rounded-full object-cover border border-arvdoul-purple/50"
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white truncate">
@@ -123,7 +123,7 @@ export default function IncomingCallBanner() {
           <button
             onClick={accept}
             aria-label="Accept call"
-            className="w-10 h-10 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] flex items-center justify-center text-white shadow-arvdoul-glow"
+            className="w-10 h-10 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white shadow-arvdoul-glow"
           >
             <Phone className="w-5 h-5" />
           </button>

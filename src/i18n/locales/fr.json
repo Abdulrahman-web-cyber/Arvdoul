@@ -158,7 +158,6 @@
     "privacySection": "Confidentialité et sécurité",
     "privateProfile": "Profil privé",
     "privateProfileDesc": "Seuls vos abonnés peuvent voir votre contenu",
-    "activeStatus": "Afficher le statut actif",
     "allowDMs": "Qui peut vous écrire",
     "dmOption": {
       "everyone": "Tout le monde",
@@ -170,6 +169,9 @@
     "dataSection": "Données et cache",
     "clearCache": "Vider le cache de l’application",
     "clearCacheDesc": "Supprime le contenu en cache et les données hors ligne",
+    "liteMode": "Mode léger (économie de données)",
+    "liteModeDesc": "Réduire la consommation de données : qualité média moindre, moins de lecture automatique, pages plus petites",
+    "liteModeRecommended": "Votre appareil ou réseau est limité — le mode léger est recommandé.",
     "about": "À propos d’Arvdoul",
     "dangerSection": "Compte",
     "signOut": "Se déconnecter",
@@ -181,7 +183,18 @@
     "deleting": "Suppression...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Authentification à deux facteurs",
+    "mfaDesc": "Ajoutez un code temporaire d'une application d'authentification comme second facteur.",
+    "mfaEnable": "Activer la 2FA",
+    "mfaEnabled": "2FA activée",
+    "mfaScanHint": "Saisissez cette clé de configuration dans votre application d'authentification, puis le code à 6 chiffres.",
+    "mfaCodeLabel": "Code à 6 chiffres",
+    "mfaVerify": "Vérifier et activer",
+    "mfaDisable": "Désactiver la 2FA",
+    "mfaError": "Une erreur est survenue. Veuillez réessayer.",
+    "mfaDisabled": "Authentification à deux facteurs désactivée.",
+    "mfaStatusUnavailable": "L'état de l'authentification à deux facteurs est indisponible. Rouvrez cette fenêtre pour réessayer."
   },
   "level": {
     "title": "Niveau et progression",

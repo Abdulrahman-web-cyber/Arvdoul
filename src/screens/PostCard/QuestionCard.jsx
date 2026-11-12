@@ -132,7 +132,7 @@ const AnswerItem = React.memo(({
     }
   };
 
-  const reputationLevel = getReputationLevel(answer.userReputation || 0);
+  const reputationLevel = getReputationLevel(unknownNumber(answer.userReputation) ?? 0);
   const timeAgo = formatRelativeTime(answer.createdAt);
   const safeUserName = answer.userName || 'Anonymous';
   const safeUserPhoto = answer.userPhoto || '/assets/default-profile.png';
@@ -327,14 +327,15 @@ const QuestionCard = React.memo(({
     localStorage.setItem(`arvdoul_composer_${postId}`, String(showComposer));
   }, [showComposer, postId]);
 
-  const bountyAmount = question?.bounty ?? 0;
+  // An unknown bounty is `null` (no badge), never coerced to a fake 0/NaN.
+  const bountyAmount = unknownNumber(question?.bounty);
 
   // Neon purple styling (works in both light and dark themes)
   const neonGradient = `linear-gradient(135deg, ${tokens.audioNeonPrimary || '#9333ea'}, ${tokens.audioNeonSecondary || '#c026d3'}, #ec4899)`;
   const buttonGlow = `0 0 8px rgba(236, 72, 153, 0.4)`;
   const cardShadow = tokens.shadowDirectional || '0 8px 24px -6px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.1)';
 
-  const reputationLevel = getReputationLevel(userReputation);
+  const reputationLevel = getReputationLevel(unknownNumber(userReputation) ?? 0);
 
   // Guard after hooks
   if (!question) {
@@ -412,7 +413,7 @@ const QuestionCard = React.memo(({
         <div className="flex items-center gap-2 text-xs pb-1" style={{ color: tokens.textSecondary }}>
           <span>Your reputation:</span>
           <span className="font-bold" style={{ color: tokens.gold }}>
-            {typeof userReputation === 'number' ? userReputation : '—'}
+            {unknownNumber(userReputation) ?? '—'}
           </span>
           {reputationLevel && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${reputationLevel.color}20`, color: reputationLevel.color }}>

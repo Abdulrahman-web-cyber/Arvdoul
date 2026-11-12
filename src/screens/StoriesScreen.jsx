@@ -634,7 +634,7 @@ export default function StoriesScreen() {
               </h1>
             </div>
             {/* Subtle neon glow underline */}
-            <div className="w-10 h-1 bg-gradient-to-r from-[#8B1EF3] via-[#C82BFF] to-[#055BFB] rounded-full mt-0.5" />
+            <div className="w-10 h-1 bg-gradient-to-r from-arvdoul-purple via-arvdoul-glow-magenta to-arvdoul-blue rounded-full mt-0.5" />
           </div>
         </div>
 
@@ -736,7 +736,7 @@ export default function StoriesScreen() {
               className={cn(
                 'px-4 py-2 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap transition-all duration-300 flex items-center gap-1.5 active:scale-95',
                 isActive
-                  ? 'bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-[0_4px_15px_rgba(139,30,243,0.4)] scale-105'
+                  ? 'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue text-white shadow-[0_4px_15px_rgba(139,30,243,0.4)] scale-105'
                   : isDark
                   ? 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5'
                   : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 shadow-sm'
@@ -773,7 +773,7 @@ export default function StoriesScreen() {
         >
           {/* Animated concentric neon rings */}
           <div className="relative mb-3">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#8B1EF3] via-[#4431F7] to-[#055BFB] flex items-center justify-center shadow-[0_0_25px_rgba(139,30,243,0.6)] group-hover:scale-110 transition-transform duration-300">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue flex items-center justify-center shadow-[0_0_25px_rgba(139,30,243,0.6)] group-hover:scale-110 transition-transform duration-300">
               <Plus className="w-7 h-7 text-white" />
             </div>
             {/* Pulsing ring */}
@@ -856,7 +856,7 @@ export default function StoriesScreen() {
               <div className="relative z-10 flex items-start justify-between w-full">
                 <div className="flex items-center gap-1.5">
                   {/* Avatar with gradient glow ring */}
-                  <div className="relative p-0.5 rounded-full bg-gradient-to-tr from-[#8B1EF3] via-[#C82BFF] to-[#055BFB] shadow-[0_0_10px_rgba(139,30,243,0.5)]">
+                  <div className="relative p-0.5 rounded-full bg-gradient-to-tr from-arvdoul-purple via-arvdoul-glow-magenta to-arvdoul-blue shadow-[0_0_10px_rgba(139,30,243,0.5)]">
                     <img
                       src={story.user.avatar}
                       alt={story.user.name}
@@ -877,7 +877,7 @@ export default function StoriesScreen() {
                         {story.user.name}
                       </span>
                       {story.user.verified && (
-                        <CheckCircle2 className="w-3 h-3 text-[#055BFB] fill-[#055BFB]" />
+                        <CheckCircle2 className="w-3 h-3 text-arvdoul-blue fill-arvdoul-blue" />
                       )}
                     </div>
                     <span className="text-[9px] text-slate-300 font-medium">
@@ -1186,7 +1186,7 @@ export default function StoriesScreen() {
                           console.warn('Story click impression not recorded', e?.message);
                         }
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8B1EF3] to-[#0088FF] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-arvdoul-purple to-arvdoul-glow-cyan text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
                     >
                       {currentStory.ctaText || 'Learn More'}
                     </a>
@@ -1232,7 +1232,7 @@ export default function StoriesScreen() {
                 <button
                   type="submit"
                   disabled={!replyText.trim()}
-                  className="w-10 h-10 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg"
+                  className="w-10 h-10 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -1399,7 +1399,7 @@ export default function StoriesScreen() {
                   setIsCalendarOpen(false);
                   navigate('/profile/highlights');
                 }}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white font-bold text-sm shadow-lg active:scale-95 transition-transform"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue text-white font-bold text-sm shadow-lg active:scale-95 transition-transform"
               >
                 Manage Profile Highlights
               </button>

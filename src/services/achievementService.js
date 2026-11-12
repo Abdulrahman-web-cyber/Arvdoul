@@ -82,30 +82,29 @@ class AchievementService {
       const isEarned = earnedMap.has(ach.id);
       const userEarnedData = isEarned ? earnedMap.get(ach.id) : null;
 
-      // Calculate progress percentage where applicable
-      let progress = isEarned ? 100 : 0;
+      // Progress percentage is only meaningful for a numeric-ratio criterion
+      // (level, streak, posts, likes, comments, friends). A boolean/gate
+      // criterion (isCreator, isRoyal, hostedLive, hasPassport, …) has no
+      // measurable fraction, so its progress stays `null` (unknown) rather than
+      // a fabricated `0%` that claims a measured empty run.
+      let progress = isEarned ? 100 : null;
       if (!isEarned && ach.criteria) {
         const c = ach.criteria;
-        if (c.minLevel) {
-          // Unknown level -> no progress, never a fabricated Level 1 baseline.
-          const lvl = Number(userStats.level);
-          progress = Number.isFinite(lvl) && lvl > 0
-            ? Math.min(100, Math.round((lvl / c.minLevel) * 100))
-            : 0;
-        } else if (c.minStreak) {
-          progress = Math.min(100, Math.round(((userStats.activeStreak || 0) / c.minStreak) * 100));
-        } else if (c.minPosts) {
-          progress = Math.min(100, Math.round(((userStats.postsCount || userStats.postCount || 0) / c.minPosts) * 100));
-        } else if (c.minLikes) {
-          progress = Math.min(100, Math.round(((userStats.likesCount || 0) / c.minLikes) * 100));
-        } else if (c.commentsCount) {
-          progress = Math.min(100, Math.round(((userStats.commentsCount || 0) / c.commentsCount) * 100));
-        } else if (c.friendsCount) {
-          progress = Math.min(100, Math.round(((userStats.friendsCount || 0) / c.friendsCount) * 100));
-        }
+        const ratio = (current, target) => {
+          const cur = Number(current);
+          const tgt = Number(target);
+          if (!Number.isFinite(cur) || cur <= 0 || !Number.isFinite(tgt) || tgt <= 0) return null;
+          return Math.min(100, Math.round((cur / tgt) * 100));
+        };
+        if (c.minLevel) progress = ratio(userStats.level, c.minLevel);
+        else if (c.minStreak) progress = ratio(userStats.activeStreak, c.minStreak);
+        else if (c.minPosts) progress = ratio(userStats.postsCount ?? userStats.postCount, c.minPosts);
+        else if (c.minLikes) progress = ratio(userStats.likesCount, c.minLikes);
+        else if (c.commentsCount) progress = ratio(userStats.commentsCount, c.commentsCount);
+        else if (c.friendsCount) progress = ratio(userStats.friendsCount, c.friendsCount);
       }
 
-      const unlocked = isEarned || progress >= 100;
+      const unlocked = isEarned || progress === 100;
 
       return {
         ...ach,

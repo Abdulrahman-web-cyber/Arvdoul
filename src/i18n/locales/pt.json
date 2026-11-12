@@ -158,7 +158,6 @@
     "privacySection": "Privacidade e segurança",
     "privateProfile": "Perfil privado",
     "privateProfileDesc": "Apenas seguidores podem ver seu conteúdo",
-    "activeStatus": "Mostrar status ativo",
     "allowDMs": "Quem pode te enviar mensagens",
     "dmOption": {
       "everyone": "Todos",
@@ -170,6 +169,9 @@
     "dataSection": "Dados e cache",
     "clearCache": "Limpar cache do aplicativo",
     "clearCacheDesc": "Remove conteúdo em cache e dados offline",
+    "liteMode": "Modo leve (economia de dados)",
+    "liteModeDesc": "Reduzir o uso de dados: menor qualidade de mídia, menos reprodução automática e páginas menores",
+    "liteModeRecommended": "Seu dispositivo ou rede é limitado — o modo leve é recomendado.",
     "about": "Sobre o Arvdoul",
     "dangerSection": "Conta",
     "signOut": "Sair",
@@ -181,7 +183,18 @@
     "deleting": "Excluindo...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Autenticação de dois fatores",
+    "mfaDesc": "Adicione um código temporário de um app autenticador como segunda etapa.",
+    "mfaEnable": "Ativar 2FA",
+    "mfaEnabled": "2FA ativada",
+    "mfaScanHint": "Insira esta chave de configuração no seu app autenticador e depois o código de 6 dígitos.",
+    "mfaCodeLabel": "Código de 6 dígitos",
+    "mfaVerify": "Verificar e ativar",
+    "mfaDisable": "Desativar 2FA",
+    "mfaError": "Algo deu errado. Tente novamente.",
+    "mfaDisabled": "Autenticação de dois fatores desativada.",
+    "mfaStatusUnavailable": "O status da autenticação de dois fatores está indisponível agora. Reabra esta caixa de diálogo para tentar novamente."
   },
   "level": {
     "title": "Nível e progresso",

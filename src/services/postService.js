@@ -20,14 +20,6 @@ class PostService {
     return this.ensureInitialized();
   }
 
-  async ensureinitialize() {
-    return this.ensureInitialized();
-  }
-
-  async _ensureinitialize() {
-    return this.ensureInitialized();
-  }
-
   async createPost(postData) {
     return await this.fs.createPost(postData);
   }
@@ -90,9 +82,6 @@ export const getPostService = () => {
 
 export const postService = {
   ensureInitialized: () => getPostService().ensureInitialized(),
-  _ensureInitialized: () => getPostService().ensureInitialized(),
-  ensureinitialize: () => getPostService().ensureInitialized(),
-  _ensureinitialize: () => getPostService().ensureInitialized(),
   createPost: (data) => getPostService().createPost(data),
   getPost: (id) => getPostService().getPost(id),
   deletePost: (id, userId) => getPostService().deletePost(id, userId),

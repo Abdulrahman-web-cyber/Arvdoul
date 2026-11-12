@@ -15,7 +15,7 @@ import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import { pickHandle, deriveHandle, pickDisplayName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -36,7 +36,7 @@ const TOKENS = {
     brandGradient:
       BRAND_GRADIENT,
     brandLine:
-      "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
+      `linear-gradient(90deg, ${tokens.color.brand.pink} 0%, ${tokens.color.brand.violet} 34%, ${tokens.color.brand.indigo} 66%, ${tokens.color.brand.cyan} 100%)`,
     shadow: "0 20px 48px rgba(0, 0, 0, 0.5)",
     iconPrimary: "#FFFFFF",
     iconSecondary: "rgba(255,255,255,0.82)",
@@ -54,11 +54,11 @@ const TOKENS = {
     brandGradient:
       BRAND_GRADIENT,
     brandLine:
-      "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
+      `linear-gradient(90deg, ${tokens.color.brand.pink} 0%, ${tokens.color.brand.violet} 34%, ${tokens.color.brand.indigo} 66%, ${tokens.color.brand.cyan} 100%)`,
     shadow: "0 18px 40px rgba(17, 24, 39, 0.09)",
     iconPrimary: "#111827",
     iconSecondary: "rgba(17,24,39,0.78)",
-    iconActive: "#4431F7",
+    iconActive: tokens.color.brand.indigo,
     iconBg: "rgba(255,255,255,0.6)",
     iconBorder: "rgba(0,0,0,0.08)",
     iconRing: "rgba(139,30,243,0.3)",
@@ -174,7 +174,7 @@ const CircularButton = memo(
         aria-label={label}
         className={cn(
           "relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full shrink-0",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B1EF3]/50"
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple/50"
         )}
         style={{
           background: active

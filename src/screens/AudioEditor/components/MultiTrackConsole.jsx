@@ -308,7 +308,7 @@ export default function MultiTrackConsole({
                 className="absolute top-0 bottom-0 z-30 pointer-events-none"
                 style={{ left: `${(currentTime / duration) * 100}%` }}
               >
-                <div className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white text-[9px] font-mono font-bold -translate-x-1/2 shadow-lg">
+                <div className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue text-white text-[9px] font-mono font-bold -translate-x-1/2 shadow-lg">
                   {formatSeconds(currentTime)}
                 </div>
               </div>
@@ -318,7 +318,7 @@ export default function MultiTrackConsole({
           <div className="divide-y divide-inherit relative min-w-[600px]">
             {totalDuration > 0 && (
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#C82BFF] to-[#055BFB] z-20 pointer-events-none shadow-[0_0_8px_#C82BFF]"
+                className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-arvdoul-glow-magenta to-arvdoul-blue z-20 pointer-events-none shadow-[0_0_8px_arvdoul-glow-magenta]"
                 style={{ left: `${(currentTime / duration) * 100}%` }}
               />
             )}

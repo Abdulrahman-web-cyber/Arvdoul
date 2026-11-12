@@ -2,6 +2,7 @@ import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, startAfter, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 const EVENTS_PER_PAGE = 20;
@@ -42,7 +43,6 @@ class EventService {
       locationLng: data.locationLng || null,
       type: data.type || 'digital', // digital, physical, hybrid
       capacity: data.capacity || 0,
-      privacy: data.privacy || 'public',
       tickets: {
         tiers: data.tickets?.tiers || [],
         isFree: data.tickets?.isFree !== false,
@@ -104,7 +104,7 @@ class EventService {
     const allowedFields = [
       'title', 'description', 'coverImage', 'startDate', 'endDate',
       'location', 'locationLat', 'locationLng', 'type', 'capacity',
-      'privacy', 'tickets', 'schedule', 'media', 'status'
+      'tickets', 'schedule', 'media', 'status'
     ];
     
     const updateData = { updatedAt: serverTimestamp() };
@@ -394,26 +394,30 @@ class EventService {
   async submitFeedback(eventId, userId, rating, comment = '') {
     await this.initialize();
     const result = await callFunction(FUNCTIONS.SUBMIT_EVENT_FEEDBACK, { eventId, rating, comment });
-    return { success: true, feedbackScore: result?.feedbackScore ?? 0 };
+    // The callable recomputes and returns the aggregate; an absent value is
+    // unknown (the caller reloads the event anyway), never a fabricated 0.
+    return { success: true, feedbackScore: unknownNumber(result?.feedbackScore) };
   }
 
   /**
-   * Get event feedback
+   * Get the viewer's own feedback for an event.
+   *
+   * A feedback row is private to the attendee who wrote it (rules:
+   * `resource.data.userId == uid()`) and its id is deterministic
+   * (`event_${eventId}_${uid}`), so this is a point read of the caller's own
+   * document — a public list read is neither possible nor needed (the aggregate
+   * rating lives on the event document's `stats.feedbackScore`).
    * @param {string} eventId - Event ID
-   * @returns {Promise<Array>} Feedback list
+   * @param {string} userId - Viewer's uid
+   * @returns {Promise<Object|null>} The viewer's feedback, or null
    */
-  async getEventFeedback(eventId) {
+  async getMyEventFeedback(eventId, userId) {
     await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'event_feedback'),
-      where('eventId', '==', eventId),
-      orderBy('createdAt', 'desc'),
-      limit(MAX_EVENT_READ)
-    );
+    if (!eventId || !userId) return null;
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const ref = doc(this.db, 'event_feedback', `event_${eventId}_${userId}`);
+    const snap = await getDoc(ref);
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   }
 
   /**
@@ -503,10 +507,13 @@ class EventService {
       checkedIn,
       capacity: event.capacity,
       isFull: event.capacity > 0 && registered >= event.capacity,
-      feedbackScore: event.stats?.feedbackScore || 0,
-      attendeePercentage: event.capacity > 0 
-        ? Math.round((registered / event.capacity) * 100) 
-        : 100
+      // An absent counter stays unknown (null), never a fabricated 0 — the
+      // event document only carries `stats.feedbackScore` once feedback exists.
+      feedbackScore: unknownNumber(event.stats?.feedbackScore),
+      // No capacity means no percentage to report — never a fabricated 100%.
+      attendeePercentage: event.capacity > 0
+        ? Math.round((registered / event.capacity) * 100)
+        : null
     };
   }
 }

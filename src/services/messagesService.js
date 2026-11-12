@@ -54,13 +54,7 @@ const MESSAGING_CONFIG = {
       FRIENDS_ONLY: 'friends_only',
       NOBODY: 'nobody',
     },
-    GROUP_INVITE_PERMISSIONS: {
-      EVERYONE: 'everyone',
-      FRIENDS_ONLY: 'friends_only',
-      ADMIN_ONLY: 'admin_only',
-    },
     DEFAULT_MESSAGE_SETTING: 'everyone',
-    DEFAULT_GROUP_INVITE_SETTING: 'everyone',
   },
   PERFORMANCE: {
     CACHE_EXPIRY: {
@@ -843,9 +837,6 @@ class UltimateMessagingService {
       // Legacy field name consumed by checkMessagePermission; kept in sync so
       // the two vocabularies cannot disagree.
       messagePermission: permissionMap[allowDMs] || MESSAGING_CONFIG.PRIVACY.DEFAULT_MESSAGE_SETTING,
-      groupInvitePermission: stored.groupInvitePermission || MESSAGING_CONFIG.PRIVACY.DEFAULT_GROUP_INVITE_SETTING,
-      showOnline: privacy.showActiveStatus !== false,
-      allowDiscovery: stored.allowDiscovery !== false,
       pushEnabled: prefs.push !== false,
     };
     this.profileCache.set(cacheKey, settings);
@@ -1926,83 +1917,6 @@ class UltimateMessagingService {
     await this.fs.updateDoc(msgRef, { deletedFor: this.fs.arrayUnion(userId) });
     this._invalidateConversationMessagesCache(conversationId);
     return { success: true };
-  }
-
-  async createPoll(conversationId, question, options, userId, anonymousVotes = true) {
-    const messageData = {
-      type: MESSAGING_CONFIG.MESSAGE_TYPES.POLL,
-      content: question,
-      pollOptions: options.map(opt => ({ text: opt })),
-      anonymousVotes,
-    };
-    return this.sendMessage(conversationId, messageData, {});
-  }
-
-  async votePoll(conversationId, messageId, optionIndex, userId) {
-    await this.ensureInitialized();
-    const conv = await this.getConversation(conversationId);
-    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
-    const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
-    const voteRef = this.fs.doc(this.firestore, 'polls', messageId, 'votes', userId);
-
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const msgSnap = await transaction.get(msgRef);
-      if (!msgSnap.exists()) throw new Error('Poll not found');
-      const msg = msgSnap.data();
-      if (msg.type !== MESSAGING_CONFIG.MESSAGE_TYPES.POLL || msg.pollClosed) throw new Error('Poll is closed');
-      if (optionIndex < 0 || optionIndex >= msg.pollOptions.length) throw new Error('Invalid option');
-      transaction.set(voteRef, {
-        userId,
-        optionIndex,
-        votedAt: this.fs.serverTimestamp(),
-      });
-    });
-    this._invalidateConversationMessagesCache(conversationId);
-    return { success: true };
-  }
-
-  async closePoll(conversationId, messageId, userId) {
-    await this.ensureInitialized();
-    const conv = await this.getConversation(conversationId);
-    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
-    const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
-    const msgSnap = await this.fs.getDoc(msgRef);
-    if (!msgSnap.exists()) throw new Error('Poll not found');
-    const msg = msgSnap.data();
-    if (msg.senderId !== userId) throw new Error('Only poll creator can close it');
-    await this.fs.updateDoc(msgRef, { pollClosed: true, updatedAt: this.fs.serverTimestamp() });
-    this._invalidateConversationMessagesCache(conversationId);
-    return { success: true };
-  }
-
-  async getPollResults(conversationId, messageId) {
-    await this.ensureInitialized();
-    const conv = await this.getConversation(conversationId);
-    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
-    const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
-    const msgSnap = await this.fs.getDoc(msgRef);
-    if (!msgSnap.exists()) throw new Error('Poll not found');
-    const msg = msgSnap.data();
-    const votesRef = this.fs.collection(this.firestore, 'polls', messageId, 'votes');
-    const snap = await this.fs.getDocs(votesRef);
-    const optionCounts = new Array(msg.pollOptions.length).fill(0);
-    let totalVotes = 0;
-    snap.forEach(doc => {
-      const data = doc.data();
-      if (data.optionIndex >= 0 && data.optionIndex < optionCounts.length) {
-        optionCounts[data.optionIndex]++;
-        totalVotes++;
-      }
-    });
-    return {
-      success: true,
-      question: msg.pollOptions.map((opt, idx) => ({
-        text: opt.text,
-        count: optionCounts[idx],
-        percentage: totalVotes > 0 ? Math.round((optionCounts[idx] / totalVotes) * 100) : 0,
-      })),
-      totalVotes,
-    };
   }
 
   async muteConversation(conversationId, userId) {
@@ -3447,10 +3361,6 @@ const messagingService = {
   viewOnceMessage: (mid, cid, uid) => getMessagingService().viewOnceMessage(mid, cid, uid),
   scheduleMessage: (cid, data, opts) => getMessagingService()._scheduleMessage(cid, data, opts),
   cancelScheduledMessage: (schedId) => getMessagingService().cancelScheduledMessage(schedId),
-  createPoll: (cid, question, options, uid, anonymous) => getMessagingService().createPoll(cid, question, options, uid, anonymous),
-  votePoll: (cid, mid, optIndex, uid) => getMessagingService().votePoll(cid, mid, optIndex, uid),
-  closePoll: (cid, mid, uid) => getMessagingService().closePoll(cid, mid, uid),
-  getPollResults: (cid, mid) => getMessagingService().getPollResults(cid, mid),
   saveDraft: (cid, uid, content) => getMessagingService().saveDraft(cid, uid, content),
   getDraft: (cid) => getMessagingService().getDraft(cid),
   deleteDraft: (cid) => getMessagingService().deleteDraft(cid),

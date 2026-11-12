@@ -445,6 +445,18 @@ class ProductionAuthService {
 
     } catch (error) {
       logger.error('❌ Email sign in failed:', error);
+      // A TOTP-enrolled account fails the first factor with
+      // `auth/multi-factor-auth-required`. Surface the resolver so the caller can
+      // complete the challenge; without this the error was formatted into a
+      // generic message and the user could never finish signing in.
+      if (error.code === 'auth/multi-factor-auth-required') {
+        return {
+          success: true,
+          requiresMFA: true,
+          resolver: error.resolver,
+          hints: error.resolver?.hints || [],
+        };
+      }
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         this._recordFailedAttempt(email);
       }
@@ -1082,6 +1094,19 @@ class ProductionAuthService {
       await multiFactor(user).unenroll(factor.uid);
     }
     return { success: true, message: 'MFA disabled' };
+  }
+
+  /** List the caller's enrolled second factors (empty array when none). */
+  async getEnrolledMFAFactors() {
+    await this.initialize();
+    const user = this.auth.currentUser;
+    if (!user) return [];
+    const { multiFactor } = await import('firebase/auth');
+    return (multiFactor(user).enrolledFactors || []).map((f) => ({
+      uid: f.uid,
+      displayName: f.displayName || 'Authenticator app',
+      factorId: f.factorId,
+    }));
   }
 
   async signInWithEmailPasswordAndMFA(email, password) {

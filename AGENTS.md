@@ -577,3 +577,26 @@ its own scroll container (`flex-1 min-h-0 overflow-y-auto`) and must not rely on
 neither `eval()` nor `new Function()`, so `'unsafe-eval'` and a bare `https:`
 source are not allowed back in. `securityServices.test.js` fails if either
 returns or an external `<script src>` is introduced.
+
+## MFA must not be a lockout trap
+`authService.signInWithEmailPassword` returns `{ requiresMFA: true, resolver,
+hints }` when Firebase raises `auth/multi-factor-auth-required` — it must not
+format that into a generic error, or an account with a second factor can never
+sign in. `AuthContext` passes `requiresMFA` through and exposes
+`verifyMFAAndSignIn`; `LoginScreen` renders the 6-digit code step;
+`SettingsScreen` enrolls (`enrollMFA` → setup key + `finalizeMFAEnrollment`) and
+disables (`disableMFA`, listed via `getEnrolledMFAFactors`) through
+`getAuthService()`. `mfaWiring.test.js` (guards job) pins the whole path.
+
+## The service worker update must be user-driven
+`public/sw.js` `install` must NOT call `self.skipWaiting()`: a self-activating
+worker means `SWUpdateBanner` never sees a waiting worker, so "Update available"
+is unreachable and the running bundle is swapped silently. The worker waits and
+takes over only on a `SKIP_WAITING` message; the banner reloads on the resulting
+`controllerchange`. Bump `CACHE_NAME` (`arvdoul-vN`) on every SW change.
+`swUpdateFlow.test.js` (guards job) pins this.
+
+## No emoji as interface icons
+`src/design-system/*.jsx` state primitives must use lucide icons, not emoji
+glyphs (`ErrorState` shipped `⚠️`, `PermissionDenied` shipped `🔒`).
+`sharedStatePrimitivesGuard.test.js` fails if an emoji returns.

@@ -23,11 +23,12 @@ import {
 import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import { resolveCreatorFlag } from '../../services/profileReadModel.js';
+import { unknownNumber } from '../../lib/unknownNumber.js';
 
 // Clean SVG Sparklines matching image curves. `data === null` means the trend
 // is genuinely unknown (fewer than two daily points), so we render an explicit
 // placeholder instead of drawing a line through fabricated zeros.
-const Sparkline = ({ color = '#8B1EF3', data = null }) => {
+const Sparkline = ({ color = 'var(--arv-brand-violet)', data = null }) => {
   const safeData = Array.isArray(data) && data.length >= 2 ? data : null;
   if (!safeData) {
     return (
@@ -153,18 +154,24 @@ const ProfileCreatorDashboard = memo(({
   const coinsTrend = analytics?.changes?.coins ?? analytics?.coinsGrowth ?? null;
 
   // Extract real daily stats for sparklines if available. With fewer than two
-  // points there is no trend to draw: we render an explicit "no trend data"
-  // placeholder rather than a fabricated flat-then-spike series.
+  // points there is no trend to draw, and a day whose metric was never recorded
+  // must not be drawn as a measured 0 — either way we render an explicit "no
+  // trend data" placeholder rather than a fabricated flat-then-spike series.
   const dailyStats = Array.isArray(analytics?.dailyStats) ? analytics.dailyStats : [];
   const hasTrend = dailyStats.length >= 2;
-  const viewsSeries = hasTrend ? dailyStats.map(d => Number(d.views) || 0) : null;
-  const reachSeries = hasTrend ? dailyStats.map(d => Number(d.reach) || 0) : null;
-  const engagementSeries = hasTrend ? dailyStats.map(d => Number(d.engagement) || 0) : null;
-  const coinsSeries = hasTrend ? dailyStats.map(d => Number(d.coins) || 0) : null;
+  const series = (key) => {
+    if (!hasTrend) return null;
+    const values = dailyStats.map((d) => unknownNumber(d?.[key]));
+    return values.every((v) => v !== null) ? values : null;
+  };
+  const viewsSeries = series('views');
+  const reachSeries = series('reach');
+  const engagementSeries = series('engagement');
+  const coinsSeries = series('coins');
 
   const formatTrend = (trend) => {
-    if (trend == null) return { text: '—', isNeutral: true };
-    const num = Number(trend) || 0;
+    const num = unknownNumber(trend);
+    if (num === null) return { text: '—', isNeutral: true };
     if (num > 0) return { text: `▲ +${num.toFixed(1)}%`, isPositive: true };
     if (num < 0) return { text: `▼ ${num.toFixed(1)}%`, isPositive: false };
     return { text: `— 0.0%`, isNeutral: true };
@@ -260,7 +267,7 @@ const ProfileCreatorDashboard = memo(({
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#8B1EF3" data={viewsSeries} />
+            <Sparkline color="var(--arv-brand-violet)" data={viewsSeries} />
           </div>
         </div>
 
@@ -349,7 +356,7 @@ const ProfileCreatorDashboard = memo(({
         onClick={() => navigate('/rankings')}
         >
           {/* Circular Crown Icon */}
-          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#8B1EF3] to-[#D946EF] flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
+          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple to-[#D946EF] flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
             <div className="w-full h-full rounded-full bg-white dark:bg-[#0b1021] flex items-center justify-center">
               <Crown className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>

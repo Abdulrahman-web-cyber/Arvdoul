@@ -34,7 +34,7 @@ jest.mock('../services/settingsService.js', () => ({
   settingsService: {
     getSettings: jest.fn(async () => ({
       notifications: { push: true, email: true, soundFx: true },
-      privacy: { allowDMs: 'everyone', showActiveStatus: true },
+      privacy: { allowDMs: 'everyone' },
       playback: { autoPlayVideos: true },
       appearance: { reduceMotion: false, language: 'en' },
     })),
@@ -43,7 +43,7 @@ jest.mock('../services/settingsService.js', () => ({
   },
   DEFAULT_SETTINGS: {
     notifications: { push: true, email: true, soundFx: true },
-    privacy: { allowDMs: 'everyone', showActiveStatus: true },
+    privacy: { allowDMs: 'everyone' },
     playback: { autoPlayVideos: true },
     appearance: { reduceMotion: false, language: 'en' },
   },

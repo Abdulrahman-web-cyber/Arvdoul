@@ -447,7 +447,7 @@ const formatDuration = (seconds) => {
             <p className="text-white/60 text-sm">{feedError}</p>
             <button
               onClick={() => setFeedNonce((n) => n + 1)}
-              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue font-bold text-sm shadow-lg hover:scale-105 transition-transform"
             >
               Retry
             </button>
@@ -465,7 +465,7 @@ const formatDuration = (seconds) => {
         <div className="flex gap-3">
           <button
             onClick={() => navigate('/create-post')}
-            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue font-bold text-sm shadow-lg hover:scale-105 transition-transform"
           >
             Create Spark
           </button>
@@ -567,7 +567,7 @@ const formatDuration = (seconds) => {
           onClick={() => navigate('/')}
           className="flex items-center gap-2 cursor-pointer"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#055BFB] flex items-center justify-center font-black text-sm text-white shadow-arvdoul-glow">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue flex items-center justify-center font-black text-sm text-white shadow-arvdoul-glow">
             A
           </div>
           <span className="text-sm font-black font-display tracking-wider uppercase">
@@ -590,7 +590,7 @@ const formatDuration = (seconds) => {
             {activeTab === 'following' && (
               <motion.span
                 layoutId="reelTab"
-                className="absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] rounded-full"
+                className="absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo rounded-full"
               />
             )}
           </button>
@@ -608,7 +608,7 @@ const formatDuration = (seconds) => {
             {activeTab === 'forYou' && (
               <motion.span
                 layoutId="reelTab"
-                className="absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] rounded-full shadow-arvdoul-glow"
+                className="absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo rounded-full shadow-arvdoul-glow"
               />
             )}
           </button>
@@ -630,7 +630,7 @@ const formatDuration = (seconds) => {
             className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors relative"
           >
             <Camera className="w-4 h-4 text-white" />
-            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#C82BFF] text-white text-[9px] font-black flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-arvdoul-glow-magenta text-white text-[9px] font-black flex items-center justify-center">
               +
             </span>
           </button>
@@ -656,7 +656,7 @@ const formatDuration = (seconds) => {
         <div className="relative mb-2">
           <div
             onClick={() => currentReel.creator.id && navigate(`/profile/${currentReel.creator.id}`)}
-            className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#055BFB] cursor-pointer shadow-arvdoul-glow"
+            className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue cursor-pointer shadow-arvdoul-glow"
           >
             <img
               src={currentReel.creator.avatar}
@@ -672,7 +672,7 @@ const formatDuration = (seconds) => {
                 "absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full text-white text-xs font-black flex items-center justify-center shadow-md border border-black transition-transform active:scale-90",
                 currentReel.creator.isFollowing
                   ? "bg-emerald-500"
-                  : "bg-gradient-to-r from-[#8B1EF3] to-[#055BFB]"
+                  : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue"
               )}
             >
               {currentReel.creator.isFollowing ? '✓' : '+'}
@@ -767,12 +767,12 @@ const formatDuration = (seconds) => {
               <img
                 src={currentReel.creator.avatar}
                 alt={currentReel.creator.name}
-                className="w-9 h-9 rounded-full object-cover border border-[#8B1EF3]"
+                className="w-9 h-9 rounded-full object-cover border border-arvdoul-purple"
               />
               <div>
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-bold font-display">{currentReel.creator.name || 'Creator'}</span>
-                  {currentReel.creator.verified && <CheckCircle2 className="w-3.5 h-3.5 text-[#055BFB] fill-[#055BFB]/20" />}
+                  {currentReel.creator.verified && <CheckCircle2 className="w-3.5 h-3.5 text-arvdoul-blue fill-arvdoul-blue/20" />}
                 </div>
                 {currentReel.creator.username && (
                   <span className="text-[10px] text-white/60">@{currentReel.creator.username}</span>
@@ -787,7 +787,7 @@ const formatDuration = (seconds) => {
                   "px-3.5 py-1 rounded-xl text-xs font-bold transition-all",
                   currentReel.creator.isFollowing
                     ? "bg-white/10 text-white/80"
-                    : "bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] text-white shadow-md"
+                    : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md"
                 )}
               >
                 {currentReel.creator.isFollowing ? 'Following' : 'Follow'}
@@ -803,7 +803,7 @@ const formatDuration = (seconds) => {
 
           {/* Hashtags */}
           {currentReel.hashtags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold text-[#8B1EF3]">
+            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold text-arvdoul-purple">
               {currentReel.hashtags.map((tag) => (
                 <button
                   key={tag}
@@ -821,15 +821,15 @@ const formatDuration = (seconds) => {
           {currentReel.music && (
             <div className="flex items-center justify-between pt-1 border-t border-white/10 text-xs">
               <div className="flex items-center gap-2 text-white/80 truncate">
-                <Music className="w-3.5 h-3.5 text-[#8B1EF3] flex-shrink-0" />
+                <Music className="w-3.5 h-3.5 text-arvdoul-purple flex-shrink-0" />
                 <span className="truncate text-[11px] font-medium">{currentReel.music}</span>
               </div>
 
               {/* Audio Wave Visualizer Box */}
-              <div className="w-6 h-6 rounded-lg bg-[#8B1EF3]/30 border border-[#8B1EF3]/40 flex items-center justify-center gap-0.5 flex-shrink-0">
-                <span className="w-0.5 h-3 bg-[#8B1EF3] rounded-full animate-pulse" />
-                <span className="w-0.5 h-4 bg-[#C82BFF] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                <span className="w-0.5 h-2 bg-[#4431F7] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              <div className="w-6 h-6 rounded-lg bg-arvdoul-purple/30 border border-arvdoul-purple/40 flex items-center justify-center gap-0.5 flex-shrink-0">
+                <span className="w-0.5 h-3 bg-arvdoul-purple rounded-full animate-pulse" />
+                <span className="w-0.5 h-4 bg-arvdoul-glow-magenta rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <span className="w-0.5 h-2 bg-arvdoul-indigo rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
               </div>
             </div>
           )}
@@ -841,7 +841,7 @@ const formatDuration = (seconds) => {
           <div className="flex-1 h-1 rounded-full bg-white/20 relative overflow-hidden">
             <div
               style={{ width: `${playback.progress}%` }}
-              className="h-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] rounded-full"
+              className="h-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue rounded-full"
             />
           </div>
           <span>{formatDuration(playback.duration || currentReel.duration)}</span>
@@ -855,7 +855,7 @@ const formatDuration = (seconds) => {
       <div className="relative z-30 px-5 pb-2">
         <div className="p-3 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 flex items-center justify-between text-[11px] text-white/80 font-semibold shadow-lg">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[#C82BFF]">
+            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-arvdoul-glow-magenta">
               <Heart className="w-3.5 h-3.5 fill-current" />
             </div>
             <div>
@@ -865,7 +865,7 @@ const formatDuration = (seconds) => {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[#8B1EF3]">
+            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-arvdoul-purple">
               <ArrowUp className="w-3.5 h-3.5" />
             </div>
             <div>
@@ -875,7 +875,7 @@ const formatDuration = (seconds) => {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-[#0088FF]">
+            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-arvdoul-glow-cyan">
               <ArrowLeftRight className="w-3.5 h-3.5" />
             </div>
             <div>

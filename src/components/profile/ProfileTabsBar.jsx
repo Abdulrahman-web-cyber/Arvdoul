@@ -71,7 +71,7 @@ const ProfileTabsBar = memo(({
               className={cn(
                 "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer select-none",
                 isActive
-                  ? "bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] text-white shadow-md shadow-purple-600/25 scale-[1.02]"
+                  ? "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md shadow-purple-600/25 scale-[1.02]"
                   : isDark
                     ? "text-slate-400 hover:text-white hover:bg-white/5 active:scale-95"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 active:scale-95"

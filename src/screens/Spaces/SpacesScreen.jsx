@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import spacesService from '../../services/spacesService';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
+import { unknownNumber } from '../../lib/unknownNumber';
 
 const CATEGORIES = ['All', 'Tech & AI', 'Music & Audio', 'Crypto & Web3', 'Chill Lounge', 'Creator Talk'];
 const EMOJI_REACTIONS = ['🔥', '💎', '🚀', '❤️', '👏', '💯', '👑'];
@@ -304,7 +305,7 @@ export default function SpacesScreen() {
 
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-400 text-xs font-bold">
-                    <Coins className="w-4 h-4" /> {activeSpace.tipsTotalCoins.toLocaleString()} Tips
+                    <Coins className="w-4 h-4" /> {unknownNumber(activeSpace.tipsTotalCoins) ?? '—'} Tips
                   </div>
                   {activeSpace.host?.id === user?.uid && (
                     <button

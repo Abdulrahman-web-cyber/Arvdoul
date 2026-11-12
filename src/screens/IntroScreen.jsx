@@ -46,6 +46,7 @@ import {
 import { useTheme } from "@context/ThemeContext";
 import { useOptionalAuth } from "@context/AuthContext";
 import ThemeToggle from "@components/Shared/ThemeToggle";
+import { tokens as dsTokens } from "../design-system/tokens.js";
 
 /* ═════════════════════════════ configuration ═════════════════════════════ */
 
@@ -55,15 +56,15 @@ const ROUTES = Object.freeze({
   home: "/home",
 });
 
-/** Single source of truth for the interface palette. */
+/** Interface palette, derived from the design-system tokens (single source of truth). */
 const TOKENS = Object.freeze({
   bg: {
-    dark: "#03071B",
-    light: "#F6F8FC",
+    dark: dsTokens.color.bg.dark,
+    light: dsTokens.color.bg.light,
   },
-  violet: "#8B1EF3",
-  indigo: "#4431F7",
-  blue: "#055BFB",
+  violet: dsTokens.color.brand.violet,
+  indigo: dsTokens.color.brand.indigo,
+  blue: dsTokens.color.brand.blue,
 });
 
 const BG = TOKENS.bg;
@@ -2615,15 +2616,15 @@ const CSS = `
   --arv-border:rgba(35,49,84,.14);
   --arv-border-strong:rgba(35,49,84,.28);
 
-  --arv-focus:#4431F7;
+  --arv-focus:${TOKENS.indigo};
   --arv-ring-solid:rgba(68,49,247,.55);
 
-  --arv-icon-a:#8B1EF3;
-  --arv-icon-b:#055BFB;
+  --arv-icon-a:${TOKENS.violet};
+  --arv-icon-b:${TOKENS.blue};
 
   --arv-error:#B4233F;
   --arv-note:#56627E;
-  --arv-dot:#8B1EF3;
+  --arv-dot:${TOKENS.violet};
 
   /* LIGHT GLASS: clean white material against the canonical light background. */
   --arv-glass-fill:

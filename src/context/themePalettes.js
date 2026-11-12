@@ -2,7 +2,7 @@
 //
 // Theme palettes for ThemeProvider. Kept in a plain .js module (not the .jsx
 // provider) so the design-token drift guard can import the values directly.
-// Surfaces derive from the design tokens; the brand violet is `#8B1EF3`.
+// Surfaces derive from the design tokens; the brand violet is `tokens.color.brand.violet`.
 
 import { tokens } from '../design-system/tokens.js';
 

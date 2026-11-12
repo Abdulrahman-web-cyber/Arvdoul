@@ -11,6 +11,7 @@ import { Banknote, DollarSign, ArrowLeft, TrendingUp, ShieldCheck, CreditCard, S
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
 import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 // The earnings breakdown must come from the real coin ledger, never a fixed
 // ratio. Gifts/tips and ad revenue are credited with these reasons by
@@ -388,10 +389,30 @@ export default function CreatorPayoutScreen() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-emerald-500">-${tx.amount?.toLocaleString?.() || tx.amount}</p>
-                    <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                      Completed
-                    </span>
+                    {(() => {
+                      const amt = unknownNumber(tx.amount);
+                      const label = amt == null ? '—' : `-$${amt.toLocaleString()}`;
+                      const state = String(tx.status || tx.state || '').toLowerCase();
+                      // Never assert "Completed" for a withdrawal the ledger
+                      // does not mark settled; an unknown state shows no badge.
+                      const badge = state === 'completed' || state === 'settled'
+                        ? { text: 'Completed', cls: 'text-emerald-400 bg-emerald-500/10' }
+                        : state === 'pending' || state === 'processing' || state === 'pending_review'
+                          ? { text: 'Pending', cls: 'text-amber-400 bg-amber-500/10' }
+                          : state === 'failed' || state === 'rejected'
+                            ? { text: 'Failed', cls: 'text-red-400 bg-red-500/10' }
+                            : null;
+                      return (
+                        <>
+                          <p className="text-sm font-bold text-emerald-500">{label}</p>
+                          {badge && (
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                              {badge.text}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}

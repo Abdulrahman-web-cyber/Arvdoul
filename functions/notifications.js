@@ -389,10 +389,13 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     return { success: false, skipped: true, reason: 'all channels disabled' };
   }
 
-  // Enrich with sender info
+  // Enrich with sender info. A caller-supplied `message` is used as-is; the
+  // fallback must be a real sentence, never the fabricated `"<name> like"` /
+  // `"Someone like"` (the type word is not a verb).
   const senderSnap = await db.collection('users').doc(senderId).get();
   const senderName = senderSnap.exists ? (senderSnap.data().displayName || senderSnap.id) : 'Someone';
-  const message = notificationData.message || `${senderName} ${notificationData.type}`;
+  const message = notificationData.message
+    || (senderSnap.exists ? `${senderName} sent you a notification` : 'You have a new notification');
   const payload = {
     title: notificationData.title,
     body: message,

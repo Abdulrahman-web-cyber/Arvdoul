@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { tokens } from '../../design-system/tokens.js';
 import { useAuth } from '../../context/AuthContext';
 import { Trophy, Crown, Medal, ArrowUp, ArrowDown, Minus, Star, Users, Flame, LineChart, Coins, ShieldCheck, Check, ChevronRight } from "lucide-react";
 import { RANKING_CONFIG } from '../../services/rankingService.js';
@@ -84,7 +85,7 @@ const TrendIndicator = ({ trend }) => {
 const TierBadge = ({ tier }) => (
   <span
     className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm"
-    style={{ backgroundColor: tier.color || '#8B1EF3', color: '#fff' }}
+    style={{ backgroundColor: tier.color || tokens.color.brand.violet, color: '#fff' }}
     aria-label={`Tier: ${tier.name}`}
   >
     {tier.name}
@@ -101,7 +102,7 @@ const UserAvatar = ({ user, size = 'md' }) => {
   return (
     <div className={cn(
       sizeClasses[size],
-      "rounded-full bg-gradient-to-tr from-[#8B1EF3] to-[#4431F7] flex items-center justify-center text-white font-black overflow-hidden shadow-sm shrink-0"
+      "rounded-full bg-gradient-to-tr from-arvdoul-purple to-arvdoul-indigo flex items-center justify-center text-white font-black overflow-hidden shadow-sm shrink-0"
     )}>
       {user?.avatar ? (
         <img src={user.avatar} alt={user.displayName || 'Avatar'} className="w-full h-full object-cover" />

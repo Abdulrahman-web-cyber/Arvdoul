@@ -371,8 +371,12 @@ class UltimateLiveService {
         viewerCount: 0,
         maxViewers: canStart.viewerLimit || 50,
         stats: {
+          // Only counters that a real writer maintains are seeded. `totalViewers`
+          // is incremented by functions/live.js#onLiveViewerCreate, and tips/
+          // gifts/coins by functions/monetization.js. A `peakViewers` seed was
+          // never updated by any writer, so every read reported it as a measured
+          // peak of 0 — an unwritten value presented as a measurement, removed.
           totalViewers: 0,
-          peakViewers: 0,
           totalTips: 0,
           totalGifts: 0,
           coinsEarned: 0,
@@ -440,10 +444,11 @@ class UltimateLiveService {
       });
       
       const viewerCount = await countersManager.get({ docPath: `live_streams/${streamId}`, field: 'viewerCount', fallback: streamData.viewerCount || 0 });
-      const peakViewers = streamData.stats?.peakViewers || 0;
+      // No writer maintains a peak-concurrent-viewer value, so do not report one.
       const coinsEarned = streamData.stats?.coinsEarned || 0;
 
-      auditLogger.log('live.ended', { userId, meta: { streamId, duration: durationMinutes, peakViewers, coinsEarned } });
+      // Fire-and-forget: the local audit queue swallows its own write errors.
+      void auditLogger.log('live.ended', { userId, meta: { streamId, duration: durationMinutes, coinsEarned } });
 
       // Clean up signaling peer
       if (this.peerConnection) {
@@ -462,7 +467,6 @@ class UltimateLiveService {
           status: 'ended',
           duration: durationMinutes,
           totalViewers: streamData.stats?.totalViewers || 0,
-          peakViewers,
           coinsEarned,
           viewerCount,
         },
@@ -517,10 +521,15 @@ class UltimateLiveService {
       const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
       
       const streamsRef = collection(this.firestore, 'live_streams');
+      // The list rule (live_streams) requires the QUERY to prove a public shape
+      // — rules are not filters — so the discovery list must constrain
+      // visibility/deletion or every non-owner list is denied (an empty
+      // discovery screen).
       let q = query(
         streamsRef,
         where('status', '==', 'live'),
         where('isDeleted', '==', false),
+        where('visibility', '==', 'public'),
         orderBy('startTime', 'desc'),
         limit(Math.min(Number(options.limit) || 50, LIVE_CONFIG.MAX_STREAM_READ))
       );
@@ -738,7 +747,9 @@ class UltimateLiveService {
       const commentData = {
         streamId,
         userId,
-        displayName: userData.displayName || userData.username || 'Anonymous',
+        // Never fabricate an identity: an unresolved author stays null (the
+        // render site resolves a real uid prefix), not a fake "Anonymous".
+        displayName: userData.displayName || userData.username || null,
         avatar: userData.photoURL || null,
         content: comment.trim(),
         createdAt: serverTimestamp(),
@@ -918,7 +929,6 @@ class UltimateLiveService {
         totalTips: data.stats?.totalTips || 0,
         coinsEarned: data.stats?.coinsEarned || 0,
         viewerCount: data.viewerCount || 0,
-        peakViewers: data.stats?.peakViewers || 0,
         duration: data.duration || 0,
       };
     } catch (error) {
@@ -950,7 +960,6 @@ class UltimateLiveService {
         status: data.status,
         duration: data.duration || 0,
         viewerCount,
-        peakViewers: data.stats?.peakViewers || 0,
         totalViewers: Math.max(data.stats?.totalViewers || 0, viewerCount),
         totalGifts: data.stats?.totalGifts || 0,
         totalTips: data.stats?.totalTips || 0,

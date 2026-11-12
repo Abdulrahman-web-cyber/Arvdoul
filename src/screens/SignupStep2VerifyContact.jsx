@@ -7,13 +7,13 @@ import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext.jsx";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
+import { tokens } from "../design-system/tokens.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Design system (shared with Signup Step 1)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const GRADIENT =
-  "linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)";
+const GRADIENT = `linear-gradient(125deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 52%, ${tokens.color.brand.blue} 100%)`;
 
 const STEPS = [
   { number: 1, label: "Personal" },
@@ -82,7 +82,7 @@ const THEMES = {
     "--text": "#101735",
     "--text-2": "#4D587B",
     "--text-3": "#7783A5",
-    "--accent-text": "#4431F7",
+    "--accent-text": tokens.color.brand.indigo,
 
     "--card-bg":
       "linear-gradient(145deg, rgba(255,255,255,0.60), rgba(255,255,255,0.30) 48%, rgba(237,242,255,0.35))",
@@ -97,7 +97,7 @@ const THEMES = {
     "--field-bg-solid": "#FFFFFF",
     "--field-border": "rgba(61,76,147,0.18)",
     "--field-border-hover": "rgba(68,49,247,0.38)",
-    "--field-focus": "#4431F7",
+    "--field-focus": tokens.color.brand.indigo,
     "--field-ring": "rgba(68,49,247,0.15)",
     "--sel-glow": "rgba(68,49,247,0.12)",
 
@@ -122,7 +122,7 @@ const THEMES = {
     "--btn-shadow":
       "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
 
-    "--focus-outline": "#4431F7",
+    "--focus-outline": tokens.color.brand.indigo,
     "--rim-1": "rgba(139,30,243,0.34)",
     "--rim-2": "rgba(5,91,251,0.30)",
     "--spec": "rgba(255,255,255,0.67)",
@@ -1289,9 +1289,7 @@ export default function SignupStep2VerifyContact() {
   const [errors, setErrors] = useState({});
   const [step1Data, setStep1Data] = useState(null);
 
-  const [recaptchaReady, setRecaptchaReady] = useState(false);
   const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
-  const [recaptchaError, setRecaptchaError] = useState(null);
 
   const [isPhoneValid, setIsPhoneValid] = useState(false);
   const [shakeCard, setShakeCard] = useState(false);
@@ -1395,7 +1393,6 @@ export default function SignupStep2VerifyContact() {
       try {
         verifier = await auth.createRecaptchaVerifier('signup-recaptcha-container');
         setRecaptchaVerifier(verifier);
-        setRecaptchaReady(true);
       } catch (rErr) {
         toast.error("Security check failed. Please tap retry and try again.");
         navigationLock.current = false;
@@ -1500,14 +1497,12 @@ export default function SignupStep2VerifyContact() {
   }, [triggerShake]);
 
   const handleRecaptchaReady = useCallback((verifier) => {
-    setRecaptchaReady(true);
     setRecaptchaVerifier(verifier);
-    setRecaptchaError(null);
   }, []);
 
-  const handleRecaptchaError = useCallback((error) => {
-    setRecaptchaError(error);
-    setRecaptchaReady(false);
+  const handleRecaptchaError = useCallback(() => {
+    // InvisibleRecaptcha renders its own error + Retry affordance; the parent
+    // only needs to drop the now-invalid verifier so the next attempt rebuilds it.
     setRecaptchaVerifier(null);
     triggerShake();
   }, [triggerShake]);
@@ -1519,7 +1514,7 @@ export default function SignupStep2VerifyContact() {
       case 'google': return true;
       default: return false;
     }
-  }, [method, phoneNumber, isPhoneValid, emailForm, errors, phoneLoading, recaptchaReady]);
+  }, [method, phoneNumber, isPhoneValid, emailForm, errors, phoneLoading]);
 
   const rootVariables = resolvedTheme === 'dark' ? THEMES.dark : THEMES.light;
   const year = new Date().getFullYear();
@@ -1535,7 +1530,7 @@ export default function SignupStep2VerifyContact() {
         </div>
         <main className="av2-shell" style={{ alignItems: "center", justifyContent: "center" }}>
           <div className="av2-loading" role="status">
-            <SpinnerIcon size={38} stroke={2.2} style={{ color: "#8B1EF3" }} />
+            <SpinnerIcon size={38} stroke={2.2} style={{ color: tokens.color.brand.violet }} />
             <p style={{ margin: 0 }}>Loading your information...</p>
           </div>
         </main>

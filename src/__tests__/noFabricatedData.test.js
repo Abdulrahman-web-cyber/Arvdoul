@@ -162,6 +162,78 @@ describe('collaborationService - no sample projects', () => {
     // The real cover field is coverImage; `banner` is never written.
     expect(src).toContain('event.coverImage');
   });
+
+  test('EventCard renders no never-written event fields or never-passed props', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/EventCard.jsx'), 'utf8');
+    // None of these is written by any event writer (eventService/CreatePost) or
+    // passed by any render site, so the branches reading them could never fire.
+    for (const phantom of [
+      'friendsGoing', 'coinReward', 'scarcity', 'attendanceVelocity',
+      'matchScore', 'friendProximity', 'userAffinity', 'distanceKm',
+      'gravityLevel', 'getGravityLevel', 'stats?.interested',
+    ]) {
+      expect(src).not.toContain(phantom);
+    }
+  });
+
+  test('LinkCard renders no fabricated safety verdict, view count or dead tip control', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/LinkCard.jsx'), 'utf8');
+    // The card has no metadata/safety/classify backend (PostCard passes only
+    // link/tokens/onAnalytics/postId), so it must not invent any of these.
+    for (const phantom of [
+      'Trusted domain', 'Potentially unsafe', 'Unverified',
+      'domainScore', 'aiSummary', 'aiConfidence', 'safetyWarning',
+      'engagement.views', 'handleTip', 'showCoinMenu', 'Saved to bookmarks',
+      'link_impression',
+    ]) {
+      expect(src).not.toContain(phantom);
+    }
+    // It renders only the publisher-supplied Open Graph fields.
+    expect(src).toContain('link.title');
+    expect(src).toContain('link.description');
+    expect(src).toContain('link.image');
+  });
+
+  test('eventService.getEventStats never fabricates a feedbackScore 0 or a 100% attendance', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/services/eventService.js'), 'utf8');
+    expect(src).not.toContain('event.stats?.feedbackScore || 0');
+    expect(src).toContain('unknownNumber(event.stats?.feedbackScore)');
+    // A capacity-less event has no percentage; it must not claim 100%.
+    expect(src).not.toMatch(/attendeePercentage:[\s\S]{0,120}: 100/);
+  });
+
+  test('ImageCard never claims a save or a report it did not perform', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/ImageCard.jsx'), 'utf8');
+    // The fallbacks used to toast a fake success when no handler was wired.
+    expect(src).not.toContain("toast.success('Saved to bookmarks')");
+    expect(src).not.toContain("toast.info('Report submitted')");
+    expect(src).toContain('Saving is unavailable here');
+    expect(src).toContain('Reporting is unavailable here');
+  });
+
+  test('VideoCard only advertises a swipe gesture it has a handler for', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/VideoCard.jsx'), 'utf8');
+    // PostCard passes no onShare/onOpenDetails/onNext/onPrev, so the hints must
+    // be gated on the handler existing rather than firing an empty action.
+    expect(src).toContain('const horizontalHandler = dx > 0 ? onShare : onOpenDetails;');
+    expect(src).toContain('const verticalHandler = dy < 0 ? onNext : onPrev;');
+    expect(src).not.toMatch(/setGestureHint\(dx > 0 \? 'share' : 'details'\);\s*setTimeout\(\(\) => setGestureHint\(null\), 800\);\s*if \(dx > 0\) \{ onShare\?\.\(\);/);
+  });
+
+  test('VideoCard only shows the quality picker when a quality ladder exists', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/VideoCard.jsx'), 'utf8');
+    // PostCard passes no `qualities`, so an always-on Settings button opened an
+    // empty menu; the picker must be gated on `qualities.length > 0`.
+    expect(src).toContain('{qualities.length > 0 && (');
+    // The unused `index` prop is gone.
+    expect(src).not.toMatch(/\n\s*index = 0,/);
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {
@@ -203,7 +275,7 @@ describe('Service worker - never caches dev/unversioned modules', () => {
     expect(sw).toContain("pathname.startsWith('/assets/')"); // versioned bundles only
     expect(sw).toContain("pathname.startsWith('/src/')"); // dev modules excluded
     expect(sw).toContain("pathname.startsWith('/@vite')");
-    expect(sw).toContain('arvdoul-v2');
+    expect(sw).toMatch(/const CACHE_NAME = 'arvdoul-v\d+'/);
   });
 
   test('main.jsx registers the SW only in production and self-heals dev', () => {
@@ -2527,6 +2599,22 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
     expect(read('src/screens/Menu/MenuScreen.jsx')).not.toMatch(/[Ee]nd-to-end encrypted/i);
   });
 
+  test('the auth screens do not claim encryption or security the app cannot back', () => {
+    // The login/forgot-password/verify-email footers advertised "End-to-end
+    // encrypted" and "Military-grade security" — neither is true (no E2EE key
+    // provisioning; the only transport guarantee is TLS). Replace with what the
+    // stack actually delivers (TLS in transit + Firebase Auth).
+    for (const file of [
+      'src/screens/LoginScreen.jsx',
+      'src/screens/ForgotPassword.jsx',
+      'src/screens/VerifyEmailScreen.jsx',
+    ]) {
+      const s = read(file);
+      expect(s).not.toMatch(/[Ee]nd-to-end encrypted/i);
+      expect(s).not.toMatch(/[Mm]ilitary-grade/i);
+    }
+  });
+
   test('a text send cannot be blocked by the encryption gate', () => {
     // The send path must fall back to plaintext when keys are absent; an
     // unconditional throw would make every text message fail to send.
@@ -2813,6 +2901,186 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
     expect(s).not.toMatch(/Number\(analytics\?\.totalViews\)\s*\|\|\s*0/);
     expect(s).toContain("views === null ? '—'");
     expect(s).toContain("coins === null ? '—'");
+  });
+
+  test('ProfileCreatorDashboard sparkline series never coerce an unrecorded day to 0', () => {
+    const s = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    // `Number(d.views) || 0` drew a flat-then-spike line through fabricated
+    // zeros for days the server never recorded; a series with any unknown point
+    // must fall back to the explicit "no trend data" placeholder.
+    expect(s).not.toMatch(/Number\(d\.(views|reach|engagement|coins)\)\s*\|\|\s*0/);
+    expect(s).toContain('unknownNumber');
+    expect(s).toContain('values.every((v) => v !== null) ? values : null');
+  });
+});
+
+describe('Ranking badge aggregates stay unknown when a post counter is missing (N294)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getUserBadges sums counters via unknownNumber and nulls an incomplete total', () => {
+    const s = read('src/services/rankingService.js');
+    // `Number(p.stats?.likes || p.likes || 0)` treated a post whose stats block
+    // was never written as a measured 0, understating the badge total.
+    expect(s).not.toContain('totalLikes += Number(p.stats?.likes || p.likes || 0);');
+    expect(s).toContain('const n = unknownNumber(raw);');
+    expect(s).toContain('if (!countsComplete) {');
+  });
+});
+
+describe('Perks screen never derives an XP bar from a fabricated 0 experience (N300)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PerksRewardsScreen keeps an unwritten experience total unknown', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    // `Number(profile?.experience) || 0` fed a fabricated 0 into getLevelInfo,
+    // rendering a measured "0 XP to Level 2" bar for a profile that stored none.
+    expect(s).not.toContain('const experience = Number(profile?.experience) || 0;');
+    expect(s).toContain('const hasExperience = experienceRaw != null && Number.isFinite(Number(experienceRaw));');
+    expect(s).toContain("{!hasExperience");
+    expect(s).toContain('{hasExperience ? (');
+  });
+});
+
+describe('Story insights and coin leaderboard never fabricate 0 (N299)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('storyService insights read every counter via unknownNumber', () => {
+    const s = read('src/services/storyService.js');
+    expect(s).not.toContain('comments: story.stats?.comments || 0');
+    expect(s).not.toContain('completionRate: story.stats?.completionRate || 0');
+    expect(s).toContain('comments: unknownNumber(story.stats?.comments),');
+    expect(s).toContain('backTaps: unknownNumber(story.stats?.backTaps),');
+  });
+
+  test('monetizationService coin leaderboard leaves an unwritten balance unknown', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).not.toContain('coins: doc.data().coins || 0,');
+    expect(s).not.toContain('position: this.getPositionTitle(doc.data().coins || 0),');
+    expect(s).toContain('const coins = unknownNumber(doc.data().coins);');
+    expect(s).toContain('position: coins === null ? null : this.getPositionTitle(coins),');
+  });
+});
+
+describe('Community stats never fabricate 0 for an unwritten counter (N298)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getCommunityStats reads every counter via unknownNumber and nulls an incomplete engagement total', () => {
+    const s = read('src/services/communityService.js');
+    // `community.stats?.memberCount || 0` and the weighted `(stats.likes || 0)`
+    // sum reported a measured 0 for counters the community doc never wrote.
+    expect(s).not.toContain('memberCount: community.stats?.memberCount || 0');
+    expect(s).not.toContain('totalEngagement += (stats.likes || 0) + (stats.comments || 0) * 2 + (stats.shares || 0) * 3;');
+    expect(s).toContain('memberCount: unknownNumber(community.stats?.memberCount),');
+    expect(s).toContain('if (!engagementComplete) totalEngagement = null;');
+  });
+});
+
+describe('Creator engagement aggregate stays unknown when a post counter is missing (N297)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('analyticsService sums top-post engagement via unknownNumber and nulls an incomplete total', () => {
+    const s = read('src/services/analyticsService.js');
+    // `sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0)` treated a
+    // post whose stats block was never written as a measured 0 engagement.
+    expect(s).not.toContain('return sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);');
+    expect(s).toContain('const addEngagement = (raw) => {');
+    expect(s).toContain('if (!engagementComplete) totalEngagement = null;');
+  });
+});
+
+describe('Creator payout rows show the real amount and settlement state (N296)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('a withdrawal row never renders a fabricated amount or a hardcoded "Completed"', () => {
+    const s = read('src/screens/CreatorPayoutScreen.jsx');
+    // `tx.amount?.toLocaleString?.() || tx.amount` printed the raw (possibly
+    // undefined) value and a hardcoded "Completed" badge claimed a settlement
+    // the ledger never reported.
+    expect(s).not.toContain("tx.amount?.toLocaleString?.() || tx.amount");
+    expect(s).toContain('const amt = unknownNumber(tx.amount);');
+    expect(s).toContain("state === 'completed' || state === 'settled'");
+    expect(s).toContain("state === 'pending' || state === 'processing' || state === 'pending_review'");
+  });
+});
+
+describe('Audio card media session shows the real author, not a fabricated one (N295)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('AudioCard omits the artist for an unknown author instead of inventing one', () => {
+    const s = read('src/screens/PostCard/AudioCard.jsx');
+    // The OS media card hardcoded artist: 'Arvdoul Creator' for every audio post.
+    expect(s).not.toContain("artist: 'Arvdoul Creator'");
+    expect(s).toContain('pickDisplayName([authorName], { fallback: null })');
+    expect(s).toContain('authorName,');
+  });
+
+  test('PostCard passes the real author name into AudioCard', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).toContain('<AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />');
+  });
+});
+
+describe('Live post stats never fabricate 0 for an unwritten counter (N293)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('subscribeToPostStats reports unknown counters as null, not 0', () => {
+    const s = read('src/services/firestoreService.js');
+    // `stats.likes ?? 0` fired a fabricated 0 into PostCard's UPDATE_STATS on
+    // every realtime tick for a post whose stats block was never written.
+    expect(s).not.toContain('likes: stats.likes ?? 0,');
+    expect(s).toContain('likes: unknownNumber(stats.likes),');
+    expect(s).toContain('views: unknownNumber(stats.views),');
+  });
+
+  test('PostCard keeps its prior count for a null realtime payload', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).toContain('likeCount: action.payload.likes ?? state.likeCount');
+  });
+});
+
+describe('Verification standing bar never fabricates 5% progress (N292)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('an unknown level shows no standing progress, not a 5% floor', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    // `(userLevel || 0) / requiredLevel` with `Math.max(5, …)` drew a 5% bar for
+    // an account whose level had not loaded — a fabricated standing claim.
+    expect(s).not.toContain('((userLevel || 0) / requiredLevel)');
+    expect(s).toContain('standingProgress');
+    expect(s).toContain('? Math.min(100, Math.max(5, (userLevel / requiredLevel) * 100))');
+  });
+});
+
+describe('Video analytics chart drops unrecorded days instead of plotting 0 (N291)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the per-day view series never coerces a missing day to 0', () => {
+    const s = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(s).not.toContain('views: d.views || 0');
+    expect(s).toContain('.filter((d) => d.views !== null)');
+    expect(s).not.toContain('d.views || 0) / seriesMax');
+  });
+});
+
+describe('Achievement progress is unknown, not a fabricated 0, when unmeasurable (N290)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('a boolean/gate criterion yields null progress, not 0', () => {
+    const s = read('src/services/achievementService.js');
+    // `let progress = isEarned ? 100 : 0` claimed a measured 0% for criteria
+    // (isCreator, isRoyal, hostedLive, hasPassport, …) that have no numeric
+    // fraction to measure.
+    expect(s).not.toContain('let progress = isEarned ? 100 : 0;');
+    expect(s).toContain('let progress = isEarned ? 100 : null;');
+    expect(s).toContain('return Math.min(100, Math.round((cur / tgt) * 100));');
+  });
+
+  test('both achievement surfaces render a null progress as Locked, not "null%"', () => {
+    const screen = read('src/screens/Achievements/AchievementsScreen.jsx');
+    expect(screen).toContain("item.progress == null ? (");
+    const panel = read('src/components/Shared/QuickAccessPanel.jsx');
+    expect(panel).toContain("achievement.progress == null ? 'Locked'");
+    expect(panel).toContain('achievement.progress != null && (');
   });
 });
 
@@ -3147,6 +3415,118 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
   });
 });
 
+describe('CreatePost publish fails closed without a real identity', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+
+  test('publishPost never mints a synthetic uid or placeholder author name', () => {
+    // The composer once fell back to
+    //   localStorage.getItem("arvdoul_uid") || `user_${Date.now().toString(36)}`
+    // with displayName "Arvdoul Creator" when no session was present, so a post
+    // could be written under a fabricated author that never matches the real
+    // account. It must fail closed instead.
+    expect(src).not.toContain('arvdoul_uid');
+    expect(src).not.toContain('`user_${Date.now().toString(36)}`');
+    expect(src).not.toContain('"Arvdoul Creator"');
+    expect(src).toContain('You must be signed in to publish');
+  });
+});
+
+describe('Author identity is never fabricated across write + hydrate paths', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('CreatePost derives the author name/handle from real identity only', () => {
+    const src = read('src/screens/CreatePost.jsx');
+    expect(src).not.toContain('"Arvdoul User"');
+    expect(src).not.toContain('`user_${userNow.uid.slice(0, 8)}`');
+    expect(src).toContain('pickDisplayName([userNow.displayName, userNow.name, userNow.username])');
+    expect(src).toContain('deriveHandle(userNow.username) || deriveHandle(userNow.email)');
+  });
+
+  test('firestoreService derives names/handles via the read model, never literals', () => {
+    const src = read('src/services/firestoreService.js');
+    expect(src).not.toContain("'Arvdoul User'");
+    expect(src).not.toContain('`user_${uid.slice(0, 8)}`');
+    expect(src).not.toContain('`user_${postData.authorId?.slice(0,8)}`');
+    expect(src).toContain('pickDisplayName([me.displayName, auth?.currentUser?.displayName, me.username])');
+    expect(src).toContain("deriveHandle(me.username) || deriveHandle(me.email)");
+  });
+
+  test('HomeScreen.hydratePost never invents "Arvdoul User"', () => {
+    const src = read('src/screens/HomeScreen.jsx');
+    expect(src).not.toContain("'Arvdoul User'");
+    expect(src).toContain('pickDisplayName([post.authorName, post.authorUsername])');
+  });
+
+  test('commentService never mints User_<uid> / user_<uid> identities', () => {
+    const src = read('src/services/commentService.js');
+    expect(src).not.toContain('`User_${userId.slice(0, 8)}`');
+    expect(src).not.toContain('`user_${userId.slice(0, 8)}`');
+    expect(src).toContain('pickDisplayName([options.userName])');
+    expect(src).toContain("deriveHandle(options.userUsername) || ''");
+  });
+
+  test('SavedScreen + videoService use the read model for saved-item authors', () => {
+    const saved = read('src/screens/SavedScreen.jsx');
+    expect(saved).not.toContain("|| 'creator'");
+    expect(saved).toContain('deriveHandle(p.authorHandle)');
+    const video = read('src/services/videoService.js');
+    expect(video).toContain('username: deriveHandle(data.authorUsername)');
+    expect(video).not.toContain("username: data.authorUsername || 'creator'");
+  });
+
+  test('liveService never stamps a comment author "Anonymous"', () => {
+    // An unresolved author must stay null; the LiveScreen render site then
+    // shows the real uid prefix rather than a fabricated "Anonymous"/"User".
+    const src = read('src/services/liveService.js');
+    expect(src).not.toContain("|| 'Anonymous'");
+    expect(src).toContain('displayName: userData.displayName || userData.username || null');
+  });
+
+  test('LiveScreen resolves a real host name, never a "Streamer" placeholder', () => {
+    const src = read('src/screens/LiveScreen.jsx');
+    expect(src).not.toContain("|| 'Streamer'");
+    expect(src).not.toContain("|| 'User'");
+    expect(src).toContain("stream?.userId?.slice(0, 6) || ''");
+  });
+
+  test('moderation + monetization reports never write "Arvdoul user"', () => {
+    const mod = read('functions/moderation.js');
+    expect(mod).not.toContain("'Arvdoul user'");
+    expect(mod).toContain("reporter.username || reporter.displayName || reporter.name || null");
+    const mon = read('functions/monetization.js');
+    expect(mon).not.toContain("'Arvdoul user'");
+    expect(mon).toContain('reporter.username || reporter.displayName || null');
+  });
+
+  test('the notification fallback body is a real sentence, not "<name> like"', () => {
+    const src = read('functions/notifications.js');
+    expect(src).not.toContain('`${senderName} ${notificationData.type}`');
+    expect(src).toContain('sent you a notification');
+  });
+
+  test('the admin moderation queue never renders an undefined reporter handle', () => {
+    const src = read('src/screens/Admin/AdminModerationQueueScreen.jsx');
+    expect(src).not.toContain('@{report.reporterName}');
+    expect(src).not.toContain('@{selectedReport.reportedItemName}');
+    expect(src).toContain('const reporterLabel = (report)');
+    expect(src).toContain('const reportedItemLabel = (report)');
+  });
+});
+
+describe('firestoreService.createPost fails closed on identity', () => {
+  const src = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+
+  test('never signs in anonymously or trusts a caller-supplied authorId', () => {
+    // A missing session used to trigger `signInAnonymously` (a throwaway uid
+    // that owns the post but is never the real author) and, failing that, a
+    // fallback that accepted `postData.authorId` verbatim — both fabricate the
+    // author. The service must require a real signed-in uid.
+    expect(src).not.toContain('signInAnonymously');
+    expect(src).not.toContain("currentUser = { uid: postData.authorId");
+    expect(src).toContain('User not authenticated. Please sign in to publish.');
+  });
+});
+
 describe('CreatePost media upload fails closed — never persists a session-scoped URL', () => {
   const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
 
@@ -3388,12 +3768,75 @@ describe('N184 — no fabricated counts sweep (round 2)', () => {
       ['src/screens/Admin/AdminCommunityManagementScreen.jsx', 'Number(comm.strikesCount) || 0'],
       ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.xpToNext || 0'],
       ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.progress || 0'],
+      // A missing visa list / never-read tip total must render unknown, not a
+      // measured 0 (or a raw `undefined.toLocaleString()` throw).
+      ['src/screens/Citizenship/PassportScreen.jsx', 'filter(s => s.verified).length || 0'],
+      ['src/screens/Spaces/SpacesScreen.jsx', 'tipsTotalCoins.toLocaleString()'],
     ];
     for (const [file, literal] of cases) {
       const src = read(file);
       expect(src).not.toContain(literal);
       expect(src).toContain('unknownNumber');
     }
+  });
+});
+
+describe('Identity — no external avatar service, no invented handle', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('the quick-access panel never leaks the display name to ui-avatars.com', () => {
+    const src = read('src/components/Shared/QuickAccessPanel.jsx');
+    // An external avatar service receives the user's display name as a query
+    // param — a third-party data leak that also bypasses the shared fallback.
+    expect(src).not.toContain('ui-avatars.com');
+    expect(src).toContain('getSafeAvatarUrl');
+  });
+
+  test('VideoComments never invents a "user" handle for a missing username', () => {
+    const src = read('src/components/Videos/VideoComments.jsx');
+    expect(src).not.toContain("username: c.userUsername || 'user'");
+    expect(src).toContain('deriveHandle(c.userUsername)');
+    expect(src).not.toContain('@{replyTo.user.username}');
+  });
+
+  test('SavedScreen routes author avatars through resolveAvatarUrl', () => {
+    const src = read('src/screens/SavedScreen.jsx');
+    expect(src).not.toContain("p.authorPhoto || '/assets/default-profile.png'");
+    expect(src).not.toContain("v.creator?.avatar || '/assets/default-profile.png'");
+    expect(src).toContain('resolveAvatarUrl');
+  });
+});
+
+describe('Analytics — per-day metrics stay unknown, not a fabricated 0', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('getEngagementTrends keeps an unrecorded day null', () => {
+    const src = read('src/services/analyticsService.js');
+    expect(src).not.toContain('engagement: stat.engagement || 0');
+    expect(src).not.toContain('likes: stat.likes || 0');
+    expect(src).toContain("const asKnown = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);");
+    expect(src).toContain('engagement: asKnown(stat.engagement)');
+    expect(src).toContain('reach: asKnown(stat.reach)');
+  });
+});
+
+describe('N184 — no fabricated counts sweep (round 4)', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('CoinsScreen transaction rows never render a fabricated amount', () => {
+    const src = read('src/screens/CoinsScreen.jsx');
+    expect(src).not.toContain('tx.amount?.toLocaleString?.() ?? tx.amount');
+    expect(src).toContain('unknownNumber(tx.amount)');
+    expect(src).toContain("amount == null ? '—'");
+  });
+
+  test('QuestionCard bounty and reputation coerce through unknownNumber', () => {
+    const src = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(src).not.toContain('question?.bounty ?? 0');
+    expect(src).not.toContain('getReputationLevel(userReputation)');
+    expect(src).not.toContain("typeof userReputation === 'number' ? userReputation : '—'");
+    expect(src).toContain('unknownNumber(question?.bounty)');
+    expect(src).toContain('unknownNumber(userReputation) ?? 0');
   });
 });
 
@@ -3414,5 +3857,29 @@ describe('N184 — no fabricated counts sweep (round 3)', () => {
     expect(src).toContain('totalComments: unknownNumber(stats.comments)');
     expect(src).toContain('totalShares: unknownNumber(stats.shares)');
     expect(src).not.toMatch(/totalLikes: stats\.likes \|\| 0/);
+  });
+});
+
+describe('N314 — liveService never reports a peak-viewer metric no writer maintains', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('startLiveStream does not seed a stats.peakViewers counter', () => {
+    // `peakViewers` was written once (0) at creation and never updated by any
+    // writer, so every read reported a measured "peak 0" for a stream that had
+    // thousands of viewers. The genuine, writer-maintained counters stay.
+    const src = read('src/services/liveService.js');
+    expect(src).not.toMatch(/peakViewers\s*:/);
+    expect(src).not.toMatch(/stats\?\.peakViewers/);
+    // The maintained counters must still be seeded.
+    expect(src).toContain('totalViewers: 0,');
+    expect(src).toContain('totalTips: 0,');
+    expect(src).toContain('totalGifts: 0,');
+    expect(src).toContain('coinsEarned: 0,');
+  });
+
+  test('endLiveStream, getLiveEarnings and getLiveAnalytics omit peakViewers', () => {
+    const src = read('src/services/liveService.js');
+    expect(src).not.toMatch(/peakViewers,/);
+    expect(src).not.toMatch(/peakViewers\s*:/);
   });
 });

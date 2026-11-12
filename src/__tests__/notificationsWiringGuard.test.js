@@ -53,6 +53,17 @@ describe('NotificationsScreen consumes the real subscription payload', () => {
     const body = screen.slice(start, screen.indexOf('\n  };', start));
     expect(body).toMatch(/notificationsService\.markNotificationAsRead\(/);
   });
+
+  test('the System filter tab can actually match a notification (N256)', () => {
+    // Every other tab had a `type`-based fallback in the filter, but System
+    // keyed on `category === 'System'` alone and no notification was ever
+    // categorised as System — the tab matched nothing.
+    expect(screen).toMatch(/SYSTEM_NOTIFICATION_TYPES/);
+    expect(screen).toMatch(/SYSTEM_NOTIFICATION_TYPES\.has\(type\) \? 'System'/);
+    // Platform-generated types (senderId 'system') must be in the set.
+    expect(screen).toMatch(/'system_alert'/);
+    expect(screen).toMatch(/'security_alert'/);
+  });
 });
 
 describe('push-token lifecycle is complete', () => {

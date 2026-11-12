@@ -1,7 +1,7 @@
 // src/context/ThemeProvider.jsx
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
-import { BRAND_GRADIENT } from "../design-system/tokens.js";
+import { BRAND_GRADIENT, tokens } from "../design-system/tokens.js";
 import { LIGHT_THEME, DARK_THEME } from "./themePalettes.js";
 
 /**
@@ -17,12 +17,12 @@ export const ARVDOUL_GRADIENT_CSS = {
  */
 export const ARVDOUL_COLORS = {
   primary: {
-    purple: '#8B1EF3',
-    violet: '#4431F7',
-    blue: '#055BFB',
-    cyan: '#0088FF',
+    purple: tokens.color.brand.violet,
+    violet: tokens.color.brand.indigo,
+    blue: tokens.color.brand.blue,
+    cyan: tokens.color.brand.cyan,
   },
-  gradient: ['#8B1EF3', '#4431F7', '#055BFB', '#0088FF'],
+  gradient: [tokens.color.brand.violet, tokens.color.brand.indigo, tokens.color.brand.blue, tokens.color.brand.cyan],
 };
 
 /**

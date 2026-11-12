@@ -6,13 +6,15 @@
  * `src/design-system/tokens.*` is the single source of truth for the brand
  * palette (`#8B1EF3` / `#4431F7` / `#055BFB` / `#0088FF` / `#C82BFF`). UI modules
  * that re-declare those literals drift from the tokens and can never be
- * re-themed. The migration is large, so this guard is a *ratchet* (like the
- * Firebase-cost baseline): `scripts/brandHexBaseline.json` freezes the current
- * per-file count and may only SHRINK.
+ * re-themed. The migration is complete: `scripts/brandHexBaseline.json` is now
+ * empty, so the guard is a hard zero-tolerance check — ANY raw brand hex in a
+ * non-design-system module fails. (It was a *ratchet* while the signup/login/
+ * onboarding screens were still frozen; those are now migrated onto the tokens,
+ * keeping their own 125deg/52% geometry by importing `tokens.color.brand.*`.)
  *
- * - Adding a raw brand hex to a file that had none fails.
- * - Adding one to a file that already had some fails.
- * - Removing them and lowering the baseline in the same change passes.
+ * - Adding a raw brand hex anywhere under `src` (outside `src/design-system/`)
+ *   fails.
+ * - The guard may only tighten; the baseline must stay empty.
  *
  * @jest-environment node
  */
@@ -60,6 +62,14 @@ describe('brand hex ratchet — the baseline may only shrink', () => {
       if (n > allowed) offenders.push(`${file}: ${n} raw brand hex (baseline ${allowed})`);
     }
     expect(offenders.sort()).toEqual([]);
+  });
+
+  test('the migration is complete: the baseline is empty and every module is clean', () => {
+    // The signup/login/onboarding screens were the last frozen holders of the
+    // canonical hexes; they now import `tokens.color.brand.*`. Nothing under
+    // `src` (outside `src/design-system/`) may re-declare a brand hex.
+    expect(baseline).toEqual({});
+    expect(currentCounts()).toEqual({});
   });
 
   test('the total count never grows', () => {

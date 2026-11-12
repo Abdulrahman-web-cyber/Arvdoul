@@ -29,7 +29,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   privacy: {
     // Profile visibility (`isPrivate`) lives on the user profile, not here.
     allowDMs: 'everyone', // 'everyone' | 'friends' | 'none'
-    showActiveStatus: true,
   },
   playback: {
     autoPlayVideos: true,

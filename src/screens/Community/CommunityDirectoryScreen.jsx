@@ -21,7 +21,7 @@ const CommunityDirectoryScreen = () => {
   const [communities, setCommunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('all'); // all, public, private, secret
+  const [filter, setFilter] = useState('all'); // all, public, private (secret communities are undiscoverable by design)
   const [sortBy, setSortBy] = useState('popular'); // popular, newest, active
   const [viewMode, setViewMode] = useState('grid'); // grid, list
   const [page, setPage] = useState(1);
@@ -327,8 +327,7 @@ const CommunityDirectoryScreen = () => {
                       {[
                         { value: 'all', label: 'All', icon: Globe },
                         { value: 'public', label: 'Public', icon: Globe },
-                        { value: 'private', label: 'Private', icon: Lock },
-                        { value: 'secret', label: 'Secret', icon: Shield }
+                        { value: 'private', label: 'Private', icon: Lock }
                       ].map(({ value, label, icon: Icon }) => (
                         <button
                           key={value}

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { safeReturnPath, clearOnboardingRequired } from "../utils/profileCompletion.js";
+import { tokens } from "../design-system/tokens.js";
 
 // Import country codes (same as signup)
 import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
@@ -15,8 +16,7 @@ import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
  * Design system (shared with Signup Step 1 / Step 2)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const GRADIENT =
-  "linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)";
+const GRADIENT = `linear-gradient(125deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 52%, ${tokens.color.brand.blue} 100%)`;
 
 const THEMES = {
   dark: {
@@ -79,7 +79,7 @@ const THEMES = {
     "--text": "#101735",
     "--text-2": "#4D587B",
     "--text-3": "#7783A5",
-    "--accent-text": "#4431F7",
+    "--accent-text": tokens.color.brand.indigo,
 
     "--card-bg":
       "linear-gradient(145deg, rgba(255,255,255,0.60), rgba(255,255,255,0.30) 48%, rgba(237,242,255,0.35))",
@@ -94,7 +94,7 @@ const THEMES = {
     "--field-bg-solid": "#FFFFFF",
     "--field-border": "rgba(61,76,147,0.18)",
     "--field-border-hover": "rgba(68,49,247,0.38)",
-    "--field-focus": "#4431F7",
+    "--field-focus": tokens.color.brand.indigo,
     "--field-ring": "rgba(68,49,247,0.15)",
     "--sel-glow": "rgba(68,49,247,0.12)",
 
@@ -119,7 +119,7 @@ const THEMES = {
     "--btn-shadow":
       "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
 
-    "--focus-outline": "#4431F7",
+    "--focus-outline": tokens.color.brand.indigo,
     "--rim-1": "rgba(139,30,243,0.34)",
     "--rim-2": "rgba(5,91,251,0.30)",
     "--spec": "rgba(255,255,255,0.67)",
@@ -937,6 +937,7 @@ export default function LoginScreen() {
     profileResolved,
     needsOnboarding,
     signInWithEmailPassword,
+    verifyMFAAndSignIn,
     sendPhoneVerificationCode,
     createRecaptchaVerifier,
     cleanupRecaptchaVerifier
@@ -953,6 +954,10 @@ export default function LoginScreen() {
   const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
   const [shakeCard, setShakeCard] = useState(false);
   const [isPhoneValid, setIsPhoneValid] = useState(false);
+  // Second factor (TOTP). Populated when signInWithEmailPassword reports
+  // `auth/multi-factor-auth-required`; the challenge is resolved below.
+  const [mfaChallenge, setMfaChallenge] = useState(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   const emailRef = useRef(null);
 
@@ -1060,6 +1065,12 @@ export default function LoginScreen() {
 
     try {
       const result = await signInWithEmailPassword(email, password);
+      if (result?.requiresMFA) {
+        setMfaChallenge({ resolver: result.resolver, hints: result.hints || [] });
+        setMfaCode("");
+        setLoading(false);
+        return;
+      }
       if (result?.success) {
         if (result.requiresVerification || result.user?.isUnverified || (result.user?.emailVerified === false && result.user?.authProvider === 'email')) {
           navigate("/verify-email", {
@@ -1095,6 +1106,35 @@ export default function LoginScreen() {
       if (field === "email") setErrors({ email: errorMsg });
       else if (field === "password") setErrors({ password: errorMsg });
       else setErrors({ general: errorMsg });
+      toast.error(errorMsg);
+      triggerShake();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyMFA = async (e) => {
+    e?.preventDefault();
+    if (!mfaChallenge?.resolver) return;
+    if (!/^\d{6}$/.test(mfaCode.trim())) {
+      setErrors({ general: "Enter the 6-digit code from your authenticator app" });
+      triggerShake();
+      return;
+    }
+    setLoading(true);
+    setErrors({});
+    try {
+      await verifyMFAAndSignIn(mfaChallenge.resolver, mfaCode.trim());
+      if (rememberMe) localStorage.setItem('rememberMe', 'true');
+      else localStorage.removeItem('rememberMe');
+      const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
+      navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
+    } catch (error) {
+      const msg = (error?.message || '').toLowerCase();
+      const errorMsg = msg.includes('invalid') || msg.includes('code')
+        ? "That code is incorrect. Please try again."
+        : "Verification failed. Please try again.";
+      setErrors({ general: errorMsg });
       toast.error(errorMsg);
       triggerShake();
     } finally {
@@ -1185,15 +1225,6 @@ export default function LoginScreen() {
     navigate(`/forgot-password?email=${encodeURIComponent(email)}`);
   };
 
-  const isFormValid = useMemo(() => {
-    switch (method) {
-      case 'email': return email && password && !errors.email && !errors.password;
-      case 'phone': return phoneNumber && isPhoneValid && !errors.phone;
-      case 'google': return true;
-      default: return false;
-    }
-  }, [method, email, password, phoneNumber, isPhoneValid, errors, recaptchaVerifier]);
-
   const rootVariables = resolvedTheme === 'dark' ? THEMES.dark : THEMES.light;
   const year = new Date().getFullYear();
   const canSubmitEmail = !loading && !!email && !!password;
@@ -1233,6 +1264,55 @@ export default function LoginScreen() {
               </header>
 
               <div className="av2-body">
+                {mfaChallenge ? (
+                  <form
+                    className="av2-panel"
+                    onSubmit={handleVerifyMFA}
+                    noValidate
+                    aria-label="Two-factor authentication"
+                  >
+                    <div>
+                      <div className="av2-label-row">
+                        <label htmlFor="login-mfa-code" className="av2-label">
+                          Authentication code <span className="av2-req" aria-hidden="true">*</span>
+                        </label>
+                      </div>
+                      <p className="av2-sub" style={{ marginBottom: 10 }}>
+                        Enter the 6-digit code from your authenticator app.
+                      </p>
+                      <div className="av2-field" data-disabled={!!loading}>
+                        <span className="av2-field-ico"><LockIcon size={19} /></span>
+                        <input
+                          id="login-mfa-code"
+                          name="mfa-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          className="av2-input"
+                          value={mfaCode}
+                          onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="123456"
+                          disabled={loading}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="av2-btn" data-loading={loading} disabled={loading}>
+                      {loading ? "Verifying…" : "Verify & sign in"}
+                    </button>
+                    <button
+                      type="button"
+                      className="av2-btn-alt"
+                      onClick={() => { setMfaChallenge(null); setMfaCode(""); setErrors({}); }}
+                      disabled={loading}
+                    >
+                      Back
+                    </button>
+                  </form>
+                ) : (
+                <>
                 <div className="av2-divider" aria-hidden="true">Sign in with</div>
 
                 <UltimateMethodToggle method={method} onToggle={setMethod} disabled={loading} />
@@ -1425,14 +1505,16 @@ export default function LoginScreen() {
                   Don't have an account?
                   <Link to="/signup/step1">Sign up now</Link>
                 </p>
+                </>
+                )}
               </div>
             </motion.section>
 
             <footer>
               <p className="av2-secure">
-                <span><LockIcon size={14} />End-to-end encrypted</span>
+                <span><LockIcon size={14} />Encrypted in transit (TLS)</span>
                 <i aria-hidden="true" />
-                <span><ShieldCheckIcon size={14} />Military-grade security</span>
+                <span><ShieldCheckIcon size={14} />Protected by Firebase Auth</span>
               </p>
               <p className="av2-foot">© {year} Arvdoul</p>
             </footer>

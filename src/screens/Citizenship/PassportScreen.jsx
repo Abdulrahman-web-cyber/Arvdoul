@@ -13,6 +13,7 @@ import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import { ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight, Stamp, Lock, UserCheck, Check } from "lucide-react";
 import { toast } from 'sonner';
 import { ROYAL_ELIGIBILITY } from '../../shared/levelConfig.cjs';
+import { unknownNumber } from '../../lib/unknownNumber';
 
 /**
  * Arvdoul Sovereign National Crest
@@ -396,7 +397,7 @@ export default function PassportScreen() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Verified Visas</span>
-                  <span className="text-base font-bold text-amber-600 dark:text-amber-400">{passport.visaStamps?.filter(s => s.verified).length || 0}</span>
+                  <span className="text-base font-bold text-amber-600 dark:text-amber-400">{unknownNumber(passport.visaStamps?.filter(s => s.verified).length) ?? '—'}</span>
                   <span className="text-[9px] text-slate-500 block">Stamped</span>
                 </div>
               </div>
@@ -456,7 +457,9 @@ export default function PassportScreen() {
                 <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-xl border ${
                   isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-amber-600/30 bg-amber-50 text-amber-800'
                 }`}>
-                  {passport.visaStamps?.filter(s => s.verified).length} of {passport.visaStamps?.length} Unlocked
+                  {Array.isArray(passport.visaStamps)
+                    ? `${passport.visaStamps.filter(s => s.verified).length} of ${passport.visaStamps.length} Unlocked`
+                    : '—'}
                 </span>
               </div>
 

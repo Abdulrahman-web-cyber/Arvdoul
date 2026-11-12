@@ -79,6 +79,29 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(userId)) &&
         get(/databases/$(database)/documents/users/$(userId)).data.get('isPrivate', false) == true;
     }
+    // Whether the caller may read a profile section (badges/titles) on
+    // `userId`'s profile. `achievements`/`titles` are settable scopes
+    // (EditProfileScreen / SettingsScreen) and are enforced on the client by
+    // `resolveCapabilities` + `projectProfileForViewer` — but
+    // `achievements/{uid}/items` and `titles/{uid}/items` were
+    // `allow read: if isSignedIn()`, so any signed-in client could read a user's
+    // earned badges/titles (and their grant times) even with the scope set to
+    // ONLY_ME/FOLLOWERS. Mirror the client decision: the owner always, otherwise
+    // the section scope must permit the viewer's relation AND the account's
+    // content must be visible (a private account grants access to
+    // followers/connections only).
+    function profileSectionReadable(userId, section, defaultScope) {
+      let isFollower = followEdgeExists(uid(), userId);
+      let isConnection = isFollower && followEdgeExists(userId, uid());
+      // `exists(...) &&` short-circuits so a missing user doc denies cleanly
+      // instead of raising on `get(...).data`.
+      return isOwner(userId) ||
+        (exists(/databases/$(database)/documents/users/$(userId)) &&
+          (!get(/databases/$(database)/documents/users/$(userId)).data.get('isPrivate', false) || isFollower || isConnection) &&
+          (get(/databases/$(database)/documents/users/$(userId)).data.get('privacy', {}).get(section, defaultScope) == 'EVERYONE' ||
+           (get(/databases/$(database)/documents/users/$(userId)).data.get('privacy', {}).get(section, defaultScope) == 'FOLLOWERS' && (isFollower || isConnection)) ||
+           (get(/databases/$(database)/documents/users/$(userId)).data.get('privacy', {}).get(section, defaultScope) == 'CONNECTIONS' && isConnection)));
+    }
     // Collection-group authorization. `messagesService.getMessages` merges
     // message reactions with ONE `collectionGroup('reactions')` query, and
     // Firestore authorizes a collection-group query ONLY through a
@@ -221,6 +244,39 @@ service cloud.firestore {
       return isSignedIn() &&
         uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.get('members', {});
     }
+    // A "secret" community is members-only: its document, join requests and
+    // member roster must not be readable by a non-member. "public" and
+    // "private" stay world-readable (private means "anyone can see, request to
+    // join"). Read via get() so the same helper works for the community's
+    // subcollections; the community document's own rule must NOT use
+    // `.get(field, default)` on `resource.data` — that form silently defeats the
+    // all-or-nothing list-query check (an unfiltered directory query would then
+    // leak secret rows; see firestoreRulesCompile + communityPrivacyRules).
+    function communityPrivacyOpen(communityId) {
+      let c = get(/databases/$(database)/documents/communities/$(communityId)).data;
+      return c.privacy != 'secret' || (isSignedIn() && uid() in c.get('members', {})) || isAdmin();
+    }
+
+    // A live viewer presence record (`live_viewers/{streamId}_{viewerId}`) names
+    // WHO is watching a stream. A bare signed-in read exposed that presence graph
+    // to every user; the only client read is `getLiveViewers` (a host-only
+    // viewer list), so scope the read to the viewer themself, the stream host and
+    // admins. Unknown/absent streams fall closed.
+    function liveStreamHost(streamId) {
+      return get(/databases/$(database)/documents/live_streams/$(streamId)).data.get('userId', '');
+    }
+
+    // A collaboration project and its `team` roster carry membership + role
+    // (privilege) data. Only the owner, a team member or an admin may read them;
+    // the owner is the first `team/{uid}` entry, so the membership check covers
+    // both. Absent project/team docs fall closed.
+    function collabProjectAccess(projectId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/collaboration_projects/$(projectId)).data.ownerId == uid() ||
+        exists(/databases/$(database)/documents/collaboration_projects/$(projectId)/team/$(uid()))
+      );
+    }
     function postListableShape() {
       return resource.data.isDeleted == false &&
         resource.data.status == 'published' &&
@@ -237,6 +293,47 @@ service cloud.firestore {
       return isAdmin() ||
         (isSignedIn() &&
           (resource.data.authorId == uid() || postListableShape()));
+    }
+
+    // ---------- video visibility gate ----------
+    // `videos/{id}` was `allow read: if true`, so any client (signed in or not)
+    // could point-read a PRIVATE or `followers` video's metadata, an UNLISTED
+    // video's, a still-processing (`uploading`/`processing`) one, or a
+    // soft-deleted one. `videoService.getVideo` enforces exactly this shape on
+    // the client, but a browser check is not authorization — the rule must
+    // enforce it. Mirrors `postReadableByViewer`: `get` makes the per-document
+    // decision, `list` requires the query to prove a public-or-own shape.
+    //   - public / unlisted: readable by any signed-in viewer once the video is
+    //     `ready` (or `live`) and not deleted. `unlisted` is link-accessible by
+    //     design (`getVideo` never blocks it), so it stays readable — it is just
+    //     never listed.
+    //   - followers: requires the viewer to hold a real follow edge.
+    //   - private: owner (and admins) only.
+    // An absent `visibility`/`status` fails closed (evaluates false).
+    function videoReadableByViewer() {
+      return (isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid())) ||
+        isAdmin() ||
+        (resource.data.isDeleted == false &&
+          (resource.data.status == 'ready' || resource.data.status == 'live') &&
+          (
+            resource.data.visibility == 'public' ||
+            resource.data.visibility == 'unlisted' ||
+            (resource.data.visibility == 'followers' &&
+              isSignedIn() &&
+              followEdgeExists(uid(), resource.data.userId))
+          ));
+    }
+    // Rules are not filters: a `list` is evaluated against the whole potential
+    // result set, so every candidate must satisfy this. The owner reads their
+    // own videos (any status/visibility) via an author-scoped query; everyone
+    // else only ever receives a ready, non-deleted, public video.
+    function videoListableByViewer() {
+      return isAdmin() ||
+        (isSignedIn() &&
+          (resource.data.userId == uid() || resource.data.authorId == uid() ||
+            (resource.data.isDeleted == false &&
+              resource.data.status == 'ready' &&
+              resource.data.visibility == 'public')));
     }
 
     // Fields that must never appear on the world-readable `users/{uid}` doc.
@@ -322,27 +419,35 @@ service cloud.firestore {
 
     // ==================== ACHIEVEMENTS ====================
     match /achievements/{userId} {
-      allow read: if isSignedIn();
+      // The `achievements` privacy scope gates these (settable in Edit Profile /
+      // Settings). A bare `isSignedIn()` read let any client read a user's
+      // earned badges even with the scope set to ONLY_ME.
+      allow read: if profileSectionReadable(userId, 'achievements', 'EVERYONE');
       allow write: if isAdmin();
       match /items/{achievementId} {
-        allow read: if isSignedIn();
+        allow read: if profileSectionReadable(userId, 'achievements', 'EVERYONE');
         allow write: if isAdmin();
       }
     }
 
     // ==================== TITLES ====================
     match /titles/{userId} {
-      allow read: if isSignedIn();
+      // The `titles` privacy scope gates these; see the achievements block.
+      allow read: if profileSectionReadable(userId, 'titles', 'EVERYONE');
       allow write: if isAdmin();
       match /items/{titleId} {
-        allow read: if isSignedIn();
+        allow read: if profileSectionReadable(userId, 'titles', 'EVERYONE');
         allow write: if isAdmin();
       }
     }
 
     // ==================== CREATOR PROFILES ====================
     match /creator_profiles/{userId} {
-      allow read: if isSignedIn();
+      // Official creator record (application bio/links + eligibility status).
+      // Server-written on approval; the only client reader is the owner's own
+      // application/status view (creatorService.getCreatorProfile). A bare
+      // `isSignedIn()` read exposed every creator's eligibility/standing.
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && request.resource.data.tier == 'NONE';
       allow update: if isAdmin() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tier', 'eligibilityStatus', 'monetizationEligible', 'policyStanding', 'approvedAt']));
       allow delete: if isAdmin();
@@ -350,7 +455,11 @@ service cloud.firestore {
 
     // ==================== REPUTATION ====================
     match /reputation/{userId} {
-      allow read: if isSignedIn();
+      // A user's trust/reliability/contribution standing is their own record.
+      // It is server-written only (isAdmin), and the only reader is the subject
+      // (and admins); a bare `isSignedIn()` exposed every user's standing to
+      // every other user.
+      allow read: if isOwner(userId) || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -360,9 +469,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // usernames registry: created/updated via owner flows; public read for availability and profile lookups
+    // usernames registry: created/updated via owner flows. The registry maps a
+    // handle to its owner; it is read only from authenticated surfaces (signup
+    // availability, share/QR link resolution, `getUserByUsername`), so the read
+    // is signed-in — a world-readable grant let anyone with the public project
+    // config enumerate every handle (and its uid) over the REST API.
     match /usernames/{username} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       // A claimed username is immutable except by the user who already owns the
       // doc, and even they may never reassign its `userId`. The previous
@@ -381,7 +494,9 @@ service cloud.firestore {
     // real owner's later rename transaction fail (this rule forbids update) and
     // block them from ever changing their username.
     match /previous_usernames/{username} {
-      allow read: if true;
+      // Same registry boundary as `usernames`: only authenticated share/QR
+      // resolution reads it.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.userId == uid() &&
         get(/databases/$(database)/documents/usernames/$(username)).data.userId == uid();
       allow update, delete: if false;
@@ -498,7 +613,12 @@ service cloud.firestore {
         allow write: if false;
       }
       match /daily_stats/{statId} {
-        allow read: if true;
+        // Per-day view stats for a post: server-written only, and the only
+        // reader is the post author (the analytics panel) — a public read
+        // exposed every author's traffic to any client.
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/posts/$(postId)).data.authorId == uid());
         allow write: if false;
       }
       // post subcollections (likes, saves, gifts, reactions): the doc id
@@ -508,7 +628,12 @@ service cloud.firestore {
       // the Admin SDK, so a client cannot forge a vote or enumerate voters
       // (poll_votes is readable only by the voter, keyed on their own uid).
       match /{subcollection}/{docId} {
+        // Social-signal subcollections (likes/reactions/gifts/saves) are public
+        // by design. `answer_votes`/`poll_votes` are vote records, and
+        // `daily_stats` is per-post author analytics — none of those may be read
+        // through the wildcard (the specific blocks above/below own them).
         allow read: if subcollection != 'answer_votes' &&
+          subcollection != 'daily_stats' &&
           (subcollection != 'poll_votes' || docId == uid());
         allow write: if isSignedIn() &&
           subcollection != 'answer_votes' && subcollection != 'poll_votes' &&
@@ -518,7 +643,13 @@ service cloud.firestore {
 
     // ==================== COMMENTS ====================
     match /comments/{commentId} {
-      allow read: if true;
+      // A comment hangs off a post that is itself readable only by a signed-in
+      // viewer (`postReadableByViewer` requires `isSignedIn()` for every
+      // non-author branch), so an unauthenticated read is never a legitimate
+      // path. `allow read: if true` let anyone holding the app's public
+      // Firebase project config dump the whole comments collection over the
+      // REST API. Scope to signed-in.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && authoredBy('userId');
       // Two legitimate updates, nothing else:
       //  - the author editing their own comment, minus the moderation verdict
@@ -545,25 +676,36 @@ service cloud.firestore {
         ])
       ));
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+      // The per-user like/dislike marker (existence only; the tallies live on
+      // the comment doc). Scope the read to signed-in — the like path is
+      // authenticated and there is no anonymous reader.
       match /likes/{likerId} {
-        allow read: if true;
+        allow read: if isSignedIn();
         allow write: if isSignedIn() && likerId == uid();
       }
       match /dislikes/{dislikerId} {
-        allow read: if true;
+        allow read: if isSignedIn();
         allow write: if isSignedIn() && dislikerId == uid();
       }
       // Per-user emoji reaction (mirrors the post reaction subcollection). The
-      // aggregate `reactionCounts` map lives on the comment doc; without this
-      // match a reaction write fell through to the deny-all catch-all.
+      // aggregate `reactionCounts` map lives on the comment doc. No client reads
+      // an individual reaction record — the doc carries `reactionCounts` and the
+      // viewer's own choice is already in hand when they react — so the read is
+      // scoped to the reactor (and admins) rather than the whole world.
       match /reactions/{reactorId} {
-        allow read: if true;
+        allow read: if isSignedIn() && (reactorId == uid() || isAdmin());
         allow write: if isSignedIn() && reactorId == uid();
       }
-      // Edit history is appended by the comment author only; the record must
-      // name the editor, so it cannot be forged as another user's edit.
+      // Edit history holds the comment's PREVIOUS text. The only reader is the
+      // author's own "edited" affordance (`CommentsDrawer.EditHistoryModal`), so
+      // a world-readable grant exposed every edited comment's original wording
+      // to anyone holding the project config. Scope to the comment author and
+      // admins. `commentId` is the parent wildcard, available in this nested
+      // match.
       match /history/{historyId} {
-        allow read: if true;
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/comments/$(commentId)).data.userId == uid());
         allow create: if isSignedIn() && request.resource.data.editedBy == uid();
         allow update, delete: if false;
       }
@@ -748,29 +890,51 @@ service cloud.firestore {
           request.resource.data.count is number;
       }
       match /reaction_shards/{shardId} {
-        allow read: if true;
+        // The raw reaction tallies are rolled up server-side and the creator
+        // sees the aggregate; no client reads the raw shards. Scope to
+        // signed-in (the reactor path is authenticated).
+        allow read: if isSignedIn();
         allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
           '❤️', '🔥', '😂', '😢', '😮', '👍', 'updatedAt'
         ]);
       }
       match /analytics_shards/{shardId} {
-        allow read: if isSignedIn();
+        // Private creator analytics (forward/back taps, completions, comments,
+        // replies). The roll-up runs server-side and the creator sees the
+        // aggregates on the story document's `stats`, so no client reads the
+        // raw shards — a signed-in read leaked one creator's engagement to
+        // every other user. Scope the read to the creator and admins.
+        allow read: if isSignedIn() && (vibeData().userId == uid() || isAdmin());
         allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
           'forwardTaps', 'backTaps', 'completions', 'comments', 'replies', 'updatedAt'
         ]);
       }
       // Reactions: only when the creator enabled them, and only while the
-      // Vibe is active and visible to the reactor (spec §22).
+      // Vibe is active and visible to the reactor (spec §22). The READ is
+      // scoped to the same gate as the parent story: a reaction record names
+      // WHO reacted, so `allow read: if true` let any client (even signed out)
+      // enumerate reactors on a private/followers Vibe whose parent doc they
+      // cannot even read. Mirror `vibeIsActive` + `vibeVisibleToViewer` +
+      // `vibeNotBlocked`.
       match /reactions/{reactorId} {
-        allow read: if true;
+        allow read: if isSignedIn() &&
+          vibeIsActive(vibeData()) &&
+          vibeVisibleToViewer(vibeData(), uid()) &&
+          vibeNotBlocked(vibeData(), uid());
         allow write: if isSignedIn() && reactorId == uid() &&
           vibeData().allowReactions == true &&
           vibeIsActive(vibeData()) &&
           vibeVisibleToViewer(vibeData(), uid());
       }
-      // Comments: gated by allowComments + active + visible (spec §21).
+      // Comments: gated by allowComments + active + visible (spec §21). The
+      // read carries the same gate as the parent story (a comment names its
+      // author); `allow read: if true` leaked comments on a private/followers
+      // Vibe to any client.
       match /comments/{commentId} {
-        allow read: if true;
+        allow read: if isSignedIn() &&
+          vibeIsActive(vibeData()) &&
+          vibeVisibleToViewer(vibeData(), uid()) &&
+          vibeNotBlocked(vibeData(), uid());
         allow create: if isSignedIn() && authoredBy('userId') &&
           vibeData().allowComments == true &&
           vibeIsActive(vibeData()) &&
@@ -830,7 +994,11 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == uid();
     }
     match /highlights/{highlightId} {
-      allow read: if true;
+      // A highlight is a curated collection of the owner's (expired) stories;
+      // its document is profile content, not a public registry. Scope the read
+      // to signed-in clients (the discovery surfaces are all behind auth), never
+      // an anonymous project-config holder.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       allow update, delete: if isSignedIn() && resource.data.userId == uid();
       // Highlight contents inherit the parent's visibility: readable by any
@@ -1155,39 +1323,89 @@ service cloud.firestore {
       allow write: if false; // server-only
     }
     match /counter_shards/{shardId} {
-      // Hashed, non-PII shard keys. Only single-field value updates are
-      // permitted (increments); full-document overwrites are blocked so
-      // counters cannot be corrupted by clients.
+      // Hashed, non-PII shard keys. Clients write these because ~40 counter
+      // mutations (likes, saves, comments, follows, views) increment them from
+      // the client inside Firestore transactions.
+      //
+      // RESIDUAL RISK (N207): a rule cannot tell a legitimate `increment(±1)`
+      // from an absolute `{ value: 999999 }`, and the shard id is unbound to the
+      // writer — so a signed-in client CAN forge a count. The shape checks below
+      // only stop full-document overwrites and non-numeric values; they are NOT
+      // a forgery defence. Closing it needs every counter mutation moved
+      // server-side (Admin SDK bypasses rules) + `allow write: if false`, a
+      // multi-service change tracked in the ledger.
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.keys().hasAll(['value']) && request.resource.data.keys().size() == 1;
+      allow create: if isSignedIn() && request.resource.data.keys().hasAll(['value']) && request.resource.data.keys().size() == 1 && request.resource.data.value is number;
       allow update: if isSignedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']) &&
+        request.resource.data.value is number;
     }
     match /system/{docId} {
-      allow read: if isSignedIn();
+      // Server bookkeeping (coin_supply, scheduler cursors) written by Cloud
+      // Functions with the Admin SDK. No client reads it, so a signed-in read
+      // exposed platform internals for nothing.
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     // ==================== LIVE ====================
+    // A live stream carries its title, host, viewer counts and monetization
+    // state, and the UI offers public / followers / private audience. The read
+    // was `allow read: if true`, so any client (signed in or not) could read a
+    // private or followers-only broadcast's metadata and it appeared in the
+    // public discovery list. Split into `get` (per-document decision) and `list`
+    // (the query must prove a public-or-own shape — rules are not filters).
+    function liveStreamVisible(s) {
+      return s != null && (
+        isAdmin() ||
+        (isSignedIn() && s.userId == uid()) ||
+        (isSignedIn() &&
+          s.isDeleted == false &&
+          (s.status == 'live' || s.status == 'ended') &&
+          (
+            s.visibility == 'public' ||
+            (s.visibility == 'followers' &&
+              followEdgeExists(uid(), s.userId))
+          )));
+    }
     match /live_streams/{streamId} {
-      allow read: if true;
+      allow get: if liveStreamVisible(resource.data);
+      allow list: if isAdmin() ||
+        (isSignedIn() &&
+          (resource.data.userId == uid() ||
+            (resource.data.isDeleted == false &&
+              resource.data.status == 'live' &&
+              resource.data.visibility == 'public')));
       allow create: if isSignedIn() && authoredBy('userId');
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
     match /live_viewers/{viewerId} {
-      allow read: if isSignedIn();
+      // A viewer's own presence is readable by them, by the stream's host (who
+      // runs the "viewers" list) and by admins. `getLiveViewers` filters
+      // `where('streamId','==',...)`, so the list query proves one stream and the
+      // host lookup resolves to a single document.
+      allow read: if isSignedIn() &&
+        (resource.data.userId == uid() || liveStreamHost(resource.data.streamId) == uid() || isAdmin());
       // Doc id is `<streamId>_<viewerId>`; a write keyed only on the incoming
       // userId let a signed-in user overwrite another viewer's watch record.
       allow write: if isSignedIn() && viewerId.endsWith('_' + uid()) &&
         request.resource.data.userId == uid();
     }
     match /live_comments/{commentId} {
-      allow read: if true;
+      // The chat of a private / followers-only broadcast was world-readable
+      // (a bare `true` read). Scope it to a signed-in viewer who can see the
+      // parent stream — the same parent lookup `live_viewers` already uses.
+      allow read: if isSignedIn() && liveStreamVisible(
+        get(/databases/$(database)/documents/live_streams/$(resource.data.streamId)).data);
       allow create: if isSignedIn() && authoredBy('userId');
       allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }
     match /live_gifts/{giftId} {
-      allow read: if isSignedIn();
+      // Economic record (sender/recipient/coinValue), written by sendLiveGift
+      // (Admin SDK). No client reads it, so a signed-in read exposed the whole
+      // live-gift ledger; scope it to the two parties like gift_transactions.
+      allow read: if isSignedIn() && (
+        resource.data.senderId == uid() || resource.data.recipientId == uid() || isAdmin());
       allow write: if false; // server-verified
     }
 
@@ -1197,11 +1415,24 @@ service cloud.firestore {
       // permissions), moderation state and derived counters. A client write
       // could therefore grant itself `role: 'owner'`, so every mutation goes
       // through the server-authoritative `community*` callables in
-      // functions/communities.js. Reads stay public for the directory.
-      allow read: if true;
+      // functions/communities.js.
+      // Reads: public + private communities stay world-readable for the
+      // directory, but a *secret* community is members-only — its name,
+      // description, rules and member roster must not leak to a non-member.
+      // The check reads `resource.data.privacy` directly (NOT `.get(..., 'public')`):
+      // the `.get()` default form makes an unfiltered list query return secret
+      // rows, because the rule can no longer prove a single permission outcome
+      // for the whole potential result set.
+      allow read: if resource.data.privacy != 'secret' ||
+        (isSignedIn() && uid() in resource.data.members) ||
+        isAdmin();
       allow write: if false; // server-verified
       match /{subcollection}/{docId} {
-        allow read: if true;
+        // Subcollection content (join requests, pending members, ...) follows
+        // the parent community's visibility: only a non-secret community or a
+        // member (or admin) may read it. `communityPrivacyOpen` get()s the
+        // parent, so a missing parent denies the read.
+        allow read: if communityPrivacyOpen(communityId);
         // Members may create their own content; only the author (or admin) may edit/delete.
         allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
         allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
@@ -1209,12 +1440,25 @@ service cloud.firestore {
     }
 
     // ==================== EVENTS ====================
+    // An event carries its title, description, schedule, ticket tiers and the
+    // organizer's coordinates. `allow read: if true` let any client (even signed
+    // out, with only the public project config) point-read every event document
+    // and dump the collection. Every client surface (discovery, detail, the
+    // viewer's registrations) runs behind auth, so scope the read to signed-in.
+    //
+    // NOTE (N266): there is no privacy capability to enforce — the former
+    // `privacy` field was never read by any surface and is no longer written
+    // (removed as a dead control), so the read stays collection-scoped to
+    // signed-in clients. A status/registration-gated read would require the two
+    // list queries (`listEvents`, `getUserRegistrations`) to prove a predicate
+    // they cannot (rules are not filters); that needs registrations served
+    // server-side.
     match /events/{eventId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && authoredBy('organizerId');
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.organizerId;
       match /{subcollection}/{docId} {
-        allow read: if true;
+        allow read: if isSignedIn();
         allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
         allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
       }
@@ -1228,10 +1472,14 @@ service cloud.firestore {
     // inviting, saving, submitting, reviewing and publishing were all denied.
     // Every mutation now goes through functions/collaboration.js.
     match /collaboration_projects/{projectId} {
-      allow read: if isSignedIn();
+      // The project document (settings) and its `team` roster carry membership +
+      // role (privilege) data, so only the owner, a team member or an admin may
+      // read them. The dashboard lists the viewer's OWN projects
+      // (`where('ownerId','==',uid())`), so the list query proves access.
+      allow read: if collabProjectAccess(projectId);
       allow write: if false;
       match /{subcollection}/{docId} {
-        allow read: if isSignedIn();
+        allow read: if collabProjectAccess(projectId);
         allow write: if false;
       }
     }
@@ -1253,8 +1501,11 @@ service cloud.firestore {
       match /items/{itemId} {
         // Items are bounded by the parent collection's ownership: only the
         // collection owner (or an admin) may add/remove entries. The previous
-        // `if isSignedIn()` let any user write into anyone's collection.
-        allow read: if isSignedIn();
+        // `if isSignedIn()` let any user write into anyone's collection. The
+        // read follows the parent too — a collection is private to its owner,
+        // so a signed-in read of its saved posts leaked another user's saves.
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid() || isAdmin());
         allow create: if isSignedIn() &&
           get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid();
         allow update, delete: if isSignedIn() &&
@@ -1274,8 +1525,14 @@ service cloud.firestore {
       allow write: if false;
     }
     match /post_analytics/{postId} {
-      allow read: if true;
-      // Aggregate post analytics are server-computed (sharded counters); never client-written.
+      // Aggregate per-post analytics are server-computed (sharded counters) and
+      // never client-written. There is no writer of this collection, so a public
+      // read exposed nothing today, but the correct authorization is the post
+      // author only — a public read would leak any future analytics the moment a
+      // server writer lands.
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (resource.data.authorId != null && resource.data.authorId == uid()));
       allow write: if false;
     }
     // A profile view record is written by the trackProfileView callable and
@@ -1345,7 +1602,11 @@ service cloud.firestore {
 
     // ==================== MISC (bounded write surfaces) ====================
     match /shares/{shareId} {
-      allow read: if true;
+      // A share record names the sharer (`userId`) and the `postId` they
+      // shared. No client ever reads it (the share counter is a separate sharded
+      // counter), so a world-readable rule only exposed who shared what to any
+      // client. Scope the read to the sharer and admins.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       // A share record is immutable and must name the sharer as its author;
       // `if isSignedIn()` let anyone rewrite or delete another user's shares.
       allow create: if isSignedIn() && request.resource.data.userId == uid();
@@ -1407,7 +1668,11 @@ service cloud.firestore {
 
     // ==================== ADVANCED CREATOR SUITE (SPACES, SOUNDS, MARKETPLACE, POLLS, AI) ====================
     match /spaces/{spaceId} {
-      allow read: if true;
+      // A space is a live audio room (public or members-only). The only client
+      // surfaces are behind auth, so `allow read: if true` exposed every room's
+      // metadata (and any members-only one) to an anonymous project-config
+      // holder. Scope to signed-in; the write rule below still gates the roster.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.host.id == uid() || request.resource.data.userId == uid());
       // The host owns the space; any signed-in member may change only the
       // non-authoritative roster (raised hands, participants, listeners,
@@ -1440,12 +1705,14 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
     }
     match /sounds/{soundId} {
-      allow read: if true;
+      // Sound library is app content; scope the read to signed-in clients.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
       allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
     }
     match /marketplace_items/{itemId} {
-      allow read: if true;
+      // Marketplace listings are app content; scope the read to signed-in.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.creatorId == uid();
       allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
     }
@@ -1465,11 +1732,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /polls/{pollId} {
-      allow read: if true;
+      // Standalone polls (the `polls` collection; distinct from the
+      // `posts`/`stories` poll subcollections). Scope the read to signed-in.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
       allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
       match /votes/{voteId} {
-        allow read: if true;
+        // Message polls default to `anonymousVotes: true` (messagesService
+        // createPoll), yet the vote doc id IS the voter's uid and the read was
+        // world-readable — any client could enumerate who voted on a
+        // conversation poll and how. The only reader (`getPollResults`) is dead
+        // code, so scope the read to the voter and admins.
+        allow read: if isSignedIn() && (voteId == uid() || isAdmin());
         allow write: if isSignedIn() && voteId == uid();
       }
     }
@@ -1479,11 +1753,11 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }
     match /badges/{badgeId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
     match /user_badges/{userBadgeId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
@@ -1521,7 +1795,13 @@ service cloud.firestore {
 
     // ==================== VIDEOS ====================
     match /videos/{videoId} {
-      allow read: if true;
+      // `get` (single doc): the full per-document visibility decision. `list`
+      // (query): only when the query itself proves public-or-own, so a private
+      // or unlisted video can never be listed (rules are not filters). Before
+      // this the collection was `allow read: if true`, so any client could read
+      // a private/processing/deleted video's metadata by id.
+      allow get: if videoReadableByViewer();
+      allow list: if videoListableByViewer();
       allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
       // The owner may edit their own video, but the moderation verdict and the
       // server-computed ranking/processing fields belong to the server
@@ -1537,8 +1817,18 @@ service cloud.firestore {
           'muxPlaybackId', 'stats', 'userId'
         ]));
       allow delete: if isAdmin() || (isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid()));
+      // The parent video's owner, resolved for the subcollection rules below so a
+      // private/processing video's shards cannot be read by a stranger through a
+      // subcollection path (the subcollection rules do not inherit the parent
+      // `get` decision).
+      function parentVideo() {
+        return get(/databases/$(database)/documents/videos/$(videoId)).data;
+      }
+      // Daily analytics shards are creator-only (the roll-up runs server-side and
+      // the creator sees aggregates on the video doc). A world-readable
+      // subcollection let anyone read a private video's engagement by id.
       match /stats/{statId} {
-        allow read: if true;
+        allow read: if isSignedIn() && (parentVideo().userId == uid() || isAdmin());
         allow write: if false; // server-computed (sharded counters)
       }
       // Like docs: the doc id is the liker's uid. The likeVideo callable writes
@@ -1549,7 +1839,8 @@ service cloud.firestore {
         allow write: if false; // server-owned (likeVideo)
       }
       match /like_shards/{shardId} {
-        allow read: if true;
+        // Read by the server (aggregation) only; no client reads these.
+        allow read: if isSignedIn() && (parentVideo().userId == uid() || isAdmin());
         allow write: if false; // server-computed
       }
     }
@@ -1557,9 +1848,10 @@ service cloud.firestore {
     // ==================== COPYRIGHT REGISTRY ====================
     match /copyright_registry/{workId} {
       // Rights holders register works from the client (registerWork) or via
-      // admin import. Read is public (needed for detection); registrants may
-      // remove their own works.
-      allow read: if true;
+      // admin import. The registry maps a work to its registrant, so it is not
+      // a public directory; the read is signed-in (the detection path is an
+      // authenticated flow). Registrants may remove their own works.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() &&
         (request.resource.data.registeredBy == uid() || request.resource.data.userId == uid());
       allow update: if isAdmin();
@@ -1569,15 +1861,19 @@ service cloud.firestore {
 
     // ==================== ENTERPRISE SSO ====================
     match /enterprise_tenants/{tenantId} {
-      // SAML tenant configuration - readable by signed-in users (SSO
-      // initiation), writable only via admin/server.
-      allow read: if isSignedIn();
+      // SAML tenant configuration (IdP metadata, ACS URLs) is read and written
+      // only by the server (`functions/saml.js`); no client surface reads it, so
+      // a signed-in read leaked tenant SSO config to every user.
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     // ==================== EVENTS (feedback) ====================
     match /event_feedback/{feedbackId} {
-      allow read: if isSignedIn();
+      // A feedback row (rating + comment) belongs to the attendee who wrote it;
+      // the only client reader fetches the caller's own row, so a bare
+      // `isSignedIn()` read exposed every attendee's rating/comment.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }
@@ -1646,7 +1942,13 @@ service cloud.firestore {
 
     // ==================== STORY REPLIES ====================
     match /story_replies/{replyId} {
-      allow read: if true;
+      // A story reply is a private interaction between the replier and the
+      // story owner: the document records `userId` (replier) and `toUserId`
+      // (owner). It was world-readable, which exposed the replier -> owner
+      // relationship graph to any client. Only the two parties (or an admin)
+      // may read it; no client currently reads the collection.
+      allow read: if isSignedIn() &&
+        (resource.data.userId == uid() || resource.data.toUserId == uid() || isAdmin());
       allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
       allow update, delete: if isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid() || isAdmin());
     }
@@ -1784,7 +2086,11 @@ service cloud.firestore {
 
     // ==================== SYSTEM HEALTH / TELEMETRY ====================
     match /system_health/{docId} {
-      allow read: if isSignedIn();
+      // Platform telemetry. The only client reader is the admin health screen's
+      // round-trip probe (`adminService.probeDatabase`), and nothing writes it
+      // from the client, so a bare signed-in read exposed platform internals
+      // for no product reason.
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
 

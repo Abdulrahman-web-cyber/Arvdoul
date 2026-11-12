@@ -24,9 +24,12 @@ import { openDB } from 'idb';
 import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import { pickDisplayName, deriveHandle } from '../services/profileReadModel';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.jsx';
 import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 import { getAdaptiveTuning } from '../utils/deviceCapabilities.js';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import PullToRefresh from '../components/Shared/PullToRefresh';
 import { scheduleIdleTask, cancelIdleTask } from '../performance/optimizer.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
@@ -368,11 +371,15 @@ class FeedSessionEngine {
 }
 
 function hydratePost(post) {
-  const authorName = post.authorName || 'Arvdoul User';
+  // Honest identity: a missing name renders a neutral label, never the
+  // invented person "Arvdoul User"; a missing handle stays empty so the card
+  // omits the `@handle` rather than showing a synthetic `user_<uid>`.
+  const authorName = pickDisplayName([post.authorName, post.authorUsername]);
   const authorId = post.authorId || post.userId || '';
   return {
     ...post,
     authorName,
+    authorUsername: deriveHandle(post.authorUsername) || '',
     authorPhoto: getSafeAvatarUrl(post.authorPhoto, authorName, authorId),
     content: post.content || '',
     media: post.media || [],
@@ -788,7 +795,13 @@ export default function HomeScreen() {
         }
       }
       triggerHaptic('success');
-      toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
+      // Only claim a coin amount the server actually reported. `coinsAdded` is
+      // absent on a non-credit result, and `?? 0` would announce "+0 Coins".
+      if (typeof result?.coinsAdded === 'number') {
+        toast.success(`🎉 Claimed +${result.coinsAdded} Coins from Sponsored Ad!`);
+      } else {
+        toast.success('Reward credited!');
+      }
       setIsRewardAdOpen(false);
       setRewardAd(null);
     } catch (err) {
@@ -1186,6 +1199,14 @@ export default function HomeScreen() {
     loadFeedRef.current?.(true, true);
   }, []);
 
+  // Native pull-to-refresh on the Virtuoso scroller. `handleRefresh` already
+  // guards re-entry (status === REFRESHING) and shows its own toast.
+  const { pull, isRefreshing, threshold } = usePullToRefresh({
+    element: scrollerRootEl,
+    onRefresh: handleRefresh,
+    enabled: !isInitialLoading && status !== STATUS.LOADING,
+  });
+
   // Listen for realtime locally published posts
   useEffect(() => {
     const handleNewPost = (e) => {
@@ -1366,7 +1387,8 @@ export default function HomeScreen() {
         </div>
 
         {/* Feed container */}
-        <div className="flex-1 min-h-0 w-full">
+        <div className="relative flex-1 min-h-0 w-full">
+          <PullToRefresh pull={pull} threshold={threshold} isRefreshing={isRefreshing} />
           {isInitialLoading && <FeedLoadingBanner />}
           {showErrorState ? (
             <div className="min-h-[60vh] flex items-center justify-center px-4">

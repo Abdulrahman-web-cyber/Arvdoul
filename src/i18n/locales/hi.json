@@ -158,7 +158,6 @@
     "privacySection": "गोपनीयता और सुरक्षा",
     "privateProfile": "निजी प्रोफ़ाइल",
     "privateProfileDesc": "केवल फ़ॉलोअर्स आपकी सामग्री देख सकते हैं",
-    "activeStatus": "सक्रिय स्थिति दिखाएं",
     "allowDMs": "आपको कौन संदेश भेज सकता है",
     "dmOption": {
       "everyone": "सभी",
@@ -170,6 +169,9 @@
     "dataSection": "डेटा और कैश",
     "clearCache": "ऐप कैश साफ़ करें",
     "clearCacheDesc": "कैश की गई सामग्री और ऑफ़लाइन डेटा हटाएं",
+    "liteMode": "लाइट मोड (डेटा सेवर)",
+    "liteModeDesc": "डेटा उपयोग कम करें: कम मीडिया गुणवत्ता, कम ऑटोप्ले और छोटे फ़ीड पेज",
+    "liteModeRecommended": "आपका डिवाइस या नेटवर्क कमज़ोर है — लाइट मोड की सिफ़ारिश की जाती है।",
     "about": "Arvdoul के बारे में",
     "dangerSection": "खाता",
     "signOut": "लॉग आउट",
@@ -181,7 +183,18 @@
     "deleting": "हटा रहे हैं...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "दो-चरणीय प्रमाणीकरण",
+    "mfaDesc": "प्रमाणक ऐप से समय-आधारित कोड को दूसरे चरण के रूप में जोड़ें।",
+    "mfaEnable": "2FA सक्षम करें",
+    "mfaEnabled": "2FA चालू है",
+    "mfaScanHint": "इस सेटअप कुंजी को अपने प्रमाणक ऐप में दर्ज करें, फिर 6 अंकों का कोड दर्ज करें।",
+    "mfaCodeLabel": "6 अंकों का कोड",
+    "mfaVerify": "सत्यापित करें और सक्षम करें",
+    "mfaDisable": "2FA बंद करें",
+    "mfaError": "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+    "mfaDisabled": "दो-चरणीय प्रमाणीकरण बंद कर दिया गया।",
+    "mfaStatusUnavailable": "दो-चरणीय प्रमाणीकरण की स्थिति अभी उपलब्ध नहीं है। पुनः प्रयास के लिए यह संवाद फिर से खोलें।"
   },
   "level": {
     "title": "स्तर और प्रगति",

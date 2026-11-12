@@ -155,3 +155,35 @@ describe('message menu actions are wired, not dead (N254)', () => {
     expect(chat).toMatch(/svc\.unpinMessage\(conversationId, msg\.id, uid\)/);
   });
 });
+
+describe('inbox filter tabs match real conversation data (N255)', () => {
+  const screen = read('src/screens/MessagingScreen.jsx');
+  const svc = read('src/services/messagesService.js');
+
+  test('conversations are created with a `type`, never a `category`', () => {
+    // The screen used to filter on `c.category`, which no writer ever sets:
+    // createConversation writes `type: 'direct' | 'group' | 'channel'`.
+    expect(svc).toMatch(/type: isChannel \? 'channel' : \(isGroup \? 'group' : 'direct'\)/);
+    expect(svc).not.toMatch(/category:/);
+  });
+
+  test('the inbox derives `category` from `type` so the tabs are reachable', () => {
+    expect(screen).toMatch(/c\.type === 'group' \? 'groups' : c\.type === 'channel' \? 'channels' : 'personal'/);
+    // Every tab id is produced by that mapping.
+    expect(screen).toMatch(/'archived'[\s\S]*'groups'[\s\S]*'channels'[\s\S]*'personal'/);
+  });
+
+  test('the search-slider button that opened no panel is gone', () => {
+    // It toggled `showSearchFilters`, which only styled the button itself —
+    // no filter panel ever rendered. The category pills are the real control.
+    expect(screen).not.toMatch(/showSearchFilters/);
+    expect(screen).not.toMatch(/SlidersHorizontal/);
+  });
+
+  test('an empty filter view is not mislabelled as an empty inbox', () => {
+    // With a filter tab active, `filteredConversations` is empty even when the
+    // inbox has threads — the old copy always claimed "No conversations yet".
+    expect(screen).toMatch(/conversations\.length === 0\s*\n?\s*\?\s*'No conversations yet/);
+    expect(screen).toMatch(/No conversations in this view\./);
+  });
+});

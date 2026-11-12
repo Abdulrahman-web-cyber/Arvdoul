@@ -755,13 +755,14 @@ class ProfessionalUserService {
       }, { merge: true });
     });
 
-    // Non‑critical side documents (outside transaction)
+    // Non‑critical side document (outside transaction). The `notifications` /
+    // `privacy` / `appearance` groups that used to be seeded here were read by
+    // nothing: notification prefs live under `notificationPreferences`
+    // (`notificationsService`), the Settings screen writes `users/{uid}.settings`,
+    // and profile privacy lives on the profile (AGENTS.md single-source rule).
     const settingsDoc = doc(this.firestore, 'user_settings', userId);
     await setDoc(settingsDoc, {
       userId,
-      notifications: { likes: true, comments: true, follows: true, mentions: true, gifts: true, messages: true },
-      privacy: { showOnline: true, allowMessages: 'everyone', allowComments: 'everyone' },
-      appearance: { theme: 'system' },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     }).catch((e) => logger.warn('Default settings seed failed', { userId, error: e?.message }));

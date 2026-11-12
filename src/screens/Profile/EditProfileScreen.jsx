@@ -61,7 +61,7 @@ import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
 
 const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
 
@@ -492,15 +492,15 @@ export default function EditProfileScreen() {
     <div className={cn(
       "min-h-screen pb-32 transition-colors duration-200 relative",
       isDark 
-        ? "bg-[#03071B] text-white selection:bg-[#8B1EF3]/30" 
-        : "bg-[#f0f4fa] text-slate-900 selection:bg-[#8B1EF3]/20"
+        ? "bg-[#03071B] text-white selection:bg-arvdoul-purple/30" 
+        : "bg-[#f0f4fa] text-slate-900 selection:bg-arvdoul-purple/20"
     )}>
       {/* Top Ambient Optical Hairline Highlight */}
       <span
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-0 h-[2px] z-30"
         style={{
-          background: "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
+          background: `linear-gradient(90deg, ${tokens.color.brand.pink} 0%, ${tokens.color.brand.violet} 34%, ${tokens.color.brand.indigo} 66%, ${tokens.color.brand.cyan} 100%)`,
         }}
       />
 
@@ -509,14 +509,14 @@ export default function EditProfileScreen() {
         aria-hidden="true" 
         className="pointer-events-none fixed -top-32 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 z-0"
         style={{
-          background: "radial-gradient(circle, #8B1EF3 0%, #4431F7 60%, transparent 100%)"
+          background: `radial-gradient(circle, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 60%, transparent 100%)`
         }}
       />
       <div 
         aria-hidden="true" 
         className="pointer-events-none fixed top-1/2 -left-32 w-80 h-80 rounded-full blur-3xl opacity-15 z-0"
         style={{
-          background: "radial-gradient(circle, #055BFB 0%, #4431F7 60%, transparent 100%)"
+          background: `radial-gradient(circle, ${tokens.color.brand.blue} 0%, ${tokens.color.brand.indigo} 60%, transparent 100%)`
         }}
       />
 
@@ -622,7 +622,7 @@ export default function EditProfileScreen() {
         )}>
           <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#8B1EF3]" />
+              <Sparkles className="w-4 h-4 text-arvdoul-purple" />
               <span className="text-xs sm:text-sm font-black tracking-tight">Citizen Presence Completeness</span>
             </div>
             <span className="text-xs font-mono font-bold text-purple-400">{completeness.score}%</span>
@@ -633,7 +633,7 @@ export default function EditProfileScreen() {
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${completeness.score}%`,
-                background: "linear-gradient(90deg, #8B1EF3 0%, #4431F7 50%, #00F0FF 100%)"
+                background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`
               }}
             />
           </div>
@@ -668,7 +668,7 @@ export default function EditProfileScreen() {
             
             {/* Circular Avatar Preview with Arvdoul Radiant Aura */}
             <div className="relative group shrink-0">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#055BFB] shadow-[0_8px_24px_rgba(139,30,243,0.35)]">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue shadow-[0_8px_24px_rgba(139,30,243,0.35)]">
                 <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-[#03071B] dark:ring-[#03071B] relative">
                   <img
                     src={avatarPreview}
@@ -703,7 +703,7 @@ export default function EditProfileScreen() {
                   onClick={() => setShowAvatarModal(true)}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold text-white shadow-md shadow-purple-500/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
                   style={{
-                    background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 100%)"
+                    background: `linear-gradient(135deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 100%)`
                   }}
                 >
                   <Camera className="w-3.5 h-3.5" />
@@ -755,7 +755,7 @@ export default function EditProfileScreen() {
             <div className="space-y-2">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <AtSign className="w-4 h-4 text-[#8B1EF3]" />
+                  <AtSign className="w-4 h-4 text-arvdoul-purple" />
                   <span>Unique Username</span>
                 </label>
 
@@ -804,7 +804,7 @@ export default function EditProfileScreen() {
                     className={cn(
                       "inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95",
                       isDark 
-                        ? "bg-[#8B1EF3]/20 hover:bg-[#8B1EF3]/30 text-[#B978FF] border border-[#8B1EF3]/30" 
+                        ? "bg-arvdoul-purple/20 hover:bg-arvdoul-purple/30 text-[#B978FF] border border-arvdoul-purple/30" 
                         : "bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-200"
                     )}
                     title="Generate a guaranteed unique username via userService"
@@ -817,7 +817,7 @@ export default function EditProfileScreen() {
 
               {/* Input with @ prefix */}
               <div className="relative flex items-center">
-                <span className="absolute left-3.5 font-mono text-sm font-bold text-[#8B1EF3] dark:text-[#B978FF] select-none pointer-events-none">
+                <span className="absolute left-3.5 font-mono text-sm font-bold text-arvdoul-purple dark:text-[#B978FF] select-none pointer-events-none">
                   @
                 </span>
                 <input
@@ -829,8 +829,8 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full pl-8 pr-4 py-2.5 rounded-2xl text-sm font-mono font-medium outline-none transition-all border",
                     isDark
-                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-[#8B1EF3] focus:ring-2 focus:ring-[#8B1EF3]/20"
-                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-[#8B1EF3] focus:ring-2 focus:ring-[#8B1EF3]/20"
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple focus:ring-2 focus:ring-arvdoul-purple/20"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple focus:ring-2 focus:ring-arvdoul-purple/20"
                   )}
                 />
               </div>
@@ -1487,7 +1487,7 @@ export default function EditProfileScreen() {
             )}>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <Lock className={cn("w-4 h-4", formData.isPrivate ? "text-[#8B1EF3]" : "text-slate-400")} />
+                  <Lock className={cn("w-4 h-4", formData.isPrivate ? "text-arvdoul-purple" : "text-slate-400")} />
                   <span className="text-sm font-bold">Private Account</span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -1498,7 +1498,7 @@ export default function EditProfileScreen() {
                 type="checkbox"
                 checked={formData.isPrivate}
                 onChange={(e) => handleInputChange('isPrivate', e.target.checked)}
-                className="w-5 h-5 accent-[#8B1EF3] rounded cursor-pointer"
+                className="w-5 h-5 accent-arvdoul-purple rounded cursor-pointer"
               />
             </label>
 

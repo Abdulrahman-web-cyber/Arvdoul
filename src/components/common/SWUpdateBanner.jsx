@@ -1,17 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Sparkles } from 'lucide-react';
 
 export function SWUpdateBanner() {
   const [waitingWorker, setWaitingWorker] = useState(null);
   const [showUpdate, setShowUpdate] = useState(false);
+  const acceptedRef = useRef(false);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
-    // Listen for controllerchange
+    // Reload once the accepted worker takes control. Reloading from the
+    // `controllerchange` event (rather than right after postMessage) avoids the
+    // race where the old bundle reloads before the new worker has activated.
     const handleControllerChange = () => {
-      // Reload automatically if user clicked update
+      if (acceptedRef.current) window.location.reload();
     };
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
@@ -45,10 +48,9 @@ export function SWUpdateBanner() {
   }, []);
 
   const handleUpdate = () => {
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-      window.location.reload();
-    }
+    if (!waitingWorker) return;
+    acceptedRef.current = true;
+    waitingWorker.postMessage({ type: 'SKIP_WAITING' });
   };
 
   if (!showUpdate) return null;
