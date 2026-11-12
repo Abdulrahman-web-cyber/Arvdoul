@@ -2981,10 +2981,11 @@ describe('Creator engagement aggregate stays unknown when a post counter is miss
   test('analyticsService sums top-post engagement via unknownNumber and nulls an incomplete total', () => {
     const s = read('src/services/analyticsService.js');
     // `sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0)` treated a
-    // post whose stats block was never written as a measured 0 engagement.
+    // post whose stats block was never written as a measured 0 engagement. The
+    // sum now lives in `_computeRecentEngagement` (shared by both read paths).
     expect(s).not.toContain('return sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);');
-    expect(s).toContain('const addEngagement = (raw) => {');
-    expect(s).toContain('if (!engagementComplete) totalEngagement = null;');
+    expect(s).toContain('const n = unknownNumber(raw);');
+    expect(s).toContain('if (!complete) totalEngagement = null;');
   });
 });
 
@@ -3402,13 +3403,23 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).toContain('strikesCount !== null && strikesCount <=');
   });
 
-  test('analytics coinsEarned is unknown (null) when unwritten, never a fabricated 0', () => {
-    // No server path increments `profile_analytics.coinsEarned`; the earnings
-    // figure is the wallet balance read from `users`. An absent balance must be
-    // unknown (rendered '—'), not a measured "0 coins earned".
+  test('analytics coinsEarned/engagement are derived live, never the never-incremented stored 0', () => {
+    // `profile_analytics.coinsEarned`/`totalEngagement` are seeded to 0 at
+    // creation and NO writer increments them, so reading the stored field
+    // reported a fabricated measured "0 coins earned" / "0 engagement" for a
+    // creator who actually has a wallet balance and post engagement. Both are
+    // now derived live: coins from the wallet balance on `users/{uid}`,
+    // engagement from the creator's recent public posts.
     const svc = read('src/services/analyticsService.js');
+    // The fabricated stored reads are gone.
     expect(svc).not.toContain('coinsEarned: data.coinsEarned || 0');
-    expect(svc).toContain("coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
+    expect(svc).not.toContain("coinsEarned: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
+    expect(svc).not.toContain("totalEngagement: typeof data.totalEngagement === 'number' ? data.totalEngagement : null");
+    // The live derivation is wired in.
+    expect(svc).toContain('_readLiveCoinBalance(userId)');
+    expect(svc).toContain('_computeRecentEngagement(userId');
+    expect(svc).toContain('coinsEarned: liveCoins');
+    expect(svc).toContain('totalEngagement: liveEngagement.totalEngagement');
     const screen = read('src/screens/VideoAnalyticsScreen.jsx');
     expect(screen).not.toContain('total: data.coinsEarned || 0');
     expect(screen).toContain("total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");

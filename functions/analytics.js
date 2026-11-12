@@ -82,8 +82,11 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
 
     if (!analyticsSnap.exists) {
       transaction.set(analyticsRef, {
-        totalEngagement: 0,
-        coinsEarned: 0,
+        // `totalEngagement`/`coinsEarned` are NOT seeded: no writer ever
+        // increments them, so a `0` seed made every creator read a fabricated
+        // measured "0 coins earned" / "0 engagement". The client derives both
+        // live (wallet balance + recent-post engagement). See
+        // analyticsService.getUserAnalytics.
         dailyStats: { [today]: { views: 1, reach: 1, engagement: 0, coins: 0 } },
         topPosts: [],
         // No writer maintains a growth rate or an active-day count on this
