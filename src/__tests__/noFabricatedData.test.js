@@ -2826,6 +2826,19 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
   });
 });
 
+describe('Ranking badge aggregates stay unknown when a post counter is missing (N294)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getUserBadges sums counters via unknownNumber and nulls an incomplete total', () => {
+    const s = read('src/services/rankingService.js');
+    // `Number(p.stats?.likes || p.likes || 0)` treated a post whose stats block
+    // was never written as a measured 0, understating the badge total.
+    expect(s).not.toContain('totalLikes += Number(p.stats?.likes || p.likes || 0);');
+    expect(s).toContain('const n = unknownNumber(raw);');
+    expect(s).toContain('if (!countsComplete) {');
+  });
+});
+
 describe('Live post stats never fabricate 0 for an unwritten counter (N293)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
