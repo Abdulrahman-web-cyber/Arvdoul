@@ -294,6 +294,8 @@ export default function AchievementsScreen() {
                   <span>{item.rarity} · {item.points} pts</span>
                   {item.unlocked ? (
                     <span className="text-emerald-500">Unlocked</span>
+                  ) : item.progress == null ? (
+                    <span>Locked</span>
                   ) : (
                     <span>{item.progress}% progress</span>
                   )}

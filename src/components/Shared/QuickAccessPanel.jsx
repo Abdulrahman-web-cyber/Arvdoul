@@ -1426,7 +1426,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 </Badge>
               ) : (
                 <Badge variant="default" className="text-xs">
-                  {achievement.progress}%
+                  {achievement.progress == null ? 'Locked' : `${achievement.progress}%`}
                 </Badge>
               )}
             </div>
@@ -1449,7 +1449,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               </span>
             </div>
 
-            {!achievement.unlocked && (
+            {!achievement.unlocked && achievement.progress != null && (
               <ProgressBar
                 value={achievement.progress}
                 color="purple"

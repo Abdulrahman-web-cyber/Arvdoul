@@ -2826,6 +2826,28 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
   });
 });
 
+describe('Achievement progress is unknown, not a fabricated 0, when unmeasurable (N290)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('a boolean/gate criterion yields null progress, not 0', () => {
+    const s = read('src/services/achievementService.js');
+    // `let progress = isEarned ? 100 : 0` claimed a measured 0% for criteria
+    // (isCreator, isRoyal, hostedLive, hasPassport, …) that have no numeric
+    // fraction to measure.
+    expect(s).not.toContain('let progress = isEarned ? 100 : 0;');
+    expect(s).toContain('let progress = isEarned ? 100 : null;');
+    expect(s).toContain('return Math.min(100, Math.round((cur / tgt) * 100));');
+  });
+
+  test('both achievement surfaces render a null progress as Locked, not "null%"', () => {
+    const screen = read('src/screens/Achievements/AchievementsScreen.jsx');
+    expect(screen).toContain("item.progress == null ? (");
+    const panel = read('src/components/Shared/QuickAccessPanel.jsx');
+    expect(panel).toContain("achievement.progress == null ? 'Locked'");
+    expect(panel).toContain('achievement.progress != null && (');
+  });
+});
+
 describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
