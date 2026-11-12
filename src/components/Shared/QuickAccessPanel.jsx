@@ -1073,8 +1073,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             "border border-gray-300/50 dark:border-gray-700/50",
             "focus:outline-none focus:ring-2",
             theme === "dark"
-              ? "focus:ring-arvdoul-purple-500"
-              : "focus:ring-arvdoul-purple-500"
+              ? "focus:ring-arvdoul-purple"
+              : "focus:ring-arvdoul-purple"
           )}
         />
         {searchQuery && (

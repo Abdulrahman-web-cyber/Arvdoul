@@ -296,7 +296,7 @@ const Filmstrip = React.memo(
             {items.length < MAX_VIDEOS && (
               <button
                 onClick={onAddVideo}
-                className="flex-shrink-0 w-24 h-24 xs:w-20 xs:h-20 rounded-2xl border-2 border-dashed border-purple-400/40 hover:border-purple-500 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 bg-black/10 focus:ring-2 focus:ring-arvdoul-purple-500"
+                className="flex-shrink-0 w-24 h-24 xs:w-20 xs:h-20 rounded-2xl border-2 border-dashed border-purple-400/40 hover:border-purple-500 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 bg-black/10 focus:ring-2 focus:ring-arvdoul-purple"
                 aria-label="Add video"
               >
                 <Icons.Plus className="w-6 h-6 text-purple-400" />
@@ -329,7 +329,7 @@ const EmptyState = React.memo(({ onUpload }) => (
     </div>
     <button
       onClick={onUpload}
-      className="px-10 py-3.5 rounded-full text-white font-semibold flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 focus:ring-2 focus:ring-arvdoul-purple-500"
+      className="px-10 py-3.5 rounded-full text-white font-semibold flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 focus:ring-2 focus:ring-arvdoul-purple"
       style={{ background: DNA_GRADIENT, boxShadow: DNA_SHADOW }}
     >
       <Icons.Upload className="w-5 h-5" /> Browse videos

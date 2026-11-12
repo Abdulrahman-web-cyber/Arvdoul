@@ -440,7 +440,7 @@ export default function CommunitySettingsScreen() {
                   onChange={(e) => setSearchMemberQuery(e.target.value)}
                   placeholder="Search members by name or ID…"
                   className={cn(
-                    "w-full pl-9 pr-4 py-2 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500 border transition",
+                    "w-full pl-9 pr-4 py-2 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple border transition",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-slate-50 border-slate-200 text-slate-900"
                   )}
                 />
@@ -694,7 +694,7 @@ export default function CommunitySettingsScreen() {
                   onChange={(e) => setName(e.target.value)}
                   disabled={!canManage}
                   className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500 transition",
+                    "w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple transition",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-slate-50 border-slate-200 text-slate-900"
                   )}
                   maxLength={60}
@@ -709,7 +709,7 @@ export default function CommunitySettingsScreen() {
                   disabled={!canManage}
                   rows={3}
                   className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500 transition",
+                    "w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple transition",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-slate-50 border-slate-200 text-slate-900"
                   )}
                   maxLength={500}
@@ -725,7 +725,7 @@ export default function CommunitySettingsScreen() {
                   rows={4}
                   placeholder="Outline civic conduct, guidelines, and policies…"
                   className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500 transition",
+                    "w-full px-4 py-2.5 rounded-xl text-xs sm:text-sm border focus:outline-none focus:ring-2 focus:ring-arvdoul-purple transition",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-slate-50 border-slate-200 text-slate-900"
                   )}
                   maxLength={1000}
@@ -783,7 +783,7 @@ export default function CommunitySettingsScreen() {
                   checked={joinApproval}
                   onChange={(e) => setJoinApproval(e.target.checked)}
                   disabled={!canManage}
-                  className="w-5 h-5 rounded text-purple-600 focus:ring-arvdoul-purple-500 cursor-pointer"
+                  className="w-5 h-5 rounded text-purple-600 focus:ring-arvdoul-purple cursor-pointer"
                 />
               </div>
             </div>

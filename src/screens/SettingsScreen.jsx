@@ -48,7 +48,7 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled
         onClick={() => onChange?.(!checked)}
         className={cn(
           'relative w-11 h-6 rounded-full transition-colors shrink-0',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple-500 focus-visible:ring-offset-2',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple focus-visible:ring-offset-2',
           checked ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gray-300 dark:bg-gray-700',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
@@ -99,7 +99,7 @@ function OptionPill({ label, active, onClick }) {
       aria-pressed={active}
       className={cn(
         'px-3 py-1.5 rounded-full text-xs font-semibold transition-all min-h-[36px]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple-500',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
         active
           ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -1052,7 +1052,7 @@ function MfaDialogBody({ loadFailed, factors, enroll, code, onCodeChange, busy, 
             maxLength={6}
             value={code}
             onChange={(e) => onCodeChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 text-gray-900 dark:text-white tracking-[0.4em] text-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple-500"
+            className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 text-gray-900 dark:text-white tracking-[0.4em] text-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             placeholder="000000"
           />
         </div>

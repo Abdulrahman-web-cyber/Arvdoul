@@ -282,7 +282,7 @@ export default function AIStudioScreen() {
                   onChange={(e) => setCaptionTopic(e.target.value)}
                   placeholder="e.g. 5 mindset shifts for high-earning creators"
                   rows={4}
-                  className={`w-full p-4 rounded-2xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none resize-none transition-all ${
+                  className={`w-full p-4 rounded-2xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none resize-none transition-all ${
                     isDark ? 'bg-gray-800/90 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                   }`}
                 />
@@ -393,7 +393,7 @@ export default function AIStudioScreen() {
                     type="text"
                     value={scriptTopic}
                     onChange={(e) => setScriptTopic(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                     }`}
                   />
@@ -403,7 +403,7 @@ export default function AIStudioScreen() {
                   <select
                     value={scriptStyle}
                     onChange={(e) => setScriptStyle(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                     }`}
                   >
@@ -419,7 +419,7 @@ export default function AIStudioScreen() {
                   <select
                     value={scriptDuration}
                     onChange={(e) => setScriptDuration(Number(e.target.value))}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                     }`}
                   >
@@ -485,7 +485,7 @@ export default function AIStudioScreen() {
                   value={promptSubject}
                   onChange={(e) => setPromptSubject(e.target.value)}
                   rows={3}
-                  className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
+                  className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                     isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                   }`}
                 />

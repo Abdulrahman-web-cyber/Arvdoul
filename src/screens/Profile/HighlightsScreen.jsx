@@ -368,7 +368,7 @@ export default function HighlightsScreen() {
                 onChange={(e) => setHighlightName(e.target.value)}
                 placeholder="e.g. Travel, Moments, Projects"
                 maxLength={30}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple-500"
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple"
                 autoFocus
               />
             </div>
@@ -515,7 +515,7 @@ export default function HighlightsScreen() {
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               placeholder="Highlight title..."
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple-500"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple"
               autoFocus
             />
             <div className="flex gap-2 pt-2">

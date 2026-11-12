@@ -292,7 +292,7 @@ export default function PollsScreen() {
                     placeholder="e.g. Which camera sensor is best for 2026?"
                     value={newQuestion}
                     onChange={(e) => setNewQuestion(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'
                     }`}
                   />

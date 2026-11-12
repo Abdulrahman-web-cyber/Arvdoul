@@ -243,7 +243,7 @@ const ImageSlide = React.memo(({
 const Dot = ({ active, index, onClick }) => (
   <button
     onClick={() => onClick(index)}
-    className={`w-2 h-2 rounded-full transition-all focus:outline-none focus:ring-1 focus:ring-arvdoul-purple-400 ${
+    className={`w-2 h-2 rounded-full transition-all focus:outline-none focus:ring-1 focus:ring-arvdoul-purple ${
       active ? 'bg-white scale-110' : 'bg-white/50 hover:bg-white/80'
     }`}
     aria-label={`Go to image ${index + 1}`}

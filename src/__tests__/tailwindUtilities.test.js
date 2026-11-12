@@ -91,6 +91,17 @@ function knownShades(color) {
   return new Set(Object.keys(def).map(Number).filter((n) => !Number.isNaN(n)));
 }
 
+// The set of custom color keys declared in `tailwind.config.js` `theme.extend.colors`
+// (e.g. `arvdoul-purple`, `arvdoul-bg`). These are flat hex strings, so a shade
+// suffix (`arvdoul-purple-500`) is NOT a real utility.
+function customColorNames() {
+  const config = readFileSync(path.join(root, 'tailwind.config.js'), 'utf8');
+  const block = config.match(/colors:\s*\{([\s\S]*?)\n\s{6}\},/s) || config.match(/colors:\s*\{([\s\S]*?)\n\s*\},/s);
+  const names = new Set();
+  if (block) for (const m of block[1].matchAll(/'([^']+)':/g)) names.add(m[1]);
+  return names;
+}
+
 describe('tailwind utilities reference declared scale steps (N111)', () => {
   test('every color/opacity step used in src is declared in the opacity scale', () => {
     const configured = configuredOpacitySteps();
@@ -121,6 +132,30 @@ describe('tailwind utilities reference declared scale steps (N111)', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  test('every custom (arvdoul-*) color utility references a declared color, not an invented shade', () => {
+    // The SHADE test above deliberately skips custom `arvdoul-*` colors because
+    // they are not in the Tailwind palette. But that left a hole: a utility like
+    // `ring-arvdoul-purple-500` names a shade (`-500`) that the flat
+    // `'arvdoul-purple': '#8B1EF3'` entry does not have, so Tailwind generates
+    // NO CSS and the class is a silent no-op — the exact failure N111 was about.
+    // This asserts every `*-arvdoul-*` utility resolves to a real color key
+    // (flat colour name, or `name-shade` for an object-valued colour).
+    const declared = customColorNames();
+    const offenders = [];
+    const UTIL = /\b(?:bg|border|text|from|via|to|ring|divide|fill|stroke|outline|decoration|placeholder|accent|caret)-([a-z][a-z0-9-]*)\b/g;
+    for (const file of walk(SRC)) {
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(UTIL)) {
+        const color = m[1];
+        const isCustom = [...declared].some((d) => color === d || color.startsWith(`${d}-`));
+        if (isCustom && !declared.has(color)) {
+          offenders.push(`${path.relative(root, file)}: ${m[0]}`);
+        }
+      }
+    }
+    expect([...new Set(offenders)]).toEqual([]);
   });
 
   test('every animate-* utility is a built-in or declared in the config', () => {

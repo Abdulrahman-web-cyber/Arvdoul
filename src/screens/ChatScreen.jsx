@@ -1070,7 +1070,7 @@ export default function ChatScreen() {
               rows={3}
               placeholder="Add details (optional)"
               className={cn(
-                'w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500/50',
+                'w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50',
                 isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
               )}
             />

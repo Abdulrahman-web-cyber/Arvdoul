@@ -289,7 +289,7 @@ export default function CollectionsScreen() {
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="e.g. 3D Spatial Shaders, Audio Loops"
                     className={cn(
-                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500",
+                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple",
                       isDark ? "bg-white/5 border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"
                     )}
                   />
@@ -305,7 +305,7 @@ export default function CollectionsScreen() {
                     onChange={(e) => setNewDesc(e.target.value)}
                     placeholder="Short summary of folder contents..."
                     className={cn(
-                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500",
+                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple",
                       isDark ? "bg-white/5 border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"
                     )}
                   />

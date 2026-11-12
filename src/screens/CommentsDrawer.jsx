@@ -623,7 +623,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
               value={content}
               onChange={handleChange}
               placeholder={placeholder}
-              className="w-full p-2 pr-20 rounded-2xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white resize-none text-sm focus:ring-2 focus:ring-arvdoul-purple-500/50 transition-shadow"
+              className="w-full p-2 pr-20 rounded-2xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white resize-none text-sm focus:ring-2 focus:ring-arvdoul-purple/50 transition-shadow"
               rows={2}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit('text'); } }}
             />
@@ -685,7 +685,7 @@ const SearchBar = ({ onSearch, onClose }) => {
           placeholder="Search comments..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="flex-1 p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-arvdoul-purple-500/50"
+          className="flex-1 p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-arvdoul-purple/50"
           autoFocus
         />
         <div className="flex gap-2">
@@ -920,7 +920,7 @@ const CommentItem = memo(({
           </div>
           {isEditing ? (
             <div className="mt-1 space-y-2">
-              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple-500/50" rows={2} autoFocus />
+              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple/50" rows={2} autoFocus />
               <div className="flex gap-2">
                 <button onClick={handleSaveEdit} className="px-3 py-1 rounded-full bg-purple-600 text-white text-xs hover:bg-purple-700 transition-colors">Save</button>
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1 rounded-full border dark:border-gray-700 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
@@ -1683,7 +1683,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 <select
                   value={ranking}
                   onChange={(e) => setRanking(e.target.value)}
-                  className="text-xs bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1 border-0 dark:text-white focus:ring-2 focus:ring-arvdoul-purple-500/50"
+                  className="text-xs bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1 border-0 dark:text-white focus:ring-2 focus:ring-arvdoul-purple/50"
                 >
                   <option value="best">Best</option>
                   <option value="newest">Newest</option>
@@ -1824,7 +1824,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                   <select
                     value={reportReason}
                     onChange={(e) => setReportReason(e.target.value)}
-                    className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800 focus:ring-2 focus:ring-arvdoul-purple-500/50"
+                    className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800 focus:ring-2 focus:ring-arvdoul-purple/50"
                   >
                     <option value="">Select reason...</option>
                     <option value="spam">Spam</option>

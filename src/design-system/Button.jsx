@@ -59,7 +59,7 @@ export default function Button({
       className={cn(
         'inline-flex items-center justify-center font-semibold select-none',
         'transition-all duration-150 active:scale-[0.97]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-arvdoul-purple-500',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-arvdoul-purple',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         VARIANTS[variant],
         SIZES[size],
