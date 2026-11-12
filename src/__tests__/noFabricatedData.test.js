@@ -3882,4 +3882,13 @@ describe('N314 — liveService never reports a peak-viewer metric no writer main
     expect(src).not.toMatch(/peakViewers,/);
     expect(src).not.toMatch(/peakViewers\s*:/);
   });
+
+  test('startLiveStream does not write a maxViewers field nothing reads', () => {
+    // `maxViewers` was seeded from `canStart.viewerLimit` (a field the
+    // eligibility check never returns, so always the 50 fallback) and no reader
+    // ever consumed it — a dead stored field implying an enforced viewer cap.
+    const src = read('src/services/liveService.js');
+    expect(src).not.toMatch(/maxViewers\s*:/);
+    expect(src).not.toMatch(/maxViewers,/);
+  });
 });

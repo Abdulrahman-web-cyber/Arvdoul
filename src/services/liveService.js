@@ -369,7 +369,6 @@ class UltimateLiveService {
         endTime: null,
         duration: 0,
         viewerCount: 0,
-        maxViewers: canStart.viewerLimit || 50,
         stats: {
           // Only counters that a real writer maintains are seeded. `totalViewers`
           // is incremented by functions/live.js#onLiveViewerCreate, and tips/
