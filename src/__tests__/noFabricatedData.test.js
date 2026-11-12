@@ -2839,6 +2839,26 @@ describe('Ranking badge aggregates stay unknown when a post counter is missing (
   });
 });
 
+describe('Story insights and coin leaderboard never fabricate 0 (N299)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('storyService insights read every counter via unknownNumber', () => {
+    const s = read('src/services/storyService.js');
+    expect(s).not.toContain('comments: story.stats?.comments || 0');
+    expect(s).not.toContain('completionRate: story.stats?.completionRate || 0');
+    expect(s).toContain('comments: unknownNumber(story.stats?.comments),');
+    expect(s).toContain('backTaps: unknownNumber(story.stats?.backTaps),');
+  });
+
+  test('monetizationService coin leaderboard leaves an unwritten balance unknown', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).not.toContain('coins: doc.data().coins || 0,');
+    expect(s).not.toContain('position: this.getPositionTitle(doc.data().coins || 0),');
+    expect(s).toContain('const coins = unknownNumber(doc.data().coins);');
+    expect(s).toContain('position: coins === null ? null : this.getPositionTitle(coins),');
+  });
+});
+
 describe('Community stats never fabricate 0 for an unwritten counter (N298)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 

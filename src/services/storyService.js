@@ -2,6 +2,7 @@
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
 import {
@@ -1309,12 +1310,15 @@ class UltimateStoryService {
       insights: {
         views: realViews,
         reactions: reactionCounts,
-        comments: story.stats?.comments || 0,
-        shares: story.stats?.shares || 0,
-        replies: story.stats?.replies || 0,
-        completionRate: story.stats?.completionRate || 0,
-        forwardTaps: story.stats?.forwardTaps || 0,
-        backTaps: story.stats?.backTaps || 0,
+        // Counters the story document never wrote are unknown (null), never a
+        // fabricated 0 — an insight panel must not claim a measured zero
+        // interaction for a story whose `stats` block is absent.
+        comments: unknownNumber(story.stats?.comments),
+        shares: unknownNumber(story.stats?.shares),
+        replies: unknownNumber(story.stats?.replies),
+        completionRate: unknownNumber(story.stats?.completionRate),
+        forwardTaps: unknownNumber(story.stats?.forwardTaps),
+        backTaps: unknownNumber(story.stats?.backTaps),
         createdAt: story.createdAt,
         expiresAt: story.expiresAt,
         type: story.type,
@@ -1334,12 +1338,12 @@ class UltimateStoryService {
       callback({
         views,
         reactions,
-        comments: story.stats?.comments || 0,
-        shares: story.stats?.shares || 0,
-        replies: story.stats?.replies || 0,
-        completionRate: story.stats?.completionRate || 0,
-        forwardTaps: story.stats?.forwardTaps || 0,
-        backTaps: story.stats?.backTaps || 0,
+        comments: unknownNumber(story.stats?.comments),
+        shares: unknownNumber(story.stats?.shares),
+        replies: unknownNumber(story.stats?.replies),
+        completionRate: unknownNumber(story.stats?.completionRate),
+        forwardTaps: unknownNumber(story.stats?.forwardTaps),
+        backTaps: unknownNumber(story.stats?.backTaps),
       });
     }, (err) => logger.warn('[storyService] subscription error', err));
   }

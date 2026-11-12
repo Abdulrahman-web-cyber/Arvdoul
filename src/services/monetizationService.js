@@ -7,6 +7,7 @@ import { openDB } from 'idb';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { loadStripe } from '@stripe/stripe-js';
 import { svcLogger } from './ServiceKit.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
@@ -557,13 +558,18 @@ class MonetizationService {
       if (cursor != null) clauses.push(where('coins', '<', Number(cursor)));
       clauses.push(orderBy('coins', 'desc'), firestoreLimit(pageSize));
       const snapshot = await getDocs(query(usersRef, ...clauses));
-      const items = snapshot.docs.map((doc) => ({
-        userId: doc.id,
-        displayName: doc.data().displayName || 'User',
-        photoURL: getSafeAvatarUrl(doc.data().photoURL, doc.data().displayName || 'User', doc.id),
-        coins: doc.data().coins || 0,
-        position: this.getPositionTitle(doc.data().coins || 0),
-      }));
+      const items = snapshot.docs.map((doc) => {
+        // A balance the ledger never wrote is unknown, not a fabricated 0 —
+        // and an unknown balance cannot be ranked into a position title.
+        const coins = unknownNumber(doc.data().coins);
+        return {
+          userId: doc.id,
+          displayName: doc.data().displayName || 'User',
+          photoURL: getSafeAvatarUrl(doc.data().photoURL, doc.data().displayName || 'User', doc.id),
+          coins,
+          position: coins === null ? null : this.getPositionTitle(coins),
+        };
+      });
       const nextCursor =
         snapshot.docs.length === pageSize && items.length > 0
           ? items[items.length - 1].coins
