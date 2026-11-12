@@ -4,7 +4,7 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live` (HEAD `224
 
 ## Current state
 
-- Latest verified: **157 suites, 1792 passed, 5 skipped**; `npm run build`
+- Latest verified: **157 suites, 1793 passed, 5 skipped**; `npm run build`
   green; `npm run lint` exit 0 (0 errors, 875 warnings).
 - N321 closed this session: live presence (`isOnline`/`lastActive`) sat on the
   world-signed-in-readable `users/{uid}` doc, so a raw `getDoc` leaked a user's
@@ -35,8 +35,10 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live` (HEAD `224
 - Emulator enabled locally this session (openjdk-21 installed via `sudo apt-get`;
   Firestore + Storage jars cached under `~/.cache/firebase/emulators/`).
 - Commits this session: N321 (presence scope), N322 (totalEarned), N323
-  (brand-mimic gradient). See `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md`
-  §8 ledger rows N321–N323.
+  (brand-mimic gradient), N325 (dead fabricated coin getter). See
+  `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` §8 ledger rows N321–N325;
+  N324 (coins readable on the public `users/{uid}` doc) is confirmed and
+  deferred with a documented migration plan.
 
 ## Completed this session
 
