@@ -795,7 +795,13 @@ export default function HomeScreen() {
         }
       }
       triggerHaptic('success');
-      toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
+      // Only claim a coin amount the server actually reported. `coinsAdded` is
+      // absent on a non-credit result, and `?? 0` would announce "+0 Coins".
+      if (typeof result?.coinsAdded === 'number') {
+        toast.success(`🎉 Claimed +${result.coinsAdded} Coins from Sponsored Ad!`);
+      } else {
+        toast.success('Reward credited!');
+      }
       setIsRewardAdOpen(false);
       setRewardAd(null);
     } catch (err) {

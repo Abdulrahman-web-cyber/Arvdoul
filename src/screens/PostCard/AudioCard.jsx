@@ -329,7 +329,6 @@ const AudioCard = React.memo(({
   audio,
   tokens,
   isVisible,
-  isNearViewport,
   postId,
   authorName,
 }) => {
@@ -386,16 +385,20 @@ const AudioCard = React.memo(({
     return () => clearInterval(interval);
   }, [currentTime]);
 
-  // Smart preload
+  // Smart preload. `isVisible` is the feed row's active-card signal (PostCard
+  // passes it); the old `isNearViewport` prop was never supplied by any caller,
+  // so metadata was never preloaded and `preload` was permanently 'none'.
   useEffect(() => {
-    if (isNearViewport && audioRef.current && audioRef.current.src !== audio?.url) {
-      audioRef.current.preload = 'metadata';
-      audioRef.current.load();
-    } else if (!isNearViewport && audioRef.current && !isVisible) {
-      audioRef.current.preload = 'none';
-      audioRef.current.load();
+    const el = audioRef.current;
+    if (!el) return;
+    if (isVisible && el.src !== audio?.url) {
+      el.preload = 'metadata';
+      el.load();
+    } else if (!isVisible) {
+      el.preload = 'none';
+      el.load();
     }
-  }, [isNearViewport, isVisible, audio?.url]);
+  }, [isVisible, audio?.url]);
 
   // Canvas resize observer (only when dimensions actually change)
   useEffect(() => {
@@ -875,7 +878,7 @@ const AudioCard = React.memo(({
       <audio
         ref={audioRef}
         src={audio?.url}
-        preload={isNearViewport ? 'metadata' : 'none'}
+        preload={isVisible ? 'metadata' : 'none'}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={() => setIsLoading(false)}
         onPause={handlePause}
