@@ -1,6 +1,6 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR #46, OPEN/MERGEABLE, HEAD `27822ba`)._
+_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR #46, OPEN/MERGEABLE, HEAD `8da6a12`)._
 
 ## Current state
 
@@ -12,8 +12,10 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 - Emulator enabled locally this session (openjdk-21 installed via `sudo apt-get`;
   Firestore + Storage jars cached under `~/.cache/firebase/emulators/`) — the
   emulator-backed adversarial suites now actually execute instead of skipping.
-- Three commits this session: `883e27e` (N207 honesty + CI emulator wiring),
-  `d7b149c` (N304 dead `events.privacy` removal), `27822ba` (checkpoint docs).
+- Commits this session: `883e27e` (N207 honesty + CI emulator wiring),
+  `d7b149c` (N304 dead `events.privacy` removal), `27822ba` (checkpoint docs),
+  `c151bab` (checkpoint header), `8da6a12` (N306 wrong video assertion + CI
+  emulator wiring), plus this commit (N307 dead-control sweep).
 
 ## Completed this session
 
@@ -160,6 +162,7 @@ Backlog item #1 is closed (CollectionsScreen, QuestionCard, CoinsScreen, Convers
 | N207 | `counter_shards` rule comment claimed overwrites were blocked "so counters cannot be corrupted" — a forgery defence it does not provide (a rule cannot tell `increment(±1)` from an absolute `{value: 999999}`) | comment replaced with an explicit `RESIDUAL RISK (N207)` note; `value is number` added to the shape checks; new `counterShardForgeryGuard.test.js` (static + emulator, incl. an `assertSucceeds` on the forged write) pins it |
 | N304 | `events.privacy` written by `createEvent`/`updateEvent` but never rendered, read or enforced — a dead control implying private events | field removed from `eventService` + `CreateEventScreen`; rules note corrected; `readScopePrivacyRules` pins `eventService` no longer writes/reads `privacy` |
 | N306 | `videoReadPrivacyRules.test.js` had a wrong assertion (anon must be denied a **public** video) and was **not wired into any CI emulator step**, so it never ran — the wrong assertion would have failed the moment Java was present | assertion corrected (anon may read a public video, like a public post/community; anon is still denied a private one — added), and the suite is now in the `guards` emulator step alongside `notificationCounterRuleShape` |
+| N307 | Settings "Show active status" toggle persisted `settings.privacy.showActiveStatus` (no reader; presence visibility is owned by `profile.privacy.presence`) and duplicated the "Live Online Presence" scope selector beside it — plus other unread persisted fields (`user_settings.privacy.{showOnline,allowMessages,allowComments}`, `user_settings.notifications.*`, `user_settings.appearance.theme`, `messagesService.getUserPrivacySettings` output `showOnline`/`allowDiscovery`/`groupInvitePermission`, `GROUP_INVITE_PERMISSIONS`/`DEFAULT_GROUP_INVITE_SETTING`, `settings.activeStatus` i18n key) | toggle + key removed (presence controlled solely by the scope); dead seed/constants trimmed; `settingsWiring.test.js` pins `showActiveStatus`/`spatialAudio`/`streamQuality` absent |
 
 CI: the `guards` emulator step now also runs `readScopePrivacyRules`, `counterShardForgeryGuard`, `videoReadPrivacyRules` and `notificationCounterRuleShape`; all were executed against a local Firestore emulator (10 emulator suites, 117 tests, 0 skips) — the emulator-backed adversarial checks genuinely pass, not just skip.
 

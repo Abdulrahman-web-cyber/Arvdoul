@@ -54,13 +54,7 @@ const MESSAGING_CONFIG = {
       FRIENDS_ONLY: 'friends_only',
       NOBODY: 'nobody',
     },
-    GROUP_INVITE_PERMISSIONS: {
-      EVERYONE: 'everyone',
-      FRIENDS_ONLY: 'friends_only',
-      ADMIN_ONLY: 'admin_only',
-    },
     DEFAULT_MESSAGE_SETTING: 'everyone',
-    DEFAULT_GROUP_INVITE_SETTING: 'everyone',
   },
   PERFORMANCE: {
     CACHE_EXPIRY: {
@@ -843,9 +837,6 @@ class UltimateMessagingService {
       // Legacy field name consumed by checkMessagePermission; kept in sync so
       // the two vocabularies cannot disagree.
       messagePermission: permissionMap[allowDMs] || MESSAGING_CONFIG.PRIVACY.DEFAULT_MESSAGE_SETTING,
-      groupInvitePermission: stored.groupInvitePermission || MESSAGING_CONFIG.PRIVACY.DEFAULT_GROUP_INVITE_SETTING,
-      showOnline: privacy.showActiveStatus !== false,
-      allowDiscovery: stored.allowDiscovery !== false,
       pushEnabled: prefs.push !== false,
     };
     this.profileCache.set(cacheKey, settings);

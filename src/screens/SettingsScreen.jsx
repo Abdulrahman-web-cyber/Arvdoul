@@ -718,16 +718,6 @@ export default function SettingsScreen() {
             checked={profileIsPrivate}
             onChange={handleToggleProfilePrivate}
           />
-          <ToggleRow
-            icon={Activity}
-            label={t('settings.activeStatus')}
-            description="Broadcast your live presence status to permitted circles"
-            checked={settings.privacy.showActiveStatus}
-            onChange={(v) => {
-              updateSetting('privacy.showActiveStatus', v);
-              handleUpdateProfilePrivacyScope('presence', v ? VISIBILITY_SCOPES.FOLLOWERS : VISIBILITY_SCOPES.ONLY_ME);
-            }}
-          />
 
           <NavRow
             icon={ShieldOff}
