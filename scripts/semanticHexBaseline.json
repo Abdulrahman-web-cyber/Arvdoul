@@ -1,0 +1,15 @@
+{
+  "src/components/Shared/CoinStackIcon.jsx": 8,
+  "src/components/profile/ProfileCreatorDashboard.jsx": 1,
+  "src/screens/AudioEditor/components/MultiTrackConsole.jsx": 3,
+  "src/screens/CreatePost/ImageEditor.jsx": 2,
+  "src/screens/Menu/MenuScreen.jsx": 11,
+  "src/screens/PostCard.jsx": 1,
+  "src/screens/PostCard/PollCard.jsx": 3,
+  "src/screens/PostCard/TextCard.jsx": 3,
+  "src/screens/SignupStep2VerifyContact.jsx": 2,
+  "src/screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx": 5,
+  "src/screens/VideoEditor/components/ToolPanels.jsx": 4,
+  "src/services/userService.js": 4,
+  "src/utils/avatarUtils.js": 1
+}

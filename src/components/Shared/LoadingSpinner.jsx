@@ -27,9 +27,9 @@ const LoadingSpinner = React.memo(
       primary: { light: tokens.color.brand.violet, dark: tokens.color.brand.violet },
       secondary: { light: tokens.color.brand.indigo, dark: tokens.color.brand.indigo },
       blue: { light: tokens.color.brand.blue, dark: tokens.color.brand.blue },
-      success: { light: "#059669", dark: "#10B981" },
-      warning: { light: "#D97706", dark: "#F59E0B" },
-      danger: { light: "#DC2626", dark: "#EF4444" },
+      success: { light: tokens.color.semantic.successLight, dark: tokens.color.semantic.success },
+      warning: { light: tokens.color.semantic.warningLight, dark: tokens.color.semantic.warning },
+      danger: { light: tokens.color.semantic.errorLight, dark: tokens.color.semantic.error },
       light: { light: "rgba(0,0,0,0.2)", dark: "rgba(255,255,255,0.7)" },
       dark: { light: "#111827", dark: "#FFFFFF" },
     };

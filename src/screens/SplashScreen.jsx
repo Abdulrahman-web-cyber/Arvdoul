@@ -52,6 +52,7 @@ import {
 } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
+import { tokens } from "../design-system/tokens.js";
 
 /* ───────────────────────── Constants ───────────────────────── */
 
@@ -95,14 +96,14 @@ const PALETTE = Object.freeze({
     text: "#0C1130",
     muted: "#566083",
     line: "rgba(12,17,48,0.22)",
-    error: "#EF4444",
+    error: tokens.color.semantic.error,
   },
   dark: {
     bg: "#03071B",
     text: "#F3F5FF",
     muted: "#9AA3CC",
     line: "rgba(243,245,255,0.28)",
-    error: "#EF4444",
+    error: tokens.color.semantic.error,
   },
 });
 

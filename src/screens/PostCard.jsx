@@ -7,6 +7,7 @@ import { readLocalLikes, setLocalLike } from '../utils/localContentCache.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
+import { tokens, BRAND_GRADIENT } from '../design-system/tokens.js';
 import firestoreService from '../services/firestoreService';
 import { trackAnalyticsEvent } from '../services/analyticsService';
 import commentService from '../services/commentService';
@@ -51,11 +52,11 @@ const getDesignTokens = (theme) => {
     overlayBg: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.4)',
     overlayPanel: isDark ? '#1f1f2b' : '#FFFFFF',
     overlayPanelBorder: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-    actionBarBg: 'linear-gradient(135deg, #9333ea, #c026d3, #06b6d4)',
+    actionBarBg: BRAND_GRADIENT,
     shadowDirectional: isDark
       ? '0 20px 35px -12px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.2)'
       : '0 20px 35px -12px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.05)',
-    neonPurple: 'linear-gradient(135deg, #9333ea, #c026d3, #06b6d4)',
+    neonPurple: BRAND_GRADIENT,
     actionBarGlow: '0 0 12px rgba(236, 72, 153, 0.4), 0 0 20px rgba(147, 51, 234, 0.3)',
   };
 };
