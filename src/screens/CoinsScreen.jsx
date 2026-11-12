@@ -560,6 +560,8 @@ export default function CoinsScreen() {
                 // never a fabricated `+undefined` / `-undefined`.
                 const amount = unknownNumber(tx.amount);
                 const isCredit = tx.type === 'credit';
+                const sign = isCredit ? '+' : '-';
+                const amountLabel = amount == null ? '—' : `${sign}${amount.toLocaleString()}`;
                 return (
                 <div key={tx.id} className={cn("flex items-center justify-between p-3 rounded-xl", colors.card, "border", colors.border)}>
                   <div className="flex items-center gap-3">
@@ -577,7 +579,7 @@ export default function CoinsScreen() {
                     </div>
                   </div>
                   <div className={cn("font-bold", isCredit ? "text-green-500" : "text-red-500")}>
-                    {amount == null ? '—' : `${isCredit ? '+' : '-'}${amount.toLocaleString()}`}
+                    {amountLabel}
                   </div>
                 </div>
                 );

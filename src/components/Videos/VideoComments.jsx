@@ -27,6 +27,12 @@ const VideoComments = memo(({
   const [sortBy, setSortBy] = useState('best');
   const [loading, setLoading] = useState(false);
   const [blockedUserIds, setBlockedUserIds] = useState(new Set());
+  // A commenter with no real handle is addressed by name, never an invented @handle.
+  const replyToLabel = useMemo(
+    () => (replyTo ? (replyTo.user.username ? `@${replyTo.user.username}` : replyTo.user.name) : ''),
+    [replyTo]
+  );
+
 
   // Both block directions: a user who blocked the viewer (or whom the viewer
   // blocked) must not have their comments rendered here. CommentsDrawer already
@@ -326,7 +332,7 @@ const VideoComments = memo(({
             <div className="px-5 py-2 bg-purple-950/40 border-t border-purple-500/20 flex items-center justify-between">
               <span className="text-purple-200 text-xs font-medium flex items-center gap-1.5 truncate">
                 <Reply className="w-3.5 h-3.5 text-purple-400" />
-                Replying to <span className="font-bold text-white">{replyTo.user.username ? `@${replyTo.user.username}` : replyTo.user.name}</span>
+                Replying to <span className="font-bold text-white">{replyToLabel}</span>
               </span>
               <button
                 onClick={() => setReplyTo(null)}
@@ -366,7 +372,7 @@ const VideoComments = memo(({
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  placeholder={replyTo ? `Reply to ${replyTo.user.username ? `@${replyTo.user.username}` : replyTo.user.name}...` : "Add a comment..."}
+                  placeholder={replyTo ? `Reply to ${replyToLabel}...` : "Add a comment..."}
                   className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/10 transition-all"
                   maxLength={500}
                 />
