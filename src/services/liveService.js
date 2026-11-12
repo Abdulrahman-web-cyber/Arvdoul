@@ -517,10 +517,15 @@ class UltimateLiveService {
       const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
       
       const streamsRef = collection(this.firestore, 'live_streams');
+      // The list rule (live_streams) requires the QUERY to prove a public shape
+      // — rules are not filters — so the discovery list must constrain
+      // visibility/deletion or every non-owner list is denied (an empty
+      // discovery screen).
       let q = query(
         streamsRef,
         where('status', '==', 'live'),
         where('isDeleted', '==', false),
+        where('visibility', '==', 'public'),
         orderBy('startTime', 'desc'),
         limit(Math.min(Number(options.limit) || 50, LIVE_CONFIG.MAX_STREAM_READ))
       );

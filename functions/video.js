@@ -219,12 +219,39 @@ exports.createMuxUpload = onCall({
 // ======================================================================
 //  2. getMuxPlaybackUrl (rate limited)
 // ======================================================================
+// A signed playback URL is a bearer credential for the media, so signing one
+// for an arbitrary client-supplied `playbackId` was an IDOR: a stranger could
+// stream a PRIVATE / `followers` / still-processing video by id even after the
+// `videos` read rule was tightened. Re-apply the same visibility gate the
+// Firestore rule enforces before signing.
+async function canViewVideo(videoId, uid, isAdmin) {
+  if (!videoId) return false;
+  const snap = await db.collection('videos').doc(videoId).get();
+  if (!snap.exists) return false;
+  const v = snap.data();
+  if (isAdmin) return true;
+  if (v.userId === uid || v.authorId === uid) return true;
+  if (v.isDeleted === true) return false;
+  if (v.status !== 'ready' && v.status !== 'live') return false;
+  if (v.visibility === 'public' || v.visibility === 'unlisted') return true;
+  if (v.visibility === 'followers') {
+    const edge = await db.doc(`follows/${uid}_${v.userId}`).get();
+    return edge.exists;
+  }
+  return false;
+}
+
 exports.getMuxPlaybackUrl = onCall(async (data, context) => {
   const uid = validateAuth(context);
   const { playbackId, videoId, quality, watermarked } = data;
   if (!playbackId || !videoId) throw new functions.https.HttpsError('invalid-argument', 'playbackId and videoId required');
 
   await checkRateLimit(uid, 'getPlayback', 30, 60000);
+
+  const isAdmin = await checkIsAdmin(uid);
+  if (!(await canViewVideo(videoId, uid, isAdmin))) {
+    throw new functions.https.HttpsError('permission-denied', 'You do not have access to this video');
+  }
 
   try {
     let url;

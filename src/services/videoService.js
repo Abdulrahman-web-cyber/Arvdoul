@@ -605,13 +605,30 @@ class UltimateVideoService {
   async getVideosByUser(userId, options = {}) {
     await this.ensureInitialized();
     const videosRef = collection(this.firestore, 'videos');
-    let q = query(
-      videosRef,
-      where('userId', '==', userId),
-      where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(options.limit || VIDEO_CONFIG.PERFORMANCE.PAGE_LIMIT)
-    );
+    const isOwnerView = Boolean(options.viewerId && options.viewerId === userId);
+    const pageLimit = options.limit || VIDEO_CONFIG.PERFORMANCE.PAGE_LIMIT;
+    // The list rule admits two shapes (rules are not filters): the owner's own
+    // shape (`userId == uid()`, any status/visibility) and the public shape
+    // (`isDeleted == false` + `status == 'ready'` + `visibility == 'public'`).
+    // A query that omits the public constraints is denied wholesale for a
+    // non-owner, so a visitor's video tab would silently show nothing.
+    let q = isOwnerView
+      ? query(
+        videosRef,
+        where('userId', '==', userId),
+        where('isDeleted', '==', false),
+        orderBy('createdAt', 'desc'),
+        limit(pageLimit)
+      )
+      : query(
+        videosRef,
+        where('userId', '==', userId),
+        where('isDeleted', '==', false),
+        where('status', '==', VIDEO_CONFIG.STATUS.READY),
+        where('visibility', '==', VIDEO_CONFIG.VISIBILITY.PUBLIC),
+        orderBy('createdAt', 'desc'),
+        limit(pageLimit)
+      );
     if (options.startAfterDoc) {
       q = query(q, startAfter(options.startAfterDoc));
     }
@@ -740,9 +757,14 @@ class UltimateVideoService {
 
     try {
       const videosRef = collection(this.firestore, 'videos');
+      // The list rule (videoListableByViewer) requires the QUERY to prove a
+      // public shape — rules are not filters — so the equality constraints must
+      // be present or every non-owner list is denied (a silent empty feed).
       let q = query(
         videosRef,
         where('isDeleted', '==', false),
+        where('status', '==', VIDEO_CONFIG.STATUS.READY),
+        where('visibility', '==', VIDEO_CONFIG.VISIBILITY.PUBLIC),
         orderBy('rankingScore', 'desc'),
         limit(limit * VIDEO_CONFIG.PERFORMANCE.FEED_FETCH_MULTIPLIER)
       );

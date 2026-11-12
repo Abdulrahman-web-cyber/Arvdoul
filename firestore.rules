@@ -272,6 +272,47 @@ service cloud.firestore {
           (resource.data.authorId == uid() || postListableShape()));
     }
 
+    // ---------- video visibility gate ----------
+    // `videos/{id}` was `allow read: if true`, so any client (signed in or not)
+    // could point-read a PRIVATE or `followers` video's metadata, an UNLISTED
+    // video's, a still-processing (`uploading`/`processing`) one, or a
+    // soft-deleted one. `videoService.getVideo` enforces exactly this shape on
+    // the client, but a browser check is not authorization — the rule must
+    // enforce it. Mirrors `postReadableByViewer`: `get` makes the per-document
+    // decision, `list` requires the query to prove a public-or-own shape.
+    //   - public / unlisted: readable by any signed-in viewer once the video is
+    //     `ready` (or `live`) and not deleted. `unlisted` is link-accessible by
+    //     design (`getVideo` never blocks it), so it stays readable — it is just
+    //     never listed.
+    //   - followers: requires the viewer to hold a real follow edge.
+    //   - private: owner (and admins) only.
+    // An absent `visibility`/`status` fails closed (evaluates false).
+    function videoReadableByViewer() {
+      return (isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid())) ||
+        isAdmin() ||
+        (resource.data.isDeleted == false &&
+          (resource.data.status == 'ready' || resource.data.status == 'live') &&
+          (
+            resource.data.visibility == 'public' ||
+            resource.data.visibility == 'unlisted' ||
+            (resource.data.visibility == 'followers' &&
+              isSignedIn() &&
+              followEdgeExists(uid(), resource.data.userId))
+          ));
+    }
+    // Rules are not filters: a `list` is evaluated against the whole potential
+    // result set, so every candidate must satisfy this. The owner reads their
+    // own videos (any status/visibility) via an author-scoped query; everyone
+    // else only ever receives a ready, non-deleted, public video.
+    function videoListableByViewer() {
+      return isAdmin() ||
+        (isSignedIn() &&
+          (resource.data.userId == uid() || resource.data.authorId == uid() ||
+            (resource.data.isDeleted == false &&
+              resource.data.status == 'ready' &&
+              resource.data.visibility == 'public')));
+    }
+
     // Fields that must never appear on the world-readable `users/{uid}` doc.
     // They live in `users_private/{uid}` instead (owner/admin only). Mirrors
     // PRIVATE_PROFILE_FIELDS in src/config/profileContracts.js.
@@ -1228,8 +1269,33 @@ service cloud.firestore {
     }
 
     // ==================== LIVE ====================
+    // A live stream carries its title, host, viewer counts and monetization
+    // state, and the UI offers public / followers / private audience. The read
+    // was `allow read: if true`, so any client (signed in or not) could read a
+    // private or followers-only broadcast's metadata and it appeared in the
+    // public discovery list. Split into `get` (per-document decision) and `list`
+    // (the query must prove a public-or-own shape — rules are not filters).
+    function liveStreamVisible(s) {
+      return s != null && (
+        isAdmin() ||
+        (isSignedIn() && s.userId == uid()) ||
+        (isSignedIn() &&
+          s.isDeleted == false &&
+          (s.status == 'live' || s.status == 'ended') &&
+          (
+            s.visibility == 'public' ||
+            (s.visibility == 'followers' &&
+              followEdgeExists(uid(), s.userId))
+          )));
+    }
     match /live_streams/{streamId} {
-      allow read: if true;
+      allow get: if liveStreamVisible(resource.data);
+      allow list: if isAdmin() ||
+        (isSignedIn() &&
+          (resource.data.userId == uid() ||
+            (resource.data.isDeleted == false &&
+              resource.data.status == 'live' &&
+              resource.data.visibility == 'public')));
       allow create: if isSignedIn() && authoredBy('userId');
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
@@ -1246,7 +1312,11 @@ service cloud.firestore {
         request.resource.data.userId == uid();
     }
     match /live_comments/{commentId} {
-      allow read: if true;
+      // The chat of a private / followers-only broadcast was world-readable
+      // (a bare `true` read). Scope it to a signed-in viewer who can see the
+      // parent stream — the same parent lookup `live_viewers` already uses.
+      allow read: if isSignedIn() && liveStreamVisible(
+        get(/databases/$(database)/documents/live_streams/$(resource.data.streamId)).data);
       allow create: if isSignedIn() && authoredBy('userId');
       allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }
@@ -1624,7 +1694,13 @@ service cloud.firestore {
 
     // ==================== VIDEOS ====================
     match /videos/{videoId} {
-      allow read: if true;
+      // `get` (single doc): the full per-document visibility decision. `list`
+      // (query): only when the query itself proves public-or-own, so a private
+      // or unlisted video can never be listed (rules are not filters). Before
+      // this the collection was `allow read: if true`, so any client could read
+      // a private/processing/deleted video's metadata by id.
+      allow get: if videoReadableByViewer();
+      allow list: if videoListableByViewer();
       allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
       // The owner may edit their own video, but the moderation verdict and the
       // server-computed ranking/processing fields belong to the server
@@ -1640,8 +1716,18 @@ service cloud.firestore {
           'muxPlaybackId', 'stats', 'userId'
         ]));
       allow delete: if isAdmin() || (isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid()));
+      // The parent video's owner, resolved for the subcollection rules below so a
+      // private/processing video's shards cannot be read by a stranger through a
+      // subcollection path (the subcollection rules do not inherit the parent
+      // `get` decision).
+      function parentVideo() {
+        return get(/databases/$(database)/documents/videos/$(videoId)).data;
+      }
+      // Daily analytics shards are creator-only (the roll-up runs server-side and
+      // the creator sees aggregates on the video doc). A world-readable
+      // subcollection let anyone read a private video's engagement by id.
       match /stats/{statId} {
-        allow read: if true;
+        allow read: if isSignedIn() && (parentVideo().userId == uid() || isAdmin());
         allow write: if false; // server-computed (sharded counters)
       }
       // Like docs: the doc id is the liker's uid. The likeVideo callable writes
@@ -1652,7 +1738,8 @@ service cloud.firestore {
         allow write: if false; // server-owned (likeVideo)
       }
       match /like_shards/{shardId} {
-        allow read: if true;
+        // Read by the server (aggregation) only; no client reads these.
+        allow read: if isSignedIn() && (parentVideo().userId == uid() || isAdmin());
         allow write: if false; // server-computed
       }
     }

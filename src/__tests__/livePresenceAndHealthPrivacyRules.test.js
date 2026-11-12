@@ -163,6 +163,33 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/resource\.data\.recipientId == uid\(\)/);
   });
 
+  test('live_streams read is not world-readable (private/followers broadcasts)', () => {
+    // `match /live_streams/{streamId}` was `allow read: if true`, so any client
+    // (signed in or not) could read a private or followers-only broadcast's
+    // metadata and it surfaced in the public discovery list.
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /live_streams/{streamId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /live_viewers', start));
+    expect(block).not.toMatch(/allow read: if true/);
+    expect(block).toContain('allow get: if liveStreamVisible(resource.data)');
+    expect(block).toContain('allow list: if isAdmin()');
+    const fnStart = rulesSrc.indexOf('function liveStreamVisible(s)');
+    const fn = rulesSrc.slice(fnStart, rulesSrc.indexOf('match /live_streams/{streamId}', fnStart));
+    expect(fn).toMatch(/s\.visibility == 'public'/);
+    expect(fn).toMatch(/s\.visibility == 'followers'/);
+    expect(fn).toMatch(/followEdgeExists\(uid\(\), s\.userId\)/);
+  });
+
+  test('live_comments read is scoped to viewers of a visible stream', () => {
+    const rulesSrc = readFile('firestore.rules');
+    const start = rulesSrc.indexOf('match /live_comments/{commentId}');
+    expect(start).toBeGreaterThan(-1);
+    const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+    expect(block).not.toMatch(/allow read: if true/);
+    expect(block).toMatch(/liveStreamVisible\(\s*get\(/);
+  });
+
   test('collections items read follows the parent collection ownership', () => {
     const rulesSrc = readFile('firestore.rules');
     const start = rulesSrc.indexOf('match /items/{itemId}');

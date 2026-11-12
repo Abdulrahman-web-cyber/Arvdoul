@@ -863,9 +863,13 @@ class UltimateSearchService {
     let docs = [];
     let lastSnapshot = null;
 
+    // The videos list rule (videoListableByViewer) requires the QUERY to prove a
+    // public shape — rules are not filters — so search must constrain
+    // visibility/status/deletion or every query is denied (an empty result that
+    // looks like "no matches").
     if (tokens.length > 0) {
       try {
-        let tokenQ = firestoreQuery(videosRef, where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
+        let tokenQ = firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
         if (cursorSnapshot) tokenQ = firestoreQuery(tokenQ, startAfter(cursorSnapshot));
         const tokenSnap = await getDocs(tokenQ);
         if (!tokenSnap.empty) {
@@ -879,7 +883,7 @@ class UltimateSearchService {
 
     if (docs.length === 0) {
       try {
-        let q = firestoreQuery(videosRef, firestoreLimit(limitCount));
+        let q = firestoreQuery(videosRef, where('isDeleted', '==', false), where('status', '==', 'ready'), where('visibility', '==', 'public'), firestoreLimit(limitCount));
         if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
         const snap = await getDocs(q);
         docs = snap.docs;
