@@ -525,29 +525,40 @@ exports.payPerView = onCall(async (data, context) => {
     const videoRef = db.collection('videos').doc(videoId);
     const purchaseRef = db.collection('video_purchases').doc(`${uid}_${videoId}`);
 
-    return await db.runTransaction(async (t) => {
-      const videoDoc = await t.get(videoRef);
-      if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-      const video = videoDoc.data();
-      const price = video.monetization?.price || 0;
-      const ownerId = video.userId;
-      if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot purchase your own video');
+    const videoDoc = await videoRef.get();
+    if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+    const video = videoDoc.data();
+    const price = video.monetization?.price || 0;
+    const ownerId = video.userId;
+    if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot purchase your own video');
 
-      const purchaseSnap = await t.get(purchaseRef);
-      if (purchaseSnap.exists) throw new functions.https.HttpsError('already-exists', 'You already have access.');
+    const existing = await purchaseRef.get();
+    if (existing.exists) throw new functions.https.HttpsError('already-exists', 'You already have access.');
 
-      if (price <= 0) {
+    if (price <= 0) {
+      // Claim the free entitlement in a small transaction so a concurrent
+      // duplicate cannot write two purchase rows.
+      await db.runTransaction(async (t) => {
+        const snap = await t.get(purchaseRef);
+        if (snap.exists) return;
         t.set(purchaseRef, { userId: uid, videoId, price: 0, grantedAt: FieldValue.serverTimestamp() });
-        return { success: true, free: true };
-      }
-
-      const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', { videoId, idempotencyKey: `ppv_${uid}_${videoId}` });
-      t.set(purchaseRef, { userId: uid, videoId, price, createdAt: FieldValue.serverTimestamp() });
-      await enqueuePush(ownerId, {
-        type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase',
       });
-      return { success: true, ...transferResult };
+      return { success: true, free: true };
+    }
+
+    // Move the coins FIRST, then record the entitlement. `transferCoinsInternal`
+    // opens its OWN transaction (Firestore forbids nesting one inside another)
+    // and is idempotent on `ppv_<uid>_<videoId>`, so a concurrent duplicate
+    // call debits at most once. The previous shape ran that transaction inside
+    // the caller's transaction — illegal, so the purchase threw every time —
+    // and awaited a push enqueue inside the callback, which would have fired
+    // once per SDK retry.
+    const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', { videoId, idempotencyKey: `ppv_${uid}_${videoId}` });
+    await purchaseRef.set({ userId: uid, videoId, price, createdAt: FieldValue.serverTimestamp() }, { merge: true });
+    await enqueuePush(ownerId, {
+      type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase',
     });
+    return { success: true, ...transferResult };
   } catch (error) {
     logger.error('payPerView', error);
     throw error;
