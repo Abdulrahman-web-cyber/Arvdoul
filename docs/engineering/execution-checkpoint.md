@@ -113,7 +113,13 @@ New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexM
 | N284 | `firestoreService.createPost` signed in anonymously / trusted a caller-supplied `authorId` | both fallbacks removed; `noFabricatedData` pin |
 | N285 | Placeholder author identity (`"Arvdoul User"`, `User_<uid>`, `user_<uid>`, `'creator'`) across write + hydrate paths | read-model `pickDisplayName`/`deriveHandle` in CreatePost, firestoreService, HomeScreen, commentService, SavedScreen, videoService; render sites omit empty handles; `noFabricatedData` block |
 
-Verification: 152 suites / 1,711 passed (5 skipped); eslint 0 errors; build green.
+Verification: 152 suites / 1,713 passed (5 skipped); eslint 0 errors; build green.
+
+| N286 | Uncoerced transaction/bounty/reputation amounts rendered fabricated numbers | `unknownNumber()` guard in CoinsScreen + QuestionCard; `noFabricatedData` round-4 pin |
+
+## Next exact task
+
+Backlog item #1 is closed (CollectionsScreen, QuestionCard, CoinsScreen, ConversationSettingsScreen and the admin payout/tx amounts all route through `unknownNumber`). Next: sweep the remaining `x || 0` **display** coercions in the analytics/ranking services (`analyticsService` dailyStats, `rankingService` totals, `achievementService` progress) and decide, per site, whether the value is a real derived aggregate (0 is honest) or a missing-data sentinel (must be `unknownNumber`).
 
 ## Next exact tasks (dependency order)
 
