@@ -232,18 +232,12 @@ class EnterpriseFirestoreService {
           }, 1000);
         });
       }
-      if (!currentUser && auth) {
-        try {
-          const { signInAnonymously } = await import('firebase/auth');
-          const cred = await signInAnonymously(auth);
-          currentUser = cred.user;
-        } catch (anonErr) {
-          console.warn('Anonymous sign-in fallback:', anonErr?.message);
-        }
-      }
-      if (!currentUser && postData.authorId) {
-        currentUser = { uid: postData.authorId, displayName: postData.authorName || 'Arvdoul User' };
-      }
+      // Fail closed on identity. The old code signed in ANONYMOUSLY (a throwaway
+      // uid that owns the post but can never be the real author) and, failing
+      // that, trusted a caller-supplied `postData.authorId`. Both fabricate an
+      // author, so a post could be written under an identity that is not the
+      // signed-in account. Arvdoul has no guest-authoring product flow, so a
+      // missing session is an error, not something to paper over.
       if (!currentUser?.uid) throw new Error('User not authenticated. Please sign in to publish.');
       postData.authorId = currentUser.uid;
       const { collection, addDoc, serverTimestamp } = this.firestoreMethods;

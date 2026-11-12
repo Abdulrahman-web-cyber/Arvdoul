@@ -3163,6 +3163,20 @@ describe('CreatePost publish fails closed without a real identity', () => {
   });
 });
 
+describe('firestoreService.createPost fails closed on identity', () => {
+  const src = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+
+  test('never signs in anonymously or trusts a caller-supplied authorId', () => {
+    // A missing session used to trigger `signInAnonymously` (a throwaway uid
+    // that owns the post but is never the real author) and, failing that, a
+    // fallback that accepted `postData.authorId` verbatim — both fabricate the
+    // author. The service must require a real signed-in uid.
+    expect(src).not.toContain('signInAnonymously');
+    expect(src).not.toContain("currentUser = { uid: postData.authorId");
+    expect(src).toContain('User not authenticated. Please sign in to publish.');
+  });
+});
+
 describe('CreatePost media upload fails closed — never persists a session-scoped URL', () => {
   const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
 
