@@ -2839,6 +2839,19 @@ describe('Ranking badge aggregates stay unknown when a post counter is missing (
   });
 });
 
+describe('Creator engagement aggregate stays unknown when a post counter is missing (N297)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('analyticsService sums top-post engagement via unknownNumber and nulls an incomplete total', () => {
+    const s = read('src/services/analyticsService.js');
+    // `sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0)` treated a
+    // post whose stats block was never written as a measured 0 engagement.
+    expect(s).not.toContain('return sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);');
+    expect(s).toContain('const addEngagement = (raw) => {');
+    expect(s).toContain('if (!engagementComplete) totalEngagement = null;');
+  });
+});
+
 describe('Creator payout rows show the real amount and settlement state (N296)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 

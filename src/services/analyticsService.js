@@ -7,6 +7,7 @@ import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { metricsService } from './metricsService.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 // ---------------------------------------------------------------------------
 // Interaction-event sink.
@@ -341,13 +342,22 @@ class UltimateAnalyticsService {
           const postsRef = collection(this.firestore, 'posts');
           const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(10)));
           topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Engagement is stored under `stats`; the top-level `likesCount`/
-          // `likes` fields are never written, so summing them produced a
-          // measured-looking 0 engagement for every creator.
+          // Engagement is stored under `stats`. Sum only while every counter
+          // is known: a post whose `stats` block was never written contributes
+          // an unknown count, and adding it as 0 reported a measured-looking
+          // engagement that understated the real total. Any unknown makes the
+          // whole aggregate null (rendered '—').
+          let engagementComplete = true;
+          const addEngagement = (raw) => {
+            const n = unknownNumber(raw);
+            if (n === null) { engagementComplete = false; return 0; }
+            return n;
+          };
           totalEngagement = topPosts.reduce((sum, p) => {
             const s = p.stats || {};
-            return sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0);
+            return sum + addEngagement(s.likes) + addEngagement(s.comments) + addEngagement(s.shares);
           }, 0);
+          if (!engagementComplete) totalEngagement = null;
         } catch (e) {
           totalEngagement = null;
           logger.warn('Analytics top-posts read failed; engagement is unavailable', { userId, error: e?.message });
