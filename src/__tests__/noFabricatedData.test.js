@@ -3147,6 +3147,22 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
   });
 });
 
+describe('CreatePost publish fails closed without a real identity', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+
+  test('publishPost never mints a synthetic uid or placeholder author name', () => {
+    // The composer once fell back to
+    //   localStorage.getItem("arvdoul_uid") || `user_${Date.now().toString(36)}`
+    // with displayName "Arvdoul Creator" when no session was present, so a post
+    // could be written under a fabricated author that never matches the real
+    // account. It must fail closed instead.
+    expect(src).not.toContain('arvdoul_uid');
+    expect(src).not.toContain('`user_${Date.now().toString(36)}`');
+    expect(src).not.toContain('"Arvdoul Creator"');
+    expect(src).toContain('You must be signed in to publish');
+  });
+});
+
 describe('CreatePost media upload fails closed — never persists a session-scoped URL', () => {
   const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
 

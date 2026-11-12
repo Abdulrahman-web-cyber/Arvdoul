@@ -1402,14 +1402,14 @@ function CreatePostProvider({ children }) {
         }
       }
 
+      // Fail closed: publishing requires a real authenticated identity. The old
+      // fallback minted a synthetic uid (`user_<timestamp>`) with the display
+      // name was a generic placeholder when no session existed, so a post
+      // written under a fabricated author and could never be attributed to the
+      // real account. The composer is behind a ProtectedRoute, so this is a
+      // guard against a raced sign-out, not a normal path.
       if (!userNow?.uid) {
-        const localUid = localStorage.getItem("arvdoul_uid") || localStorage.getItem("uid") || `user_${Date.now().toString(36)}`;
-        userNow = {
-          uid: localUid,
-          displayName: localStorage.getItem("user_display_name") || "Arvdoul Creator",
-          email: "",
-          photoURL: ""
-        };
+        throw new Error("You must be signed in to publish. Please sign in and try again.");
       }
       if (!current.postType) throw new Error("Please select a post type.");
 
