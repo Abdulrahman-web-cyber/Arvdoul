@@ -1,15 +1,19 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR #46)._
+_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR #46, OPEN/MERGEABLE, HEAD `27822ba`)._
 
 ## Current state
 
-- Baseline: full Jest suite green (121 suites, 1464 passed, 5 skipped); `npm run
-  build` green; `npm run lint` exit 0 (0 errors, warnings only).
-- Latest verified: 132 suites, 1550 passed, 5 skipped; `npm run build` green;
-  `npm run lint` exit 0 (0 errors, 867 warnings).
-- Emulator enabled locally this session (openjdk installed) — the emulator-backed
-  adversarial suites now actually execute instead of skipping.
+- Latest verified: **155 suites, 1763 passed, 5 skipped**; `npm run build`
+  green; `npx eslint src/ functions/ --quiet` exit 0 (0 errors).
+- The `guards` CI job (108-suite static list) passes locally; its two emulator
+  steps were run locally against real emulators (Firestore 8 suites / 108 tests,
+  Storage 10 tests) and in CI (green, 0 skips).
+- Emulator enabled locally this session (openjdk-21 installed via `sudo apt-get`;
+  Firestore + Storage jars cached under `~/.cache/firebase/emulators/`) — the
+  emulator-backed adversarial suites now actually execute instead of skipping.
+- Three commits this session: `883e27e` (N207 honesty + CI emulator wiring),
+  `d7b149c` (N304 dead `events.privacy` removal), `27822ba` (checkpoint docs).
 
 ## Completed this session
 
@@ -35,7 +39,7 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N204 | `dmRequestFrom()` now requires `status == 'pending'` | A declined request no longer authorises the DM (nothing deletes the doc); `dmPermissionWiring` guard |
 | N199-N201 | `hasOnly` keys-not-values sweep on post/comment/message update rules | `posts`: non-author carve-out narrowed to `stats.reactions` only (top-level `hasOnly(['stats','updatedAt'])` + nested `hasOnly(['reactions'])`), author may not touch `poll`/`gifts`/`stats`; `comments`: numeric `likes`/`dislikes` excluded (sharded counter owns them); messages: `readBy`/`deliveredTo` pinned to caller's own uid via `removeAll([uid()])`. Emulator-backed adversarial tests in `firestoreRulesCompile.test.js` (skip when no JVM) + static guards. |
 | N206 | A private account's approved followers could not read its content | `postReadableByViewer`/`postListableShape` hard-required `authorIsPrivate == false` with no follower branch, so the profile grid returned 0 for every follower of a private account (the rule comment claimed the branch existed). Added `authorContentVisible()` (public author OR `followEdgeExists(uid(), authorId)`); the `follows` create rule now forbids self-creating an edge to a **private** target (`targetIsPrivate()`), closing the self-follow content leak the branch would otherwise open. Client grid omits the `authorIsPrivate` constraint only for an approved-follower view (`getPostsByUser({ constrainAuthorIsPrivate })` via `profileStore`); new `posts(authorId,authorIsPrivate,status,visibility,isDeleted,createdAt)` composite index. Emulator N206 + `profileFeedPagination` + `postVisibilityEnforcement` guards. |
-| N207 | `counter_shards` accepts a client-written `value` for any shard id (fabricated counts) | Confirmed; **deferred with justification** — not closable by a rule alone (a legit `increment(±1)` is indistinguishable from an absolute `{value: 999999}`, and the shard id is unbound). Needs every counter mutation moved server-side (Admin SDK bypasses rules) + `allow write: if false`, a multi-service change. Recorded in the ledger. |
+| N207 | `counter_shards` accepts a client-written `value` for any shard id (fabricated counts) | Confirmed; **deferred with justification** — not closable by a rule alone (a legit `increment(±1)` is indistinguishable from an absolute `{value: 999999}`, and the shard id is unbound). Needs every counter mutation moved server-side (Admin SDK bypasses rules) + `allow write: if false`, a multi-service change. **This session:** the rule's misleading "overwrites are blocked so counters cannot be corrupted" comment (a forgery defence it does not provide) is replaced with an explicit `RESIDUAL RISK (N207)` note, the shape checks now also reject a non-numeric `value`, and `counterShardForgeryGuard.test.js` (static + emulator, incl. an `assertSucceeds` on the forged write) pins it. |
 | N208 | A server-created community post had no `expiresAt`; the get-rule raised on the absent field | `postReadableByViewer` read `resource.data.expiresAt` directly (raises when absent → denies the read); `createCommunityPost` wrote no `expiresAt`, so the UI-created community post was unreadable by everyone. Rule now uses `.get('expiresAt', null)`; the callable writes `expiresAt: null`. Emulator N208 check. |
 | N209 | Admin-gated Cloud Functions changed state with no audit record; a deployed admin callable was unreachable | Added `writeAudit` to `deleteUserData`, `generateFriendRecommendations`, `createBulkNotificationJob`, `generateAudioFingerprint`, `updateViralScore`, `backfillPrivacyBoundary`; wired the dead `FUNCTIONS.BACKFILL_POST_PRIVACY` key into a new *Maintenance Operations* panel on `AdminSystemHealthScreen` (+ `callableService.backfillPostPrivacy()`). Two new hard-failing guards: `functionsInventoryGuard.test.js` (dead `FUNCTIONS` key / ad-hoc `httpsCallable` literal / frozen unreferenced-callable baseline — may only shrink) and `adminAuditGuard.test.js` (no admin write without an audit record). |
 | N210 | `daily_upload_counters` trusted the `userId` field but not the document id — a user could write another user's daily upload counter | Rule now pins the shard id to the caller (`shardId.matches('upload_' + uid() + '_...')`), mirroring `unread_counters`. Emulator N210 check + static guard in `firestoreRulesCompile.test.js`. |
