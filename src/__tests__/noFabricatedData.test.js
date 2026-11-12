@@ -3680,6 +3680,10 @@ describe('N184 — no fabricated counts sweep (round 2)', () => {
       ['src/screens/Admin/AdminCommunityManagementScreen.jsx', 'Number(comm.strikesCount) || 0'],
       ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.xpToNext || 0'],
       ['src/screens/Progression/ProgressScreen.jsx', 'levelInfo?.progress || 0'],
+      // A missing visa list / never-read tip total must render unknown, not a
+      // measured 0 (or a raw `undefined.toLocaleString()` throw).
+      ['src/screens/Citizenship/PassportScreen.jsx', 'filter(s => s.verified).length || 0'],
+      ['src/screens/Spaces/SpacesScreen.jsx', 'tipsTotalCoins.toLocaleString()'],
     ];
     for (const [file, literal] of cases) {
       const src = read(file);

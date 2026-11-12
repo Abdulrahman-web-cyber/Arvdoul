@@ -270,6 +270,7 @@ jobs:
           src/__tests__/communityPrivacyRules.test.js
           src/__tests__/storyReplyPrivacyRules.test.js
           src/__tests__/livePresenceAndHealthPrivacyRules.test.js
+          src/__tests__/readScopePrivacyRules.test.js
           src/__tests__/notificationCounterRuleShape.test.js
           src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js

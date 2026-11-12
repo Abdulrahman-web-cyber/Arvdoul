@@ -2,6 +2,7 @@ import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, startAfter, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 const EVENTS_PER_PAGE = 20;
@@ -394,7 +395,9 @@ class EventService {
   async submitFeedback(eventId, userId, rating, comment = '') {
     await this.initialize();
     const result = await callFunction(FUNCTIONS.SUBMIT_EVENT_FEEDBACK, { eventId, rating, comment });
-    return { success: true, feedbackScore: result?.feedbackScore ?? 0 };
+    // The callable recomputes and returns the aggregate; an absent value is
+    // unknown (the caller reloads the event anyway), never a fabricated 0.
+    return { success: true, feedbackScore: unknownNumber(result?.feedbackScore) };
   }
 
   /**

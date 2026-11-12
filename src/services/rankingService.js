@@ -496,8 +496,12 @@ class RankingService {
       const userSnap = await getDoc(doc(this.firestore, 'users', userId));
       const userData = userSnap.exists() ? userSnap.data() : {};
 
-      const followerCount = Number(userData.followerCount || userData.stats?.followers || 0);
-      const followingCount = Number(userData.followingCount || userData.stats?.following || 0);
+      // A missing/never-read count is unknown (progress null → '—'), never a
+      // measured 0. `Number(x || 0)` reported "0 followers" — which reads as a
+      // real measurement and marks `first_follower`/`influencer` as genuinely
+      // unearned — when the sharded counter had simply not been read.
+      const followerCount = unknownNumber(userData.followerCount ?? userData.stats?.followers);
+      const followingCount = unknownNumber(userData.followingCount ?? userData.stats?.following);
       const createdAt = userData.createdAt?.toDate?.() || (userData.createdAt ? new Date(userData.createdAt) : null);
       const accountDays = createdAt && !Number.isNaN(createdAt.getTime())
         ? Math.max(0, Math.floor((today.getTime() - createdAt.getTime()) / 86400000))

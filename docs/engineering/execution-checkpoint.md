@@ -145,6 +145,17 @@ Backlog item #1 is closed (CollectionsScreen, QuestionCard, CoinsScreen, Convers
    reply test is still open.
 5. **#14/#15/#17** - offline pending surfacing, observability sink, contract ratchet.
 
+## Read-authorization + fabrication sweep (continuation)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N301 | Content collections shipped `allow read: if true` (world-readable): `comments` + `likes`/`dislikes`/`reactions`/`history`, `highlights`, `events` (+ subcollections), the `usernames` registry, `reaction_shards`, story reaction children, and the advanced-creator suite (`spaces`, `sounds`, `marketplace_items`, `polls`, `badges`, `user_badges`, `copyright_registry`, `previous_usernames`) | each read scoped to its real consumer — signed-in for `comments`/`usernames`/`events`/creator suite, owner-only for `highlights` + comment `history`, `allow read: if false` for comment `reactions`; new `readScopePrivacyRules.test.js` (guards job) fails on any `allow read: if true;` |
+| N302 | `rankingService.getUserBadges` fabricated `0` follower/following counts (`Number(x \|\| 0)`) | both via `unknownNumber(...)`; unknown stays `null`; `noFabricatedData` pin |
+| N303 | `PassportScreen` fabricated `0` verified-visa count / rendered literal `undefined`; `SpacesScreen` called `.toLocaleString()` on an unread tip total; `eventService.submitFeedback` returned `feedbackScore ?? 0` | all via `unknownNumber` (unknown → '—'); `noFabricatedData` pin |
+| N304 | `events` read rule still cannot enforce the document `privacy` field (extends N266) | deferred with justification (needs registrations served server-side); inline `N266` note in the ruleset |
+
+Latest verified: **154 suites / 1,757 passed (5 skipped)**; `npm run lint` exit 0 (0 errors); `npm run build` green.
+
 ## Commands to resume
 
 ```
