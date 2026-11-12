@@ -167,10 +167,11 @@ Backlog item #1 is closed (CollectionsScreen, QuestionCard, CoinsScreen, Convers
 | N309 | `LinkCard` fabricated a green "Trusted domain" safety verdict (defaulted `onGetSafetyScore` → `{score:100}`), a view count, and two fake-success controls (Save → "Saved to bookmarks", Tip → "Sent N coins"), all from props `PostCard` never passes; the AI-summary/trending branches were permanently dead; an IndexedDB metadata cache had no producer | card renders only the publisher-supplied Open Graph fields (title falls back to the bare hostname); keeps the real external link, native share sheet and URL-derived YouTube/Vimeo embed; unreachable cache + fabricated controls + dead props removed; `noFabricatedData` pins every removed identifier |
 | N310 | `eventService.getEventStats` fabricated a `0` rating (`event.stats?.feedbackScore \|\| 0`) and a `100%` attendance for capacity-less events | rating via `unknownNumber` (unknown stays `null`); capacity-less event reports no percentage; `noFabricatedData` pins both |
 | N311 | `ImageCard`'s Save/Report buttons toasted "Saved to bookmarks"/"Report submitted" while `PostCard` passed no `onSave`/`onReport` — nothing was written or sent, on every feed image | `onSave` → `PostCard.handleSave` (optimistic `savePost`/`unsavePost` + offline queue), `onReport` → new `handleReportImage` via the canonical `reportContent` callable; unwired fallbacks now fail honestly; `noFabricatedData` + `integrationWiring` pins |
+| N312 | `VideoCard` advertised four swipe gestures (`Share`/`Details`/`Next Video`/`Previous Video`) that `PostCard` never wires (`onShare`/`onOpenDetails`/`onNext`/`onPrev` all undefined) — the hint flashed and the optional-call was a no-op | each swipe branch gated on its handler being present (hint only shows then); `noFabricatedData` pins the gating |
 
 CI: the `guards` emulator step now also runs `readScopePrivacyRules`, `counterShardForgeryGuard`, `videoReadPrivacyRules` and `notificationCounterRuleShape`; all were executed against a local Firestore emulator (10 emulator suites, 117 tests, 0 skips) — the emulator-backed adversarial checks genuinely pass, not just skip.
 
-Latest verified: **155 suites / 1,768 passed (5 skipped)**; `npm run lint` exit 0 (0 errors); `npm run build` green (N308-N311).
+Latest verified: **155 suites / 1,769 passed (5 skipped)**; `npm run lint` exit 0 (0 errors); `npm run build` green (N308-N312).
 
 ## Commands to resume
 
