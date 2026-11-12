@@ -57,7 +57,10 @@ self.addEventListener('activate', (event) => {
 
 // User accepted the update prompt: let the waiting worker take over.
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  // Only honour messages from our own origin (defence-in-depth: a same-origin
+  // check stops a cross-origin frame from driving worker activation).
+  if (event.origin && event.origin !== self.location.origin) return;
+  if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });

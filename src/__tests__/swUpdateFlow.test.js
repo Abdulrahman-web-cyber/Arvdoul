@@ -32,9 +32,11 @@ describe('service-worker update flow is user-driven', () => {
 
   test('a SKIP_WAITING message handler exists and calls skipWaiting', () => {
     expect(sw).toMatch(/addEventListener\('message'/);
-    expect(sw).toMatch(/data\.type === 'SKIP_WAITING'/);
+    expect(sw).toMatch(/data\?\.type === 'SKIP_WAITING'/);
     const message = sw.slice(sw.indexOf("addEventListener('message'"));
     expect(message).toMatch(/self\.skipWaiting\(\)/);
+    // Origin is verified before acting on the message (defence-in-depth).
+    expect(message).toMatch(/event\.origin !== self\.location\.origin/);
   });
 
   test('the banner reloads only after the accepted worker takes control', () => {
