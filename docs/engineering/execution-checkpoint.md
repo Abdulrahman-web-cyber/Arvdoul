@@ -153,6 +153,7 @@ Backlog item #1 is closed (CollectionsScreen, QuestionCard, CoinsScreen, Convers
 | N302 | `rankingService.getUserBadges` fabricated `0` follower/following counts (`Number(x \|\| 0)`) | both via `unknownNumber(...)`; unknown stays `null`; `noFabricatedData` pin |
 | N303 | `PassportScreen` fabricated `0` verified-visa count / rendered literal `undefined`; `SpacesScreen` called `.toLocaleString()` on an unread tip total; `eventService.submitFeedback` returned `feedbackScore ?? 0` | all via `unknownNumber` (unknown → '—'); `noFabricatedData` pin |
 | N304 | `events` read rule still cannot enforce the document `privacy` field (extends N266) | deferred with justification (needs registrations served server-side); inline `N266` note in the ruleset |
+| N305 | Auth screens (login / forgot-password / verify-email) advertised "End-to-end encrypted" + "Military-grade security" — unbackable claims | footers now say "Encrypted in transit (TLS)" + "Protected/Verified by Firebase Auth"; `noFabricatedData` pin for the three screens |
 
 Latest verified: **154 suites / 1,757 passed (5 skipped)**; `npm run lint` exit 0 (0 errors); `npm run build` green.
 

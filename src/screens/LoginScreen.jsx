@@ -1512,9 +1512,9 @@ export default function LoginScreen() {
 
             <footer>
               <p className="av2-secure">
-                <span><LockIcon size={14} />End-to-end encrypted</span>
+                <span><LockIcon size={14} />Encrypted in transit (TLS)</span>
                 <i aria-hidden="true" />
-                <span><ShieldCheckIcon size={14} />Military-grade security</span>
+                <span><ShieldCheckIcon size={14} />Protected by Firebase Auth</span>
               </p>
               <p className="av2-foot">© {year} Arvdoul</p>
             </footer>

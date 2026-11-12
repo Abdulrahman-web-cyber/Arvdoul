@@ -2527,6 +2527,22 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
     expect(read('src/screens/Menu/MenuScreen.jsx')).not.toMatch(/[Ee]nd-to-end encrypted/i);
   });
 
+  test('the auth screens do not claim encryption or security the app cannot back', () => {
+    // The login/forgot-password/verify-email footers advertised "End-to-end
+    // encrypted" and "Military-grade security" — neither is true (no E2EE key
+    // provisioning; the only transport guarantee is TLS). Replace with what the
+    // stack actually delivers (TLS in transit + Firebase Auth).
+    for (const file of [
+      'src/screens/LoginScreen.jsx',
+      'src/screens/ForgotPassword.jsx',
+      'src/screens/VerifyEmailScreen.jsx',
+    ]) {
+      const s = read(file);
+      expect(s).not.toMatch(/[Ee]nd-to-end encrypted/i);
+      expect(s).not.toMatch(/[Mm]ilitary-grade/i);
+    }
+  });
+
   test('a text send cannot be blocked by the encryption gate', () => {
     // The send path must fall back to plaintext when keys are absent; an
     // unconditional throw would make every text message fail to send.

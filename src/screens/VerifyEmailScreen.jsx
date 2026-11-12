@@ -1104,9 +1104,9 @@ export default function EmailVerification() {
 
             <footer>
               <p className="av2-secure">
-                <span><LockIcon size={14} />Encrypted</span>
+                <span><LockIcon size={14} />Encrypted in transit (TLS)</span>
                 <i aria-hidden="true" />
-                <span><ShieldCheckIcon size={14} />Secure</span>
+                <span><ShieldCheckIcon size={14} />Verified by Firebase Auth</span>
               </p>
               <p className="av2-foot">© {year} Arvdoul</p>
             </footer>
