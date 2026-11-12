@@ -154,8 +154,11 @@ Backlog item #1 is closed (CollectionsScreen, QuestionCard, CoinsScreen, Convers
 | N303 | `PassportScreen` fabricated `0` verified-visa count / rendered literal `undefined`; `SpacesScreen` called `.toLocaleString()` on an unread tip total; `eventService.submitFeedback` returned `feedbackScore ?? 0` | all via `unknownNumber` (unknown → '—'); `noFabricatedData` pin |
 | N304 | `events` read rule still cannot enforce the document `privacy` field (extends N266) | deferred with justification (needs registrations served server-side); inline `N266` note in the ruleset |
 | N305 | Auth screens (login / forgot-password / verify-email) advertised "End-to-end encrypted" + "Military-grade security" — unbackable claims | footers now say "Encrypted in transit (TLS)" + "Protected/Verified by Firebase Auth"; `noFabricatedData` pin for the three screens |
+| N207 | `counter_shards` rule comment claimed overwrites were blocked "so counters cannot be corrupted" — a forgery defence it does not provide (a rule cannot tell `increment(±1)` from an absolute `{value: 999999}`) | comment replaced with an explicit `RESIDUAL RISK (N207)` note; `value is number` added to the shape checks; new `counterShardForgeryGuard.test.js` (static + emulator, incl. an `assertSucceeds` on the forged write) pins it |
 
-Latest verified: **154 suites / 1,757 passed (5 skipped)**; `npm run lint` exit 0 (0 errors); `npm run build` green.
+CI: the `guards` emulator step now also runs `readScopePrivacyRules` and `counterShardForgeryGuard`; both were executed against a local Firestore emulator (7 emulator suites, 103 tests, 0 skips) — the emulator-backed adversarial checks genuinely pass, not just skip.
+
+Latest verified: **154 suites / 1,758 passed (5 skipped)**; `npm run lint` exit 0 (0 errors); `npm run build` green.
 
 ## Commands to resume
 

@@ -1296,13 +1296,22 @@ service cloud.firestore {
       allow write: if false; // server-only
     }
     match /counter_shards/{shardId} {
-      // Hashed, non-PII shard keys. Only single-field value updates are
-      // permitted (increments); full-document overwrites are blocked so
-      // counters cannot be corrupted by clients.
+      // Hashed, non-PII shard keys. Clients write these because ~40 counter
+      // mutations (likes, saves, comments, follows, views) increment them from
+      // the client inside Firestore transactions.
+      //
+      // RESIDUAL RISK (N207): a rule cannot tell a legitimate `increment(±1)`
+      // from an absolute `{ value: 999999 }`, and the shard id is unbound to the
+      // writer — so a signed-in client CAN forge a count. The shape checks below
+      // only stop full-document overwrites and non-numeric values; they are NOT
+      // a forgery defence. Closing it needs every counter mutation moved
+      // server-side (Admin SDK bypasses rules) + `allow write: if false`, a
+      // multi-service change tracked in the ledger.
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.keys().hasAll(['value']) && request.resource.data.keys().size() == 1;
+      allow create: if isSignedIn() && request.resource.data.keys().hasAll(['value']) && request.resource.data.keys().size() == 1 && request.resource.data.value is number;
       allow update: if isSignedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']) &&
+        request.resource.data.value is number;
     }
     match /system/{docId} {
       // Server bookkeeping (coin_supply, scheduler cursors) written by Cloud
