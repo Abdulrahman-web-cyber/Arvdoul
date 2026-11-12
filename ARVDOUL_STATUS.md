@@ -38,7 +38,7 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep`._
 | 5 | "Jest configuration" ☐, "Firebase emulator setup" ☐, "Sentry integration" ☐ | `jest.config.cjs` + emulator-backed rule tests exist; `crashReportingService.js`/`rumService.js` exist | marked complete except Firebase Performance Monitoring + custom metrics, which remain **not implemented** |
 | 30 | "Cloud Run containerized deployment build" ✅ | **No `Dockerfile`, no Cloud Run config** | corrected to Firebase Hosting only |
 | 33 | "Lite Mode toggle" ✅, "pull-to-refresh (`usePullToRefresh.js`, `PullToRefresh.jsx`)" ✅ | those files **do not exist** | corrected; recorded as **not implemented** |
-| 34 | "601 tests / 40 suites" | live tree: **1,706 tests / 151 suites** | corrected |
+| 34 | "601 tests / 40 suites" | live tree: **1,709 tests / 152 suites** | corrected |
 | 36 | "span tracking (`observabilityService.js`)" ✅ | **`observabilityService.js` does not exist** | corrected |
 | 38 | "sharded counter engine (`src/utils/shardedCounter.js`)" ✅ | the real engine is `src/utils/CountersManager.js` | corrected |
 | 39 | "100% sign-off", "634+ tests / 43 suites" | unverifiable | replaced with live numbers |
@@ -229,7 +229,7 @@ service-worker lifecycle.
 ## PHASE 8 — AUTOMATED TEST SUITES & LOAD BENCHMARKING
 
 ### 34. Automated Test Suites — ✅ COMPLETE
-**151 suites, 1,706 tests (1,701 passing, 5 skipped)** with enforced coverage floors.
+**152 suites, 1,709 tests (1,704 passing, 5 skipped)** with enforced coverage floors.
 
 ### 35. Load & Stress Benchmarking — ✅ COMPLETE
 `tests/load/offline-sync-benchmark.js`, `tests/load/concurrency-stress.js`,

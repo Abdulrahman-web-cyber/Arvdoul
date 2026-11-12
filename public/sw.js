@@ -1,5 +1,6 @@
 /* ARVDOUL Service Worker — production PWA
  *
+ * v3 (2026-11): user-driven update flow.
  * v2 (2026-08): hardened fetch strategy.
  *
  * CRITICAL FIX: v1 cache-first'd EVERY same-origin GET — including unversioned
@@ -11,9 +12,12 @@
  *   2. versioned production static assets (/assets/ hashed bundles) and
  *      the small precache list (icons/logos/manifest).
  * Everything else (dev modules, HMR, APIs) passes through untouched.
+ *
+ * v3: install no longer calls skipWaiting(); the new worker waits until the
+ * in-app SWUpdateBanner posts SKIP_WAITING, so "Update available" is reachable.
  */
 
-const CACHE_NAME = 'arvdoul-v2';
+const CACHE_NAME = 'arvdoul-v3';
 const PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icons/icon.png', '/logo/logo-light.png', '/logo/logo-dark.png', '/assets/default-profile.png'];
 
 // File extensions safe for cache-first (versioned bundles + static media).
@@ -34,10 +38,12 @@ function isVersionedStatic(url) {
 }
 
 self.addEventListener('install', (event) => {
+  // Do NOT skipWaiting(): a new worker must wait until the user accepts the
+  // in-app "Update available" prompt (which posts SKIP_WAITING). Self-activating
+  // here meant the update banner could never appear and the app silently swapped
+  // the running bundle.
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
 });
 
@@ -47,6 +53,13 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+});
+
+// User accepted the update prompt: let the waiting worker take over.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {

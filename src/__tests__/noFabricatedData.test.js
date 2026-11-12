@@ -203,7 +203,7 @@ describe('Service worker - never caches dev/unversioned modules', () => {
     expect(sw).toContain("pathname.startsWith('/assets/')"); // versioned bundles only
     expect(sw).toContain("pathname.startsWith('/src/')"); // dev modules excluded
     expect(sw).toContain("pathname.startsWith('/@vite')");
-    expect(sw).toContain('arvdoul-v2');
+    expect(sw).toMatch(/const CACHE_NAME = 'arvdoul-v\d+'/);
   });
 
   test('main.jsx registers the SW only in production and self-heals dev', () => {

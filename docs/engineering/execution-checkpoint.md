@@ -94,6 +94,7 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N279 | Event-payload contract (#17) | `eventPayloadContract.test.js` pins producer↔consumer payload shapes; `guards` job |
 | N280 | MFA lockout trap fixed | service surfaces resolver; AuthContext + LoginScreen + SettingsScreen wired; `getEnrolledMFAFactors`; `mfaWiring.test.js` |
 | N281 | Design-system emoji icons removed | `ErrorState`/`PermissionDenied` use lucide icons; emoji-icon guard added |
+| N282 | PWA update flow unreachable | sw.js waits for SKIP_WAITING; banner reloads on controllerchange; `swUpdateFlow.test.js` |
 | #12 | Design-system consolidation (continued): raw brand hex ratcheted **349 across 44 files → 58 across 7 files**. Migrated profile components, search components, Shared nav/appbar, theme context, AudioEditor, ThumbnailDesigner, PerksRewards, Rankings, CreatePost, Reels, Stories, Search, EditProfile, ImageEditor. Remaining 7 files are the policy-frozen signup/login/onboarding screens. | `brandHexRatchetGuard` (baseline lowered); build + full suite green. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,
