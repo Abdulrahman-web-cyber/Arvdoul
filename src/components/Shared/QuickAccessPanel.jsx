@@ -14,6 +14,7 @@ import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES, formatCoins
 import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 import achievementService from "../../services/achievementService";
 import { formatCount } from "../../lib/searchUtils";
+import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -730,17 +731,14 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   }, [currentUser, track]);
 
   const renderUserProfile = () => {
-    // Get profile picture - use professional avatar if none
-    const profilePicture = currentUser?.photoURL ||
-      (currentUser?.uid ?
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=3B82F6&color=fff&bold=true&size=200` :
-        "/assets/default-profile.png"
-      );
+    // Canonical local avatar: a real photo, else the deterministic in-app SVG.
+    // Never call an external avatar service — that would leak the user's
+    // display name to a third party and bypass the shared fallback.
+    const profilePicture = getSafeAvatarUrl(currentUser?.photoURL, currentUser?.displayName, currentUser?.uid);
 
-    // Handle image error
     const handleImageError = (e) => {
       e.target.onerror = null;
-      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.displayName || 'User')}&background=3B82F6&color=fff&bold=true&size=200`;
+      e.target.src = getSafeAvatarUrl(null, currentUser?.displayName, currentUser?.uid);
     };
 
     return (

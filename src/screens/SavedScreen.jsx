@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import ErrorState from '../design-system/ErrorState.jsx';
-import { pickDisplayName, deriveHandle } from '../services/profileReadModel.js';
+import { pickDisplayName, deriveHandle, resolveAvatarUrl } from '../services/profileReadModel.js';
 import { cn } from '../lib/utils';
 
 const COLLECTIONS = [
@@ -53,7 +53,7 @@ export default function SavedScreen() {
           author: {
             name: pickDisplayName([p.authorName]),
             username: deriveHandle(p.authorHandle) || deriveHandle(p.authorUsername) || '',
-            avatar: p.authorPhoto || '/assets/default-profile.png',
+            avatar: resolveAvatarUrl(p.authorPhoto, p.authorName, p.authorId),
           },
           type: p.type || 'post',
           thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
@@ -71,7 +71,7 @@ export default function SavedScreen() {
           author: {
             name: pickDisplayName([v.creator?.name]),
             username: deriveHandle(v.creator?.username) || '',
-            avatar: v.creator?.avatar || '/assets/default-profile.png',
+            avatar: resolveAvatarUrl(v.creator?.avatar, v.creator?.name, v.creator?.id),
           },
           type: 'video',
           thumbnail: v.thumbnail || '/assets/default-profile.png',

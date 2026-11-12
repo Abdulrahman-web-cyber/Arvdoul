@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, Reply, Send, BadgeCheck, Smile, Crown, Sparkles } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { formatTimeAgo, SPRING_ANIMATION } from '../../utils/videoUtils';
+import { pickDisplayName, deriveHandle } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 
@@ -71,8 +72,10 @@ const VideoComments = memo(({
           id: c.id,
           user: {
             id: c.userId,
-            name: c.userName || 'User',
-            username: c.userUsername || 'user',
+            // Never invent a handle: `deriveHandle` returns null for a
+            // placeholder/absent value, and the render gates on it.
+            name: pickDisplayName([c.userName], { fallback: 'User' }),
+            username: deriveHandle(c.userUsername),
             avatar: c.userAvatar || null,
             isVerified: !!c.isVerified,
             isCreator: c.userId === video.userId || c.userId === video.creatorId,
@@ -323,7 +326,7 @@ const VideoComments = memo(({
             <div className="px-5 py-2 bg-purple-950/40 border-t border-purple-500/20 flex items-center justify-between">
               <span className="text-purple-200 text-xs font-medium flex items-center gap-1.5 truncate">
                 <Reply className="w-3.5 h-3.5 text-purple-400" />
-                Replying to <span className="font-bold text-white">@{replyTo.user.username}</span>
+                Replying to <span className="font-bold text-white">{replyTo.user.username ? `@${replyTo.user.username}` : replyTo.user.name}</span>
               </span>
               <button
                 onClick={() => setReplyTo(null)}
@@ -363,7 +366,7 @@ const VideoComments = memo(({
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  placeholder={replyTo ? `Reply to @${replyTo.user.username}...` : "Add a comment..."}
+                  placeholder={replyTo ? `Reply to ${replyTo.user.username ? `@${replyTo.user.username}` : replyTo.user.name}...` : "Add a comment..."}
                   className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/10 transition-all"
                   maxLength={500}
                 />

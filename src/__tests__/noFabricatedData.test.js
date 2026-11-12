@@ -3471,6 +3471,32 @@ describe('N184 — no fabricated counts sweep (round 2)', () => {
   });
 });
 
+describe('Identity — no external avatar service, no invented handle', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('the quick-access panel never leaks the display name to ui-avatars.com', () => {
+    const src = read('src/components/Shared/QuickAccessPanel.jsx');
+    // An external avatar service receives the user's display name as a query
+    // param — a third-party data leak that also bypasses the shared fallback.
+    expect(src).not.toContain('ui-avatars.com');
+    expect(src).toContain('getSafeAvatarUrl');
+  });
+
+  test('VideoComments never invents a "user" handle for a missing username', () => {
+    const src = read('src/components/Videos/VideoComments.jsx');
+    expect(src).not.toContain("username: c.userUsername || 'user'");
+    expect(src).toContain('deriveHandle(c.userUsername)');
+    expect(src).not.toContain('@{replyTo.user.username}');
+  });
+
+  test('SavedScreen routes author avatars through resolveAvatarUrl', () => {
+    const src = read('src/screens/SavedScreen.jsx');
+    expect(src).not.toContain("p.authorPhoto || '/assets/default-profile.png'");
+    expect(src).not.toContain("v.creator?.avatar || '/assets/default-profile.png'");
+    expect(src).toContain('resolveAvatarUrl');
+  });
+});
+
 describe('Analytics — per-day metrics stay unknown, not a fabricated 0', () => {
   const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
