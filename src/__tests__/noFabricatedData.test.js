@@ -162,6 +162,20 @@ describe('collaborationService - no sample projects', () => {
     // The real cover field is coverImage; `banner` is never written.
     expect(src).toContain('event.coverImage');
   });
+
+  test('EventCard renders no never-written event fields or never-passed props', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/EventCard.jsx'), 'utf8');
+    // None of these is written by any event writer (eventService/CreatePost) or
+    // passed by any render site, so the branches reading them could never fire.
+    for (const phantom of [
+      'friendsGoing', 'coinReward', 'scarcity', 'attendanceVelocity',
+      'matchScore', 'friendProximity', 'userAffinity', 'distanceKm',
+      'gravityLevel', 'getGravityLevel', 'stats?.interested',
+    ]) {
+      expect(src).not.toContain(phantom);
+    }
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {
