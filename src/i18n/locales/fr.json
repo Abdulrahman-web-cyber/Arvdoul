@@ -184,7 +184,17 @@
     "deleting": "Suppression...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Authentification à deux facteurs",
+    "mfaDesc": "Ajoutez un code temporaire d'une application d'authentification comme second facteur.",
+    "mfaEnable": "Activer la 2FA",
+    "mfaEnabled": "2FA activée",
+    "mfaScanHint": "Saisissez cette clé de configuration dans votre application d'authentification, puis le code à 6 chiffres.",
+    "mfaCodeLabel": "Code à 6 chiffres",
+    "mfaVerify": "Vérifier et activer",
+    "mfaDisable": "Désactiver la 2FA",
+    "mfaError": "Une erreur est survenue. Veuillez réessayer.",
+    "mfaDisabled": "Authentification à deux facteurs désactivée."
   },
   "level": {
     "title": "Niveau et progression",

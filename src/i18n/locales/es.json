@@ -184,7 +184,17 @@
     "deleting": "Eliminando...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Autenticación en dos pasos",
+    "mfaDesc": "Añade un código temporal de una app de autenticación como segundo paso.",
+    "mfaEnable": "Activar 2FA",
+    "mfaEnabled": "2FA activada",
+    "mfaScanHint": "Introduce esta clave de configuración en tu app de autenticación y luego el código de 6 dígitos.",
+    "mfaCodeLabel": "Código de 6 dígitos",
+    "mfaVerify": "Verificar y activar",
+    "mfaDisable": "Desactivar 2FA",
+    "mfaError": "Algo salió mal. Inténtalo de nuevo.",
+    "mfaDisabled": "Autenticación en dos pasos desactivada."
   },
   "level": {
     "title": "Nivel y progreso",

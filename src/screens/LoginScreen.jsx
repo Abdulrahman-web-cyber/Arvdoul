@@ -937,6 +937,7 @@ export default function LoginScreen() {
     profileResolved,
     needsOnboarding,
     signInWithEmailPassword,
+    verifyMFAAndSignIn,
     sendPhoneVerificationCode,
     createRecaptchaVerifier,
     cleanupRecaptchaVerifier
@@ -953,6 +954,10 @@ export default function LoginScreen() {
   const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
   const [shakeCard, setShakeCard] = useState(false);
   const [isPhoneValid, setIsPhoneValid] = useState(false);
+  // Second factor (TOTP). Populated when signInWithEmailPassword reports
+  // `auth/multi-factor-auth-required`; the challenge is resolved below.
+  const [mfaChallenge, setMfaChallenge] = useState(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   const emailRef = useRef(null);
 
@@ -1060,6 +1065,12 @@ export default function LoginScreen() {
 
     try {
       const result = await signInWithEmailPassword(email, password);
+      if (result?.requiresMFA) {
+        setMfaChallenge({ resolver: result.resolver, hints: result.hints || [] });
+        setMfaCode("");
+        setLoading(false);
+        return;
+      }
       if (result?.success) {
         if (result.requiresVerification || result.user?.isUnverified || (result.user?.emailVerified === false && result.user?.authProvider === 'email')) {
           navigate("/verify-email", {
@@ -1095,6 +1106,35 @@ export default function LoginScreen() {
       if (field === "email") setErrors({ email: errorMsg });
       else if (field === "password") setErrors({ password: errorMsg });
       else setErrors({ general: errorMsg });
+      toast.error(errorMsg);
+      triggerShake();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyMFA = async (e) => {
+    e?.preventDefault();
+    if (!mfaChallenge?.resolver) return;
+    if (!/^\d{6}$/.test(mfaCode.trim())) {
+      setErrors({ general: "Enter the 6-digit code from your authenticator app" });
+      triggerShake();
+      return;
+    }
+    setLoading(true);
+    setErrors({});
+    try {
+      await verifyMFAAndSignIn(mfaChallenge.resolver, mfaCode.trim());
+      if (rememberMe) localStorage.setItem('rememberMe', 'true');
+      else localStorage.removeItem('rememberMe');
+      const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
+      navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
+    } catch (error) {
+      const msg = (error?.message || '').toLowerCase();
+      const errorMsg = msg.includes('invalid') || msg.includes('code')
+        ? "That code is incorrect. Please try again."
+        : "Verification failed. Please try again.";
+      setErrors({ general: errorMsg });
       toast.error(errorMsg);
       triggerShake();
     } finally {
@@ -1224,6 +1264,55 @@ export default function LoginScreen() {
               </header>
 
               <div className="av2-body">
+                {mfaChallenge ? (
+                  <form
+                    className="av2-panel"
+                    onSubmit={handleVerifyMFA}
+                    noValidate
+                    aria-label="Two-factor authentication"
+                  >
+                    <div>
+                      <div className="av2-label-row">
+                        <label htmlFor="login-mfa-code" className="av2-label">
+                          Authentication code <span className="av2-req" aria-hidden="true">*</span>
+                        </label>
+                      </div>
+                      <p className="av2-sub" style={{ marginBottom: 10 }}>
+                        Enter the 6-digit code from your authenticator app.
+                      </p>
+                      <div className="av2-field" data-disabled={!!loading}>
+                        <span className="av2-field-ico"><LockIcon size={19} /></span>
+                        <input
+                          id="login-mfa-code"
+                          name="mfa-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          className="av2-input"
+                          value={mfaCode}
+                          onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="123456"
+                          disabled={loading}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="av2-btn" data-loading={loading} disabled={loading}>
+                      {loading ? "Verifying…" : "Verify & sign in"}
+                    </button>
+                    <button
+                      type="button"
+                      className="av2-btn-alt"
+                      onClick={() => { setMfaChallenge(null); setMfaCode(""); setErrors({}); }}
+                      disabled={loading}
+                    >
+                      Back
+                    </button>
+                  </form>
+                ) : (
+                <>
                 <div className="av2-divider" aria-hidden="true">Sign in with</div>
 
                 <UltimateMethodToggle method={method} onToggle={setMethod} disabled={loading} />
@@ -1416,6 +1505,8 @@ export default function LoginScreen() {
                   Don't have an account?
                   <Link to="/signup/step1">Sign up now</Link>
                 </p>
+                </>
+                )}
               </div>
             </motion.section>
 

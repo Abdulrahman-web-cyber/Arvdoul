@@ -989,6 +989,11 @@ export function AuthProvider({ children }) {
       try {
         setError(null);
         const result = await authService.signInWithEmailPassword(email, password);
+        // Second factor required: hand the resolver back to the caller so the
+        // screen can collect the TOTP code. Do NOT treat this as a login.
+        if (result?.requiresMFA) {
+          return { success: false, requiresMFA: true, resolver: result.resolver, hints: result.hints };
+        }
         if (!result.success) throw new Error(result.error || 'Failed to sign in');
         if (result.requiresVerification || result.user?.isUnverified) {
           AuthStorageManager.set('email_not_verified_user', {
@@ -1020,6 +1025,23 @@ export function AuthProvider({ children }) {
         throw error;
       } finally {
         navigationLock.current = false;
+      }
+    });
+  }, [authService]);
+
+  const verifyMFAAndSignIn = useCallback(async (resolver, code, selectedIndex = 0) => {
+    return runOnce('mfa_verify', async () => {
+      if (!authService) throw new Error('Auth service not ready');
+      try {
+        setError(null);
+        const result = await authService.verifyMFAAndSignIn(resolver, code, selectedIndex);
+        if (!result.success) throw new Error(result.error || 'Verification failed');
+        toast.success('Welcome back!');
+        return result;
+      } catch (error) {
+        const errorMessage = normalizeFirebaseError(error);
+        debouncedToast(errorMessage, 'error');
+        throw error;
       }
     });
   }, [authService]);
@@ -1369,6 +1391,7 @@ export function AuthProvider({ children }) {
     isProfileComplete,
     requiresEmailVerification: !!(user && !user.emailVerified),
     signInWithEmailPassword,
+    verifyMFAAndSignIn,
     signUpWithEmailPassword,
     signInWithGoogle,
     sendPhoneVerificationCode,
@@ -1389,7 +1412,7 @@ export function AuthProvider({ children }) {
   }), [
     user, userProfile, loading, error, authError, isSignupInProgress, authInitialized,
     securityChecks, authService, userService, authState,
-    signInWithEmailPassword, signUpWithEmailPassword, signInWithGoogle,
+    signInWithEmailPassword, verifyMFAAndSignIn, signUpWithEmailPassword, signInWithGoogle,
     sendPhoneVerificationCode, verifyPhoneOTP, signOut, checkEmailVerification,
     resendEmailVerification, sendPasswordResetEmail, confirmPasswordReset,
     createRecaptchaVerifier, cleanupRecaptchaVerifier, createUserProfile,

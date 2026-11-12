@@ -27,6 +27,7 @@ import { getAdaptiveTuning, setLiteModePreference, getDeviceCapabilities } from 
 import { Dialog } from '../components/UI/Dialog.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
 import { cn } from '../lib/utils';
+import { logger } from '../utils/Logger';
 
 /* ---------- Reusable row primitives ---------- */
 function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled }) {
@@ -124,6 +125,13 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [roadmapTab, setRoadmapTab] = useState('levels');
+  // Two-factor auth (TOTP). `factors` is the real enrolled list; `enroll` holds
+  // the in-progress session until the user confirms a code.
+  const [mfaFactors, setMfaFactors] = useState([]);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaEnroll, setMfaEnroll] = useState(null); // { secret, session }
+  const [mfaCode, setMfaCode] = useState('');
+  const [showMfaDialog, setShowMfaDialog] = useState(false);
   // Real Do Not Disturb state, read back from `user_settings` — the server
   // gates every dispatch on `doNotDisturb` but nothing ever set it.
   const [dnd, setDnd] = useState({ loading: true, enabled: false, until: null });
@@ -202,6 +210,77 @@ export default function SettingsScreen() {
       toast.error(err?.message || 'Could not update Do Not Disturb.');
     } finally {
       setDndBusy(false);
+    }
+  };
+
+  // Read the real enrolled second factors for the signed-in user.
+  useEffect(() => {
+    if (!uid) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const { getAuthService } = await import('../services/authService.js');
+        const factors = await getAuthService().getEnrolledMFAFactors();
+        if (mounted) setMfaFactors(factors);
+      } catch (err) {
+        logger.warn('Could not read enrolled MFA factors', { error: err?.message });
+        if (mounted) setMfaFactors([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [uid]);
+
+  const handleStartMFAEnrollment = async () => {
+    if (mfaBusy) return;
+    setMfaBusy(true);
+    try {
+      const { getAuthService } = await import('../services/authService.js');
+      const res = await getAuthService().enrollMFA();
+      setMfaEnroll({ secret: res.secret, session: res.session });
+      setMfaCode('');
+    } catch (err) {
+      toast.error(err?.message || t('settings.mfaError'));
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleConfirmMFAEnrollment = async () => {
+    if (!mfaEnroll || mfaBusy) return;
+    if (!/^\d{6}$/.test(mfaCode.trim())) {
+      toast.error(t('settings.mfaError'));
+      return;
+    }
+    setMfaBusy(true);
+    try {
+      const { getAuthService } = await import('../services/authService.js');
+      const svc = getAuthService();
+      await svc.finalizeMFAEnrollment(mfaCode.trim(), mfaEnroll.session);
+      const factors = await svc.getEnrolledMFAFactors();
+      setMfaFactors(factors);
+      setMfaEnroll(null);
+      setMfaCode('');
+      setShowMfaDialog(false);
+      toast.success(t('settings.mfaEnabled'));
+    } catch (err) {
+      toast.error(err?.message || t('settings.mfaError'));
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleDisableMFA = async () => {
+    if (mfaBusy || mfaFactors.length === 0) return;
+    setMfaBusy(true);
+    try {
+      const { getAuthService } = await import('../services/authService.js');
+      await getAuthService().disableMFA(mfaFactors);
+      setMfaFactors([]);
+      toast.success(t('settings.mfaDisabled'));
+    } catch (err) {
+      toast.error(err?.message || t('settings.mfaError'));
+    } finally {
+      setMfaBusy(false);
     }
   };
 
@@ -535,6 +614,12 @@ export default function SettingsScreen() {
         <Section icon={User} title={t('settings.accountSection')}>
           <NavRow icon={User} label={t('settings.editProfile')} description={t('settings.editProfileDesc')} onClick={() => navigate('/profile/edit')} />
           <NavRow icon={ShieldCheck} label={t('settings.securityPassword')} description={t('settings.securityPasswordDesc')} onClick={() => navigate('/reset-password')} />
+          <NavRow
+            icon={Lock}
+            label={mfaFactors.length > 0 ? t('settings.mfaEnabled') : t('settings.mfaTitle')}
+            description={t('settings.mfaDesc')}
+            onClick={() => { setMfaEnroll(null); setMfaCode(''); setShowMfaDialog(true); }}
+          />
           <NavRow icon={DollarSign} label={t('settings.wallet')} description={t('settings.walletDesc')} onClick={() => navigate('/coins')} />
           <NavRow icon={Activity} label={t('settings.dataUsage')} description={t('settings.dataUsageDesc')} onClick={() => navigate('/settings/data-usage')} />
         </Section>
@@ -875,6 +960,68 @@ export default function SettingsScreen() {
               {deleting ? t('settings.deleting') : t('settings.confirmDelete')}
             </button>
           </div>
+        </div>
+      </Dialog>
+      {/* Two-factor authentication (TOTP) */}
+      <Dialog isOpen={showMfaDialog} onClose={() => { setShowMfaDialog(false); setMfaEnroll(null); setMfaCode(''); }} title={t('settings.mfaTitle')} size="sm">
+        <div className="space-y-4">
+          {mfaFactors.length > 0 ? (
+            <>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />
+                <p className="text-sm text-gray-700 dark:text-gray-200">{t('settings.mfaEnabled')}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDisableMFA}
+                disabled={mfaBusy}
+                className="w-full py-2.5 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-500 shadow-lg disabled:opacity-60 min-h-[44px]"
+              >
+                {t('settings.mfaDisable')}
+              </button>
+            </>
+          ) : mfaEnroll ? (
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{t('settings.mfaScanHint')}</p>
+              <div className="rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3">
+                <code className="block text-xs font-mono break-all select-all text-gray-800 dark:text-gray-100">{mfaEnroll.secret}</code>
+              </div>
+              <div>
+                <label htmlFor="mfa-code" className="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-300">{t('settings.mfaCodeLabel')}</label>
+                <input
+                  id="mfa-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 text-gray-900 dark:text-white tracking-[0.4em] text-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                  placeholder="000000"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleConfirmMFAEnrollment}
+                disabled={mfaBusy}
+                className="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg disabled:opacity-60 min-h-[44px]"
+              >
+                {t('settings.mfaVerify')}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{t('settings.mfaDesc')}</p>
+              <button
+                type="button"
+                onClick={handleStartMFAEnrollment}
+                disabled={mfaBusy}
+                className="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg disabled:opacity-60 min-h-[44px]"
+              >
+                {t('settings.mfaEnable')}
+              </button>
+            </>
+          )}
         </div>
       </Dialog>
       {/* Interactive Level Perks & Appearance Roadmap Modal */}

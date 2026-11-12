@@ -184,7 +184,17 @@
     "deleting": "Deleting...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Two-factor authentication",
+    "mfaDesc": "Add a time-based code from an authenticator app as a second step.",
+    "mfaEnable": "Enable 2FA",
+    "mfaEnabled": "2FA is on",
+    "mfaScanHint": "Enter this setup key in your authenticator app, then enter the 6-digit code.",
+    "mfaCodeLabel": "6-digit code",
+    "mfaVerify": "Verify & enable",
+    "mfaDisable": "Disable 2FA",
+    "mfaError": "Something went wrong. Please try again.",
+    "mfaDisabled": "Two-factor authentication disabled."
   },
   "level": {
     "title": "Level & Progress",

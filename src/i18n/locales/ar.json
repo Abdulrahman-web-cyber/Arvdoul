@@ -184,7 +184,17 @@
     "deleting": "جارٍ الحذف...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "المصادقة الثنائية",
+    "mfaDesc": "أضف رمزًا زمنيًا من تطبيق المصادقة كخطوة ثانية.",
+    "mfaEnable": "تفعيل المصادقة الثنائية",
+    "mfaEnabled": "المصادقة الثنائية مفعّلة",
+    "mfaScanHint": "أدخل مفتاح الإعداد هذا في تطبيق المصادقة ثم أدخل الرمز المكوّن من 6 أرقام.",
+    "mfaCodeLabel": "رمز مكوّن من 6 أرقام",
+    "mfaVerify": "تحقّق وفعّل",
+    "mfaDisable": "إيقاف المصادقة الثنائية",
+    "mfaError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    "mfaDisabled": "تم إيقاف المصادقة الثنائية."
   },
   "level": {
     "title": "المستوى والتقدم",

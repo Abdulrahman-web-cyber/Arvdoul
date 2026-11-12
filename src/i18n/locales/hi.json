@@ -184,7 +184,17 @@
     "deleting": "हटा रहे हैं...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "दो-चरणीय प्रमाणीकरण",
+    "mfaDesc": "प्रमाणक ऐप से समय-आधारित कोड को दूसरे चरण के रूप में जोड़ें।",
+    "mfaEnable": "2FA सक्षम करें",
+    "mfaEnabled": "2FA चालू है",
+    "mfaScanHint": "इस सेटअप कुंजी को अपने प्रमाणक ऐप में दर्ज करें, फिर 6 अंकों का कोड दर्ज करें।",
+    "mfaCodeLabel": "6 अंकों का कोड",
+    "mfaVerify": "सत्यापित करें और सक्षम करें",
+    "mfaDisable": "2FA बंद करें",
+    "mfaError": "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+    "mfaDisabled": "दो-चरणीय प्रमाणीकरण बंद कर दिया गया।"
   },
   "level": {
     "title": "स्तर और प्रगति",

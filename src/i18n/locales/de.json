@@ -184,7 +184,17 @@
     "deleting": "Löschen...",
     "doNotDisturb": "Do Not Disturb",
     "doNotDisturbDesc": "Pause push and in-app alerts",
-    "doNotDisturbOn": "Alerts are paused for the next 24 hours"
+    "doNotDisturbOn": "Alerts are paused for the next 24 hours",
+    "mfaTitle": "Zwei-Faktor-Authentifizierung",
+    "mfaDesc": "Füge einen zeitbasierten Code aus einer Authenticator-App als zweiten Schritt hinzu.",
+    "mfaEnable": "2FA aktivieren",
+    "mfaEnabled": "2FA ist aktiv",
+    "mfaScanHint": "Gib diesen Einrichtungsschlüssel in deiner Authenticator-App ein und dann den 6-stelligen Code.",
+    "mfaCodeLabel": "6-stelliger Code",
+    "mfaVerify": "Bestätigen und aktivieren",
+    "mfaDisable": "2FA deaktivieren",
+    "mfaError": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+    "mfaDisabled": "Zwei-Faktor-Authentifizierung deaktiviert."
   },
   "level": {
     "title": "Level & Fortschritt",
