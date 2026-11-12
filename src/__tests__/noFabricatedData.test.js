@@ -2826,6 +2826,17 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
   });
 });
 
+describe('Video analytics chart drops unrecorded days instead of plotting 0 (N291)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the per-day view series never coerces a missing day to 0', () => {
+    const s = read('src/screens/VideoAnalyticsScreen.jsx');
+    expect(s).not.toContain('views: d.views || 0');
+    expect(s).toContain('.filter((d) => d.views !== null)');
+    expect(s).not.toContain('d.views || 0) / seriesMax');
+  });
+});
+
 describe('Achievement progress is unknown, not a fabricated 0, when unmeasurable (N290)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 

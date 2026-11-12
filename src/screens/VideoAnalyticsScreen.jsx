@@ -77,8 +77,11 @@ const VideoAnalyticsScreen = () => {
             watchTimeChange: null,
             avgCompletionRate: null,
             completionChange: null,
-            // Real per-day view series for the chart (empty when no data yet).
-            series: (data.dailyStats || []).map((d) => ({ date: d.date, views: d.views || 0 })),
+            // Real per-day view series for the chart. A day the server never
+            // recorded is dropped, not plotted as a fabricated 0.
+            series: (data.dailyStats || [])
+              .map((d) => ({ date: d.date, views: unknownNumber(d.views) }))
+              .filter((d) => d.views !== null),
             hasData: Boolean(data.hasData),
           },
           revenue: {
@@ -286,7 +289,7 @@ const OverviewTab = ({ analytics }) => {
 
   // Real per-day view series; scale bar heights against the series max.
   const series = overview.series || [];
-  const seriesMax = series.reduce((m, d) => Math.max(m, d.views || 0), 0);
+  const seriesMax = series.reduce((m, d) => Math.max(m, d.views ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -339,7 +342,7 @@ const OverviewTab = ({ analytics }) => {
               <motion.div
                 key={d.date}
                 initial={{ height: 0 }}
-                animate={{ height: seriesMax > 0 ? `${Math.round(((d.views || 0) / seriesMax) * 100)}%` : '2%' }}
+                animate={{ height: seriesMax > 0 ? `${Math.round((d.views / seriesMax) * 100)}%` : '2%' }}
                 transition={{ delay: 0.3 + i * 0.02 }}
                 className="flex-1 rounded-t-lg"
                 title={`${d.date}: ${d.views}`}
