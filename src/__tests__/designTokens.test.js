@@ -101,3 +101,23 @@ describe('design-system components - token hygiene', () => {
     }
   });
 });
+
+describe('design-system helpers - brandRgba / brandCanvasBackground', () => {
+  test('brandRgba derives from the brand violet token, not a literal', async () => {
+    const { brandRgba, BRAND_VIOLET_RGB } = await import('../design-system/tokens.js');
+    // The token is #8B1EF3 = rgb(139, 30, 243).
+    expect(BRAND_VIOLET_RGB).toBe('139, 30, 243');
+    expect(brandRgba(0.1)).toBe('rgba(139, 30, 243, 0.1)');
+  });
+
+  test('brandCanvasBackground returns the canvas + brand glow for both themes', async () => {
+    const { brandCanvasBackground } = await import('../design-system/tokens.js');
+    const dark = brandCanvasBackground(true);
+    const light = brandCanvasBackground(false);
+    expect(dark).toContain(tokens.color.bg.dark);
+    expect(light).toContain(tokens.color.bg.light);
+    expect(dark).toContain('rgba(139, 30, 243, 0.1)');
+    expect(light).toContain('rgba(139, 30, 243, 0.05)');
+    expect(dark).toContain('radial-gradient');
+  });
+});

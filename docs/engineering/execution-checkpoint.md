@@ -4,7 +4,7 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 ## Current state
 
-- Latest verified: **159 suites, 1807 passed, 5 skipped**; `npm run build`
+- Latest verified: **160 suites, 1816 passed, 5 skipped**; `npm run build`
   green; `npm run lint` exit 0 (0 errors, 876 warnings).
 - N330 closed this session (money-in integrity): the three Stripe-backed
   economy callables ran their Stripe network calls **inside** the retryable
@@ -58,6 +58,8 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 | # | Item | Evidence |
 | --- | --- | --- |
+| N334 | Keyboard focus rings used the raw Tailwind family (`ring-purple-500`/`ring-indigo-500`/`ring-blue-500`/`ring-violet-*`) — a different colour than the brand violet | standardised 97 rings across 40 files onto `ring-arvdoul-purple-500`; drift-guard assertion; added `designSystemPrimitives.test.jsx` |
+| N333 | A second brand gradient shipped in 24 sites (incl. the design-system `Button` primary) because the guard only banned the pink/rose-middle mimic | migrated onto `bg-arvdoul-gradient`; added `ROGUE_BRAND_MIMIC_NEUTRAL` to the drift guard |
 | N332 | A client could write its own `users/{uid}.lockedCoins`, defeating the withdrawal hold (`getAvailableBalance = coins - lockedCoins`) — filed a second withdrawal against held coins | added `lockedCoins` to `SERVER_AUTHORITATIVE_FIELDS` + both rules denylists; `serverAuthoritativeFieldsRules.test.js` (static + emulator) in `guards` |
 | N331 | `payPerView` nested `transferCoinsInternal` (its own transaction) inside the outer transaction and awaited `enqueuePush` in the callback — an illegal nested transaction, so every pay-per-view purchase threw | separated the steps: transfer (idempotent) first, entitlement + push after commit; guard now bans nested `runTransaction`/`transferCoinsInternal`/`enqueuePush`/`fetch` in callbacks |
 | N330 | `purchaseCoins`/`createSubscription`/`cancelSubscription` ran **Stripe network calls inside the retryable transaction callback** (`createFirestoreTransaction` retries 5×; the SDK re-runs on write-conflict). `purchaseCoins` re-charged the card each retry; `createSubscription` had **no** Stripe idempotency key, so a transient conflict could start multiple paid subscriptions; it also read `users/{uid}` **after** writing `subscriptions/{uid}` (read-after-write → throws, so subscribing failed outright). | all Stripe calls moved BEFORE the transaction; `creditSubscriptionCoins` runs before the sub-doc write so reads precede writes; `cancelSubscription` reads+cancels in Stripe first; both now reject a foreign idempotency key; `transactionOrderGuard.test.js` gains a hard-zero "no `stripe.*` inside a `runTransaction` callback" assertion |

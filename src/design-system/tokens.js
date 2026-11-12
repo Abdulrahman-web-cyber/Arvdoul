@@ -200,3 +200,28 @@ export default tokens;
  * re-declaring the literal — the design system is the single source of truth.
  */
 export const BRAND_GRADIENT = tokens.color.brand.gradient;
+
+/**
+ * Brand violet as an "R, G, B" triplet. Use `brandRgba(alpha)` to build an
+ * alpha variant instead of re-declaring the brand colour in decimal form
+ * (`rgba(139, 30, 243, …)`) — a decimal literal would not move if the brand
+ * violet token changes.
+ */
+export const BRAND_VIOLET_RGB = '139, 30, 243';
+export const brandRgba = (alpha) => `rgba(${BRAND_VIOLET_RGB}, ${alpha})`;
+
+/**
+ * The Arvdoul screen canvas: the base background colour with a soft brand-violet
+ * radial glow anchored at the top. Several screens hand-rolled this identical
+ * `radial-gradient(circle at 50% 0%, rgba(139,30,243,0.1) 0%, transparent 50%),
+ * #03071B` string with the brand violet as a decimal literal; this is the one
+ * implementation so the glow tracks the tokens.
+ *
+ * @param {boolean} isDark
+ * @returns {string} a CSS `background` value
+ */
+export function brandCanvasBackground(isDark) {
+  const glow = isDark ? 0.1 : 0.05;
+  const base = isDark ? tokens.color.bg.dark : tokens.color.bg.light;
+  return `radial-gradient(circle at 50% 0%, ${brandRgba(glow)} 0%, transparent 50%), ${base}`;
+}
