@@ -645,14 +645,15 @@ const ImageCard = React.memo(({
     haptic(10);
   }, [onLike, onDoubleTap, pushAnalytics, postId]);
   const handleSave = useCallback((url) => {
+    // No save backend is wired for a bare image; never claim the image was saved.
     if (onSave) onSave(url);
-    else toast.success('Saved to bookmarks');
+    else toast.error('Saving is unavailable here');
     pushAnalytics('save', { postId, imageUrl: url });
     haptic(5);
   }, [onSave, pushAnalytics, postId]);
   const handleReport = useCallback((url) => {
     if (onReport) onReport(url);
-    else toast.info('Report submitted');
+    else toast.error('Reporting is unavailable here');
     pushAnalytics('report', { postId, imageUrl: url });
     haptic(10);
   }, [onReport, pushAnalytics, postId]);

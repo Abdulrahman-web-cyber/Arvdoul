@@ -204,6 +204,16 @@ describe('collaborationService - no sample projects', () => {
     // A capacity-less event has no percentage; it must not claim 100%.
     expect(src).not.toMatch(/attendeePercentage:[\s\S]{0,120}: 100/);
   });
+
+  test('ImageCard never claims a save or a report it did not perform', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/ImageCard.jsx'), 'utf8');
+    // The fallbacks used to toast a fake success when no handler was wired.
+    expect(src).not.toContain("toast.success('Saved to bookmarks')");
+    expect(src).not.toContain("toast.info('Report submitted')");
+    expect(src).toContain('Saving is unavailable here');
+    expect(src).toContain('Reporting is unavailable here');
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {

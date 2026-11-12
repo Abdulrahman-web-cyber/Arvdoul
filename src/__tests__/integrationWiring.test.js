@@ -200,6 +200,14 @@ describe('post-surface interaction analytics wiring', () => {
     expect(src).not.toContain('/api/analytics/batch');
     expect(src).not.toContain('sendBeacon');
   });
+
+  test('ImageCard is given real save/report handlers (its controls used to fake success)', () => {
+    const src = read('src/screens/PostCard.jsx');
+    const m = src.match(/<ImageCard\b[^>]*>/);
+    expect(m).not.toBeNull();
+    expect(m[0]).toContain('onSave={handleSave}');
+    expect(m[0]).toContain('onReport={handleReportImage}');
+  });
 });
 
 describe('post-embedded poll voting is wired end-to-end', () => {
