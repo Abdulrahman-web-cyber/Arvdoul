@@ -245,7 +245,7 @@ export default function SpacesScreen() {
 
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 to-red-500 text-white font-bold text-sm shadow-xl shadow-purple-500/25 hover:scale-105 transition-all"
+          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-arvdoul-gradient text-white font-bold text-sm shadow-xl shadow-purple-500/25 hover:scale-105 transition-all"
         >
           <Plus className="w-4 h-4" /> Start a Live Space
         </button>
@@ -603,7 +603,7 @@ export default function SpacesScreen() {
 
                 <button
                   type="submit"
-                  className="w-full py-4 rounded-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-red-500 text-white shadow-xl shadow-purple-500/25 hover:opacity-95"
+                  className="w-full py-4 rounded-2xl font-bold bg-arvdoul-gradient text-white shadow-xl shadow-purple-500/25 hover:opacity-95"
                 >
                   🚀 Go Live with Voice Space
                 </button>

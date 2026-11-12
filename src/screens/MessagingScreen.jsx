@@ -602,7 +602,7 @@ export default function MessagingScreen() {
           navigate('/messages/new');
           toast.success('Compose a new message');
         }}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 text-white flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.6)] hover:scale-110 transition-transform active:scale-95"
+        className="fixed right-5 bottom-20 z-40 w-14 h-14 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.6)] hover:scale-110 transition-transform active:scale-95"
         title="Compose New Message"
       >
         <MessageSquare className="w-6 h-6 fill-white/20" />

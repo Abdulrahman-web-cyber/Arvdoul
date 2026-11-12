@@ -317,7 +317,7 @@ export default function AIStudioScreen() {
               <button
                 onClick={handleGenerateCaption}
                 disabled={loading}
-                className="w-full py-4 rounded-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white shadow-xl shadow-purple-500/30 flex items-center justify-center gap-2 hover:opacity-95 transition-all disabled:opacity-50"
+                className="w-full py-4 rounded-2xl font-bold bg-arvdoul-gradient text-white shadow-xl shadow-purple-500/30 flex items-center justify-center gap-2 hover:opacity-95 transition-all disabled:opacity-50"
               >
                 {loading ? <LoadingSpinner size="sm" /> : <><Sparkles className="w-5 h-5" /> Generate Viral Caption</>}
               </button>

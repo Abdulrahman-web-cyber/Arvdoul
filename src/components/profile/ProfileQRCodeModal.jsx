@@ -133,7 +133,7 @@ const ProfileQRCodeModal = memo(({
 
           {/* Modal Title */}
           <div className="text-center mb-4">
-            <div className="w-12 h-12 mx-auto mb-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
+            <div className="w-12 h-12 mx-auto mb-2.5 rounded-2xl bg-arvdoul-gradient flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
               <QrCode className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold">Universal Profile QR</h3>
@@ -236,7 +236,7 @@ const ProfileQRCodeModal = memo(({
 
             <button
               onClick={handleShare}
-              className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white shadow-md shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs bg-arvdoul-gradient hover:opacity-95 text-white shadow-md shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
               title="Share Profile"
             >
               <Share2 className="w-4 h-4" />
@@ -249,7 +249,7 @@ const ProfileQRCodeModal = memo(({
             <button
               type="button"
               onClick={() => setShowScanner(true)}
-              className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-arvdoul-gradient hover:opacity-95 text-white shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
             >
               <ScanLine className="w-4 h-4" />
               <span>Scan Another User's QR Code</span>

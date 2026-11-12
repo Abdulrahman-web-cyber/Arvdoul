@@ -154,7 +154,7 @@ export default function ProgressScreen() {
               }`}
             >
               <div
-                className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-700 rounded-full"
+                className="h-full bg-arvdoul-gradient transition-all duration-700 rounded-full"
                 style={{ width: `${unknownNumber(levelInfo?.progress) ?? 0}%` }}
                 role="progressbar"
                 aria-valuenow={unknownNumber(levelInfo?.progress) ?? 0}

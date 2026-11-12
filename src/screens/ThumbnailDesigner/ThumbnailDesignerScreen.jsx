@@ -650,7 +650,7 @@ export default function ThumbnailDesignerScreen() {
                       opacity: layer.opacity / 100,
                     }}
                   >
-                    <div className="px-3 py-1 rounded-full bg-gradient-to-r from-red-600 via-purple-600 to-indigo-600 text-white text-xs font-black tracking-widest shadow-xl border border-white/20">
+                    <div className="px-3 py-1 rounded-full bg-arvdoul-gradient text-white text-xs font-black tracking-widest shadow-xl border border-white/20">
                       {layer.label}
                     </div>
                   </div>

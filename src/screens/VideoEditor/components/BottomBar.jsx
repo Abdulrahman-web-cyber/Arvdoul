@@ -60,7 +60,7 @@ export default function BottomBar({
           id="editor-big-add-btn"
           onClick={() => fileInputRef.current?.click()}
           title="Import Video, Audio or Photo"
-          className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 hover:from-purple-500 hover:via-indigo-500 hover:to-blue-400 text-white flex items-center justify-center shadow-2xl shadow-purple-600/60 ring-4 ring-gray-950 dark:ring-gray-950 light:ring-white transition-all duration-200 active:scale-95 cursor-pointer"
+          className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-arvdoul-gradient hover:opacity-95 text-white flex items-center justify-center shadow-2xl shadow-purple-600/60 ring-4 ring-gray-950 dark:ring-gray-950 light:ring-white transition-all duration-200 active:scale-95 cursor-pointer"
         >
           <Plus className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.5] text-white transition-transform group-hover:rotate-90 duration-300" />
           <span className="absolute -inset-1 rounded-full bg-purple-500 opacity-40 blur-md group-hover:opacity-75 transition-opacity pointer-events-none" />

@@ -279,7 +279,7 @@ export default function EditorHeader({
         <button
           id="editor-export-btn"
           onClick={onExportClick}
-          className="relative group flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-200 active:scale-95 border border-white/20"
+          className="relative group flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-full bg-arvdoul-gradient hover:opacity-95 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-200 active:scale-95 border border-white/20"
         >
           <Upload className="w-4 h-4 stroke-[2.5]" />
           <span>Export</span>

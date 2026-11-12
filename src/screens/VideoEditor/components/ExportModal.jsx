@@ -541,7 +541,7 @@ export default function ExportModal({
 
             <button
               onClick={handleStartExport}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:via-indigo-500 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-purple-600/30 active:scale-95 transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-arvdoul-gradient hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-purple-600/30 active:scale-95 transition-all"
             >
               <HardDrive className="w-4 h-4" />
               <span>Start Render</span>

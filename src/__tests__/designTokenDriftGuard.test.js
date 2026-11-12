@@ -51,6 +51,15 @@ const ROGUE_GRADIENT = /from-purple-600\s+via-pink-600\s+to-cyan-500/;
 // banned. `N319`/`N323` migrated every occurrence onto `BRAND_GRADIENT`.
 const ROGUE_BRAND_MIMIC =
   /from-(?:purple|violet|fuchsia)-\d+\s+via-(?:pink|fuchsia|rose)-\d+\s+to-(?:cyan|blue|indigo)-\d+/;
+// The SAME brand-mimic shape with a NEUTRAL middle stop: purple/violet/fuchsia →
+// indigo/blue/violet → cyan/blue/indigo/teal. The ROGUE_BRAND_MIMIC above only
+// caught the pink/rose-middle family, so 14 sites — including the design-system
+// `Button` primary itself (`from-violet-600 via-indigo-600 to-cyan-500`) — kept
+// shipping a second, near-identical brand gradient whose stops would never move
+// when the canonical `#8B1EF3 → #4431F7 → #055BFB` changes. All 14 are now
+// `bg-arvdoul-gradient`; this pins the whole shape out.
+const ROGUE_BRAND_MIMIC_NEUTRAL =
+  /from-(?:purple|violet|fuchsia|indigo)-\d+\s+via-(?:indigo|blue|violet|purple)-\d+\s+to-(?:cyan|blue|indigo|teal)-\d+/;
 // The SAME rogue gradient in raw-hex form: Tailwind purple-600 → fuchsia-600 →
 // cyan-500, plus the pink-500 / rose variants the post cards used as a
 // "neon purple" stand-in for the brand gradient. `#9333ea`/`#c026d3` were
@@ -93,6 +102,14 @@ describe('brand gradient — design system is the single source of truth (N104)'
     const offenders = [];
     for (const file of files) {
       if (ROGUE_BRAND_MIMIC.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('no 3-stop purple→indigo→cyan brand mimic remains (N333)', () => {
+    const offenders = [];
+    for (const file of files) {
+      if (ROGUE_BRAND_MIMIC_NEUTRAL.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
     }
     expect(offenders).toEqual([]);
   });

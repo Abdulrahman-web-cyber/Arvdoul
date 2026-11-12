@@ -247,7 +247,7 @@ export default function CreatorPayoutScreen() {
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Earnings Card */}
-        <div className="relative overflow-hidden rounded-arvdoul-xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-800 p-6 text-white shadow-arvdoul-glow">
+        <div className="relative overflow-hidden rounded-arvdoul-xl bg-arvdoul-gradient p-6 text-white shadow-arvdoul-glow">
           <div className="absolute -right-8 -bottom-8 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">

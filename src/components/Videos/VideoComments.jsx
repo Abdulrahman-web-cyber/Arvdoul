@@ -386,7 +386,7 @@ const VideoComments = memo(({
                 whileTap={{ scale: 0.9 }}
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
-                className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shadow-purple-500/20"
+                className="w-10 h-10 rounded-full bg-arvdoul-gradient flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shadow-purple-500/20"
                 aria-label="Send comment"
               >
                 <Send className="w-4 h-4 translate-x-0.5" />

@@ -11,7 +11,7 @@ import { cn } from '../lib/utils.js';
 
 const VARIANTS = {
   primary:
-    'bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 text-white shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40',
+    'bg-arvdoul-gradient text-white shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40',
   secondary:
     'bg-white/10 dark:bg-white/10 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-white/15 hover:bg-white/20 dark:hover:bg-white/20 backdrop-blur-sm',
   ghost:

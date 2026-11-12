@@ -131,7 +131,7 @@ export class SectionErrorBoundary extends Component {
               </div>
 
               {/* Glowing Icon Container */}
-              <div className="relative mx-auto w-16 h-16 rounded-2xl p-[2px] bg-gradient-to-tr from-purple-500 via-indigo-500 to-cyan-400 shadow-lg shadow-purple-500/20">
+              <div className="relative mx-auto w-16 h-16 rounded-2xl p-[2px] bg-arvdoul-gradient shadow-lg shadow-purple-500/20">
                 <div className="w-full h-full rounded-2xl bg-white dark:bg-[#080d19] flex items-center justify-center text-purple-600 dark:text-purple-400">
                   <Icon className="w-8 h-8" />
                 </div>
@@ -153,7 +153,7 @@ export class SectionErrorBoundary extends Component {
                   type="button"
                   onClick={this.handleReset}
                   disabled={isRetrying}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:via-indigo-500 hover:to-cyan-500 shadow-lg shadow-purple-500/25 active:scale-95 transition-all disabled:opacity-60 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm text-white bg-arvdoul-gradient hover:opacity-95 shadow-lg shadow-purple-500/25 active:scale-95 transition-all disabled:opacity-60 cursor-pointer"
                 >
                   <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
                   <span>{isRetrying ? 'Syncing...' : 'Retry Loading'}</span>
