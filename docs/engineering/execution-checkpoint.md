@@ -1,6 +1,6 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR #42)._
+_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR #46)._
 
 ## Current state
 
@@ -114,6 +114,16 @@ New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexM
 | N285 | Placeholder author identity (`"Arvdoul User"`, `User_<uid>`, `user_<uid>`, `'creator'`) across write + hydrate paths | read-model `pickDisplayName`/`deriveHandle` in CreatePost, firestoreService, HomeScreen, commentService, SavedScreen, videoService; render sites omit empty handles; `noFabricatedData` block |
 
 Verification: 152 suites / 1,713 passed (5 skipped); eslint 0 errors; build green.
+
+| N293 | `firestoreService.subscribeToPostStats` mapped `stats.likes ?? 0` (and views/comments/shares/saves) | each counter via `unknownNumber`; PostCard reducer keeps the prior value; `noFabricatedData` pin |
+| N294 | `rankingService.getUserBadges` summed `Number(p.stats?.likes \|\| p.likes \|\| 0)` | each counter via `unknownNumber`; aggregate `null` if any counter unknown; `noFabricatedData` pin |
+| N295 | `AudioCard` hardcoded the OS media-session artist as "Arvdoul Creator" for every audio post | real `authorName` from `PostCard`; `pickDisplayName([authorName], { fallback: null })`; artist omitted when unknown; `noFabricatedData` pin |
+| N296 | `CreatorPayoutScreen` rendered `-${tx.amount?.toLocaleString?.() \|\| tx.amount}` beside a hardcoded "Completed" badge | amount via `unknownNumber` ('—'); badge derived from the ledger `status`/`state` (Completed/Pending/Failed, none when unknown); `noFabricatedData` pin |
+| N297 | `analyticsService` new-creator fallback summed `(s.likes \|\| 0)+(s.comments \|\| 0)+(s.shares \|\| 0)` | each counter via `unknownNumber`; engagement total `null` if any unknown; `noFabricatedData` pin |
+| N298 | `communityService.getCommunityStats` returned `community.stats?.memberCount \|\| 0` + weighted `(stats.likes \|\| 0)` | every counter via `unknownNumber`; weighted `weeklyEngagement` `null` if any unknown; `noFabricatedData` pin |
+| N299 | `storyService` insights returned `story.stats?.comments \|\| 0` (…completionRate/forwardTaps/backTaps/replies/shares); `monetizationService.getCoinLeaderboard` mapped `coins \|\| 0` + a position title from that 0 | both via `unknownNumber`; unknown balance stays `null` with no fabricated title; `noFabricatedData` pin |
+
+Latest verified: 152 suites / 1,732 passed (5 skipped); eslint 0 errors; build green (N299).
 
 | N286 | Uncoerced transaction/bounty/reputation amounts rendered fabricated numbers | `unknownNumber()` guard in CoinsScreen + QuestionCard; `noFabricatedData` round-4 pin |
 
