@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { XP_RULES } from '../shared/levelConfig.cjs';
+import { XP_RULES, NEW_USER_DEFAULTS } from '../shared/levelConfig.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
@@ -3904,5 +3904,39 @@ describe('N314 — liveService never reports a peak-viewer metric no writer main
     const src = read('src/services/liveService.js');
     expect(src).not.toMatch(/peakViewers,/);
     expect(src).not.toMatch(/peakViewers\s*:/);
+  });
+});
+
+describe('N320 — lifetime earnings are never a fabricated measured zero', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('NEW_USER_DEFAULTS does not seed totalEarned', () => {
+    // No server path increments a lifetime-earnings counter, so a seeded 0
+    // renders as a *measured* "0 earned" on the wallet/creator surfaces. Absent
+    // must mean unknown, not zero.
+    expect(NEW_USER_DEFAULTS.totalEarned).toBeUndefined();
+    const cfg = read('src/shared/levelConfig.cjs');
+    expect(cfg).not.toMatch(/^\s*totalEarned:\s*0,/m);
+  });
+
+  test('the users create rule does not pin totalEarned (so it stays unknown)', () => {
+    const rules = read('firestore.rules');
+    const start = rules.indexOf("allow create: if isOwner(userId)");
+    const block = rules.slice(start, rules.indexOf(']);', rules.indexOf('contributionScore', start)));
+    expect(block).not.toContain("get('totalEarned', null)");
+  });
+
+  test('createUserProfile does not seed totalEarned on a new account', () => {
+    const src = read('src/services/userService.js');
+    expect(src).not.toMatch(/totalEarned:\s*NEW_USER_DEFAULTS\.totalEarned/);
+  });
+
+  test('the wallet and creator surfaces render absent earnings as unknown, not 0', () => {
+    // QuickAccessPanel already guards `!= null`; WalletScreen renders "—" for a
+    // null total. Guard both so a future refactor cannot default to 0.
+    const qap = read('src/components/Shared/QuickAccessPanel.jsx');
+    expect(qap).toContain('userStats.totalEarned != null');
+    const wallet = read('src/screens/Economy/WalletScreen.jsx');
+    expect(wallet).toContain("wallet?.totalEarned == null ? '—'");
   });
 });

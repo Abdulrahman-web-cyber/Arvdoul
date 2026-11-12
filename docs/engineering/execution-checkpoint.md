@@ -1,38 +1,42 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (HEAD `357a695`)._
+_Last updated: this session. Branch `harden/n319-n320-analytics-live` (HEAD `224bb05`), base `origin/main` (PR #46 merged)._
 
 ## Current state
 
-- Latest verified: **156 suites, 1781 passed, 5 skipped**; `npm run build`
-  green; `npx eslint src/ functions/ --quiet` exit 0 (0 errors).
-- N320 closed this session: the creator dashboard's "Engagement"/"Coins Earned"
-  cards rendered a fabricated measured `0` — `functions/analytics.js`
-  seeds `profile_analytics.totalEngagement`/`coinsEarned` to `0` and no writer
-  ever increments them, and `analyticsService.getUserAnalytics` read the stored
-  value in the doc-exists branch (its `typeof === 'number'` guard passes on the
-  seed), *replacing* the live values the else branch derived. Both figures are
-  now derived live in every branch (`_computeRecentEngagement` from recent
-  public posts, `_readLiveCoinBalance` from `users/{uid}`); the server seed no
-  longer writes the two never-incremented fields.
-- N319 closed this session: the rogue `ARVDOUL_GRADIENT`
-  (`#9333ea → #c026d3 → #06b6d4`/`#ec4899`) second-brand-gradient family across
-  the post cards / video cards / SplashScreen is migrated onto `BRAND_GRADIENT`
-  (the `audioNeon*` token reads it was gated behind are undefined, so the rogue
-  fallback always fired). `designTokenDriftGuard.test.js` gains a raw-hex guard;
-  `semanticColorRatchetGuard.test.js` (new, shrinking baseline) +
-  `scripts/semanticHexBaseline.json` pin the semantic-palette consolidation.
-  Wired into the hard-failing `guards` CI job.
-- The `guards` CI job (108-suite static list) passes locally; its two emulator
-  steps were run locally against real emulators (Firestore 8 suites / 108 tests,
-  Storage 10 tests) and in CI (green, 0 skips).
+- Latest verified: **157 suites, 1792 passed, 5 skipped**; `npm run build`
+  green; `npm run lint` exit 0 (0 errors, 875 warnings).
+- N321 closed this session: live presence (`isOnline`/`lastActive`) sat on the
+  world-signed-in-readable `users/{uid}` doc, so a raw `getDoc` leaked a user's
+  online status / activity timestamp to any authenticated client regardless of
+  the profile's `presence` scope (client-masking-only, the N315 class). Presence
+  moved to a scope-gated `user_presence/{uid}` document (rule mirrors
+  `profileSectionReadable(userId, 'presence', 'FOLLOWERS')`); `userService`
+  writes/reads it, `socialGraphService.hydrateProfiles` hydrates it opt-in with
+  per-doc reads, `AuthContext` no longer fabricates `lastActive`, the dead
+  `appStore.updateUserLastActive` is gone, and `users/{uid}` create/update refuse
+  the two fields. `userPresencePrivacyRules.test.js` (static + emulator
+  adversarial) + idempotent `scripts/migrate-user-presence.mjs`.
+- N322 closed this session: `NEW_USER_DEFAULTS.totalEarned: 0` seeded a
+  lifetime-earnings figure no writer maintains, so the wallet/creator surfaces
+  rendered a fabricated measured "Lifetime Earned: 0" (the N320 class). Removed
+  from `NEW_USER_DEFAULTS`, `createUserProfile`, and the `users/{uid}` create
+  rule (still in the server-authoritative denylist). Absent now renders "—".
+- N323 closed this session: a three-stop "brand mimic" gradient
+  (`from-purple-500 via-pink-500 to-cyan-400` and siblings) stood in for the
+  brand gradient across six modules (`RouteProgressBar`, `VideoTopBar`,
+  `GroupInfoScreen`, `MessagingScreen`, `ProfileQRCodeModal`,
+  `QuickAccessPanel`) plus two `components/Videos/VideoCard` /
+  `components/Ads/SponsoredPostCard` fills — a second brand gradient the hex
+  ratchet could not see. All migrated onto `BRAND_GRADIENT`;
+  `designTokenDriftGuard.test.js` gains a hard-zero `ROGUE_BRAND_MIMIC` guard.
+- The `guards` CI job (static list) passes locally; its emulator steps were run
+  locally against the running Firestore emulator (127.0.0.1:8080).
 - Emulator enabled locally this session (openjdk-21 installed via `sudo apt-get`;
-  Firestore + Storage jars cached under `~/.cache/firebase/emulators/`) — the
-  emulator-backed adversarial suites now actually execute instead of skipping.
-- Commits this session: `883e27e` (N207 honesty + CI emulator wiring),
-  `d7b149c` (N304 dead `events.privacy` removal), `27822ba` (checkpoint docs),
-  `c151bab` (checkpoint header), `8da6a12` (N306 wrong video assertion + CI
-  emulator wiring), plus this commit (N307 dead-control sweep).
+  Firestore + Storage jars cached under `~/.cache/firebase/emulators/`).
+- Commits this session: N321 (presence scope), N322 (totalEarned), N323
+  (brand-mimic gradient). See `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md`
+  §8 ledger rows N321–N323.
 
 ## Completed this session
 

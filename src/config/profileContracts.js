@@ -130,7 +130,11 @@ export const SERVER_AUTHORITATIVE_FIELDS = [
   'accountStatus',
   'roles',
   'role',
-  'policyStanding'
+  'policyStanding',
+  // Live presence is scope-gated in user_presence/{uid} (N321); it is not a
+  // client-writable field on users/{uid}.
+  'isOnline',
+  'lastActive',
 ];
 
 /**

@@ -10,6 +10,7 @@ import { memo, useState, useEffect, useMemo } from "react";
 import { X, Copy, Check, Share2, Download, QrCode, Sparkles, Loader2, ScanLine, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
@@ -144,7 +145,8 @@ const ProfileQRCodeModal = memo(({
           {/* High-Resolution QR Card */}
           <div className="p-4 sm:p-5 rounded-2xl bg-white text-slate-900 shadow-lg flex flex-col items-center justify-center border border-slate-200 mb-4 relative overflow-hidden group">
             {/* Subtle Top Gradient Accent */}
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 via-pink-500 to-cyan-500" />
+            <div className="absolute top-0 inset-x-0 h-1.5"
+              style={{ background: BRAND_GRADIENT }} />
 
             {/* User Identity Header */}
             <div className="flex items-center gap-2.5 mb-3 pt-1">

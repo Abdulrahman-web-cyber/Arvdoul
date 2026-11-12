@@ -18,7 +18,6 @@ import { create } from 'zustand';
  *   - `currentUser` / `isAuthenticated` / `setCurrentUser` / `clearUserData`
  *   - `setAppState` (local merge into the mirror, used by profile modals)
  *   - `updateUserProfile` (local merge of just-updated fields)
- *   - `updateUserLastActive`
  *
  * Identity is NEVER persisted. A persisted `currentUser` survived sign-out and
  * rehydrated on reload, so on a shared device account A's profile could render
@@ -49,13 +48,6 @@ const useAppStore = create((set) => ({
   // User Profile Updates (local mirror only — the write already happened)
   updateUserProfile: (updates) => set((state) => ({
     currentUser: state.currentUser ? { ...state.currentUser, ...updates } : null
-  })),
-
-  updateUserLastActive: () => set((state) => ({
-    currentUser: state.currentUser ? {
-      ...state.currentUser,
-      lastActive: new Date().toISOString()
-    } : null
   }))
 }));
 

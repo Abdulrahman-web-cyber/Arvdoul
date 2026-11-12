@@ -502,10 +502,25 @@ class ProfessionalUserService {
     // Overlay shard-backed follower/following counts (legacy fallback).
     await countersManager.apply({ data: full, docPath: `users/${userId}`, fields: ['followerCount', 'followingCount'], scope: 'top' });
 
-    // Compute honest presence (Spec §42: only online if valid activity within 5 minutes)
-    const lastActiveDate = full.lastActive?.toDate ? full.lastActive.toDate() : (full.lastActive ? new Date(full.lastActive) : null);
+    // Live presence is scope-gated in `user_presence/{uid}` (the world-readable
+    // users/{uid} doc no longer carries isOnline/lastActive — N321). Read it for
+    // the requester; a denied (scope) or failed read leaves presence offline,
+    // never a fabricated "online". Honest online = flag set AND activity within
+    // 5 minutes (Spec §42).
+    let presenceDoc = null;
+    try {
+      const { doc: fsDoc, getDoc: fsGetDoc } = await import('firebase/firestore');
+      const presenceSnap = await fsGetDoc(fsDoc(this.firestore, 'user_presence', snap.id));
+      if (presenceSnap.exists()) presenceDoc = presenceSnap.data();
+    } catch (e) {
+      logger.debug('presence read skipped (scope denied or offline)', { userId: snap.id, error: e?.message });
+    }
+    const rawLastActive = presenceDoc?.lastActive;
+    const lastActiveDate = rawLastActive?.toDate ? rawLastActive.toDate() : (rawLastActive ? new Date(rawLastActive) : null);
     const isRecent = lastActiveDate && (Date.now() - lastActiveDate.getTime() < 5 * 60 * 1000);
-    const isActuallyOnline = Boolean(full.isOnline && isRecent);
+    const isActuallyOnline = Boolean(presenceDoc?.isOnline && isRecent);
+    full.isOnline = isActuallyOnline;
+    full.lastActive = lastActiveDate ? lastActiveDate.toISOString() : null;
     full.presence = {
       isOnline: isActuallyOnline,
       status: isActuallyOnline ? 'online' : 'offline',
@@ -647,7 +662,8 @@ class ProfessionalUserService {
       followingCount: 0,
       postCount: 0,
       coins: NEW_USER_DEFAULTS.coins,
-      totalEarned: NEW_USER_DEFAULTS.totalEarned,
+      // `totalEarned` is not seeded (no server writer maintains a lifetime
+      // earnings counter — N320 class). Absent renders as unknown, not 0.
       level: NEW_USER_DEFAULTS.level,
       experience: NEW_USER_DEFAULTS.experience,
       experienceToNextLevel: NEW_USER_DEFAULTS.experienceToNextLevel,
@@ -659,8 +675,9 @@ class ProfessionalUserService {
       accountStatus: NEW_USER_DEFAULTS.accountStatus,
       isVerified: NEW_USER_DEFAULTS.isVerified,
       isPrivate: false,
-      isOnline: true,
-      lastActive: serverTimestamp(),
+      // Live presence (isOnline/lastActive) lives in `user_presence/{uid}` so the
+      // rules can gate it by the `presence` privacy scope; the world-readable
+      // `users/{uid}` doc must not carry it (N321). Seeded below.
 
       metadata: {
         hasCustomAvatar: !!profileData.photoURL,
@@ -753,6 +770,14 @@ class ProfessionalUserService {
         username,
         createdAt: serverTimestamp()
       }, { merge: true });
+
+      // Presence is scope-gated (user_presence/{uid}), not on the world-readable
+      // users/{uid} doc. Written here so a brand-new account is online at signup.
+      transaction.set(doc(this.firestore, 'user_presence', userId), {
+        isOnline: true,
+        lastActive: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
     });
 
     // Non‑critical side document (outside transaction). The `notifications` /
@@ -858,8 +883,10 @@ class ProfessionalUserService {
     const userRef = doc(this.firestore, 'users', userId);
     const updatePayload = {
       ...sanitizedUpdates,
-      updatedAt: serverTimestamp(),
-      lastActive: serverTimestamp()
+      updatedAt: serverTimestamp()
+      // `lastActive` is intentionally NOT written here — presence lives in
+      // `user_presence/{uid}` (see updateLastActive) so the `presence` scope can
+      // be enforced by the rules (N321).
     };
     // A null `locationCoordinates` is an explicit clear (privacy switched to
     // hidden/country_only) — delete the field rather than storing null.
@@ -2026,8 +2053,14 @@ class ProfessionalUserService {
   async updateLastActive(userId) {
     try {
       await this._ensureInitialized();
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      await updateDoc(doc(this.firestore, 'users', userId), { isOnline: true, lastActive: serverTimestamp() });
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      // Presence is its own scope-gated document (user_presence/{uid}); the
+      // world-readable users/{uid} doc must not carry isOnline/lastActive (N321).
+      await setDoc(
+        doc(this.firestore, 'user_presence', userId),
+        { isOnline: true, lastActive: serverTimestamp(), updatedAt: serverTimestamp() },
+        { merge: true }
+      );
       try {
         const { callFunction, FUNCTIONS } = await import('./callableService.js');
         await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });

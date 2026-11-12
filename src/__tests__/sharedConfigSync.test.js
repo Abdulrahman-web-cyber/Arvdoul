@@ -117,7 +117,12 @@ describe('shared config single source of truth', () => {
     expect(block).toContain(`get('level', null) == ${NEW_USER_DEFAULTS.level}`);
     expect(block).toContain(`get('experience', null) == ${NEW_USER_DEFAULTS.experience}`);
     expect(block).toContain(`get('experienceToNextLevel', null) == ${NEW_USER_DEFAULTS.experienceToNextLevel}`);
-    expect(block).toContain(`get('totalEarned', null) == ${NEW_USER_DEFAULTS.totalEarned}`);
+    // `totalEarned` is intentionally absent from both NEW_USER_DEFAULTS and the
+    // create pin: nothing writes a lifetime-earnings counter, so seeding 0 would
+    // be a fabricated "measured" figure (N320). It stays in the server-only
+    // denylist, so a client still cannot set it at signup.
+    expect(NEW_USER_DEFAULTS.totalEarned).toBeUndefined();
+    expect(block).not.toContain("get('totalEarned', null)");
     expect(block).toContain(`get('reputation', null) == ${NEW_USER_DEFAULTS.reputation}`);
     expect(block).toContain(`get('isVerified', null) == ${NEW_USER_DEFAULTS.isVerified}`);
     expect(block).toContain(`get('isCreator', null) == ${NEW_USER_DEFAULTS.isCreator}`);

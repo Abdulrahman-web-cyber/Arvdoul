@@ -8,6 +8,7 @@ import { getMessagingService } from '../services/messagesService';
 import userService from '../services/userService';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { cn } from '../lib/utils';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, UserMinus, Shield, Edit2, Trash2, Link as LinkIcon, Loader2, CheckCircle2, Search, X } from "lucide-react";
 
@@ -311,7 +312,8 @@ export default function GroupInfoScreen() {
         )}>
           {/* Group Avatar */}
           <div className="relative inline-block mb-4">
-            <div className="w-24 h-24 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+            <div className="w-24 h-24 rounded-full p-[2px] shadow-[0_0_20px_rgba(168,85,247,0.35)]"
+              style={{ background: BRAND_GRADIENT }}>
               {conversation?.photoURL ? (
                 <img
                   src={conversation.photoURL}

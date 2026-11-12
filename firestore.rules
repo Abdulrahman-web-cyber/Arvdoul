@@ -52,7 +52,10 @@ service cloud.firestore {
         'achievements', 'creatorStatus', 'creatorTier', 'isCreator',
         'monetizationEligible', 'coins', 'coinBalance', 'earnings',
         'totalEarned', 'isVerified', 'accountStatus', 'roles', 'role',
-        'policyStanding'
+        'policyStanding',
+        // Live presence moved to the scope-gated user_presence/{uid} (N321); a
+        // client write of these on users/{uid} would re-open the leak.
+        'isOnline', 'lastActive'
       ]);
     }
 
@@ -365,7 +368,10 @@ service cloud.firestore {
         request.resource.data.get('level', null) == 1 &&
         request.resource.data.get('experience', null) == 0 &&
         request.resource.data.get('experienceToNextLevel', null) == 100 &&
-        request.resource.data.get('totalEarned', null) == 0 &&
+        // `totalEarned` is deliberately not pinned: no server path writes it, so
+        // a seeded 0 would be a fabricated "measured" earnings figure (N320).
+        // The field stays in the server-authoritative denylist above, so a
+        // client still cannot set it to a non-zero value at signup.
         request.resource.data.get('reputation', null) == 0 &&
         request.resource.data.get('isVerified', null) == false &&
         request.resource.data.get('isCreator', null) == false &&
@@ -375,8 +381,10 @@ service cloud.firestore {
           'titles', 'activeTitle', 'achievements', 'monetizationEligible',
           'levelBand', 'activeDays', 'activeDaysCount', 'activeStreak',
           'longestStreak', 'lastActiveDate', 'lastActiveDay', 'coinBalance',
-          'earnings', 'reputationScore', 'reputationTier', 'influence',
-          'influenceScore', 'contribution', 'contributionScore'
+          'earnings', 'totalEarned', 'reputationScore', 'reputationTier', 'influence',
+          'influenceScore', 'contribution', 'contributionScore',
+          // Live presence lives in user_presence/{uid} (N321).
+          'isOnline', 'lastActive'
         ]);
       // Admins (admins/{uid} doc) may moderate via the applyUserAdminAction
       // callable; a direct admin write from the client is refused so every
@@ -404,6 +412,29 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
           ['email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
         );
+      allow delete: if false;
+    }
+
+    // ==================== USER PRESENCE ====================
+    // Live online status + last-active timestamp. These used to be fields on the
+    // world-readable `users/{uid}` doc, so any signed-in client could read
+    // anyone's presence (and their activity pattern) with a raw getDoc even when
+    // the `presence` scope was set to ONLY_ME/FOLLOWERS — the scope was enforced
+    // only by the client projection (`resolveCapabilities`/`projectProfileForViewer`),
+    // never by the rules (the N315 class). Moving them to their own collection
+    // lets the rules mirror the scope exactly: owner always, otherwise the
+    // `presence` scope (default FOLLOWERS) must permit the viewer's relation and
+    // a private account must grant follower/connection. Admins may read for the
+    // active-user aggregate.
+    match /user_presence/{userId} {
+      allow read: if isAdmin() || (isSignedIn() && profileSectionReadable(userId, 'presence', 'FOLLOWERS'));
+      // The heartbeat is written by the subject. Only presence fields may change;
+      // the account-lifecycle/status fields stay server-owned (Admin SDK writes
+      // bypass these rules).
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(['isOnline', 'lastActive', 'updatedAt']);
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline', 'lastActive', 'updatedAt']);
       allow delete: if false;
     }
 

@@ -42,6 +42,15 @@ const CANONICAL_LITERAL = /linear-gradient\(\s*135deg\s*,\s*#8B1EF3\s+0%\s*,\s*#
 // `#8B1EF3 → #4431F7 → #055BFB`; a `from-purple-600 via-pink-600` triple is a
 // second brand gradient and must not be introduced.
 const ROGUE_GRADIENT = /from-purple-600\s+via-pink-600\s+to-cyan-500/;
+// The general "brand mimic" family: a three-stop purple/violet/fuchsia →
+// pink/fuchsia/rose → cyan/blue/indigo ramp. It is a second brand gradient by
+// construction — a change to the canonical `#8B1EF3 → #4431F7 → #055BFB` would
+// silently miss every site. The remaining brand *fills* (`from-purple-600
+// to-indigo-600`, solid `bg-purple-600`, dark surfaces, story ring pairs) are
+// the deliberate Arvdoul palette and are allowed; only the 3-stop mimic is
+// banned. `N319`/`N323` migrated every occurrence onto `BRAND_GRADIENT`.
+const ROGUE_BRAND_MIMIC =
+  /from-(?:purple|violet|fuchsia)-\d+\s+via-(?:pink|fuchsia|rose)-\d+\s+to-(?:cyan|blue|indigo)-\d+/;
 // The SAME rogue gradient in raw-hex form: Tailwind purple-600 → fuchsia-600 →
 // cyan-500, plus the pink-500 / rose variants the post cards used as a
 // "neon purple" stand-in for the brand gradient. `#9333ea`/`#c026d3` were
@@ -76,6 +85,14 @@ describe('brand gradient — design system is the single source of truth (N104)'
     const offenders = [];
     for (const file of files) {
       if (ROGUE_GRADIENT.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('no 3-stop purple→pink→cyan brand mimic remains (N323)', () => {
+    const offenders = [];
+    for (const file of files) {
+      if (ROGUE_BRAND_MIMIC.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
     }
     expect(offenders).toEqual([]);
   });

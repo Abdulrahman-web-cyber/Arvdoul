@@ -186,6 +186,13 @@ exports.recordActiveDay = functions
           lastActiveDay: today,
           activeStreak: newStreak,
           activeDaysCount: newDaysCount,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Live presence is scope-gated in its own document (N321); the
+        // world-readable users/{uid} doc must not carry isOnline/lastActive.
+        tx.set(admin.firestore().doc(`user_presence/${uid}`), {
+          isOnline: true,
           lastActive: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });

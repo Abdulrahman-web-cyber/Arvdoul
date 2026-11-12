@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Search, Camera, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import ArvdoulLogo from '../Shared/ArvdoulLogo';
 import PropTypes from 'prop-types';
 
@@ -48,7 +49,8 @@ const VideoTopBar = memo(({
           {activeTab === 'following' && (
             <motion.div
               layoutId="videoTabIndicator"
-              className="absolute -bottom-1 left-1 right-1 h-1 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 shadow-md shadow-purple-500/60"
+              className="absolute -bottom-1 left-1 right-1 h-1 rounded-full shadow-md shadow-purple-500/60"
+                style={{ background: BRAND_GRADIENT }}
               transition={{ type: 'spring', stiffness: 450, damping: 32 }}
             />
           )}
@@ -87,7 +89,8 @@ const VideoTopBar = memo(({
           {activeTab === 'for_you' && (
             <motion.div
               layoutId="videoTabIndicator"
-              className="absolute -bottom-1 left-1 right-1 h-1 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 shadow-md shadow-purple-500/60"
+              className="absolute -bottom-1 left-1 right-1 h-1 rounded-full shadow-md shadow-purple-500/60"
+                style={{ background: BRAND_GRADIENT }}
               transition={{ type: 'spring', stiffness: 450, damping: 32 }}
             />
           )}
@@ -111,7 +114,8 @@ const VideoTopBar = memo(({
           whileTap={{ scale: 0.9 }}
           whileHover={{ scale: 1.05 }}
           onClick={onCreateVideo || (() => navigate('/create-post'))}
-          className="relative w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 border border-white/30 flex items-center justify-center text-white shadow-xl shadow-purple-500/30 transition-transform"
+          className="relative w-10 h-10 rounded-full border border-white/30 flex items-center justify-center text-white shadow-xl shadow-purple-500/30 transition-transform"
+            style={{ background: BRAND_GRADIENT }}
           title="Create Video"
           aria-label="Create Video"
         >

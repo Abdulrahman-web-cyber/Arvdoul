@@ -407,7 +407,7 @@ class SocialGraphService {
    * Batched profile hydration. One `documentId() in` read per 30 ids — never one
    * profile fetch per follower.
    */
-  async hydrateProfiles(userIds, { viewerId = null, edges = null } = {}) {
+  async hydrateProfiles(userIds, { viewerId = null, edges = null, withPresence = false } = {}) {
     const ids = [...new Set((userIds || []).filter(Boolean))].slice(0, MAX_HYDRATE_IDS);
     if (ids.length === 0) return [];
     await this._ensureInitialized();
@@ -425,11 +425,47 @@ class SocialGraphService {
       snap.forEach((d) => byId.set(d.id, { id: d.id, uid: d.id, ...d.data() }));
     }
 
+    // Presence lives in its own scope-gated doc (`user_presence/{uid}`), which
+    // the rules authorize per viewer. A batch `documentId() in` read cannot
+    // prove a per-document `get()` condition, so presence is hydrated with
+    // bounded per-doc reads and only for callers that render it (opt-in).
+    if (withPresence) {
+      const presence = await this._fetchPresenceMap(ids);
+      for (const [id, p] of presence) {
+        const raw = byId.get(id);
+        if (raw) { raw.isOnline = p.isOnline; raw.lastActive = p.lastActive; }
+      }
+    }
+
     const edgeMap = edges || (viewerId ? await this.getEdgeSet(viewerId, ids) : new Map());
     return ids
       .map((id) => byId.get(id))
       .filter(Boolean)
       .map((raw) => this.projectProfile(raw, viewerId, edgeMap.get(raw.id)));
+  }
+
+  /**
+   * Per-document presence for a bounded id list. A denied (scope) or failed
+   * read is omitted, so the projection renders the target offline — never a
+   * fabricated "online". Honest online = flag set AND activity within 5 min.
+   */
+  async _fetchPresenceMap(ids) {
+    const map = new Map();
+    if (!ids.length) return map;
+    const { doc, getDoc } = await import('firebase/firestore');
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const snap = await getDoc(doc(this.firestore, 'user_presence', id));
+        if (!snap.exists()) return;
+        const d = snap.data();
+        const la = d.lastActive?.toDate ? d.lastActive.toDate() : (d.lastActive ? new Date(d.lastActive) : null);
+        const recent = Boolean(la && Date.now() - la.getTime() < 5 * 60 * 1000);
+        map.set(id, { isOnline: Boolean(d.isOnline && recent), lastActive: la });
+      } catch (e) {
+        logger.debug('[SocialGraph] presence read skipped', { id, error: e?.message });
+      }
+    }));
+    return map;
   }
 
   /** List a relationship kind with hydrated, viewer-projected profiles. */
@@ -443,7 +479,8 @@ class SocialGraphService {
     const isSafetyList = SAFETY_EDGE_KINDS.has(kind);
     const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;
     const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;
-    const connections = await this.hydrateProfiles(visibleIds, { viewerId });
+    // The connections screen renders an online dot, so hydrate presence too.
+    const connections = await this.hydrateProfiles(visibleIds, { viewerId, withPresence: true });
     return { success: true, connections, hasMore, nextCursor, count: connections.length };
   }
 

@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { Search, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
@@ -224,7 +225,8 @@ export default function MessagingScreen() {
               className="relative cursor-pointer"
               onClick={() => navigate('/profile')}
             >
-              <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]">
+              <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_16px_rgba(168,85,247,0.35)]"
+                style={{ background: BRAND_GRADIENT }}>
                 <img
                   src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'User', user?.uid)}
                   alt="My Profile"
@@ -369,7 +371,8 @@ export default function MessagingScreen() {
                 >
                   {/* Avatar with Glow Ring and Pin Badge */}
                   <div className="relative mb-2">
-                    <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_12px_rgba(168,85,247,0.3)]">
+                    <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                        style={{ background: BRAND_GRADIENT }}>
                       <img
                         src={item.avatar}
                         alt={item.name}

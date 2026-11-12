@@ -222,8 +222,10 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     // functions/levelSystem recordActiveDay); absent stays null (unknown).
     activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null,
     activeStreak: userProfile?.activeStreak ?? null,
+    // The signed-in session is by definition online. Live presence of *other*
+    // users is read from the scope-gated user_presence/{uid} (N321); do not
+    // fabricate a `lastActive` timestamp on the session object.
     isOnline: true,
-    lastActive: new Date().toISOString(),
     createdAt: user.metadata?.creationTime || new Date().toISOString(),
     isNewUser: user.isNewUser || false,
     requiresProfileCompletion: !isProfileComplete

@@ -970,7 +970,10 @@ const NEW_USER_DEFAULTS = Object.freeze({
   level: 1,
   experience: 0,
   experienceToNextLevel: 100,
-  totalEarned: 0,
+  // `totalEarned` is intentionally NOT seeded: no server path increments a
+  // lifetime-earnings counter yet, so a seeded 0 would render as a *measured*
+  // "0 earned" on the wallet/creator surfaces (the N320 class). The readers
+  // treat an absent value as unknown ("—"), not as zero.
   reputation: 0,
   isVerified: false,
   isCreator: false,

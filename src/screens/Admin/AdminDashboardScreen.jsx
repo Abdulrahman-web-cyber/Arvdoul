@@ -54,7 +54,9 @@ const AdminDashboardScreen = () => {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const [users, activeUsers, posts, reports, pendingReports, communities, events] = await Promise.all([
           count('users'),
-          count('users', [await where('lastActive', '>=', thirtyDaysAgo)]),
+          // Active-user count reads the scope-gated presence collection (N321);
+          // admins are authorized by the user_presence rule.
+          count('user_presence', [await where('lastActive', '>=', thirtyDaysAgo)]),
           count('posts'),
           count('comment_reports'),
           count('comment_reports', [await where('status', '==', 'pending')]),
