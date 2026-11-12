@@ -2814,6 +2814,16 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
     expect(s).toContain("views === null ? '—'");
     expect(s).toContain("coins === null ? '—'");
   });
+
+  test('ProfileCreatorDashboard sparkline series never coerce an unrecorded day to 0', () => {
+    const s = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    // `Number(d.views) || 0` drew a flat-then-spike line through fabricated
+    // zeros for days the server never recorded; a series with any unknown point
+    // must fall back to the explicit "no trend data" placeholder.
+    expect(s).not.toMatch(/Number\(d\.(views|reach|engagement|coins)\)\s*\|\|\s*0/);
+    expect(s).toContain('unknownNumber');
+    expect(s).toContain('values.every((v) => v !== null) ? values : null');
+  });
 });
 
 describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () => {
