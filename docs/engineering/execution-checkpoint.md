@@ -4,7 +4,7 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 ## Current state
 
-- Latest verified: **160 suites, 1816 passed, 5 skipped**; `npm run build`
+- Latest verified: **160 suites, 1819 passed, 5 skipped**; `npm run build`
   green; `npm run lint` exit 0 (0 errors, 876 warnings).
 - N330 closed this session (money-in integrity): the three Stripe-backed
   economy callables ran their Stripe network calls **inside** the retryable
@@ -58,6 +58,8 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 | # | Item | Evidence |
 | --- | --- | --- |
+| N336 | `ring-arvdoul-purple-500` was a dead class (no `-500` shade on the flat `arvdoul-purple`) — 97 focus rings invisible | corrected to `ring-arvdoul-purple`; added a config-aware custom-colour utility assertion to `tailwindUtilities.test.js` |
+| N335 | The screen canvas radial-gradient was copy-pasted in 4 screens with raw brand literals | added `brandRgba`/`brandCanvasBackground` design-system helpers; migrated all 4 |
 | N334 | Keyboard focus rings used the raw Tailwind family (`ring-purple-500`/`ring-indigo-500`/`ring-blue-500`/`ring-violet-*`) — a different colour than the brand violet | standardised 97 rings across 40 files onto `ring-arvdoul-purple-500`; drift-guard assertion; added `designSystemPrimitives.test.jsx` |
 | N333 | A second brand gradient shipped in 24 sites (incl. the design-system `Button` primary) because the guard only banned the pink/rose-middle mimic | migrated onto `bg-arvdoul-gradient`; added `ROGUE_BRAND_MIMIC_NEUTRAL` to the drift guard |
 | N332 | A client could write its own `users/{uid}.lockedCoins`, defeating the withdrawal hold (`getAvailableBalance = coins - lockedCoins`) — filed a second withdrawal against held coins | added `lockedCoins` to `SERVER_AUTHORITATIVE_FIELDS` + both rules denylists; `serverAuthoritativeFieldsRules.test.js` (static + emulator) in `guards` |
