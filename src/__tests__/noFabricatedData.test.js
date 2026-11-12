@@ -629,6 +629,15 @@ describe('appStore - identity mirror only, no duplicate economy', () => {
     expect(src).toContain('clearUserData');
   });
 
+  test('userService has no fabricated coin-balance getter', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/userService.js'), 'utf8');
+    // `getCoinBalance` returned `profile?.coins || 0`, presenting an absent
+    // balance as a measured 0, and had no caller anywhere (dead). The real
+    // balance reads go through `walletService` (which returns null when
+    // unknown, rendered as "—").
+    expect(src).not.toContain('getCoinBalance');
+  });
+
   test('QuickAccessPanel never fabricates a 1250-coin balance', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
     // The balance header showed a fake 1250 when the real balance was unknown;

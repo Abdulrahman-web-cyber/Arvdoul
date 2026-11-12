@@ -1026,11 +1026,6 @@ class ProfessionalUserService {
     return profile.isProfileComplete === true || !!(profile.displayName?.trim() && profile.username?.trim());
   }
 
-  async getCoinBalance(userId) {
-    const profile = await this.getUserProfile(userId);
-    return profile?.coins || 0;
-  }
-
   async addCoins(userId, amount, reason = 'reward') {
     await this._ensureInitialized();
     const result = await monetizationAddCoins(userId, amount, reason, { source: 'user_service' });
@@ -2164,7 +2159,6 @@ export const checkUsernameAvailability = (name, exclude) => getUserService().che
 export const generateUniqueUsername = (base, exclude) => getUserService().generateUniqueUsername(base, exclude);
 
 // Economy
-export const getCoinBalance = (uid) => getUserService().getCoinBalance(uid);
 export const addCoins = (uid, amount, reason) => getUserService().addCoins(uid, amount, reason);
 
 // Social
@@ -2240,7 +2234,6 @@ const userServiceExport = Object.assign(getUserService, {
   resetToDefaultAvatar,
   checkUsernameAvailability,
   generateUniqueUsername,
-  getCoinBalance,
   addCoins,
   followUser,
   unfollowUser,
