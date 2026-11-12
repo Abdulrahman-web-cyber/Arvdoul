@@ -2839,6 +2839,20 @@ describe('Ranking badge aggregates stay unknown when a post counter is missing (
   });
 });
 
+describe('Community stats never fabricate 0 for an unwritten counter (N298)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('getCommunityStats reads every counter via unknownNumber and nulls an incomplete engagement total', () => {
+    const s = read('src/services/communityService.js');
+    // `community.stats?.memberCount || 0` and the weighted `(stats.likes || 0)`
+    // sum reported a measured 0 for counters the community doc never wrote.
+    expect(s).not.toContain('memberCount: community.stats?.memberCount || 0');
+    expect(s).not.toContain('totalEngagement += (stats.likes || 0) + (stats.comments || 0) * 2 + (stats.shares || 0) * 3;');
+    expect(s).toContain('memberCount: unknownNumber(community.stats?.memberCount),');
+    expect(s).toContain('if (!engagementComplete) totalEngagement = null;');
+  });
+});
+
 describe('Creator engagement aggregate stays unknown when a post counter is missing (N297)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 

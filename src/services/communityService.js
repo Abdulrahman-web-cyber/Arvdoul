@@ -4,6 +4,7 @@ import { getFirestoreInstance } from '../firebase/firebase.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore";
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { logger } from '../utils/Logger.js';
+import { unknownNumber } from '../lib/unknownNumber.js';
 
 const COMMUNITIES_PER_PAGE = 20;
 // Hard ceiling for any single community read; a per-user membership list is
@@ -384,17 +385,31 @@ class CommunityService {
     );
     const postsSnapshot = await getDocs(postsQuery);
 
+    // Weighted engagement over the recent posts. A post whose `stats` block was
+    // never written contributes an UNKNOWN count, so the whole weighted total
+    // becomes unknown (null) rather than a measured-looking 0 that understated
+    // the community's real engagement.
+    let engagementComplete = true;
+    const addWeighted = (raw, weight) => {
+      const n = unknownNumber(raw);
+      if (n === null) { engagementComplete = false; return 0; }
+      return n * weight;
+    };
     let totalEngagement = 0;
     postsSnapshot.docs.forEach(doc => {
       const stats = doc.data().stats || {};
-      totalEngagement += (stats.likes || 0) + (stats.comments || 0) * 2 + (stats.shares || 0) * 3;
+      totalEngagement += addWeighted(stats.likes, 1)
+        + addWeighted(stats.comments, 2)
+        + addWeighted(stats.shares, 3);
     });
+    if (!engagementComplete) totalEngagement = null;
 
     return {
-      memberCount: community.stats?.memberCount || 0,
-      postCount: community.stats?.postCount || 0,
-      eventCount: community.stats?.eventCount || 0,
-      activityScore: community.stats?.activityScore || 0,
+      // Counters the community doc never wrote are unknown, not a fabricated 0.
+      memberCount: unknownNumber(community.stats?.memberCount),
+      postCount: unknownNumber(community.stats?.postCount),
+      eventCount: unknownNumber(community.stats?.eventCount),
+      activityScore: unknownNumber(community.stats?.activityScore),
       recentPosts: postsSnapshot.size,
       weeklyEngagement: totalEngagement,
       activeMembers: Object.keys(community.members || {}).length
