@@ -195,6 +195,15 @@ describe('collaborationService - no sample projects', () => {
     expect(src).toContain('link.description');
     expect(src).toContain('link.image');
   });
+
+  test('eventService.getEventStats never fabricates a feedbackScore 0 or a 100% attendance', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/services/eventService.js'), 'utf8');
+    expect(src).not.toContain('event.stats?.feedbackScore || 0');
+    expect(src).toContain('unknownNumber(event.stats?.feedbackScore)');
+    // A capacity-less event has no percentage; it must not claim 100%.
+    expect(src).not.toMatch(/attendeePercentage:[\s\S]{0,120}: 100/);
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {

@@ -507,10 +507,13 @@ class EventService {
       checkedIn,
       capacity: event.capacity,
       isFull: event.capacity > 0 && registered >= event.capacity,
-      feedbackScore: event.stats?.feedbackScore || 0,
-      attendeePercentage: event.capacity > 0 
-        ? Math.round((registered / event.capacity) * 100) 
-        : 100
+      // An absent counter stays unknown (null), never a fabricated 0 — the
+      // event document only carries `stats.feedbackScore` once feedback exists.
+      feedbackScore: unknownNumber(event.stats?.feedbackScore),
+      // No capacity means no percentage to report — never a fabricated 100%.
+      attendeePercentage: event.capacity > 0
+        ? Math.round((registered / event.capacity) * 100)
+        : null
     };
   }
 }
