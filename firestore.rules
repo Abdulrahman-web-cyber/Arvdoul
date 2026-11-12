@@ -79,6 +79,29 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(userId)) &&
         get(/databases/$(database)/documents/users/$(userId)).data.get('isPrivate', false) == true;
     }
+    // Whether the caller may read a profile section (badges/titles) on
+    // `userId`'s profile. `achievements`/`titles` are settable scopes
+    // (EditProfileScreen / SettingsScreen) and are enforced on the client by
+    // `resolveCapabilities` + `projectProfileForViewer` — but
+    // `achievements/{uid}/items` and `titles/{uid}/items` were
+    // `allow read: if isSignedIn()`, so any signed-in client could read a user's
+    // earned badges/titles (and their grant times) even with the scope set to
+    // ONLY_ME/FOLLOWERS. Mirror the client decision: the owner always, otherwise
+    // the section scope must permit the viewer's relation AND the account's
+    // content must be visible (a private account grants access to
+    // followers/connections only).
+    function profileSectionReadable(userId, section, defaultScope) {
+      let isFollower = followEdgeExists(uid(), userId);
+      let isConnection = isFollower && followEdgeExists(userId, uid());
+      // `exists(...) &&` short-circuits so a missing user doc denies cleanly
+      // instead of raising on `get(...).data`.
+      return isOwner(userId) ||
+        (exists(/databases/$(database)/documents/users/$(userId)) &&
+          (!get(/databases/$(database)/documents/users/$(userId)).data.get('isPrivate', false) || isFollower || isConnection) &&
+          (get(/databases/$(database)/documents/users/$(userId)).data.get('privacy', {}).get(section, defaultScope) == 'EVERYONE' ||
+           (get(/databases/$(database)/documents/users/$(userId)).data.get('privacy', {}).get(section, defaultScope) == 'FOLLOWERS' && (isFollower || isConnection)) ||
+           (get(/databases/$(database)/documents/users/$(userId)).data.get('privacy', {}).get(section, defaultScope) == 'CONNECTIONS' && isConnection)));
+    }
     // Collection-group authorization. `messagesService.getMessages` merges
     // message reactions with ONE `collectionGroup('reactions')` query, and
     // Firestore authorizes a collection-group query ONLY through a
@@ -396,20 +419,24 @@ service cloud.firestore {
 
     // ==================== ACHIEVEMENTS ====================
     match /achievements/{userId} {
-      allow read: if isSignedIn();
+      // The `achievements` privacy scope gates these (settable in Edit Profile /
+      // Settings). A bare `isSignedIn()` read let any client read a user's
+      // earned badges even with the scope set to ONLY_ME.
+      allow read: if profileSectionReadable(userId, 'achievements', 'EVERYONE');
       allow write: if isAdmin();
       match /items/{achievementId} {
-        allow read: if isSignedIn();
+        allow read: if profileSectionReadable(userId, 'achievements', 'EVERYONE');
         allow write: if isAdmin();
       }
     }
 
     // ==================== TITLES ====================
     match /titles/{userId} {
-      allow read: if isSignedIn();
+      // The `titles` privacy scope gates these; see the achievements block.
+      allow read: if profileSectionReadable(userId, 'titles', 'EVERYONE');
       allow write: if isAdmin();
       match /items/{titleId} {
-        allow read: if isSignedIn();
+        allow read: if profileSectionReadable(userId, 'titles', 'EVERYONE');
         allow write: if isAdmin();
       }
     }

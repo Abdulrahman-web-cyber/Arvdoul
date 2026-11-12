@@ -116,6 +116,22 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     const code = rules.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
     expect(code).not.toMatch(/allow read: if true;/);
   });
+
+  test('achievements/titles reads honour the section privacy scope', () => {
+    for (const [marker, section] of [
+      ['match /achievements/{userId}', 'achievements'],
+      ['match /titles/{userId}', 'titles'],
+    ]) {
+      const b = block(rules, marker);
+      // A bare `isSignedIn()` read let any signed-in client read another user's
+      // earned badges/titles even with the scope set to ONLY_ME/FOLLOWERS.
+      expect(b).not.toMatch(/allow read: if isSignedIn\(\);/);
+      expect(b).toMatch(new RegExp(`allow read: if profileSectionReadable\\(userId, '${section}', 'EVERYONE'\\);`));
+    }
+    // The helper must actually resolve the scope, not just the relation.
+    expect(rules).toMatch(/function profileSectionReadable\(userId, section, defaultScope\)/);
+    expect(rules).toMatch(/\.get\('privacy', \{\}\)\.get\(section, defaultScope\)/);
+  });
 });
 
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
@@ -219,6 +235,44 @@ describe('read-scope privacy (emulator)', () => {
 
       await assertSucceeds(getDoc(doc(alice, 'comments/c1/history/h1')));
       await assertFails(getDoc(doc(bob, 'comments/c1/history/h1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('achievements/titles are gated by the section privacy scope', async () => {
+    if (!reachable) return;
+    const { assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+    const env = await makeEnv('arvdoul-read-scope-achievements');
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        // alice hides her badges/titles; carol leaves them public.
+        await setDoc(doc(db, 'users/alice'), {
+          isPrivate: false,
+          privacy: { achievements: 'ONLY_ME', titles: 'ONLY_ME' },
+        });
+        await setDoc(doc(db, 'users/carol'), {
+          isPrivate: false,
+          privacy: { achievements: 'EVERYONE', titles: 'EVERYONE' },
+        });
+        await setDoc(doc(db, 'achievements/alice/items/a1'), { id: 'a1', title: 'Pioneer' });
+        await setDoc(doc(db, 'titles/alice/items/t1'), { id: 't1', name: 'Duke' });
+        await setDoc(doc(db, 'achievements/carol/items/a1'), { id: 'a1', title: 'Pioneer' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // The owner always reads their own badges/titles.
+      await assertSucceeds(getDoc(doc(alice, 'achievements/alice/items/a1')));
+      await assertSucceeds(getDoc(doc(alice, 'titles/alice/items/t1')));
+      // A stranger may not read a scope set to ONLY_ME.
+      await assertFails(getDoc(doc(bob, 'achievements/alice/items/a1')));
+      await assertFails(getDoc(doc(bob, 'titles/alice/items/t1')));
+      // A scope left at EVERYONE stays readable.
+      await assertSucceeds(getDoc(doc(bob, 'achievements/carol/items/a1')));
     } finally {
       await env.cleanup();
     }
