@@ -3424,6 +3424,18 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(screen).not.toContain('total: data.coinsEarned || 0');
     expect(screen).toContain("total: typeof data.coinsEarned === 'number' ? data.coinsEarned : null");
   });
+
+  test('the profile_analytics seed carries only the counters trackProfileView maintains', () => {
+    // Only `views`/`reach` are incremented in the daily series; a seeded
+    // `engagement: 0` / `coins: 0` rendered as a measured flat zero sparkline
+    // for a creator with no engagement reading. The seed must not fabricate
+    // per-day engagement/coins either.
+    const fn = fs.readFileSync(path.join(root, 'functions/analytics.js'), 'utf8');
+    expect(fn).not.toContain('views: 1, reach: 1, engagement: 0, coins: 0');
+    expect(fn).not.toContain('engagement: todayStats.engagement || 0');
+    expect(fn).not.toContain('coins: todayStats.coins || 0');
+    expect(fn).toContain('dailyStats: { [today]: { views: 1, reach: 1 } }');
+  });
 });
 
 describe('CreatePost publish fails closed without a real identity', () => {

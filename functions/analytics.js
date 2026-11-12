@@ -87,7 +87,14 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
         // measured "0 coins earned" / "0 engagement". The client derives both
         // live (wallet balance + recent-post engagement). See
         // analyticsService.getUserAnalytics.
-        dailyStats: { [today]: { views: 1, reach: 1, engagement: 0, coins: 0 } },
+        //
+        // Per-day `engagement`/`coins` are NOT seeded either, for the same
+        // reason: only `views`/`reach` are ever incremented below, so a seeded
+        // `engagement: 0` / `coins: 0` rendered as a measured flat zero
+        // sparkline. The daily series carries only the counters this path
+        // actually maintains; a day with no engagement reading stays absent
+        // (the client renders an explicit "no trend data" placeholder).
+        dailyStats: { [today]: { views: 1, reach: 1 } },
         topPosts: [],
         // No writer maintains a growth rate or an active-day count on this
         // doc; seeding `growthRate: 0` / `activeDays: 1` fabricated a measured
@@ -98,13 +105,11 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
     } else {
       const existing = analyticsSnap.data();
       const dailyStats = existing.dailyStats || {};
-      const todayStats = dailyStats[today] || { views: 0, reach: 0, engagement: 0, coins: 0 };
+      const todayStats = dailyStats[today] || { views: 0, reach: 0 };
       transaction.update(analyticsRef, {
         [`dailyStats.${today}`]: {
           views: (todayStats.views || 0) + 1,
           reach: (todayStats.reach || 0) + 1,
-          engagement: todayStats.engagement || 0,
-          coins: todayStats.coins || 0,
         },
         lastUpdated: FieldValue.serverTimestamp(),
       });
