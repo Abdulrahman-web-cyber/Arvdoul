@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import { unknownNumber } from '../lib/unknownNumber.js';
 import { MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL, AD_REWARD_COINS as AD_REWARD_COINS_CANONICAL } from '../shared/levelConfig.cjs';
 
 import { Coins, Crown, Zap, Rocket, Star, CheckCircle, Shield, Gift, TrendingUp, Play, History, Banknote, Loader2, Sparkles } from "lucide-react";
@@ -554,7 +555,12 @@ export default function CoinsScreen() {
             <p className={cn("text-sm py-4", colors.secondary)}>No transactions yet — buy coins, watch ads, or send gifts to get started.</p>
           ) : (
             <div className="space-y-2">
-              {transactions.map((tx) => (
+              {transactions.map((tx) => {
+                // An unreadable amount is shown as an explicit unavailable state,
+                // never a fabricated `+undefined` / `-undefined`.
+                const amount = unknownNumber(tx.amount);
+                const isCredit = tx.type === 'credit';
+                return (
                 <div key={tx.id} className={cn("flex items-center justify-between p-3 rounded-xl", colors.card, "border", colors.border)}>
                   <div className="flex items-center gap-3">
                     <div className={cn(
@@ -570,11 +576,12 @@ export default function CoinsScreen() {
                       </p>
                     </div>
                   </div>
-                  <div className={cn("font-bold", tx.type === 'credit' ? "text-green-500" : "text-red-500")}>
-                    {tx.type === 'credit' ? '+' : '-'}{tx.amount?.toLocaleString?.() ?? tx.amount}
+                  <div className={cn("font-bold", isCredit ? "text-green-500" : "text-red-500")}>
+                    {amount == null ? '—' : `${isCredit ? '+' : '-'}${amount.toLocaleString()}`}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
           {!transactionsLoading && transactionsCursor && (

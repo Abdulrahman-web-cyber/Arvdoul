@@ -3471,6 +3471,26 @@ describe('N184 — no fabricated counts sweep (round 2)', () => {
   });
 });
 
+describe('N184 — no fabricated counts sweep (round 4)', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('CoinsScreen transaction rows never render a fabricated amount', () => {
+    const src = read('src/screens/CoinsScreen.jsx');
+    expect(src).not.toContain('tx.amount?.toLocaleString?.() ?? tx.amount');
+    expect(src).toContain('unknownNumber(tx.amount)');
+    expect(src).toContain("amount == null ? '—'");
+  });
+
+  test('QuestionCard bounty and reputation coerce through unknownNumber', () => {
+    const src = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(src).not.toContain('question?.bounty ?? 0');
+    expect(src).not.toContain('getReputationLevel(userReputation)');
+    expect(src).not.toContain("typeof userReputation === 'number' ? userReputation : '—'");
+    expect(src).toContain('unknownNumber(question?.bounty)');
+    expect(src).toContain('unknownNumber(userReputation) ?? 0');
+  });
+});
+
 describe('N184 — no fabricated counts sweep (round 3)', () => {
   const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
