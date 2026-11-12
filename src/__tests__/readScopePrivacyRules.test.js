@@ -15,8 +15,7 @@
  *  - `stories/{id}/reactions` and `stories/{id}/comments` (reactor/commenter
  *    identity on a Vibe whose parent doc may be private/followers-only)
  *  - `highlights/{id}`
- *  - `events/{id}` (title, schedule, ticket tiers, organizer coordinates;
- *    the UI offers a private audience)
+ *  - `events/{id}` (title, schedule, ticket tiers, organizer coordinates)
  *  - the advanced creator suite (`spaces`, `sounds`, `marketplace_items`,
  *    standalone `polls`, `badges`, `user_badges`, `copyright_registry`)
  *
@@ -87,14 +86,17 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(b).toMatch(/allow read: if isSignedIn\(\);/);
   });
 
-  test('events read requires sign-in (privacy enforcement is N266-blocked)', () => {
+  test('events read requires sign-in (no privacy field to enforce — N266)', () => {
     const b = block(rules, 'match /events/{eventId}');
     expect(b).not.toMatch(/allow read: if true;/);
     expect(b).toMatch(/allow read: if isSignedIn\(\);/);
-    // The privacy-gated variant is deliberately deferred: the list queries
-    // cannot prove a `privacy` predicate (rules are not filters). See N266.
+    // The former `privacy` field was a dead control (written, never read, never
+    // enforced) and is gone; the rule documents that. See N266.
     const start = rules.indexOf('match /events/{eventId}');
     expect(rules.slice(Math.max(0, start - 600), start)).toMatch(/N266/);
+    const svc = readFile('src/services/eventService.js');
+    expect(svc).not.toMatch(/privacy:\s*data\.privacy/);
+    expect(svc).not.toMatch(/['"]privacy['"]/);
   });
 
   test('advanced creator suite collections require sign-in', () => {
@@ -156,7 +158,7 @@ describe('read-scope privacy (emulator)', () => {
       await env.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
         await setDoc(doc(db, 'comments/c1'), { userId: 'alice', postId: 'p1', content: 'hi' });
-        await setDoc(doc(db, 'events/e1'), { organizerId: 'alice', privacy: 'public', title: 'x' });
+        await setDoc(doc(db, 'events/e1'), { organizerId: 'alice', title: 'x' });
         await setDoc(doc(db, 'highlights/h1'), { userId: 'alice' });
         await setDoc(doc(db, 'spaces/s1'), { hostId: 'alice' });
       });
@@ -188,7 +190,7 @@ describe('read-scope privacy (emulator)', () => {
       await env.clearFirestore();
       await env.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
-        await setDoc(doc(db, 'events/e1'), { organizerId: 'alice', privacy: 'public' });
+        await setDoc(doc(db, 'events/e1'), { organizerId: 'alice' });
       });
       const anon = env.unauthenticatedContext().firestore();
       const stranger = env.authenticatedContext('stranger').firestore();

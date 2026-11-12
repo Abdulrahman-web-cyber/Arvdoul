@@ -1419,11 +1419,13 @@ service cloud.firestore {
     // and dump the collection. Every client surface (discovery, detail, the
     // viewer's registrations) runs behind auth, so scope the read to signed-in.
     //
-    // NOTE (N266): the `privacy` field (`public`/`private`) is not yet enforced
-    // by the read rule. A privacy- or status-gated rule would require the two
+    // NOTE (N266): there is no privacy capability to enforce — the former
+    // `privacy` field was never read by any surface and is no longer written
+    // (removed as a dead control), so the read stays collection-scoped to
+    // signed-in clients. A status/registration-gated read would require the two
     // list queries (`listEvents`, `getUserRegistrations`) to prove a predicate
-    // they cannot (rules are not filters), so the read stays collection-scoped
-    // to signed-in clients until registrations are served server-side.
+    // they cannot (rules are not filters); that needs registrations served
+    // server-side.
     match /events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && authoredBy('organizerId');

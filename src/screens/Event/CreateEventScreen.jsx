@@ -47,7 +47,6 @@ const CreateEventScreen = () => {
     type: 'digital',
     location: '',
     capacity: 0,
-    privacy: 'public',
     tickets: {
       tiers: [{ name: 'General', price: 0, quantity: 100 }],
       isFree: true
@@ -192,7 +191,6 @@ const CreateEventScreen = () => {
           type: event.type || 'digital',
           location: event.location || '',
           capacity: event.capacity || 0,
-          privacy: event.privacy || 'public',
           tickets: event.tickets || prev.tickets,
         }));
       } catch (err) {
@@ -234,7 +232,6 @@ const CreateEventScreen = () => {
         type: formData.type,
         location: formData.location.trim(),
         capacity: formData.capacity,
-        privacy: formData.privacy,
         tickets: formData.tickets
       };
 

@@ -43,7 +43,6 @@ class EventService {
       locationLng: data.locationLng || null,
       type: data.type || 'digital', // digital, physical, hybrid
       capacity: data.capacity || 0,
-      privacy: data.privacy || 'public',
       tickets: {
         tiers: data.tickets?.tiers || [],
         isFree: data.tickets?.isFree !== false,
@@ -105,7 +104,7 @@ class EventService {
     const allowedFields = [
       'title', 'description', 'coverImage', 'startDate', 'endDate',
       'location', 'locationLat', 'locationLng', 'type', 'capacity',
-      'privacy', 'tickets', 'schedule', 'media', 'status'
+      'tickets', 'schedule', 'media', 'status'
     ];
     
     const updateData = { updatedAt: serverTimestamp() };
