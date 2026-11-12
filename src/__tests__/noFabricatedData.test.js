@@ -3471,6 +3471,19 @@ describe('N184 — no fabricated counts sweep (round 2)', () => {
   });
 });
 
+describe('Analytics — per-day metrics stay unknown, not a fabricated 0', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('getEngagementTrends keeps an unrecorded day null', () => {
+    const src = read('src/services/analyticsService.js');
+    expect(src).not.toContain('engagement: stat.engagement || 0');
+    expect(src).not.toContain('likes: stat.likes || 0');
+    expect(src).toContain("const asKnown = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);");
+    expect(src).toContain('engagement: asKnown(stat.engagement)');
+    expect(src).toContain('reach: asKnown(stat.reach)');
+  });
+});
+
 describe('N184 — no fabricated counts sweep (round 4)', () => {
   const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 

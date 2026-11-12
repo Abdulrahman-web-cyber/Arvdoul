@@ -632,14 +632,18 @@ class UltimateAnalyticsService {
       
       const analytics = await this.getUserAnalytics(userId, `${days}d`);
       // Real per-day engagement from stored daily stats (no fabricated ratios).
+      // A day whose metric was never recorded stays `null` (unknown), never a
+      // measured-looking 0 — matching the convention used above for
+      // `activeDays`.
+      const asKnown = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
       return analytics.dailyStats.map(stat => ({
         date: stat.date,
-        engagement: stat.engagement || 0,
-        likes: stat.likes || 0,
-        comments: stat.comments || 0,
-        shares: stat.shares || 0,
-        views: stat.views || 0,
-        reach: stat.reach || 0,
+        engagement: asKnown(stat.engagement),
+        likes: asKnown(stat.likes),
+        comments: asKnown(stat.comments),
+        shares: asKnown(stat.shares),
+        views: asKnown(stat.views),
+        reach: asKnown(stat.reach),
       }));
     } catch (error) {
       logger.error('Get engagement trends failed', { error: error.message, userId });
