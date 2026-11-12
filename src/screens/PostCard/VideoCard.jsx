@@ -521,21 +521,30 @@ const VideoCard = React.memo(({
       const swipeThresholdX = viewportWidth * 0.1; // 10% of width
       const swipeThresholdY = window.innerHeight * 0.1;
 
+      // Only advertise and act on a swipe when the card was actually given a
+      // handler for it. PostCard renders this card without onShare/onOpenDetails/
+      // onNext/onPrev, so the hints used to promise an action that never ran.
       if (absX > swipeThresholdX && absY < swipeThresholdY) {
-        setGestureHint(dx > 0 ? 'share' : 'details');
-        setTimeout(() => setGestureHint(null), 800);
-        if (dx > 0) { onShare?.(); pushAnalytics('video_swipe_right_share', { postId }); }
-        else { onOpenDetails?.(postId); pushAnalytics('video_swipe_left_details', { postId }); }
-        haptic(10);
-        return;
+        const horizontalHandler = dx > 0 ? onShare : onOpenDetails;
+        if (horizontalHandler) {
+          setGestureHint(dx > 0 ? 'share' : 'details');
+          setTimeout(() => setGestureHint(null), 800);
+          if (dx > 0) { onShare(); pushAnalytics('video_swipe_right_share', { postId }); }
+          else { onOpenDetails(postId); pushAnalytics('video_swipe_left_details', { postId }); }
+          haptic(10);
+          return;
+        }
       }
       if (absY > swipeThresholdY && absX < swipeThresholdX) {
-        setGestureHint(dy < 0 ? 'next' : 'prev');
-        setTimeout(() => setGestureHint(null), 800);
-        if (dy < 0) { onNext?.(); pushAnalytics('video_swipe_up_next', { postId }); }
-        else { onPrev?.(); pushAnalytics('video_swipe_down_prev', { postId }); }
-        haptic(10);
-        return;
+        const verticalHandler = dy < 0 ? onNext : onPrev;
+        if (verticalHandler) {
+          setGestureHint(dy < 0 ? 'next' : 'prev');
+          setTimeout(() => setGestureHint(null), 800);
+          verticalHandler();
+          pushAnalytics(dy < 0 ? 'video_swipe_up_next' : 'video_swipe_down_prev', { postId });
+          haptic(10);
+          return;
+        }
       }
       if (velocity < 0.3 && absX < 10 && absY < 10) {
         togglePlay();

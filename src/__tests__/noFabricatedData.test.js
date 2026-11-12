@@ -214,6 +214,16 @@ describe('collaborationService - no sample projects', () => {
     expect(src).toContain('Saving is unavailable here');
     expect(src).toContain('Reporting is unavailable here');
   });
+
+  test('VideoCard only advertises a swipe gesture it has a handler for', () => {
+    const src = fs.readFileSync(
+      path.join(root, 'src/screens/PostCard/VideoCard.jsx'), 'utf8');
+    // PostCard passes no onShare/onOpenDetails/onNext/onPrev, so the hints must
+    // be gated on the handler existing rather than firing an empty action.
+    expect(src).toContain('const horizontalHandler = dx > 0 ? onShare : onOpenDetails;');
+    expect(src).toContain('const verticalHandler = dy < 0 ? onNext : onPrev;');
+    expect(src).not.toMatch(/setGestureHint\(dx > 0 \? 'share' : 'details'\);\s*setTimeout\(\(\) => setGestureHint\(null\), 800\);\s*if \(dx > 0\) \{ onShare\?\.\(\);/);
+  });
 });
 
 describe('videoUtils - no fake thumbnail service', () => {
