@@ -2826,6 +2826,19 @@ describe('Analytics surfaces never fabricate zeroed metrics on a failed read (N1
   });
 });
 
+describe('Verification standing bar never fabricates 5% progress (N292)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('an unknown level shows no standing progress, not a 5% floor', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    // `(userLevel || 0) / requiredLevel` with `Math.max(5, …)` drew a 5% bar for
+    // an account whose level had not loaded — a fabricated standing claim.
+    expect(s).not.toContain('((userLevel || 0) / requiredLevel)');
+    expect(s).toContain('standingProgress');
+    expect(s).toContain('? Math.min(100, Math.max(5, (userLevel / requiredLevel) * 100))');
+  });
+});
+
 describe('Video analytics chart drops unrecorded days instead of plotting 0 (N291)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 

@@ -74,6 +74,11 @@ export const ProfileVerificationModal = memo(({
   // Threshold comes from the shared level config; never restate the literal.
   const requiredLevel = LEVEL_GATES.verifiedPriority;
   const isLevelEligible = userLevel !== null && requiredLevel != null && userLevel >= requiredLevel;
+  // An unknown level is "Unranked" with no measurable progress toward the
+  // target; a genuine (but low) level gets the 5% sliver for visibility.
+  const standingProgress = userLevel !== null && requiredLevel
+    ? Math.min(100, Math.max(5, (userLevel / requiredLevel) * 100))
+    : 0;
 
   // The applicant sees the same requirements the admin queue enforces, derived
   // from the shared contract (a restated "1,000 followers" literal would drift).
@@ -310,7 +315,7 @@ export const ProfileVerificationModal = memo(({
                       <div className="w-full bg-slate-200 dark:bg-white/10 h-2 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-gradient-to-r from-purple-600 to-cyan-500 rounded-full transition-all duration-500"
-                          style={{ width: `${Math.min(100, Math.max(5, ((userLevel || 0) / requiredLevel) * 100))}%` }}
+                          style={{ width: `${standingProgress}%` }}
                         />
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 font-medium">
