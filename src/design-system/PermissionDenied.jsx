@@ -16,6 +16,7 @@
  */
 
 import Button from './Button.jsx';
+import { Lock } from 'lucide-react';
 
 export default function PermissionDenied({
   title = 'Access Denied',
@@ -30,8 +31,8 @@ export default function PermissionDenied({
       className={`min-h-screen flex items-center justify-center bg-gray-950 text-white ${className}`}
     >
       <div className="text-center p-8">
-        <div aria-hidden="true" className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-500/10 border border-red-500/25 flex items-center justify-center text-2xl">
-          🔒
+        <div aria-hidden="true" className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-500 dark:text-red-400">
+          <Lock className="w-6 h-6" />
         </div>
         <h2 className="text-2xl font-bold mb-2">{title}</h2>
         <p className="text-gray-400">{message}</p>

@@ -5,6 +5,7 @@
  */
 
 import Button from './Button.jsx';
+import { AlertTriangle } from 'lucide-react';
 
 /**
  * @param {Object} props
@@ -20,8 +21,8 @@ export default function ErrorState({ title, message, onRetry, retryLabel = 'Retr
       role="alert"
       className={`flex flex-col items-center justify-center text-center px-6 py-14 ${className}`}
     >
-      <div aria-hidden="true" className="mb-4 w-14 h-14 rounded-full bg-red-500/10 border border-red-500/25 flex items-center justify-center text-2xl">
-        ⚠️
+      <div aria-hidden="true" className="mb-4 w-14 h-14 rounded-full bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-500 dark:text-red-400">
+        <AlertTriangle className="w-6 h-6" />
       </div>
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h3>
       {message && (
