@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Play, Pause, Volume2, VolumeX, Music, RotateCcw, RotateCw, Loader2 } from 'lucide-react';
 import { create } from 'zustand';
 import { openDB } from 'idb';
+import { pickDisplayName } from '../../services/profileReadModel.js';
 
 // 1. ZUSTAND STORE – Single source of truth for playback state
 const useAudioStore = create((set, get) => ({
@@ -140,13 +141,13 @@ class GlobalAudioManager {
     this._updateStore();
   }
 
-  async play(cardId, audioElement, volume, speed) {
+  async play(cardId, audioElement, volume, speed, authorName = null) {
     await this.ensurePipeline(cardId, audioElement, volume);
     if (this.audioContext.state === 'suspended') await this.audioContext.resume();
     audioElement.playbackRate = speed;
     await audioElement.play();
     this.userPaused = false;
-    this._updateMediaSession(audioElement);
+    this._updateMediaSession(audioElement, authorName);
     this._startTimeUpdatePolling();
     this._updateStore();
   }
@@ -224,11 +225,15 @@ class GlobalAudioManager {
     );
   }
 
-  _updateMediaSession(audioElement) {
+  _updateMediaSession(audioElement, authorName = null) {
     if (!navigator.mediaSession) return;
+    // The OS media card must show the real author, never a fabricated
+    // "Arvdoul Creator" for every audio post. An unknown author omits the
+    // artist field rather than inventing one.
+    const artist = pickDisplayName([authorName], { fallback: null });
     navigator.mediaSession.metadata = new MediaMetadata({
       title: audioElement.src.split('/').pop() || 'Audio',
-      artist: 'Arvdoul Creator',
+      ...(artist ? { artist } : {}),
       album: 'Audio Post',
     });
   }
@@ -326,6 +331,7 @@ const AudioCard = React.memo(({
   isVisible,
   isNearViewport,
   postId,
+  authorName,
 }) => {
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
@@ -533,13 +539,13 @@ const AudioCard = React.memo(({
           if (audioEl.readyState >= 1) resolve();
         });
         if (signal.aborted) return;
-        await globalAudioManager.play(cardIdRef.current, audioEl, volume, speed);
+        await globalAudioManager.play(cardIdRef.current, audioEl, volume, speed, authorName);
       } catch (err) {
         if (err.name !== 'AbortError') console.error('Playback failed', err);
         setIsLoading(false);
       }
     }
-  }, [isActuallyPlaying, volume, speed, audio?.url]);
+  }, [isActuallyPlaying, volume, speed, audio?.url, authorName]);
 
   // Skip with clamping and buffering guard
   const skip = useCallback((seconds) => {

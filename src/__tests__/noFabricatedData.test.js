@@ -2839,6 +2839,23 @@ describe('Ranking badge aggregates stay unknown when a post counter is missing (
   });
 });
 
+describe('Audio card media session shows the real author, not a fabricated one (N295)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('AudioCard omits the artist for an unknown author instead of inventing one', () => {
+    const s = read('src/screens/PostCard/AudioCard.jsx');
+    // The OS media card hardcoded artist: 'Arvdoul Creator' for every audio post.
+    expect(s).not.toContain("artist: 'Arvdoul Creator'");
+    expect(s).toContain('pickDisplayName([authorName], { fallback: null })');
+    expect(s).toContain('authorName,');
+  });
+
+  test('PostCard passes the real author name into AudioCard', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).toContain('<AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />');
+  });
+});
+
 describe('Live post stats never fabricate 0 for an unwritten counter (N293)', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 

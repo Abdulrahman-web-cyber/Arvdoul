@@ -1165,7 +1165,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       )}
       {isImage && <ImageCard images={post.media} onLike={handleLikeClick} postId={post.id} onAnalytics={handleAnalytics} />}
       {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} currentUser={currentUser} onAnalytics={handleAnalytics} />}
-      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} />}
+      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
       {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={post.isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
