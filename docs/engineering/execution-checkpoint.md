@@ -4,7 +4,7 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
 
 ## Current state
 
-- Latest verified: **158 suites, 1802 passed, 5 skipped**; `npm run build`
+- Latest verified: **159 suites, 1807 passed, 5 skipped**; `npm run build`
   green; `npm run lint` exit 0 (0 errors, 876 warnings).
 - N330 closed this session (money-in integrity): the three Stripe-backed
   economy callables ran their Stripe network calls **inside** the retryable
