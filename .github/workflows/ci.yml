@@ -257,6 +257,7 @@ jobs:
           src/__tests__/securityServices.test.js
           src/__tests__/statusDocHonestyGuard.test.js
           src/__tests__/pullToRefresh.test.js
+          src/__tests__/eventPayloadContract.test.js
           src/__tests__/callableAuthGate.test.js
           src/__tests__/deployIntegrity.test.js
           src/__tests__/functionsInventoryGuard.test.js

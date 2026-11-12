@@ -182,6 +182,7 @@ error-boundary reporting to a backend.
 - **Deliverable**: pluggable sink (Sentry/Datadog adapter), structured events, alert
   definitions, `docs/engineering/production-readiness.md`.
 - **Effort**: 5 ED (+ vendor decision/cost).
+- **Delivered so far**: pluggable `Logger` sink (`setLogSink`/`flushLogSink` + batched fetch transport via `VITE_LOG_ENDPOINT`), `loggerSink.test.js`, `docs/engineering/production-readiness.md`. Hosted vendor + dashboards/alerts remain **BLOCKED** on a budget decision.
 
 ### 16. Test infrastructure + Node-version parity (System: CI/QA)
 `guards` now runs green on Node 22 (fixed N182), but the `lint`/`test` CI jobs are

@@ -90,6 +90,8 @@ _Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (PR
 | N275 | **`creator_profiles/{userId}` (creator bio/links + eligibility/standing) was readable by every signed-in user.** Only reader is the owner's own status view. | Read scoped to owner + admins. Guard (static) pins it. |
 | N276 | Status-doc honesty (`ARVDOUL_STATUS.md` claimed 59/59 / 100% while citing 40 non-existent paths) | rewritten as an evidence-based ledger; `statusDocHonestyGuard.test.js` (guards job) fails if a documented path stops resolving or the 59/59 claim returns |
 | N277 | Lite-Mode toggle + pull-to-refresh were dead/absent (claimed complete) | `src/hooks/usePullToRefresh.js` + `src/components/Shared/PullToRefresh.jsx` wired into `HomeScreen`; reactive Lite-Mode toggle in Settings + i18n (7 locales); `pullToRefresh.test.js` |
+| N278 | Logger remote sink (#15) | `setLogSink`/`flushLogSink` + batched fetch transport (`VITE_LOG_ENDPOINT`); `loggerSink.test.js` |
+| N279 | Event-payload contract (#17) | `eventPayloadContract.test.js` pins producer↔consumer payload shapes; `guards` job |
 | #12 | Design-system consolidation (continued): raw brand hex ratcheted **349 across 44 files → 58 across 7 files**. Migrated profile components, search components, Shared nav/appbar, theme context, AudioEditor, ThumbnailDesigner, PerksRewards, Rankings, CreatePost, Reels, Stories, Search, EditProfile, ImageEditor. Remaining 7 files are the policy-frozen signup/login/onboarding screens. | `brandHexRatchetGuard` (baseline lowered); build + full suite green. |
 
 New guards registered in the hard-failing `guards` CI job: `firestoreQueryIndexMap`,

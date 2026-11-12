@@ -19,6 +19,80 @@ const PII_KEYS = /email|phone|mobile|ip[_-]?address|address|ssn|dob|birthdate/i;
 
 let GLOBAL_CORRELATION_ID = null;
 
+/**
+ * Remote log sink.
+ *
+ * `Logger` has always written structured JSON to `console`, but a browser
+ * console is not a sink an operator can read. This adds a pluggable transport:
+ * when a sink is installed (explicitly via `setLogSink`, or automatically from
+ * `VITE_LOG_ENDPOINT` in a browser) entries at `warn` and above are batched and
+ * shipped off-thread. With no sink installed the path is a no-op — there is no
+ * synthetic endpoint and nothing is fabricated.
+ *
+ * The sink is fire-and-forget: a transport failure must never throw into the
+ * caller or lose the local console record.
+ */
+let REMOTE_SINK = null;
+let SINK_MIN_LEVEL = LOG_LEVELS.warn;
+let SINK_QUEUE = [];
+let SINK_TIMER = null;
+const SINK_BATCH_SIZE = 25;
+const SINK_FLUSH_MS = 2000;
+
+/** Install (or clear, with a falsy value) the remote sink. */
+export function setLogSink(sink, { minLevel = 'warn' } = {}) {
+  REMOTE_SINK = typeof sink === 'function' ? sink : null;
+  SINK_MIN_LEVEL = LOG_LEVELS[minLevel] ?? LOG_LEVELS.warn;
+  if (!REMOTE_SINK) {
+    SINK_QUEUE = [];
+    if (SINK_TIMER) { clearTimeout(SINK_TIMER); SINK_TIMER = null; }
+  }
+}
+
+/** Flush any queued entries to the sink now (best-effort). */
+export function flushLogSink() {
+  if (!REMOTE_SINK || SINK_QUEUE.length === 0) return;
+  const batch = SINK_QUEUE;
+  SINK_QUEUE = [];
+  if (SINK_TIMER) { clearTimeout(SINK_TIMER); SINK_TIMER = null; }
+  try {
+    Promise.resolve(REMOTE_SINK(batch)).catch(() => { /* transport failure must not surface */ });
+  } catch {
+    /* transport failure must not surface */
+  }
+}
+
+function enqueueForSink(entry) {
+  if (!REMOTE_SINK) return;
+  if (LOG_LEVELS[entry.level] < SINK_MIN_LEVEL) return;
+  SINK_QUEUE.push(entry);
+  if (SINK_QUEUE.length >= SINK_BATCH_SIZE) {
+    flushLogSink();
+    return;
+  }
+  if (!SINK_TIMER) {
+    SINK_TIMER = setTimeout(flushLogSink, SINK_FLUSH_MS);
+    if (typeof SINK_TIMER?.unref === 'function') SINK_TIMER.unref();
+  }
+}
+
+// Auto-install a fetch transport when an endpoint is configured at build time.
+if (typeof window !== 'undefined' && typeof import.meta !== 'undefined' && import.meta.env?.VITE_LOG_ENDPOINT) {
+  const endpoint = import.meta.env.VITE_LOG_ENDPOINT;
+  setLogSink((batch) => {
+    if (typeof fetch !== 'function') return;
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: batch }),
+      keepalive: true,
+    });
+  });
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushLogSink();
+  });
+}
+
 /** Set the process-wide correlation id (e.g. from auth bootstrap). */
 export function setCorrelationId(id) {
   GLOBAL_CORRELATION_ID = id || null;
@@ -103,6 +177,9 @@ export class Logger {
     // Level gate already enforces minLevel; emit structured JSON (prod strips
     // debug via build config, not by silently dropping info).
     fn(JSON.stringify(entry));
+
+    // Ship warn+ to the configured remote sink (no-op when none is installed).
+    enqueueForSink(entry);
   }
 
   debug(message, meta) { this._emit('debug', message, meta); }
