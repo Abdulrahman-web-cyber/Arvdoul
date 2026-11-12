@@ -824,12 +824,17 @@ class MonetizationService {
 
   async getPayoutSettings() {
     await this._ensureInitialized();
+    // The callable returns `{ success, settings }`; the settings document is
+    // the payout account record (`status: 'onboarding' | 'ready'`,
+    // `stripeAccountId`). Unwrap it so callers read the record, not the
+    // envelope — reading `accountStatus` off the envelope always missed.
+    const unwrap = (data) => (data && typeof data === 'object' ? (data.settings ?? data) : null);
     try {
       const result = await retryOperation(() => this.cfGetPayoutSettings());
-      return result.data;
+      return unwrap(result.data);
     } catch (err) {
       const uid = auth?.currentUser?.uid;
-      if (!uid) return { enabled: false, accountStatus: 'unconfigured' };
+      if (!uid) return { status: 'unconfigured' };
       try {
         const snap = await getDoc(doc(this.db, 'payout_settings', uid));
         if (snap.exists()) return snap.data();
@@ -838,7 +843,7 @@ class MonetizationService {
       }
       // Honest unconfigured state — never claim an active payout account
       // that does not exist.
-      return { enabled: false, accountStatus: 'unconfigured', currency: 'USD' };
+      return { status: 'unconfigured', currency: 'USD' };
     }
   }
 

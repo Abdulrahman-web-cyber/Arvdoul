@@ -49,8 +49,6 @@ export default function MainLayout({ children }) {
     location.pathname.startsWith("/video-editor") ||
     location.pathname.startsWith("/audio-editor") ||
     location.pathname.startsWith("/thumbnail-designer") ||
-    location.pathname.startsWith("/image-editor") ||
-    location.pathname.startsWith("/image-studio") ||
     location.pathname.startsWith("/live") ||
     location.pathname.startsWith("/camera")
   );

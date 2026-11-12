@@ -948,22 +948,8 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* Thumbnail Designer & Image Studio Routes */}
+      {/* Thumbnail Designer route */}
       <Route path="/thumbnail-designer" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ThumbnailDesignerScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
-      <Route path="/image-studio" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ThumbnailDesignerScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
-      <Route path="/image-editor" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <ThumbnailDesignerScreen />

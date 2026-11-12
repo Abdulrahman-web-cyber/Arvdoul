@@ -85,10 +85,6 @@ export default function CoinsScreen() {
     };
   });
 
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawEmail, setWithdrawEmail] = useState('');
-  const [withdrawing, setWithdrawing] = useState(false);
-
   const isDark = theme === 'dark';
   const colors = {
     bg: isDark ? 'bg-gradient-to-b from-gray-900 via-gray-950 to-black' : 'bg-gradient-to-b from-blue-50 via-white to-white',
@@ -275,33 +271,6 @@ export default function CoinsScreen() {
     }
   };
 
-  const handleWithdraw = async () => {
-    if (!user?.uid || withdrawing) return;
-    const amount = Number(withdrawAmount);
-    if (!amount || amount < MIN_WITHDRAWAL_COINS) {
-      toast.error(`Minimum withdrawal is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins.`);
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail)) {
-      toast.error('Enter a valid PayPal email.');
-      return;
-    }
-    setWithdrawing(true);
-    try {
-      const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
-      const res = await svc.requestWithdrawal(user.uid, amount, 'paypal', { email: withdrawEmail });
-      if (res?.success) {
-        toast.success('Withdrawal request submitted for review.');
-        setWithdrawAmount('');
-        setWithdrawEmail('');
-        await loadBalance();
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Withdrawal request failed.');
-    } finally {
-      setWithdrawing(false);
-    }
-  };
 
   return (
     <div className={cn("min-h-screen pb-24", colors.bg)}>
@@ -505,32 +474,14 @@ export default function CoinsScreen() {
             <Banknote className="w-5 h-5 text-purple-500" /> Withdraw Earnings
           </h2>
           <p className={cn("text-sm mb-4", colors.secondary)}>
-            Request a payout (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins). Requests are reviewed and paid out via the
-            secure payout pipeline.
+            Payouts settle to your connected Stripe account (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins).
+            Connect and manage your payout account from the creator payout screen.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <input
-              type="number"
-              min={MIN_WITHDRAWAL_COINS}
-              placeholder={`Amount (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
-              value={withdrawAmount}
-              onChange={(e) => setWithdrawAmount(e.target.value)}
-              className={cn("px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500", colors.card, colors.border, colors.text)}
-            />
-            <input
-              type="email"
-              placeholder="PayPal email"
-              value={withdrawEmail}
-              onChange={(e) => setWithdrawEmail(e.target.value)}
-              className={cn("px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500", colors.card, colors.border, colors.text)}
-            />
-          </div>
           <button
-            onClick={handleWithdraw}
-            disabled={withdrawing}
-            className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-500 to-violet-500 text-white hover:from-purple-600 hover:to-violet-600 transition-all disabled:opacity-60"
+            onClick={() => navigate('/creator-payout')}
+            className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-500 to-violet-500 text-white hover:from-purple-600 hover:to-violet-600 transition-all"
           >
-            {withdrawing ? 'SUBMITTING…' : 'REQUEST WITHDRAWAL'}
+            GO TO PAYOUTS
           </button>
         </div>
 

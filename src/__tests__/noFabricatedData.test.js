@@ -424,8 +424,13 @@ describe('Badge system - real stats map', () => {
 describe('Payouts - honest account state', () => {
   test('getPayoutSettings never claims an active account when unconfigured', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
-    expect(src).toContain("accountStatus: 'unconfigured'");
+    // The server record uses `status: 'onboarding' | 'ready'`; the fallback must
+    // report an honest `unconfigured` status, never a fabricated active account.
+    expect(src).toContain("status: 'unconfigured'");
     expect(src).not.toContain("return { enabled: true, accountStatus: 'active', currency: 'USD' }");
+    // It must unwrap the callable's `{ success, settings }` envelope; reading
+    // `accountStatus` off the envelope silently missed every account.
+    expect(src).toContain('data.settings ?? data');
   });
 
   test('CreatorPayoutScreen has no simulated Stripe timer', () => {

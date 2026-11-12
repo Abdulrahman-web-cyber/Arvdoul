@@ -26,6 +26,11 @@ module.exports = {
     '^@assets/(.*)$': '<rootDir>/src/assets/$1',
     '^@app-firebase/(.*)$': '<rootDir>/src/firebase/$1',
     '^@styles/(.*)$': '<rootDir>/src/styles/$1',
+    // `functions/` modules require `firebase-functions`, which is a
+    // `functions/`-scoped dependency and is not installed at the repo root.
+    // The behaviour test for the settlement money-path loads the real
+    // `functions/withdrawalSettlement.js`, so map the import to a thin stub.
+    '^firebase-functions$': '<rootDir>/tests/stubs/firebase-functions.cjs',
     // Vite loads stylesheets; Jest needs them stubbed or any screen that
     // imports one fails to load with a syntax error.
     '\\.(css|less|scss|sass)$': '<rootDir>/tests/styleMock.cjs',

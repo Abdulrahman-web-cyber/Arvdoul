@@ -585,8 +585,9 @@ const RevenueTab = ({ revenue }) => {
 
   const formatUsd = formatCoinsAsUsd;
 
-  const accountStatus = payout.settings?.accountStatus || 'unconfigured';
-  const accountConnected = ['verified', 'active', 'enabled'].includes(accountStatus);
+  // The server record uses `status: 'onboarding' | 'ready'` (ready = Stripe
+  // `payouts_enabled`); reading the old `accountStatus` always missed.
+  const accountConnected = payout.settings?.status === 'ready';
 
   const revenueItems = [
     { label: 'Subscriptions', value: revenue.subscriptions, icon: Users },

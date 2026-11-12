@@ -299,6 +299,7 @@ jobs:
           src/__tests__/profileFeedGridLikeCount.test.jsx
           src/__tests__/xpWiring.test.js
           src/__tests__/withdrawalGate.test.js
+          src/__tests__/withdrawalSettlementProvider.test.js
           src/__tests__/settingsWiring.test.js
           src/__tests__/dmPermissionWiring.test.js
           src/__tests__/integrationWiring.test.js

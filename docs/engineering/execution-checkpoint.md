@@ -1,12 +1,18 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/n319-n320-analytics-live` (HEAD `224bb05`), base `origin/main` (PR #46 merged)._
+_Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
 ## Current state
 
-- Latest verified: **157 suites, 1793 passed, 5 skipped**; `npm run build`
-  green; `npm run lint` exit 0 (0 errors, 875 warnings).
-- N321 closed this session: live presence (`isOnline`/`lastActive`) sat on the
+- Latest verified: **158 suites, 1801 passed, 5 skipped**; `npm run build`
+  green; `npm run lint` exit 0 (0 errors, 876 warnings).
+- N326–N329 closed this session (financial-integrity + payout-contract +
+  dead-route): see the table below. The headline is N326 — a PayPal-selected
+  withdrawal settled as a Stripe payout **from the platform account** with
+  `stripeAccount: undefined`, and the destination came from a client-supplied
+  field. Settlement is now provider-aware and server-authoritative, and a
+  functions test harness (emulator-backed) covers it.
+- N321 closed (prior): live presence (`isOnline`/`lastActive`) sat on the
   world-signed-in-readable `users/{uid}` doc, so a raw `getDoc` leaked a user's
   online status / activity timestamp to any authenticated client regardless of
   the profile's `presence` scope (client-masking-only, the N315 class). Presence
@@ -41,6 +47,17 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live` (HEAD `224
   deferred with a documented migration plan.
 
 ## Completed this session
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N326 | A PayPal-selected withdrawal settled as a Stripe payout **from the platform account** (`settleWithdrawal` always called `stripe.payouts.create` and took the destination from the client-supplied `paymentDetails.stripeAccountId`; the payout UI offered PayPal with no PayPal integration) | settlement now resolves the provider server-side (`resolvePayoutProvider`): PayPal/unknown are terminal (reject + release locked coins), a Stripe method requires `payout_settings.status === 'ready'` and the account id comes from `payout_settings`; `requestWithdrawal` validates the method before locking; `stripeWebhook` handles `account.updated` → `ready`; PayPal control removed from `CoinsScreen`/`CreatorPayoutScreen`/`VideoAnalyticsScreen`; `withdrawalSettlementProvider.test.js` (8 emulator tests) pins it |
+| N327 | `walletService.requestPayout` passed the details object as `paymentMethod`, so every `WalletScreen` withdrawal threw "paymentMethod and paymentDetails required" | signature fixed to `(userId, amount, paymentMethod='stripe_connected', paymentDetails={})`; `WalletScreen` passes `'stripe_connected'` |
+| N328 | `getPayoutSettings()` returned the `{ success, settings }` envelope and screens read `accountStatus`, a field the server never writes (server writes `status`) — a fully-onboarded creator showed "Not connected" forever | service unwraps `data.settings ?? data`; fallback returns honest `status: 'unconfigured'`; `CreatorPayoutScreen`/`VideoAnalyticsScreen` gate on `status === 'ready'`; `noFabricatedData` pin |
+| N329 | `/image-editor` + `/image-studio` were dead routes rendering the same `ThumbnailDesignerScreen` as the reachable `/thumbnail-designer`; nothing linked to them | both aliases + their `TopAppBar`/`MainLayout` path special-cases removed |
+
+**Functions test harness (new).** `jest.config.cjs` still excludes `/functions/` from the auto-run, but a new `firebase-functions` stub (`tests/stubs/firebase-functions.cjs`) + module mapper lets a `src/__tests__` suite `import` a real `functions/` module and exercise it against the Firestore emulator. `withdrawalSettlementProvider.test.js` is the first consumer and is wired into the `guards` CI job (which already runs the Firestore emulator).
+
+## Completed this session (N321–N325, prior)
 
 | # | Item | Evidence |
 | --- | --- | --- |

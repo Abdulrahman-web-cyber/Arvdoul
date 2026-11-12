@@ -20,7 +20,7 @@ const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
 const { getUserIdFromContext, getUserEmail } = require('./auth');
-const { settleWithdrawal } = require('./withdrawalSettlement');
+const { settleWithdrawal, STRIPE_PAYOUT_METHODS } = require('./withdrawalSettlement');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -694,6 +694,16 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('invalid-argument', `Minimum withdrawal is ${MIN_WITHDRAWAL_COINS} coins.`);
     }
     if (!paymentMethod || !paymentDetails) throw new functions.https.HttpsError('invalid-argument', 'paymentMethod and paymentDetails required.');
+    // Reject an unpayable method at request time, before any coins are locked.
+    // PayPal has no settlement integration and any other non-Stripe method
+    // cannot be paid out; queueing such a request would lock the creator's
+    // coins behind a payout that can never be sent.
+    if (!STRIPE_PAYOUT_METHODS.has(paymentMethod)) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        `Unsupported payout method "${paymentMethod}". Withdrawals settle to a connected Stripe payout account.`
+      );
+    }
 
     const configuredMinLevel = Number(functions.config().app?.withdrawal_min_level) || LEVEL_GATES.withdrawals;
     const userRef = admin.firestore().collection('users').doc(uid);
@@ -1055,6 +1065,28 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
             });
           }
         }
+      }
+      break;
+    }
+
+    case 'account.updated': {
+      // Stripe Connect onboarding completion. The creator's payout account is
+      // only usable once Stripe reports `payouts_enabled`; `settleWithdrawal`
+      // requires `payout_settings.status === 'ready'`, so this is what flips a
+      // freshly-onboarded account from `onboarding` to `ready`. Without it the
+      // status never changed and every withdrawal stalled as unpayable.
+      const account = event.data.object;
+      const accountId = account.id;
+      const settingsQuery = await db.collection('payout_settings')
+        .where('stripeAccountId', '==', accountId).limit(1).get();
+      if (!settingsQuery.empty) {
+        await settingsQuery.docs[0].ref.set({
+          status: account.payouts_enabled ? 'ready' : 'onboarding',
+          payoutsEnabled: !!account.payouts_enabled,
+          chargesEnabled: !!account.charges_enabled,
+          requirementsDue: account.requirements?.currently_due || [],
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
       }
       break;
     }

@@ -349,8 +349,7 @@ export const TopAppBar = ({
     if (path.startsWith("/search")) return "search";
     if (
       path.startsWith("/create-post") ||
-      path.startsWith("/create-story") ||
-      path.startsWith("/image-editor")
+      path.startsWith("/create-story")
     )
       return "composer";
     if (path === "/profile" || path === "/profile/me")
@@ -401,7 +400,6 @@ export const TopAppBar = ({
     if (path.startsWith("/creator/onboarding") || path.startsWith("/creator-onboarding")) return "Creator Accreditation";
     if (path.startsWith("/create-post")) return "Create Post";
     if (path.startsWith("/create-story")) return "Create Story";
-    if (path.startsWith("/image-editor") || path.startsWith("/image-studio")) return "Image Studio";
     if (path.startsWith("/video-editor")) return "Video Studio";
     if (path.startsWith("/audio-editor")) return "Audio Studio";
     if (path.startsWith("/thumbnail-designer")) return "Thumbnail Designer";

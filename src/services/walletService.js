@@ -123,8 +123,8 @@ class WalletService {
   /**
    * Submit withdrawal request via monetization engine.
    */
-  async requestPayout(userId, amountCoins, details = {}) {
-    return monetizationService.requestWithdrawal(userId, amountCoins, details);
+  async requestPayout(userId, amountCoins, paymentMethod = 'stripe_connected', paymentDetails = {}) {
+    return monetizationService.requestWithdrawal(userId, amountCoins, paymentMethod, paymentDetails);
   }
 }
 
