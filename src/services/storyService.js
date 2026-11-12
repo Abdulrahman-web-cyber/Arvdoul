@@ -892,6 +892,7 @@ class UltimateStoryService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
     const quizRef = this.fs.doc(this.firestore, 'stories', storyId, 'quizzes', quizId);
+    let reward = 0;
     await this.fs.runTransaction(this.firestore, async (transaction) => {
       const snap = await transaction.get(quizRef);
       if (!snap.exists()) throw new Error('Quiz not found');
@@ -903,13 +904,25 @@ class UltimateStoryService {
         [`userAnswers.${currentUser.uid}`]: { option: optionIndex, isCorrect },
         updatedAt: serverTimestamp(),
       });
-      if (isCorrect && quiz.coinReward) {
-        // Reward coins (call monetization service)
-        const monetization = (await import('./monetizationService.js')).getMonetizationService();
-        await monetization.addCoins(currentUser.uid, quiz.coinReward, 'quiz_correct', { storyId, quizId });
-      }
+      reward = isCorrect ? Number(quiz.coinReward) || 0 : 0;
     });
-    return { success: true };
+    // The coin credit is a network callable and must run AFTER the transaction
+    // commits, never inside it: a Firestore transaction callback can be retried,
+    // so awaiting `addCoins` in-band could mint the reward more than once for a
+    // single answer (and a cap/network failure would abort a legitimate answer).
+    // A deterministic idempotency key makes the credit exactly-once even if the
+    // caller retries the whole operation.
+    if (reward > 0) {
+      const monetization = (await import('./monetizationService.js')).getMonetizationService();
+      await monetization.addCoins(
+        currentUser.uid,
+        reward,
+        'quiz_correct',
+        { storyId, quizId },
+        `quiz_${currentUser.uid}_${storyId}_${quizId}`
+      );
+    }
+    return { success: true, reward };
   }
 
   async updateCountdown(storyId, countdownId) {
