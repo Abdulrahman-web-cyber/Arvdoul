@@ -3859,3 +3859,27 @@ describe('N184 — no fabricated counts sweep (round 3)', () => {
     expect(src).not.toMatch(/totalLikes: stats\.likes \|\| 0/);
   });
 });
+
+describe('N314 — liveService never reports a peak-viewer metric no writer maintains', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('startLiveStream does not seed a stats.peakViewers counter', () => {
+    // `peakViewers` was written once (0) at creation and never updated by any
+    // writer, so every read reported a measured "peak 0" for a stream that had
+    // thousands of viewers. The genuine, writer-maintained counters stay.
+    const src = read('src/services/liveService.js');
+    expect(src).not.toMatch(/peakViewers\s*:/);
+    expect(src).not.toMatch(/stats\?\.peakViewers/);
+    // The maintained counters must still be seeded.
+    expect(src).toContain('totalViewers: 0,');
+    expect(src).toContain('totalTips: 0,');
+    expect(src).toContain('totalGifts: 0,');
+    expect(src).toContain('coinsEarned: 0,');
+  });
+
+  test('endLiveStream, getLiveEarnings and getLiveAnalytics omit peakViewers', () => {
+    const src = read('src/services/liveService.js');
+    expect(src).not.toMatch(/peakViewers,/);
+    expect(src).not.toMatch(/peakViewers\s*:/);
+  });
+});
