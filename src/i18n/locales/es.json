@@ -194,7 +194,8 @@
     "mfaVerify": "Verificar y activar",
     "mfaDisable": "Desactivar 2FA",
     "mfaError": "Algo salió mal. Inténtalo de nuevo.",
-    "mfaDisabled": "Autenticación en dos pasos desactivada."
+    "mfaDisabled": "Autenticación en dos pasos desactivada.",
+    "mfaStatusUnavailable": "El estado de la autenticación en dos pasos no está disponible ahora. Vuelve a abrir este cuadro de diálogo para reintentar."
   },
   "level": {
     "title": "Nivel y progreso",

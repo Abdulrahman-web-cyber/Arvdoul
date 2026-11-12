@@ -27,7 +27,6 @@ import { getAdaptiveTuning, setLiteModePreference, getDeviceCapabilities } from 
 import { Dialog } from '../components/UI/Dialog.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
 import { cn } from '../lib/utils';
-import { logger } from '../utils/Logger';
 
 /* ---------- Reusable row primitives ---------- */
 function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled }) {
@@ -131,6 +130,7 @@ export default function SettingsScreen() {
   const [mfaBusy, setMfaBusy] = useState(false);
   const [mfaEnroll, setMfaEnroll] = useState(null); // { secret, session }
   const [mfaCode, setMfaCode] = useState('');
+  const [mfaLoadFailed, setMfaLoadFailed] = useState(false);
   const [showMfaDialog, setShowMfaDialog] = useState(false);
   // Real Do Not Disturb state, read back from `user_settings` — the server
   // gates every dispatch on `doNotDisturb` but nothing ever set it.
@@ -222,9 +222,10 @@ export default function SettingsScreen() {
         const { getAuthService } = await import('../services/authService.js');
         const factors = await getAuthService().getEnrolledMFAFactors();
         if (mounted) setMfaFactors(factors);
-      } catch (err) {
-        logger.warn('Could not read enrolled MFA factors', { error: err?.message });
-        if (mounted) setMfaFactors([]);
+      } catch {
+        // Surface the failure so the dialog reports "status unavailable"
+        // instead of implying the account has no second factor.
+        if (mounted) { setMfaLoadFailed(true); setMfaFactors([]); }
       }
     })();
     return () => { mounted = false; };
@@ -965,7 +966,12 @@ export default function SettingsScreen() {
       {/* Two-factor authentication (TOTP) */}
       <Dialog isOpen={showMfaDialog} onClose={() => { setShowMfaDialog(false); setMfaEnroll(null); setMfaCode(''); }} title={t('settings.mfaTitle')} size="sm">
         <div className="space-y-4">
-          {mfaFactors.length > 0 ? (
+          {mfaLoadFailed && mfaFactors.length === 0 && !mfaEnroll ? (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20" role="alert">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-sm text-gray-700 dark:text-gray-200">{t('settings.mfaStatusUnavailable')}</p>
+            </div>
+          ) : mfaFactors.length > 0 ? (
             <>
               <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                 <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" aria-hidden="true" />

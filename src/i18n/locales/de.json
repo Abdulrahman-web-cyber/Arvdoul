@@ -194,7 +194,8 @@
     "mfaVerify": "Bestätigen und aktivieren",
     "mfaDisable": "2FA deaktivieren",
     "mfaError": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
-    "mfaDisabled": "Zwei-Faktor-Authentifizierung deaktiviert."
+    "mfaDisabled": "Zwei-Faktor-Authentifizierung deaktiviert.",
+    "mfaStatusUnavailable": "Der Status der Zwei-Faktor-Authentifizierung ist derzeit nicht verfügbar. Öffne diesen Dialog erneut, um es noch einmal zu versuchen."
   },
   "level": {
     "title": "Level & Fortschritt",

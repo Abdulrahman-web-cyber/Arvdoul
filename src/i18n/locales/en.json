@@ -194,7 +194,8 @@
     "mfaVerify": "Verify & enable",
     "mfaDisable": "Disable 2FA",
     "mfaError": "Something went wrong. Please try again.",
-    "mfaDisabled": "Two-factor authentication disabled."
+    "mfaDisabled": "Two-factor authentication disabled.",
+    "mfaStatusUnavailable": "Two-factor status is unavailable right now. Reopen this dialog to retry."
   },
   "level": {
     "title": "Level & Progress",
