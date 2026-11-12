@@ -261,7 +261,7 @@ export default function SavedScreen() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search saved titles, tags, creators..."
               className={cn(
-                "w-full pl-10 pr-4 py-2.5 rounded-2xl border text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40",
+                "w-full pl-10 pr-4 py-2.5 rounded-2xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500/40",
                 isDark ? "bg-white/5 border-white/10 text-white placeholder-gray-500" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"
               )}
             />

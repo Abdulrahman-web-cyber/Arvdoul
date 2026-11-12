@@ -114,6 +114,21 @@ describe('brand gradient — design system is the single source of truth (N104)'
     expect(offenders).toEqual([]);
   });
 
+  test('keyboard focus rings use the brand token, not the raw Tailwind brand family (N334)', () => {
+    // 97 focus rings across 40 files used `focus:ring-purple-500` /
+    // `ring-indigo-500` / `ring-blue-500` / `ring-violet-*`. The violet and
+    // purple-500 are NOT the brand violet (`#8B1EF3` is `arvdoul-purple`), so
+    // the app's focus affordance rendered a different colour than its brand.
+    // Standardised on `ring-arvdoul-purple-500`. Semantic rings (emerald/amber/
+    // red on success/warn/error controls) are intentionally exempt.
+    const offenders = [];
+    const FAMILY = /focus(?:-visible)?:ring-(?:purple|indigo|blue|violet|fuchsia)-\d+/;
+    for (const file of files) {
+      if (FAMILY.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
   test('the rogue gradient never reappears in raw-hex form (#9333ea / #c026d3)', () => {
     const offenders = [];
     for (const file of files) {

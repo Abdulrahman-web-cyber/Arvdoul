@@ -859,8 +859,8 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                   isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple-500/20"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple-500/20"
                 )}
               />
             </div>
@@ -884,8 +884,8 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-normal outline-none transition-all border resize-none leading-relaxed",
                   isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple-500/20"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple-500/20"
                 )}
               />
             </div>
@@ -943,8 +943,8 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                     isDark
-                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-arvdoul-purple-500/20"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-arvdoul-purple-500/20"
                   )}
                 />
               </div>

@@ -389,7 +389,7 @@ const CreateEventScreen = () => {
                   value={formData.title}
                   onChange={(e) => handleChange('title', e.target.value)}
                   placeholder="Give your event a name"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500"
                 />
               </div>
 
@@ -403,7 +403,7 @@ const CreateEventScreen = () => {
                   onChange={(e) => handleChange('description', e.target.value)}
                   placeholder="Tell people about your event..."
                   rows={5}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 resize-none"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500 resize-none"
                 />
               </div>
 
@@ -451,7 +451,7 @@ const CreateEventScreen = () => {
                     value={formData.location}
                     onChange={(e) => handleChange('location', e.target.value)}
                     placeholder={formData.type === 'digital' ? 'Meeting link or URL' : 'Venue address'}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500"
                   />
                 </div>
               </div>
@@ -469,7 +469,7 @@ const CreateEventScreen = () => {
                     onChange={(e) => handleChange('capacity', parseInt(e.target.value) || 0)}
                     placeholder="0 = unlimited"
                     min={0}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500"
                   />
                 </div>
               </div>
@@ -502,7 +502,7 @@ const CreateEventScreen = () => {
                       value={formData.startDate}
                       onChange={(e) => handleChange('startDate', e.target.value)}
                       min={format(new Date(), 'yyyy-MM-dd')}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-arvdoul-purple-500"
                     />
                   </div>
                   <div className="relative">
@@ -510,7 +510,7 @@ const CreateEventScreen = () => {
                       type="time"
                       value={formData.startTime}
                       onChange={(e) => handleChange('startTime', e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-arvdoul-purple-500"
                     />
                   </div>
                 </div>
@@ -529,7 +529,7 @@ const CreateEventScreen = () => {
                       value={formData.endDate}
                       onChange={(e) => handleChange('endDate', e.target.value)}
                       min={formData.startDate || format(new Date(), 'yyyy-MM-dd')}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-arvdoul-purple-500"
                     />
                   </div>
                   <div className="relative">
@@ -537,7 +537,7 @@ const CreateEventScreen = () => {
                       type="time"
                       value={formData.endTime}
                       onChange={(e) => handleChange('endTime', e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-arvdoul-purple-500"
                     />
                   </div>
                 </div>

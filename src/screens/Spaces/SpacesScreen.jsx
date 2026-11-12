@@ -569,7 +569,7 @@ export default function SpacesScreen() {
                     placeholder="e.g. Late Night Coding & Chill Beats 🎧"
                     value={newSpaceTitle}
                     onChange={(e) => setNewSpaceTitle(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300'
                     }`}
                   />

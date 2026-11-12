@@ -59,7 +59,7 @@ const VERSIONS_STORE = "draft_versions";
 const TEMPLATES_STORE = "templates";
 
 const INPUT_CLASS =
-  "w-full p-2.5 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 focus:outline-none";
+  "w-full p-2.5 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-arvdoul-purple-500 focus:outline-none";
 
 // ── EXACT CUSTOM SVG ICONS (100 % as provided, unique IDs) ─────────────
 const makeIconComponent = (renderSvg) => {

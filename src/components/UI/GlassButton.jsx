@@ -91,7 +91,7 @@ const GlassButton = memo(({
     'duration-200',
     'focus:outline-none',
     'focus:ring-2',
-    'focus:ring-purple-500',
+    'focus:ring-arvdoul-purple-500',
     'focus:ring-offset-2',
     sizeConfig.padding,
     sizeConfig.text,

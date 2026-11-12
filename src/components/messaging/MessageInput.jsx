@@ -271,7 +271,7 @@ const MessageInput = React.memo(({
           placeholder={placeholder}
           disabled={disabled || isRecording}
           className={cn(
-            'flex-1 px-4 py-2 rounded-full resize-none focus:outline-none focus:ring-2 focus:ring-purple-500',
+            'flex-1 px-4 py-2 rounded-full resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500',
             'text-sm placeholder-gray-500 max-h-[120px]',
             theme === 'dark'
               ? 'bg-gray-800 text-white border border-gray-700'

@@ -160,7 +160,7 @@ const AdminFeatureFlagsScreen = () => {
               placeholder="Search flag or description..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500"
             />
           </div>
 
@@ -220,7 +220,7 @@ const AdminFeatureFlagsScreen = () => {
                       id={`toggle-${name}`}
                       onClick={() => handleToggle(name, currentValue)}
                       disabled={isBusy}
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500 disabled:opacity-50 ${
                         currentValue ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                       }`}
                       role="switch"

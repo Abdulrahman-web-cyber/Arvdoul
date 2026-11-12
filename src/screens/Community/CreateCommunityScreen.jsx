@@ -383,7 +383,7 @@ const CreateCommunityScreen = () => {
                   onChange={(e) => handleChange('name', e.target.value)}
                   placeholder="Enter community name"
                   maxLength={50}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500 focus:border-transparent"
                 />
                 <div className="flex justify-between mt-1">
                   <span className="text-xs text-gray-500">
@@ -406,7 +406,7 @@ const CreateCommunityScreen = () => {
                   placeholder="What is this community about?"
                   rows={4}
                   maxLength={500}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500 focus:border-transparent resize-none"
                 />
                 <div className="flex justify-end">
                   <span className={`text-xs ${formData.description.length > 450 ? 'text-red-500' : 'text-gray-500'}`}>
@@ -442,7 +442,7 @@ const CreateCommunityScreen = () => {
                   onChange={(e) => handleChange('tagInput', e.target.value)}
                   onKeyDown={handleTagKeyDown}
                   placeholder="Type a tag and press Enter"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Add up to 10 tags to help people find your community
@@ -512,7 +512,7 @@ const CreateCommunityScreen = () => {
                     type="checkbox"
                     checked={formData.settings.joinApproval}
                     onChange={(e) => handleNestedChange('settings', 'joinApproval', e.target.checked)}
-                    className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                    className="w-5 h-5 rounded text-indigo-600 focus:ring-arvdoul-purple-500"
                   />
                 </label>
 
@@ -529,7 +529,7 @@ const CreateCommunityScreen = () => {
                     type="checkbox"
                     checked={formData.settings.inviteOnly}
                     onChange={(e) => handleNestedChange('settings', 'inviteOnly', e.target.checked)}
-                    className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                    className="w-5 h-5 rounded text-indigo-600 focus:ring-arvdoul-purple-500"
                   />
                 </label>
 
@@ -546,7 +546,7 @@ const CreateCommunityScreen = () => {
                     type="checkbox"
                     checked={formData.settings.discoveryEnabled}
                     onChange={(e) => handleNestedChange('settings', 'discoveryEnabled', e.target.checked)}
-                    className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                    className="w-5 h-5 rounded text-indigo-600 focus:ring-arvdoul-purple-500"
                   />
                 </label>
               </div>
@@ -577,7 +577,7 @@ const CreateCommunityScreen = () => {
                   placeholder="Define the rules and guidelines for your community..."
                   rows={6}
                   maxLength={2000}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-arvdoul-purple-500 focus:border-transparent resize-none"
                 />
                 <div className="flex justify-end">
                   <span className={`text-xs ${formData.rules.length > 1800 ? 'text-red-500' : 'text-gray-500'}`}>
@@ -605,7 +605,7 @@ const CreateCommunityScreen = () => {
                     type="checkbox"
                     checked={formData.moderation.contentApproval}
                     onChange={(e) => handleNestedChange('moderation', 'contentApproval', e.target.checked)}
-                    className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                    className="w-5 h-5 rounded text-indigo-600 focus:ring-arvdoul-purple-500"
                   />
                 </label>
 
@@ -622,7 +622,7 @@ const CreateCommunityScreen = () => {
                     type="checkbox"
                     checked={formData.moderation.slowMode}
                     onChange={(e) => handleNestedChange('moderation', 'slowMode', e.target.checked)}
-                    className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                    className="w-5 h-5 rounded text-indigo-600 focus:ring-arvdoul-purple-500"
                   />
                 </label>
 

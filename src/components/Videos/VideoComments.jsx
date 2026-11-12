@@ -373,7 +373,7 @@ const VideoComments = memo(({
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   placeholder={replyTo ? `Reply to ${replyToLabel}...` : "Add a comment..."}
-                  className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/10 transition-all"
+                  className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple-500 border border-white/10 transition-all"
                   maxLength={500}
                 />
                 {newComment.length > 0 && (

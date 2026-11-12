@@ -183,7 +183,7 @@ export default function SoundsScreen() {
             placeholder="Search sounds, artists, genres or BPM..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-11 pr-4 py-3 rounded-2xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+            className={`w-full pl-11 pr-4 py-3 rounded-2xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
               isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200'
             }`}
           />
@@ -406,7 +406,7 @@ export default function SoundsScreen() {
                     placeholder="e.g. Midnight Horizon Beat (Prod. by Me)"
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple-500 outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'
                     }`}
                   />
