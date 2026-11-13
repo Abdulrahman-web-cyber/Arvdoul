@@ -274,6 +274,7 @@ jobs:
           src/__tests__/userPresencePrivacyRules.test.js
           src/__tests__/serverAuthoritativeFieldsRules.test.js
           src/__tests__/counterShardForgeryGuard.test.js
+          src/__tests__/messageDedupeGuard.test.js
           src/__tests__/notificationCounterRuleShape.test.js
           src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js

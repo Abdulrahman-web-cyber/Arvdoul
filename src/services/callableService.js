@@ -51,6 +51,7 @@ export const FUNCTIONS = {
   PROMOTE_EVENT_WAITLIST: 'promoteEventWaitlist',
   SUBMIT_EVENT_FEEDBACK: 'submitEventFeedback',
   GET_EVENT_ATTENDEES: 'getEventAttendees',
+  GET_USER_EVENT_REGISTRATIONS: 'getUserEventRegistrations',
   // Collaboration projects (server-authoritative; see functions/collaboration.js)
   CREATE_COLLAB_PROJECT: 'createCollaborationProject',
   UPDATE_COLLAB_PROJECT: 'updateCollaborationProject',

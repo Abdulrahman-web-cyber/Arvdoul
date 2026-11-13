@@ -86,10 +86,15 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(b).toMatch(/allow read: if isSignedIn\(\);/);
   });
 
-  test('events read requires sign-in (no privacy field to enforce — N266)', () => {
+  test('events read is status/relationship-gated (N266)', () => {
     const b = block(rules, 'match /events/{eventId}');
     expect(b).not.toMatch(/allow read: if true;/);
-    expect(b).toMatch(/allow read: if isSignedIn\(\);/);
+    // The event document read itself is gated (the nested subcollection read is
+    // a separate rule and still requires sign-in).
+    expect(b).toMatch(/allow read: if isSignedIn\(\) && \(/);
+    expect(b).toMatch(/resource\.data\.status in \['published', 'open', 'live', 'ended'\]/);
+    expect(b).toMatch(/resource\.data\.organizerId == uid\(\)/);
+    expect(b).toMatch(/resource\.data\.attendees\[uid\(\)\] != null/);
     // The former `privacy` field was a dead control (written, never read, never
     // enforced) and is gone; the rule documents that. See N266.
     const start = rules.indexOf('match /events/{eventId}');
@@ -197,7 +202,7 @@ describe('read-scope privacy (emulator)', () => {
     }
   });
 
-  test('events are readable by signed-in clients only', async () => {
+  test('a draft event is readable only by its organizer or an attendee (N266)', async () => {
     if (!reachable) return;
     const { assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
     const { doc, setDoc, getDoc } = await import('firebase/firestore');
@@ -206,13 +211,25 @@ describe('read-scope privacy (emulator)', () => {
       await env.clearFirestore();
       await env.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
-        await setDoc(doc(db, 'events/e1'), { organizerId: 'alice' });
+        await setDoc(doc(db, 'events/draft1'), {
+          organizerId: 'alice', status: 'draft', attendees: { bob: { status: 'registered' } },
+        });
+        await setDoc(doc(db, 'events/live1'), { organizerId: 'alice', status: 'published' });
       });
       const anon = env.unauthenticatedContext().firestore();
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
       const stranger = env.authenticatedContext('stranger').firestore();
 
-      await assertFails(getDoc(doc(anon, 'events/e1')));
-      await assertSucceeds(getDoc(doc(stranger, 'events/e1')));
+      // Unauthenticated is denied everywhere.
+      await assertFails(getDoc(doc(anon, 'events/draft1')));
+      await assertFails(getDoc(doc(anon, 'events/live1')));
+      // A published event is readable by any signed-in client.
+      await assertSucceeds(getDoc(doc(stranger, 'events/live1')));
+      // A draft is readable by the organizer and an attendee, but NOT a stranger.
+      await assertSucceeds(getDoc(doc(alice, 'events/draft1')));
+      await assertSucceeds(getDoc(doc(bob, 'events/draft1')));
+      await assertFails(getDoc(doc(stranger, 'events/draft1')));
     } finally {
       await env.cleanup();
     }

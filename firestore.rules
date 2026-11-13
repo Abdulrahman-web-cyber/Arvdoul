@@ -1214,10 +1214,22 @@ service cloud.firestore {
     }
     match /message_dedupe/{key} {
       // Opaque idempotency keys. The client writes its own record and reads it
-      // back in `_checkDuplicate` to detect a duplicate send, so read must stay
-      // open to the sender; the key is sha256(sender:conversation:type:content)
-      // so it leaks nothing and cannot be forged for another user's message.
-      allow read, write: if isSignedIn();
+      // back in `_checkDuplicate` to detect a duplicate send. The key is
+      // sha256(sender:conversation:type:content:mediaHash) — computable by
+      // anyone, since the pre-image is public — so the key alone is NOT a
+      // forgery defence: an attacker could pre-create a victim's key and
+      // suppress their next message, and could list the collection to
+      // enumerate every recent send. The doc is therefore bound to its sender
+      // by a `senderId` field: a client may only create/update a record that
+      // stamps itself as the caller, and may only read its own records. A
+      // foreign record is unreadable (the client treats a denied read as "not
+      // my duplicate") and an attacker cannot mint one naming someone else.
+      // A missing doc (`resource == null`) is readable — that is the normal
+      // "no duplicate yet" case, and it reveals nothing.
+      allow read: if isSignedIn() && (resource == null || resource.data.senderId == uid());
+      allow create, update: if isSignedIn() && request.resource.data.senderId == uid();
+      // Records expire via the `ttlExpiresAt` TTL policy; no client delete.
+      allow delete: if false;
     }
     match /last_messages/{conversationId} {
       // The preview text is the conversation's own content: readable only by a
@@ -1372,18 +1384,32 @@ service cloud.firestore {
       // mutations (likes, saves, comments, follows, views) increment them from
       // the client inside Firestore transactions.
       //
-      // RESIDUAL RISK (N207): a rule cannot tell a legitimate `increment(±1)`
-      // from an absolute `{ value: 999999 }`, and the shard id is unbound to the
-      // writer — so a signed-in client CAN forge a count. The shape checks below
-      // only stop full-document overwrites and non-numeric values; they are NOT
-      // a forgery defence. Closing it needs every counter mutation moved
-      // server-side (Admin SDK bypasses rules) + `allow write: if false`, a
-      // multi-service change tracked in the ledger.
+      // N207 (partially mitigated): a rule CAN see the post-`increment()` value
+      // — the emulator probe proves `request.resource.data.value` is the
+      // *resulting* value and `resource.data.value` the pre-write value — so the
+      // write is pinned to a small relative increment instead of an absolute
+      // assignment. A one-shot `{ value: 999999 }` mint (create or update) is
+      // now DENIED. Every reachable client call site is ±1 (see
+      // CountersManager call sites); the bound (±100) leaves headroom for the
+      // batched comment-delete path. What remains: the shard id is still unbound
+      // to the writer, so a signed-in client can grind repeated bounded writes
+      // (no per-user rate limit applies to this collection) — this is NOT a
+      // complete forgery defence. The full fix is to move every counter mutation
+      // server-side (Admin SDK bypasses rules) and set `allow write: if false`.
+      // Tracked in the ledger.
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.keys().hasAll(['value']) && request.resource.data.keys().size() == 1 && request.resource.data.value is number;
-      allow update: if isSignedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']) &&
-        request.resource.data.value is number;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['value'])
+        && request.resource.data.keys().size() == 1
+        && request.resource.data.value is number
+        && request.resource.data.value >= -100
+        && request.resource.data.value <= 100;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value'])
+        && request.resource.data.value is number
+        && resource.data.value is number
+        && request.resource.data.value - resource.data.value >= -100
+        && request.resource.data.value - resource.data.value <= 100;
     }
     match /system/{docId} {
       // Server bookkeeping (coin_supply, scheduler cursors) written by Cloud
@@ -1493,13 +1519,20 @@ service cloud.firestore {
     //
     // NOTE (N266): there is no privacy capability to enforce — the former
     // `privacy` field was never read by any surface and is no longer written
-    // (removed as a dead control), so the read stays collection-scoped to
-    // signed-in clients. A status/registration-gated read would require the two
-    // list queries (`listEvents`, `getUserRegistrations`) to prove a predicate
-    // they cannot (rules are not filters); that needs registrations served
-    // server-side.
+    // (removed as a dead control). The read is now status/relationship-gated
+    // (N266): a published/open/live/ended event is readable by any signed-in
+    // client, but a `draft`, `cancelled` or `archived` event — which is not in
+    // any discovery list — is readable only by its organizer or an attendee.
+    // The client registration list is served server-side
+    // (`getUserEventRegistrations`), so no client list query needs to prove the
+    // status/organizer predicate (rules are not filters).
     match /events/{eventId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.status in ['published', 'open', 'live', 'ended'] ||
+        resource.data.organizerId == uid() ||
+        (resource.data.attendees != null && resource.data.attendees[uid()] != null) ||
+        isAdmin()
+      );
       allow create: if isSignedIn() && authoredBy('organizerId');
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.organizerId;
       match /{subcollection}/{docId} {

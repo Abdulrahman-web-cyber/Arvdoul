@@ -516,3 +516,36 @@ keeps reading the legacy public field so no balance is lost.
 
 Latest verified: **1893 tests / 1888 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green.
+
+## Continuation session (N266: draft-event read exposure closed)
+
+Java 21 was installed in the workspace (`apt-get install -y default-jre-headless`),
+so the Firestore/Storage emulators now run locally — every emulator-backed rules
+suite is verified for real here, not only in CI.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N266 | `events/{eventId}` was `allow read: if isSignedIn()`, so any signed-in client could read a `draft`/`cancelled`/`archived` event by id (title, location, coordinates, ticket tiers) even though no discovery list surfaces it. The earlier deferral was blocked because `eventService.getUserRegistrations`'s list query (`where('attendees.<uid>.status','in',…)`) cannot prove the status/organizer predicate (rules are not filters). | Registration list moved server-side: new `getUserEventRegistrations` callable (Admin SDK, minimal projection, bounded `limit(100)`, in-memory sort to avoid an undeclarable per-uid map composite index); `eventService.getUserRegistrations()` delegates to it and `FUNCTIONS.GET_USER_EVENT_REGISTRATIONS` was added. Rule is now `isSignedIn() && (status in ['published','open','live','ended'] || organizerId == uid() || attendees[uid()] != null || isAdmin())`. `readScopePrivacyRules.test.js` updated: static gate assertions + an emulator test proving draft → organizer/attendee succeed and stranger/anonymous fail, published → any signed-in succeeds. |
+
+Latest verified: **1893 tests / 1888 passed (5 skipped)**; emulator rules suites
+(`readScopePrivacyRules`, `firestoreRulesCompile`, `socialGraphEdgeReadRules`,
+`counterShardForgeryGuard`, storage path alignment, +7 more) — **139 tests
+passed** locally against the Firestore/Storage emulators; `npm run lint` exit 0
+(0 errors); `npm run build` green.
+
+## Continuation session (N207 closure + N369 message_dedupe forgery)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N207 | `counter_shards` accepted a client-written absolute `value` for any shard id — a signed-in user could mint any count. The earlier deferral claimed a rule could not distinguish a legitimate `increment(±1)` from an absolute write. **That was wrong:** an emulator probe confirmed `request.resource.data.value` is the *resulting* value and `resource.data.value` the *pre-write* value, so a rule can bound the relative delta. | Rule now requires the single numeric `value` AND bounds the change to `±100` (`value - resource.data.value` in `[-100,100]` on update; `value` in `[-100,100]` on create). One-shot absolute mints (create and update) are denied; every reachable call site increments ±1 and the ±100 headroom covers the batched comment-delete (`amount: -count`). `counterShardForgeryGuard.test.js` now asserts the absolute mint `assertFails` while a legitimate ±1 increment `assertSucceeds`. Residual (documented, not fully closed): the shard id is unbound to the writer, so a client can still grind repeated bounded writes; the full fix is to move every counter mutation server-side and set `allow write: if false`. |
+| N369 | `message_dedupe` was `allow read, write: if isSignedIn()`. The key is `sha256(sender:conversation:type:content:mediaHash)` — its pre-image is public — so any signed-in client could compute a victim's next key, pre-create the record, and suppress that victim's message (`_checkDuplicate` → `messaging/duplicate`). The open read also allowed enumerating recent send keys, and the rule comment overclaimed the key "cannot be forged". | Rule binds each record to its sender: `create, update` must stamp `senderId == uid()`; `read` is `resource == null || resource.data.senderId == uid()`. `messagesService.sendMessage` stamps `senderId` and `_checkDuplicate` treats a `permission-denied` read as "no duplicate of mine". New `messageDedupeGuard.test.js` (static + emulator) is registered in the hard-failing `guards` job. |
+
+Latest verified: full emulator suite **1898 tests / 176 suites** green (incl. the two new guards);
+`npm run lint` exit 0 (0 errors); `npm run build` green.
+
+### Findings status
+
+Closed in this session: **N207**, **N369**. Still open in the ledger: **N175**
+(rankings/trending have no writer — BLOCKED on the ranking formula, a product
+decision; inventing one would itself fabricate standings) and **N270**
+(highlight visibility is a product decision, INFORMATIONAL).

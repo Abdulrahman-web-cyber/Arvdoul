@@ -70,6 +70,49 @@ async function promoteNextWaitlisted(ref, event) {
   return uid;
 }
 
+/**
+ * The caller's own event registrations, served server-side.
+ *
+ * The client list query (`where('attendees.<uid>.status','in',[...])`) cannot
+ * prove the `events` read rule's organizer/attendee predicate — rules are not
+ * filters — so the read rule had to stay a bare `isSignedIn()` and any
+ * signed-in client could read a `draft` event by id (N266). Serving the list
+ * here lets the rule gate the read on `organizerId == uid()` / `attendees[uid]`
+ * while the caller's own registrations (including drafts they organized or
+ * registered for) still resolve.
+ */
+exports.getUserEventRegistrations = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getUserEventRegistrations', 30, 60000);
+
+  // No `orderBy` here: the filter is on a per-uid map field
+  // (`attendees.<uid>.status`), whose composite index cannot be pre-declared,
+  // and a filter+orderBy combination would need one. The bounded window is
+  // sorted in memory instead.
+  const snap = await db.collection('events')
+    .where(`attendees.${uid}.status`, 'in', ['registered', 'waitlisted', 'checked_in'])
+    .limit(100)
+    .get();
+
+  const toMillis = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : 0));
+  const events = snap.docs
+    .map((d) => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        title: data.title || null,
+        status: data.status || null,
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
+        coverImage: data.coverImage || null,
+        organizerId: data.organizerId || null,
+        attendeeStatus: data.attendees?.[uid]?.status || null,
+      };
+    })
+    .sort((a, b) => toMillis(a.startDate) - toMillis(b.startDate));
+  return { events };
+});
+
 exports.registerForEvent = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'registerForEvent', 30, 60000);

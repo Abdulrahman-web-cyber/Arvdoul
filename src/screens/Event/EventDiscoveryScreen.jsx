@@ -88,7 +88,7 @@ const EventDiscoveryScreen = () => {
     if (!user?.uid) return;
     
     try {
-      const registrations = await eventService.getUserRegistrations(user.uid);
+      const registrations = await eventService.getUserRegistrations();
       const organized = await eventService.getOrganizedEvents(user.uid);
       setMyEvents([...registrations, ...organized]);
     } catch (error) {

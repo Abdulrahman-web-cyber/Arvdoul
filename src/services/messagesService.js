@@ -1321,6 +1321,9 @@ class UltimateMessagingService {
       if (MESSAGING_CONFIG.DEDUPLICATION.ENABLED) {
         const dedupeRef = this.fs.doc(this.firestore, 'message_dedupe', idempotencyKey);
         transaction.set(dedupeRef, {
+          // The rules bind a dedupe record to its sender, so an attacker cannot
+          // pre-create a victim's key to suppress their message.
+          senderId: currentUser.uid,
           createdAt: this.fs.serverTimestamp(),
           expiresAt: new Date(Date.now() + MESSAGING_CONFIG.DEDUPLICATION.WINDOW_SECONDS * 1000),
         });
@@ -2967,8 +2970,15 @@ class UltimateMessagingService {
       return true;
     }
     const dedupeRef = this.fs.doc(this.firestore, 'message_dedupe', idempotencyKey);
-    const snap = await this.fs.getDoc(dedupeRef);
-    return snap.exists();
+    try {
+      const snap = await this.fs.getDoc(dedupeRef);
+      return snap.exists();
+    } catch (err) {
+      // A denied read (a record that names another sender, or a rules change)
+      // must not block the send: treat it as "no duplicate of mine".
+      if (err?.code === 'permission-denied') return false;
+      throw err;
+    }
   }
 
   async _incrementUnreadCounters(conversationId, senderId, participantIds) {
