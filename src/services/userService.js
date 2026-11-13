@@ -11,6 +11,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { PROFILE_CONSTRAINTS, validateProfileUpdate, PRIVATE_PROFILE_FIELDS, PRIVATE_PROFILE_COLLECTION, splitProfileFields } from "../config/profileContracts.js";
+import { AVATAR_PALETTES } from '../utils/avatarUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { projectProfileForViewer } from './profileReadModel.js';
 import { socialGraphService } from './socialGraphService.js';
@@ -24,16 +25,7 @@ const USER_CONFIG = {
   MUTUAL_FRIENDS_MAX_FOLLOWS: 1000,
   FRIENDS_OF_FRIENDS_MAX_FRIENDS: 200,
   FRIENDS_OF_FRIENDS_MAX_CANDIDATES: 100,
-  AVATAR_PALETTES: [
-    { primary: '#3B82F6', secondary: '#1D4ED8', text: '#FFFFFF' },
-    { primary: '#8B5CF6', secondary: '#7C3AED', text: '#FFFFFF' },
-    { primary: '#10B981', secondary: '#059669', text: '#FFFFFF' },
-    { primary: '#EC4899', secondary: '#DB2777', text: '#FFFFFF' },
-    { primary: '#F97316', secondary: '#EA580C', text: '#FFFFFF' },
-    { primary: '#14B8A6', secondary: '#0D9488', text: '#FFFFFF' },
-    { primary: '#6366F1', secondary: '#4F46E5', text: '#FFFFFF' },
-    { primary: '#EF4444', secondary: '#DC2626', text: '#FFFFFF' }
-  ],
+  AVATAR_PALETTES,
   FRIENDS_PAGE_SIZE: 50,
   DEFAULT_RECOMMENDATIONS_LIMIT: 20,
   CACHE_MAX_ENTRIES: 500,

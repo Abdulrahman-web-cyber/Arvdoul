@@ -6,7 +6,14 @@
  * lightweight, high-contrast, scalable vector avatars.
  */
 
-const AVATAR_PALETTES = [
+/**
+ * Canonical deterministic-avatar palette. Every generated fallback avatar must
+ * draw from THIS list, so a given user renders the same colour whether they are
+ * shown by `generateDefaultAvatarSvg` (avatarUtils) or `generateDefaultAvatar`
+ * (userService). Previously the two modules each carried their own list with
+ * DIFFERENT secondary shades, so the same user got two different avatars.
+ */
+export const AVATAR_PALETTES = [
   { primary: '#3B82F6', secondary: '#1D4ED8', text: '#FFFFFF' }, // Royal Blue
   { primary: '#8B5CF6', secondary: '#6D28D9', text: '#FFFFFF' }, // Purple
   { primary: '#10B981', secondary: '#047857', text: '#FFFFFF' }, // Emerald
