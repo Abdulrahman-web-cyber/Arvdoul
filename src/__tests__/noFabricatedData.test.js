@@ -3954,3 +3954,22 @@ describe('N320 — lifetime earnings are never a fabricated measured zero', () =
     expect(wallet).toContain("wallet?.totalEarned == null ? '—'");
   });
 });
+
+describe('N343 — ProfileProgression never fabricates a "0 XP" bar from a missing XP value', () => {
+  const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileProgression.jsx'), 'utf8');
+  test('the experience prop does not default to a fabricated 0', () => {
+    // `experience = 0` made `getLevelInfo(0)` render "0 XP earned / 100 XP to
+    // Level N" for a profile that stores a level but no XP — a fabricated
+    // measured zero, the exact class the component doc claims to avoid.
+    expect(src).not.toMatch(/experience\s*=\s*0\b/);
+    expect(src).toMatch(/experience\s*=\s*null\b/);
+  });
+  test('the XP curve is consulted only when a real XP value exists', () => {
+    expect(src).not.toMatch(/getLevelInfo\(\s*experience\s*\|\|\s*0\s*\)/);
+    expect(src).toContain('getLevelInfo(Number(experience))');
+    expect(src).toContain('hasExperience');
+  });
+  test('the XP bar is gated on the resolved XP info, not the level alone', () => {
+    expect(src).toContain('{xpInfo && (');
+  });
+});
