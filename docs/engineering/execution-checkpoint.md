@@ -423,6 +423,16 @@ Latest verified: **1874 tests / 1869 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N361: ProfilePublicScreen private-gate label)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N361 | `ProfilePublicScreen`'s "This Account is Private" gate labelled its CTA `{isFollowing ? 'Requested' : 'Follow to View'}`; `isFollowing` is false for a pending request, so a requester still saw "Follow to View" | CTA branches on `requestStatus === 'pending'`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1875 tests / 1870 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

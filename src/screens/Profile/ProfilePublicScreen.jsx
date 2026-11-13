@@ -609,7 +609,7 @@ export default function ProfilePublicScreen() {
                   className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
-                  <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
+                  <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
                 </button>
               </div>
             </div>

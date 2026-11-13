@@ -101,6 +101,14 @@ describe('pending follow request is a distinct, real state', () => {
     expect(src).not.toMatch(/const isAlreadyFollowing = following\.some/);
   });
 
+  test('ProfilePublicScreen private gate labels the pending request, not a fabricated follow', () => {
+    // The "This Account is Private" gate labelled its CTA from `isFollowing`
+    // (false for a pending request), so it read "Follow to View" even after the
+    // viewer had requested access.
+    const src = read('src/screens/Profile/ProfilePublicScreen.jsx');
+    expect(src).toMatch(/requestStatus === 'pending' \? 'Requested' : 'Follow to View'/);
+  });
+
   test('the owner visitor preview carries requestStatus and disables handler-less controls', () => {
     const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
     expect(preview).toMatch(/requestStatus:\s*storeFollowStatus\?\.requestStatus/);
