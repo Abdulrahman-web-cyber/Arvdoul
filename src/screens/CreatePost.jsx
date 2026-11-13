@@ -561,7 +561,6 @@ function reducer(state, action) {
       case "SET_EVENT_LOCATION": draft.typeData.event.location = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_TITLE": draft.typeData.link.title = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_AUDIO_FILE": draft.typeData.audio.file = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_TYPE_DATA": {
         // Deep-merge per-type data (CreateAudio dispatches the whole audio
         // sub-object). A plain assign would drop sibling keys, so merge one
@@ -589,13 +588,11 @@ function reducer(state, action) {
       case "SET_EVENT_CAPACITY": draft.typeData.event.capacity = action.payload; draft.isDirty = true; break;
       case "SET_LINK_METADATA": draft.typeData.link.metadata = action.payload; break;
       case "SET_LINK_THUMBNAIL": draft.typeData.link.thumbnail = action.payload; draft.isDirty = true; break;
-      case "SET_VIDEO_FILE": draft.typeData.video.file = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_STEP": draft.step = action.payload; break;
       case "SET_LOADING": draft.loading = action.payload; break;
       case "SET_PROGRESS": draft.progress = action.payload; break;
       case "SET_ERROR": draft.error = action.payload; break;
       case "SET_DRAFT_ID": draft.draftId = action.payload; break;
-      case "SET_IS_DRAFT_LOADED": draft.isDraftLoaded = action.payload; break;
       case "SET_IS_DIRTY": draft.isDirty = action.payload; break;
       case "SET_INSIGHTS": draft.insights = action.payload; break;
       case "SET_MODERATION_STATUS": draft.moderationStatus = action.payload; break;
@@ -2155,7 +2152,7 @@ function PostPreview() {
 }
 
 export function ReviewSummary({ defaultOpen = false }) {
-  const { state } = useCreatePostState();
+  const { state, dispatch } = useCreatePostState();
   const { saveDraft, saveAsTemplate } = useCreatePostServices();
   const isDark = useTheme().theme === "dark";
 
@@ -2217,7 +2214,15 @@ export function ReviewSummary({ defaultOpen = false }) {
       {state.error && (
         <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-medium flex items-center gap-2">
           <Icons.AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{state.error}</span>
+          <span className="flex-1">{state.error}</span>
+          <button
+            type="button"
+            aria-label="Dismiss error"
+            onClick={() => dispatch({ type: "CLEAR_ERROR" })}
+            className="p-0.5 rounded hover:bg-red-500/20"
+          >
+            <Icons.X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>

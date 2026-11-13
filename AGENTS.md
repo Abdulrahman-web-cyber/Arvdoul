@@ -584,6 +584,24 @@ has no integrated provider, remove the control and throw an honest "not availabl
 (or render an unavailable state) — never fabricate a success or a URL. Guarded by
 `noFabricatedData.test.js`; the same rule as §11's "no fabricated standing".
 
+**The composer is the recurring offender (N376/N378/N379).** `CreatePost.jsx` had
+four paid controls that wrote nothing (`enableComments`/`enableGifts`/`enableSharing`/
+`isNSFW`), a `Co-Authors` panel and a `Recurrence` picker that persisted values no
+writer/reader/rule consumed, and a `TaggingPanel` whose "brand"/"product" tags were
+just users (its only search is a `users`-index query) plus `topics`/`feeling`/
+`activity`/`customList`/`expiresAt` state that `firestoreService.createPost` never
+persists. A composer control must either reach a persisted, read field or not exist.
+`scheduledPostsGuard.test.js` now also fails if any composer reducer `case "X"` has no
+`dispatch({ type: "X" })` anywhere in the composer tree (`SET_AUDIO_FILE`,
+`SET_VIDEO_FILE`, `SET_IS_DRAFT_LOADED` were unreachable; the error banner's
+`CLEAR_ERROR` was wired up with a dismiss button instead of deleted).
+
+**Scheduled posts publish (N377).** `functions/scheduledPosts.js#publishScheduledPosts`
+(pubsub, merged in `index.js`) is the single writer that flips a due
+`status:'scheduled'` post to `published`; the `(status, scheduledTime)` composite index
+backs its bounded query. Do not add another `scheduled`-status writer, and do not let
+the client optimistically show a scheduled post as published.
+
 ## Reconstruction deliverable
 `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/
 duplication/cost/route/dependency reconstruction and the AUDIT V3 finding-status

@@ -101,4 +101,26 @@ describe('composer has no dead scheduling/collaboration controls', () => {
       expect(createPost).not.toContain(token);
     }
   });
+
+  test('every composer reducer case is dispatched from somewhere', () => {
+    // A `case "X":` with no `dispatch({ type: "X" })` anywhere in the composer
+    // tree is an unreachable reducer branch — the same dead-control class as the
+    // removed panels (SET_AUDIO_FILE / SET_VIDEO_FILE / SET_IS_DRAFT_LOADED were
+    // exactly this; CLEAR_ERROR was wired up instead of deleted).
+    const dir = path.join(root, 'src/screens');
+    const files = fs.readdirSync(dir).filter((f) => f.startsWith('CreatePost') && f.endsWith('.jsx'));
+    const subDir = path.join(dir, 'CreatePost');
+    const all = [...files.map((f) => path.join(dir, f))];
+    if (fs.existsSync(subDir)) {
+      all.push(...fs.readdirSync(subDir).filter((f) => f.endsWith('.jsx')).map((f) => path.join(subDir, f)));
+    }
+    const source = all.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    const cases = new Set([...source.matchAll(/case "([A-Z_]+)"/g)].map((m) => m[1]));
+    const dispatched = new Set([
+      ...[...source.matchAll(/type:\s*"([A-Z_]+)"/g)].map((m) => m[1]),
+      ...[...source.matchAll(/type:\s*`([A-Z_]+)\$\{/g)].map((m) => m[1]),
+    ]);
+    const unreachable = [...cases].filter((c) => !dispatched.has(c));
+    expect(unreachable).toEqual([]);
+  });
 });
