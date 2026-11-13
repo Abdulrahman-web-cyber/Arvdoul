@@ -204,10 +204,17 @@ const formatDuration = (seconds) => {
         if (creatorIds.length === 0) return;
         const states = await getUserService().getFollowStates(user.uid, creatorIds);
         if (cancelled) return;
-        setReels((prev) => prev.map((r) => ({
-          ...r,
-          creator: { ...r.creator, isFollowing: Boolean(states.get(r.creator?.id)?.isFollowing) },
-        })));
+        setReels((prev) => prev.map((r) => {
+          const state = states.get(r.creator?.id);
+          return {
+            ...r,
+            creator: {
+              ...r.creator,
+              isFollowing: Boolean(state?.isFollowing),
+              requestStatus: state?.requestStatus ?? null,
+            },
+          };
+        }));
       } catch (err) {
         console.warn('Could not resolve follow state:', err);
       }
@@ -304,17 +311,33 @@ const formatDuration = (seconds) => {
     }
     if (!creator?.id || creator.id === user.uid) return;
     const wasFollowing = creator.isFollowing;
-    setReels((prev) => prev.map((r) => (
-      r.creator.id === creator.id ? { ...r, creator: { ...r.creator, isFollowing: !wasFollowing } } : r
+    const wasRequested = creator.requestStatus === 'pending';
+    const applyCreator = (isFollowing, requestStatus = null) => setReels((prev) => prev.map((r) => (
+      r.creator.id === creator.id
+        ? { ...r, creator: { ...r.creator, isFollowing, requestStatus } }
+        : r
     )));
+    // Optimistic: a private target becomes a pending request, not a follow.
+    applyCreator(!wasFollowing && !wasRequested, null);
     try {
-      if (wasFollowing) await getUserService().unfollowUser(user.uid, creator.id);
-      else await getUserService().followUser(user.uid, creator.id);
-      toast.success(wasFollowing ? `Unfollowed @${creator.username}` : `Following @${creator.username} 🎉`);
+      if (wasFollowing || wasRequested) {
+        if (wasRequested) await getUserService().cancelFollowRequest(user.uid, creator.id);
+        else await getUserService().unfollowUser(user.uid, creator.id);
+        applyCreator(false, null);
+        toast.success(wasRequested ? 'Request withdrawn' : `Unfollowed @${creator.username}`);
+      } else {
+        const res = await getUserService().followUser(user.uid, creator.id);
+        // A private account yields `{requested:true}` and creates no edge.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          applyCreator(false, 'pending');
+          toast.success('Follow request sent');
+        } else {
+          applyCreator(true, null);
+          toast.success(`Following @${creator.username} 🎉`);
+        }
+      }
     } catch (err) {
-      setReels((prev) => prev.map((r) => (
-        r.creator.id === creator.id ? { ...r, creator: { ...r.creator, isFollowing: wasFollowing } } : r
-      )));
+      applyCreator(wasFollowing, wasRequested ? 'pending' : null);
       toast.error(err?.message || 'Could not update follow');
     }
   };
@@ -670,7 +693,9 @@ const formatDuration = (seconds) => {
           {currentReel.creator.id && currentReel.creator.id !== user?.uid && (
             <button
               onClick={() => handleFollow(currentReel.creator)}
-              aria-label={currentReel.creator.isFollowing ? 'Unfollow creator' : 'Follow creator'}
+              aria-label={currentReel.creator.isFollowing
+                ? 'Unfollow creator'
+                : (currentReel.creator.requestStatus === 'pending' ? 'Cancel follow request' : 'Follow creator')}
               className={cn(
                 "absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full text-white text-xs font-black flex items-center justify-center shadow-md border border-black transition-transform active:scale-90",
                 currentReel.creator.isFollowing
@@ -678,7 +703,7 @@ const formatDuration = (seconds) => {
                   : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue"
               )}
             >
-              {currentReel.creator.isFollowing ? '✓' : '+'}
+              {currentReel.creator.isFollowing ? '✓' : (currentReel.creator.requestStatus === 'pending' ? '…' : '+')}
             </button>
           )}
         </div>
@@ -793,7 +818,9 @@ const formatDuration = (seconds) => {
                     : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md"
                 )}
               >
-                {currentReel.creator.isFollowing ? 'Following' : 'Follow'}
+                {currentReel.creator.isFollowing
+                  ? 'Following'
+                  : (currentReel.creator.requestStatus === 'pending' ? 'Requested' : 'Follow')}
               </button>
             )}
           </div>

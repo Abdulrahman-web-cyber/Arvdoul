@@ -382,6 +382,17 @@ The emulator-gated assertions execute (not silently skip) with Java present.
 Latest verified: **162 suites / 1829 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green.
 
+## Continuation session (viewer-state reality: comments + pending follow requests)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N356 | `VideoComments` hardcoded `isLiked: false`; `commentService.likeComment` toggles (rejects a repeat), so an already-liked comment rendered unliked and the toggle threw + reverted — the like silently no-op'd | `VideoComments` seeds `isLiked` from the comment doc's `likesBy` (viewer uid resolved via `getAuthInstance`); `commentLikeStateRealityGuard.test.js` (guards job) |
+| N357 | A follow against a private account (`follow_requests/{from}_{to}`, `status: 'pending'`, no `follows` edge) was unmodelled: the graph spine returned `requestStatus: null`, `getFollowStates` dropped it, and four follow controls re-offered "Follow" (a second tap filing a duplicate request) with no way to withdraw | `socialGraphService.getRelationship`/`getEdgeSet` read the pending row (actor-equality + other-party `in` + `status == 'pending'`, only when the follow edge is wanted); `userService.getFollowStates` surfaces `requestStatus`; `ReelsScreen`/`SearchScreen`/`VideoCard`(+`VideoFeed`)/`CreatorCarousel` render a distinct Requested state and cancel via `cancelFollowRequest`; `follow_requests` composite index declared; `followRequestStateRealityGuard.test.js` (guards job) |
+
+Latest verified: **1870 tests / 1865 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

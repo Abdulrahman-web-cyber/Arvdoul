@@ -129,6 +129,43 @@ const SearchScreen = memo(() => {
     };
   }, [updateQuery, search, query]);
 
+  // Resolve the viewer's real follow state for the trending creators. The
+  // search index does not carry a per-viewer `isFollowing` flag, so a card that
+  // read `creator.isFollowing` always showed "Follow" for a creator the viewer
+  // already followed (and tapping it then called followUser again). Batched
+  // per-pair edge read, never a scan of the viewer's follow graph.
+  const trendingCreatorIds = Array.isArray(trending?.creators)
+    ? trending.creators.map((c) => c.id || c.uid).filter(Boolean).join(',')
+    : '';
+  useEffect(() => {
+    if (!user?.uid || !trendingCreatorIds) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = trendingCreatorIds.split(',');
+        const states = await getUserService().getFollowStates(user.uid, ids);
+        if (cancelled) return;
+        setTrending((prev) => {
+          if (!prev || !Array.isArray(prev.creators)) return prev;
+          return {
+            ...prev,
+            creators: prev.creators.map((c) => {
+              const state = states.get(c.id || c.uid);
+              return {
+                ...c,
+                isFollowing: Boolean(state?.isFollowing),
+                requestStatus: state?.requestStatus ?? null,
+              };
+            }),
+          };
+        });
+      } catch (err) {
+        console.warn('[SearchScreen] follow-state hydration failed', err?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid, trendingCreatorIds, setTrending]);
+
   // Handle search submission
   const handleSearch = useCallback((searchQuery = query) => {
     if (searchQuery.trim()) {
@@ -223,20 +260,38 @@ const SearchScreen = memo(() => {
     const creators = Array.isArray(trending?.creators) ? trending.creators : [];
     const target = creators.find((c) => (c.id || c.uid) === creatorId);
     const wasFollowing = Boolean(target?.isFollowing);
-    const applyState = (following) => {
+    const wasRequested = Boolean(target?.requestStatus === 'pending');
+    const applyState = (following, requestStatus = null) => {
       if (!trending || !Array.isArray(trending.creators)) return;
       setTrending({
         ...trending,
-        creators: trending.creators.map((c) => ((c.id || c.uid) === creatorId ? { ...c, isFollowing: following } : c)),
+        creators: trending.creators.map((c) => ((c.id || c.uid) === creatorId
+          ? { ...c, isFollowing: following, requestStatus }
+          : c)),
       });
     };
-    applyState(!wasFollowing);
+    // Optimistic: a private target becomes a *pending request*, not a follow.
+    applyState(!wasFollowing && !wasRequested, null);
     try {
-      if (wasFollowing) await getUserService().unfollowUser(user.uid, creatorId);
-      else await getUserService().followUser(user.uid, creatorId);
-      toast.success(wasFollowing ? 'Unfollowed' : 'Following 🎉');
+      if (wasFollowing || wasRequested) {
+        if (wasRequested) await getUserService().cancelFollowRequest(user.uid, creatorId);
+        else await getUserService().unfollowUser(user.uid, creatorId);
+        applyState(false, null);
+        toast.success(wasRequested ? 'Request withdrawn' : 'Unfollowed');
+      } else {
+        const res = await getUserService().followUser(user.uid, creatorId);
+        // A private account yields `{requested:true}` and creates no edge; show
+        // "Requested" rather than claiming a completed follow.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          applyState(false, 'pending');
+          toast.success('Follow request sent');
+        } else {
+          applyState(true, null);
+          toast.success('Following 🎉');
+        }
+      }
     } catch (err) {
-      applyState(wasFollowing);
+      applyState(wasFollowing, wasRequested ? 'pending' : null);
       toast.error(err?.message || 'Could not update follow');
     }
   }, [user?.uid, trending, setTrending]);

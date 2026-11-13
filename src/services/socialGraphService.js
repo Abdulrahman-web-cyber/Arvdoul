@@ -187,20 +187,24 @@ class SocialGraphService {
    * other party with `in`. Chunked to 30 for the `in` cap. Returns the set of
    * `${actorId}_${otherId}` keys.
    */
-  async _actorScopedIds(viewerId, otherIds, { collection: collectionName, actorField, otherField }) {
+  async _actorScopedIds(viewerId, otherIds, { collection: collectionName, actorField, otherField, equals = null }) {
     const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
     const found = new Set();
     const unique = [...new Set(otherIds)].filter(Boolean);
     for (const chunk of this._chunk(unique, IN_CHUNK)) {
       if (chunk.length === 0) continue;
-      const snap = await getDocs(
-        query(
-          collection(this.firestore, collectionName),
-          where(actorField, '==', viewerId),
-          where(otherField, 'in', chunk),
-          fLimit(chunk.length)
-        )
-      );
+      const constraints = [
+        collection(this.firestore, collectionName),
+        where(actorField, '==', viewerId),
+        where(otherField, 'in', chunk),
+      ];
+      for (const [field, value] of Object.entries(equals || {})) {
+        constraints.push(where(field, '==', value));
+      }
+      // Keep the cap inline in the `query(...)` argument list: the Firebase cost
+      // analyzer reads the call site textually, so a hoisted limit reads as an
+      // unbounded collection read.
+      const snap = await getDocs(query(...constraints, fLimit(chunk.length)));
       snap.forEach((d) => {
         const data = d.data() || {};
         const other = data[otherField];
@@ -228,13 +232,22 @@ class SocialGraphService {
 
     try {
       await this._ensureInitialized();
-      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut] = await Promise.all([
+      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
         this._existingIds(EDGE_COLLECTIONS.follow, [`${viewerId}_${targetId}`]),
         this._existingIds(EDGE_COLLECTIONS.follow, [`${targetId}_${viewerId}`]),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.in),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.mute.out),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.restrict.out),
+        // A follow against a private target files `follow_requests/{from}_{to}`
+        // with `status: 'pending'` and no follow edge; the capability engine
+        // needs that state to render Requested rather than an open Follow.
+        this._actorScopedIds(viewerId, [targetId], {
+          collection: 'follow_requests',
+          actorField: 'fromUserId',
+          otherField: 'toUserId',
+          equals: { status: 'pending' },
+        }),
       ]);
       const isFollowing = followOut.has(`${viewerId}_${targetId}`);
       const isFollower = followIn.has(`${targetId}_${viewerId}`);
@@ -250,7 +263,7 @@ class SocialGraphService {
         isBlocked: isBlocking || isBlockedBy,
         isMuted: muteOut.has(`${viewerId}_${targetId}`),
         isRestricted: restrictOut.has(`${viewerId}_${targetId}`),
-        requestStatus: null,
+        requestStatus: pendingOut.has(`${viewerId}_${targetId}`) ? 'pending' : null,
       };
       this._writeCache(this.edgeCache, cacheKey, edge);
       return edge;
@@ -294,6 +307,20 @@ class SocialGraphService {
       const muteOut = include.includes('mute') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.mute.out) : new Set();
       const restrictOut = include.includes('restrict') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.restrict.out) : new Set();
 
+      // A follow against a private target creates a `follow_requests/{from}_{to}`
+      // row (status `pending`) and NO follow edge. A surface that only reads the
+      // edge shows "Follow" for a target the viewer already requested, and a
+      // second tap files a duplicate request. Actor-equality + other-party `in`
+      // is the shape the rule proves (`fromUserId == uid()`). Read only when the
+      // caller asked for the follow edge (it is a follow-relationship concept).
+      const pendingOut = include.includes('follow')
+        ? await this._actorScopedIds(viewerId, others, {
+            collection: 'follow_requests',
+            actorField: 'fromUserId',
+            otherField: 'toUserId',
+          })
+        : new Set();
+
       for (const t of others) {
         const isFollowing = followOut.has(`${viewerId}_${t}`);
         const isFollower = followIn.has(`${t}_${viewerId}`);
@@ -309,7 +336,7 @@ class SocialGraphService {
           isBlocked: isBlocking || isBlockedBy,
           isMuted: muteOut.has(`${viewerId}_${t}`),
           isRestricted: restrictOut.has(`${viewerId}_${t}`),
-          requestStatus: null,
+          requestStatus: pendingOut.has(`${viewerId}_${t}`) ? 'pending' : null,
         });
       }
     } catch (err) {

@@ -31,7 +31,17 @@ describe('video feed wiring', () => {
     const src = read('src/components/Videos/VideoFeed.jsx');
     // Canonical batched per-pair edge read, never a scan of the viewer's graph.
     expect(src).toContain('getFollowStates');
-    expect(src).toMatch(/followedByViewer=\{followingIds\.has/);
+    // The resolved state (follow + pending request) is passed to the card; a
+    // private target's pending request must not render as a plain "Follow".
+    expect(src).toMatch(/followedByViewer=\{Boolean\(followStates\.get/);
+    expect(src).toMatch(/requestPending=\{followStates\.get/);
+  });
+
+  test('VideoCard renders a pending follow request distinctly', () => {
+    const src = read('src/components/Videos/VideoCard.jsx');
+    expect(src).toContain('requestPending');
+    expect(src).toMatch(/isRequested \? 'Requested' : 'Follow'/);
+    expect(src).toContain('cancelFollowRequest');
   });
 
   test('VideoCard accepts followedByViewer instead of hardcoding false', () => {

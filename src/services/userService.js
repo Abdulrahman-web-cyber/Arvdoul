@@ -1417,12 +1417,13 @@ class ProfessionalUserService {
           isFollowing: Boolean(edge.isFollowing),
           isFollower: Boolean(edge.isFollower),
           isMutualFriend: Boolean(edge.isMutualFriend),
+          requestStatus: edge.requestStatus ?? null,
         });
       }
     } catch (err) {
       logger.warn('[UserService] getFollowStates failed', { viewerId, error: err?.message });
       for (const id of targets) {
-        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
+        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false, requestStatus: null });
       }
     }
 

@@ -5,7 +5,7 @@
 import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, Volume2, VolumeX, PictureInPicture2, Download, Bookmark, Flag, Heart, MessageCircle, Share2, Repeat, Maximize, Music, BadgeCheck, Plus, Check, Sparkles, MoreHorizontal, ChevronRight, Gift, ArrowUpCircle, MoveHorizontal, X } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, PictureInPicture2, Download, Bookmark, Flag, Heart, MessageCircle, Share2, Repeat, Maximize, Music, BadgeCheck, Plus, Check, Clock, Sparkles, MoreHorizontal, ChevronRight, Gift, ArrowUpCircle, MoveHorizontal, X } from "lucide-react";
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -29,6 +29,7 @@ const VideoCard = memo(({
   onReport,
   onFollow,
   followedByViewer,
+  requestPending = false,
   autoPlay = false,
   showControls = true,
   className = '',
@@ -49,6 +50,17 @@ const VideoCard = memo(({
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [isFollowing, setIsFollowing] = useState(followedByViewer ?? video?.creator?.isFollowing ?? false);
+  const [isRequested, setIsRequested] = useState(Boolean(requestPending));
+
+  // The parent resolves the viewer's edge asynchronously (batched read), so the
+  // initial state above is usually stale. Sync the badge whenever the resolved
+  // props change (the optimistic toggle is not clobbered, because the props do
+  // not change until the parent's read — or the parent's own optimistic update
+  // via onFollow — actually moves).
+  useEffect(() => {
+    setIsFollowing(Boolean(followedByViewer));
+    setIsRequested(Boolean(requestPending));
+  }, [followedByViewer, requestPending]);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [showGestureGuide, setShowGestureGuide] = useState(true);
 
@@ -234,22 +246,35 @@ const VideoCard = memo(({
     if (followBusy) return;
 
     const prev = isFollowing;
+    const prevRequested = isRequested;
     setFollowBusy(true);
-    setIsFollowing(!prev); // optimistic
+    setIsFollowing(!prev && !prevRequested); // optimistic
     try {
       const { getUserService } = await import('../../services/userService.js');
       const svc = getUserService();
       const handle = video?.creator?.username ? `@${video.creator.username}` : 'this creator';
-      if (prev) {
-        await svc.unfollowUser(user.uid, targetId);
-        toast.success(`Unfollowed ${handle}`);
+      if (prev || prevRequested) {
+        if (prevRequested) await svc.cancelFollowRequest(user.uid, targetId);
+        else await svc.unfollowUser(user.uid, targetId);
+        setIsRequested(false);
+        toast.success(prevRequested ? 'Request withdrawn' : `Unfollowed ${handle}`);
+        onFollow?.(video?.creator, { isFollowing: false, requestStatus: null });
       } else {
-        await svc.followUser(user.uid, targetId);
-        toast.success(`Following ${handle}! 🎉`);
+        const res = await svc.followUser(user.uid, targetId);
+        // A private account yields `{requested:true}` and creates no edge.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          setIsFollowing(false);
+          setIsRequested(true);
+          toast.success('Follow request sent');
+          onFollow?.(video?.creator, { isFollowing: false, requestStatus: 'pending' });
+        } else {
+          toast.success(`Following ${handle}! 🎉`);
+          onFollow?.(video?.creator, { isFollowing: true, requestStatus: null });
+        }
       }
-      onFollow?.(video?.creator);
     } catch (err) {
       setIsFollowing(prev); // rollback
+      setIsRequested(prevRequested);
       toast.error(err?.message || 'Could not update follow status');
     } finally {
       setFollowBusy(false);
@@ -421,9 +446,11 @@ const VideoCard = memo(({
                 : 'text-white ring-2 ring-black'
             }`}
             style={isFollowing ? undefined : { background: BRAND_GRADIENT }}
-            title={isFollowing ? 'Following' : 'Follow'}
+            title={isFollowing ? 'Following' : (isRequested ? 'Requested' : 'Follow')}
           >
-            {isFollowing ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Plus className="w-3.5 h-3.5 stroke-[3]" />}
+            {isFollowing
+              ? <Check className="w-3.5 h-3.5 stroke-[3]" />
+              : (isRequested ? <Clock className="w-3.5 h-3.5 stroke-[3]" /> : <Plus className="w-3.5 h-3.5 stroke-[3]" />)}
           </motion.button>
         </div>
 
@@ -729,7 +756,7 @@ const VideoCard = memo(({
             }`}
             style={isFollowing ? undefined : { background: BRAND_GRADIENT }}
           >
-            {isFollowing ? 'Following' : 'Follow'}
+            {isFollowing ? 'Following' : (isRequested ? 'Requested' : 'Follow')}
           </motion.button>
         </div>
 
@@ -920,6 +947,7 @@ VideoCard.propTypes = {
   onReport: PropTypes.func,
   onFollow: PropTypes.func,
   followedByViewer: PropTypes.bool,
+  requestPending: PropTypes.bool,
   autoPlay: PropTypes.bool,
   showControls: PropTypes.bool,
   className: PropTypes.string,

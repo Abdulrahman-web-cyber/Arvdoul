@@ -68,6 +68,9 @@ const VideoComments = memo(({
     const loadComments = async () => {
       setLoading(true);
       try {
+        const { getAuthInstance } = await import('../../firebase/firebase.js');
+        const auth = await getAuthInstance();
+        const viewerUid = auth?.currentUser?.uid || null;
         const { getCommentService } = await import('../../services/commentService.js');
         const res = await getCommentService().getCommentsByPost(video.id, {
           nested: true,
@@ -88,7 +91,11 @@ const VideoComments = memo(({
           },
           text: c.content || c.text || '',
           likes: typeof c.likes === 'number' ? c.likes : null,
-          isLiked: false,
+          // The comment doc carries `likesBy` (the ids that liked it); a card
+          // that hardcoded `false` showed an unliked heart for a comment the
+          // viewer had liked, and the toggle then re-called `likeComment`
+          // (which throws "already liked"), so the like appeared to no-op.
+          isLiked: Array.isArray(c.likesBy) && !!viewerUid && c.likesBy.includes(viewerUid),
           createdAt: c.createdAt instanceof Date
             ? c.createdAt.toISOString()
             : new Date(c.createdAt).toISOString(),
