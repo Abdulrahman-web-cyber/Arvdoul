@@ -434,7 +434,12 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   picker (`src/data/videoData.js` `VIRTUAL_GIFTS`, `GiftScreen`, `PostOptionsDrawer`,
   `liveService.GIFT_TYPES`, `monetizationService.GIFTS`) derives from them, and
   the server prices gifts from `GIFT_VALUES` (`functions/monetization.js`
-  `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug.
+  `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug —
+  `PostOptionsDrawer` re-declared `{ rose: 5, crown: 50, … }` with a `|| 5`
+  default, so its send-gift toast could advertise a price the server never
+  charges; read `GIFT_VALUES` instead.
+  `giftPriceSingleSourceGuard.test.js` (guards job) fails if a gift price
+  literal reappears outside the canonical config / derived catalog.
 - `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS`,
   `AD_REWARD_COINS` and `MAX_ADS_PER_USER_PER_DAY` own store pricing, the
   monthly subscription grant, the rewarded-ad payout and the daily ad budget.

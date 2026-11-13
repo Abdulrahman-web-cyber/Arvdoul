@@ -372,6 +372,7 @@ jobs:
           src/__tests__/serviceOfflineQueueOwnerGuard.test.js
           src/__tests__/moneyLedgerOwnershipGuard.test.js
           src/__tests__/adRewardBoundGuard.test.js
+          src/__tests__/giftPriceSingleSourceGuard.test.js
           src/__tests__/postBoostWiringGuard.test.js
           src/__tests__/moneyDisplayFormatGuard.test.js
           src/__tests__/coinBalanceBoundary.test.js

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark, AlertCircle, VolumeX, Pin, Archive, MessageSquareOff, Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle, Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck, EyeOff, ThumbsDown } from "lucide-react";
 import { VIRTUAL_GIFTS } from '../data/videoData';
+import { GIFT_VALUES } from '../shared/levelConfig.cjs';
 import firestoreService from '../services/firestoreService.js';
 import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
@@ -658,8 +659,11 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   });
 
   const getGiftValue = (giftType) => {
-    const fallback = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
-    return fallback[giftType] || 5;
+    // Read the canonical price table — a local literal (rose 5 / crown 50 / …)
+    // drifts from the server's GIFT_VALUES and can advertise a price the
+    // `sendGift` callable never charges.
+    const value = GIFT_VALUES[giftType];
+    return typeof value === 'number' ? value : null;
   };
 
   const handleSendGift = requireAuth(async (giftType) => {
@@ -670,7 +674,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     try {
       const result = await callWithRetry(() => sendGift(currentUser.uid, post.id, giftType));
       if (!isValidVersion('gift', version) || !mountedRef.current) return;
-      if (result.success) { toast.success(`Sent ${giftType} (${value} coins)`); debouncedAnalytics('post_option_click', { action: 'gift', postId: post.id, giftType, value }); }
+      if (result.success) { toast.success(`Sent ${giftType}${value != null ? ` (${value} coins)` : ''}`); debouncedAnalytics('post_option_click', { action: 'gift', postId: post.id, giftType, value }); }
       else toast.error(result.error || 'Gift failed');
     } catch { toast.error('Gift failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
