@@ -2,6 +2,33 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — video/reel viewer-state reality (N354–N355)
+
+- **N354 (MEDIUM, closed):** `videoService.formatVideoItem` seeded `isLiked`/`isSaved`
+  from `item.isLiked`/`item.isSaved` — fields **no writer ever sets** on a `videos/{id}`
+  document (`uploadVideo` writes only the content/author fields). `ReelsScreen` mapped
+  those straight into the reel, so every reel rendered an unliked heart for a viewer who
+  had liked it, and because `likeVideo` **toggles** server-side the next tap *unliked* it
+  (the heart flipped back on, appearing to do nothing); same for save. `VideoDetailScreen`
+  also read a dead `data.likedBy?.includes(uid)`. Fix: new
+  `videoService._hydrateViewerVideoState(videos, uid)` resolves the real state — one
+  bounded `documentId() in` read per 30 videos against `users/{uid}/saved_videos`, plus one
+  point read per video against `videos/{id}/likes/{uid}` (a like doc cannot be batched
+  across its per-video parent). `getVideoFeed` hydrates both branches; the dead format
+  fields and the dead detail read are gone. Locked by `viewerLikeStateRealityGuard.test.js`
+  (guards job).
+- **N355 (MEDIUM, closed):** `ReelsScreen` and `VideoFeed` hydrated the per-creator
+  `isFollowing`/`followedByViewer` badge with `getFollowing(uid, { limit: 200 })` — a
+  graph-wide list whose cost grows with how many accounts the viewer follows — to answer
+  "does the viewer follow these N creators?". Fix: both use
+  `userService.getFollowStates(viewerId, creatorIds)` → `socialGraphService.getEdgeSet`
+  (the canonical batched per-pair read, chunked `documentId() in` on the actor field).
+  `integrationWiring.test.js` asserts the canonical method.
+
+Latest verified: **169 suites / 1855 passed (5 skipped), exit 0**; `npm run lint` exit 0
+(0 errors); `npm run build` green. `firebaseCostGuard` stayed green (the new saved-videos
+read is explicitly `limit`-bounded).
+
 ## This session — viewer like-state reality (N352–N353)
 
 - **N352 (MEDIUM, closed):** `PostCard`/`PostOptionsDrawer` seeded the viewer's
