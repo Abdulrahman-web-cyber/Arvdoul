@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import marketplaceService from '../../services/marketplaceService';
+import { unknownNumber } from '../../lib/unknownNumber';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const CATEGORIES = ['All', 'Digital Assets', 'Audio & Sounds', 'Merch & Apparel', 'Mentorship & VIP'];
@@ -218,10 +219,16 @@ export default function MarketplaceScreen() {
                   </h3>
 
                   <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
-                      <Star className="w-3.5 h-3.5 fill-yellow-400" /> {prod.rating} ({prod.reviewsCount})
-                    </div>
-                    <span className="text-[11px] text-gray-400">{prod.salesCount} sold</span>
+                    {typeof prod.rating === 'number' && prod.rating > 0 ? (
+                      <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
+                        <Star className="w-3.5 h-3.5 fill-yellow-400" /> {prod.rating} ({unknownNumber(prod.reviewsCount) ?? 0})
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">No reviews yet</span>
+                    )}
+                    {typeof prod.salesCount === 'number' && prod.salesCount > 0 && (
+                      <span className="text-[11px] text-gray-400">{prod.salesCount} sold</span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -4073,3 +4073,18 @@ describe('N389 — saved items / collections show a real date, not "Recently"', 
     expect(svc).toMatch(/savedAt:\s*entry\.savedAt \|\| null/);
   });
 });
+
+describe('N390 — Marketplace does not render a zero-star rating as if measured', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+
+  test('a product with no reviews shows "No reviews yet", not a bare 0 rating', () => {
+    expect(src).toMatch(/prod\.rating > 0/);
+    expect(src).toMatch(/No reviews yet/);
+    // The unconditional `{prod.rating} ({prod.reviewsCount})` rendered "0 (0)".
+    expect(src).not.toMatch(/<Star className="w-3\.5 h-3\.5 fill-yellow-400" \/> \{prod\.rating\} \(\{prod\.reviewsCount\}\)/);
+  });
+
+  test('"N sold" is only shown once a sale has happened', () => {
+    expect(src).toMatch(/prod\.salesCount > 0/);
+  });
+});
