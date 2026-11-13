@@ -146,6 +146,13 @@ as failures.
   index, and cover it in `socialGraphEdgeReadRules.test.js`. Do not "fix" this by
   allowing `get` on a null `resource` in the rules — that turns a point read into an
   edge-existence oracle for arbitrary pairs.
+- **Post author standing**: `authorId`/`authorName`/`authorPhoto`/`authorIsPrivate` are
+  the only author fields on `posts/{uid}`. Standing (verified / creator / premium) lives
+  on `users/{uid}` and is resolved for a page of posts by
+  `src/hooks/useAuthorStanding.js` (batched `socialGraphService.hydrateProfiles`) and
+  passed to `PostCard` as `authorStanding`. Never read `post.authorLevel` or
+  `post.isVerified` — no writer sets them, so the badge/gift gate would be permanently
+  dead. `postAuthorStandingGuard.test.js` (guards job) enforces this.
 - **Avatar field**: `photoURL` is the only stored avatar field on `users/{uid}`.
   `profilePicture` is accepted as an input alias by `validateProfileUpdate` and folded onto
   `photoURL` — never write `profilePicture` to Firestore.

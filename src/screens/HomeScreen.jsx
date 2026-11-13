@@ -29,6 +29,7 @@ import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.j
 import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 import { getAdaptiveTuning } from '../utils/deviceCapabilities.js';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { useAuthorStanding } from '../hooks/useAuthorStanding';
 import PullToRefresh from '../components/Shared/PullToRefresh';
 import { scheduleIdleTask, cancelIdleTask } from '../performance/optimizer.js';
 
@@ -577,6 +578,7 @@ const PostWithTracking = React.memo(({
   onOpenComments,
   onOpenOptions,
   onRetry,
+  authorStanding,
 }) => {
   const { register, unregister } = useContext(VisibilityContext);
   const [isVisible, setIsVisible] = useState(false);
@@ -605,6 +607,7 @@ const PostWithTracking = React.memo(({
           onOpenOptions={onOpenOptions}
           onRetry={onRetry}
           isVisible={isVisible}
+          authorStanding={authorStanding}
         />
       </ErrorBoundary>
     </div>
@@ -640,6 +643,10 @@ export default function HomeScreen() {
 
   const [feedState, dispatchFeed] = useReducer(feedReducer, { byId: {}, order: [] });
   const feed = useMemo(() => feedState.order.map(id => feedState.byId[id]), [feedState.order, feedState.byId]);
+  // Resolve each visible author's verified/creator/premium standing in one
+  // bounded batch so PostCard can render real badges instead of the dead
+  // `post.authorLevel`/`post.isVerified` reads.
+  const authorStanding = useAuthorStanding(feed);
   const feedRef = useRef([]);
   useEffect(() => { feedRef.current = feed; }, [feed]);
   useEffect(() => { feedRuntimeRef.current.feed = feed; }, [feed]);
@@ -1471,6 +1478,7 @@ export default function HomeScreen() {
                       onOpenComments={openComments}
                       onOpenOptions={openOptions}
                       onRetry={handleRetry}
+                      authorStanding={authorStanding[post.authorId]}
                     />
                   </div>
                 )}

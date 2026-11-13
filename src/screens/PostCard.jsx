@@ -501,7 +501,7 @@ const engagementReducer = (state, action) => {
   }
 };
 
-function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, navigate, onRetry, isVisible = true }) {
+function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, navigate, onRetry, isVisible = true, authorStanding = null }) {
   const { theme } = useTheme();
   const tokens = useMemo(() => getDesignTokens(theme), [theme]);
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -527,8 +527,15 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
   // Memoized post data
   const likedBySet = useMemo(() => new Set(post.likedBy || []), [post.likedBy]);
-  const isCreator = (post.authorLevel || 0) >= 5;
-  const isPremium = (post.authorLevel || 0) >= 8;
+  // Author standing (verified / creator / premium) lives on the author's
+  // `users/{uid}` profile, never on the post document. The card previously read
+  // an author-level field and a post-level verified flag that no writer ever
+  // set, so these were permanently false. The feed (HomeScreen) resolves the
+  // standing and passes it down; a caller without it renders no badge rather
+  // than inventing one.
+  const isVerified = Boolean(authorStanding?.isVerified);
+  const isCreator = Boolean(authorStanding?.isCreator);
+  const isPremium = Boolean(authorStanding?.isPremium);
   const hasMedia = !!(post.media && post.media.length > 0);
 
   const isInitiallyLiked = useMemo(() => {
@@ -1051,12 +1058,12 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-gradient-to-r from-purple-400 to-pink-600' : 'bg-transparent'}`} />
           <img src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
           {isPremium && <Crown className="absolute -top-1 -right-1 w-3 h-3 text-yellow-400" />}
-          {post.isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
+          {isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 flex-wrap">
             <span className="font-semibold text-sm" style={{ color: tokens.text }}>{post.authorName}</span>
-            {post.isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
+            {isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
             {isCreator && <Zap className="w-3 h-3 text-amber-400" />}
             {post.momentum === 'trending' && <TrendingUp className="w-3 h-3 text-green-400" title="Trending" />}
             {post.momentum === 'exploding' && <Sparkles className="w-3 h-3 text-yellow-400" title="Exploding" />}
@@ -1173,7 +1180,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
-      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={post.isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
+      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}

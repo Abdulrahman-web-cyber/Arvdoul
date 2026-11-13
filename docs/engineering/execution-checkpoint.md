@@ -2,10 +2,64 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — dead author-standing reads (N349)
+
+- **N349 (MEDIUM, closed):** `PostCard` computed `isCreator = (post.authorLevel || 0) >= 5`
+  and `isPremium = (post.authorLevel || 0) >= 8`, and read `post.isVerified` for the
+  verified check. **No writer ever puts `authorLevel` or `isVerified` on a `posts/{id}`
+  document** — standing lives on `users/{uid}` (the create path writes `authorId`,
+  `authorName`, `authorIsPrivate`, `authorPhoto` only). Every read was therefore
+  permanently falsy: the creator/premium avatar rings, the verified badge, the creator
+  zap, and the creator-gated **Send gift** button never rendered on any feed card.
+  - Fix: new `src/hooks/useAuthorStanding.js` hydrates the distinct author uids in one
+    bounded batch (`socialGraphService.hydrateProfiles`, 30 ids per `documentId() in`
+    read, viewer-projected, resolved ids not re-read) and returns an entry only for a
+    profile that actually resolved. `PostCard`/`PostDetails` consume a resolved
+    `authorStanding` prop; a caller without one renders **no** badge (never fabricated).
+    `HomeScreen` feeds it the page's posts; `PostDetails` its single post.
+  - Guard: `postAuthorStandingGuard.test.js` (guards job) fails on any `authorLevel`
+    read or a post-document standing read.
+
+Latest verified: **167 suites / 1843 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (all with the Firestore emulator live).
+
+## This session — money/fabrication + post-author-field sweep (N344–N348)
+
+- **N348 (HIGH, closed):** `functions/monetization.js` read the post author from
+  `postSnap.data().userId`, which does not exist — posts denormalise the author
+  as `authorId` (firestoreService postDoc, the communities writer, and the
+  `posts` create rule all agree). Consequences: `sendGift` threw "Post has no
+  author" on **every** gift (gifting was dead), and `boostPost`'s ownership
+  check `data().userId !== uid` rejected the real owner (boosting was dead, and
+  `boosted_posts.userId` was written `undefined`). Both now resolve `authorId`
+  with a `userId` fallback. Guard: `postAuthorFieldConsistency.test.js` (in the
+  `guards` job) fails on a post-author `userId` read in `functions/`, and pins
+  the client writer + rules to `authorId`. A follow-up sweep confirmed
+  `live_streams`/`videos`/`comments`/`questions` genuinely store `userId`, and
+  `admin.js`/`user.js`/`comments.js` reads are correct (no other mismatches).
+- **N344–N347 (closed in commit `f7f3207`):** idempotency-ledger ownership check
+  on `requestWithdrawal`/`watchAd`; fractional-coin withdrawal rejected; money
+  screens no longer double-prefix `$` (`$$5.00`) and format coins via
+  `formatCoinsAsUsd`; `predictPostPerformance` + `CreatePost` no longer render a
+  fabricated per-reach "earnings" figure. Guards: `moneyLedgerOwnershipGuard`,
+  `moneyDisplayFormatGuard`, `predictionNoFabricatedEarnings`.
+- **Emulator now runs locally for real.** `openjdk-21` (`default-jre-headless`)
+  installed via `sudo apt-get`; the Firestore emulator jar was fetched directly
+  (`storage.googleapis.com/firebase-preview-drop/.../cloud-firestore-emulator-v1.19.8.jar`)
+  into `~/.cache/firebase/emulators/` (firebase-tools' own downloader stalled),
+  then run with `java -jar … --host 127.0.0.1 --port 8080`. With
+  `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` the emulator-gated adversarial
+  assertions execute instead of skipping:
+  - rules/graph suites (15 suites): **130 passed, 5 skipped**;
+  - **full suite with the emulator: 166 suites / 1840 passed (5 skipped), exit 0.**
+
+Latest verified: **166 suites / 1840 passed (5 skipped)**; `npm run lint` exit 0;
+`npm run build` green (all with the emulator live).
+
 ## Current state
 
-- Latest verified: **161 suites, 1822 passed, 5 skipped**; `npm run build`
-  green; `npm run lint` exit 0 (0 errors, 876 warnings).
+- Latest verified: **167 suites, 1843 passed, 5 skipped**; `npm run build`
+  green; `npm run lint` exit 0 (0 errors).
 - N330 closed this session (money-in integrity): the three Stripe-backed
   economy callables ran their Stripe network calls **inside** the retryable
   Firestore transaction callback — `purchaseCoins` re-charged the card each
