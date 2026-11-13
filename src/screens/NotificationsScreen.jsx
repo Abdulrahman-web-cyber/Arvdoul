@@ -368,11 +368,29 @@ export default function NotificationsScreen() {
           : type === 'coin_gift' ? 'Coins'
             : SYSTEM_NOTIFICATION_TYPES.has(type) ? 'System'
               : 'All';
+      // Bucket into the groups the list actually renders (Now/Today/Yesterday/
+      // Earlier). The old value was a raw `toLocaleDateString()` for anything
+      // older than an hour, which matched no rendered group key, so every
+      // notification past the one-hour window silently disappeared from the
+      // list; a missing timestamp fell into a never-rendered 'Recent' group.
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startOfYesterday = new Date(startOfToday);
+      startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+      const timeGroup = !createdAtMs
+        ? 'Earlier'
+        : Date.now() - createdAtMs < 3600000
+          ? 'Now'
+          : createdAtMs >= startOfToday.getTime()
+            ? 'Today'
+            : createdAtMs >= startOfYesterday.getTime()
+              ? 'Yesterday'
+              : 'Earlier';
       return {
         id: fn.id || `fn-${idx}`,
         category,
         type,
-        timeGroup: createdAt && createdAtMs ? (Date.now() - createdAtMs < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
+        timeGroup,
         user: {
           id: fn.senderId || null,
           name: fn.senderName || fn.title || '',
@@ -569,8 +587,10 @@ export default function NotificationsScreen() {
   const groupedNotifications = useMemo(() => {
     const groups = { Now: [], Today: [], Yesterday: [], Earlier: [] };
     filteredNotifications.forEach((n) => {
-      const g = n.timeGroup || 'Recent';
-      if (!groups[g]) groups[g] = [];
+      // `timeGroup` is always one of the rendered keys (set in
+      // formatNotification); an unexpected value must not silently drop the
+      // item, so it falls back to the always-rendered 'Earlier' bucket.
+      const g = groups[n.timeGroup] ? n.timeGroup : 'Earlier';
       groups[g].push(n);
     });
     return groups;
