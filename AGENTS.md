@@ -351,8 +351,12 @@ third side (N367): a handler prop a component *references and even wires into an
 always-undefined function — `TimelineToolbar`'s Back/Crop/Settings buttons,
 `TextTool`'s "Text Layers" section, `MessageBubble.onLongPress`, `VideoGiftModal.onSendGift`.
 Wire the handler (e.g. `SplashScreen.onRenderError` → `logger.error` in `AppRoutes`), make
-the control read-only if it has no destination, or delete it — do not allowlist. All three
-run in the hard-failing `guards` job.
+the control read-only if it has no destination, or delete it — do not allowlist.
+`src/__tests__/deadDataPropGuard.test.js` is the fourth side: a *data* prop referenced only
+as a JSX truthiness gate (`{items.length > 0 && …}`, `{overlay && …}`) that no caller passes
+and that has no default — the whole block can never render (`TextTool`'s "Text Layers"
+section). Pass the data, delete the dead block, or give it a real default. All four run in
+the hard-failing `guards` job.
 
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus
