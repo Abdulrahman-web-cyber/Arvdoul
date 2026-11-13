@@ -776,8 +776,11 @@ describe('Shared rate limiter + admin secrets', () => {
   test('sendNotification is spam-hardened', () => {
     const src = fs.readFileSync(path.join(root, 'functions/notifications.js'), 'utf8');
     expect(src).toContain("checkRateLimit(senderId, 'sendNotification'");
-    expect(src).toContain('Cannot send self-notifications');
     expect(src).toContain('Too many notifications to this recipient');
+    // Type allowlist: a client cannot mint a trusted system/financial notice.
+    expect(src).toContain('CLIENT_SOCIAL_NOTIFICATION_TYPES');
+    expect(src).toContain('CLIENT_SELF_NOTIFICATION_TYPES');
+    expect(src).toContain('cannot be sent by a client');
   });
 
   test('callables got rate limits', () => {

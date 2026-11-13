@@ -893,16 +893,14 @@ class MonetizationService {
     if (!giftConfig) {
       throw new Error(`Unknown gift type: ${giftType}`);
     }
-    const cost = giftConfig.value;
 
     try {
       const result = await retryOperation(() =>
         this.cfSendGift({ senderId, postId, giftType, idempotencyKey: key })
       );
-      // Social loop: notify the post author + award gift_received XP
-      // (best-effort, never breaks the gift).
-      this._afterGiftSent(senderId, postId, giftType, cost).catch((e) =>
-        log.warn('Gift follow-up (XP/notification) failed', { senderId, postId, error: e?.message }));
+      // The receiver's in-app `gift_received` notification is written server-side
+      // in `sendGift` (the only place that can prove the gift); a client cannot
+      // mint that trusted type. Nothing further to do here.
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO
@@ -911,27 +909,6 @@ class MonetizationService {
       // to the caller instead of being papered over.
       log.error('Monetary callable failed (no client fallback):', err);
       throw err;
-    }
-  }
-
-  /**
-   * Best-effort social loop after a gift is sent: notify the post author. The
-   * `gift_received` XP is credited server-side in `sendGift` (which holds the
-   * gift transaction id), so it cannot be minted by a client without a real
-   * gift. Never throws into the gift path.
-   * @private
-   */
-  async _afterGiftSent(senderId, postId, giftType, cost) {
-    try {
-      const { getDoc, doc } = await import('firebase/firestore');
-      const postSnap = await getDoc(doc(this.db, 'posts', postId));
-      const authorId = postSnap.exists() ? (postSnap.data().authorId || postSnap.data().userId) : null;
-      if (!authorId || authorId === senderId) return;
-
-      const { getNotificationsService } = await import('./notificationsService.js');
-      await getNotificationsService().createGiftNotification(senderId, authorId, postId, giftType, cost);
-    } catch (err) {
-      log.debug('[Gift] Post-gift notification skipped:', { error: err.message });
     }
   }
 

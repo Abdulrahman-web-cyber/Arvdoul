@@ -22,6 +22,7 @@ const { enqueuePush } = require('./pushQueue');
 const { getUserIdFromContext, getUserEmail } = require('./auth');
 const { settleWithdrawal, STRIPE_PAYOUT_METHODS } = require('./withdrawalSettlement');
 const { readCoinBalance, writeCoinBalance, availableFrom } = require('./coinBalance');
+const { writeNotification } = require('./notificationWriter');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -590,6 +591,21 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
     });
 
     logEvent('gift_sent', { sender: senderUid, postId, giftType, value: giftValue });
+
+    // In-app notification for the receiver — written server-side (the gift is
+    // proved here, and `gift_received` is a trusted type a client may not mint).
+    if (result && result.receiverId && result.receiverId !== senderUid) {
+      const receiverSnap = await admin.firestore().collection('users').doc(senderUid).get();
+      const senderName = receiverSnap.exists ? (receiverSnap.data().displayName || senderUid) : 'Someone';
+      await writeNotification(result.receiverId, {
+        type: 'gift_received',
+        title: 'Gift received! 🎁',
+        message: `You received a ${giftType} gift worth ${giftValue} coins`,
+        senderId: senderUid,
+        senderName,
+        metadata: { postId, giftType, cost: giftValue },
+      }).catch((err) => console.warn('Gift notification failed:', err.message));
+    }
 
     // Gift XP: the sender's own action, plus the recipient's `gift_received`.
     // Both are awarded here (the gift transaction id is the idempotency key) so

@@ -325,21 +325,59 @@ exports.retryAndRecoverPushTasks = functions.pubsub
 // ======================================================================
 // 4. sendNotification (Callable) – main entry point for client
 // ======================================================================
+// Client-issuable notification types. The server previously accepted ANY
+// `notificationData.type` from a signed-in caller, so a client could mint a
+// `security_alert` / `system_alert` / `payment_received` / `withdrawal_approved`
+// / `verification` / `level_up` / `coins_earned` notification — a trusted-
+// looking system or financial record the recipient cannot distinguish from a
+// real one. Those categories are server-only (written by the trusted function
+// that actually performs the action).
+//
+// A client may raise the social types below toward *other* users, and only the
+// self-only types (`welcome`, `system`) toward itself. Everything else is
+// refused, so a caller can neither fabricate a trusted system/financial notice
+// for someone else nor launder one into their own inbox.
+const CLIENT_SOCIAL_NOTIFICATION_TYPES = new Set([
+  'like',
+  'comment',
+  'reply',
+  'mention',
+  'follow',
+  'follow_request',
+  'follow_accepted',
+  'friend_request',
+  'friend_accepted',
+  'message',
+  'group_message',
+  'group_join_request',
+  'event_update',
+  'story_collaboration',
+]);
+const CLIENT_SELF_NOTIFICATION_TYPES = new Set(['welcome', 'system']);
+
 exports.sendNotification = functions.https.onCall(async (data, context) => {
   const senderId = context.auth.uid;
   const { notificationData, options } = data;
   const recipientId = notificationData.recipientId;
   if (!recipientId) throw new functions.https.HttpsError('invalid-argument', 'recipientId required');
 
-  // SPAM HARDENING: per-sender rate limit + no self-notifications + no
-  // notification spam to a recipient beyond a per-recipient daily cap.
+  const type = notificationData.type;
+  const isSelf = recipientId === senderId;
+  const allowed = isSelf
+    ? CLIENT_SELF_NOTIFICATION_TYPES.has(type)
+    : CLIENT_SOCIAL_NOTIFICATION_TYPES.has(type);
+  if (!allowed) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      `Notification type "${type || ''}" cannot be sent by a client`
+    );
+  }
+  if (notificationData.metadata && typeof notificationData.metadata !== 'object') {
+    throw new functions.https.HttpsError('invalid-argument', 'metadata must be an object');
+  }
+
+  // SPAM HARDENING: per-sender rate limit.
   await checkRateLimit(senderId, 'sendNotification', 30, 60000);
-  if (recipientId === senderId && notificationData.type !== 'system') {
-    throw new functions.https.HttpsError('failed-precondition', 'Cannot send self-notifications');
-  }
-  if (notificationData.type === 'welcome' && notificationData.priority !== 'high') {
-    throw new functions.https.HttpsError('invalid-argument', 'welcome notifications are server-issued only');
-  }
 
   // A block is a mutual denial: a user who blocked (or was blocked by) the
   // sender must not receive notifications from them. Without this, a blocked

@@ -499,6 +499,21 @@ falls back to plaintext — no lock badge or "E2EE protected" label. Likewise
 `feedService` offline-mode write stubs throw instead of resolving a fake
 `{ id: 'dummy' }`. `noFabricatedData.test.js` guards both.
 
+## The notification inbox is a trusted surface
+`sendNotification` is a client callable, so its `type` is allowlisted: a client
+may raise only social types toward *other* users and only `welcome`/`system`
+toward itself (`CLIENT_SOCIAL_NOTIFICATION_TYPES` /
+`CLIENT_SELF_NOTIFICATION_TYPES` in `functions/notifications.js`). A client must
+never be able to mint a system or financial notice (`security_alert`,
+`payment_received`, `withdrawal_approved`, `verification`, `level_up`,
+`coins_earned`, `gift_received`, …) into any inbox — a recipient cannot tell a
+forged record from a real one. Server code that has proved the event writes the
+in-app record through `functions/notificationWriter.js#writeNotification`
+(e.g. `sendGift` writes the receiver's `gift_received` there), keeping the
+sharded unread counter in step. `notificationTypeAllowlistGuard.test.js` fails
+if a `src` service sends an unlisted type or a trusted type becomes
+client-sendable.
+
 ## No fabricated media URLs
 A media write must persist a durable, publicly-resolvable Storage
 `downloadURL` — never a session-scoped `blob:` object URL or a base64 `data:`

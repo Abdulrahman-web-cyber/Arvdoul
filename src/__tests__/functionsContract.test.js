@@ -100,7 +100,9 @@ describe('Cloud Functions deploy contract', () => {
     // monetization.js and polls.js (no exports.* of its own).
     // coinBalance.js is the shared balance accessor (N324), required by the
     // money-path modules, never deployed standalone.
-    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js']);
+    // notificationWriter.js is the trusted server-side in-app notification
+    // writer (N382), required by the functions that prove the event.
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js', 'notificationWriter.js']);
     const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.

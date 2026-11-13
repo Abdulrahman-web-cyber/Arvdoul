@@ -1000,56 +1000,6 @@ class UltimateNotificationsService {
     });
   }
 
-  async createMessageNotification(senderId, recipientId, messageId, conversationId, text) {
-    if (senderId === recipientId) return;
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.MESSAGE,
-      recipientId,
-      senderId,
-      title: 'New message',
-      message: text?.slice(0, 50) || '',
-      metadata: { messageId, conversationId },
-      priority: 'high',
-    });
-  }
-
-  async createCoinRewardNotification(userId, amount, reason) {
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.COIN_REWARD,
-      recipientId: userId,
-      senderId: 'system',
-      title: 'Coins Earned!',
-      message: `You earned ${amount} coins for ${reason}`,
-      metadata: { amount, reason },
-      priority: 'normal',
-    });
-  }
-
-  async createRoyaltyPromotionNotification(userId, oldPosition, newPosition) {
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.ROYALTY_PROMOTION,
-      recipientId: userId,
-      senderId: 'system',
-      title: `👑 Royalty Promotion!`,
-      message: `You are now ${newPosition.title} ${newPosition.emoji} of Arvdoul!`,
-      metadata: { oldPosition: oldPosition.title, newPosition: newPosition.title },
-      priority: 'high',
-    });
-  }
-
-  async createGiftNotification(senderId, recipientId, postId, giftType, cost) {
-    if (senderId === recipientId) return;
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.GIFT_RECEIVED,
-      recipientId,
-      senderId,
-      title: 'Gift received! 🎁',
-      message: `You received a ${giftType} gift worth ${cost} coins`,
-      metadata: { postId, giftType, cost },
-      priority: 'normal',
-    });
-  }
-
   async createFriendRequestNotification(fromUserId, toUserId, fromDisplayName) {
     if (fromUserId === toUserId) return;
     return this.sendNotification({
@@ -1171,10 +1121,6 @@ const notificationsService = {
   createLikeNotification: (pid, liker, owner) => getNotificationsService().createLikeNotification(pid, liker, owner),
   createCommentNotification: (pid, commenter, owner, cid) => getNotificationsService().createCommentNotification(pid, commenter, owner, cid),
   createFollowNotification: (follower, following) => getNotificationsService().createFollowNotification(follower, following),
-  createMessageNotification: (sender, recipient, mid, cid, txt) => getNotificationsService().createMessageNotification(sender, recipient, mid, cid, txt),
-  createCoinRewardNotification: (uid, amount, reason) => getNotificationsService().createCoinRewardNotification(uid, amount, reason),
-  createRoyaltyPromotionNotification: (uid, oldPos, newPos) => getNotificationsService().createRoyaltyPromotionNotification(uid, oldPos, newPos),
-  createGiftNotification: (sender, recipient, pid, giftType, cost) => getNotificationsService().createGiftNotification(sender, recipient, pid, giftType, cost),
   createFriendRequestNotification: (from, to, name) => getNotificationsService().createFriendRequestNotification(from, to, name),
   getService: getNotificationsService,
   getStats: () => getNotificationsService().getStats(),

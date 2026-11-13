@@ -241,20 +241,22 @@ describe('gifts - validation + notification + XP wiring', () => {
     ).rejects.toThrow('Unknown gift type');
   });
 
-  test('_afterGiftSent notifies the author but does not award XP client-side', async () => {
-    seedUser('u_author');
-    state.posts.set('p1', { id: 'p1', authorId: 'u_author', content: 'x' });
-    const { getMonetizationService } = await import('../services/monetizationService.js');
-    const monetizationService = getMonetizationService();
-    monetizationService.db = { fake: true };
-
-    await monetizationService._afterGiftSent('u_sender', 'p1', 'rose', 5);
-    expect(mockNotifications.createGiftNotification).toHaveBeenCalledWith('u_sender', 'u_author', 'p1', 'rose', 5);
-    // gift_received is credited server-side in sendGift (the only place that can
-    // prove a gift happened); the client must not attempt it.
-    expect(mockLevelSystem.awardExperience).not.toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'gift_received' })
-    );
+  test('sendGift does not notify or award XP client-side (both are server-only)', async () => {
+    // The receiver's `gift_received` in-app notification is written server-side
+    // in `functions/monetization.js#sendGift` (the only place that can prove the
+    // gift) via `writeNotification`; a client cannot mint that trusted type, so
+    // the old client-side `_afterGiftSent` helper is gone and `sendGift` must not
+    // touch notifications or XP at all.
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    const client = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(client).not.toContain('createGiftNotification');
+    expect(client).not.toContain('_afterGiftSent');
+    const server = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    expect(server).toContain('writeNotification');
+    expect(server).toMatch(/type: 'gift_received'/);
   });
 });
 

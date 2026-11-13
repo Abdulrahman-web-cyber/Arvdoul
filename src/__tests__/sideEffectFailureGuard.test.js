@@ -34,7 +34,7 @@ function collect(dir, out = []) {
 
 // Server-owned side effects whose silent failure is a user-visible lie.
 const SIDE_EFFECT =
-  /\b(recordVideoView|sharePost|shareVideo|recordPostView|recordActiveDay|awardExperience|markConversationAsRead|reportStoryCompletion|reportStoryView|createLikeNotification|sendNotification|updateLastActive|updateUserProfile|_notifyPostAuthor|_notifyReply|_processMentions|_awardCommentXp|_afterGiftSent|_recordFollowerSnapshotIfDue|archiveStory|deleteCurrentUser|createHighlight)\s*\(/;
+  /\b(recordVideoView|sharePost|shareVideo|recordPostView|recordActiveDay|awardExperience|markConversationAsRead|reportStoryCompletion|reportStoryView|createLikeNotification|sendNotification|updateLastActive|updateUserProfile|_notifyPostAuthor|_notifyReply|_processMentions|_awardCommentXp|_recordFollowerSnapshotIfDue|archiveStory|deleteCurrentUser|createHighlight)\s*\(/;
 
 // A bare no-op catch: `.catch(() => {})` with nothing inside the body.
 const NOOP_CATCH = /\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/;
@@ -64,7 +64,6 @@ describe('server-owned side effects are not swallowed by a bare no-op catch', ()
       ['src/services/authService.js', 'Server auth rate-limit check unreachable'],
       ['src/services/commentService.js', 'comment_created XP award failed'],
       ['src/services/liveService.js', 'live_minute XP award failed'],
-      ['src/services/monetizationService.js', 'Gift follow-up (XP/notification) failed'],
       ['src/services/userService.js', 'recordActiveDay failed'],
       ['src/screens/ChatScreen.jsx', 'mark-as-read failed'],
       ['src/screens/ReelsScreen.jsx', 'view not recorded'],
