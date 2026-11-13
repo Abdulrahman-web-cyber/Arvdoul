@@ -433,6 +433,16 @@ Latest verified: **1875 tests / 1870 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N362: ProfilePublicScreen friend-request keying)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N362 | `sendFriendRequest`/`cancelFriendRequest` used the raw `userId` route param (which may be a `@handle`), so the `friend_requests/{fromUid}_{toUid}` document was filed under a handle-keyed id that the accept path could never match | both resolve `friendTargetUid = profileData?.id || profileData?.uid || routeUserId`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1876 tests / 1871 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

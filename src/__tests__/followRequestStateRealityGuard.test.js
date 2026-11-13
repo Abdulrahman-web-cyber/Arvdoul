@@ -109,6 +109,17 @@ describe('pending follow request is a distinct, real state', () => {
     expect(src).toMatch(/requestStatus === 'pending' \? 'Requested' : 'Follow to View'/);
   });
 
+  test('ProfilePublicScreen keys friend-request mutations on the resolved uid, not the route param', () => {
+    // The route param can be a `@handle`; `friend_requests/{from}_{to}` is keyed
+    // on the uid, so sending/cancelling with the raw param filed the request
+    // under a handle document id that accept/cancel could never match.
+    const src = read('src/screens/Profile/ProfilePublicScreen.jsx');
+    expect(src).toMatch(/sendFriendRequest\(currentUser\.uid, friendTargetUid\)/);
+    expect(src).toMatch(/cancelFriendRequest\(currentUser\.uid, friendTargetUid\)/);
+    expect(src).not.toMatch(/sendFriendRequest\(currentUser\.uid, userId\)/);
+    expect(src).not.toMatch(/cancelFriendRequest\(currentUser\.uid, userId\)/);
+  });
+
   test('the owner visitor preview carries requestStatus and disables handler-less controls', () => {
     const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
     expect(preview).toMatch(/requestStatus:\s*storeFollowStatus\?\.requestStatus/);

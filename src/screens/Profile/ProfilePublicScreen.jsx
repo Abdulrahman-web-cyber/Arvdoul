@@ -214,7 +214,7 @@ export default function ProfilePublicScreen() {
       return;
     }
 
-    const targetUid = profileData?.id || profileData?.uid || userId;
+    const targetUid = profileData?.id || profileData?.uid || routeUserId;
     if (!targetUid || targetUid === currentUserId) return;
 
     if (requestStatus === 'pending') {
@@ -233,7 +233,7 @@ export default function ProfilePublicScreen() {
       const next = useProfileStore.getState().followStatus;
       setRelationship(prev => prev ? { ...prev, isFollowing: Boolean(next?.isFollowing), requestStatus: next?.requestStatus ?? null } : null);
     }
-  }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, userId, navigate]);
+  }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, routeUserId, navigate]);
 
   // Handle Friend Request Toggle (For Newcomer level 1-2 profiles)
   const handleFriendRequestToggle = useCallback(async () => {
@@ -242,6 +242,12 @@ export default function ProfilePublicScreen() {
       navigate('/login');
       return;
     }
+
+    // The route param may be a `@handle`; friend requests are keyed on the
+    // resolved uid, so using the raw param filed them under the wrong document
+    // id (and the accept/cancel paths then never matched).
+    const friendTargetUid = profileData?.id || profileData?.uid || routeUserId;
+    if (!friendTargetUid || friendTargetUid === currentUser.uid) return;
 
     if (friendshipStatus === 'friends') {
       toast.info(`You and @${profileData?.username || 'user'} are already friends!`);
@@ -262,7 +268,7 @@ export default function ProfilePublicScreen() {
         setFriendshipStatus('friends');
         toast.success(`You and @${profileData?.username || 'user'} are now friends!`);
       } else if (friendshipStatus === 'none') {
-        const res = await userService.sendFriendRequest(currentUser.uid, userId);
+        const res = await userService.sendFriendRequest(currentUser.uid, friendTargetUid);
         setFriendshipStatus('pending');
         if (res?.requestId) setPendingRequestId(res.requestId);
         toast.success(`Friend request sent to @${profileData?.username || 'user'}`);
@@ -273,16 +279,18 @@ export default function ProfilePublicScreen() {
     } finally {
       setFriendRequestLoading(false);
     }
-  }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
+  }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, profileData?.id, profileData?.uid, routeUserId, navigate]);
 
   // Withdraw an outgoing friend request. `cancelFriendRequest` had no caller,
   // so a sent request was a permanent dead-end.
   const handleCancelFriendRequest = useCallback(async () => {
-    if (!currentUser?.uid || !userId) return;
+    if (!currentUser?.uid) return;
+    const friendTargetUid = profileData?.id || profileData?.uid || routeUserId;
+    if (!friendTargetUid) return;
     setFriendRequestLoading(true);
     try {
       const { getUserService } = await import('../../services/userService.js');
-      await getUserService().cancelFriendRequest(currentUser.uid, userId);
+      await getUserService().cancelFriendRequest(currentUser.uid, friendTargetUid);
       setFriendshipStatus('none');
       setPendingRequestId(null);
       toast.success('Friend request withdrawn.');
@@ -291,7 +299,7 @@ export default function ProfilePublicScreen() {
     } finally {
       setFriendRequestLoading(false);
     }
-  }, [currentUser?.uid, userId]);
+  }, [currentUser?.uid, profileData?.id, profileData?.uid, routeUserId]);
 
   // Base profile: real data only, no mock fallbacks and no privacy decisions.
   // Privacy is applied once, from the capability engine, in `effectiveProfile`
