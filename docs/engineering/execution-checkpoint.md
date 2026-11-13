@@ -413,6 +413,16 @@ Latest verified: **1873 tests / 1868 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N360: NotificationsScreen network follow truthfulness)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N360 | `NotificationsScreen` `handleToggleFollow` appended the user to `following` + toasted "Following" even when `followUser` filed a pending request (private target), and the "Follow Back" button decided follow/unfollow from `following.some(...)` (the viewer's own list) so an already-followed follower showed "Follow Back" and tapping it unfollowed them | load resolves `getFollowStates` over the follower+following union into `followStates`; row renders **Requested** with real withdraw via `cancelFollowRequest`; handler reconciles `result.requested`/`requestStatus === 'pending'`; `followRequestStateRealityGuard.test.js` locks it |
+
+Latest verified: **1874 tests / 1869 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

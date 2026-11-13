@@ -87,6 +87,20 @@ describe('pending follow request is a distinct, real state', () => {
     expect(src).not.toMatch(/r\.followers \|\| \[\]\)\.filter\(\(f\) => f\.isFollowing\)/);
   });
 
+  test('NotificationsScreen reconciles the pending request and never fabricates a follow', () => {
+    // `followUser` against a private account files a pending request (no edge),
+    // but the follower row optimistically added the user to `following` and
+    // toasted "Following" — a follow that never happened — and the Follow Back
+    // button decided follow/unfollow from `following.some(...)` (the viewer's own
+    // list), not the real per-pair edge.
+    const src = read('src/screens/NotificationsScreen.jsx');
+    expect(src).toMatch(/getFollowStates\(user\.uid, stateIds\)/);
+    expect(src).toMatch(/result\?\.requested \|\| result\?\.requestStatus === 'pending'/);
+    expect(src).toMatch(/handleCancelFollowRequest/);
+    expect(src).toMatch(/cancelFollowRequest\(user\.uid, targetId\)/);
+    expect(src).not.toMatch(/const isAlreadyFollowing = following\.some/);
+  });
+
   test('the owner visitor preview carries requestStatus and disables handler-less controls', () => {
     const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
     expect(preview).toMatch(/requestStatus:\s*storeFollowStatus\?\.requestStatus/);

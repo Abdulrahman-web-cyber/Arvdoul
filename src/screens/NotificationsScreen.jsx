@@ -66,6 +66,9 @@ export default function NotificationsScreen() {
   const [networkTab, setNetworkTab] = useState('requests');
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
+  // Real per-pair follow state for the follower rows (the list read returns bare
+  // profiles, so a pending follow-back request was invisible).
+  const [followStates, setFollowStates] = useState({});
   const [requests, setRequests] = useState([]);
   const [followRequests, setFollowRequests] = useState([]);
   const [pendingFollowRequestAction, setPendingFollowRequestAction] = useState(null);
@@ -112,6 +115,7 @@ export default function NotificationsScreen() {
         setRecommended([]);
         setFollowers([]);
         setFollowing([]);
+        setFollowStates({});
         setRequests([]);
         setFollowRequests([]);
         return;
@@ -127,8 +131,29 @@ export default function NotificationsScreen() {
       ]);
       const recResult = await svc.getFriendRecommendations(user.uid, 6).catch(() => ({ success: false, recommendations: [] }));
       setRecommended(recResult.recommendations || []);
-      setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
-      setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
+      const followerList = f.status === 'fulfilled' ? f.value.followers || [] : [];
+      const followingList = g.status === 'fulfilled' ? g.value.following || [] : [];
+      setFollowers(followerList);
+      setFollowing(followingList);
+      // The list read returns bare profiles with no viewer→row edge, so a
+      // follower the viewer already follows (or has a pending request to) was
+      // indistinguishable from one they do not. Resolve the real per-pair state
+      // in one bounded batched read.
+      const stateIds = [...new Set(
+        [...followerList, ...followingList].map((u) => u?.id || u?.uid).filter(Boolean)
+      )];
+      if (stateIds.length) {
+        try {
+          const states = await svc.getFollowStates(user.uid, stateIds);
+          const asObject = {};
+          states.forEach((v, k) => { asObject[k] = v; });
+          setFollowStates(asObject);
+        } catch (e) {
+          console.warn('[Notifications] follow-state hydration failed', e?.message);
+        }
+      } else {
+        setFollowStates({});
+      }
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
       // Private-account follow requests arrive as `follow_request` notifications
       // but only a friend/follow request *document* can be approved. Load the
@@ -257,14 +282,38 @@ export default function NotificationsScreen() {
       if (isCurrentlyFollowing) {
         await svc.unfollowUser(user.uid, targetId);
         setFollowing((prev) => prev.filter((u) => (u.id || u.uid) !== targetId));
+        setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: null } }));
         toast.info(`Unfollowed ${targetUser.displayName || targetUser.username || 'user'}`);
       } else {
-        await svc.followUser(user.uid, targetId);
-        setFollowing((prev) => [...prev, targetUser]);
-        toast.success(`Following ${targetUser.displayName || targetUser.username || 'user'}! 🎉`);
+        const result = await svc.followUser(user.uid, targetId);
+        if (result?.requested || result?.requestStatus === 'pending') {
+          // A private target records a pending request — no edge, no "following".
+          setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: 'pending' } }));
+          toast.success('Follow request sent');
+        } else {
+          setFollowing((prev) => [...prev, targetUser]);
+          setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: true, requestStatus: null } }));
+          toast.success(`Following ${targetUser.displayName || targetUser.username || 'user'}! 🎉`);
+        }
       }
     } catch {
       toast.error('Action failed. Please try again.');
+    } finally {
+      setNetworkActionState((prev) => ({ ...prev, [targetId]: null }));
+    }
+  };
+
+  // Withdraw a pending follow request to a private account.
+  const handleCancelFollowRequest = async (targetId) => {
+    if (!targetId || !user?.uid) return;
+    setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      await getUserService().cancelFollowRequest(user.uid, targetId);
+      setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: null } }));
+      toast.info('Follow request withdrawn');
+    } catch {
+      toast.error('Could not withdraw the request. Please try again.');
     } finally {
       setNetworkActionState((prev) => ({ ...prev, [targetId]: null }));
     }
@@ -947,30 +996,47 @@ export default function NotificationsScreen() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {(() => {
+                            const fId = fUser.id || fUser.uid;
+                            const state = followStates[fId] || { isFollowing: false, requestStatus: null };
+                            const rowStatus = networkActionState[fId];
+                            const isRequested = state.requestStatus === 'pending';
+                            return (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const isAlreadyFollowing = following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid));
-                              handleToggleFollow(fUser, isAlreadyFollowing);
+                              if (isRequested) {
+                                handleCancelFollowRequest(fId);
+                              } else {
+                                handleToggleFollow(fUser, state.isFollowing);
+                              }
                             }}
-                            disabled={networkActionState[fUser.id || fUser.uid] === 'loading'}
+                            disabled={rowStatus === 'loading'}
                             className={cn(
                               "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1",
-                              following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid))
+                              state.isFollowing
                                 ? isDark
                                   ? "bg-white/10 text-white/80 hover:bg-white/15"
                                   : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                                : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
+                                : isRequested
+                                  ? isDark
+                                    ? "bg-white/10 text-white/70 border border-white/15"
+                                    : "bg-slate-100 text-slate-600 border border-slate-300"
+                                  : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
                             )}
                           >
-                            {networkActionState[fUser.id || fUser.uid] === 'loading' ? (
+                            {rowStatus === 'loading' ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid)) ? (
+                            ) : isRequested ? (
+                              'Requested'
+                            ) : state.isFollowing ? (
                               'Following'
                             ) : (
                               'Follow Back'
                             )}
                           </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
