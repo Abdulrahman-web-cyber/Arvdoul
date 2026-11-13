@@ -1032,6 +1032,36 @@ class EnterpriseFirestoreService {
     };
   }
 
+  /**
+   * Batch form of the `liked` half of `getPostViewerState` for a list of posts
+   * (a profile grid). The viewer's likes live in their own
+   * `users/{uid}/liked_posts` subcollection (the doc id IS the post id), which
+   * the rules authorise on the path's owner alone — so a bounded
+   * `documentId() in` read resolves the whole grid in one chunked query
+   * instead of one point read per post. Returns a `Set` of liked post ids.
+   */
+  async getLikedPostIds(userId, postIds) {
+    const ids = [...new Set((postIds || []).filter(Boolean))];
+    if (!userId || ids.length === 0) return new Set();
+    await this.ensureInitialized();
+    const { collection, query, where, documentId, limit: fLimit, getDocs } = this.firestoreMethods;
+    const liked = new Set();
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      try {
+        const snap = await getDocs(query(
+          collection(this.firestore, 'users', userId, 'liked_posts'),
+          where(documentId(), 'in', chunk),
+          fLimit(chunk.length)
+        ));
+        snap.forEach((d) => liked.add(d.id));
+      } catch {
+        // A denied/absent read leaves those ids unresolved (treated as not liked).
+      }
+    }
+    return liked;
+  }
+
   async incrementCommentCount(postId, delta = 1) {
     await this.ensureInitialized();
     try {
@@ -1333,6 +1363,7 @@ const firestoreService = {
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
   getPostViewerState: (pid, uid) => getFirestoreService().getPostViewerState(pid, uid),
+  getLikedPostIds: (uid, ids) => getFirestoreService().getLikedPostIds(uid, ids),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
   getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
   addAnswer: (pid, answer, key) => getFirestoreService().addAnswer(pid, answer, key),
