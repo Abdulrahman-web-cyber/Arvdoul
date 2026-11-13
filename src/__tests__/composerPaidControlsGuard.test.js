@@ -1,14 +1,18 @@
 /**
- * Composer "Boost" must not be a second, dead paid path (N376).
+ * Composer paid controls must not be dead theatre (N376).
  *
- * `CreatePost`'s Monetization panel used to offer a "Boost" type that debited
- * coins with `spendCoins(uid, budget, 'post_boost')` after publish. Nothing ever
- * read the stored `boost` field, no `boostData`/`boosted_posts` row was written,
- * and `firestoreService` never persisted `boost` — so the coins were destroyed
- * with no promotion. The only real, working boost is the post-publish
- * `boostPost` callable (writes `boosted_posts` + `posts.boostData`, read by the
- * feed). This guard keeps the composer from growing a second paid path that
- * takes money without promoting the post.
+ * `CreatePost`'s Monetization panel used to offer four paid types — "Boost",
+ * "Subscriber Only", "Pay‑Per‑View" and "Tip Jar". None of them was enforced
+ * anywhere: the `boost` type debited coins (`spendCoins('post_boost')`) with no
+ * promotion, and `monetization`/`ppvPrice`/`tipJarAmounts`/`subscriptionTier`
+ * were persisted but never read by any feed, post surface, rule or function —
+ * so a "Subscriber Only" post was world-readable and a "Tip Jar" collected
+ * nothing. The only real paid post feature is the post-publish `boostPost`
+ * callable (writes `boosted_posts` + `posts.boostData`, read by the feed).
+ *
+ * A control that collects a value nothing reads is a bug (§ "No dead props or
+ * fabricated successes"), so the whole dead panel was removed. This guard keeps
+ * it from growing back without a real enforcement model.
  *
  * @jest-environment node
  */
@@ -21,16 +25,20 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const createPost = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
 const monetizationService = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
 
-describe('composer boost is the single server-authoritative path', () => {
-  test('CreatePost offers no boost monetization type', () => {
-    expect(createPost).not.toMatch(/\{\s*value:\s*["']boost["']/);
+describe('composer has no dead paid controls', () => {
+  test('CreatePost offers no boost or paywall monetization types', () => {
+    expect(createPost).not.toContain('MONETIZATION_TYPES');
+    expect(createPost).not.toContain('MonetizationPanel');
     expect(createPost).not.toContain('BOOST_TIERS');
+    expect(createPost).not.toMatch(/state\.monetization/);
     expect(createPost).not.toMatch(/state\.boost/);
+    for (const dead of ['ppvPrice', 'tipJarAmounts', 'subscriptionTier', 'SET_PPV_PRICE', 'SET_TIP_JAR_AMOUNTS', 'SET_SUBSCRIPTION_TIER']) {
+      expect(createPost).not.toContain(dead);
+    }
   });
 
   test('CreatePost never spends coins itself for a promotion', () => {
     expect(createPost).not.toMatch(/spendCoins\([^)]*['"]post_boost['"]/);
-    // The only client-side boost entry point is the callable.
     expect(createPost).not.toMatch(/\bboostPost\s*\(/);
   });
 
@@ -41,16 +49,30 @@ describe('composer boost is the single server-authoritative path', () => {
   test('the boost daily rate has one canonical source', () => {
     const shared = fs.readFileSync(path.join(root, 'src/shared/levelConfig.cjs'), 'utf8');
     expect(shared).toMatch(/const BOOST_DAILY_RATE_COINS = \d+;/);
-    // The client reads the canonical value, not a local literal.
-    expect(createPost).not.toMatch(/BOOST_TIERS/);
     const drawer = fs.readFileSync(path.join(root, 'src/screens/PostOptionsDrawer.jsx'), 'utf8');
     expect(drawer).toMatch(/BOOST_DAILY_RATE_COINS/);
     expect(drawer).not.toMatch(/costPerDay=\{?\s*10\b/);
     expect(drawer).not.toMatch(/costPerDay = 10\b/);
-    // The server default comes from the shared config, not a bare literal.
     const fn = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
     expect(fn).toMatch(/BOOST_DAILY_RATE\b/);
     expect(fn).not.toMatch(/boost_daily_rate \|\| 10\b/);
+  });
+
+  test('no client module invents a post-level monetization payload', () => {
+    const offenders = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (['node_modules', '__tests__', 'dist', 'build', '.git'].includes(e.name)) continue;
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(js|jsx)$/.test(e.name)) {
+          const src = fs.readFileSync(full, 'utf8');
+          if (/tipJarAmounts|ppvPrice/.test(src)) offenders.push(path.relative(root, full));
+        }
+      }
+    };
+    walk(path.join(root, 'src'));
+    expect(offenders).toEqual([]);
   });
 
   test('post_boost appears only in the server boostPost handler', () => {

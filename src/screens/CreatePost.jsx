@@ -41,7 +41,6 @@ import { getStorageService } from "../services/storageService";
 import { getSearchService } from "../services/searchService";
 import { getVideoService } from "../services/videoService";
 import { getStoryService } from "../services/storyService";
-import { getMonetizationService } from "../services/monetizationService";
 import { getNotificationsService } from "../services/notificationsService";
 import { getFeedService } from "../services/feedService";
 import { getUserService } from "../services/userService";
@@ -465,13 +464,6 @@ const VISIBILITY_OPTIONS = [
   { value: "only_me", label: "Only Me" },
 ];
 
-const MONETIZATION_TYPES = [
-  { value: "none", label: "No Monetization" },
-  { value: "subscription", label: "Subscriber Only" },
-  { value: "ppv", label: "Pay‑Per‑View" },
-  { value: "tip_jar", label: "Tip Jar" },
-];
-
 const MEDIA_LIMITS = {
   maxImages: 10,
   maxVideos: 1,
@@ -504,10 +496,6 @@ const initialState = {
   hashtags: [],
   feeling: null,
   activity: null,
-  monetization: { type: "none" },
-  subscriptionTier: null,
-  ppvPrice: null,
-  tipJarAmounts: [5, 10, 25],
   scheduledTime: null,
   expiresAt: null,
   recurrence: "none",
@@ -592,10 +580,6 @@ function reducer(state, action) {
       case "SET_HASHTAGS": draft.hashtags = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_FEELING": draft.feeling = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ACTIVITY": draft.activity = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_MONETIZATION": draft.monetization = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_SUBSCRIPTION_TIER": draft.subscriptionTier = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_PPV_PRICE": draft.ppvPrice = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_TIP_JAR_AMOUNTS": draft.tipJarAmounts = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_SCHEDULED_TIME": draft.scheduledTime = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EXPIRES_AT": draft.expiresAt = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_RECURRENCE": draft.recurrence = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -748,7 +732,7 @@ function CreatePostProvider({ children }) {
 
   const services = useRef({
     firestore: null, storage: null, search: null, video: null, story: null,
-    monetization: null, notifications: null, feed: null, user: null,
+    notifications: null, feed: null, user: null,
     ai: null, moderation: null, analytics: null,
   });
 
@@ -786,16 +770,16 @@ function CreatePostProvider({ children }) {
       try {
         const servicePromises = [
           getFirestoreService(), getStorageService(), getSearchService(),
-          getVideoService(), getStoryService(), getMonetizationService(),
+          getVideoService(), getStoryService(),
           getNotificationsService(), getFeedService(), getUserService(),
         ];
-        const [fs, st, se, vs, ss, ms, ns, fd, us] = await timedPromise(
+        const [fs, st, se, vs, ss, ns, fd, us] = await timedPromise(
           Promise.all(servicePromises), 15000, "Service initialization"
         );
 
         services.current = {
           firestore: fs, storage: st, search: se, video: vs, story: ss,
-          monetization: ms, notifications: ns, feed: fd, user: us,
+          notifications: ns, feed: fd, user: us,
         };
 
         dbRef.current = await timedPromise(
@@ -1486,10 +1470,6 @@ function CreatePostProvider({ children }) {
         hashtags: current.hashtags || [],
         feeling: current.feeling || null,
         activity: current.activity || null,
-        monetization: current.monetization?.type !== "none" ? current.monetization : null,
-        subscriptionTier: current.subscriptionTier || null,
-        ppvPrice: current.ppvPrice || 0,
-        tipJarAmounts: current.tipJarAmounts || [5, 10, 25],
         scheduledTime: current.scheduledTime || null,
         expiresAt: current.expiresAt || null,
         recurrence: current.recurrence || "none",
@@ -2011,21 +1991,6 @@ export function TaggingPanel({ defaultOpen = false }) {
   );
 }
 
-export function MonetizationPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  return (
-    <Panel icon={Icons.DollarSign} title="Monetization" defaultOpen={defaultOpen}>
-      <select value={state.monetization.type} onChange={e => dispatch({ type: "SET_MONETIZATION", payload: { ...state.monetization, type: e.target.value } })}
-        className={INPUT_CLASS}>
-        {MONETIZATION_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      {state.monetization.type === "subscription" && <input type="text" placeholder="Tier name" value={state.subscriptionTier || ""} onChange={e => dispatch({ type: "SET_SUBSCRIPTION_TIER", payload: e.target.value })} className={`${INPUT_CLASS} mt-2`} />}
-      {state.monetization.type === "ppv" && <input type="number" placeholder="Price in coins" value={state.ppvPrice || ""} onChange={e => dispatch({ type: "SET_PPV_PRICE", payload: parseInt(e.target.value) || 0 })} className={`${INPUT_CLASS} mt-2`} />}
-      {state.monetization.type === "tip_jar" && <input type="text" placeholder="5, 10, 25" value={state.tipJarAmounts.join(", ")} onChange={e => { const amounts = e.target.value.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n)); dispatch({ type: "SET_TIP_JAR_AMOUNTS", payload: amounts }); }} className={`${INPUT_CLASS} mt-2`} />}
-    </Panel>
-  );
-}
-
 export function SchedulingPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
   const [showPicker, setShowPicker] = useState(false);
@@ -2407,12 +2372,6 @@ export function ReviewSummary({ defaultOpen = false }) {
           <span className="text-gray-400 block text-[10px] uppercase font-semibold">Schedule</span>
           <span className="font-semibold text-gray-800 dark:text-gray-200">
             {state.scheduledTime ? new Date(state.scheduledTime).toLocaleDateString() : "Immediately"}
-          </span>
-        </div>
-        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
-          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Monetization</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
-            {MONETIZATION_TYPES.find(m => m.value === state.monetization.type)?.label || "Free"}
           </span>
         </div>
       </div>
@@ -2876,7 +2835,6 @@ function EnhancedStep3View() {
         {[
           { id: 'audience', label: '🎯 Audience & Reach' },
           { id: 'content', label: '📍 Tags & Location' },
-          { id: 'monetization', label: '💰 Monetization' },
           { id: 'advanced', label: '⚙️ AI & Scheduling' },
         ].map((tab) => (
           <button
@@ -2907,12 +2865,6 @@ function EnhancedStep3View() {
           <div className="space-y-4">
             <LocationPanel defaultOpen={true} />
             <TaggingPanel defaultOpen={true} />
-          </div>
-        )}
-
-        {activeSection === 'monetization' && (
-          <div className="space-y-4">
-            <MonetizationPanel defaultOpen={true} />
           </div>
         )}
 
