@@ -15,7 +15,7 @@ import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import { pickHandle, deriveHandle, pickDisplayName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
-import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -43,7 +43,7 @@ const TOKENS = {
     iconActive: "#FFFFFF",
     iconBg: "rgba(255,255,255,0.08)",
     iconBorder: "rgba(255,255,255,0.12)",
-    iconRing: "rgba(139,30,243,0.5)",
+    iconRing: brandRgba(0.5),
   },
   light: {
     bg: "#F6F8FC",
@@ -61,7 +61,7 @@ const TOKENS = {
     iconActive: tokens.color.brand.indigo,
     iconBg: "rgba(255,255,255,0.6)",
     iconBorder: "rgba(0,0,0,0.08)",
-    iconRing: "rgba(139,30,243,0.3)",
+    iconRing: brandRgba(0.3),
   },
 };
 
@@ -178,9 +178,7 @@ const CircularButton = memo(
         )}
         style={{
           background: active
-            ? isDark
-              ? "rgba(139,30,243,0.25)"
-              : "rgba(139,30,243,0.15)"
+            ? brandRgba(isDark ? 0.25 : 0.15)
             : tokens.iconBg,
           border: `1px solid ${active ? tokens.iconRing : tokens.iconBorder}`,
           boxShadow: isDark
