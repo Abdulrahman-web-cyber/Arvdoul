@@ -514,6 +514,10 @@ rules-provable-read invariant (N033) is frozen even in the unit run.
 | N335 **The screen canvas was copy-pasted with raw brand literals.** Four screens hand-rolled the identical `radial-gradient(circle at 50% 0%, rgba(139,30,243,0.1) 0%, transparent 50%), #03071B` string — the brand violet as a decimal literal and the base colour as raw hex, neither of which moves when a token changes. | ✅ **now closed** — added `brandRgba()` / `brandCanvasBackground()` to `src/design-system/tokens.js` and migrated all four; `designTokens.test.js` pins the helpers. |
 | N336 **`ring-arvdoul-purple-500` (from N334) was a dead class.** The config declares a flat `arvdoul-purple` with no `-500` shade, so Tailwind emitted no CSS and 97 focus rings were invisible — the N111 failure mode, which the `tailwindUtilities` guard missed because its SHADE test skips custom colours. | ✅ **now closed** — corrected to `ring-arvdoul-purple`; added a config-aware assertion that every `*-arvdoul-*` utility resolves to a declared colour key (proved it fails on the invalid class). |
 
+| N337 **The Tailwind `bg-arvdoul-gradient` utility was unpinned from the token.** The config re-declares the brand gradient as a literal (Tailwind cannot import the ESM token), and nothing asserted the two agreed, so changing the token would leave every migrated CTA rendering the old gradient. | ✅ **now closed** — `designTokenDriftGuard` now asserts the config literal is byte-identical to `tokens.color.brand.gradient`. |
+| N338 **`themePalettes.js` declared the brand violet in decimal form.** The drift guard requires the palettes to derive from the tokens, yet their glow/card shadows used `rgba(139,30,243,..)` — a literal that never moves with the token. | ✅ **now closed** — derive from `brandRgba()`. Also added `brandVioletRgbaRatchetGuard` (baseline `scripts/brandVioletRgbaBaseline.json`) so the remaining decimal occurrences can only shrink. |
+| N339 **TopAppBar / FollowButton hand-wrote brand-violet glows in decimal.** JS string contexts (not Tailwind arbitrary values), so safely derivable. | ✅ **now closed** — migrated to `brandRgba()`; ratchet baseline 73 → 67. |
+
 
 ---
 
