@@ -613,6 +613,11 @@ Two collections accept a client write that must never name another user:
   shard with `count: 999999`. They now bound the change to `±100`
   (`fieldDeltaBounded` on update, `fieldCreateBounded` on create). Do not widen
   the bound.
+- `daily_upload_counters/{shardId}` (N210 id-bound; N370 value-bound). The id is
+  pinned to the caller (`upload_{uid}_{date}_shard_{n}`) so a client cannot
+  reset another user's limit; the `count` is a `[1,100]` create and a bounded
+  `+0..+100` update, so a fresh shard cannot be pre-set to `999999` to defeat
+  the per-tier upload limit. Keep it a `+1`-per-upload counter.
 
 `counterShardForgeryGuard.test.js`, `storyShardForgeryGuard.test.js` and
 `messageDedupeGuard.test.js` (all in the hard-failing `guards` job) pin these
