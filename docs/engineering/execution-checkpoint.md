@@ -2,22 +2,21 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
-## This session — viewer like/save/reaction reality (N352)
+## This session — viewer like-state reality (N352–N353)
 
-- **N352 (MEDIUM, closed):** `PostCard` seeded `liked`/`saved`/`reaction` from
-  `post.isLiked`/`post.liked`/`post.likedBy`/`post.savedBy`/`post.userReaction` —
-  **none of which any writer ever sets** on a `posts/{id}` document. The real state
-  lives in the viewer's own per-user docs (`posts/{id}/likes|saves|reactions/{uid}`).
-  So a like survived only on the device-local registry (gone on another device or after
-  clearing storage) and `saved` was permanently false — a post the viewer had saved
-  showed an unsaved bookmark, and toggling it called `unsavePost` (a no-op delete).
-  Fix: new `firestoreService.getPostViewerState(postId, uid)` reads the three viewer
-  docs in parallel (absent/denied → negative); `PostCard` and `PostOptionsDrawer`
-  hydrate from it (device-local like registry still wins offline); the dead post-field
-  reads are gone. Locked by `postCardFieldRealityGuard.test.js` (guards job).
+- **N352 (MEDIUM, closed):** `PostCard`/`PostOptionsDrawer` seeded the viewer's
+  `liked`/`saved`/`reaction` from `post.isLiked`/`post.liked`/`post.likedBy`/
+  `post.savedBy`/`post.userReaction` — **none of which any writer ever sets** on a
+  `posts/{id}` document. Fix: `firestoreService.getPostViewerState(postId, uid)`
+  reads the viewer's own `posts/{id}/likes|saves|reactions/{uid}` docs in parallel.
+- **N353 (MEDIUM, closed):** `ProfileFeedGrid` seeded `likedPosts`/`likeBaseline`
+  from `post.isLiked`/`likedByMe`/`hasLiked` (also never written), so re-liking a
+  pre-liked post double-counted. Fix: `firestoreService.getLikedPostIds(uid, ids)`
+  resolves the real set in one bounded `documentId() in` read per 30 ids against
+  `users/{uid}/liked_posts`.
 
-Latest verified: **168 suites / 1851 passed (5 skipped), exit 0**; `npm run lint` exit 0;
-`npm run build` green (with the Firestore emulator live).
+Latest verified: **168 suites / 1851 passed (5 skipped), exit 0**; `npm run lint` exit 0
+(0 errors); `npm run build` green (with the Firestore emulator live).
 
 ## This session — PostCard follow-state reality (N351)
 
