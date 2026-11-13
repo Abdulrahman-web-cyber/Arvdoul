@@ -1408,7 +1408,14 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /gift_transactions/{txId} {
-      allow read: if isSignedIn() && (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      // Written by `functions/monetization.js#sendGift`, which stamps
+      // `senderId`/`receiverId`. The rule previously keyed on
+      // `fromUserId`/`toUserId` — field names no writer ever set — so a client
+      // read (e.g. a party listing their own gift history) was always denied.
+      allow read: if isSignedIn() && (
+        resource.data.senderId == uid() ||
+        resource.data.receiverId == uid() ||
+        isAdmin());
       allow write: if false; // server-verified
     }
     match /ads/{adId} {
