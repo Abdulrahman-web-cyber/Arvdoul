@@ -120,4 +120,13 @@ describe('design-system helpers - brandRgba / brandCanvasBackground', () => {
     expect(light).toContain('rgba(139, 30, 243, 0.05)');
     expect(dark).toContain('radial-gradient');
   });
+
+  test('brandHexRgba derives an rgba() string from any brand token', async () => {
+    const { brandHexRgba } = await import('../design-system/tokens.js');
+    // The whole point of the helper is that the colour comes from the token, so
+    // it must track tokens.color.brand.* rather than re-declare a decimal.
+    expect(brandHexRgba(tokens.color.brand.violet, 0.25)).toBe('rgba(139, 30, 243, 0.25)');
+    expect(brandHexRgba(tokens.color.brand.indigo, 0.12)).toBe('rgba(68, 49, 247, 0.12)');
+    expect(brandHexRgba(tokens.color.brand.blue, 0)).toBe('rgba(5, 91, 251, 0)');
+  });
 });

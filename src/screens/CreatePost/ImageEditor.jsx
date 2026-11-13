@@ -60,7 +60,7 @@ import TextTool from '../../components/Shared/TextTool';
 import DrawingTool from '../../components/Shared/DrawingTool';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
-import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens, brandRgba} from '../../design-system/tokens.js';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Icons (resolved defensively so a lucide-react rename can never crash render)
@@ -146,7 +146,7 @@ const THEMES = {
     '--pop-selected': 'rgba(124,108,255,0.28)',
     '--line': 'rgba(165,178,255,0.20)',
     '--dot': 'rgba(165,178,255,0.10)',
-    '--glow-a': 'rgba(139,30,243,0.16)',
+    '--glow-a': brandRgba(0.16),
     '--glow-b': 'rgba(5,91,251,0.13)',
     '--btn-shadow': '0 12px 28px -12px rgba(68,49,247,0.55), inset 0 1px 0 rgba(255,255,255,0.28)',
     '--focus-outline': '#A99BFF',
@@ -178,7 +178,7 @@ const THEMES = {
     '--pop-selected': 'rgba(68,49,247,0.13)',
     '--line': 'rgba(61,76,147,0.16)',
     '--dot': 'rgba(68,49,247,0.09)',
-    '--glow-a': 'rgba(139,30,243,0.07)',
+    '--glow-a': brandRgba(0.07),
     '--glow-b': 'rgba(5,91,251,0.07)',
     '--btn-shadow': '0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)',
     '--focus-outline': tokens.color.brand.indigo,

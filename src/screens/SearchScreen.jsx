@@ -19,7 +19,7 @@ import TrendingSection from '../components/search/TrendingSection';
 import CreatorCarousel from '../components/search/CreatorCarousel';
 import SearchFilters from '../components/search/SearchFilters';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
-import { BRAND_GRADIENT, tokens } from '../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens, brandRgba} from '../design-system/tokens.js';
 
 /**
  * ARVDOUL Design Tokens — the brand gradient comes from the design system so
@@ -570,7 +570,7 @@ const ForYouSection = memo(({ isDark }) => (
             'cursor-pointer relative group'
           )}
           style={{
-            boxShadow: '0 10px 40px rgba(139, 30, 243, 0.3)',
+            boxShadow: `0 10px 40px ${brandRgba(0.3)}`,
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10" />

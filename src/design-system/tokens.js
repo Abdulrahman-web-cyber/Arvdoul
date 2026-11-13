@@ -211,6 +211,20 @@ export const BRAND_VIOLET_RGB = '139, 30, 243';
 export const brandRgba = (alpha) => `rgba(${BRAND_VIOLET_RGB}, ${alpha})`;
 
 /**
+ * Alpha variant of an arbitrary brand colour token, for canvas/SVG code that
+ * needs an `rgba()` string the class-based utilities cannot express. Kept
+ * generic (rather than one helper per brand colour) so the brand family stays
+ * the single source of truth. `hex` is a `#RRGGBB` token value.
+ */
+export const brandHexRgba = (hex, alpha) => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+/**
  * The Arvdoul screen canvas: the base background colour with a soft brand-violet
  * radial glow anchored at the top. Several screens hand-rolled this identical
  * `radial-gradient(circle at 50% 0%, rgba(139,30,243,0.1) 0%, transparent 50%),
