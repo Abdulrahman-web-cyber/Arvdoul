@@ -26,7 +26,7 @@ import { unknownNumber } from '../../lib/unknownNumber.js';
 // as an explicit unavailable state, never a confident "$0.00".
 const asUsd = (value) => {
   const n = unknownNumber(value);
-  return n === null ? '—' : `$${formatCoinsAsUsd(n)}`;
+  return n === null ? '—' : formatCoinsAsUsd(n);
 };
 const asCoins = (value) => {
   const n = unknownNumber(value);

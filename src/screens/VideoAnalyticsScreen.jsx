@@ -419,7 +419,7 @@ const VideosTab = ({ videos }) => {
                 </span>
               </div>
               <div className="text-green-400 text-sm font-medium">
-                {video.earnings == null ? '—' : `$${video.earnings.toFixed(2)}`}
+                {video.earnings == null ? '—' : formatCoinsAsUsd(video.earnings)}
               </div>
             </div>
 

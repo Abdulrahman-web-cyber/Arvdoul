@@ -687,8 +687,10 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
     const { amount, paymentMethod, paymentDetails, idempotencyKey } = data;
-    if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION * 5) {
-      throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION * 5}.`);
+    // Coins are an integer unit; a fractional amount would flow into
+    // lockedCoins, the ledger and the USD payout. Reject it at the boundary.
+    if (!amount || typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0 || amount > MAX_COIN_OPERATION * 5) {
+      throw new functions.https.HttpsError('invalid-argument', `amount must be a whole number between 1 and ${MAX_COIN_OPERATION * 5}.`);
     }
     if (amount < MIN_WITHDRAWAL_COINS) {
       throw new functions.https.HttpsError('invalid-argument', `Minimum withdrawal is ${MIN_WITHDRAWAL_COINS} coins.`);
@@ -752,7 +754,12 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     // same coins (double lock, and a second withdrawal row for one intent).
     const resultData = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
 
       const freshSnap = await t.get(userRef);
       const freshData = freshSnap.data();
@@ -1606,7 +1613,12 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
 
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
 
       const userRef = admin.firestore().collection('users').doc(uid);
       const userSnap = await t.get(userRef);

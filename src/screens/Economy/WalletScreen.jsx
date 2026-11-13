@@ -259,7 +259,7 @@ export default function WalletScreen() {
                 {fmtCoins(wallet?.totalEarned)} Coins
               </span>
               <span className="text-[10px] text-gray-500 block">
-                {wallet?.totalEarned == null ? '—' : `$${formatCoinsAsUsd(wallet.totalEarned)} USD`}
+                {wallet?.totalEarned == null ? '—' : `${formatCoinsAsUsd(wallet.totalEarned)} USD`}
               </span>
             </div>
             <div>

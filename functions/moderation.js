@@ -520,18 +520,16 @@ exports.predictPostPerformance = functions.https.onCall(async (data, context) =>
   }
   if (!scheduledTime) bestTime = 'Tuesday 18:00';
 
-  // Earnings only exist when the author actually enabled monetisation.
-  const monetized = Boolean(data?.monetization && data?.monetization.type && data.monetization.type !== 'none');
-  const earnings = monetized ? Math.round(reach * 0.004 * (engagement / 4)) : 0;
-  if (!monetized) factors.push('Monetisation is off, so predicted earnings are 0.');
-
+  // Reach/engagement/viral score are a deterministic authoring heuristic shown
+  // with the factors that produced them. No coin figure is returned: the
+  // economy model has no per-reach earning rate (only coins-per-USD), so a
+  // predicted "earnings" number would be invented money shown as real.
   const viralScore = Math.min(95, Math.round((engagement * 6) + (reach / 400)));
 
   return {
     success: true,
     reach: Math.round(reach).toLocaleString(),
     engagement: Number(engagement.toFixed(1)),
-    earnings,
     viralScore,
     bestTime,
     factors,

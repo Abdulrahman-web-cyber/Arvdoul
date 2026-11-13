@@ -2253,7 +2253,6 @@ export function InsightsPanel({ defaultOpen = false }) {
     <div className="grid grid-cols-2 gap-2 text-xs">
       <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
       <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
-      <div><span className="text-gray-500">Earnings:</span> {state.insights.earnings} coins</div>
       <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
       <div className="col-span-2"><span className="text-gray-500">Best time:</span> {state.insights.bestTime}</div>
     </div>
