@@ -234,6 +234,25 @@ CI: the `guards` emulator step now also runs `readScopePrivacyRules`, `counterSh
 
 Latest verified: **155 suites / 1,775 passed (5 skipped)**; `npx eslint src/ functions/ --quiet` exit 0 (0 errors); `npm run build` green. Emulator-backed `readScopePrivacyRules` 13/13, `firestoreRulesCompile` + `firestoreRulesCoverage` + `livePresenceAndHealthPrivacyRules` 70/70 (N313-N318).
 
+## Continuation session (design-token + avatar consolidation)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N337 | The Tailwind `bg-arvdoul-gradient` utility re-declared the brand gradient as a config literal (Tailwind cannot import the ESM token) with nothing pinning the two | `designTokenDriftGuard` asserts the config literal is byte-identical to `tokens.color.brand.gradient` |
+| N338 | `themePalettes.js` declared the brand violet in decimal form (`rgba(139,30,243,..)`) despite the guard requiring palettes to derive from tokens | glows/cards derive from `brandRgba()`; new `brandVioletRgbaRatchetGuard.test.js` (baseline `scripts/brandVioletRgbaBaseline.json`, 73 → 64) wired into `guards` |
+| N339 | `TopAppBar`/`FollowButton` hand-wrote brand-violet glows in decimal (JS string contexts) | migrated to `brandRgba()`; ratchet baseline lowered |
+| N340 | Two deterministic-avatar generators (`avatarUtils.generateDefaultAvatarSvg`, `userService.generateDefaultAvatar`) each carried their OWN palette list with DIFFERENT secondary shades — the same user rendered a different avatar in the feed vs the profile | palette single-sourced in `avatarUtils`; `userService` imports it; `avatarPaletteConsistency.test.js` (guards job) fails on a second list or the old shades; semantic-hex baseline shrinks |
+| N341 | `BottomNav` brand-violet radial/linear gradients hand-wrote the decimal literal | migrated to `brandRgba()`; ratchet baseline lowered |
+
+**Emulator verification (this session).** `openjdk-21` installed via `sudo apt-get`;
+`npx firebase-tools emulators:exec --only firestore` ran the 12 rules/graph
+adversarial suites for real: **12 suites / 129 tests passed, 0 skipped**.
+`--only storage` ran `storageRulesPathAlignment` for real: **10 tests passed**.
+The emulator-gated assertions execute (not silently skip) with Java present.
+
+Latest verified: **162 suites / 1825 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green.
+
 ## Commands to resume
 
 ```
