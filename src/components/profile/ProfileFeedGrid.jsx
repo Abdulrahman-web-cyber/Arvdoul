@@ -38,9 +38,9 @@ const ProfileFeedGrid = memo(({
   const [likeBaseline, setLikeBaseline] = useState({});
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const audioElRef = useRef(null);
-  // Ids the viewer has toggled this session. The server flag in `posts` is a
-  // snapshot that can lag (or simply not change on a mocked/local write), so it
-  // must never clobber a like the viewer just made.
+  // Ids the viewer has toggled this session. The server snapshot can lag (or a
+  // mocked/local write may not change it), so it must never clobber a like the
+  // viewer just made.
   const touchedLikesRef = useRef(new Set());
 
   // Seed like/save state from the real posts (and the viewer's own liked/saved
