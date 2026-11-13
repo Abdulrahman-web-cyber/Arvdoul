@@ -576,7 +576,11 @@ export default function ProfilePublicScreen() {
             targetName={effectiveProfile?.displayName || 'Creator'}
             theme={theme}
             capabilities={capabilities}
-            onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+            // The mutual-friends card is a summary, and `ProfileSocialContext`
+            // invokes the handler with no argument — the old
+            // `(friend) => navigate(...friend.id)` dereferenced `undefined` and
+            // threw on every click. Route to the full friends list instead.
+            onFriendPress={() => navigate(`/profile/${effectiveProfile?.id || effectiveProfile?.uid || userId}/friends`)}
           />
 
           {/* 3. 6-Card Civic Metrics Grid */}

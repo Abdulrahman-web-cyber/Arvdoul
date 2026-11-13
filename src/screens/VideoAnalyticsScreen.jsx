@@ -571,7 +571,7 @@ const RevenueTab = ({ revenue }) => {
           const withdrawals = historyItems.filter(
             (tx) => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')
           );
-          if (withdrawals.length > 0) lastPayoutCoins = Number(withdrawals[0].amount) || 0;
+          if (withdrawals.length > 0) lastPayoutCoins = unknownNumber(withdrawals[0].amount);
         }
 
         setPayout({ loading: false, settings, pendingCoins, lastPayoutCoins });

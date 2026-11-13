@@ -335,9 +335,10 @@ const VideoFeed = memo(({
                 onReport={() => handleReport(video)}
                 onFollow={(_creator, nextState) => {
                   const creatorId = video.userId || video.authorId || video.creator?.id;
-                  if (creatorId) setFollowStates((prev) => {
+                  if (!creatorId || !nextState) return;
+                  setFollowStates((prev) => {
                     const next = new Map(prev);
-                    next.set(creatorId, nextState || { isFollowing: true, requestStatus: null });
+                    next.set(creatorId, nextState);
                     return next;
                   });
                 }}

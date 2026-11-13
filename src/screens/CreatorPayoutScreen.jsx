@@ -21,9 +21,16 @@ const AD_REASONS = ['ad_reward', 'ad_share', 'ad_revenue'];
 const OTHER_EARNING_REASONS = ['poll_vote_reward', 'level_up_reward', 'subscription', 'purchase', 'bonus', 'reward'];
 
 function sumCredits(items, reasons) {
-  return items
-    .filter((tx) => reasons.includes(tx.reason))
-    .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0);
+  const matched = items.filter((tx) => reasons.includes(tx.reason));
+  // An amount the ledger did not carry is unknown; summing it as 0 understated
+  // the earnings and rendered a measured figure. Return unknown instead.
+  let total = 0;
+  for (const tx of matched) {
+    const amount = unknownNumber(tx.amount);
+    if (amount == null) return null;
+    total += amount;
+  }
+  return total;
 }
 
 export default function CreatorPayoutScreen() {
@@ -84,11 +91,19 @@ export default function CreatorPayoutScreen() {
         });
       }
       // A failed spend-ledger read leaves lifetime withdrawals unknown ("—"),
-      // never a fabricated "$0.00 withdrawn".
+      // never a fabricated "$0.00 withdrawn". A withdrawal row whose amount is
+      // absent is unknown too — summing it as 0 understated the total.
       if (spendRes.status === 'fulfilled' && Array.isArray(spendRes.value)) {
-        setLifetimeWithdrawnCoins(spendRes.value
-          .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
-          .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
+        const withdrawals = spendRes.value.filter(
+          (tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal'
+        );
+        let total = 0;
+        for (const tx of withdrawals) {
+          const amount = unknownNumber(tx.amount);
+          if (amount == null) { total = null; break; }
+          total += amount;
+        }
+        setLifetimeWithdrawnCoins(total);
       }
       // payout account status (never simulated).
       try {

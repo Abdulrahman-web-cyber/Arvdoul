@@ -3405,6 +3405,10 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).toContain("earnings.gifts == null ? '—'");
     expect(s).toContain("earnings.ads == null ? '—'");
     expect(s).toContain("lifetimeWithdrawnCoins == null ? '—'");
+    // A ledger row whose amount is absent is unknown; summing it as 0
+    // understated the figure while still rendering it as measured.
+    expect(s).not.toContain('Number(tx.amount) || 0');
+    expect(s).toContain('const amount = unknownNumber(tx.amount);');
   });
 
   test('AdminVerificationScreen treats an absent strike count as unknown, not 0', () => {

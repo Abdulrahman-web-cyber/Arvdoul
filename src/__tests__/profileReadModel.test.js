@@ -452,6 +452,10 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       expect(wrapper).toContain('capabilities={capabilities}');
       const screen = read('src/screens/Profile/ProfilePublicScreen.jsx');
       expect(screen).toMatch(/<ProfileMutualFriends[\s\S]*?capabilities=\{capabilities\}/);
+      // The card calls its handler with NO argument, so a `(friend) => ...`
+      // handler dereferenced `undefined` and threw on every click.
+      expect(screen).not.toMatch(/onFriendPress=\{\(friend\)/);
+      expect(screen).toMatch(/onFriendPress=\{\(\) =>/);
     });
 
     it('profile surfaces do not read standing around the projection', () => {
