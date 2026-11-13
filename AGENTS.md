@@ -231,6 +231,12 @@ as failures.
   (admin-readable, server-write-only). `AdminAuditLogsScreen` reads that
   collection. `src/utils/AuditLogger.js` is a local IndexedDB queue and is not
   a server-side audit trail.
+- **Scheduled posts**: a future `scheduledTime` makes `firestoreService.createPost`
+  write `status: 'scheduled'`; `functions/scheduledPosts.js#publishScheduledPosts`
+  (pubsub, every 5 min) is the ONLY writer that flips a due post to `published`.
+  Do not add a second publisher, and do not surface a scheduled post (local
+  optimistic cache, feed, notification) before it publishes. The composer must
+  not offer a recurrence model — nothing schedules recurring posts.
 - **Admin gate**: `admins/{uid}` is not client-readable, so admin screens must
   call `fetchAdminStatus()` rather than `getDoc(doc(firestore, 'admins', uid))`
   (which always denies and silently shows the "no access" state).

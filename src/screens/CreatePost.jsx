@@ -498,15 +498,6 @@ const initialState = {
   activity: null,
   scheduledTime: null,
   expiresAt: null,
-  recurrence: "none",
-  coAuthors: [],
-  collaborationInvites: [],
-  settings: {
-    enableComments: true,
-    enableGifts: true,
-    enableSharing: true,
-    isNSFW: false,
-  },
   typeData: {
     poll: { options: [], allowMultiple: false },
     event: {
@@ -582,23 +573,6 @@ function reducer(state, action) {
       case "SET_ACTIVITY": draft.activity = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_SCHEDULED_TIME": draft.scheduledTime = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EXPIRES_AT": draft.expiresAt = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_RECURRENCE": draft.recurrence = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "ADD_CO_AUTHOR": {
-        if (!draft.coAuthors.some(c => c.id === action.payload.id)) {
-          draft.coAuthors.push({ id: action.payload.id, name: action.payload.name, percentage: action.payload.percentage || 0 });
-          draft.isDirty = true; pushHistory = true;
-        }
-        break;
-      }
-      case "REMOVE_CO_AUTHOR": draft.coAuthors = draft.coAuthors.filter(u => u.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "SET_CO_AUTHOR_PERCENTAGE": {
-        const co = draft.coAuthors.find(c => c.id === action.payload.id);
-        if (co) { co.percentage = action.payload.percentage; draft.isDirty = true; pushHistory = true; }
-        break;
-      }
-      case "ADD_COLLABORATION_INVITE": draft.collaborationInvites.push(action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "REMOVE_COLLABORATION_INVITE": draft.collaborationInvites = draft.collaborationInvites.filter(i => i.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "UPDATE_SETTINGS": draft.settings = { ...draft.settings, ...action.payload }; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -1432,6 +1406,12 @@ function CreatePostProvider({ children }) {
 
       // Generate instant post ID and media references
       const instantPostId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      // A future `scheduledTime` makes the server write `status: 'scheduled'`
+      // (see firestoreService.createPost); the `publishScheduledPosts` job
+      // flips it to `published` when due. A scheduled post must NOT be injected
+      // into the device-local "just published" cache or the feed now — it is
+      // not live yet.
+      const isScheduled = Boolean(current.scheduledTime && new Date(current.scheduledTime) > new Date());
       const instantMedia = (current.mediaItems || []).map((m, idx) => ({
         id: m.id || `media_${idx}`,
         url: m.preview || m.url || "",
@@ -1472,9 +1452,6 @@ function CreatePostProvider({ children }) {
         activity: current.activity || null,
         scheduledTime: current.scheduledTime || null,
         expiresAt: current.expiresAt || null,
-        recurrence: current.recurrence || "none",
-        settings: current.settings || {},
-        coAuthors: current.coAuthors || [],
         poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null } : null,
         event: effectiveType === "event" ? {
           title: effectiveText,
@@ -1517,14 +1494,19 @@ function CreatePostProvider({ children }) {
         isOptimistic: true,
       };
 
-      // 1. Immediately inject into client cache & emit event
-      try {
-        const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-        const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
-        localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated.slice(0, 50)));
-        window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
-      } catch (cacheErr) {
-        console.warn("Local post caching note:", cacheErr);
+      // 1. Immediately inject into client cache & emit event — but only for an
+      // immediately-published post. A scheduled post is not live yet, so it must
+      // not be written to the device-local "just published" cache (which
+      // `feedService` merges into the feed) or announced to the feed.
+      if (!isScheduled) {
+        try {
+          const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
+          const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
+          localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated.slice(0, 50)));
+          window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
+        } catch (cacheErr) {
+          console.warn("Local post caching note:", cacheErr);
+        }
       }
 
       // 2. Clear draft
@@ -1534,10 +1516,18 @@ function CreatePostProvider({ children }) {
         });
       }
 
-      // 3. Instant UI feedback & Navigation (User never waits!)
-      toast.success("Post published instantly! 🎉");
-      publishLockRef.current = false;
-      navigate(communityId ? `/community/${communityId}` : "/home");
+      // 3. Instant UI feedback & Navigation (User never waits!). The background
+      // write below still runs for both branches — a scheduled post must be
+      // persisted so `publishScheduledPosts` can find and publish it when due.
+      if (isScheduled) {
+        toast.success("Post scheduled! 📅");
+        publishLockRef.current = false;
+        navigate("/profile");
+      } else {
+        toast.success("Post published instantly! 🎉");
+        publishLockRef.current = false;
+        navigate(communityId ? `/community/${communityId}` : "/home");
+      }
 
       // 4. Background Cloud Sync (Non-blocking)
       (async () => {
@@ -1995,32 +1985,8 @@ export function SchedulingPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
   const [showPicker, setShowPicker] = useState(false);
 
-  const recurrenceDates = useMemo(() => {
-    if (!state.scheduledTime || state.recurrence === "none") return [];
-    const base = new Date(state.scheduledTime);
-    const dates = [base];
-    for (let i = 1; i <= 5; i++) {
-      const next = new Date(base);
-      if (state.recurrence === "daily") next.setDate(base.getDate() + i);
-      else if (state.recurrence === "weekly") next.setDate(base.getDate() + i * 7);
-      else if (state.recurrence === "monthly") next.setMonth(base.getMonth() + i);
-      if (next > new Date()) dates.push(next);
-    }
-    return dates;
-  }, [state.scheduledTime, state.recurrence]);
-
   return (
     <Panel icon={Icons.Clock} title="Scheduling" defaultOpen={defaultOpen}>
-      <div className="flex items-center gap-4 mb-3">
-        <label className="text-sm">Recurrence:</label>
-        <select value={state.recurrence} onChange={e => dispatch({ type: "SET_RECURRENCE", payload: e.target.value })}
-          className={`${INPUT_CLASS} w-auto`}>
-          <option value="none">None</option>
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
-        </select>
-      </div>
       <button onClick={() => setShowPicker(!showPicker)} className="text-sm text-purple-500 hover:underline">
         {showPicker ? "Hide picker" : "Set specific date/time"}
       </button>
@@ -2033,66 +1999,10 @@ export function SchedulingPanel({ defaultOpen = false }) {
             className={INPUT_CLASS} />
         </Suspense>
       )}
-      {recurrenceDates.length > 1 && (
-        <div className="mt-3 p-3 bg-purple-100/10 dark:bg-purple-900/10 rounded-xl border border-purple-500/20">
-          <p className="text-xs font-semibold text-purple-400 mb-2">Upcoming posts:</p>
-          <div className="flex flex-wrap gap-2">
-            {recurrenceDates.map((d, i) => (
-              <span key={i} className="bg-purple-500/10 text-purple-400 text-xs px-2 py-1 rounded-full">
-                {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-export function CoAuthorPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { searchUsers } = useCreatePostServices();
-  const [showModal, setShowModal] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-
-  const doSearch = async (q) => { setQuery(q); if (q.length < 2) { setResults([]); return; } const users = await searchUsers(q); setResults(users); };
-  const addCoAuthor = (user) => { dispatch({ type: "ADD_CO_AUTHOR", payload: { id: user.id, name: user.displayName || user.username, percentage: 0 } }); setShowModal(false); setQuery(""); setResults([]); };
-
-  return (
-    <Panel icon={Icons.Users} title="Co‑Authors" defaultOpen={defaultOpen}>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {state.coAuthors.map(c => (
-          <div key={c.id} className="flex items-center gap-2 bg-purple-100 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs">
-            <span>{c.name}</span>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={c.percentage}
-              onChange={e => dispatch({ type: "SET_CO_AUTHOR_PERCENTAGE", payload: { id: c.id, percentage: parseInt(e.target.value) || 0 } })}
-              className="w-12 bg-white/20 rounded px-1 text-xs text-center"
-              placeholder="%"
-            />
-            <button onClick={() => dispatch({ type: "REMOVE_CO_AUTHOR", payload: c.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button>
-          </div>
-        ))}
-      </div>
-      <button onClick={() => setShowModal(true)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-full">+ Add</button>
-      {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <h4 className="font-bold mb-2">Add Co‑author</h4>
-          <input type="text" placeholder="Search..." value={query} onChange={e => doSearch(e.target.value)} className={`${INPUT_CLASS} mb-2`} autoFocus />
-          <div className="max-h-40 overflow-y-auto">
-            {results.map(u => (
-              <button key={u.id} onClick={() => addCoAuthor(u)} className="w-full text-left p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-                <img src={u.photoURL || "/assets/default-profile.png"} className="w-6 h-6 rounded-full" alt="" /> <span>{u.displayName || u.username}</span>
-              </button>
-            ))}
-            {query && results.length === 0 && <p className="text-sm text-gray-500">No users found</p>}
-          </div>
-          <button onClick={() => setShowModal(false)} className="mt-3 w-full py-2 rounded-xl bg-gray-200 dark:bg-gray-700">Cancel</button>
-        </Modal>
+      {state.scheduledTime && (
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Publishes automatically at {new Date(state.scheduledTime).toLocaleString()}.
+        </p>
       )}
     </Panel>
   );
@@ -2187,7 +2097,7 @@ function PostPreview() {
   const { user } = useAuth();
   const isDark = useTheme().theme === "dark";
 
-  const authorName = state.coAuthors[0]?.name || pickDisplayName([user?.displayName, user?.username], { fallback: "You" });
+  const authorName = pickDisplayName([user?.displayName, user?.username], { fallback: "You" });
   const authorUsername = deriveHandle(user?.username) || deriveHandle(user?.email) || "";
   const authorPhoto = user?.photoURL || "";
 
@@ -2857,7 +2767,6 @@ function EnhancedStep3View() {
         {activeSection === 'audience' && (
           <div className="space-y-4">
             <VisibilityPanel defaultOpen={true} />
-            <CoAuthorPanel defaultOpen={true} />
           </div>
         )}
 

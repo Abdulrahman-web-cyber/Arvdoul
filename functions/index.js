@@ -88,6 +88,10 @@ merge(require('./events.js'));
 // review/publish). Membership is privilege data; the client never writes the
 // project document or its team/content subcollections.
 merge(require('./collaboration.js'));
+// Scheduled-post publisher: the composer writes `status: 'scheduled'` with a
+// future `scheduledTime`; this scheduled job is the only writer that flips a
+// due post to `published` (otherwise a scheduled post never surfaces anywhere).
+merge(require('./scheduledPosts.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
