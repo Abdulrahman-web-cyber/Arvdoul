@@ -3888,7 +3888,10 @@ describe('N184 — no fabricated counts sweep (round 4)', () => {
     expect(src).not.toContain('getReputationLevel(userReputation)');
     expect(src).not.toContain("typeof userReputation === 'number' ? userReputation : '—'");
     expect(src).toContain('unknownNumber(question?.bounty)');
-    expect(src).toContain('unknownNumber(userReputation) ?? 0');
+    expect(src).toContain('unknownNumber(userReputation)');
+    // N384: an absent reputation must not be coerced to a fabricated 0 that
+    // then renders a "Unestablished" badge for an unmeasured score.
+    expect(src).not.toContain('unknownNumber(userReputation) ?? 0');
   });
 });
 
@@ -3986,5 +3989,27 @@ describe('N343 — ProfileProgression never fabricates a "0 XP" bar from a missi
   });
   test('the XP bar is gated on the resolved XP info, not the level alone', () => {
     expect(src).toContain('{xpInfo && (');
+  });
+});
+
+describe('N384 — QuestionCard reputation badge uses the canonical 0-100 bands', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/PostCard/QuestionCard.jsx'), 'utf8');
+
+  test('no local reputation threshold table diverging from REPUTATION_BANDS', () => {
+    // A local table (100/500/1000/5000) once used a scale the canonical
+    // 0-100 reputation model can never reach, so the badge never fired below
+    // 100 and mislabelled a 100 as "Skilled".
+    expect(src).not.toMatch(/reputation\s*>=\s*5000/);
+    expect(src).not.toMatch(/reputation\s*>=\s*1000/);
+    expect(src).not.toMatch(/label:\s*'Legend'/);
+  });
+
+  test('the badge is derived from the canonical getReputationBand', () => {
+    expect(src).toContain('getReputationBand');
+    expect(src).toContain("from '../../services/levelSystemService.js'");
+  });
+
+  test('an absent reputation does not coerce to a fabricated 0', () => {
+    expect(src).not.toMatch(/getReputationLevel\(unknownNumber\([^)]*\)\s*\?\?\s*0\)/);
   });
 });

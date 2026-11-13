@@ -3,12 +3,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles } from "lucide-react";
-import { useAuth } from '../context/AuthContext';
 import { Loader2, AlertTriangle } from 'lucide-react';
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [post, setPost] = useState(null);
