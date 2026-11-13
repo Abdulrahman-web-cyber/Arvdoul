@@ -243,6 +243,7 @@ Latest verified: **155 suites / 1,775 passed (5 skipped)**; `npx eslint src/ fun
 | N339 | `TopAppBar`/`FollowButton` hand-wrote brand-violet glows in decimal (JS string contexts) | migrated to `brandRgba()`; ratchet baseline lowered |
 | N340 | Two deterministic-avatar generators (`avatarUtils.generateDefaultAvatarSvg`, `userService.generateDefaultAvatar`) each carried their OWN palette list with DIFFERENT secondary shades — the same user rendered a different avatar in the feed vs the profile | palette single-sourced in `avatarUtils`; `userService` imports it; `avatarPaletteConsistency.test.js` (guards job) fails on a second list or the old shades; semantic-hex baseline shrinks |
 | N341 | `BottomNav` brand-violet radial/linear gradients hand-wrote the decimal literal | migrated to `brandRgba()`; ratchet baseline lowered |
+| N342 | Eleven more JS-string brand-violet literals survived N339/N341: the six auth/onboarding `--glow-a`/`--rim-1` style vars, `ImageEditor`, `editorConstants`, `OfflineIndicator`, `SearchScreen`, and the `EqualizerModule` canvas gradient (which also hard-coded brand indigo/blue decimals) | all derive from `brandRgba()`; new generic `brandHexRgba(token, alpha)` for the canvas stops; `designTokens.test.js` pins it; ratchet baseline 73 → 38 (residue is Tailwind arbitrary-value classes) |
 
 **Emulator verification (this session).** `openjdk-21` installed via `sudo apt-get`;
 `npx firebase-tools emulators:exec --only firestore` ran the 12 rules/graph
@@ -250,7 +251,7 @@ adversarial suites for real: **12 suites / 129 tests passed, 0 skipped**.
 `--only storage` ran `storageRulesPathAlignment` for real: **10 tests passed**.
 The emulator-gated assertions execute (not silently skip) with Java present.
 
-Latest verified: **162 suites / 1825 passed (5 skipped)**; `npm run lint` exit 0
+Latest verified: **162 suites / 1826 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green.
 
 ## Commands to resume
