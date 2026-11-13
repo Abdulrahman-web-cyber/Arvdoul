@@ -4039,3 +4039,15 @@ describe('N386 — video project "Recent Projects" shows a real relative save ti
     expect(src).toContain('formatSavedAt(p.updatedAt)');
   });
 });
+
+describe('N388 — ProfileHeroSection creator pill uses the canonical identity badge', () => {
+  const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileHeroSection.jsx'), 'utf8');
+
+  test('the pill label is derived, not the literal "Top Creator"', () => {
+    // 'Top Creator' is reserved for creators at LEVEL_GATES.verifiedPriority;
+    // the literal claimed that standing for every creator regardless of level.
+    expect(src).toMatch(/getIdentityBadge/);
+    expect(src).toMatch(/creatorBadgeLabel/);
+    expect(src).not.toMatch(/>\s*Top Creator\s*</);
+  });
+});

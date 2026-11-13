@@ -27,6 +27,7 @@ import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
+const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
 
 // Format joined date nicely. Returns null when the timestamp is absent or
 // unparseable so the caller renders nothing rather than a fabricated date.
@@ -318,6 +319,15 @@ export const ProfileHeroSection = memo(({
   const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
+  // The creator pill label comes from the canonical identity badge: "Top
+  // Creator" is reserved for creators at/above LEVEL_GATES.verifiedPriority,
+  // everyone else is "Creator". The literal 'Top Creator' claimed the higher
+  // standing for any creator regardless of level.
+  const creatorBadgeLabel = useMemo(
+    () => getIdentityBadge(profile?.level, { isCreator })?.label || 'Creator',
+    [profile?.level, isCreator],
+  );
+
   const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
   // The verification gate threshold lives in the shared level config; the
   // "Level N to Verify" copy below must read it, not restate a literal.
@@ -535,7 +545,7 @@ export const ProfileHeroSection = memo(({
                     : "bg-amber-50 text-amber-700 border-amber-200"
                 )}>
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <span>Top Creator</span>
+                  <span>{creatorBadgeLabel}</span>
                 </span>
               )}
 
