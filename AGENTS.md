@@ -608,10 +608,15 @@ Two collections accept a client write that must never name another user:
   stamp `senderId == uid()` and `read` is owner-scoped (a missing doc stays
   readable). `messagesService` stamps `senderId` and treats a `permission-denied`
   read as "no duplicate of mine".
+- `stories/{storyId}/view_shards|reaction_shards|analytics_shards` (N370). The
+  rules bounded the key set but not the value, so a client could `setDoc` a
+  shard with `count: 999999`. They now bound the change to `±100`
+  (`fieldDeltaBounded` on update, `fieldCreateBounded` on create). Do not widen
+  the bound.
 
-`counterShardForgeryGuard.test.js` and `messageDedupeGuard.test.js` (both in the
-hard-failing `guards` job) pin both shapes; the latter also runs an adversarial
-emulator check (mallory cannot mint or read alice's dedupe record).
+`counterShardForgeryGuard.test.js`, `storyShardForgeryGuard.test.js` and
+`messageDedupeGuard.test.js` (all in the hard-failing `guards` job) pin these
+shapes; the latter two also run adversarial emulator checks.
 
 ## Timestamps: serverTimestamp() sentinels have no .toDate()
 `_buildMessage` (and every other create path) sets timestamps to

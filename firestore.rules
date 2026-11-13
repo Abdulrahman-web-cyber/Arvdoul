@@ -886,6 +886,57 @@ service cloud.firestore {
           !exists(/databases/$(database)/documents/blocks/$(viewerId + '_' + s.userId)) &&
           !exists(/databases/$(database)/documents/blocks/$(s.userId + '_' + viewerId));
       }
+      // Shard writes are BOUNDED AGGREGATION COUNTERS. A rule can see the
+      // post-`increment()` value (`request.resource.data.<f>` is the resulting
+      // value, `resource.data.<f>` the pre-write value), so a client can only
+      // apply a small relative change — never mint an absolute figure. The
+      // rules language has no list lambdas, so each field is named explicitly.
+      function fieldDeltaBounded(field, lo, hi) {
+        return request.resource.data.get(field, 0) is number &&
+          (resource.data.get(field, null) == null || (
+            request.resource.data.get(field, 0) - resource.data.get(field, 0) >= lo &&
+            request.resource.data.get(field, 0) - resource.data.get(field, 0) <= hi));
+      }
+      // On create the doc is absent, so `resource.data` is null and the delta is
+      // the whole initial value: the provided value must already be in range.
+      function fieldCreateBounded(field, lo, hi) {
+        return request.resource.data.get(field, 0) is number &&
+          request.resource.data.get(field, 0) >= lo &&
+          request.resource.data.get(field, 0) <= hi;
+      }
+      function viewShardDelta() {
+        return fieldDeltaBounded('count', -100, 100);
+      }
+      function reactionShardDelta() {
+        return fieldDeltaBounded('❤️', -100, 100) &&
+          fieldDeltaBounded('🔥', -100, 100) &&
+          fieldDeltaBounded('😂', -100, 100) &&
+          fieldDeltaBounded('😢', -100, 100) &&
+          fieldDeltaBounded('😮', -100, 100) &&
+          fieldDeltaBounded('👍', -100, 100);
+      }
+      function analyticsShardDelta() {
+        return fieldDeltaBounded('forwardTaps', -100, 100) &&
+          fieldDeltaBounded('backTaps', -100, 100) &&
+          fieldDeltaBounded('completions', -100, 100) &&
+          fieldDeltaBounded('comments', -100, 100) &&
+          fieldDeltaBounded('replies', -100, 100);
+      }
+      function reactionShardCreateBounded() {
+        return fieldCreateBounded('❤️', -100, 100) &&
+          fieldCreateBounded('🔥', -100, 100) &&
+          fieldCreateBounded('😂', -100, 100) &&
+          fieldCreateBounded('😢', -100, 100) &&
+          fieldCreateBounded('😮', -100, 100) &&
+          fieldCreateBounded('👍', -100, 100);
+      }
+      function analyticsShardCreateBounded() {
+        return fieldCreateBounded('forwardTaps', -100, 100) &&
+          fieldCreateBounded('backTaps', -100, 100) &&
+          fieldCreateBounded('completions', -100, 100) &&
+          fieldCreateBounded('comments', -100, 100) &&
+          fieldCreateBounded('replies', -100, 100);
+      }
       // `get` (single doc) is the full per-document decision. `list` is split
       // out because a Firestore list rule may only read fields the QUERY
       // constrains: `vibeIsActive`/`vibeVisibleToViewer` read isDeleted/status/
@@ -930,18 +981,27 @@ service cloud.firestore {
       // client cannot write arbitrary data into the aggregation collections.
       match /view_shards/{shardId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn() &&
+        // Create starts from an absent (0) counter, so the initial value is the
+        // whole delta and must already be bounded.
+        allow create: if isSignedIn() &&
           request.resource.data.keys().hasOnly(['count', 'updatedAt']) &&
-          request.resource.data.count is number;
+          request.resource.data.count is number &&
+          request.resource.data.count >= -100 && request.resource.data.count <= 100;
+        allow update: if isSignedIn() &&
+          request.resource.data.keys().hasOnly(['count', 'updatedAt']) &&
+          viewShardDelta();
       }
       match /reaction_shards/{shardId} {
         // The raw reaction tallies are rolled up server-side and the creator
         // sees the aggregate; no client reads the raw shards. Scope to
         // signed-in (the reactor path is authenticated).
         allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
-          '❤️', '🔥', '😂', '😢', '😮', '👍', 'updatedAt'
-        ]);
+        allow create: if isSignedIn() &&
+          request.resource.data.keys().hasOnly(['❤️', '🔥', '😂', '😢', '😮', '👍', 'updatedAt']) &&
+          reactionShardCreateBounded();
+        allow update: if isSignedIn() &&
+          request.resource.data.keys().hasOnly(['❤️', '🔥', '😂', '😢', '😮', '👍', 'updatedAt']) &&
+          reactionShardDelta();
       }
       match /analytics_shards/{shardId} {
         // Private creator analytics (forward/back taps, completions, comments,
@@ -950,9 +1010,16 @@ service cloud.firestore {
         // raw shards — a signed-in read leaked one creator's engagement to
         // every other user. Scope the read to the creator and admins.
         allow read: if isSignedIn() && (vibeData().userId == uid() || isAdmin());
-        allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
-          'forwardTaps', 'backTaps', 'completions', 'comments', 'replies', 'updatedAt'
-        ]);
+        allow create: if isSignedIn() &&
+          request.resource.data.keys().hasOnly([
+            'forwardTaps', 'backTaps', 'completions', 'comments', 'replies', 'updatedAt'
+          ]) &&
+          analyticsShardCreateBounded();
+        allow update: if isSignedIn() &&
+          request.resource.data.keys().hasOnly([
+            'forwardTaps', 'backTaps', 'completions', 'comments', 'replies', 'updatedAt'
+          ]) &&
+          analyticsShardDelta();
       }
       // Reactions: only when the creator enabled them, and only while the
       // Vibe is active and visible to the reactor (spec §22). The READ is
@@ -2217,9 +2284,21 @@ service cloud.firestore {
       allow read, delete: if isSignedIn() &&
         resource.data.userId == uid() &&
         shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
-      allow create, update: if isSignedIn() &&
+      // The value is bounded, not just the id: a fresh shard starts at 1 and
+      // every write is a +1 from the pre-write value, so an unbounded absolute
+      // `count` (which would defeat the per-tier upload limit) is refused.
+      allow create: if isSignedIn() &&
         request.resource.data.userId == uid() &&
-        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+') &&
+        request.resource.data.count is int &&
+        request.resource.data.count >= 1 && request.resource.data.count <= 100;
+      allow update: if isSignedIn() &&
+        request.resource.data.userId == uid() &&
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+') &&
+        request.resource.data.count is int &&
+        resource.data.count is int &&
+        request.resource.data.count - resource.data.count >= 0 &&
+        request.resource.data.count - resource.data.count <= 100;
     }
 
     // ==================== ENGAGEMENT COIN EVENTS (server-authored, immutable) ====================
