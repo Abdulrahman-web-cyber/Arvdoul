@@ -35,6 +35,8 @@ export default function VideoDetailScreen() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(null);
   const [saved, setSaved] = useState(false);
+  const [followState, setFollowState] = useState({ isFollowing: false, requestStatus: null });
+  const [followBusy, setFollowBusy] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [watchNext, setWatchNext] = useState({ loading: false, items: [], error: null });
   const viewedRef = useRef(false);
@@ -80,6 +82,22 @@ export default function VideoDetailScreen() {
             console.warn('Video creator profile read failed', e?.message);
           }
         }
+        // Resolve the viewer's real edge to the creator (the follow badge
+        // must reflect the server, and a private target shows "Requested").
+        if (data.userId && user?.uid && data.userId !== user.uid) {
+          try {
+            const { getUserService } = await import('../services/userService.js');
+            const rel = await getUserService().getFollowStatus(user.uid, data.userId);
+            setFollowState({
+              isFollowing: Boolean(rel?.isFollowing),
+              requestStatus: rel?.requestStatus ?? null,
+            });
+          } catch (e) {
+            console.warn('Video creator follow-state read failed', e?.message);
+          }
+        } else {
+          setFollowState({ isFollowing: false, requestStatus: null });
+        }
 
         // Record a real view once
         if (!viewedRef.current && user?.uid) {
@@ -107,6 +125,40 @@ export default function VideoDetailScreen() {
       }
     })();
   }, [videoId, searchParams, user?.uid]);
+
+  const handleFollowToggle = async () => {
+    if (!user?.uid) { toast.info('Sign in to follow creators.'); return; }
+    const targetId = video?.userId;
+    if (!targetId || targetId === user.uid) return;
+    setFollowBusy(true);
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      if (followState.requestStatus === 'pending') {
+        await svc.cancelFollowRequest(user.uid, targetId);
+        setFollowState({ isFollowing: false, requestStatus: null });
+        return;
+      }
+      if (followState.isFollowing) {
+        await svc.unfollowUser(user.uid, targetId);
+        setFollowState({ isFollowing: false, requestStatus: null });
+        return;
+      }
+      const res = await svc.followUser(user.uid, targetId);
+      // A private target yields a pending request, not an edge.
+      if (res?.requested || res?.requestStatus === 'pending') {
+        setFollowState({ isFollowing: false, requestStatus: 'pending' });
+        toast.success('Follow request sent');
+      } else {
+        setFollowState({ isFollowing: true, requestStatus: null });
+        toast.success(`Following @${creator?.username || creator?.name || 'creator'}`);
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not update follow state.');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
 
   const handleLike = async () => {
     if (!user?.uid) { toast.info('Sign in to like videos.'); return; }
@@ -239,6 +291,10 @@ export default function VideoDetailScreen() {
             {creator && (
               <VideoCreatorInfo
                 creator={creator}
+                isFollowing={followState.isFollowing}
+                requested={followState.requestStatus === 'pending'}
+                followBusy={followBusy}
+                onFollow={video?.userId && video.userId !== user?.uid ? handleFollowToggle : undefined}
                 onProfileClick={() => navigate(`/profile/${creator.id}`)}
               />
             )}

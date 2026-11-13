@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { motion } from 'framer-motion';
-import { BadgeCheck, UserPlus } from 'lucide-react';
+import { BadgeCheck, Clock, UserPlus } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import PropTypes from 'prop-types';
 
@@ -15,6 +15,8 @@ const VideoCreatorInfo = memo(({
   title = '',
   description = '',
   isFollowing = false,
+  requested = false,
+  followBusy = false,
   onFollow,
   onProfileClick,
   className = '',
@@ -36,7 +38,7 @@ const VideoCreatorInfo = memo(({
             className="w-12 h-12 rounded-full border-2 border-white object-cover"
           />
           {creator.isVerified && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-arvdoul-gradient flex items-center justify-center">
               <BadgeCheck className="w-3 h-3 text-white" />
             </div>
           )}
@@ -55,12 +57,26 @@ const VideoCreatorInfo = memo(({
 
         {!isFollowing && onFollow && (
           <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={onFollow}
-            className="px-4 py-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-semibold flex items-center gap-1"
+            whileTap={requested ? {} : { scale: 0.95 }}
+            onClick={requested ? undefined : onFollow}
+            disabled={requested || followBusy}
+            className={`px-4 py-1.5 rounded-full text-white text-sm font-semibold flex items-center gap-1 ${
+              requested
+                ? 'bg-white/15 text-white/80'
+                : 'bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo'
+            }`}
           >
-            <UserPlus className="w-4 h-4" />
-            Follow
+            {requested ? (
+              <>
+                <Clock className="w-4 h-4" />
+                Requested
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-4 h-4" />
+                Follow
+              </>
+            )}
           </motion.button>
         )}
       </div>
@@ -90,6 +106,8 @@ VideoCreatorInfo.propTypes = {
   title: PropTypes.string,
   description: PropTypes.string,
   isFollowing: PropTypes.bool,
+  requested: PropTypes.bool,
+  followBusy: PropTypes.bool,
   onFollow: PropTypes.func,
   onProfileClick: PropTypes.func,
   className: PropTypes.string,

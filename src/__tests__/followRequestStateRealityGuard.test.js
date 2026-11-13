@@ -140,4 +140,24 @@ describe('pending follow request is a distinct, real state', () => {
     expect(hero).toMatch(/disabled=\{!onOpenOptions\}/);
     expect(hero).toMatch(/disabled=\{!onOpenMessages\}/);
   });
+
+  test('VideoDetailScreen resolves the real edge and renders a Requested state (N364)', () => {
+    // The video viewer's creator card had a Follow control with NO state: it
+    // always rendered "Follow" (never "Following"), offered no cancel for a
+    // pending private-account request, and the screen never wired `onFollow`,
+    // so the button was dead. The screen must resolve the real per-pair edge,
+    // branch on the pending request, and pass the handler down.
+    const detail = read('src/screens/VideoDetailScreen.jsx');
+    expect(detail).toMatch(/getFollowStatus\(user\.uid, data\.userId\)/);
+    expect(detail).toMatch(/requestStatus:\s*'pending'/);
+    expect(detail).toMatch(/cancelFollowRequest\(user\.uid, targetId\)/);
+    expect(detail).toMatch(/onFollow=\{video\?\.userId && video\.userId !== user\?\.uid \? handleFollowToggle : undefined\}/);
+
+    const info = read('src/components/Videos/VideoCreatorInfo.jsx');
+    // The card renders the Requested state (with a disabled control) instead of
+    // an always-"Follow" button.
+    expect(info).toMatch(/requested = false/);
+    expect(info).toMatch(/requested \? \(/);
+    expect(info).toMatch(/disabled=\{requested \|\| followBusy\}/);
+  });
 });
