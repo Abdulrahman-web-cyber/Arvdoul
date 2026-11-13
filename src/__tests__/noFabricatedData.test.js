@@ -1526,7 +1526,7 @@ describe('Monetization - canonical level curve (no duplicated drift)', () => {
     // The import must carry the canonical LEVELS table (aliased) plus the
     // shared helpers it actually uses; do not re-import symbols that are dead.
     expect(src).toMatch(
-      /import \{ LEVELS as CANONICAL_LEVELS,[^}]*?GIFT_CATALOG,[^}]*?getLevelInfo \} from ['"]\.\.\/shared\/levelConfig\.cjs['"];/
+      /import \{ LEVELS as CANONICAL_LEVELS,[^}]*?GIFT_CATALOG,[^}]*?getLevelInfo[^}]*?\} from ['"]\.\.\/shared\/levelConfig\.cjs['"];/
     );
     expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
     expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
