@@ -3302,6 +3302,12 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).not.toContain('postDoc.viewsCount || postDoc.views || 0');
     expect(s).not.toContain('postDoc.likesCount || postDoc.likes?.length || 0');
     expect(s).toContain('postDoc.stats?.views');
+    // The "Virality Score" was a High/Medium/Normal bucket invented from the
+    // view count; it now renders the server's real `trendingScore` (or
+    // "Unavailable"), never a fabricated label.
+    expect(s).not.toContain('Virality Score');
+    expect(s).not.toMatch(/> 1000 \? 'High'/);
+    expect(s).toContain('metrics.trendingScore');
   });
 
   test('PostCard analytics panel and comment preview do not fabricate a 0', () => {

@@ -19,6 +19,7 @@ export default function PostAnalyticsScreen() {
     shares: null,
     saves: null,
     engagementRate: null,
+    trendingScore: null,
   });
 
   useEffect(() => {
@@ -55,7 +56,13 @@ export default function PostAnalyticsScreen() {
             ? ((totalEngagements / views) * 100).toFixed(1)
             : null;
 
-          setMetrics({ views, likes, comments, shares, saves, engagementRate });
+          // The scheduler (`functions/feed.js#processScoreUpdates`) writes a real
+          // `trendingScore` on every public published post. Show it when present;
+          // an absent score stays null (rendered "Unavailable") rather than a
+          // "High/Medium/Normal" bucket invented from the view count.
+          const trendingScore = stat(postDoc.trendingScore);
+
+          setMetrics({ views, likes, comments, shares, saves, engagementRate, trendingScore });
         }
       } catch (err) {
         console.warn('Failed to load post analytics:', err);
@@ -123,7 +130,7 @@ export default function PostAnalyticsScreen() {
                 {post.content || post.text || post.caption || 'No text content'}
               </p>
               <div className="mt-2 text-xs text-gray-500 flex items-center gap-4">
-                <span>Created: {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : 'Recent'}</span>
+                <span>Created: {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : '—'}</span>
               </div>
             </div>
           </div>
@@ -193,10 +200,10 @@ export default function PostAnalyticsScreen() {
             <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Sparkles className="w-4 h-4 text-purple-500" />
-                <span className="text-sm font-medium">Virality Score</span>
+                <span className="text-sm font-medium">Trending Score</span>
               </div>
               <span className="font-bold text-sm">
-                {metrics.views == null ? 'Unavailable' : metrics.views > 1000 ? 'High' : metrics.views > 100 ? 'Medium' : 'Normal'}
+                {metrics.trendingScore == null ? 'Unavailable' : metrics.trendingScore.toFixed(2)}
               </span>
             </div>
           </div>
