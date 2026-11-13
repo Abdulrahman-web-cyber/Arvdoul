@@ -589,6 +589,30 @@ listener without one dies silently on a rules denial or dropped connection
 `ServiceKit` child. `src/__tests__/snapshotErrorHandling.test.js` parses each
 call and fails if any is registered with only two arguments.
 
+## Client-writable aggregate counters and idempotency keys must be bound
+
+Two collections accept a client write that must never name another user:
+
+- `counter_shards/{shardId}` (`CountersManager`). A rule CAN see the
+  post-`increment()` value: `request.resource.data.value` is the *resulting*
+  value and `resource.data.value` the pre-write value, so the write is bounded
+  to a relative `±100` change (N207). A one-shot absolute mint — create or
+  update — is denied. Every reachable call site increments by ±1; the ±100
+  headroom covers the batched comment-delete (`amount: -count`). Do not widen
+  the bound or add an absolute `value` write. Residual: the shard id is unbound
+  to the writer, so the full fix is still to move every counter mutation
+  server-side and set `allow write: if false`.
+- `message_dedupe/{key}` (N369). The key is
+  `sha256(sender:conversation:type:content:mediaHash)` — its pre-image is
+  public, so the key alone is not a forgery defence. `create`/`update` must
+  stamp `senderId == uid()` and `read` is owner-scoped (a missing doc stays
+  readable). `messagesService` stamps `senderId` and treats a `permission-denied`
+  read as "no duplicate of mine".
+
+`counterShardForgeryGuard.test.js` and `messageDedupeGuard.test.js` (both in the
+hard-failing `guards` job) pin both shapes; the latter also runs an adversarial
+emulator check (mallory cannot mint or read alice's dedupe record).
+
 ## Timestamps: serverTimestamp() sentinels have no .toDate()
 `_buildMessage` (and every other create path) sets timestamps to
 `serverTimestamp()`, a sentinel with no `.toDate()` until the write commits.
