@@ -31,6 +31,18 @@ as failures.
 - **Profile sharing**: `src/utils/shareUtils.js` (`shareProfile`, `getProfileUrl`,
   `getProfileHandle`, `copyToClipboard`). All share entry points must use it so links resolve
   consistently. Do not rebuild `${origin}/profile/${id}` by hand — use `getProfileUrl`.
+- **Viewer-scoped like/save state lives in the viewer's own documents, never on
+  the shared post/video document.** No writer sets `post.isLiked`/`likedByMe`/
+  `hasLiked`/`savedBy`/`userReaction` or `video.isLiked`/`isSaved` — a
+  `posts/{id}`/`videos/{id}` doc carries only aggregate counters. The truth is
+  `posts/{id}/likes|saves|reactions/{uid}`, `users/{uid}/liked_posts`,
+  `users/{uid}/saved_videos/{videoId}` and `videos/{id}/likes/{uid}`. Read it
+  through `firestoreService.getPostViewerState` / `getLikedPostIds` and
+  `videoService.getViewerVideoState` / `_hydrateViewerVideoState`. Seeding a
+  heart/bookmark from the shared-doc flag always reads false (and a re-like then
+  double-counts, because the server counter already includes the viewer's like);
+  `viewerLikeStateRealityGuard.test.js` and `postCardFieldRealityGuard.test.js`
+  (guards job) fail on a regression.
 - **Profile read model / capabilities**: `src/services/profileCapabilityEngine.js` decides
   access (`resolveCapabilities`); `src/services/profileReadModel.js` owns the derivation every
   profile surface needs — placeholder name/handle rejection (`pickHandle`, `pickDisplayName`,

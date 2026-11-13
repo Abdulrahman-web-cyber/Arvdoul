@@ -729,8 +729,6 @@ class UltimateVideoService {
         shares: item.stats?.shares ?? item.shares ?? null,
         saves: item.stats?.saves ?? item.saves ?? null,
         views: item.stats?.views ?? item.views ?? null,
-        isLiked: item.isLiked || false,
-        isSaved: item.isSaved || false,
       };
     };
 
@@ -748,7 +746,8 @@ class UltimateVideoService {
           .map(formatVideoItem)
           .filter(v => v && v.videoUrl);
         if (matchingVideos.length > 0) {
-          return { success: true, feed: matchingVideos, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
+          const hydrated = await this._hydrateViewerVideoState(matchingVideos, safeUserId);
+          return { success: true, feed: hydrated, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
         }
       }
     } catch (e) {
@@ -800,7 +799,7 @@ class UltimateVideoService {
         rawVideos = rawVideos.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId));
       }
 
-      const formatted = rawVideos.map(formatVideoItem);
+      const formatted = await this._hydrateViewerVideoState(rawVideos.map(formatVideoItem), safeUserId);
       const nextCursor = formatted.length ? formatted[formatted.length - 1].id : null;
       return { success: true, feed: formatted, hasMore: formatted.length >= limit, nextCursor };
     } catch (err) {
@@ -1034,7 +1033,7 @@ class UltimateVideoService {
    * Viewer-specific like/save state for one video. The public video document
    * only carries aggregate counters; whether *this* viewer liked or saved it
    * lives in the `likes` subcollection and the viewer's `saved_videos`, so a
-   * detail screen must resolve it separately (the feed does this server-side).
+   * detail screen must resolve it separately (see `_hydrateViewerVideoState`).
    * Returns { liked: false, saved: false } for anonymous viewers.
    */
   async getViewerVideoState(videoId, userId) {
@@ -1045,6 +1044,32 @@ class UltimateVideoService {
       getDoc(doc(this.firestore, 'users', userId, 'saved_videos', videoId)),
     ]);
     return { liked: likeSnap.exists(), saved: savedSnap.exists() };
+  }
+
+  /**
+   * Resolve the viewer's like/save state for a page of videos. A `videos/{id}`
+   * document carries only aggregate counters — no writer sets a per-viewer
+   * `isLiked`/`isSaved` flag on it — so a feed that read those rendered an
+   * unliked heart for a video the viewer had liked (and a second tap re-liked
+   * it server-side, which toggles it back off). Two bounded point reads per
+   * video (the like doc and the viewer's saved doc), both owner-only under the
+   * rules, merged in parallel.
+   */
+  async _hydrateViewerVideoState(videos, userId) {
+    if (!userId || !Array.isArray(videos) || videos.length === 0) return videos;
+    const states = await Promise.all(videos.map(async (v) => {
+      if (!v?.id) return { liked: false, saved: false };
+      try {
+        const [likeSnap, savedSnap] = await Promise.all([
+          getDoc(doc(this.firestore, 'videos', v.id, 'likes', userId)),
+          getDoc(doc(this.firestore, 'users', userId, 'saved_videos', v.id)),
+        ]);
+        return { liked: likeSnap.exists(), saved: savedSnap.exists() };
+      } catch {
+        return { liked: false, saved: false };
+      }
+    }));
+    return videos.map((v, i) => ({ ...v, isLiked: states[i].liked, isSaved: states[i].saved }));
   }
 
   async getSavedVideos(userId, { limit: max = 50 } = {}) {

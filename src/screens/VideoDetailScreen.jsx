@@ -57,7 +57,9 @@ export default function VideoDetailScreen() {
         if (!data) throw new Error('Video not found');
         setVideo(data);
         setLikeCount(typeof data.stats?.likes === 'number' ? data.stats.likes : null);
-        setLiked(data.likedBy?.includes(user?.uid) || false);
+        // No per-viewer like flag lives on the video document; the real state is
+        // resolved below via getViewerVideoState (a dead `data.likedBy` read here
+        // just always produced false).
 
         // Fetch creator profile if we have a userId
         if (data.userId) {
