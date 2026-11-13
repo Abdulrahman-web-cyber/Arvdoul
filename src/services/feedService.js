@@ -84,6 +84,14 @@ const FEED_CONFIG = {
     AD_PREFETCH_DELAY: 2000,
     SPONSORED_AUCTION_ENABLED: true,
     SPONSORED_BID_FACTOR: 0.001,
+    // Paid self-promotion (`boostPost` debits coins and writes `boosted_posts`).
+    // An active boost must raise the post's ranking score for every viewer —
+    // otherwise the paid feature silently no-ops. `BOOST_COLLECTION` is read by
+    // the *viewer's* feed (public read), not the boosted author's own read of
+    // their posts. A modest factor keeps a paid post competitive, not dominant.
+    BOOSTED_COLLECTION: 'boosted_posts',
+    BOOST_RANKING_FACTOR: 1.5,
+    BOOST_FETCH_LIMIT: 30,
   },
   PERFORMANCE: {
     REQUEST_TIMEOUT: 8000,
@@ -738,6 +746,64 @@ class UltimateFeedService {
     }
   }
 
+  /**
+   * Active paid promotions (`boostPost` writes `boosted_posts/{postId}` after
+   * debiting coins). Bounded, index-backed (composite `expiresAt` + `__name__`),
+   * and best-effort: a denied read (private/blocked author) is simply dropped so
+   * one bad row cannot fail the whole feed. Each returned post is tagged
+   * `isBoosted` for the ranking multiplier in `_scoreAndRankPostsOptimized`.
+   */
+  async _getBoostedPosts(userId, options) {
+    if (this.offlineMode) return [];
+    const limit = options?.limit || FEED_CONFIG.MONETISATION.BOOST_FETCH_LIMIT;
+    try {
+      const { collection, query, where, orderBy, limit: fLimit, getDocs, doc, getDoc } = this.firestoreMethods;
+      const snap = await getDocs(query(
+        collection(this.firestore, FEED_CONFIG.MONETISATION.BOOSTED_COLLECTION),
+        where('expiresAt', '>', Date.now()),
+        orderBy('expiresAt', 'asc'),
+        fLimit(Math.min(limit, FEED_CONFIG.MONETISATION.BOOST_FETCH_LIMIT)),
+      ));
+      if (snap.empty) return [];
+
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
+      const results = await Promise.all(snap.docs.map(async (boostDoc) => {
+        const boost = boostDoc.data();
+        if (!boost.postId || hiddenAuthors.has(boost.userId)) return null;
+        try {
+          const postSnap = await getDoc(doc(this.firestore, 'posts', boost.postId));
+          if (!postSnap.exists()) return null;
+          const data = postSnap.data();
+          if (data.isDeleted === true) return null;
+          if (data.status && data.status !== 'published') return null;
+          if (data.authorIsPrivate === true) return null;
+          if (data.visibility && data.visibility !== 'public') return null;
+          if (hiddenAuthors.has(data.authorId)) return null;
+          return {
+            id: postSnap.id,
+            ...data,
+            _source: 'boosted',
+            _score: 0.5,
+            isBoosted: true,
+            boostExpiresAt: boost.expiresAt,
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+          };
+        } catch (e) {
+          return null; // denied / missing → drop this one, keep the rest
+        }
+      }));
+
+      const posts = results.filter(Boolean);
+      await Promise.all(posts.map(p => countersManager.apply({
+        data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
+      }).catch(() => p)));
+      return posts;
+    } catch (error) {
+      logger.warn('Boosted posts source failed', { userId, error: error?.message });
+      return [];
+    }
+  }
+
   async _getLatestFeed(userId, options) {
     if (this.offlineMode) return { success: true, feed: [], nextCursor: null };
     try {
@@ -1043,6 +1109,11 @@ class UltimateFeedService {
       }
     }
 
+    // Paid promotions must actually reach viewers: read the active boosts and
+    // splice those posts into the ranking pool (best-effort; a denied read for
+    // a private/blocked author is dropped inside the helper).
+    addSource('boosted', this._getBoostedPosts(userId, { limit: pageLimit }));
+
     const timedPromises = sourcePromises.map(p =>
       Promise.race([p, new Promise(resolve => setTimeout(() => resolve(), FEED_CONFIG.PERFORMANCE.REQUEST_TIMEOUT))])
     );
@@ -1083,6 +1154,8 @@ class UltimateFeedService {
         const watchBoost = 1 + (p.avgWatchTime / 60) * FEED_CONFIG.ALGORITHM.WATCH_TIME_WEIGHT;
         finalScore *= Math.min(2.0, watchBoost);
       }
+      // A paid, still-active promotion raises the post's rank for every viewer.
+      if (p.isBoosted) finalScore *= FEED_CONFIG.MONETISATION.BOOST_RANKING_FACTOR;
 
       const randomBoost = (this._hashString(p.id + sessionSeed) % 100) / 100;
       if (randomBoost < FEED_CONFIG.RANDOMNESS.EXPLORATION_BOOST) {

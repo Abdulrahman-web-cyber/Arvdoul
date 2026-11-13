@@ -270,6 +270,20 @@ Never add a second report collection without adding it to both
 `REPORT_COLLECTIONS`, and never log an admin action with the client-side
 `AuditLogger` (it writes to a local IndexedDB queue, not to the server trail).
 
+## Paid post boost is a real ranking signal
+`functions/monetization.js#boostPost` debits coins, then writes both
+`posts/{id}.boostData` and `boosted_posts/{postId}`. Both sides must stay wired:
+the **viewer's** feed reads active promotions in
+`feedService._getBoostedPosts` (bounded: `where('expiresAt','>',now)` +
+`orderBy('expiresAt','asc')` + `limit`, then a per-post `get` that drops a
+private/blocked/missing post instead of leaking it) and `_scoreAndRankPostsOptimized`
+multiplies the score by `BOOST_RANKING_FACTOR`. `boostData` is server-owned: the
+`posts` create rule requires `boostData == null` and the author-update carve-out
+forbids it, so a client cannot self-grant a free promotion; `boosted_posts` is
+signed-in read / `write: if false`, with a `(expiresAt, __name__)` composite
+index and a TTL `expireAt`. An expired boost must be re-purchasable.
+`postBoostWiringGuard.test.js` (guards job) fails if any layer regresses.
+
 ## Audio Studio
 `src/screens/AudioEditor/` is a real Web Audio editor: `audioEngine.js` owns the
 graph (clip sources → track gain/pan → EQ biquads → master → analyser), and the

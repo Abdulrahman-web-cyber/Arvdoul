@@ -643,7 +643,12 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       const boostPostData = postSnap.data();
       const postAuthorId = boostPostData.authorId || boostPostData.userId;
       if (postAuthorId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the post owner can boost.');
-      if (boostPostData.boostData?.isBoosted) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
+      // Only an *active* boost blocks a new one; an expired promotion must be
+      // re-purchasable (the old check blocked the post forever).
+      const priorExpiresAt = boostPostData.boostData?.boostExpiresAt;
+      const boostStillActive = boostPostData.boostData?.isBoosted === true &&
+        (typeof priorExpiresAt !== 'number' || priorExpiresAt > Date.now());
+      if (boostStillActive) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
 
       const newBalance = boostBal.coins - totalCost;
       writeCoinBalance(t, uid, { coins: newBalance });
@@ -669,6 +674,9 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       t.set(boostedRef, {
         postId, userId: postAuthorId, boostedBy: uid,
         expiresAt: boostExpiresAt,
+        // TTL: drop the ranking signal once the promotion lapses so an expired
+        // boost cannot keep surfacing the post (and the feed read stays small).
+        expireAt: new Date(boostExpiresAt),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

@@ -319,7 +319,9 @@ class EnterpriseFirestoreService {
         status: status,
         isDeleted: false,
         monetization: postData.monetization || null,
-        boostData: postData.boostData || null,
+        // boostData is server-owned (set only by the `boostPost` callable after
+        // it debits coins); a create must never seed it (firestore.rules pins
+        // `boostData == null` on create).
         scheduledTime: scheduledTime || null,
         publishedAt: (!isScheduled && status === 'published') ? serverTimestamp() : null,
         expiresAt: expiresAt || null,

@@ -265,7 +265,12 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
         import('../services/postService.js'),
       ]);
       const post = await postService.getPost(postId);
-      if (post?.boostData?.isBoosted) {
+      // Mirror the server's rule: only a *still-active* boost blocks a new one,
+      // so an expired promotion stays re-purchasable.
+      const expiresAt = post?.boostData?.boostExpiresAt;
+      const boostActive = post?.boostData?.isBoosted === true &&
+        (typeof expiresAt !== 'number' || expiresAt > Date.now());
+      if (boostActive) {
         toast.info('This post is already promoted');
         onClose();
         return;

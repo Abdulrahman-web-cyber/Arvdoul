@@ -615,7 +615,11 @@ service cloud.firestore {
       // account (or vice versa) to bypass the read gate.
       allow create: if isSignedIn() && authoredBy('authorId') &&
         request.resource.data.authorIsPrivate ==
-          get(/databases/$(database)/documents/users/$(uid())).data.get('isPrivate', false);
+          get(/databases/$(database)/documents/users/$(uid())).data.get('isPrivate', false) &&
+        // `boostData` is the paid-promotion record, written only by the
+        // server-side `boostPost` callable after it debits coins. A create must
+        // not seed it (else a client mints a free promotion at post-creation).
+        request.resource.data.get('boostData', null) == null;
       // Two legitimate updates, nothing else:
       //  - the author editing their own post, minus the moderation fields. Those
       //    belong to the server (reportContent / adminModerateContent); without
@@ -637,7 +641,7 @@ service cloud.firestore {
           (request.auth.uid == resource.data.authorId &&
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
-              'poll', 'gifts'
+              'poll', 'gifts', 'boostData'
             ])) ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'stats', 'updatedAt'
@@ -1418,6 +1422,15 @@ service cloud.firestore {
     match /sponsored_posts/{sponsoredId} {
       allow read: if isSignedIn();
       allow write: if false; // admin via console/CF
+    }
+    // Paid post promotions. `functions/monetization.js#boostPost` writes this
+    // row after it debits coins, and the viewer's feed reads it to rank active
+    // boosts (`feedService._getBoostedPosts`). Readable to signed-in clients
+    // (it is a public ranking signal, like `sponsored_posts`), server-write-only
+    // so a client cannot mint a free promotion.
+    match /boosted_posts/{postId} {
+      allow read: if isSignedIn();
+      allow write: if false; // server-only (boostPost)
     }
     match /audio_tracks/{trackId} {
       allow read: if isSignedIn();
