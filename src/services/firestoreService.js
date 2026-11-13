@@ -631,7 +631,9 @@ class EnterpriseFirestoreService {
     }
     const snap = await getDocs(q);
     const savedEntries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const posts = savedEntries.map(entry => entry.snapshot);
+    // Keep the save timestamp alongside the snapshot: it was dropped, so the
+    // saved-items screen could never show when a post was saved.
+    const posts = savedEntries.map(entry => ({ ...(entry.snapshot || {}), savedAt: entry.savedAt || null }));
     const hasMore = snap.docs.length === (options.limit || 20);
     const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
     return { success: true, posts, hasMore, nextCursor };

@@ -4051,3 +4051,25 @@ describe('N388 — ProfileHeroSection creator pill uses the canonical identity b
     expect(src).not.toMatch(/>\s*Top Creator\s*</);
   });
 });
+
+describe('N389 — saved items / collections show a real date, not "Recently"', () => {
+  const saved = fs.readFileSync(path.join(root, 'src/screens/SavedScreen.jsx'), 'utf8');
+  const collections = fs.readFileSync(path.join(root, 'src/screens/CollectionsScreen.jsx'), 'utf8');
+  const svc = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+
+  test('an absent save timestamp renders "—", never "Recently"', () => {
+    expect(saved).not.toMatch(/savedAt:\s*[^,]*\|\|\s*'Recently'/);
+    expect(saved).toContain("formatSavedDate(p.savedAt)");
+    expect(saved).toContain("formatSavedDate(v.savedAt)");
+    expect(saved).toMatch(/item\.savedAt \|\| '—'/);
+  });
+
+  test('collections fall back to "—" for a missing updatedAt', () => {
+    expect(collections).not.toMatch(/:\s*'Recently'/);
+    expect(collections).toMatch(/c\.lastUpdated \|\| '—'/);
+  });
+
+  test('getSavedPosts preserves the real savedAt timestamp', () => {
+    expect(svc).toMatch(/savedAt:\s*entry\.savedAt \|\| null/);
+  });
+});

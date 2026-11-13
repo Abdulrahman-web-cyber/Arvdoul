@@ -21,6 +21,15 @@ const COLLECTIONS = [
   'Audio Library'
 ];
 
+// A save timestamp arrives as a Firestore Timestamp (posts) or an ISO string
+// (videos). Render a real date, and null when it is absent or unparseable so
+// the caller shows '—' rather than a fabricated "Recently".
+function formatSavedDate(value) {
+  if (!value) return null;
+  const d = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString();
+}
+
 export default function SavedScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -57,7 +66,7 @@ export default function SavedScreen() {
           },
           type: p.type || 'post',
           thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
-          savedAt: p.savedAt || 'Recently',
+          savedAt: formatSavedDate(p.savedAt),
           collection: p.collection || 'Saved',
           tags: p.hashtags || [],
         }));
@@ -76,7 +85,7 @@ export default function SavedScreen() {
           type: 'video',
           thumbnail: v.thumbnail || '/assets/default-profile.png',
           videoUrl: v.videoUrl || '',
-          savedAt: v.savedAt || 'Recently',
+          savedAt: formatSavedDate(v.savedAt),
           collection: 'Saved',
           tags: [],
         }));
@@ -485,7 +494,7 @@ export default function SavedScreen() {
                     <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                       {item.author.username && <span>@{item.author.username}</span>}
                       <span>•</span>
-                      <span>{item.savedAt}</span>
+                      <span>{item.savedAt || '—'}</span>
                       <span>•</span>
                       <span className="text-purple-400 font-semibold">{item.collection}</span>
                     </div>

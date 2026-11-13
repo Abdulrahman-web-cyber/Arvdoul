@@ -49,7 +49,7 @@ export default function CollectionsScreen() {
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
-            : 'Recently',
+            : null,
         }));
         setCollections(mapped);
       } catch (err) {
@@ -95,7 +95,7 @@ export default function CollectionsScreen() {
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
-            : 'Recently',
+            : null,
         })));
       }
     } catch (err) {
@@ -224,7 +224,7 @@ export default function CollectionsScreen() {
                 <p className="text-xs text-gray-300 line-clamp-1">{c.description}</p>
                 <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 font-semibold">
                   <span>{c.itemCount === null ? '— items' : `${c.itemCount} items`}</span>
-                  <span>Updated {c.lastUpdated}</span>
+                  <span>Updated {c.lastUpdated || '—'}</span>
                 </div>
               </div>
             </div>
