@@ -507,3 +507,12 @@ Run `functions/privacyMigration.js` against production (admin-gated callable /
 scheduled sweep) to copy `coins`/`lockedCoins` into `users_private/{uid}` and
 scrub them from `users/{uid}`. Until it runs, `readCoinBalance(..., { fallbackToPublic: true })`
 keeps reading the legacy public field so no balance is lost.
+
+## Continuation session (N368: event attendee roster)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N368 | `EventDetailScreen`'s attendee tab rendered `data.displayName \|\| 'User'` over a generic gradient blob. `events/{id}.attendees` stores only `{status,ticketTier,registeredAt,checkedInAt}` per uid (no name — `functions/events.js` never writes one), so **every** attendee showed the placeholder "User" and the real identity was unrecoverable. | New `getEventAttendees` callable resolves the roster server-side (bounded `documentId() in` `users` batches, placeholder stripping, `[]` for a non-attendee); `eventService.getEventAttendees` + `FUNCTIONS.GET_EVENT_ATTENDEES`; the screen renders the resolved roster with real avatars (`getSafeAvatarUrl`) plus a skeleton and a permission empty-state; the callerless `subscribeToAttendees` was removed. `eventAttendeeRosterGuard.test.js` (guards job) pins it. |
+
+Latest verified: **1893 tests / 1888 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green.

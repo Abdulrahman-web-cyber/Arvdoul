@@ -158,6 +158,73 @@ exports.promoteEventWaitlist = functions.https.onCall(async (data, context) => {
   return { success: true, promotedUserId: promoted };
 });
 
+// Placeholder handles/names the client's read model rejects; mirrored here so a
+// roster never surfaces a generated `user_xxxxxx` handle or a "Creator" stand-in.
+const PLACEHOLDER_NAMES = new Set([
+  'user', 'creator', 'unknown', 'anonymous', 'arvdoul user', 'citizen', 'guest', 'null', 'undefined',
+]);
+const cleanString = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const isPlaceholder = (value) => {
+  const cleaned = cleanString(value);
+  return cleaned !== null && (PLACEHOLDER_NAMES.has(cleaned.toLowerCase()) || /^user_[0-9a-f]{4,}$/i.test(cleaned));
+};
+
+/**
+ * The attendee roster for an event, resolved server-side.
+ *
+ * `events/{id}.attendees` stores only `{ status, ticketTier, registeredAt,
+ * checkedInAt }` per uid — no display name — so the client rendered a
+ * fabricated "User" placeholder for every attendee (and lost the real identity
+ * entirely). The roster is served here so the caller gets the real, projected
+ * `displayName`/`username`/`photoURL` from `users/{uid}`, never a stand-in.
+ * Non-attendees receive an empty roster; statuses/counters stay visible to any
+ * signed-in viewer (they are event metadata, not personal data).
+ */
+exports.getEventAttendees = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getEventAttendees', 60, 60000);
+
+  const { eventId, includeWaitlist = false } = data || {};
+  const { data: event } = await requireEvent(eventId);
+
+  const attendees = event.attendees || {};
+  const viewerIsOrganizer = event.organizerId === uid;
+  const viewerIsAttendee = Boolean(attendees[uid]);
+  if (!viewerIsOrganizer && !viewerIsAttendee) {
+    return { attendees: [] };
+  }
+
+  const entries = Object.entries(attendees)
+    .filter(([, a]) => a && (includeWaitlist || a.status !== 'waitlisted'))
+    .slice(0, 200);
+  const uids = entries.map(([id]) => id);
+
+  const profiles = new Map();
+  for (let i = 0; i < uids.length; i += 30) {
+    const chunk = uids.slice(i, i + 30);
+    const snap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
+    snap.forEach((d) => profiles.set(d.id, d.data()));
+  }
+
+  const roster = entries.map(([id, a]) => {
+    const profile = profiles.get(id) || {};
+    const displayName = cleanString(profile.displayName) || cleanString(profile.name);
+    const username = cleanString(profile.username);
+    return {
+      id,
+      status: a.status || null,
+      ticketTier: a.ticketTier || null,
+      checkedInAt: a.checkedInAt || null,
+      displayName: isPlaceholder(displayName) ? null : displayName,
+      username: isPlaceholder(username) ? null : username,
+      photoURL: cleanString(profile.photoURL),
+      isVerified: profile.isVerified === true,
+    };
+  });
+
+  return { attendees: roster };
+});
+
 exports.submitEventFeedback = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'submitEventFeedback', 10, 60000);

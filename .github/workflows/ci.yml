@@ -379,6 +379,7 @@ jobs:
           src/__tests__/viewerLikeStateRealityGuard.test.js
           src/__tests__/commentLikeStateRealityGuard.test.js
           src/__tests__/followRequestStateRealityGuard.test.js
+          src/__tests__/eventAttendeeRosterGuard.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
       # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the
