@@ -83,4 +83,22 @@ describe('composer has no dead scheduling/collaboration controls', () => {
     expect(createPost).not.toMatch(/state\.settings/);
     expect(createPost).not.toContain('UPDATE_SETTINGS');
   });
+
+  test('no dead tagging/topic/feeling/expiry controls', () => {
+    // TaggingPanel (brands/products have no data source), topics, feeling,
+    // activity, customList and the expiresAt selector were collected but never
+    // persisted by createPost or read anywhere.
+    for (const token of [
+      'TaggingPanel',
+      'state.taggedBrands',
+      'state.taggedProducts',
+      'state.topics',
+      'state.feeling',
+      'state.activity',
+      'state.customList',
+      'state.expiresAt',
+    ]) {
+      expect(createPost).not.toContain(token);
+    }
+  });
 });

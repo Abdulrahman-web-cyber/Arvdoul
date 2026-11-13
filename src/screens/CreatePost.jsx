@@ -487,17 +487,9 @@ const initialState = {
   contentJSON: null,
   mediaItems: [],
   visibility: "public",
-  customList: [],
   location: null,
-  taggedPeople: [],
-  taggedBrands: [],
-  taggedProducts: [],
-  topics: [],
   hashtags: [],
-  feeling: null,
-  activity: null,
   scheduledTime: null,
-  expiresAt: null,
   typeData: {
     poll: { options: [], allowMultiple: false },
     event: {
@@ -559,20 +551,9 @@ function reducer(state, action) {
       case "REMOVE_MEDIA_ITEM": draft.mediaItems.splice(action.payload, 1); draft.isDirty = true; pushHistory = true; break;
       case "REORDER_MEDIA": { const [removed] = draft.mediaItems.splice(action.payload.from, 1); draft.mediaItems.splice(action.payload.to, 0, removed); draft.isDirty = true; pushHistory = true; break; }
       case "SET_VISIBILITY": draft.visibility = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_CUSTOM_LIST": draft.customList = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LOCATION": draft.location = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "ADD_TAGGED_PERSON": if (!draft.taggedPeople.some(p => p.id === action.payload.id)) { draft.taggedPeople.push(action.payload); draft.isDirty = true; pushHistory = true; } break;
-      case "REMOVE_TAGGED_PERSON": draft.taggedPeople = draft.taggedPeople.filter(p => p.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "ADD_TAGGED_BRAND": if (!draft.taggedBrands.some(b => b.id === action.payload.id)) { draft.taggedBrands.push(action.payload); draft.isDirty = true; pushHistory = true; } break;
-      case "REMOVE_TAGGED_BRAND": draft.taggedBrands = draft.taggedBrands.filter(b => b.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "ADD_TAGGED_PRODUCT": if (!draft.taggedProducts.some(p => p.id === action.payload.id)) { draft.taggedProducts.push(action.payload); draft.isDirty = true; pushHistory = true; } break;
-      case "REMOVE_TAGGED_PRODUCT": draft.taggedProducts = draft.taggedProducts.filter(p => p.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "SET_TOPICS": draft.topics = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_HASHTAGS": draft.hashtags = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_FEELING": draft.feeling = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_ACTIVITY": draft.activity = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_SCHEDULED_TIME": draft.scheduledTime = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_EXPIRES_AT": draft.expiresAt = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -1281,11 +1262,6 @@ function CreatePostProvider({ children }) {
     return () => clearTimeout(debounceTimerRef.current);
   }, [state.content, state.mediaItems, getPredictions, moderateContent]);
 
-  const searchUsers = useCallback(async (query) => {
-    if (!services.current.search) return [];
-    try { const res = await services.current.search.searchUsers(query, { limit: 10 }); return res.success ? res.users : []; } catch { return []; }
-  }, []);
-
   const publishPost = useCallback(async (overrideState = null, isOfflineReplay = false) => {
     if (publishLockRef.current) return;
     publishLockRef.current = true;
@@ -1441,17 +1417,9 @@ function CreatePostProvider({ children }) {
         authorPhoto: userNow.photoURL || userNow.photo || "",
         visibility: communityId ? "community" : (current.visibility || "public"),
         communityId: communityId || null,
-        customList: current.customList || [],
         location: current.location || null,
-        taggedPeople: current.taggedPeople || [],
-        taggedBrands: current.taggedBrands || [],
-        taggedProducts: current.taggedProducts || [],
-        topics: current.topics || [],
         hashtags: current.hashtags || [],
-        feeling: current.feeling || null,
-        activity: current.activity || null,
         scheduledTime: current.scheduledTime || null,
-        expiresAt: current.expiresAt || null,
         poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null } : null,
         event: effectiveType === "event" ? {
           title: effectiveText,
@@ -1744,7 +1712,7 @@ function CreatePostProvider({ children }) {
     services: services.current, isOffline, offlineQueueItems, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
-    retryOfflineItem, deleteOfflineItem, searchUsers,
+    retryOfflineItem, deleteOfflineItem,
     saveAsTemplate, loadTemplate, loadTemplates, getDraftVersions, loadVersions, restoreVersion,
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
@@ -1752,7 +1720,7 @@ function CreatePostProvider({ children }) {
     isOffline, offlineQueueItems, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
-    retryOfflineItem, deleteOfflineItem, searchUsers,
+    retryOfflineItem, deleteOfflineItem,
     saveAsTemplate, loadTemplate, loadTemplates, getDraftVersions, loadVersions, restoreVersion,
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
@@ -1936,46 +1904,6 @@ export function LocationPanel({ defaultOpen = false }) {
             <button key={i} onMouseDown={() => { dispatch({ type: "SET_LOCATION", payload: s }); setQuery(s); setShow(false); }} className="w-full text-left p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600">{s}</button>
           ))}
         </div>
-      )}
-    </Panel>
-  );
-}
-
-export function TaggingPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { searchUsers } = useCreatePostServices();
-  const [showModal, setShowModal] = useState(false);
-  const [tagType, setTagType] = useState("person");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-
-  const doSearch = async (q) => { setQuery(q); if (q.length < 2) { setResults([]); return; } const users = await searchUsers(q); setResults(users); };
-  const addTag = () => { if (results.length === 0) return; const entity = results[0]; dispatch({ type: `ADD_TAGGED_${tagType.toUpperCase()}`, payload: { id: entity.id, name: entity.displayName || entity.username } }); setShowModal(false); setQuery(""); setResults([]); };
-
-  return (
-    <Panel icon={Icons.AtSign} title="Tagging" defaultOpen={defaultOpen}>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {state.taggedPeople.map(p => <span key={p.id} className="inline-flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-full text-xs">{p.name}<button onClick={() => dispatch({ type: "REMOVE_TAGGED_PERSON", payload: p.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button></span>)}
-        {state.taggedBrands.map(b => <span key={b.id} className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-full text-xs">{b.name}<button onClick={() => dispatch({ type: "REMOVE_TAGGED_BRAND", payload: b.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button></span>)}
-        {state.taggedProducts.map(p => <span key={p.id} className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full text-xs">{p.name}<button onClick={() => dispatch({ type: "REMOVE_TAGGED_PRODUCT", payload: p.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button></span>)}
-      </div>
-      <div className="flex gap-2">
-        {["person", "brand", "product"].map(type => (
-          <button key={type} onClick={() => { setTagType(type); setShowModal(true); }} className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-full capitalize">{type}</button>
-        ))}
-      </div>
-      {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <h4 className="font-bold mb-2">Tag {tagType}</h4>
-          <input type="text" placeholder="Search..." value={query} onChange={e => doSearch(e.target.value)} className={`${INPUT_CLASS} mb-2`} autoFocus />
-          <div className="max-h-40 overflow-y-auto">
-            {results.map(u => (
-              <button key={u.id} onClick={() => { setResults([u]); addTag(); }} className="w-full text-left p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">{u.displayName || u.username}</button>
-            ))}
-            {query && results.length === 0 && <p className="text-sm text-gray-500">No results</p>}
-          </div>
-          <button onClick={() => setShowModal(false)} className="mt-3 w-full py-2 rounded-xl bg-gray-200 dark:bg-gray-700">Cancel</button>
-        </Modal>
       )}
     </Panel>
   );
@@ -2744,7 +2672,7 @@ function EnhancedStep3View() {
       <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-gray-100 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 overflow-x-auto scrollbar-hide">
         {[
           { id: 'audience', label: '🎯 Audience & Reach' },
-          { id: 'content', label: '📍 Tags & Location' },
+          { id: 'content', label: '📍 Location' },
           { id: 'advanced', label: '⚙️ AI & Scheduling' },
         ].map((tab) => (
           <button
@@ -2773,7 +2701,6 @@ function EnhancedStep3View() {
         {activeSection === 'content' && (
           <div className="space-y-4">
             <LocationPanel defaultOpen={true} />
-            <TaggingPanel defaultOpen={true} />
           </div>
         )}
 
