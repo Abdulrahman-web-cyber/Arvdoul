@@ -4021,3 +4021,21 @@ describe('N385 — no placeholder date word in place of an absent timestamp', ()
     expect(src).toContain("? tx.createdAt.toDate().toLocaleDateString() : '—'");
   });
 });
+
+describe('N386 — video project "Recent Projects" shows a real relative save time', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('a saved project stores a real timestamp, not a display string', () => {
+    const src = read('src/screens/VideoEditor/VideoEditorScreen.jsx');
+    expect(src).not.toMatch(/updatedAtText\s*:/);
+    expect(src).toMatch(/updatedAt:\s*new Date\(\)\.toISOString\(\)/);
+  });
+
+  test('the header derives the label from the timestamp and never defaults to "Just now"', () => {
+    const src = read('src/screens/VideoEditor/components/EditorHeader.jsx');
+    // A stored "Just now" string claimed a project saved days ago was just saved.
+    expect(src).not.toMatch(/updatedAtText/);
+    expect(src).not.toMatch(/formatSavedAt\([^)]*\)\s*\|\|\s*'Just now'/);
+    expect(src).toContain('formatSavedAt(p.updatedAt)');
+  });
+});
