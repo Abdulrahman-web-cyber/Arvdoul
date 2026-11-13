@@ -29,7 +29,8 @@ describe('video feed wiring', () => {
 
   test('VideoFeed resolves the viewer follow state and passes it down', () => {
     const src = read('src/components/Videos/VideoFeed.jsx');
-    expect(src).toContain('getFollowing');
+    // Canonical batched per-pair edge read, never a scan of the viewer's graph.
+    expect(src).toContain('getFollowStates');
     expect(src).toMatch(/followedByViewer=\{followingIds\.has/);
   });
 

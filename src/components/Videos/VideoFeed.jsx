@@ -72,17 +72,20 @@ const VideoFeed = memo(({
 
   // Resolve the viewer's real follow state for the loaded creators so the
   // follow badge reflects the server, not a hardcoded false (which made every
-  // already-followed creator render as "+ Follow").
+  // already-followed creator render as "+ Follow"). Batched per-pair edge read
+  // (`getFollowStates` → `getEdgeSet`), never a scan of the viewer's follow graph.
   const [followingIds, setFollowingIds] = useState(() => new Set());
   useEffect(() => {
     if (!user?.uid || videos.length === 0) return undefined;
     let cancelled = false;
     (async () => {
       try {
+        const creatorIds = [...new Set(videos.map((v) => v.userId || v.authorId || v.creator?.id).filter(Boolean))];
+        if (creatorIds.length === 0) return;
         const { getUserService } = await import('../../services/userService.js');
-        const res = await getUserService().getFollowing(user.uid, { limit: 200 });
+        const states = await getUserService().getFollowStates(user.uid, creatorIds);
         if (cancelled) return;
-        setFollowingIds(new Set((res.following || res.friends || []).map((f) => f.uid || f.id)));
+        setFollowingIds(new Set([...states].filter(([, s]) => s?.isFollowing).map(([id]) => id)));
       } catch (err) {
         console.warn('Could not resolve follow state:', err);
       }
