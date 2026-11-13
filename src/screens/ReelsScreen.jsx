@@ -193,17 +193,20 @@ const formatDuration = (seconds) => {
   }, [currentReelIndex, reels.length, hasMore, loadMoreReels]);
 
   // Resolve the follow state for the loaded creators (never a local-only fake).
+  // Uses the canonical batched edge read (`getFollowStates` → `getEdgeSet`) so
+  // it never scans the viewer's whole follow graph.
   useEffect(() => {
     if (!user?.uid || reels.length === 0) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await getUserService().getFollowing(user.uid, { limit: 200 });
+        const creatorIds = [...new Set(reels.map((r) => r.creator?.id).filter(Boolean))];
+        if (creatorIds.length === 0) return;
+        const states = await getUserService().getFollowStates(user.uid, creatorIds);
         if (cancelled) return;
-        const followingIds = new Set((res.following || res.friends || []).map((f) => f.uid || f.id));
         setReels((prev) => prev.map((r) => ({
           ...r,
-          creator: { ...r.creator, isFollowing: followingIds.has(r.creator.id) },
+          creator: { ...r.creator, isFollowing: Boolean(states.get(r.creator?.id)?.isFollowing) },
         })));
       } catch (err) {
         console.warn('Could not resolve follow state:', err);
