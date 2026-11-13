@@ -421,12 +421,18 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   `liveService.GIFT_TYPES`, `monetizationService.GIFTS`) derives from them, and
   the server prices gifts from `GIFT_VALUES` (`functions/monetization.js`
   `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug.
-- `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS` and
-  `AD_REWARD_COINS` own store pricing, the monthly subscription grant and the
-  rewarded-ad payout. `functions/monetization.js` (`purchaseCoins`,
-  `createSubscription`) and the store screens (`CoinsScreen`,
-  `Economy/WalletScreen`) all read these tables. Never re-declare a package id,
-  price or coin amount in a screen or a function. IAP (`verifyPurchase`) was
+- `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS`,
+  `AD_REWARD_COINS` and `MAX_ADS_PER_USER_PER_DAY` own store pricing, the
+  monthly subscription grant, the rewarded-ad payout and the daily ad budget.
+  `functions/monetization.js` (`purchaseCoins`, `createSubscription`, `watchAd`)
+  and the store screens (`CoinsScreen`, `Economy/WalletScreen`) all read these
+  tables. Never re-declare a package id, price, coin amount or daily cap in a
+  screen or a function — a cap the server does not read is not a cap.
+  `watchAd` must consume the budget server-side (`enforceDailyLimit(uid, 1, 'ad',
+  MAX_ADS_PER_USER_PER_DAY)`) and floor the reward at one unit
+  (`Math.max(1, Math.floor(seconds/30)) * AD_REWARD_COINS`) so a sub-30s claim
+  pays the advertised unit instead of zero (`adRewardBoundGuard.test.js`).
+  IAP (`verifyPurchase`) was
   removed: it checked only that appstore/play *config keys existed* and then
   minted coins without validating the receipt against Apple/Google — a
   fabricated verification. Coin purchases go through the real Stripe-verified

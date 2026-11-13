@@ -947,6 +947,14 @@ const SUBSCRIPTION_TIERS = Object.freeze({
 const AD_REWARD_COINS = 2;
 
 /**
+ * Maximum rewarded ads a single account may claim per UTC day. Enforced
+ * server-side in `functions/monetization.js#watchAd` (via the `fraud_limits`
+ * `adTotal` daily counter) so a client cannot mint coins by looping the
+ * rewarded-ad callable. The client reads the same value only for display.
+ */
+const MAX_ADS_PER_USER_PER_DAY = 20;
+
+/**
  * Coin -> USD conversion. Integer coins are the only unit that is ever stored or
  * transferred; USD is a display-only projection, so every surface must use this
  * single rounding policy instead of dividing by COINS_PER_DOLLAR by hand.
@@ -1017,6 +1025,7 @@ module.exports = {
   COIN_PACKAGES_BY_ID,
   SUBSCRIPTION_TIERS,
   AD_REWARD_COINS,
+  MAX_ADS_PER_USER_PER_DAY,
   coinsToUsd,
   formatCoinsAsUsd,
   getRankTitle,

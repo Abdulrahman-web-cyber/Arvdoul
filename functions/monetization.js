@@ -1216,6 +1216,7 @@ const COIN_PACKAGES = require('./levelConfig.cjs').COIN_PACKAGES_BY_ID;
 const SUBSCRIPTION_TIERS = require('./levelConfig.cjs').SUBSCRIPTION_TIERS;
 
 const AD_REWARD_PER_30S = require('./levelConfig.cjs').AD_REWARD_COINS;
+const MAX_ADS_PER_USER_PER_DAY = require('./levelConfig.cjs').MAX_ADS_PER_USER_PER_DAY;
 const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
 
 /**
@@ -1616,11 +1617,22 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'Ad campaign not found or inactive.');
     }
 
+    // Daily cap, applied only once the campaign is proven real so an invalid
+    // adId cannot burn the caller's budget. The per-minute rate limit alone
+    // lets an account claim 20 ads/min all day, each minting coins; this
+    // consumes the shared daily ad budget (the same lever the client shows).
+    await enforceDailyLimit(uid, 1, 'ad', MAX_ADS_PER_USER_PER_DAY);
+
     // Clamp the client-supplied watch time so a forged duration cannot inflate
-    // the reward beyond a real rewarded-ad session.
+    // the reward beyond a real rewarded-ad session, then floor the reward at
+    // one full reward. The advertised rate is "AD_REWARD_PER_30S coins per 30s"
+    // (CoinsScreen / SponsoredPostCard render the same 30s unit), so a
+    // sub-30s claim must still pay exactly one unit — the old
+    // `Math.max(REWARD, floor(s/30)*REWARD)` paid the floor of a shorter
+    // window, i.e. zero, contradicting the displayed "+N coins per 30s".
     const MAX_AD_WATCH_SECONDS = 120;
     const watchedSeconds = Math.min(Number(watchDurationSeconds), MAX_AD_WATCH_SECONDS);
-    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchedSeconds / 30) * AD_REWARD_PER_30S);
+    const reward = Math.max(1, Math.floor(watchedSeconds / 30)) * AD_REWARD_PER_30S;
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
@@ -1643,7 +1655,7 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
 
       const impRef = admin.firestore().collection('ad_impressions').doc();
       t.set(impRef, {
-        userId: uid, adId, placement, watchDurationSeconds, reward,
+        userId: uid, adId, placement, watchDurationSeconds: watchedSeconds, reward,
         createdAt: serverTS(), expireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       });
       const txRef = admin.firestore().collection('coin_transactions').doc();

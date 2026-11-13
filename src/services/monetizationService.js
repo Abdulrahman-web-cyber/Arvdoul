@@ -10,7 +10,7 @@ import { PRIVATE_PROFILE_COLLECTION } from '../config/profileContracts.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
-import { LEVELS as CANONICAL_LEVELS, GIFT_CATALOG, getLevelInfo } from "../shared/levelConfig.cjs";
+import { LEVELS as CANONICAL_LEVELS, GIFT_CATALOG, getLevelInfo, MAX_ADS_PER_USER_PER_DAY } from "../shared/levelConfig.cjs";
 
 const log = svcLogger('monetizationService');
 
@@ -40,7 +40,7 @@ const DEFAULT_CONFIG = {
   GIFTS: GIFT_CATALOG.map((g) => ({ type: g.type, value: g.coins })),
   BOOST_COST_PER_DAY: 10,
   AD_PLACEMENTS: ['home', 'videos', 'stories', 'messages', 'notifications', 'profile', 'feed', 'conversation_list', 'search'],
-  MAX_ADS_PER_USER_PER_DAY: 20,
+  MAX_ADS_PER_USER_PER_DAY: MAX_ADS_PER_USER_PER_DAY,
   AD_CACHE_TTL: 300, // seconds
   POSITION_THRESHOLDS: {
     KING: 1000000,
