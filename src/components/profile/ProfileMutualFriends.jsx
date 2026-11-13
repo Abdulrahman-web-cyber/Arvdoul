@@ -17,7 +17,6 @@ const ProfileMutualFriends = memo(({
   theme = 'light',
   capabilities = null,
   onFriendPress,
-  onCommunityClick,
 }) => {
   return (
     <ProfileSocialContext
@@ -29,7 +28,6 @@ const ProfileMutualFriends = memo(({
       theme={theme}
       capabilities={capabilities}
       onFriendClick={onFriendPress}
-      onCommunityClick={onCommunityClick}
     />
   );
 });

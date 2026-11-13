@@ -6,6 +6,7 @@ import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
 import SplashScreen from "../screens/SplashScreen.jsx";
+import logger from "../utils/Logger.js";
 
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
@@ -200,7 +201,14 @@ export default function AppRoutes() {
       {/* ========== PUBLIC ROUTES (No Layout) ========== */}
       <Route path="/" element={
         <PublicRoute>
-          <SplashScreen />
+          <SplashScreen
+            onRenderError={(error, info) =>
+              logger.error("Splash render error", {
+                error: error?.message,
+                componentStack: info?.componentStack,
+              })
+            }
+          />
         </PublicRoute>
       } />
       

@@ -453,6 +453,33 @@ Latest verified: **1876 tests / 1871 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N364: video viewer follow state)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N364 | `VideoDetailScreen` passed neither `isFollowing` nor `onFollow` to `VideoCreatorInfo`, so the creator card's Follow control was dead and always read "Follow"; a pending private-account request had no state and no cancel | screen resolves `getFollowStatus(uid, video.userId)`, branches pending into a disabled "Requested" with `cancelFollowRequest`, passes `isFollowing`/`requested`/`followBusy`/`onFollow`; `followRequestStateRealityGuard.test.js` pins it; the verified badge's rogue purple→pink gradient migrated to `bg-arvdoul-gradient` |
+
+## Continuation session (N365, N366)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N365 | `CreatorPayoutScreen.sumCredits`/lifetime-withdrawn and `VideoAnalyticsScreen.lastPayoutCoins` coerced an absent ledger `amount` to `0`, understating a measured figure | every sum returns unknown (`null` → "—") when any contributing amount is unknown; `noFabricatedData.test.js` pins `unknownNumber` + absence of `Number(tx.amount) \|\| 0` |
+| N366 | `ProfilePublicScreen` passed `onFriendPress={(friend) => navigate(\`/profile/${friend.id}\`)}` but `ProfileSocialContext` calls the handler with no argument → TypeError on every tap | handler routes to `/profile/:userId/friends`; `profileReadModel.test.js` fails on a `(friend) =>` handler; `VideoFeed`'s `onFollow` no longer fabricates `{ isFollowing: true }` |
+
+Latest verified: **1878 tests / 1873 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N367: dead handler-prop wiring sweep)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N367 | Handler props that a component referenced (or wired into an `onClick`) but that **no caller ever passed** and that were never guarded — always-undefined functions: `TimelineToolbar`'s Back/Crop/Settings buttons (`onBack`/`onCrop`/`onOpenSettings`), `TextTool`'s whole "Text Layers" section (`textLayers` + its three layer callbacks), `MessageBubble.onLongPress`, `VideoGiftModal.onSendGift`, `MessageInput.onStartRecording`/`onStopRecording`, `ExportModal.onCompleteExport`, and `ProfileSocialContext`'s `cursor-pointer` shared-communities card calling a never-passed `onCommunityClick` | dead buttons/props removed (`TimelineToolbar`, `TextTool`, `MessageInput`, `ExportModal`, `ToolPanels`, `VideoGiftModal`, `MessageBubble`); `SplashScreen.onRenderError` is now wired in `AppRoutes` to `logger.error`; the communities card is a read-only summary; new hard-failing `deadHandlerPropGuard.test.js` (guards job) fails if a handler is referenced/executed but never passed and never guarded |
+
+Latest verified: **1879 tests / 1874 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

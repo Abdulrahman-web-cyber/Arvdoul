@@ -25,7 +25,6 @@ export default function ExportModal({
   duration = 0,
   currentResolution,
   tracks = [],
-  onCompleteExport,
 }) {
   const navigate = useNavigate();
   const [selectedRes, setSelectedRes] = useState(currentResolution || RESOLUTION_PRESETS[0]);
@@ -283,7 +282,6 @@ export default function ExportModal({
     setExportProgress(100);
     setIsExporting(false);
     setExportComplete(true);
-    onCompleteExport?.({ url, blob, size: blob.size });
   };
 
   const handleDownload = () => {
@@ -564,5 +562,4 @@ ExportModal.propTypes = {
   duration: PropTypes.number,
   currentResolution: PropTypes.object,
   tracks: PropTypes.array,
-  onCompleteExport: PropTypes.func,
 };

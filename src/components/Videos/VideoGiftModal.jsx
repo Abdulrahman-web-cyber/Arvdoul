@@ -19,7 +19,6 @@ const VideoGiftModal = memo(({
   isOpen = false,
   onClose,
   creator = {},
-  onSendGift,
 }) => {
   const { isDark } = useTheme();
   const { user } = useAuth();
@@ -96,7 +95,6 @@ const VideoGiftModal = memo(({
       } catch { /* best-effort */ }
 
       setSentAnimation(selectedGift);
-      onSendGift?.(selectedGift);
       toast.success(`Sent ${selectedGift.name} to @${creator?.username || creator?.name || 'creator'}! ✨`);
       setTimeout(() => {
         setSentAnimation(null);
@@ -222,7 +220,6 @@ VideoGiftModal.propTypes = {
   isOpen: PropTypes.bool,
   onClose: PropTypes.func.isRequired,
   creator: PropTypes.object,
-  onSendGift: PropTypes.func,
 };
 
 export default VideoGiftModal;

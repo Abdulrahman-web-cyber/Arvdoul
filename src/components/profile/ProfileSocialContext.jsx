@@ -21,7 +21,6 @@ const ProfileSocialContext = memo(({
   theme = 'dark',
   capabilities = null,
   onFriendClick,
-  onCommunityClick,
 }) => {
   const isDark = theme === 'dark';
 
@@ -115,12 +114,12 @@ const ProfileSocialContext = memo(({
       </div>
       )}
 
-      {/* 2. Shared Communities Card */}
+      {/* 2. Shared Communities Card — a read-only summary. No caller wires a
+          destination, so it must not advertise a click it cannot honour. */}
       {canShowCommunities && (
-      <div 
-        onClick={() => onCommunityClick?.()}
+      <div
         className={cn(
-          "flex items-center gap-3 p-2.5 rounded-xl sm:rounded-2xl transition-all cursor-pointer group",
+          "flex items-center gap-3 p-2.5 rounded-xl sm:rounded-2xl transition-all group",
           isDark ? "hover:bg-white/[0.04]" : "hover:bg-slate-50"
         )}
       >

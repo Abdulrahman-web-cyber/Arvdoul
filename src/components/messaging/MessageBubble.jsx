@@ -13,7 +13,6 @@ const MessageBubble = React.memo(({
   isOwn,
   senderName,
   senderAvatar,
-  onLongPress,
   onReaction,
   onReply,
   onForward,
@@ -67,7 +66,6 @@ const MessageBubble = React.memo(({
   const handleTouchStart = () => {
     longPressTimerRef.current = setTimeout(() => {
       setShowMenu(true);
-      onLongPress?.(message);
     }, 500);
   };
 
@@ -143,7 +141,6 @@ const MessageBubble = React.memo(({
         onContextMenu={(e) => {
           e.preventDefault();
           setShowMenu(true);
-          onLongPress?.(message);
         }}
       >
         {/* Sender name (for group chats, first message of the group) */}

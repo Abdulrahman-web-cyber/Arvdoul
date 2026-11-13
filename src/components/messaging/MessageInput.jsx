@@ -11,8 +11,6 @@ import GIFPicker from '../Shared/GIFPicker';
 const MessageInput = React.memo(({
   onSendMessage,
   onSendMedia,
-  onStartRecording,
-  onStopRecording,
   onTyping,
   theme,
   disabled = false,
@@ -113,7 +111,6 @@ const MessageInput = React.memo(({
         recordingTimerRef.current = setInterval(() => {
           setRecordingDuration((prev) => prev + 1);
         }, 1000);
-        onStartRecording?.();
       };
 
       mediaRecorder.onstop = () => {
@@ -140,7 +137,6 @@ const MessageInput = React.memo(({
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-      onStopRecording?.();
     }
   };
 

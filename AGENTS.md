@@ -344,6 +344,16 @@ is only flagged when the identifier appears nowhere after the destructure; an im
 when *all* importers ignore it), so it stays at zero false positives. Delete the dead
 import/component; do not allowlist it.
 
+`src/__tests__/deadPropsGuard.test.js` is the mirror image (a prop the caller passes that
+the callee never destructures) and `src/__tests__/deadHandlerPropGuard.test.js` is the
+third side (N367): a handler prop a component *references and even wires into an
+`onClick`* but that **no caller ever passes** and that is never guarded, so it is an
+always-undefined function — `TimelineToolbar`'s Back/Crop/Settings buttons,
+`TextTool`'s "Text Layers" section, `MessageBubble.onLongPress`, `VideoGiftModal.onSendGift`.
+Wire the handler (e.g. `SplashScreen.onRenderError` → `logger.error` in `AppRoutes`), make
+the control read-only if it has no destination, or delete it — do not allowlist. All three
+run in the hard-failing `guards` job.
+
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus
   `profile.privacy.*` scopes) — not in the settings document.
