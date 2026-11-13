@@ -476,9 +476,11 @@ Latest verified: **1878 tests / 1873 passed (5 skipped)**; `npm run lint` exit 0
 | --- | --- | --- |
 | N367 | Handler props that a component referenced (or wired into an `onClick`) but that **no caller ever passed** and that were never guarded — always-undefined functions: `TimelineToolbar`'s Back/Crop/Settings buttons (`onBack`/`onCrop`/`onOpenSettings`), `TextTool`'s whole "Text Layers" section (`textLayers` + its three layer callbacks), `MessageBubble.onLongPress`, `VideoGiftModal.onSendGift`, `MessageInput.onStartRecording`/`onStopRecording`, `ExportModal.onCompleteExport`, and `ProfileSocialContext`'s `cursor-pointer` shared-communities card calling a never-passed `onCommunityClick` | dead buttons/props removed (`TimelineToolbar`, `TextTool`, `MessageInput`, `ExportModal`, `ToolPanels`, `VideoGiftModal`, `MessageBubble`); `SplashScreen.onRenderError` is now wired in `AppRoutes` to `logger.error`; the communities card is a read-only summary; new hard-failing `deadHandlerPropGuard.test.js` (guards job) fails if a handler is referenced/executed but never passed and never guarded; complementary `deadDataPropGuard.test.js` fails if a data prop is used only as a JSX truthiness gate but no caller passes it |
 
-Latest verified: **1879 tests / 1874 passed (5 skipped)**; `npm run lint` exit 0
+Latest verified: **1880 tests / 1875 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
-`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job. `AppRoutes`
+also wires `SplashScreen.onMetrics` → `metricsService.recordHistogram` (the
+startup timings previously had no sink).
 
 ## Commands to resume
 
