@@ -55,6 +55,9 @@ describe('pending follow request is a distinct, real state', () => {
       'src/screens/SearchScreen.jsx',
       'src/components/Videos/VideoCard.jsx',
       'src/components/search/CreatorCarousel.jsx',
+      'src/screens/PostOptionsDrawer.jsx',
+      'src/components/profile/ProfileHeroSection.jsx',
+      'src/screens/Profile/ProfilePublicScreen.jsx',
     ]) {
       const src = read(file);
       expect(src).toContain('requestStatus');
@@ -64,8 +67,22 @@ describe('pending follow request is a distinct, real state', () => {
       'src/screens/ReelsScreen.jsx',
       'src/screens/SearchScreen.jsx',
       'src/components/Videos/VideoCard.jsx',
+      'src/screens/PostOptionsDrawer.jsx',
+      'src/screens/Profile/ProfilePublicScreen.jsx',
     ]) {
       expect(read(file)).toContain('cancelFollowRequest');
     }
+  });
+
+  test('the owner visitor preview carries requestStatus and disables handler-less controls', () => {
+    const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
+    expect(preview).toMatch(/requestStatus:\s*storeFollowStatus\?\.requestStatus/);
+    const hero = read('src/components/profile/ProfileHeroSection.jsx');
+    // Preview passes no onFollowToggle/onOpenTipModal/onOpenOptions/onOpenMessages,
+    // so those controls must render disabled rather than silently do nothing.
+    expect(hero).toMatch(/disabled=\{followLoading \|\| !onFollowToggle\}/);
+    expect(hero).toMatch(/disabled=\{!onOpenTipModal\}/);
+    expect(hero).toMatch(/disabled=\{!onOpenOptions\}/);
+    expect(hero).toMatch(/disabled=\{!onOpenMessages\}/);
   });
 });

@@ -809,13 +809,18 @@ export const ProfileHeroSection = memo(({
             </button>
           )}
 
-          {/* Primary Follow Button */}
+          {/* Primary Follow Button. In the owner's "view as public" preview no
+              handler is passed, so the control renders visibly disabled rather
+              than as a button that silently does nothing. */}
           <button
             type="button"
             onClick={onFollowToggle}
-            disabled={followLoading}
+            disabled={followLoading || !onFollowToggle}
+            aria-disabled={followLoading || !onFollowToggle}
+            title={!onFollowToggle ? 'Preview only — this is how your profile looks to others' : undefined}
             className={cn(
               "flex-1 min-w-[140px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer",
+              !onFollowToggle && "opacity-60 cursor-not-allowed",
               isFollowing || requestStatus === 'pending'
                 ? (isDark ? "bg-white/10 hover:bg-white/15 text-slate-200" : "bg-slate-200 hover:bg-slate-300 text-slate-800")
                 : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo hover:brightness-110 shadow-purple-600/30"
@@ -839,12 +844,18 @@ export const ProfileHeroSection = memo(({
             )}
           </button>
 
-          {/* Message Button */}
+          {/* Message Button. In the owner's visitor preview there is no handler
+              and no other party to message, so it renders disabled instead of
+              opening a conversation with yourself. */}
           <button
             type="button"
-            onClick={onOpenMessages ? onOpenMessages : () => navigate(`/messages/new?to=${profileUid}`)}
+            onClick={onOpenMessages}
+            disabled={!onOpenMessages}
+            aria-disabled={!onOpenMessages}
+            title={!onOpenMessages ? 'Preview only' : undefined}
             className={cn(
               "flex-1 min-w-[130px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 cursor-pointer",
+              !onOpenMessages && "opacity-60 cursor-not-allowed",
               capabilities && capabilities.canMessage === false
                 ? (isDark ? "bg-white/5 opacity-60 border-white/5 text-slate-400" : "bg-slate-100 opacity-60 border-slate-200 text-slate-500")
                 : isDark
@@ -856,51 +867,63 @@ export const ProfileHeroSection = memo(({
             <span>Message</span>
           </button>
 
-          {/* Audio Call Button - hidden unless the calls flag is on */}
+          {/* Audio Call Button - hidden unless the calls flag is on. Disabled in
+              the owner's visitor preview (no onOpenMessages) since there is no
+              other party to call. */}
           {callsEnabled && (
           <button
             type="button"
             onClick={handleStartCall}
+            disabled={!onOpenMessages}
+            aria-disabled={!onOpenMessages}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              !onOpenMessages && "opacity-60 cursor-not-allowed",
               isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}
-            title="Audio Call"
+            title={onOpenMessages ? 'Audio Call' : 'Preview only'}
             aria-label="Audio Call"
           >
             <Phone className="w-4 h-4" />
           </button>
           )}
 
-          {/* Gift / Tip Button */}
+          {/* Gift / Tip Button — no handler in the owner's visitor preview, so it
+              renders disabled rather than as a dead control. */}
           <button
             type="button"
             onClick={onOpenTipModal}
+            disabled={!onOpenTipModal}
+            aria-disabled={!onOpenTipModal}
+            title={onOpenTipModal ? 'Send Gift / Tip Coins' : 'Preview only'}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              !onOpenTipModal && "opacity-60 cursor-not-allowed",
               isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}
-            title="Send Gift / Tip Coins"
             aria-label="Send Gift"
           >
             <Gift className="w-4 h-4 text-purple-400" />
           </button>
 
-          {/* More Options Dropdown */}
+          {/* More Options Dropdown — no handler in the owner's visitor preview. */}
           <button
             type="button"
             onClick={onOpenOptions}
+            disabled={!onOpenOptions}
+            aria-disabled={!onOpenOptions}
+            title={onOpenOptions ? 'More Options' : 'Preview only'}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              !onOpenOptions && "opacity-60 cursor-not-allowed",
               isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}
-            title="More Options"
             aria-label="More Options"
           >
             <MoreHorizontal className="w-4 h-4" />

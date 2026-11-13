@@ -107,6 +107,10 @@ export default function ProfilePreviewScreen({
             isFollowing: Boolean(storeFollowStatus?.isFollowing),
             isFollower: Boolean(storeFollowStatus?.isFollower),
             isMutualFriend: Boolean(storeFollowStatus?.isMutualFriend),
+            // A pending request to a private account is not a follow; carry it
+            // so the preview does not offer an open "Follow" for a pair that
+            // already has an unanswered request.
+            requestStatus: storeFollowStatus?.requestStatus ?? null,
           },
       viewAs: isOwnerView ? null : 'public',
     });

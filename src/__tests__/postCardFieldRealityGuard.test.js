@@ -71,6 +71,17 @@ describe('PostCard renders only real fields and discloses ads', () => {
     expect(drawer).toMatch(/getPostViewerState/);
   });
 
+  test('PostOptionsDrawer reconciles a pending follow request (not a fake follow)', () => {
+    const drawer = stripComments(fs.readFileSync(path.join(root, 'src', 'screens', 'PostOptionsDrawer.jsx'), 'utf8'));
+    // The status read returns `requestStatus: 'pending'` for a private target;
+    // the row must offer to withdraw it, and a followUser `{requested:true}`
+    // result must not be rendered as a completed follow.
+    expect(drawer).toMatch(/requestStatus === 'pending'/);
+    expect(drawer).toMatch(/cancelFollowRequest/);
+    expect(drawer).toMatch(/res\?\.requested/);
+    expect(drawer).toMatch(/Cancel request/);
+  });
+
   test('firestoreService.getPostViewerState reads the viewer\'s own docs', () => {
     const svc = fs.readFileSync(path.join(root, 'src', 'services', 'firestoreService.js'), 'utf8');
     expect(svc).toMatch(/async getPostViewerState\(/);

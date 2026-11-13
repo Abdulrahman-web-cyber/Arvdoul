@@ -393,6 +393,16 @@ Latest verified: **1870 tests / 1865 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N358: two more follow surfaces + preview dead controls)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N358 | `PostOptionsDrawer` read `getFollowStatus` but dropped `requestStatus`, so a requested private author's post menu showed **Follow** (second tap = duplicate request) and a `followUser` `{requested:true}` result was optimistically rendered as a completed follow; `ProfilePreviewScreen`'s visitor perspective omitted `requestStatus` from the relationship handed to the capability engine; `ProfileHeroSection` rendered Follow/Message/Call/Gift/More with no handler in preview mode (dead controls) | drawer carries `followRequested` (from `requestStatus === 'pending'`), offers **Cancel request** via `cancelFollowRequest`, and reconciles `res.requested`/`requestStatus === 'pending'` into the requested state; preview passes `requestStatus`; hero disables + "Preview only"-labels the handler-less controls; `followRequestStateRealityGuard.test.js` (extended) and `postCardFieldRealityGuard.test.js` (new drawer test) lock it |
+
+Latest verified: **1872 tests / 1867 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

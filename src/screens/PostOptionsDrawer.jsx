@@ -83,7 +83,7 @@ const initialState = {
   pinned: false, pinning: false,
   archived: false, archiving: false,
   commentsEnabled: true, commentsToggling: false,
-  followState: null, followLoading: false,
+  followState: null, followRequested: false, followLoading: false,
   loadingAction: null,
 };
 
@@ -98,6 +98,7 @@ function uiReducer(state, action) {
     case 'SET_COMMENTS_ENABLED': return { ...state, commentsEnabled: action.payload };
     case 'SET_COMMENTS_TOGGLING': return { ...state, commentsToggling: action.payload };
     case 'SET_FOLLOW_STATE': return { ...state, followState: action.payload };
+    case 'SET_FOLLOW_REQUESTED': return { ...state, followRequested: action.payload };
     case 'SET_FOLLOW_LOADING': return { ...state, followLoading: action.payload };
     case 'SET_LOADING_ACTION': return { ...state, loadingAction: action.payload };
     default: return state;
@@ -145,6 +146,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     archived: safePost.archived === true,
     commentsEnabled: safePost.commentsEnabled !== false,
     followState: null,
+    followRequested: false,
   });
 
   // Modals
@@ -257,10 +259,16 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       try {
         const res = await userService.getFollowStatus(currentUser.uid, ownerId);
         if (!cancelled && mountedRef.current) {
-          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: res.isFollowing });
+          // A private target yields a pending request, not a follow: reconcile
+          // both so the row offers "Cancel request" instead of a no-op Follow.
+          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: Boolean(res?.isFollowing) });
+          dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: res?.requestStatus === 'pending' });
         }
       } catch {
-        if (!cancelled && mountedRef.current) dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
+        if (!cancelled && mountedRef.current) {
+          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
+          dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: false });
+        }
       }
     };
     fetchFollow();
@@ -695,6 +703,27 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const version = getNextVersion('follow');
     dispatchUI({ type: 'SET_FOLLOW_LOADING', payload: true });
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'follow' });
+
+    const wasRequested = uiState.followRequested;
+    // A pending request is withdrawn, not "unfollowed" (there is no edge yet).
+    if (wasRequested) {
+      dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: false });
+      try {
+        await userService.cancelFollowRequest(currentUser.uid, ownerId);
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        toast.success('Follow request withdrawn');
+        debouncedAnalytics('post_option_click', { action: 'cancel_follow_request', postId: post.id });
+      } catch {
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: true });
+        toast.error('Action failed');
+      } finally {
+        dispatchUI({ type: 'SET_FOLLOW_LOADING', payload: false });
+        dispatchUI({ type: 'SET_LOADING_ACTION', payload: null });
+      }
+      return;
+    }
+
     const newState = !uiState.followState;
     dispatchUI({ type: 'SET_FOLLOW_STATE', payload: newState });
     if (!navigator.onLine) {
@@ -705,11 +734,25 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       return;
     }
     try {
-      if (newState) await callWithRetry(() => userService.followUser(currentUser.uid, ownerId));
-      else await callWithRetry(() => userService.unfollowUser(currentUser.uid, ownerId));
-      if (!isValidVersion('follow', version) || !mountedRef.current) return;
-      toast.success(newState ? `Following @${post.authorUsername}` : `Unfollowed @${post.authorUsername}`);
-      debouncedAnalytics('post_option_click', { action: newState ? 'follow' : 'unfollow', postId: post.id });
+      if (newState) {
+        const res = await callWithRetry(() => userService.followUser(currentUser.uid, ownerId));
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        // A private target yields `{requested:true}` and creates no edge; show
+        // "Requested" rather than claiming a completed follow.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
+          dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: true });
+          toast.success('Follow request sent');
+        } else {
+          toast.success(`Following @${post.authorUsername}`);
+        }
+        debouncedAnalytics('post_option_click', { action: 'follow', postId: post.id });
+      } else {
+        await callWithRetry(() => userService.unfollowUser(currentUser.uid, ownerId));
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        toast.success(`Unfollowed @${post.authorUsername}`);
+        debouncedAnalytics('post_option_click', { action: 'unfollow', postId: post.id });
+      }
     } catch (err) {
       if (!isValidVersion('follow', version) || !mountedRef.current) return;
       dispatchUI({ type: 'SET_FOLLOW_STATE', payload: !newState });
@@ -728,8 +771,15 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
 
   const secondaryRow = useMemo(() => [
     { id: 'copy', icon: Copy, label: 'Copy link', onClick: handleCopyLink, secondary: true },
-    ...(!isAuthor ? [{ id: 'follow', icon: uiState.followState ? UserMinus : UserPlus, label: uiState.followState ? 'Unfollow' : 'Follow', onClick: handleFollowToggle, disabled: uiState.followLoading, primary: true }] : []),
-  ], [isAuthor, uiState.followState, uiState.followLoading, handleCopyLink, handleFollowToggle]);
+    ...(!isAuthor ? [{
+      id: 'follow',
+      icon: uiState.followState ? UserMinus : UserPlus,
+      label: uiState.followState ? 'Unfollow' : (uiState.followRequested ? 'Cancel request' : 'Follow'),
+      onClick: handleFollowToggle,
+      disabled: uiState.followLoading,
+      primary: true,
+    }] : []),
+  ], [isAuthor, uiState.followState, uiState.followRequested, uiState.followLoading, handleCopyLink, handleFollowToggle]);
 
   const tertiaryRow = useMemo(() => [
     ...(!isAuthor ? [{ id: 'tip', icon: Coins, label: 'Tip', onClick: () => openModal('tip'), primary: true }] : []),
