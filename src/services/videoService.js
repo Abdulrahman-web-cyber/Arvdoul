@@ -1,7 +1,7 @@
 // src/services/videoService.js
 
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, startAfter, serverTimestamp, runTransaction, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, startAfter, serverTimestamp, runTransaction, onSnapshot, documentId } from "firebase/firestore";
 import { openDB } from 'idb';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
@@ -228,6 +228,8 @@ class LRUCache {
 }
 
 const pendingRequests = new Map();
+// Firestore `in`/`documentId() in` queries accept at most 30 values.
+const IN_CHUNK = 30;
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of pendingRequests.entries()) {
@@ -1051,25 +1053,43 @@ class UltimateVideoService {
    * document carries only aggregate counters — no writer sets a per-viewer
    * `isLiked`/`isSaved` flag on it — so a feed that read those rendered an
    * unliked heart for a video the viewer had liked (and a second tap re-liked
-   * it server-side, which toggles it back off). Two bounded point reads per
-   * video (the like doc and the viewer's saved doc), both owner-only under the
-   * rules, merged in parallel.
+   * it server-side, which toggles it back off).
+   *
+   * The saved half is one bounded `documentId() in` read over the viewer's own
+   * `users/{uid}/saved_videos` (chunked at 30); the like half is one point read
+   * per video because each like doc lives under a different `videos/{id}` parent
+   * and cannot be batched across parents.
    */
   async _hydrateViewerVideoState(videos, userId) {
     if (!userId || !Array.isArray(videos) || videos.length === 0) return videos;
-    const states = await Promise.all(videos.map(async (v) => {
-      if (!v?.id) return { liked: false, saved: false };
+    const ids = videos.map((v) => v?.id).filter(Boolean);
+    if (ids.length === 0) return videos;
+
+    const savedIds = new Set();
+    try {
+      const col = collection(this.firestore, 'users', userId, 'saved_videos');
+      for (let i = 0; i < ids.length; i += IN_CHUNK) {
+        const chunk = ids.slice(i, i + IN_CHUNK);
+        const snap = await getDocs(query(col, where(documentId(), 'in', chunk), limit(chunk.length)));
+        snap.forEach((d) => savedIds.add(d.id));
+      }
+    } catch {
+      // A denied/absent read leaves the saved state unresolved (treated unsaved).
+    }
+
+    const likedIds = new Set();
+    await Promise.all(ids.map(async (id) => {
       try {
-        const [likeSnap, savedSnap] = await Promise.all([
-          getDoc(doc(this.firestore, 'videos', v.id, 'likes', userId)),
-          getDoc(doc(this.firestore, 'users', userId, 'saved_videos', v.id)),
-        ]);
-        return { liked: likeSnap.exists(), saved: savedSnap.exists() };
+        const snap = await getDoc(doc(this.firestore, 'videos', id, 'likes', userId));
+        if (snap.exists()) likedIds.add(id);
       } catch {
-        return { liked: false, saved: false };
+        // Denied/absent resolves to not liked.
       }
     }));
-    return videos.map((v, i) => ({ ...v, isLiked: states[i].liked, isSaved: states[i].saved }));
+
+    return videos.map((v) => (v?.id
+      ? { ...v, isLiked: likedIds.has(v.id), isSaved: savedIds.has(v.id) }
+      : v));
   }
 
   async getSavedVideos(userId, { limit: max = 50 } = {}) {
