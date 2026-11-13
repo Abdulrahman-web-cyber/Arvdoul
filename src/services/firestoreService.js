@@ -999,6 +999,39 @@ class EnterpriseFirestoreService {
     return { success: true, reaction: snap.exists() ? snap.data().type : null };
   }
 
+  /**
+   * The viewer's own state for one post — liked, saved, and reaction. These
+   * live in per-user subcollection docs (`posts/{id}/likes|saves|reactions/{uid}`)
+   * that the post document itself never carries, so a card reading only the
+   * post doc can never know the viewer already liked/saved/reacted (the like
+   * only survived on the device-local registry, so it vanished on any other
+   * device or after a storage clear). Three point reads of the viewer's own
+   * docs, issued in parallel; a denied/absent read resolves to the negative.
+   */
+  async getPostViewerState(postId, userId) {
+    if (!postId || !userId) return { liked: false, saved: false, reaction: null };
+    await this.ensureInitialized();
+    const { doc, getDoc } = this.firestoreMethods;
+    const read = async (subcollection) => {
+      try {
+        const snap = await getDoc(doc(this.firestore, 'posts', postId, subcollection, userId));
+        return snap.exists() ? snap.data() : null;
+      } catch {
+        return null;
+      }
+    };
+    const [like, save, reaction] = await Promise.all([
+      read('likes'),
+      read('saves'),
+      read(CONFIG.REACTIONS_SUBCOLLECTION),
+    ]);
+    return {
+      liked: Boolean(like),
+      saved: Boolean(save),
+      reaction: reaction?.type || null,
+    };
+  }
+
   async incrementCommentCount(postId, delta = 1) {
     await this.ensureInitialized();
     try {
@@ -1299,6 +1332,7 @@ const firestoreService = {
   addReaction: (pid, uid, reactionType) => getFirestoreService().addReaction(pid, uid, reactionType),
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
+  getPostViewerState: (pid, uid) => getFirestoreService().getPostViewerState(pid, uid),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
   getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
   addAnswer: (pid, answer, key) => getFirestoreService().addAnswer(pid, answer, key),

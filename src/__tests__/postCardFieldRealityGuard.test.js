@@ -22,7 +22,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const postCard = fs.readFileSync(path.join(root, 'src', 'screens', 'PostCard.jsx'), 'utf8');
+const rawPostCard = fs.readFileSync(path.join(root, 'src', 'screens', 'PostCard.jsx'), 'utf8');
+// Strip comments so a prose mention of a dead field is not mistaken for a read.
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+const postCard = stripComments(rawPostCard);
 
 describe('PostCard renders only real fields and discloses ads', () => {
   test('no dead `post.momentum` or `post.communityNotes` reads', () => {
@@ -51,5 +54,27 @@ describe('PostCard renders only real fields and discloses ads', () => {
     expect(postCard).toMatch(/getFollowStatus\(/);
     expect(postCard).toMatch(/requestStatus === 'pending'/);
     expect(postCard).toMatch(/'requested'/);
+  });
+
+  test('viewer like/save/reaction state is hydrated, not read from the post doc', () => {
+    // No writer ever sets these on a post document, so reading them was dead
+    // (and always false). The card must read the viewer's own subcollection.
+    expect(postCard).not.toMatch(/post\.userReaction/);
+    expect(postCard).not.toMatch(/post\.savedBy/);
+    expect(postCard).not.toMatch(/post\.likedBy\b/);
+    expect(postCard).toMatch(/getPostViewerState/);
+  });
+
+  test('PostOptionsDrawer does not read the dead `post.savedBy` field', () => {
+    const drawer = stripComments(fs.readFileSync(path.join(root, 'src', 'screens', 'PostOptionsDrawer.jsx'), 'utf8'));
+    expect(drawer).not.toMatch(/\.savedBy\b/);
+    expect(drawer).toMatch(/getPostViewerState/);
+  });
+
+  test('firestoreService.getPostViewerState reads the viewer\'s own docs', () => {
+    const svc = fs.readFileSync(path.join(root, 'src', 'services', 'firestoreService.js'), 'utf8');
+    expect(svc).toMatch(/async getPostViewerState\(/);
+    expect(svc).toMatch(/getPostViewerState: \(pid, uid\)/);
+    expect(svc).toMatch(/'posts', postId, subcollection, userId/);
   });
 });

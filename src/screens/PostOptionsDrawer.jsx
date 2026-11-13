@@ -137,7 +137,10 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   // UI reducer
   const [uiState, dispatchUI] = useReducer(uiReducer, {
     ...initialState,
-    saved: safePost.savedBy?.includes(currentUser?.uid) || false,
+    // `saved` is a per-viewer fact that lives in the viewer's own
+    // `users/{uid}/saved_posts` doc, never on the post; it is hydrated by the
+    // effect below. Seeding from an absent post-level save list always read false.
+    saved: false,
     pinned: !!safePost.pinned,
     archived: safePost.archived === true,
     commentsEnabled: safePost.commentsEnabled !== false,
@@ -263,6 +266,20 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     fetchFollow();
     return () => { cancelled = true; };
   }, [isOpen, currentUser, ownerId, isAuthor]);
+
+  // Saved state – refresh on drawer open from the viewer's own saved_posts doc.
+  useEffect(() => {
+    if (!isOpen || !currentUser?.uid || !safePost.id) return undefined;
+    let cancelled = false;
+    firestoreService.getPostViewerState?.(safePost.id, currentUser.uid)
+      .then((state) => {
+        if (!cancelled && mountedRef.current && state) {
+          dispatchUI({ type: 'SET_SAVED', payload: Boolean(state.saved) });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, currentUser?.uid, safePost.id]);
 
   // Coin balance for modals
   useEffect(() => {

@@ -531,7 +531,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [isSponsored, post.adCampaignId, currentUser?.uid]);
 
   // Memoized post data
-  const likedBySet = useMemo(() => new Set(post.likedBy || []), [post.likedBy]);
   // Author standing (verified / creator / premium) lives on the author's
   // `users/{uid}` profile, never on the post document. The card previously read
   // an author-level field and a post-level verified flag that no writer ever
@@ -544,18 +543,20 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const hasMedia = !!(post.media && post.media.length > 0);
 
   const isInitiallyLiked = useMemo(() => {
-    if (post.isLiked || post.liked) return true;
-    const uid = currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') : null);
-    if (uid && likedBySet.has(uid)) return true;
+    const uid = currentUser?.uid;
     if (uid && readLocalLikes(uid)[post.id]) return true;
     return false;
-  }, [post.id, post.isLiked, post.liked, likedBySet, currentUser?.uid]);
+  }, [post.id, currentUser?.uid]);
 
-  // Engagement state with reducer
+  // Engagement state with reducer. `liked`/`saved`/`reaction` are per-viewer and
+  // are NOT fields on the post document (no writer sets `post.isLiked`,
+  // `post.likedBy`, `post.savedBy` or `post.userReaction`); they are hydrated
+  // from the viewer's own subcollection docs below. Seeding from those absent
+  // post fields always produced the negative.
   const [engagement, dispatch] = useReducer(engagementReducer, {
     liked: isInitiallyLiked,
-    reaction: post.userReaction || null,
-    saved: post.savedBy?.includes(currentUser?.uid) || false,
+    reaction: null,
+    saved: false,
     followState: 'none',
     likeCount: post.stats?.likes ?? null,
     commentCount: post.stats?.comments ?? null,
@@ -582,6 +583,28 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       .catch(() => {});
     return () => { cancelled = true; };
   }, [currentUser?.uid, post.authorId]);
+
+  // Hydrate the viewer's real like/save/reaction state from their own
+  // subcollection docs. The post document carries none of these, so without
+  // this read the heart/bookmark only reflected an in-session or device-local
+  // action. The local like registry is the offline source of truth and wins
+  // until the server read resolves.
+  useEffect(() => {
+    const uid = currentUser?.uid;
+    if (!uid || !post.id) return undefined;
+    let cancelled = false;
+    firestoreService.getPostViewerState?.(post.id, uid)
+      .then((state) => {
+        if (cancelled || !state) return;
+        if (state.liked || readLocalLikes(uid)[post.id]) {
+          dispatch({ type: 'SET_LIKED', payload: true });
+        }
+        if (state.saved) dispatch({ type: 'SET_SAVED', payload: true });
+        if (state.reaction) dispatch({ type: 'SET_REACTION', payload: state.reaction });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser?.uid, post.id]);
 
   // Rollback snapshot helper
   const takeSnapshot = useCallback(() => ({ ...engagementRef.current }), []);
@@ -612,17 +635,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const debounceReactionRef = useRef(null);
   const likeLockRef = useRef(false);
   const isAuthor = currentUser?.uid === post.authorId;
-
-  // Follow status
-  useEffect(() => {
-    if (!isAuthor && currentUser?.uid) {
-      userService.getFollowStatus(currentUser.uid, post.authorId).then(res => {
-        if (res.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
-      }).catch((e) => {
-        console.warn('Follow-state read failed', e?.message);
-      });
-    }
-  }, [currentUser?.uid, post.authorId, isAuthor]);
 
   // Real coin balance (ledger) whenever the gift picker opens.
   useEffect(() => {

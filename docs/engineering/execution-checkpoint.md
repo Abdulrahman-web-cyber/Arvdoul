@@ -2,6 +2,23 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — viewer like/save/reaction reality (N352)
+
+- **N352 (MEDIUM, closed):** `PostCard` seeded `liked`/`saved`/`reaction` from
+  `post.isLiked`/`post.liked`/`post.likedBy`/`post.savedBy`/`post.userReaction` —
+  **none of which any writer ever sets** on a `posts/{id}` document. The real state
+  lives in the viewer's own per-user docs (`posts/{id}/likes|saves|reactions/{uid}`).
+  So a like survived only on the device-local registry (gone on another device or after
+  clearing storage) and `saved` was permanently false — a post the viewer had saved
+  showed an unsaved bookmark, and toggling it called `unsavePost` (a no-op delete).
+  Fix: new `firestoreService.getPostViewerState(postId, uid)` reads the three viewer
+  docs in parallel (absent/denied → negative); `PostCard` and `PostOptionsDrawer`
+  hydrate from it (device-local like registry still wins offline); the dead post-field
+  reads are gone. Locked by `postCardFieldRealityGuard.test.js` (guards job).
+
+Latest verified: **168 suites / 1851 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (with the Firestore emulator live).
+
 ## This session — PostCard follow-state reality (N351)
 
 - **N351 (MEDIUM, closed):** the `PostCard` follow button initialised
