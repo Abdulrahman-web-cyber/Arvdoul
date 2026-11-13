@@ -74,6 +74,19 @@ describe('pending follow request is a distinct, real state', () => {
     }
   });
 
+  test('ConnectionsScreen hydrates the real per-row follow state, not an undefined field', () => {
+    // `hydrateProfiles`/`projectProfileForViewer` mask privacy but never attach
+    // the viewer→row follow edge, so `citizen.isFollowing` was always undefined
+    // and every row rendered "Follow".
+    const src = read('src/screens/Profile/ConnectionsScreen.jsx');
+    expect(src).toMatch(/getFollowStates\(currentUserId, allIds\)/);
+    expect(src).toMatch(/requestStatus:\s*s\?\.requestStatus/);
+    // The friends tab is a mutual-follow list, not a raw follower scan that
+    // filtered on the never-set `isFollowing` field.
+    expect(src).toMatch(/userService\.getFriends\(targetUserId/);
+    expect(src).not.toMatch(/r\.followers \|\| \[\]\)\.filter\(\(f\) => f\.isFollowing\)/);
+  });
+
   test('the owner visitor preview carries requestStatus and disables handler-less controls', () => {
     const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
     expect(preview).toMatch(/requestStatus:\s*storeFollowStatus\?\.requestStatus/);

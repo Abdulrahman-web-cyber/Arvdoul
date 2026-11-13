@@ -132,11 +132,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           : Promise.resolve({ following: [] });
         const friendsPromise = canViewFriends
           ? (currentUserId && currentUserId !== targetUserId
-              ? userService.getMutualFriends(currentUserId, targetUserId)
-              : userService.getFollowers(targetUserId, { viewerId: currentUserId }).then((r) => ({
-                  mutualFriends: (r.followers || []).filter((f) => f.isFollowing),
-                })))
-          : Promise.resolve({ mutualFriends: [] });
+              ? userService.getFriends(targetUserId, { viewerId: currentUserId })
+              : Promise.resolve({ friends: [] }))
+          : Promise.resolve({ friends: [] });
 
         const [followersRes, followingRes, friendsRes] = await Promise.allSettled([
           followersPromise,
@@ -145,15 +143,49 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ]);
 
         if (isMounted) {
+          let followersList = [];
+          let followingList = [];
+          let friendsList = [];
           if (followersRes.status === 'fulfilled') {
-            setFollowers(followersRes.value?.followers || []);
+            followersList = followersRes.value?.followers || [];
           }
           if (followingRes.status === 'fulfilled') {
-            setFollowing(followingRes.value?.following || followingRes.value?.friends || []);
+            followingList = followingRes.value?.following || followingRes.value?.friends || [];
           }
           if (friendsRes.status === 'fulfilled') {
-            setFriends(friendsRes.value?.mutualFriends || friendsRes.value?.friends || []);
+            friendsList = friendsRes.value?.mutualFriends || friendsRes.value?.friends || [];
           }
+
+          // The spine's projection masks privacy but never attaches the
+          // viewer→row follow edge, so `citizen.isFollowing` was always
+          // undefined and every row rendered "Follow" even for accounts the
+          // viewer already followed (or had a pending request to). Resolve the
+          // real per-pair state in one bounded batched read.
+          const allIds = [...new Set([
+            ...followersList, ...followingList, ...friendsList,
+          ].map((u) => u?.id || u?.uid).filter((id) => id && id !== currentUserId))];
+          let followStates = new Map();
+          if (currentUserId && allIds.length) {
+            try {
+              const { getUserService } = await import('../../services/userService.js');
+              followStates = await getUserService().getFollowStates(currentUserId, allIds);
+            } catch (e) {
+              console.warn('Follow-state hydration failed:', e?.message);
+            }
+          }
+          const withState = (list) => list.map((u) => {
+            const id = u?.id || u?.uid;
+            const s = followStates.get(id);
+            return {
+              ...u,
+              isFollowing: Boolean(s?.isFollowing),
+              requestStatus: s?.requestStatus ?? null,
+            };
+          });
+
+          setFollowers(withState(followersList));
+          setFollowing(withState(followingList));
+          setFriends(withState(friendsList));
           // Only a viewer with no visible list at all sees the protected state.
           if (!canViewFollowers && !canViewFollowing) setPermissionDenied(true);
         }

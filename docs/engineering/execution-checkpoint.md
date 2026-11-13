@@ -403,6 +403,16 @@ Latest verified: **1872 tests / 1867 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N359: ConnectionsScreen real per-row follow state)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N359 | `ConnectionsScreen` rendered `isFollowing={citizen.isFollowing}` but the spine's projection never attaches that edge, so every row showed **Follow**; the Friends tab called `getMutualFriends` (bare profiles) for others and filtered `getFollowers` on the never-set `f.isFollowing` for the owner, so it was empty for everyone | one bounded `getFollowStates(currentUserId, allIds)` over the union of the three lists stamps real `isFollowing`/`requestStatus`; Friends tab uses canonical `userService.getFriends`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1873 tests / 1868 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```
