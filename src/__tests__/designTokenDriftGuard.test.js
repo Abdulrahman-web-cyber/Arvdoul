@@ -161,4 +161,16 @@ describe('brand gradient — design system is the single source of truth (N104)'
     expect(css).toContain(`--arv-brand-gradient: ${tokens.color.brand.gradient};`);
     expect(json.colors.brand.gradient).toBe(tokens.color.brand.gradient);
   });
+
+  test('tailwind.config.js bg-arvdoul-gradient agrees with the token', () => {
+    // The Tailwind `bg-arvdoul-gradient` utility re-declares the brand gradient
+    // as a literal (Tailwind config cannot import the ESM token at build time).
+    // Nothing pinned the two together, so a change to the token would leave the
+    // utility — used by every migrated CTA — rendering the OLD gradient. Assert
+    // the config literal is byte-identical to the token.
+    const config = readFileSync(path.join(root, 'tailwind.config.js'), 'utf8');
+    const m = config.match(/'arvdoul-gradient':\s*'([^']+)'/);
+    expect(m).not.toBeNull();
+    expect(m[1]).toBe(tokens.color.brand.gradient);
+  });
 });
