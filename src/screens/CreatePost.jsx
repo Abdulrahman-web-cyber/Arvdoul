@@ -470,14 +470,6 @@ const MONETIZATION_TYPES = [
   { value: "subscription", label: "Subscriber Only" },
   { value: "ppv", label: "Pay‑Per‑View" },
   { value: "tip_jar", label: "Tip Jar" },
-  { value: "boost", label: "Boost" },
-];
-
-const BOOST_TIERS = [
-  { value: "none", label: "No Boost", budget: 0, duration: 1 },
-  { value: "low", label: "Low Boost", budget: 50, duration: 1 },
-  { value: "medium", label: "Medium Boost", budget: 100, duration: 2 },
-  { value: "high", label: "High Boost", budget: 200, duration: 3 },
 ];
 
 const MEDIA_LIMITS = {
@@ -513,7 +505,6 @@ const initialState = {
   feeling: null,
   activity: null,
   monetization: { type: "none" },
-  boost: { type: "none", budget: 0, duration: 1 },
   subscriptionTier: null,
   ppvPrice: null,
   tipJarAmounts: [5, 10, 25],
@@ -602,7 +593,6 @@ function reducer(state, action) {
       case "SET_FEELING": draft.feeling = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ACTIVITY": draft.activity = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_MONETIZATION": draft.monetization = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_BOOST": draft.boost = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_SUBSCRIPTION_TIER": draft.subscriptionTier = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_PPV_PRICE": draft.ppvPrice = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_TIP_JAR_AMOUNTS": draft.tipJarAmounts = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -727,30 +717,6 @@ function CreatePostProvider({ children }) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { setCurrentUser } = useAppStore();
-  // coin balance from the ledger (Firestore users/{uid}.coins via the
-  // monetization service). Never the store's in-memory number — the store is
-  // not synced with the server.
-  const [userCoins, setUserCoins] = useState(null);
-  const [userCoinsError, setUserCoinsError] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    if (!user?.uid) { setUserCoins(null); setUserCoinsError(false); return undefined; }
-    (async () => {
-      try {
-        const { getMonetizationService } = await import('../services/monetizationService.js');
-        const bal = await getMonetizationService().getBalance(user.uid);
-        if (!cancelled) {
-          setUserCoins(typeof bal === 'number' ? bal : null);
-          setUserCoinsError(false);
-        }
-      } catch {
-        // Distinguish "failed" from "still loading" — the panel must not tell
-        // the user their balance is loading when the read failed.
-        if (!cancelled) { setUserCoins(null); setUserCoinsError(true); }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.uid]);
   const isDark = theme === "dark";
   const prefersReducedMotion = useReducedMotion();
 
@@ -1325,7 +1291,7 @@ function CreatePostProvider({ children }) {
       const result = await callFunction(FUNCTIONS.PREDICT_POST_PERFORMANCE, {
         postType: stateRef.current.postType, content: stateRef.current.content,
         mediaCount: stateRef.current.mediaItems.length, scheduledTime: stateRef.current.scheduledTime,
-        visibility: stateRef.current.visibility, boost: stateRef.current.boost,
+        visibility: stateRef.current.visibility,
       });
       dispatch({ type: "SET_INSIGHTS", payload: result });
     } catch (insightsErr) {
@@ -1521,7 +1487,6 @@ function CreatePostProvider({ children }) {
         feeling: current.feeling || null,
         activity: current.activity || null,
         monetization: current.monetization?.type !== "none" ? current.monetization : null,
-        boost: current.boost?.type !== "none" ? current.boost : null,
         subscriptionTier: current.subscriptionTier || null,
         ppvPrice: current.ppvPrice || 0,
         tipJarAmounts: current.tipJarAmounts || [5, 10, 25],
@@ -1654,18 +1619,6 @@ function CreatePostProvider({ children }) {
             // The optimistic id could not be swapped for the real one; the local
             // cache may keep a ghost entry until the next feed reconciliation.
             console.warn("Post id sync failed:", syncErr);
-          }
-
-          // Monetization coins boost
-          if (current.boost?.type !== "none" && current.boost?.budget > 0) {
-            try {
-              const { getMonetizationService } = await import("../services/monetizationService.js");
-              const monetizationService = services.current.monetization || getMonetizationService();
-              await monetizationService.spendCoins(userNow.uid, current.boost.budget, "post_boost");
-            } catch (boostErr) {
-              console.warn("Post boost spend failed:", boostErr);
-              toast.error("Your post published, but the paid boost could not be applied.");
-            }
           }
 
           // Clear feed cache
@@ -1818,7 +1771,7 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const servicesValue = useMemo(() => ({
-    services: services.current, isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
+    services: services.current, isOffline, offlineQueueItems, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
     retryOfflineItem, deleteOfflineItem, searchUsers,
@@ -1826,7 +1779,7 @@ function CreatePostProvider({ children }) {
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
   }), [
-    isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
+    isOffline, offlineQueueItems, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
     retryOfflineItem, deleteOfflineItem, searchUsers,
@@ -2060,35 +2013,12 @@ export function TaggingPanel({ defaultOpen = false }) {
 
 export function MonetizationPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
-  const { userCoins, userCoinsError } = useCreatePostServices();
-  // userCoins is the ledger balance (null while loading / unauthenticated).
-  const insufficient = state.monetization.type === "boost" &&
-    userCoins != null && state.boost.budget > userCoins;
   return (
     <Panel icon={Icons.DollarSign} title="Monetization" defaultOpen={defaultOpen}>
       <select value={state.monetization.type} onChange={e => dispatch({ type: "SET_MONETIZATION", payload: { ...state.monetization, type: e.target.value } })}
         className={INPUT_CLASS}>
         {MONETIZATION_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      {state.monetization.type === "boost" && (
-        <div className="space-y-2 mt-2">
-          <select value={state.boost.type} onChange={e => { const tier = BOOST_TIERS.find(t => t.value === e.target.value); dispatch({ type: "SET_BOOST", payload: tier || BOOST_TIERS[0] }); }}
-            className={INPUT_CLASS}>
-            {BOOST_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <input type="number" placeholder="Budget" value={state.boost.budget}
-            onChange={e => dispatch({ type: "SET_BOOST", payload: { ...state.boost, budget: parseInt(e.target.value) || 0 } })}
-            className={INPUT_CLASS} />
-          {insufficient && <p className="text-xs text-red-500">Insufficient coins (you have {userCoins})</p>}
-          {state.monetization.type === "boost" && userCoins == null && (
-            <p className="text-xs text-gray-500">
-              {userCoinsError
-                ? 'Could not load your balance — the server still verifies it on publish.'
-                : 'Balance loading… (server-side check still applies on publish)'}
-            </p>
-          )}
-        </div>
-      )}
       {state.monetization.type === "subscription" && <input type="text" placeholder="Tier name" value={state.subscriptionTier || ""} onChange={e => dispatch({ type: "SET_SUBSCRIPTION_TIER", payload: e.target.value })} className={`${INPUT_CLASS} mt-2`} />}
       {state.monetization.type === "ppv" && <input type="number" placeholder="Price in coins" value={state.ppvPrice || ""} onChange={e => dispatch({ type: "SET_PPV_PRICE", payload: parseInt(e.target.value) || 0 })} className={`${INPUT_CLASS} mt-2`} />}
       {state.monetization.type === "tip_jar" && <input type="text" placeholder="5, 10, 25" value={state.tipJarAmounts.join(", ")} onChange={e => { const amounts = e.target.value.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n)); dispatch({ type: "SET_TIP_JAR_AMOUNTS", payload: amounts }); }} className={`${INPUT_CLASS} mt-2`} />}
@@ -2946,7 +2876,7 @@ function EnhancedStep3View() {
         {[
           { id: 'audience', label: '🎯 Audience & Reach' },
           { id: 'content', label: '📍 Tags & Location' },
-          { id: 'monetization', label: '💰 Monetization & Boost' },
+          { id: 'monetization', label: '💰 Monetization' },
           { id: 'advanced', label: '⚙️ AI & Scheduling' },
         ].map((tab) => (
           <button

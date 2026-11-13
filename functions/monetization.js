@@ -33,6 +33,11 @@ const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_t
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
 const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
+// Per-day coin price of a paid post promotion. Canonical value lives in
+// `levelConfig.cjs` (shared with the client preview); the config override stays
+// available for an operator to change the rate without a code deploy.
+const BOOST_DAILY_RATE = functions.config().app?.boost_daily_rate ||
+  require('./levelConfig.cjs').BOOST_DAILY_RATE_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
 // ----------------------------------------------------------------------
@@ -609,7 +614,7 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('invalid-argument', 'postId and days (1‑30) required.');
     }
 
-    const boostDailyRate = functions.config().app?.boost_daily_rate || 10;
+    const boostDailyRate = BOOST_DAILY_RATE;
     const totalCost = boostDailyRate * days;
     if (totalCost > MAX_COIN_OPERATION) throw new functions.https.HttpsError('invalid-argument', `Boost cost exceeds maximum allowed.`);
 

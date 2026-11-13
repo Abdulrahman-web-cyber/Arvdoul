@@ -38,7 +38,6 @@ function generateIdempotencyKey() {
 const DEFAULT_CONFIG = {
   LEVELS: CANONICAL_LEVELS,
   GIFTS: GIFT_CATALOG.map((g) => ({ type: g.type, value: g.coins })),
-  BOOST_COST_PER_DAY: 10,
   AD_PLACEMENTS: ['home', 'videos', 'stories', 'messages', 'notifications', 'profile', 'feed', 'conversation_list', 'search'],
   MAX_ADS_PER_USER_PER_DAY: MAX_ADS_PER_USER_PER_DAY,
   AD_CACHE_TTL: 300, // seconds

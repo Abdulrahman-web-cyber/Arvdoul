@@ -35,6 +35,8 @@ import {
   COINS_PER_DOLLAR,
   MIN_WITHDRAWAL_COINS,
   NEW_USER_DEFAULTS,
+  AD_REWARD_COINS,
+  BOOST_DAILY_RATE_COINS,
   coinsToUsd,
   formatCoinsAsUsd,
 } from '../shared/levelConfig.cjs';
@@ -77,6 +79,8 @@ export {
   COINS_PER_DOLLAR,
   MIN_WITHDRAWAL_COINS,
   NEW_USER_DEFAULTS,
+  AD_REWARD_COINS,
+  BOOST_DAILY_RATE_COINS,
   coinsToUsd,
   formatCoinsAsUsd,
 };

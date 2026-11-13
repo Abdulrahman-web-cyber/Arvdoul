@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark, AlertCircle, VolumeX, Pin, Archive, MessageSquareOff, Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle, Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck, EyeOff, ThumbsDown } from "lucide-react";
 import { VIRTUAL_GIFTS } from '../data/videoData';
-import { GIFT_VALUES } from '../shared/levelConfig.cjs';
+import { GIFT_VALUES, BOOST_DAILY_RATE_COINS } from '../shared/levelConfig.cjs';
 import firestoreService from '../services/firestoreService.js';
 import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
@@ -1192,7 +1192,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   loading={uiState.loadingAction === 'boost'}
                   coinBalance={coinBalance}
                   theme={theme}
-                  costPerDay={10}
+                  costPerDay={BOOST_DAILY_RATE_COINS}
                 />
               </div>
             )}
@@ -1301,7 +1301,7 @@ const GiftModal = ({ onSelectGift, onCancel, loading, coinBalance, theme }) => {
   );
 };
 
-const BoostModal = ({ onSelectDays, onCancel, loading, coinBalance, theme, costPerDay = 10 }) => {
+const BoostModal = ({ onSelectDays, onCancel, loading, coinBalance, theme, costPerDay = BOOST_DAILY_RATE_COINS }) => {
   const days = [1,3,7,30];
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">

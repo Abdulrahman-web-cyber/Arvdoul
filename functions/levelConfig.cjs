@@ -947,6 +947,13 @@ const SUBSCRIPTION_TIERS = Object.freeze({
 const AD_REWARD_COINS = 2;
 
 /**
+ * Coins charged per day of a paid post promotion (`boostPost`). The server
+ * debits this rate inside the `boostPost` transaction and the client reads the
+ * same value only to preview the total, so the two can never disagree.
+ */
+const BOOST_DAILY_RATE_COINS = 10;
+
+/**
  * Maximum rewarded ads a single account may claim per UTC day. Enforced
  * server-side in `functions/monetization.js#watchAd` (via the `fraud_limits`
  * `adTotal` daily counter) so a client cannot mint coins by looping the
@@ -1025,6 +1032,7 @@ module.exports = {
   COIN_PACKAGES_BY_ID,
   SUBSCRIPTION_TIERS,
   AD_REWARD_COINS,
+  BOOST_DAILY_RATE_COINS,
   MAX_ADS_PER_USER_PER_DAY,
   coinsToUsd,
   formatCoinsAsUsd,

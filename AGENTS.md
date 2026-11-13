@@ -424,6 +424,12 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   `MIN_WITHDRAWAL_COINS`. The wallet/payout screens read them and
   `functions/monetization.js` `requestWithdrawal` enforces
   `MIN_WITHDRAWAL_COINS` server-side — never hardcode a payout rate or minimum.
+- `BOOST_DAILY_RATE_COINS` owns the per-day coin price of a paid post
+  promotion. `functions/monetization.js#boostPost` debits it (a
+  `functions.config().app.boost_daily_rate` override is still honoured) and
+  `PostOptionsDrawer`'s BoostModal previews the same value — never hardcode the
+  boost rate in a screen, and do not reintroduce a composer "Boost" monetization
+  type: the only paid promotion path is the post-publish `boostPost` callable.
 - `NEW_USER_DEFAULTS` is the only place the new-account economy/status values
   live (`coins`, `level`, `experience`, `reputation`, `isVerified`, ...).
   `userService.createUserProfile` seeds from it and `firestore.rules` pins the
