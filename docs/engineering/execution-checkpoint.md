@@ -2,6 +2,20 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — PostCard follow-state reality (N351)
+
+- **N351 (MEDIUM, closed):** the `PostCard` follow button initialised
+  `engagement.followState = 'none'` and only the button's own optimistic dispatch changed
+  it, so a viewer who already followed the author still saw **Follow**; and tapping Follow
+  on a **private** account called `followUser` (which returns `{requested:true}` and creates
+  no edge) then optimistically showed **Following** for a follow that was only pending. Fix:
+  a `getFollowStatus` hydration effect seeds `following`/`requested`; `handleFollow`
+  reconciles the pending result into a `requested` state; the button renders **Requested**
+  and gains an `aria-label`. Locked by `postCardFieldRealityGuard.test.js` (guards job).
+
+Latest verified: **168 suites / 1848 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (with the Firestore emulator live).
+
 ## This session — PostCard field reality + ad disclosure (N350)
 
 - **N350 (MEDIUM, closed):** `PostCard` rendered two more fields no writer sets —

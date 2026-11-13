@@ -565,6 +565,24 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const engagementRef = useRef(engagement);
   useEffect(() => { engagementRef.current = engagement; }, [engagement]);
 
+  // Hydrate the real follow state so the button reflects an existing edge or an
+  // outstanding private-account request instead of always rendering "Follow"
+  // (a user who already followed the author saw a follow button, and a second
+  // tap looked like a silent no-op).
+  useEffect(() => {
+    const uid = currentUser?.uid;
+    if (!uid || !post.authorId || uid === post.authorId) return undefined;
+    let cancelled = false;
+    userService.getFollowStatus(uid, post.authorId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
+        else if (res?.requestStatus === 'pending') dispatch({ type: 'SET_FOLLOW_STATE', payload: 'requested' });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser?.uid, post.authorId]);
+
   // Rollback snapshot helper
   const takeSnapshot = useCallback(() => ({ ...engagementRef.current }), []);
   const rollbackTo = useCallback((snapshot) => {
@@ -943,14 +961,19 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const handleFollow = useCallback(async () => {
     if (!currentUser) return toast.error('Sign in');
     const snapshot = takeSnapshot();
-    const newFollowState = snapshot.followState === 'following' ? 'none' : 'following';
-    dispatch({ type: 'SET_FOLLOW_STATE', payload: newFollowState });
+    const isFollowing = snapshot.followState === 'following';
+    dispatch({ type: 'SET_FOLLOW_STATE', payload: isFollowing ? 'none' : 'following' });
     triggerHaptic('medium');
     try {
-      if (newFollowState === 'following') {
-        await userService.followUser(currentUser.uid, post.authorId);
-      } else {
+      if (isFollowing) {
         await userService.unfollowUser(currentUser.uid, post.authorId);
+      } else {
+        const res = await userService.followUser(currentUser.uid, post.authorId);
+        // A follow against a private account is a pending request, not an edge:
+        // show "Requested" so a tap does not look like it silently failed.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          dispatch({ type: 'SET_FOLLOW_STATE', payload: 'requested' });
+        }
       }
     } catch (err) {
       rollbackTo(snapshot);
@@ -1093,14 +1116,15 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <motion.button
               onClick={handleFollow}
               whileTap={{ scale: 0.96 }}
-              className="px-2 py-0.5 rounded-full text-xs font-semibold text-white shadow-md transition-all"
+              className="px-2 py-0.5 rounded-full text-xs font-semibold shadow-md transition-all"
               style={{
-                background: engagement.followState === 'following' ? (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)') : tokens.neonPurple,
-                boxShadow: engagement.followState === 'following' ? 'none' : `0 0 6px rgba(236,72,153,0.4), 0 0 8px rgba(147,51,234,0.2)`,
-                color: engagement.followState === 'following' ? (theme === 'dark' ? '#fff' : '#333') : '#fff',
+                background: engagement.followState === 'none' ? tokens.neonPurple : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'),
+                boxShadow: engagement.followState === 'none' ? `0 0 6px rgba(236,72,153,0.4), 0 0 8px rgba(147,51,234,0.2)` : 'none',
+                color: engagement.followState === 'none' ? '#fff' : (theme === 'dark' ? '#fff' : '#333'),
               }}
+              aria-label={engagement.followState === 'following' ? `Unfollow ${post.authorName}` : engagement.followState === 'requested' ? `Follow request pending for ${post.authorName}` : `Follow ${post.authorName}`}
             >
-              {engagement.followState === 'following' ? 'Following' : 'Follow'}
+              {engagement.followState === 'following' ? 'Following' : engagement.followState === 'requested' ? 'Requested' : 'Follow'}
             </motion.button>
           )}
           <button onClick={() => onOpenOptions?.(post)} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Post options">

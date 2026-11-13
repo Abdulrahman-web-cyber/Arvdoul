@@ -45,4 +45,11 @@ describe('PostCard renders only real fields and discloses ads', () => {
     expect(feed).toMatch(/type:\s*'ad'/);
     expect(feed).toMatch(/isAd:\s*true/);
   });
+
+  test('the follow control hydrates real state and shows a pending request', () => {
+    // Hydrated from the canonical status read, not hardcoded to 'none'.
+    expect(postCard).toMatch(/getFollowStatus\(/);
+    expect(postCard).toMatch(/requestStatus === 'pending'/);
+    expect(postCard).toMatch(/'requested'/);
+  });
 });
