@@ -16,7 +16,7 @@ import * as monetizationService from '../services/monetizationService';
 import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, Sparkles, BarChart3, Coins, Send, AlertTriangle, Shield, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
 // Sub‑cards
@@ -512,8 +512,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // sub-cards are not re-rendered by a fresh prop identity.
   const handleAnalytics = trackAnalyticsEvent;
 
-  // Sponsored / ad detection
-  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined;
+  // Sponsored / ad detection. The feed inserts ad cards shaped
+  // `{ type: 'ad', isAd: true, ... }` (feedService `_getAdOptimized`), and a
+  // post-embedded sponsor is flagged by `isSponsored`/`adCampaignId`. A card
+  // that is not identified as sponsored must never render a sponsored label
+  // (FTC-style ad disclosure depends on it), so cover all three signals.
+  const isAd = post.type === 'ad' || post.isAd === true;
+  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined || isAd;
   const [adDetails, setAdDetails] = useState(null);
   useEffect(() => {
     if (isSponsored && post.adCampaignId && monetizationService.getAd) {
@@ -1033,8 +1038,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   if (!post.id) return null;
 
   const actionBarGradient = tokens.actionBarBg;
-  const ctaText = adDetails?.cta || (post.ctaText || 'Learn More');
-  const ctaLink = adDetails?.link || post.ctaLink;
+  const ctaText = adDetails?.cta || post.cta || post.ctaText || 'Learn More';
+  const ctaLink = adDetails?.link || post.link || post.ctaLink;
 
   return (
     <motion.div
@@ -1065,8 +1070,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <span className="font-semibold text-sm" style={{ color: tokens.text }}>{post.authorName}</span>
             {isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
             {isCreator && <Zap className="w-3 h-3 text-amber-400" />}
-            {post.momentum === 'trending' && <TrendingUp className="w-3 h-3 text-green-400" title="Trending" />}
-            {post.momentum === 'exploding' && <Sparkles className="w-3 h-3 text-yellow-400" title="Exploding" />}
             {isSponsored && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-300">Sponsored</span>
             )}
@@ -1124,14 +1127,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
               {ctaText} <ExternalLink className="w-3 h-3 inline ml-1" />
             </a>
           )}
-        </div>
-      )}
-
-      {/* COMMUNITY NOTES */}
-      {post.communityNotes?.length > 0 && (
-        <div className="mx-3 mb-1 p-1.5 bg-blue-500/10 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex items-start gap-2">
-          <Shield className="w-3 h-3 flex-shrink-0 mt-0.5" />
-          <span>{post.communityNotes[0].text}</span>
         </div>
       )}
 

@@ -2,6 +2,22 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — PostCard field reality + ad disclosure (N350)
+
+- **N350 (MEDIUM, closed):** `PostCard` rendered two more fields no writer sets —
+  `post.momentum` ('trending'/'exploding') and `post.communityNotes` (no community-notes
+  collection exists; the scheduler writes `trendingScore`/`personalizationScore`) — so the
+  momentum badges and community-notes block were permanently dead. Separately, the feed
+  inserts ad cards shaped `{ type: 'ad', isAd: true, cta, link }` (`feedService
+  ._getAdOptimized`, `feed.ads` defaults **true**) but the card only checked
+  `post.isSponsored`/`post.adCampaignId`: **every feed ad rendered with no sponsored label
+  and no CTA.** Fix: dead reads removed (with unused `Sparkles`/`Shield` imports); the card
+  treats `type === 'ad'`/`isAd === true` as sponsored and reads the ad card's `cta`/`link`;
+  `postCardFieldRealityGuard.test.js` (guards job) locks all of it.
+
+Latest verified: **168 suites / 1847 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (with the Firestore emulator live).
+
 ## This session — dead author-standing reads (N349)
 
 - **N349 (MEDIUM, closed):** `PostCard` computed `isCreator = (post.authorLevel || 0) >= 5`
