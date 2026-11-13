@@ -1980,11 +1980,21 @@ export function InsightsPanel({ defaultOpen = false }) {
   const content = !state.insights ? (
     <button onClick={getPredictions} className="px-4 py-2 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600">📊 Get Predictions</button>
   ) : (
-    <div className="grid grid-cols-2 gap-2 text-xs">
-      <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
-      <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
-      <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
-      <div className="col-span-2"><span className="text-gray-500">Best time:</span> {state.insights.bestTime}</div>
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
+        <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
+        <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
+        <div className="col-span-2"><span className="text-gray-500">Best time:</span> {state.insights.bestTime}</div>
+      </div>
+      {Array.isArray(state.insights.factors) && state.insights.factors.length > 0 && (
+        <ul className="text-xs text-gray-500 dark:text-gray-400 list-disc pl-4 space-y-0.5">
+          {state.insights.factors.map((f, i) => <li key={i}>{f}</li>)}
+        </ul>
+      )}
+      <p className="text-[11px] text-gray-400 dark:text-gray-500">
+        Heuristic estimates from your draft — not a guarantee of performance.
+      </p>
     </div>
   );
   return (
