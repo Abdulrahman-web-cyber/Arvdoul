@@ -549,3 +549,18 @@ Closed in this session: **N207**, **N369**. Still open in the ledger: **N175**
 (rankings/trending have no writer — BLOCKED on the ranking formula, a product
 decision; inventing one would itself fabricate standings) and **N270**
 (highlight visibility is a product decision, INFORMATIONAL).
+
+## Continuation session 2 (N370 + N270 re-verification)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N370 | Story shard counters (`stories/{id}/view_shards`, `reaction_shards`, `analytics_shards`) bounded the KEY SET but not the VALUE, so any signed-in client could `setDoc` a shard with `count: 999999`; the sum-on-read (`_getShardedViewCount`/`_getShardedReactionCounts`) then reported a forged count. Same class as N207. `daily_upload_counters` was id-bound (N210) but its `count` was likewise unbounded — a fresh shard could be pre-set to `999999`, defeating the per-tier upload limit. | Rules now pin a bounded relative change using the N207 technique (`fieldDeltaBounded` on update, `fieldCreateBounded` on create; `request.resource.data.<f>` is the resulting value, `resource.data.<f>` the pre-write value; missing pre-write reads as the map's `get(field, null)`): `±100` for story shards, `[1,100]` create + `+0..+100` update for upload counters. New `storyShardForgeryGuard.test.js` (static + emulator adversarial) plus two new adversarial assertions in `firestoreRulesCompile.test.js`; both registered in the hard-failing `guards` job. |
+| N270 | Re-verified: the `highlights` read is `isSignedIn()`, **not** world-readable — the row's title was stale. Cross-user read is intentional (`storyService.getHighlights(userId)` renders any profile's Highlights). `highlightStories` leak only the reference; the underlying `stories/{id}` stays visibility-gated. | Re-classified **NOT_AN_ISSUE / reviewed**. No code change. |
+
+Verified: full emulator suite **1901 tests / 177 suites** green; `npm run lint`
+exit 0 (0 errors); `npm run build` green.
+
+### Findings status
+
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision). N270 re-classified NOT_AN_ISSUE.
