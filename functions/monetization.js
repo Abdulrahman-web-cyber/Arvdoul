@@ -518,7 +518,11 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
       const postRef = admin.firestore().collection('posts').doc(postId);
       const postSnap = await t.get(postRef);
       if (!postSnap.exists) throw new functions.https.HttpsError('not-found', 'Post not found.');
-      const authorUid = postSnap.data().userId;
+      // Posts denormalise the author as `authorId` (firestoreService postDoc and
+      // the communities writer). Reading `userId` returned undefined, so every
+      // gift failed with 'Post has no author'.
+      const postData = postSnap.data();
+      const authorUid = postData.authorId || postData.userId;
       if (!authorUid) throw new functions.https.HttpsError('internal', 'Post has no author.');
 
       if (senderUid === authorUid && GIFT_SELF_SEND_FLAG) {
@@ -633,8 +637,13 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       const postRef = admin.firestore().collection('posts').doc(postId);
       const postSnap = await t.get(postRef);
       if (!postSnap.exists) throw new functions.https.HttpsError('not-found', 'Post does not exist.');
-      if (postSnap.data().userId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the post owner can boost.');
-      if (postSnap.data().boostData?.isBoosted) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
+      // Posts store the author as `authorId`; `userId` is undefined, so this
+      // ownership check rejected the real owner ("Only the post owner can
+      // boost") and boosting could never succeed.
+      const boostPostData = postSnap.data();
+      const postAuthorId = boostPostData.authorId || boostPostData.userId;
+      if (postAuthorId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the post owner can boost.');
+      if (boostPostData.boostData?.isBoosted) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
 
       const newBalance = (userData.coins || 0) - totalCost;
       t.update(userRef, { coins: newBalance });
@@ -658,7 +667,7 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
 
       const boostedRef = admin.firestore().collection('boosted_posts').doc(postId);
       t.set(boostedRef, {
-        postId, userId: postSnap.data().userId, boostedBy: uid,
+        postId, userId: postAuthorId, boostedBy: uid,
         expiresAt: boostExpiresAt,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
