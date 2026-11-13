@@ -413,7 +413,7 @@ export default function CreatorPayoutScreen() {
                     <div>
                       <p className="text-sm font-semibold capitalize">{tx.reason || 'Creator Withdrawal'}</p>
                       <p className="text-xs text-arvdoul-text-secondary">
-                        {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                        {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString() : '—'}
                       </p>
                     </div>
                   </div>

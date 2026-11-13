@@ -4013,3 +4013,11 @@ describe('N384 — QuestionCard reputation badge uses the canonical 0-100 bands'
     expect(src).not.toMatch(/getReputationLevel\(unknownNumber\([^)]*\)\s*\?\?\s*0\)/);
   });
 });
+
+describe('N385 — no placeholder date word in place of an absent timestamp', () => {
+  test('CreatorPayoutScreen renders "—", not "Recent", for an absent createdAt', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/CreatorPayoutScreen.jsx'), 'utf8');
+    expect(src).not.toMatch(/:\s*'Recent'\s*}/);
+    expect(src).toContain("? tx.createdAt.toDate().toLocaleDateString() : '—'");
+  });
+});
