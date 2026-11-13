@@ -443,6 +443,16 @@ Latest verified: **1876 tests / 1871 passed (5 skipped)**; `npm run lint` exit 0
 (0 errors); `npm run build` green. Emulator-backed suites skip locally (no
 `FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
 
+## Continuation session (N363: NotificationsScreen connect fallback)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N363 | `handleConnectUser`'s friend-request fallback called `followUser` and always set `'following'` + toasted "Now following" even for a private target (pending request) | fallback reconciles `result.requested`/`requestStatus === 'pending'` into `'requested'`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1876 tests / 1871 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
 ## Commands to resume
 
 ```

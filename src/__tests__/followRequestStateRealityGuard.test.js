@@ -101,6 +101,15 @@ describe('pending follow request is a distinct, real state', () => {
     expect(src).not.toMatch(/const isAlreadyFollowing = following\.some/);
   });
 
+  test('NotificationsScreen connect fallback reconciles a pending follow request', () => {
+    // The friend-request fallback called `followUser` and then always set the
+    // row to 'following' — for a private target that is only a pending request.
+    const src = read('src/screens/NotificationsScreen.jsx');
+    const connectBlock = src.slice(src.indexOf('const handleConnectUser'), src.indexOf('const handleToggleFollow'));
+    expect(connectBlock).toMatch(/result\?\.requested \|\| result\?\.requestStatus === 'pending'/);
+    expect(connectBlock).not.toMatch(/await svc\.followUser\(user\.uid, targetId\);\s*\n\s*setNetworkActionState\(\(prev\) => \(\{ \.\.\.prev, \[targetId\]: 'following' \}\)\)/);
+  });
+
   test('ProfilePublicScreen private gate labels the pending request, not a fabricated follow', () => {
     // The "This Account is Private" gate labelled its CTA from `isFollowing`
     // (false for a pending request), so it read "Follow to View" even after the

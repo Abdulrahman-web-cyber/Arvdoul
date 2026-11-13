@@ -260,9 +260,15 @@ export default function NotificationsScreen() {
       try {
         const { getUserService } = await import('../services/userService.js');
         const svc = getUserService();
-        await svc.followUser(user.uid, targetId);
-        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
-        toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+        const result = await svc.followUser(user.uid, targetId);
+        if (result?.requested || result?.requestStatus === 'pending') {
+          // Private target: a pending request, not a follow.
+          setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
+          toast.success('Follow request sent');
+        } else {
+          setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
+          toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+        }
       } catch {
         // Both the friend request and the follow failed — do not claim a
         // connection that was never made.
