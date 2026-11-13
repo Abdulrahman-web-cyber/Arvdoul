@@ -2545,7 +2545,7 @@ describe('Wallet availability mirrors the server hold (lockedCoins)', () => {
 
   test('walletService derives availableCoins from lockedCoins, not a partial status sum', () => {
     const s = read('src/services/walletService.js');
-    expect(s).toContain('const lockedCoins = Number(userData.lockedCoins || 0)');
+    expect(s).toContain('const lockedCoins = Number(balanceData.lockedCoins || 0)');
     // Availability mirrors the server hold; an unknown balance stays null
     // rather than advertising 0 spendable coins.
     expect(s).toContain('const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);');
@@ -2966,12 +2966,13 @@ describe('Story insights and coin leaderboard never fabricate 0 (N299)', () => {
     expect(s).toContain('backTaps: unknownNumber(story.stats?.backTaps),');
   });
 
-  test('monetizationService coin leaderboard leaves an unwritten balance unknown', () => {
+  test('the cross-user coin leaderboard is removed (N324)', () => {
+    // A leaderboard ordered by `coins` across `users/{uid}` can only run if the
+    // balance is world-readable; the balance now lives on users_private/{uid},
+    // so the cross-user ranking was removed with it (it had no screen caller).
     const s = read('src/services/monetizationService.js');
-    expect(s).not.toContain('coins: doc.data().coins || 0,');
-    expect(s).not.toContain('position: this.getPositionTitle(doc.data().coins || 0),');
-    expect(s).toContain('const coins = unknownNumber(doc.data().coins);');
-    expect(s).toContain('position: coins === null ? null : this.getPositionTitle(coins),');
+    expect(s).not.toContain('getCoinLeaderboard');
+    expect(s).not.toContain("orderBy('coins'");
   });
 });
 
@@ -3123,8 +3124,9 @@ describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () 
 
   test('walletService leaves an unknown balance null instead of 0', () => {
     const s = read('src/services/walletService.js');
+    // The balance is read from users_private/{uid} (N324), never the public doc.
     expect(s).not.toContain("Number(userData.coins || userData.coinBalance || 0)");
-    expect(s).toContain('const rawCoins = userData.coins ?? userData.coinBalance ?? null;');
+    expect(s).toContain('const rawCoins = balanceData.coins ?? balanceData.coinBalance ?? null;');
   });
 
   test('PostOptionsDrawer does not derive a creator score from follower count', () => {

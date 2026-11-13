@@ -19,6 +19,7 @@
 const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 const { coinsToUsd } = require('./levelConfig.cjs');
+const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 
 const db = admin.firestore();
 
@@ -72,7 +73,6 @@ async function resolvePayoutProvider(withdrawalData) {
  * alone, so a retried approval/rejection cannot double-release.
  */
 async function rejectAndRelease(withdrawalId, withdrawalData, failureReason) {
-  const userRef = db.collection('users').doc(withdrawalData.userId);
   const withdrawalRef = db.collection('withdrawal_requests').doc(withdrawalId);
   await db.runTransaction(async (t) => {
     // Firestore transactions require every read BEFORE the first write. The
@@ -88,7 +88,7 @@ async function rejectAndRelease(withdrawalId, withdrawalData, failureReason) {
         .where('metadata.withdrawalId', '==', withdrawalId)
         .where('type', '==', 'withdrawal_lock')
     );
-    t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) });
+    writeCoinBalance(t, withdrawalData.userId, { lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) });
     lockSnapshot.forEach((doc) => t.update(doc.ref, {
       status: 'cancelled',
       cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -200,19 +200,18 @@ async function settleWithdrawal(deps, withdrawalId, action) {
     // A failed settlement must also RELEASE the hold: `lockedCoins` is what
     // makes the coins unavailable in the wallet, so leaving it set would strand
     // the creator's balance forever on a withdrawal that never pays out.
-    const userRef = db.collection('users').doc(withdrawalData.userId);
     const preflight = await runTransaction(async (t) => {
       const freshSnap = await t.get(withdrawalRef);
       if (freshSnap.data().status !== 'processing' || freshSnap.data().lockOwner !== serverId) {
         throw new Error('Invalid lock state.');
       }
-      const userSnap = await t.get(userRef);
-      const balance = userSnap.exists ? (userSnap.data().coins || 0) : 0;
-      const locked = userSnap.exists ? (userSnap.data().lockedCoins || 0) : 0;
+      const bal = await readCoinBalance(t, withdrawalData.userId, { fallbackToPublic: true });
+      const balance = bal.coins;
+      const locked = bal.lockedCoins;
       if (locked < withdrawalData.amount || balance < withdrawalData.amount) {
         const releaseAmount = Math.min(withdrawalData.amount, locked);
         if (releaseAmount > 0) {
-          t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount) });
+          writeCoinBalance(t, withdrawalData.userId, { lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount) });
         }
         t.update(withdrawalRef, {
           status: 'failed',
@@ -257,16 +256,16 @@ async function settleWithdrawal(deps, withdrawalId, action) {
         throw new Error('Invalid lock state.');
       }
 
-      const userSnap2 = await t.get(userRef);
-      const currentBalance = userSnap2.data().coins || 0;
-      const currentLocked = userSnap2.data().lockedCoins || 0;
+      const finalBal = await readCoinBalance(t, withdrawalData.userId, { fallbackToPublic: true });
+      const currentBalance = finalBal.coins;
+      const currentLocked = finalBal.lockedCoins;
 
       if (currentLocked < withdrawalData.amount || currentBalance < withdrawalData.amount) {
         t.update(withdrawalRef, { status: 'failed', failureReason: 'Insufficient balance at finalization.' });
         throw new Error('Insufficient balance.');
       }
 
-      t.update(userRef, {
+      writeCoinBalance(t, withdrawalData.userId, {
         coins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
         lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
         lastWithdrawalCompletedAt: admin.firestore.FieldValue.serverTimestamp(),

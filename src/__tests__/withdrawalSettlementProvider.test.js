@@ -96,7 +96,7 @@ describe('withdrawal settlement behaviour (emulator)', () => {
     payoutSettings = null,
   }) {
     const uid = `u_${Math.random().toString(36).slice(2)}`;
-    await db.collection('users').doc(uid).set({ coins: userCoins, lockedCoins: amount });
+    await db.collection('users_private').doc(uid).set({ coins: userCoins, lockedCoins: amount });
     const ref = db.collection('withdrawal_requests').doc();
     await ref.set({
       userId: uid,
@@ -147,7 +147,7 @@ describe('withdrawal settlement behaviour (emulator)', () => {
 
     const w = (await db.collection('withdrawal_requests').doc(wid).get()).data();
     expect(w.status).toBe('rejected');
-    const u = (await db.collection('users').doc(uid).get()).data();
+    const u = (await db.collection('users_private').doc(uid).get()).data();
     expect(u.lockedCoins).toBe(0);
     expect(u.coins).toBe(10000);
     expect(stripeCalls).toHaveLength(0);
@@ -164,7 +164,7 @@ describe('withdrawal settlement behaviour (emulator)', () => {
 
     const w = (await db.collection('withdrawal_requests').doc(wid).get()).data();
     expect(w.status).toBe('pending');
-    const u = (await db.collection('users').doc(uid).get()).data();
+    const u = (await db.collection('users_private').doc(uid).get()).data();
     expect(u.lockedCoins).toBe(5000);
     expect(stripeCalls).toHaveLength(0);
   });
@@ -195,7 +195,7 @@ describe('withdrawal settlement behaviour (emulator)', () => {
     const w = (await db.collection('withdrawal_requests').doc(wid).get()).data();
     expect(w.status).toBe('completed');
     expect(w.stripePayoutId).toBeTruthy();
-    const u = (await db.collection('users').doc(uid).get()).data();
+    const u = (await db.collection('users_private').doc(uid).get()).data();
     expect(u.coins).toBe(5000);
     expect(u.lockedCoins).toBe(0);
 
@@ -212,12 +212,12 @@ describe('withdrawal settlement behaviour (emulator)', () => {
     const res = await settleWithdrawal(deps(), wid, 'reject');
     expect(res.status).toBe('rejected');
 
-    const u = (await db.collection('users').doc(uid).get()).data();
+    const u = (await db.collection('users_private').doc(uid).get()).data();
     expect(u.lockedCoins).toBe(0);
     // A second reject is refused (already processed) and must NOT release the
     // lock a second time — `lockedCoins` stays at 0, never negative.
     await expect(settleWithdrawal(deps(), wid, 'reject')).rejects.toThrow(/already processed/i);
-    const u2 = (await db.collection('users').doc(uid).get()).data();
+    const u2 = (await db.collection('users_private').doc(uid).get()).data();
     expect(u2.lockedCoins).toBe(0);
   });
 });

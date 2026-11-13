@@ -72,7 +72,9 @@ describe('live gifts/tips are server-authoritative transfers, never a client deb
       expect(body).toMatch(/const recipientUid = stream\.userId/);
       // Real credit, not just a debit.
       expect(body).toMatch(/recipientNewBalance/);
-      expect(body).toMatch(/t\.update\(recipientRef, \{ coins: recipientNewBalance \}\)/);
+      // The recipient balance now lives on users_private (N324), written via
+      // the shared writeCoinBalance helper.
+      expect(body).toMatch(/writeCoinBalance\(t, recipientUid, \{ coins: recipientNewBalance \}\)/);
       // Double-entry ledger row moves value users:sender -> users:recipient.
       expect(body).toMatch(new RegExp(`createLedgerEntry\\(t, \`users:\\$\\{senderUid\\}\`, \`users:\\$\\{recipientUid\\}\``));
       expect(body).toMatch(new RegExp(`reason: '${reason}'`));

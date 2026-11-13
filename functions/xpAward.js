@@ -18,6 +18,7 @@ const {
 } = require('./levelConfig.cjs');
 
 const db = admin.firestore();
+const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 
 /**
  * Award XP for `action` to `uid` inside one transaction, applying the
@@ -77,7 +78,9 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
     if (coinReward > 0) {
       // The reward is a real coin credit, so it lands in the same
       // coin_transactions ledger the wallet reads and increments the system
-      // supply, keeping the ledger and supply counters consistent.
+      // supply, keeping the ledger and supply counters consistent. The balance
+      // itself lives on users_private/{uid} (N324).
+      const privBal = await readCoinBalance(tx, uid, { fallbackToPublic: true });
       const rewardTxRef = db.collection('coin_transactions').doc();
       tx.set(rewardTxRef, {
         userId: uid,
@@ -85,13 +88,13 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
         amount: coinReward,
         reason: 'level_up_reward',
         metadata: { level: after.level },
-        balanceAfter: (dataDoc.coins || 0) + coinReward,
+        balanceAfter: privBal.coins + coinReward,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       });
       tx.set(db.collection('system').doc('coin_supply'),
         { totalCoins: admin.firestore.FieldValue.increment(coinReward) }, { merge: true });
-      tx.set(userRef, { coins: admin.firestore.FieldValue.increment(coinReward) }, { merge: true });
+      writeCoinBalance(tx, uid, { coins: admin.firestore.FieldValue.increment(coinReward) });
     }
 
     result = {

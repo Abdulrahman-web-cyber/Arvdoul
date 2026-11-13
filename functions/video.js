@@ -25,6 +25,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 const Timestamp = admin.firestore.Timestamp;
 
 const storage = new Storage();
@@ -105,15 +106,16 @@ async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = 
     if (!fromDoc.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
     if (!toDoc.exists) throw new functions.https.HttpsError('not-found', 'Recipient not found.');
 
-    const fromBalance = fromDoc.data().coins || 0;
-    if (fromBalance < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins.');
+    // Balances live on users_private/{uid} (N324), never the world-readable doc.
+    const fromBal = await readCoinBalance(t, fromUid, { fallbackToPublic: true });
+    if (fromBal.coins < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins.');
 
-    const newFromBalance = fromBalance - amount;
-    const toBalance = toDoc.data().coins || 0;
-    const newToBalance = toBalance + amount;
+    const toBal = await readCoinBalance(t, toUid, { fallbackToPublic: true });
+    const newFromBalance = fromBal.coins - amount;
+    const newToBalance = toBal.coins + amount;
 
-    t.update(fromRef, { coins: newFromBalance, updatedAt: FieldValue.serverTimestamp() });
-    t.update(toRef, { coins: newToBalance, updatedAt: FieldValue.serverTimestamp() });
+    writeCoinBalance(t, fromUid, { coins: newFromBalance, updatedAt: FieldValue.serverTimestamp() });
+    writeCoinBalance(t, toUid, { coins: newToBalance, updatedAt: FieldValue.serverTimestamp() });
 
     const txId = idempotencyKey;
     const debitRef = db.collection('coin_transactions').doc(`${txId}_debit`);

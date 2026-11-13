@@ -21,6 +21,7 @@ const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
 const { getUserIdFromContext, getUserEmail } = require('./auth');
 const { settleWithdrawal, STRIPE_PAYOUT_METHODS } = require('./withdrawalSettlement');
+const { readCoinBalance, writeCoinBalance, availableFrom } = require('./coinBalance');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -180,9 +181,9 @@ const checkMutualTransfer = async (senderUid, receiverUid, amount) => {
 // ----------------------------------------------------------------------
 // WALLET LOCKING HELPERS
 // ----------------------------------------------------------------------
-const getAvailableBalance = (userData) => {
-  return (userData.coins || 0) - (userData.lockedCoins || 0);
-};
+// Balance reads/writes now resolve `users_private/{uid}` (N324): `coins` and
+// `lockedCoins` must never sit on the world-readable `users/{uid}` doc.
+const getAvailableBalance = (privateData) => availableFrom(privateData);
 
 // ----------------------------------------------------------------------
 // ENVIRONMENT & STRIPE
@@ -279,9 +280,9 @@ exports.addCoins = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const oldBalance = userSnap.data().coins || 0;
+      const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + amount;
-      t.update(userRef, { coins: newBalance });
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       const txData = {
@@ -342,12 +343,12 @@ exports.spendCoins = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const data = userSnap.data();
-      const available = getAvailableBalance(data);
+      const { coins: dataCoins, lockedCoins: dataLocked } = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: dataCoins, lockedCoins: dataLocked });
       if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins (some may be locked).');
 
-      const newBalance = (data.coins || 0) - amount;
-      t.update(userRef, { coins: newBalance });
+      const newBalance = dataCoins - amount;
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       t.set(txRef, {
@@ -427,16 +428,16 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
         if (!spaceSnap.exists) spaceRef = null;
       }
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available balance.');
 
-      const receiverData = receiverSnap.data();
-      const senderNewBalance = (senderData.coins || 0) - amount;
-      const receiverNewBalance = (receiverData.coins || 0) + amount;
+      const receiverBal = await readCoinBalance(t, toUserId, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - amount;
+      const receiverNewBalance = receiverBal.coins + amount;
 
-      t.update(senderRef, { coins: senderNewBalance });
-      t.update(receiverRef, { coins: receiverNewBalance });
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, toUserId, { coins: receiverNewBalance });
 
       const senderTxRef = admin.firestore().collection('coin_transactions').doc();
       const receiverTxRef = admin.firestore().collection('coin_transactions').doc();
@@ -511,8 +512,8 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
       const senderSnap = await t.get(senderRef);
       if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < giftValue) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
 
       const postRef = admin.firestore().collection('posts').doc(postId);
@@ -531,14 +532,13 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
 
       await checkMutualTransfer(senderUid, authorUid, giftValue);
 
-      const authorRef = admin.firestore().collection('users').doc(authorUid);
-      const authorSnap = (authorUid !== senderUid) ? await t.get(authorRef) : senderSnap;
+      const authorBal = (authorUid !== senderUid) ? await readCoinBalance(t, authorUid, { fallbackToPublic: true }) : senderBal;
 
-      const senderNewBalance = (senderData.coins || 0) - giftValue;
-      const authorNewBalance = (authorSnap.data().coins || 0) + giftValue;
+      const senderNewBalance = senderBal.coins - giftValue;
+      const authorNewBalance = authorBal.coins + giftValue;
 
-      t.update(senderRef, { coins: senderNewBalance });
-      if (authorUid !== senderUid) t.update(authorRef, { coins: authorNewBalance });
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      if (authorUid !== senderUid) writeCoinBalance(t, authorUid, { coins: authorNewBalance });
 
       t.update(postRef, {
         'stats.gifts': admin.firestore.FieldValue.increment(1),
@@ -630,8 +630,8 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const userData = userSnap.data();
-      const available = getAvailableBalance(userData);
+      const boostBal = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: boostBal.coins, lockedCoins: boostBal.lockedCoins });
       if (available < totalCost) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
 
       const postRef = admin.firestore().collection('posts').doc(postId);
@@ -645,8 +645,8 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       if (postAuthorId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the post owner can boost.');
       if (boostPostData.boostData?.isBoosted) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
 
-      const newBalance = (userData.coins || 0) - totalCost;
-      t.update(userRef, { coins: newBalance });
+      const newBalance = boostBal.coins - totalCost;
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       t.set(txRef, {
@@ -733,7 +733,12 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('failed-precondition', `Minimum level ${configuredMinLevel} required.`);
     }
 
-    const available = getAvailableBalance(userData);
+    const privateSnap = await admin.firestore().collection('users_private').doc(uid).get();
+    const privateData = privateSnap.exists ? privateSnap.data() : {};
+    // Legacy fallback (pre-migration accounts) so a balance is not under-read.
+    const available = availableFrom(
+      privateData.coins === undefined ? { ...privateData, coins: userData.coins, lockedCoins: privateData.lockedCoins ?? userData.lockedCoins } : privateData
+    );
     if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins (some may be locked).');
 
     const lastWithdrawalCompletedAt = userData.lastWithdrawalCompletedAt?.toMillis() || 0;
@@ -770,12 +775,11 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
         return ledgerSnap.data().result;
       }
 
-      const freshSnap = await t.get(userRef);
-      const freshData = freshSnap.data();
-      const freshAvailable = getAvailableBalance(freshData);
+      const freshBal = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const freshAvailable = getAvailableBalance({ coins: freshBal.coins, lockedCoins: freshBal.lockedCoins });
       if (freshAvailable < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins at lock time.');
 
-      t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(amount) });
+      writeCoinBalance(t, uid, { lockedCoins: admin.firestore.FieldValue.increment(amount) });
       t.set(withdrawalRef, {
         userId: uid, amount, paymentMethod, paymentDetails,
         status: requiresReview ? 'pending_review' : 'pending',
@@ -788,7 +792,7 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
         userId: uid, type: 'withdrawal_lock', amount, reason: 'withdrawal_request',
         metadata: { withdrawalId: withdrawalRef.id },
         idempotencyKey: key,
-        balanceAfter: freshData.coins || 0,
+        balanceAfter: freshBal.coins,
         createdAt: serverTS(),
         expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       });
@@ -1148,7 +1152,7 @@ exports.auditCoins = functions.pubsub.schedule('every 24 hours').onRun(async (co
       return null;
     }
 
-    const agg = await admin.firestore().collection('users')
+    const agg = await admin.firestore().collection('users_private')
       .aggregate({ total: admin.firestore.AggregateField.sum('coins') })
       .get();
     const balanceTotal = Number(agg.data().total) || 0;
@@ -1225,9 +1229,9 @@ async function creditSubscriptionCoins(t, { userId, tier, coinsPerMonth, idempot
   const userRef = admin.firestore().collection('users').doc(userId);
   const userSnap = await t.get(userRef);
   if (!userSnap.exists) return null;
-  const oldBalance = userSnap.data().coins || 0;
+  const { coins: oldBalance } = await readCoinBalance(t, userId, { fallbackToPublic: true });
   const newBalance = oldBalance + coinsPerMonth;
-  t.update(userRef, { coins: newBalance });
+  writeCoinBalance(t, userId, { coins: newBalance });
 
   const txRef = admin.firestore().collection('coin_transactions').doc();
   t.set(txRef, {
@@ -1321,9 +1325,9 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const oldBalance = userSnap.data().coins || 0;
+      const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + pkg.coins;
-      t.update(userRef, { coins: newBalance });
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       t.set(txRef, {
@@ -1633,9 +1637,9 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const oldBalance = userSnap.data().coins || 0;
+      const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + reward;
-      t.update(userRef, { coins: newBalance });
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const impRef = admin.firestore().collection('ad_impressions').doc();
       t.set(impRef, {
@@ -1751,7 +1755,8 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
       const userRef = db.collection('users').doc(uid);
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
-      const available = getAvailableBalance(userSnap.data());
+      const buyerBal = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: buyerBal.coins, lockedCoins: buyerBal.lockedCoins });
       if (available < price) {
         throw new functions.https.HttpsError('failed-precondition', `Insufficient Arvdoul Coins. You need ${price} coins, but have ${available}.`);
       }
@@ -1765,10 +1770,11 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
       //    total supply is unchanged. The old path debited the buyer and
       //    burned the coins from system/coin_supply, so every purchase
       //    destroyed value and the seller was never paid.
-      const newBalance = (userSnap.data().coins || 0) - price;
-      const sellerNewBalance = (sellerSnap.data().coins || 0) + price;
-      t.update(userRef, { coins: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      t.update(sellerRef, { coins: sellerNewBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      const sellerBal = await readCoinBalance(t, sellerId, { fallbackToPublic: true });
+      const newBalance = buyerBal.coins - price;
+      const sellerNewBalance = sellerBal.coins + price;
+      writeCoinBalance(t, uid, { coins: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      writeCoinBalance(t, sellerId, { coins: sellerNewBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
       const txRef = db.collection('coin_transactions').doc();
       t.set(txRef, {
@@ -1909,8 +1915,8 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'Cannot gift your own stream.');
       }
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < giftValue) {
         throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
       }
@@ -1919,10 +1925,11 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
       const recipientSnap = await t.get(recipientRef);
       if (!recipientSnap.exists) throw new functions.https.HttpsError('not-found', 'Streamer not found.');
 
-      const senderNewBalance = (senderData.coins || 0) - giftValue;
-      const recipientNewBalance = (recipientSnap.data().coins || 0) + giftValue;
-      t.update(senderRef, { coins: senderNewBalance });
-      t.update(recipientRef, { coins: recipientNewBalance });
+      const recipientBal = await readCoinBalance(t, recipientUid, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - giftValue;
+      const recipientNewBalance = recipientBal.coins + giftValue;
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, recipientUid, { coins: recipientNewBalance });
 
       t.update(streamRef, {
         'stats.totalGifts': admin.firestore.FieldValue.increment(1),
@@ -2044,8 +2051,8 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'Cannot tip your own stream.');
       }
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < amount) {
         throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
       }
@@ -2054,10 +2061,11 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
       const recipientSnap = await t.get(recipientRef);
       if (!recipientSnap.exists) throw new functions.https.HttpsError('not-found', 'Streamer not found.');
 
-      const senderNewBalance = (senderData.coins || 0) - amount;
-      const recipientNewBalance = (recipientSnap.data().coins || 0) + amount;
-      t.update(senderRef, { coins: senderNewBalance });
-      t.update(recipientRef, { coins: recipientNewBalance });
+      const recipientBal = await readCoinBalance(t, recipientUid, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - amount;
+      const recipientNewBalance = recipientBal.coins + amount;
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, recipientUid, { coins: recipientNewBalance });
 
       t.update(streamRef, {
         'stats.totalTips': admin.firestore.FieldValue.increment(1),

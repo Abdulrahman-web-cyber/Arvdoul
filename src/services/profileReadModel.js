@@ -233,6 +233,9 @@ export const CREATOR_INFO_FIELDS = Object.freeze([
 export const ECONOMIC_FIELDS = Object.freeze([
   'coins',
   'coinBalance',
+  // The withdrawal hold (N324). It never belongs on the public doc, but a
+  // pre-migration document may still carry it — mask it like any money field.
+  'lockedCoins',
   'balance',
   'earnings',
   'totalEarned',

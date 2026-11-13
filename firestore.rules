@@ -350,7 +350,9 @@ service cloud.firestore {
     function touchesPrivateProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'email', 'phoneNumber', 'emailVerified', 'phoneVerified',
-        'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId'
+        'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId',
+        // Financial figures (N324): the balance lives on the users_private doc.
+        'coins', 'lockedCoins'
       ]);
     }
 
@@ -369,7 +371,6 @@ service cloud.firestore {
         // exactly the new-account defaults (NEW_USER_DEFAULTS in
         // src/shared/levelConfig.cjs). Without this a client could mint itself
         // coins, XP, a level, verification or a privileged role at signup.
-        request.resource.data.get('coins', null) == 100 &&
         request.resource.data.get('level', null) == 1 &&
         request.resource.data.get('experience', null) == 0 &&
         request.resource.data.get('experienceToNextLevel', null) == 100 &&
@@ -388,8 +389,9 @@ service cloud.firestore {
           'longestStreak', 'lastActiveDate', 'lastActiveDay', 'coinBalance',
           'earnings', 'totalEarned', 'reputationScore', 'reputationTier', 'influence',
           'influenceScore', 'contribution', 'contributionScore',
-          // The withdrawal hold is server-only (see touchesServerAuthoritativeFields).
-          'lockedCoins',
+          // The coin balance and withdrawal hold are server-only and now live on
+          // users_private/{uid} (N324); never on the world-readable doc.
+          'coins', 'lockedCoins',
           // Live presence lives in user_presence/{uid} (N321).
           'isOnline', 'lastActive'
         ]);
@@ -411,10 +413,15 @@ service cloud.firestore {
     // client cannot forge a payment id that a webhook would then trust.
     match /users_private/{userId} {
       allow read: if isOwner(userId) || isAdmin();
+      // The owner seeds their own private doc at signup. `coins` is pinned to
+      // the new-account default (NEW_USER_DEFAULTS.coins) so a client cannot
+      // mint itself a balance; `lockedCoins` is server-only and refused.
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(
-          ['uid', 'email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
-        );
+          ['uid', 'email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt', 'coins']
+        ) &&
+        request.resource.data.get('coins', null) == 100 &&
+        !request.resource.data.keys().hasAny(['lockedCoins']);
       allow update: if isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
           ['email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']

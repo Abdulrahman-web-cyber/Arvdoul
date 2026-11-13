@@ -4,10 +4,9 @@ import { getFirestoreInstance, auth } from '../firebase/firebase.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy, limit as firestoreLimit, addDoc, serverTimestamp } from "firebase/firestore";
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
 import { openDB } from 'idb';
-import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { loadStripe } from '@stripe/stripe-js';
 import { svcLogger } from './ServiceKit.js';
-import { unknownNumber } from '../lib/unknownNumber.js';
+import { PRIVATE_PROFILE_COLLECTION } from '../config/profileContracts.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
@@ -409,14 +408,19 @@ class MonetizationService {
   // Returns a number when the balance is known, `null` when it could not be
   // read. Callers already gate on `typeof bal === 'number'`; the previous
   // `return 0` on failure told every screen the wallet was empty.
+  //
+  // The authoritative balance lives on `users_private/{uid}` (owner/admin
+  // readable) — NOT the world-signed-in `users/{uid}` doc, which would leak any
+  // balance to every signed-in user regardless of the owner's `economicStatus`
+  // scope (N324). A cross-viewer read is denied by the rules and returns null.
   async getBalance(userId) {
     if (!userId) return null;
     await this._ensureInitialized();
     try {
-      const userRef = doc(this.db, 'users', userId);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return null;
-      const coins = userSnap.data().coins;
+      const privateRef = doc(this.db, PRIVATE_PROFILE_COLLECTION, userId);
+      const privateSnap = await getDoc(privateRef);
+      if (!privateSnap.exists()) return null;
+      const coins = privateSnap.data().coins;
       return coins == null ? null : Number(coins);
     } catch (e) {
       log.error('Failed to get balance:', e);
@@ -545,40 +549,6 @@ class MonetizationService {
     if (followers >= thresholds.STAR) return { title: 'Star', emoji: '✨', minFollowers: thresholds.STAR, type: 'popularity' };
     if (followers >= thresholds.RISING) return { title: 'Rising Star', emoji: '🌱', minFollowers: thresholds.RISING, type: 'popularity' };
     return { title: 'Community Member', emoji: '👥', minFollowers: 0, type: 'popularity' };
-  }
-
-  // Cursor-paginated by coins. `cursor` is the `coins` value of the last row
-  // already held; ties at the boundary are acceptable for a leaderboard page.
-  async getCoinLeaderboard(limitCount = 50, cursor = null) {
-    await this._ensureInitialized();
-    try {
-      const pageSize = Math.max(1, Math.min(Number(limitCount) || 50, 200));
-      const usersRef = collection(this.db, 'users');
-      const clauses = [];
-      if (cursor != null) clauses.push(where('coins', '<', Number(cursor)));
-      clauses.push(orderBy('coins', 'desc'), firestoreLimit(pageSize));
-      const snapshot = await getDocs(query(usersRef, ...clauses));
-      const items = snapshot.docs.map((doc) => {
-        // A balance the ledger never wrote is unknown, not a fabricated 0 —
-        // and an unknown balance cannot be ranked into a position title.
-        const coins = unknownNumber(doc.data().coins);
-        return {
-          userId: doc.id,
-          displayName: doc.data().displayName || 'User',
-          photoURL: getSafeAvatarUrl(doc.data().photoURL, doc.data().displayName || 'User', doc.id),
-          coins,
-          position: coins === null ? null : this.getPositionTitle(coins),
-        };
-      });
-      const nextCursor =
-        snapshot.docs.length === pageSize && items.length > 0
-          ? items[items.length - 1].coins
-          : null;
-      return { items, nextCursor };
-    } catch (e) {
-      log.error('Failed to get leaderboard:', e);
-      return { items: [], nextCursor: null };
-    }
   }
 
   getPositionTitle(coins) {
@@ -1042,8 +1012,6 @@ export const getUserPosition = (userId, gender = 'other') =>
   getMonetizationService().getUserPosition(userId, gender);
 export const getUserPopularityPosition = (userId) =>
   getMonetizationService().getUserPopularityPosition(userId);
-export const getCoinLeaderboard = (limitCount, cursor) =>
-  getMonetizationService().getCoinLeaderboard(limitCount, cursor);
 
 export const addCoins = (userId, amount, reason, metadata, idempotencyKey) =>
   getMonetizationService().addCoins(userId, amount, reason, metadata, idempotencyKey);

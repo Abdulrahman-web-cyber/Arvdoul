@@ -754,7 +754,14 @@ class ProfessionalUserService {
       if (existingPrivate.exists()) {
         transaction.update(privateDoc, safePrivateData);
       } else {
-        transaction.set(privateDoc, { uid: userId, ...safePrivateData });
+        // The starting balance is seeded ONLY when the private doc is created
+        // (N324) — never on an update, or a repeated createUserProfile call
+        // would reset a real balance to the default. The world-readable
+        // users/{uid} never carries a financial figure; the rules pin the
+        // create to NEW_USER_DEFAULTS.coins.
+        const seed = { uid: userId, ...safePrivateData };
+        if (privateFields.coins !== undefined) seed.coins = privateFields.coins;
+        transaction.set(privateDoc, seed);
       }
 
       transaction.set(usernameDoc, {

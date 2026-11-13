@@ -102,39 +102,6 @@ describe('monetizationService.getTransactionHistory (cursor pagination)', () => 
   });
 });
 
-describe('monetizationService.getCoinLeaderboard (cursor pagination)', () => {
-  beforeEach(() => {
-    builtQueries.length = 0;
-  });
-
-  test('returns ranked items and a coins cursor', async () => {
-    const docs = Array.from({ length: 10 }, (_, i) => ({
-      id: `u${i}`,
-      data: () => ({ displayName: `User ${i}`, coins: 1000 - i * 10 }),
-    }));
-    firestore.getDocs.mockResolvedValueOnce({ docs });
-
-    const page = await service().getCoinLeaderboard(10);
-
-    expect(page.items).toHaveLength(10);
-    expect(page.items[0]).toMatchObject({ userId: 'u0', coins: 1000 });
-    expect(page.nextCursor).toBe(910);
-    const clauses = builtQueries.at(-1).clauses;
-    expect(clauses.some((c) => c.__orderBy?.[0] === 'coins')).toBe(true);
-    expect(clauses.some((c) => c.__where?.[0] === 'coins')).toBe(false);
-  });
-
-  test('a cursor page filters coins < cursor', async () => {
-    firestore.getDocs.mockResolvedValueOnce({ docs: [{ id: 'u9', data: () => ({ coins: 800 }) }] });
-
-    await service().getCoinLeaderboard(10, 910);
-
-    const cursorClause = builtQueries.at(-1).clauses.find((c) => c.__where?.[0] === 'coins');
-    expect(cursorClause.__where[1]).toBe('<');
-    expect(cursorClause.__where[2]).toBe(910);
-  });
-});
-
 describe('monetizationService.getMonetizationStats', () => {
   test('counts transactions from the paginated page shape', async () => {
     firestore.getDocs.mockResolvedValueOnce({ docs: [txDoc('a', '2026-01-01T00:00:00Z'), txDoc('b', '2026-01-01T00:00:00Z')] });

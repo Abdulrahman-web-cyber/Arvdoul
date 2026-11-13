@@ -658,7 +658,9 @@ export function AuthProvider({ children }) {
               photoURL: firebaseUser.photoURL || null,
               authProvider: firebaseUser.providerData?.[0]?.providerId || 'phone',
               isProfileComplete: !onboarding,
-              coins: 0,
+              // Unknown until the private doc (owner-readable) is read; a
+              // fabricated 0 would claim a measured empty wallet (N324).
+              coins: null,
               level: null,
               accountStatus: 'active'
             };

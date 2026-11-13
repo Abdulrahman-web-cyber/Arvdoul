@@ -54,6 +54,12 @@ export const PRIVATE_PROFILE_FIELDS = [
   'stripeCustomerId',
   'stripeAccountId',
   'stripeSubscriptionId',
+  // Financial figures (N324). `users/{uid}` is world-signed-in readable, so a
+  // balance there let any signed-in user read anyone's wallet regardless of the
+  // owner's `economicStatus` scope. The authoritative balance now lives on
+  // `users_private/{uid}` (owner/admin only), written by `functions/coinBalance.js`.
+  'coins',
+  'lockedCoins',
 ];
 
 export const PRIVATE_PROFILE_COLLECTION = 'users_private';

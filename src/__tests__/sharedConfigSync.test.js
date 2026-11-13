@@ -113,7 +113,9 @@ describe('shared config single source of truth', () => {
     const block = rules.slice(start, rules.indexOf(']);', rules.indexOf('contributionScore', start)));
     // Every numeric/boolean default must appear as a literal equality in the
     // create guard, so the rule can never drift from NEW_USER_DEFAULTS.
-    expect(block).toContain(`get('coins', null) == ${NEW_USER_DEFAULTS.coins}`);
+    // `coins` is NOT pinned here: the balance lives on users_private/{uid}
+    // (N324), and that collection's create rule pins it instead.
+    expect(block).not.toContain("get('coins', null)");
     expect(block).toContain(`get('level', null) == ${NEW_USER_DEFAULTS.level}`);
     expect(block).toContain(`get('experience', null) == ${NEW_USER_DEFAULTS.experience}`);
     expect(block).toContain(`get('experienceToNextLevel', null) == ${NEW_USER_DEFAULTS.experienceToNextLevel}`);
@@ -127,6 +129,11 @@ describe('shared config single source of truth', () => {
     expect(block).toContain(`get('isVerified', null) == ${NEW_USER_DEFAULTS.isVerified}`);
     expect(block).toContain(`get('isCreator', null) == ${NEW_USER_DEFAULTS.isCreator}`);
     expect(block).toContain(`get('accountStatus', null) == '${NEW_USER_DEFAULTS.accountStatus}'`);
+
+    // The starting balance is pinned on the private doc (N324).
+    const privateStart = rules.indexOf('match /users_private/{userId}');
+    const privateBlock = rules.slice(privateStart, rules.indexOf('allow delete', privateStart));
+    expect(privateBlock).toContain(`get('coins', null) == ${NEW_USER_DEFAULTS.coins}`);
   });
 
   test('the client seeds a new profile from NEW_USER_DEFAULTS, not literals', () => {

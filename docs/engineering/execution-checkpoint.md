@@ -490,3 +490,20 @@ NODE_OPTIONS=--experimental-vm-modules npm run test -- --watchAll=false
 npm run build
 npm run lint
 ```
+
+## Continuation session (N324: coin balance moved to users_private)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N324 | A user's coin balance (`users/{uid}.coins`) was readable by every signed-in client (`allow read: if isSignedIn()`), because Firestore rules cannot field-mask a readable document — `economicStatus` (default ONLY_ME) was enforced only by the client projection. A financial figure readable by every signed-in user. | Authoritative balance moved to `users_private/{uid}` (owner/admin only). New `functions/coinBalance.js` (`readCoinBalance`/`writeCoinBalance`/`availableFrom`) is the single accessor; `monetization.js`, `withdrawalSettlement.js`, `video.js`, `xpAward.js` repointed; `admin.js` + `monetization.js` coin-supply aggregate sum `users_private`; `privacyMigration.js` backfills `coins`/`lockedCoins`; client `monetizationService.getBalance` / `walletService` / `analyticsService._readLiveCoinBalance` read the private doc; `userService.createUserProfile` seeds the starting balance on the private doc (create-only). Rules: `coins`/`lockedCoins` added to `touchesPrivateProfileFields`, the users create pin/denylist updated, and the `users_private` create pins `coins == 100` and refuses `lockedCoins`. Cross-user `getCoinLeaderboard` (needed a public balance, no screen caller) removed with its test. `coinBalanceBoundary.test.js` (new, guards job) + `profilePiiBoundary.test.js` + `sharedConfigSync.test.js` + `noFabricatedData.test.js` pin the boundary. Legacy accounts keep a `fallbackToPublic` read until `privacyMigration` runs. |
+
+Latest verified: **1889 tests / 1884 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+### Remaining production-only requirement for N324
+
+Run `functions/privacyMigration.js` against production (admin-gated callable /
+scheduled sweep) to copy `coins`/`lockedCoins` into `users_private/{uid}` and
+scrub them from `users/{uid}`. Until it runs, `readCoinBalance(..., { fallbackToPublic: true })`
+keeps reading the legacy public field so no balance is lost.
