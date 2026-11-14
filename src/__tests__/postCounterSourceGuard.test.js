@@ -63,7 +63,22 @@ describe('post engagement counters have a single authoritative source (N433)', (
   test('the mirror writes the sums onto posts/{postId}.stats', () => {
     expect(countersSrc).toMatch(/exports\.aggregatePostCounters = functions\.pubsub/);
     expect(countersSrc).toMatch(/patch\[`stats\.\$\{field\}`\] = value/);
-    expect(countersSrc).toMatch(/POST_COUNTER_FIELDS = \['likes', 'comments', 'shares', 'saves'\]/);
+    expect(countersSrc).toMatch(/POST_COUNTER_FIELDS = \['likes', 'comments', 'shares', 'saves', 'views'\]/);
+  });
+
+  test('every post field the analytics writer shards is mirrored (N441)', () => {
+    // `recordPostView` increments the `views` shard for `posts/{id}`; a sharded
+    // field that is missing from POST_COUNTER_FIELDS is never written back onto
+    // `stats.*`, so a server reader sees a permanent 0.
+    const analyticsSrc = read('functions/analytics.js');
+    const shardedPostFields = [...analyticsSrc.matchAll(
+      /incrementShardedCounter\(\s*`posts\/\$\{[^}]+\}`\s*,\s*'(\w+)'/g,
+    )].map((m) => m[1]);
+    expect(shardedPostFields).toContain('views');
+    const mirrored = countersSrc.match(/POST_COUNTER_FIELDS = \[([^\]]*)\]/)[1];
+    for (const field of shardedPostFields) {
+      expect(mirrored).toContain(`'${field}'`);
+    }
   });
 
   test('feed ranking reads the real stats fields, not the never-written top-level ones', () => {

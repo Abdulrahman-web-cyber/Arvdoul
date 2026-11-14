@@ -44,7 +44,10 @@ const FieldValue = admin.firestore.FieldValue;
 const COUNTER_SHARDS_COLLECTION = 'counter_shards';
 const COUNTER_SHARDS = 10;
 // Post fields maintained as sharded counters (shard field -> stats field).
-const POST_COUNTER_FIELDS = ['likes', 'comments', 'shares', 'saves'];
+// `views` is included: `functions/analytics.js#recordPostView` increments the
+// `views` shard for `posts/{id}` and no writer sets `stats.views`, so without
+// mirroring it the feed's view-weighted engagement term was a constant 0 (N441).
+const POST_COUNTER_FIELDS = ['likes', 'comments', 'shares', 'saves', 'views'];
 // Bounded per-run work for the mirror job (cursor-paged).
 const POST_MIRROR_BATCH = 200;
 

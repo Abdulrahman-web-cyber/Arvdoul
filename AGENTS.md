@@ -586,10 +586,15 @@ omits a sharded field.
 
 **Post *views* are a sharded counter, not `stats.views`.** `recordPostView`
 (`functions/analytics.js`) increments `counter_shards` for `posts/{id}`; no writer
-ever sets `posts/{id}.stats.views` (it stays the create-time `0`). Any surface that
+sets `posts/{id}.stats.views` inline (it stays the create-time `0` until the
+mirror runs). Any surface that
 shows a post's view total must resolve it through `CountersManager.get({ docPath:
 'posts/{id}', field: 'views' })` (falling back to `stats.views` only when no shard
 exists yet) — reading the raw field shows a fabricated `0` (N437, `PostAnalyticsScreen`).
+Server-side, `functions/postCounters.js#aggregatePostCounters` mirrors the shard sums
+(now including `views`) onto `stats.*` so server readers (`feed.js` ranking) get a real
+number; `views` was missing from `POST_COUNTER_FIELDS`, so the view-weighted engagement
+term was a constant 0 (N441).
 The same distinction applies to `videos/{id}.stats.saves`, which is server-owned and
 written only by the `toggleVideoSave` callable keyed on `videos/{id}/saved_by/{uid}`
 (N436, `videoSaveCounterSourceGuard.test.js`).
