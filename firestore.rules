@@ -44,6 +44,11 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'xp', 'experience', 'experienceToNextLevel',
         'level', 'levelBand',
+        // Follower/following counts are maintained by the sharded counters
+        // (client `CountersManager` inside the follow/unfollow transactions) and
+        // mirrored onto the doc by `functions/userCounters.js`. A client write
+        // would let an owner mint a standing they do not have (N431).
+        'followerCount', 'followingCount',
         'activeDays', 'activeDaysCount', 'activeStreak', 'longestStreak',
         'lastActiveDate', 'lastActiveDay',
         'reputation', 'reputationScore', 'reputationTier',
@@ -382,6 +387,10 @@ service cloud.firestore {
         request.resource.data.get('isVerified', null) == false &&
         request.resource.data.get('isCreator', null) == false &&
         request.resource.data.get('accountStatus', null) == 'active' &&
+        // Counts are server-mirrored (N431); a client may only seed them at 0.
+        request.resource.data.get('followerCount', null) == 0 &&
+        request.resource.data.get('followingCount', null) == 0 &&
+        request.resource.data.get('postCount', null) == 0 &&
         !request.resource.data.keys().hasAny([
           'roles', 'role', 'policyStanding', 'creatorStatus', 'creatorTier',
           'titles', 'activeTitle', 'achievements', 'monetizationEligible',

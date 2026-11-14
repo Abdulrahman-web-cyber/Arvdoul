@@ -494,6 +494,24 @@ A missing `level`/`xp` renders as unavailable (null), never as `Level 1` /
 `Citizen`. Do not add `|| 1` level defaults or `() => 'Citizen'` fallbacks in
 profile components — `src/__tests__/noFabricatedData.test.js` guards this.
 
+## Follower/following counts have one source of truth
+`users/{uid}.followerCount`/`followingCount` are seeded `0` at signup and are
+**not** the live count — every follow/unfollow mutation increments a sharded
+`counter_shards` document (client `CountersManager`, inside
+`userService.followUser`/`unfollowUser`/`approveFollowRequest`/`blockUser`). Never
+trust the raw field on the server: `functions/userCounters.js` is the authoritative
+reader (`readUserCounter` sums the shards in one batched `db.getAll`, legacy raw
+field only when no shard exists) and the scheduled `aggregateUserCounters` mirror
+writes the sum back onto `users/{uid}` so every remaining raw reader (search index,
+profile hydration, ranking) reads a real number. Both fan-out threshold decisions
+(`feed.js`, `stories.js`) read through `readUserCounter`, and the count is
+server-authoritative in the rules (`touchesServerAuthoritativeFields` + the create
+rule pins it to `0`) and in `SERVER_AUTHORITATIVE_FIELDS`. The server shard hash +
+doc-id layout must stay byte-identical to `src/utils/CountersManager.js`.
+`src/__tests__/followerCounterSourceGuard.test.js` (guards job) pins all of this.
+Do not add a raw `data().followerCount || 0` read on the server — it always
+returned a fabricated `0` (N431).
+
 ## No fabricated security claims
 Do not render a "secure"/"encrypted" claim a feature cannot back. Messaging has
 no key provisioning (`generateUserKeys`/`unlockPrivateKey` have no caller and no

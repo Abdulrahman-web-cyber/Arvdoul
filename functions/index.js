@@ -92,6 +92,12 @@ merge(require('./collaboration.js'));
 // future `scheduledTime`; this scheduled job is the only writer that flips a
 // due post to `published` (otherwise a scheduled post never surfaces anywhere).
 merge(require('./scheduledPosts.js'));
+// Sharded-counter reader + mirror (N431). The scheduled job writes the summed
+// follower/following shards back onto `users/{uid}` so every reader that trusts
+// the raw field (search index, profile hydration, ranking) sees a real number.
+// `readUserCounter` is a plain helper required in-process by the fan-out
+// threshold decisions.
+merge(require('./userCounters.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {

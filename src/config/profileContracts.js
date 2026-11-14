@@ -108,6 +108,11 @@ export const SERVER_AUTHORITATIVE_FIELDS = [
   'experienceToNextLevel',
   'level',
   'levelBand',
+  // Follower/following counts are maintained by the sharded counters and
+  // mirrored onto the document by `functions/userCounters.js` (N431); a client
+  // write would let an owner mint standing they do not have.
+  'followerCount',
+  'followingCount',
   'activeDays',
   'activeDaysCount',
   'activeStreak',

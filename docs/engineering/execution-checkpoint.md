@@ -590,11 +590,22 @@ Verified: `npx eslint src functions` exit 0 (0 errors, warnings only); full jest
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N270 is NOT_AN_ISSUE. N424–N430 closed.
 
+## Continuation session 5 (N431 — stale `followerCount`/`followingCount` on the server)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N431 | `users/{uid}.followerCount`/`followingCount` are seeded `0` at signup (`NEW_USER_DEFAULTS`) and **never written again** — every follow/unfollow increments a sharded `counter_shards` doc (`CountersManager` inside `userService.followUser`/`unfollowUser`/`approveFollowRequest`/`blockUser`). Server readers trusting the raw field saw a fabricated `0`: (1) the fan-out threshold in `functions/feed.js` + `functions/stories.js` (`> 10000`) **never tripped** → a celebrity's post/story fanned out to *every* follower (the unbounded write storm the pull model exists to avoid); (2) `functions/search.js` shipped `followerCount: 0` to the Algolia user index → people-search rendered a fabricated “0 followers”; (3) `socialGraphService.hydrateProfiles`/`getSummary`, `profileReadModel`, `rankingService`, `monetizationService.getUserPopularityPosition` all read the stale raw field (only `userService.getUserProfile` applied the shard overlay). A client could also seed an arbitrary count at signup and write it via profile update (minted standing). | New `functions/userCounters.js`: `readUserCounter` sums shards in one batched `db.getAll` (legacy raw field only when no shard exists) — now used by both fan-out decisions (feed.js fails toward the pull model on an unresolvable count); scheduled `aggregateUserCounters` mirror writes the shard sum back onto `users/{uid}` (only when changed, so the Algolia `onWrite` index does not churn) so every raw reader is truthful. Counts made server-authoritative in `firestore.rules` (`touchesServerAuthoritativeFields` + create rule pins `0`) and `SERVER_AUTHORITATIVE_FIELDS`. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **186 suites / 2063 passed / 5 skipped / 2068 total** green; `npm run build` green. New `followerCounterSourceGuard.test.js` (added to the hard-failing `guards` CI job) pins the module+merge, the byte-identical server/client shard hash + doc-id layout, the batched shard read, the mirror write shape, both fan-out reads, the fail-safe default, the rules denylist/create pin and the contract parity.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N270 is NOT_AN_ISSUE. N424–N431 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 185 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 186 suites green
 npm run build                 # green
 ```

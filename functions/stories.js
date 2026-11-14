@@ -167,11 +167,13 @@ async function processFanoutTaskInternal(taskRef, taskId, taskData) {
     return;
   }
 
-  // Hybrid decision
+  // Hybrid decision. The count must be the AUTHORITATIVE one: the raw
+  // `users/{uid}.followerCount` is seeded 0 and never updated (follows increment
+  // a sharded counter — N431), so trusting it never tripped the celebrity gate.
   let followerCount = 0;
   try {
-    const userDoc = await db.collection('users').doc(ownerId).get();
-    followerCount = userDoc.data()?.followerCount || 0;
+    const { readUserCounter } = require('./userCounters');
+    followerCount = await readUserCounter(ownerId, 'followerCount');
   } catch (err) {
     log('error', 'Failed to fetch follower count', { ownerId, error: err.message });
     await taskRef.update({

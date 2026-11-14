@@ -185,8 +185,20 @@ exports.fanoutPostOnCreate = functions.firestore
     }
 
     try {
-      const authorSnap = await db.collection('users').doc(authorId).get();
-      const followerCount = authorSnap.data()?.followerCount || 0;
+      // Read the AUTHORITATIVE follower count: `users/{uid}.followerCount` is
+      // seeded 0 at signup and never updated (every follow increments a sharded
+      // counter — N431), so trusting the raw field made this threshold never
+      // trip and fanned a celebrity's post out to every follower. A count that
+      // cannot be resolved is treated as "large" so the pull model is used
+      // rather than risking an unbounded write storm.
+      let followerCount;
+      try {
+        const { readUserCounter } = require('./userCounters');
+        followerCount = await readUserCounter(authorId, 'followerCount');
+      } catch (counterErr) {
+        followerCount = Number.MAX_SAFE_INTEGER;
+        console.warn('Fan-out follower-count resolution failed; using pull model', { authorId, error: counterErr.message });
+      }
 
       if (followerCount > FANOUT_THRESHOLD) {
         await taskRef.update({
