@@ -4,7 +4,7 @@ import { subscribeSyncStatus, syncQueue } from '../offline/syncEngine.js';
 
 const formatTime = (ts) => {
   if (!ts) return 'Never';
-  try { return new Date(ts).toLocaleTimeString(); } catch { return 'Unknown'; }
+  try { return new Date(ts).toLocaleTimeString(); } catch { return '—'; }
 };
 
 export default function OfflineStatusScreen() {

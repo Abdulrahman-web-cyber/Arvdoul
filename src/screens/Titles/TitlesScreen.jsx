@@ -309,7 +309,7 @@ export default function TitlesScreen() {
                   )}
 
                   <span className="text-[11px] text-gray-500 font-mono">
-                    {isEarned ? 'Granted' : 'Audited'}
+                    {isEarned ? 'Granted' : 'Locked'}
                   </span>
                 </div>
               </div>

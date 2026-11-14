@@ -4487,3 +4487,26 @@ describe('N409 — graph/comment/feed surfaces never assert a generic "Creator"/
     expect(p).not.toContain("item.authorName], { fallback: 'Creator' })");
   });
 });
+
+describe('N410 — verification/reward surfaces do not overstate what the platform verifies', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileVerificationModal describes a reviewed creator badge, not identity "establishment"', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain('established the authentic identity');
+    expect(s).not.toContain("'Verified Member'");
+    expect(s).toContain('reviewed this creator');
+  });
+
+  test('Titles/Achievements do not label a locked item "Audited"', () => {
+    const t = read('src/screens/Titles/TitlesScreen.jsx');
+    expect(t).not.toContain("'Granted' : 'Audited'");
+    const a = read('src/screens/Achievements/AchievementsScreen.jsx');
+    expect(a).not.toContain('Audit Status');
+  });
+
+  test('OfflineStatusScreen renders an unknown time as a dash, not "Unknown"', () => {
+    const s = read('src/screens/OfflineStatusScreen.jsx');
+    expect(s).not.toMatch(/catch \{ return 'Unknown'; \}/);
+  });
+});
