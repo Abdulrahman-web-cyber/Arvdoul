@@ -28,7 +28,9 @@ const truncateSafe = (str, maxLen) => {
 
 // Helpers
 function getCountdownDetails(startDate) {
-  if (!startDate) return { text: 'TBD', urgent: false };
+  // No start date means the countdown is unknown; return an empty label rather
+  // than the fabricated placeholder "TBD" (the render also gates on startDate).
+  if (!startDate) return { text: '', urgent: false };
   const now = new Date();
   const diff = startDate - now;
   if (diff <= 0) return { text: 'Started', urgent: true };
@@ -250,7 +252,7 @@ const EventCard = React.memo(({
           >
             <Calendar className="w-3.5 h-3.5 text-white mb-0.5" />
             <span className="text-[10px] font-bold text-white leading-tight">
-              {startDate ? format(startDate, 'MMM d') : 'TBD'}
+              {startDate ? format(startDate, 'MMM d') : '—'}
             </span>
             <span className="text-[8px] text-white/80 leading-tight">
               {startDate ? format(startDate, 'p') : '—'}

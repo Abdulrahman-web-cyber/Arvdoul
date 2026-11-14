@@ -4135,3 +4135,28 @@ describe('N393 — community member lists use the read model, not synthetic "Cit
     expect(src).toMatch(/pickDisplayName\(\[info\?\.displayName, info\?\.name\], \{ fallback: 'Member' \}\)/);
   });
 });
+
+describe('N394 — event countdown, post stats/ranking and author placeholders are not fabricated', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('EventCard shows no "TBD" placeholder for an unknown date', () => {
+    const s = read('src/screens/PostCard/EventCard.jsx');
+    expect(s).not.toMatch(/text: 'TBD'/);
+    expect(s).not.toMatch(/format\(startDate, 'MMM d'\) : 'TBD'/);
+  });
+
+  test('HomeScreen.hydratePost leaves an absent createdAt/stats/ranking absent', () => {
+    const s = read('src/screens/HomeScreen.jsx');
+    expect(s).not.toContain("post.createdAt || new Date()");
+    expect(s).not.toContain('stats: post.stats || { likes: 0, comments: 0, shares: 0 }');
+    expect(s).toMatch(/rankingMetadata: post\.rankingMetadata \?\? null/);
+  });
+
+  test('QuestionCard and PollsScreen fall back to "Member", never "Anonymous"', () => {
+    const q = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(q).not.toContain("answer.userName || 'Anonymous'");
+    expect(q).toContain("pickDisplayName([answer.userName], { fallback: 'Member' })");
+    const p = read('src/screens/Polls/PollsScreen.jsx');
+    expect(p).not.toContain("poll.creator?.name || 'Anonymous'");
+  });
+});

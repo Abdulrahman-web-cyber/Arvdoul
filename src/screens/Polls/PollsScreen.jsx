@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import pollService from '../../services/pollService';
+import { pickDisplayName } from '../../services/profileReadModel';
 const CATEGORIES = ['All', 'Tech & Trends', 'Gear & Studio', 'Creator Economy'];
 
 /** Honest countdown label derived from the poll's real endsAt timestamp.
@@ -189,7 +190,7 @@ export default function PollsScreen() {
                       </div>
                     )}
                     <div>
-                      <span className="text-xs font-bold text-white block">{poll.creator?.name || 'Anonymous'}</span>
+                      <span className="text-xs font-bold text-white block">{pickDisplayName([poll.creator?.name], { fallback: 'Member' })}</span>
                       <span className="text-[11px] text-gray-400">{poll.creator?.username ? `${poll.creator.username} • ` : ''}{poll.category}</span>
                     </div>
                   </div>

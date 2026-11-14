@@ -384,9 +384,16 @@ function hydratePost(post) {
     authorPhoto: getSafeAvatarUrl(post.authorPhoto, authorName, authorId),
     content: post.content || '',
     media: post.media || [],
-    stats: post.stats || { likes: 0, comments: 0, shares: 0 },
-    createdAt: post.createdAt?.toDate?.() || post.createdAt || new Date(),
-    rankingMetadata: post.rankingMetadata || { score: 0, reason: 'algorithm', rankWeight: 1 },
+    // Absent stats stay absent (the card renders '—'), never a fabricated
+    // measured { likes: 0, comments: 0, shares: 0 }.
+    stats: post.stats || {},
+    // A post with no createdAt has an unknown posting time; leave it null so the
+    // card omits the label rather than defaulting to "now" (a fabricated "just
+    // now" on every post that lost its timestamp).
+    createdAt: post.createdAt?.toDate?.() || post.createdAt || null,
+    // No consumer reads a fabricated { score: 0, reason: 'algorithm' } — an
+    // absent ranking is left absent.
+    rankingMetadata: post.rankingMetadata ?? null,
   };
 }
 
