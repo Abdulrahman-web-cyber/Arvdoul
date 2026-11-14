@@ -164,3 +164,131 @@ exports.aggregateUserCounters = functions.pubsub
 // Plain helper export (no trigger): merged-out by index.js, required in-process
 // by the modules that need an immediately-correct count.
 exports.readUserCounter = readUserCounter;
+
+// ----------------------------------------------------------------------
+// users/{uid}.postCount (N438)
+// ----------------------------------------------------------------------
+// `users/{uid}` is seeded `postCount: 0` at signup. The only writer was a
+// best-effort CLIENT increment inside `firestoreService.repostPost`, so a
+// normal post never moved the count while a repost bumped it — and the field
+// was NOT in the server-authoritative denylist, so any owner could `updateDoc`
+// it to an arbitrary number (minted standing). It is read by
+// `ProfileMetricsGrid`, `QuickAccessPanel`, `AuthContext` and
+// `socialGraphService.hydrateProfiles`.
+//
+// The count is maintained server-side here: a net-delta document trigger counts
+// a post toward its author while the post exists and is not soft-deleted. The
+// predicate (`isDeleted === false`) is exactly what both the owner's profile
+// grid (`getPostsByUser`) and the reconcile query below require, and it matches
+// the post read rules (a post without `isDeleted == false` is not listable), so
+// the counter can never include content a viewer could not see in the grid.
+// A create/publish is `+1`, a delete/unpublish is `-1`, and a re-write that
+// leaves the post's liveness unchanged cancels to zero (so a like/comment
+// update reads no user doc and writes nothing).
+function countsAsPost(post) {
+  if (!post) return false;
+  return post.isDeleted === false;
+}
+
+exports.onPostWrite = functions.firestore
+  .document('posts/{postId}')
+  .onWrite(async (change) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+
+    // Net delta per author: -1 if the post counted before, +1 if it counts
+    // after. An author change (or a soft delete) is handled by the same delta.
+    const deltas = new Map();
+    const bump = (uid, delta) => {
+      if (typeof uid !== 'string' || !uid || delta === 0) return;
+      deltas.set(uid, (deltas.get(uid) || 0) + delta);
+    };
+    if (countsAsPost(before)) bump(before.authorId, -1);
+    if (countsAsPost(after)) bump(after.authorId, +1);
+
+    // A re-write that leaves the post's liveness unchanged (a like/comment/view
+    // update, or the scheduled counter mirror) cancels to a zero delta: drop
+    // those so no user doc is read or written.
+    const entries = [...deltas.entries()].filter(([, delta]) => delta !== 0);
+    if (entries.length === 0) return;
+
+    // Only update users that still exist: an update to a missing doc would fail
+    // the whole batch, and a deleted account must not get a resurrected counter.
+    const uids = entries.map(([uid]) => uid);
+    const snaps = await db.getAll(...uids.map((uid) => db.collection('users').doc(uid)));
+
+    const batch = db.batch();
+    let writes = 0;
+    snaps.forEach((snap, i) => {
+      if (!snap.exists) return;
+      const delta = deltas.get(uids[i]);
+      if (!delta) return;
+      batch.update(snap.ref, {
+        postCount: FieldValue.increment(delta),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      writes += 1;
+    });
+    if (writes > 0) await batch.commit();
+  });
+
+/**
+ * Reconcile `users/{uid}.postCount` against the author's real posts.
+ *
+ * The document trigger keeps the count correct from now on, but two classes of
+ * drift predate it: (1) posts created before the trigger existed were never
+ * counted, and (2) the removed client increment bumped the count on a *repost*
+ * while a normal post never moved it. This cursor-paged job recomputes the true
+ * value (a bounded `count()` over `posts where authorId == uid`, no scan) and
+ * writes it only when it differs, so a steady-state run costs one read per user
+ * and no writes.
+ */
+const POST_COUNT_RECONCILE_BATCH = 300;
+
+exports.reconcileUserPostCounts = functions.pubsub
+  .schedule('every 60 minutes')
+  .onRun(async () => {
+    const cursorRef = db.collection('system').doc('user_post_count_cursor');
+    const cursorSnap = await cursorRef.get();
+    const lastId = cursorSnap.exists ? cursorSnap.data().lastId : null;
+
+    let query = db.collection('users').orderBy('__name__').limit(POST_COUNT_RECONCILE_BATCH);
+    if (lastId) {
+      const lastDoc = await db.collection('users').doc(lastId).get();
+      if (lastDoc.exists) query = query.startAfter(lastDoc);
+    }
+
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+      // A previous run finished the collection: restart from the top.
+      if (lastId) await cursorRef.set({ lastId: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return { processed: 0 };
+    }
+
+    let processed = 0;
+    let reconciled = 0;
+    let newLastId = lastId;
+    for (const docSnap of snapshot.docs) {
+      const countSnap = await db.collection('posts')
+        .where('authorId', '==', docSnap.id)
+        .where('isDeleted', '==', false)
+        .count()
+        .get();
+      const real = countSnap.data().count;
+      if (docSnap.data().postCount !== real) {
+        await docSnap.ref.update({ postCount: real, updatedAt: FieldValue.serverTimestamp() });
+        reconciled += 1;
+      }
+      newLastId = docSnap.id;
+      processed++;
+    }
+
+    await cursorRef.set(
+      {
+        lastId: snapshot.size < POST_COUNT_RECONCILE_BATCH ? null : newLastId,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { processed, reconciled };
+  });

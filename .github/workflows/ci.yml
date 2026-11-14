@@ -389,6 +389,7 @@ jobs:
           src/__tests__/composerPaidControlsGuard.test.js
           src/__tests__/scheduledPostsGuard.test.js
           src/__tests__/followerCounterSourceGuard.test.js
+          src/__tests__/postAuthorCountSourceGuard.test.js
           src/__tests__/achievementMetricSourceGuard.test.js
           src/__tests__/postCounterSourceGuard.test.js
           src/__tests__/communityEventCountSourceGuard.test.js

@@ -512,6 +512,20 @@ doc-id layout must stay byte-identical to `src/utils/CountersManager.js`.
 Do not add a raw `data().followerCount || 0` read on the server — it always
 returned a fabricated `0` (N431).
 
+## Post count has one source of truth
+`users/{uid}.postCount` is seeded `0` at signup and is **not** a client-writable
+field — it is server-authoritative (`SERVER_AUTHORITATIVE_FIELDS` +
+`touchesServerAuthoritativeFields` in `firestore.rules`; the create rule pins it
+to `0`). `functions/userCounters.js#onPostWrite` is the only writer: a document
+trigger on `posts/{postId}` applies a net delta per author (counted iff
+`isDeleted === false`) via `FieldValue.increment`, so create/publish is `+1` and
+delete/unpublish is `-1`, and a like/comment update cancels to a zero delta (no
+user read or write). The cursor-paged `reconcileUserPostCounts` job (bounded
+`count()` over `posts where authorId == uid`, no scan) corrects legacy drift. Do
+not re-add a client `postCount` increment — the removed one only ever fired on
+*repost*, so a normal post never moved the count and the field could be minted
+(N438). `src/__tests__/postAuthorCountSourceGuard.test.js` (guards job) pins it.
+
 ## Achievement/title metrics are computed, never assumed
 `ACHIEVEMENTS_CATALOG` / `TITLES_CATALOG` criteria are scored against metric
 fields on `users/{uid}`. A criterion whose metric has **no writer** reads a

@@ -657,11 +657,22 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **191 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N437 closed.
 
+## Continuation session 11 (N438 — `users/{uid}.postCount` had no server writer and was not server-authoritative)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N438 | `users/{uid}.postCount` is seeded `0` at signup, but the only writer was a best-effort *client* increment inside `firestoreService.repostPost` — so a normal post never moved the count (only a repost did), while `ProfileMetricsGrid` ("Posts"), `QuickAccessPanel`, `AuthContext` and `socialGraphService.hydrateProfiles` rendered it as a real total. Unlike `followerCount`/`followingCount` (N431) it was absent from `SERVER_AUTHORITATIVE_FIELDS` and the rules denylist, so any signed-in owner could `updateDoc` it to an arbitrary number (minted standing). Same counter-with-no-writer class as N431/N433/N434/N435/N436. | `postCount` added to `SERVER_AUTHORITATIVE_FIELDS` (`src/config/profileContracts.js`) and `touchesServerAuthoritativeFields()` (`firestore.rules`; the signup `create` still pins it to `0`). New `functions/userCounters.js#onPostWrite` document trigger is the only writer: net delta per author (`isDeleted === false` before → `-1`, after → `+1`, zero deltas skipped) via `FieldValue.increment`, touching only users that still exist. Cursor-paged `reconcileUserPostCounts` job (bounded `count()` over `posts where authorId == uid`, no scan) corrects legacy drift. The client `updateUserPostCount` writer and its repost call site were deleted. New `postAuthorCountSourceGuard.test.js` (guards job) pins the trigger, the reconcile job, the rules/contract parity and the absence of the client writer. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **192 suites / 2101 passed / 5 skipped / 2106 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N438 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 191 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 192 suites green
 npm run build                 # green
 ```

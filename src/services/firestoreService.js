@@ -901,7 +901,6 @@ class EnterpriseFirestoreService {
           postId, userId: uid, type: 'repost', sharedAt: serverTimestamp(),
         });
       } catch (e) { logger.warn('Repost share-counter update failed:', e?.message); }
-      try { await this.updateUserPostCount(uid, 1); } catch (e) { logger.warn('updateUserPostCount failed (repost)', { uid, error: e?.message }); }
       try {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
@@ -1298,19 +1297,6 @@ class EnterpriseFirestoreService {
   async getAuthInstance() {
     if (!this.firebaseApp) this.firebaseApp = await import('../firebase/firebase.js');
     return await this.firebaseApp.getAuthInstance();
-  }
-
-  async updateUserPostCount(userId, delta = 1) {
-    try {
-      await this.ensureInitialized();
-      const { doc, updateDoc, increment, serverTimestamp } = this.firestoreMethods;
-      const userRef = doc(this.firestore, 'users', userId);
-      await updateDoc(userRef, { postCount: increment(delta), updatedAt: serverTimestamp() });
-    } catch (error) {
-      // Denormalised post count; the authoritative list is posts/{id}. Log so a
-      // rules/quota failure is diagnosable rather than silently drifting.
-      logger.warn('updateUserPostCount failed; denormalised count may drift', { userId, delta, error: error?.message });
-    }
   }
 
   invalidateCache(key) { this.cache.delete(key); }

@@ -113,6 +113,11 @@ export const SERVER_AUTHORITATIVE_FIELDS = [
   // write would let an owner mint standing they do not have.
   'followerCount',
   'followingCount',
+  // The published-post count is maintained by the server-side
+  // `functions/userCounters.js#onPostWrite` trigger (net delta per post
+  // create/publish/delete) and reconciled by `reconcileUserPostCounts`; a
+  // client write would let an owner mint a post count they do not have (N438).
+  'postCount',
   'activeDays',
   'activeDaysCount',
   'activeStreak',

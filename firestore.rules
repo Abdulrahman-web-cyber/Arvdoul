@@ -49,6 +49,13 @@ service cloud.firestore {
         // mirrored onto the doc by `functions/userCounters.js`. A client write
         // would let an owner mint a standing they do not have (N431).
         'followerCount', 'followingCount',
+        // The published-post count is maintained by the server-side
+        // `functions/userCounters.js#onPostWrite` trigger (a net delta per post
+        // create/publish/delete) and reconciled by `reconcileUserPostCounts`. A
+        // client write would let an owner mint a post count they do not have —
+        // and the old client path only ever bumped it on repost, so a normal
+        // post never moved it (N438).
+        'postCount',
         'activeDays', 'activeDaysCount', 'activeStreak', 'longestStreak',
         'lastActiveDate', 'lastActiveDay',
         'reputation', 'reputationScore', 'reputationTier',
