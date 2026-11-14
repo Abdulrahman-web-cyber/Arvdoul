@@ -228,18 +228,26 @@ class PassportService {
       });
     }
 
-    // 2. Sovereign Border Clearance
+    // 2. Sovereign Border Clearance — issued only for a real, non-fabricated
+    // security credential. There is no cryptographic peer-clearance system, so
+    // the stamp is not unconditionally "verified"; it is earned by a verified
+    // identity or a resolved (non-placeholder) account, and its copy makes no
+    // cryptographic claim the platform cannot back (N408).
+    const hasIdentityCredential = isVerified === true
+      || (isCreator === true && Boolean(profile.username));
     stamps.push({
       id: 'stamp_border',
       code: 'ARV-SBC-PASS',
       title: 'Border Clearance',
       ministry: 'Sovereign Border Agency',
       category: 'Security',
-      issuedAt: 'Perpetual',
-      verified: true,
+      issuedAt: hasIdentityCredential ? (issueDate || 'Epoch I') : null,
+      verified: hasIdentityCredential,
       sealType: 'emerald',
       icon: '🛡️',
-      description: 'Permanent right of passage and cryptographic peer clearance across Arvdoul.',
+      description: hasIdentityCredential
+        ? 'Recognised for a verified account with established standing across Arvdoul.'
+        : 'Requires a verified identity or established creator standing.',
     });
 
     // 3. Civic Vanguard Stamp (Level 10+ or 7+ day streak)

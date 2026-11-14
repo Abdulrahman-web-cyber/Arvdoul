@@ -504,7 +504,7 @@ export default function PerksRewardsScreen() {
               onClick={() => navigate('/titles')}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer"
             >
-              <span>View All Titles & Audited Provenance</span>
+              <span>View All Titles &amp; Verified Provenance</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

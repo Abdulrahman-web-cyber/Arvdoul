@@ -95,7 +95,7 @@ export default function TitlesScreen() {
     setClaiming(titleId);
     try {
       await titleService.claimTitle(titleId);
-      toast.success('Title claimed with full provenance!');
+      toast.success('Title claimed!');
       await loadTitles();
       await refreshProfile();
     } catch (err) {
@@ -360,7 +360,7 @@ export default function TitlesScreen() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Provenance Status</span>
-                <span className="text-emerald-400 font-mono">Audited & Cryptographically Bound</span>
+                <span className="text-emerald-400 font-mono">Granted from verified milestones</span>
               </div>
             </div>
 

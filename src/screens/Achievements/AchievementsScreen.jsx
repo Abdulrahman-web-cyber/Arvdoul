@@ -156,7 +156,7 @@ export default function AchievementsScreen() {
                 {stats.percentage}% Completed
               </h2>
               <p className="text-xs text-gray-500 mt-1">
-                Audited proof of civic, creative, and economic contributions to Arvdoul.
+                Verified record of civic, creative, and economic contributions to Arvdoul.
               </p>
             </div>
 

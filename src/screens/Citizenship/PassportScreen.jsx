@@ -318,7 +318,7 @@ export default function PassportScreen() {
                     )}
                   </div>
 
-                  {/* Cryptographic Hologram Shield */}
+                  {/* Verification Shield */}
                   <div className="absolute -bottom-2 -right-2 bg-gradient-to-tr from-amber-600 to-indigo-600 text-white p-1.5 rounded-xl shadow-lg border border-black/40">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
@@ -451,7 +451,7 @@ export default function PassportScreen() {
                     <span>Official Arvdoul Visa Stamps & Attestations</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Cryptographically stamped civic clearances and verified milestone seals.
+                    Verified civic clearances and milestone seals.
                   </p>
                 </div>
                 <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-xl border ${
@@ -685,7 +685,7 @@ export default function PassportScreen() {
         )}
 
         {/* ========================================================================= */}
-        {/* PAGE 4: BORDER CLEARANCE & CRYPTOGRAPHIC QR                               */}
+        {/* PAGE 4: BORDER CLEARANCE & PUBLIC PROFILE QR                              */}
         {/* ========================================================================= */}
         {activePage === 'clearance' && (
           <div className="space-y-4">
@@ -699,7 +699,7 @@ export default function PassportScreen() {
                   </span>
                   <h3 className="text-lg font-black mt-1">Instant State Attestation</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Present this cryptographic pass at physical border points or for peer citizen attestation.
+                    Present this QR pass to share your public profile and verified milestones.
                   </p>
                 </div>
 

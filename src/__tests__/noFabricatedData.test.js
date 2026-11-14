@@ -4449,3 +4449,24 @@ describe('N407 — notification/actor labels never say "Someone"/"Unknown"', () 
     }
   });
 });
+
+describe('N408 — no unbacked cryptographic / audit claims in the UI', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the passport border stamp is earned, not unconditionally verified', () => {
+    const s = read('src/services/passportService.js');
+    expect(s).not.toContain('Permanent right of passage and cryptographic peer clearance');
+    expect(s).toContain('const hasIdentityCredential = isVerified === true');
+    expect(s).toContain('issuedAt: hasIdentityCredential ? (issueDate');
+  });
+
+  test('no screen claims cryptographic stamping/attestation', () => {
+    for (const rel of [
+      'src/screens/Citizenship/PassportScreen.jsx',
+      'src/screens/Titles/TitlesScreen.jsx',
+      'src/screens/Achievements/AchievementsScreen.jsx',
+    ]) {
+      expect(read(rel).toLowerCase()).not.toContain('cryptograph');
+    }
+  });
+});
