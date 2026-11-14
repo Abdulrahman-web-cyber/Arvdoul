@@ -1061,7 +1061,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [handleReaction, closeReactionsPicker]);
 
   const postedDateTime = useMemo(() => {
-    try { return formatDistanceToNow(post.createdAt?.toDate?.() || new Date(post.createdAt), { addSuffix: true }); } catch { return 'just now'; }
+    // A post without a parseable createdAt has no posting time; return null so
+    // the header omits it rather than claiming it was posted "just now".
+    const date = post.createdAt?.toDate?.() || (post.createdAt ? new Date(post.createdAt) : null);
+    if (!date || Number.isNaN(date.getTime())) return null;
+    try { return formatDistanceToNow(date, { addSuffix: true }); } catch { return null; }
   }, [post.createdAt]);
 
   // Determine post type
@@ -1116,8 +1120,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           </div>
           <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: tokens.textSecondary }}>
             {post.authorUsername && <span>@{post.authorUsername}</span>}
-            {post.authorUsername && <span>·</span>}
-            <span>{postedDateTime}</span>
+            {post.authorUsername && postedDateTime && <span>·</span>}
+            {postedDateTime && <span>{postedDateTime}</span>}
             {post.visibility === 'public' && <Globe className="w-3 h-3" />}
             {post.visibility === 'followers' && <Users className="w-3 h-3" />}
           </div>

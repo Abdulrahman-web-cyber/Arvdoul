@@ -4104,3 +4104,25 @@ describe('N391 — PassportScreen renders "—" instead of a fabricated civic id
     expect(src).toMatch(/rankTitle \|\| '—'/);
   });
 });
+
+describe('N392 — missing timestamps are omitted, not claimed as "just now"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PostCard omits the posted-at label when createdAt is absent', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).not.toMatch(/catch \{ return 'just now'; \}/);
+    expect(s).toMatch(/postedDateTime && <span>\{postedDateTime\}<\/span>/);
+  });
+
+  test('CommentsDrawer renders no age rather than "just now" for a timeless comment', () => {
+    const s = read('src/screens/CommentsDrawer.jsx');
+    expect(s).not.toMatch(/if \(!comment\?\.createdAt\) return 'just now'/);
+    expect(s).toMatch(/\{timeAgo && <span/);
+  });
+
+  test('ProjectDetailScreen returns null for an absent timestamp', () => {
+    const s = read('src/screens/Collaboration/ProjectDetailScreen.jsx');
+    expect(s).not.toMatch(/if \(!value\) return 'just now'/);
+    expect(s).toMatch(/if \(!value\) return null;/);
+  });
+});

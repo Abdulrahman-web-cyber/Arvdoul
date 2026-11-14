@@ -846,11 +846,14 @@ const CommentItem = memo(({
   }, [childrenIds, byId, blockedUserIds, comment]);
 
   const timeAgo = useMemo(() => {
-    if (!comment?.createdAt) return 'just now';
+    // No createdAt means the comment's age is unknown; return '' so the header
+    // omits it rather than claiming the comment was posted "just now".
+    if (!comment?.createdAt) return '';
     try {
       const date = comment.createdAt?.toDate?.() || new Date(comment.createdAt);
+      if (Number.isNaN(date.getTime())) return '';
       return formatDistanceToNow(date, { addSuffix: true, locale: enUS });
-    } catch { return 'just now'; }
+    } catch { return ''; }
   }, [comment?.createdAt]);
 
   const avatarUrl = useMemo(() => {
@@ -913,7 +916,7 @@ const CommentItem = memo(({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-bold text-sm dark:text-white truncate">{comment.userName || 'User'}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>
+            {timeAgo && <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>}
             {comment.isEdited && (
               <button onClick={() => onToggleHistory(comment)} className="text-[10px] text-purple-400 underline hover:text-purple-600 transition-colors">edited</button>
             )}
