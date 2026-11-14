@@ -9,6 +9,7 @@ import { Coins, Heart, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } f
 import { cn } from '../../lib/utils';
 import { getMonetizationService } from '../../services/monetizationService.js';
 import { pickDisplayName } from '../../services/profileReadModel.js';
+import { newIdempotencyKey } from '../../utils/IdempotencyKey.js';
 import { toast } from 'sonner';
 
 const PRESET_AMOUNTS = [10, 50, 100, 250, 500, 1000];
@@ -72,6 +73,7 @@ export default function ProfileTipModal({
   };
 
   const handleSendTip = async () => {
+    if (submitting) return;
     if (!currentUserId) {
       toast.error('Please sign in to send a tip');
       return;
@@ -92,7 +94,10 @@ export default function ProfileTipModal({
     setSubmitting(true);
     try {
       const monetization = getMonetizationService();
-      const idempotencyKey = `tip_${currentUserId}_${recipientId}_${Date.now()}`;
+      // A tip is a per-intent money action: one stable key for this send, so a
+      // retry of the same intent debits once. `Date.now()` would mint a new key
+      // on every attempt and double-charge.
+      const idempotencyKey = newIdempotencyKey();
       
       await monetization.transferCoins(
         currentUserId,

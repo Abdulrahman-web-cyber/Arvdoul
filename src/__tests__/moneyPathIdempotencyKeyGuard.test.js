@@ -70,4 +70,14 @@ describe('money-path idempotency keys are retry-stable (N447)', () => {
     expect(marketplaceSvc).toMatch(/const idempotencyKey = newIdempotencyKey\(\)/);
     expect(marketplaceSvc).toMatch(/PURCHASE_MARKETPLACE_ITEM,\s*\{ productId, idempotencyKey \}/);
   });
+
+  test('the profile tip modal sends a stable per-intent key', () => {
+    const tipModal = read('src/components/profile/ProfileTipModal.jsx');
+    // A `Date.now()` key changes on every retry, so a committed-but-unacked
+    // tip would be charged twice.
+    expect(tipModal).not.toMatch(/idempotencyKey = `tip_\$\{[^}]*\}_\$\{[^}]*\}_\$\{Date\.now\(\)\}/);
+    expect(tipModal).toMatch(/const idempotencyKey = newIdempotencyKey\(\)/);
+    // ...and the send is re-entrancy-guarded so a double-tap cannot fire twice.
+    expect(tipModal).toMatch(/if \(submitting\) return;/);
+  });
 });
