@@ -10,6 +10,7 @@ import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatDuration, formatViewCount } from "../../utils/videoUtils";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import useDoubleTap from '../../hooks/useDoubleTap.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
@@ -837,7 +838,7 @@ const VideoCard = memo(({
             className="absolute top-0 bottom-0 left-0 rounded-full"
             style={{
               width: `${progress}%`,
-              background: 'linear-gradient(90deg, #a855f7 0%, #ec4899 50%, #06b6d4 100%)',
+              background: BRAND_GRADIENT,
             }}
           />
           {/* Glowing Slider Knob */}

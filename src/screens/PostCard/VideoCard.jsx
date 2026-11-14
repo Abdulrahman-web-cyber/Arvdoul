@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Settings, Share2, Info, ArrowUp, ArrowDown } from "lucide-react";
 import { FaHeart } from 'react-icons/fa6';
 import levelSystemService from '../../services/levelSystemService';
+import { tokens, BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // 1. GLOBAL FEED SCHEDULER (event‑driven, no polling, with cleanup)
 class FeedEventBus {
@@ -279,9 +280,9 @@ const formatTime = (sec) => {
 
 const haptic = (pattern = 10) => navigator.vibrate?.(pattern);
 
-const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #9333ea, #c026d3, #06b6d4)';
-const ARVDOUL_GLOW = '0 0 8px rgba(147,51,234,0.6)';
-const ARVDOUL_ACTIVE_GLOW = '0 0 0 1px rgba(147,51,234,0.35), 0 0 40px rgba(147,51,234,0.15)';
+const ARVDOUL_GRADIENT = BRAND_GRADIENT;
+const ARVDOUL_GLOW = `0 0 8px ${tokens.color.brand.violet}99`;
+const ARVDOUL_ACTIVE_GLOW = `0 0 0 1px ${tokens.color.brand.violet}59, 0 0 40px ${tokens.color.brand.violet}26`;
 const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
 
 const VIDEO_STATES = {
@@ -802,7 +803,7 @@ const VideoCard = React.memo(({
 
       {videoState === VIDEO_STATES.BUFFERING && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-transparent animate-spin" style={{ borderTopColor: '#c026d3', borderImage: ARVDOUL_GRADIENT, borderImageSlice: 1 }} />
+          <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-transparent animate-spin" style={{ borderTopColor: tokens.color.brand.violet, borderImage: ARVDOUL_GRADIENT, borderImageSlice: 1 }} />
         </div>
       )}
 

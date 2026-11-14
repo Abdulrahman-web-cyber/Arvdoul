@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { Sparkles, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -208,7 +209,7 @@ const PollCard = React.memo(({
   }, [currentUser, onVote, canVote, isMulti, optimisticOptions, optimisticTotal, optimisticUserVote,
       postId, onAnalytics, isVoting]);
 
-  const neonGradient = `linear-gradient(135deg, ${t.audioNeonPrimary || '#9333ea'}, ${t.audioNeonSecondary || '#c026d3'}, #ec4899)`;
+  const neonGradient = BRAND_GRADIENT;
   const buttonGlow = `0 0 4px rgba(236, 72, 153, 0.3)`; // reduced from 8px to 4px, lower opacity
   const cardShadow = t.shadowDirectional || '0 8px 20px -6px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.1)';
   const hoverShadow = '0 12px 28px -8px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2)';

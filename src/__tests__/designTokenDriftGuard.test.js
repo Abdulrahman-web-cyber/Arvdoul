@@ -42,6 +42,13 @@ const CANONICAL_LITERAL = /linear-gradient\(\s*135deg\s*,\s*#8B1EF3\s+0%\s*,\s*#
 // `#8B1EF3 → #4431F7 → #055BFB`; a `from-purple-600 via-pink-600` triple is a
 // second brand gradient and must not be introduced.
 const ROGUE_GRADIENT = /from-purple-600\s+via-pink-600\s+to-cyan-500/;
+// The SAME rogue gradient in raw-hex form: Tailwind purple-600 → fuchsia-600 →
+// cyan-500, plus the pink-500 / rose variants the post cards used as a
+// "neon purple" stand-in for the brand gradient. `#9333ea`/`#c026d3` were
+// re-declared as `ARVDOUL_GRADIENT` and in `getDesignTokens().actionBarBg`, so a
+// change to the canonical brand would silently miss every post card. They are
+// now migrated onto `BRAND_GRADIENT`; this pins them out.
+const ROGUE_GRADIENT_HEX = /#(?:9333ea|c026d3)\b/i;
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -69,6 +76,14 @@ describe('brand gradient — design system is the single source of truth (N104)'
     const offenders = [];
     for (const file of files) {
       if (ROGUE_GRADIENT.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('the rogue gradient never reappears in raw-hex form (#9333ea / #c026d3)', () => {
+    const offenders = [];
+    for (const file of files) {
+      if (ROGUE_GRADIENT_HEX.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
     }
     expect(offenders).toEqual([]);
   });
