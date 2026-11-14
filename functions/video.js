@@ -462,6 +462,54 @@ exports.shareVideo = onCall(async (data, context) => {
 });
 
 // ======================================================================
+//  5b. toggleVideoSave (authoritative saves counter)
+// ======================================================================
+// `videos/{id}.stats.saves` is seeded `0` at create and was never written: the
+// viewer's save state lives in `users/{uid}/saved_videos/{videoId}`, and the
+// video document update rule excludes `stats`, so no client could maintain the
+// aggregate. The video card and the reels screen render `stats.saves` as a real
+// count, so it was a permanent fabricated `0` (N436). The count is derived from
+// the `saved_videos` collection (a save exists iff the per-user doc exists), and
+// this callable is the only writer of the toggle — `stats` stays server-owned.
+exports.toggleVideoSave = onCall(async (data, context) => {
+  const uid = validateAuth(context);
+  const { videoId, save } = data;
+  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+
+  await checkRateLimit(uid, 'toggleVideoSave', 30, 60000);
+
+  try {
+    const videoRef = db.collection('videos').doc(videoId);
+    const savedRef = videoRef.collection('saved_by').doc(uid);
+
+    const result = await db.runTransaction(async (t) => {
+      const videoDoc = await t.get(videoRef);
+      if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+      const savedDoc = await t.get(savedRef);
+      const currentlySaved = savedDoc.exists;
+      const shouldSave = typeof save === 'boolean' ? save : !currentlySaved;
+
+      if (shouldSave === currentlySaved) {
+        return { saved: currentlySaved, action: 'noop' };
+      }
+      if (shouldSave) {
+        t.set(savedRef, { userId: uid, createdAt: FieldValue.serverTimestamp() });
+        t.update(videoRef, { 'stats.saves': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        return { saved: true, action: 'saved' };
+      }
+      t.delete(savedRef);
+      t.update(videoRef, { 'stats.saves': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+      return { saved: false, action: 'unsaved' };
+    });
+
+    return { success: true, ...result };
+  } catch (error) {
+    logger.error('toggleVideoSave', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ======================================================================
 //  6. recordVideoView (deduplicated)
 // ======================================================================
 exports.recordVideoView = onCall(async (data, context) => {

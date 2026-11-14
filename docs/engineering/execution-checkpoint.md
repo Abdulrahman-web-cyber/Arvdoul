@@ -635,11 +635,22 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **190 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N435 closed.
 
+## Continuation session 9 (N436 — video `stats.saves` had no writer)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N436 | `videos/{id}.stats.saves` is seeded `0` and never written. A viewer's save state lives in `users/{uid}/saved_videos/{videoId}`, and the `videos` update rule excludes `stats`, so no client could maintain the aggregate — yet `VideoCard` renders `formatViewCount(video.saves)` and `ReelsScreen` renders `stats.saves.toLocaleString()` as real counts. Permanent fabricated `0`. | New server-authoritative `toggleVideoSave` callable (rate-limited, transactional) is the only writer: it keys on `videos/{id}/saved_by/{uid}` (a save exists iff the doc exists), increments/decrements `stats.saves`, idempotent (no-op when the state already matches). Client `saveVideo`/`unsaveVideo` call it via `FUNCTIONS.TOGGLE_VIDEO_SAVE` (best-effort). New `saved_by` subcollection is server-internal (`allow read, write: if false`). New `videoSaveCounterSourceGuard.test.js` (guards job). |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **191 suites / 2090 passed / 5 skipped / 2095 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N436 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 190 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 191 suites green
 npm run build                 # green
 ```

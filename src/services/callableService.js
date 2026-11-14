@@ -127,6 +127,7 @@ export const FUNCTIONS = {
   CREATE_MUX_UPLOAD: 'createMuxUpload',
   LIKE_VIDEO: 'likeVideo',
   SHARE_VIDEO: 'shareVideo',
+  TOGGLE_VIDEO_SAVE: 'toggleVideoSave',
   RECORD_VIDEO_VIEW: 'recordVideoView',
   PAY_PER_VIEW: 'payPerView',
   SEND_TIP: 'sendTip',

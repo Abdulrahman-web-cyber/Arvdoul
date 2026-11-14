@@ -368,6 +368,7 @@ class UltimateVideoService {
         this.fns.getMuxPlaybackUrl = cf(FUNCTIONS.GET_MUX_PLAYBACK_URL);
         this.fns.likeVideo = cf(FUNCTIONS.LIKE_VIDEO);
         this.fns.shareVideo = cf(FUNCTIONS.SHARE_VIDEO);
+        this.fns.toggleVideoSave = cf(FUNCTIONS.TOGGLE_VIDEO_SAVE);
         this.fns.recordVideoView = cf(FUNCTIONS.RECORD_VIDEO_VIEW);
         this.fns.payPerView = cf(FUNCTIONS.PAY_PER_VIEW);
         this.fns.sendTip = cf(FUNCTIONS.SEND_TIP);
@@ -1017,6 +1018,16 @@ class UltimateVideoService {
           createdAt: data.createdAt || null,
         },
       });
+      // The `saved_videos` snapshot is private to the viewer; the public
+      // `videos/{id}.stats.saves` aggregate is server-owned (`stats` is excluded
+      // from the client video update rule), so it is maintained by the callable
+      // (N436). Best-effort: a save already persisted locally must not fail just
+      // because the counter call failed.
+      try {
+        await this.fns.toggleVideoSave({ videoId, save: true });
+      } catch (err) {
+        logger.warn('[videoService] save counter update failed', err?.message);
+      }
     }
     this.cache.invalidateVideo(videoId);
     return { success: true, alreadySaved };
@@ -1027,6 +1038,11 @@ class UltimateVideoService {
     if (!userId) throw new Error('userId is required to unsave a video');
     const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
     await deleteDoc(savedRef);
+    try {
+      await this.fns.toggleVideoSave({ videoId, save: false });
+    } catch (err) {
+      logger.warn('[videoService] save counter update failed', err?.message);
+    }
     this.cache.invalidateVideo(videoId);
     return { success: true };
   }

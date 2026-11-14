@@ -2017,6 +2017,14 @@ service cloud.firestore {
         allow read: if isSignedIn() && (parentVideo().userId == uid() || isAdmin());
         allow write: if false; // server-computed
       }
+      // Save records: the doc id is the saver's uid, written by the
+      // `toggleVideoSave` callable (admin SDK, rules bypassed). It is purely
+      // server-internal — a viewer's own save state is resolved from
+      // `users/{uid}/saved_videos` — so it is neither client-readable nor
+      // client-writable (a read would be a save-graph enumeration oracle).
+      match /saved_by/{saverId} {
+        allow read, write: if false; // server-owned (toggleVideoSave)
+      }
     }
 
     // ==================== COPYRIGHT REGISTRY ====================
