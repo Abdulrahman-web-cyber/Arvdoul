@@ -4258,3 +4258,19 @@ describe('N398 — profile surfaces render real identity or a neutral blank', ()
     expect(s).toContain("pickDisplayName([recipient?.displayName, recipient?.username], { fallback: null })");
   });
 });
+
+describe('N399 — poll options and event host never fabricate a label', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PollCard does not label a malformed option "Option"', () => {
+    const s = read('src/screens/PostCard/PollCard.jsx');
+    expect(s).not.toContain("text: opt.text ?? 'Option'");
+    expect(s).toContain("text: opt.text ?? '—'");
+  });
+
+  test('EventCard does not render "Unknown host" for a missing host', () => {
+    const s = read('src/screens/PostCard/EventCard.jsx');
+    expect(s).not.toContain("'Unknown host'");
+    expect(s).toContain("{hostDisplay || '—'}");
+  });
+});

@@ -222,7 +222,7 @@ const EventCard = React.memo(({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px]" style={{ color: tokens.textSecondary }}>
           <div className="flex items-center gap-1">
             <span>by</span>
-            <span className="font-medium" style={{ color: tokens.text }}>{hostDisplay || 'Unknown host'}</span>
+            <span className="font-medium" style={{ color: tokens.text }}>{hostDisplay || '—'}</span>
             {isVerified && <CheckCircle className="w-2.5 h-2.5 text-blue-400" />}
           </div>
           {event.location && (
