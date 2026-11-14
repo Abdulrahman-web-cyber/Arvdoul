@@ -83,7 +83,7 @@ const VideoComments = memo(({
             id: c.userId,
             // Never invent a handle: `deriveHandle` returns null for a
             // placeholder/absent value, and the render gates on it.
-            name: pickDisplayName([c.userName], { fallback: 'User' }),
+            name: pickDisplayName([c.userName], { fallback: null }) || `user ${String(c.userId || '').slice(0, 6)}`,
             username: deriveHandle(c.userUsername),
             avatar: c.userAvatar || null,
             isVerified: !!c.isVerified,

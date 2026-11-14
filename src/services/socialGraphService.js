@@ -390,7 +390,8 @@ class SocialGraphService {
 
   _normalizeProfile(raw) {
     if (!raw) return null;
-    const displayName = pickDisplayName([raw.displayName, raw.name], { fallback: 'Creator' });
+    const displayName = pickDisplayName([raw.displayName, raw.name], { fallback: null })
+      || `user ${String(raw.id || raw.uid || '').slice(0, 6)}`;
     const username = pickHandle([raw.username, raw.handle]) || '';
     const lastActive = raw.lastActive?.toDate ? raw.lastActive.toDate() : (raw.lastActive ? new Date(raw.lastActive) : null);
     const isRecent = Boolean(lastActive && Date.now() - lastActive.getTime() < 5 * 60 * 1000);

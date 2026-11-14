@@ -891,7 +891,8 @@ const ProfileFeedGrid = memo(({
         const isVid = item.type === 'video' || item.type === 'reel';
         const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
         const isLiked = Boolean(likedPosts[item.id]);
-        const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: 'Creator' });
+        const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: null })
+          || `user ${String(profile?.id || profile?.uid || item.authorId || '').slice(0, 6)}`;
         const authorAvatar = resolveAvatarUrl(profile?.photoURL || item.authorAvatar, authorName, profile?.id || profile?.uid || item.authorId);
         const handle = profile?.username ? `@${profile.username}` : '';
 

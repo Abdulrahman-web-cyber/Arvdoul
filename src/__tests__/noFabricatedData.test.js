@@ -4470,3 +4470,20 @@ describe('N408 — no unbacked cryptographic / audit claims in the UI', () => {
     }
   });
 });
+
+describe('N409 — graph/comment/feed surfaces never assert a generic "Creator"/"User"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('socialGraphService resolves an absent name to the uid prefix, not "Creator"', () => {
+    const s = read('src/services/socialGraphService.js');
+    expect(s).not.toContain("pickDisplayName([raw.displayName, raw.name], { fallback: 'Creator' })");
+    expect(s).toContain('`user ${String(raw.id || raw.uid || \'\').slice(0, 6)}`');
+  });
+
+  test('VideoComments and ProfileFeedGrid never fabricate an author name', () => {
+    const v = read('src/components/Videos/VideoComments.jsx');
+    expect(v).not.toContain("pickDisplayName([c.userName], { fallback: 'User' })");
+    const p = read('src/components/profile/ProfileFeedGrid.jsx');
+    expect(p).not.toContain("item.authorName], { fallback: 'Creator' })");
+  });
+});
