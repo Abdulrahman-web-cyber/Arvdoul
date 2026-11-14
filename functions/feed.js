@@ -360,10 +360,16 @@ async function processScoreUpdates(trendingOnly = false) {
   for (const doc of postsSnap.docs) {
     const post = doc.data();
     const postId = doc.id;
-    const likes = post.likeCount || 0;
-    const comments = post.commentCount || 0;
-    const shares = post.shareCount || 0;
-    const views = post.viewCount || 0;
+    // Engagement lives under `stats` (written by firestoreService and mirrored
+    // from the sharded counters by `aggregatePostCounters`). The previous
+    // top-level `likeCount`/`commentCount`/`shareCount`/`viewCount` reads are
+    // never written anywhere, so the engagement term was a constant 0 and every
+    // post ranked purely by recency (N433).
+    const stats = post.stats || {};
+    const likes = stats.likes || 0;
+    const comments = stats.comments || 0;
+    const shares = stats.shares || 0;
+    const views = stats.views || 0;
     const engagement = likes + comments * 2 + shares * 3 + views * 0.1;
     const createdAt = post.createdAt ? post.createdAt.toDate() : new Date();
     const ageHours = (now - createdAt) / (1000 * 60 * 60);

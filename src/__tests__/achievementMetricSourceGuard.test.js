@@ -57,12 +57,22 @@ describe('achievement metrics are computed from real data (N432)', () => {
     // comments.userId (commentService.createComment), poll_votes.userId
     // (polls.castVote), profile_views.viewerId (analytics.trackProfileView),
     // gift_transactions.senderId (monetization.sendGift), live_streams.userId
-    // (liveService.startLive).
+    // (liveService.startLive), posts.authorId (firestoreService.createPost).
     expect(metricsSrc).toMatch(/collection\('comments'\)\.where\('userId', '==', uid\)/);
     expect(metricsSrc).toMatch(/collection\('poll_votes'\)\.where\('userId', '==', uid\)/);
     expect(metricsSrc).toMatch(/collection\('profile_views'\)\.where\('viewerId', '==', uid\)/);
     expect(metricsSrc).toMatch(/collection\('gift_transactions'\)\.where\('senderId', '==', uid\)/);
     expect(metricsSrc).toMatch(/collection\('live_streams'\)\.where\('userId', '==', uid\)/);
+    expect(metricsSrc).toMatch(/collection\('posts'\)\.where\('authorId', '==', uid\)/);
+  });
+
+  test('likesCount/postsCount are computed (bounded count + sum, no scan)', () => {
+    // postsCount is a `.count()`; likesCount is a `.aggregate({ sum })` over
+    // `stats.likes` — a real number only because N433 mirrors the sharded
+    // counter onto it.
+    expect(metricsSrc).toMatch(/safeSum\(/);
+    expect(metricsSrc).toMatch(/sum: field/);
+    expect(metricsSrc).toMatch(/'stats\.likes'/);
   });
 
   test('the metric reads are bounded aggregations, not collection scans', () => {

@@ -70,6 +70,11 @@ require('./auth.js');
 require('./pushQueue.js');
 // Server-authoritative profile view analytics (trackProfileView callable).
 merge(require('./analytics.js'));
+// Authoritative post engagement counters (shard reader + scheduled mirror).
+// The scheduled `aggregatePostCounters` writes the sharded like/comment/share/
+// save sums back onto `posts/{postId}.stats` so ranking/search read real values
+// instead of the never-written seeded zeros (N433).
+merge(require('./postCounters.js'));
 // PII boundary backfill: moves legacy contact/verification/Stripe fields off
 // the world-readable users/{uid} doc into users_private/{uid}.
 merge(require('./privacyMigration.js'));
