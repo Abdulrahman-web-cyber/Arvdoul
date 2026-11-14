@@ -71,7 +71,7 @@ export default function ProfilePreviewScreen({
       handleFallbacks: [authUser?.email],
       handleFallback: 'citizen',
       displayCandidates: [p.displayName, p.name],
-      displayFallback: 'Arvdoul Citizen',
+      displayFallback: null,
       followerCandidates: [p.followerCount, p.followersCount],
       followingCandidates: [p.followingCount],
       postCandidates: [p.postCount, storePosts?.length],

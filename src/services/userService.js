@@ -475,19 +475,22 @@ class ProfessionalUserService {
       logger.warn('Auth instance unavailable while building profile', { userId, error: e?.message });
     }
 
+    // An identity with no stored name, no auth name and no email derives from
+    // the real uid prefix — the old 'Member'/'Creator' literal was a fabricated
+    // name (N405).
     full.displayName = (full.displayName && full.displayName !== 'User')
       ? full.displayName
       : (full.name && full.name !== 'User')
         ? full.name
         : (isSelfUser && authUser?.displayName)
           ? authUser.displayName
-          : (full.email ? full.email.split('@')[0] : (isSelfUser ? 'Member' : 'Creator'));
+          : (full.email ? full.email.split('@')[0] : `user ${String(userId).slice(0, 6)}`);
 
     full.username = (full.username && !full.username.startsWith('user_'))
       ? full.username
       : (isSelfUser && authUser?.email?.split('@')[0])
         ? authUser.email.split('@')[0]
-        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : 'creator')));
+        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : `user_${String(userId).slice(0, 6)}`)));
 
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
 

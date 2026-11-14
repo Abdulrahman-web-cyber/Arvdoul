@@ -4390,3 +4390,25 @@ describe('N404 — monetization stats do not fabricate a balance/level for an un
     expect(s).toContain('return { balance: null, level: null, totalTransactions: null };');
   });
 });
+
+describe('N405 — identity derivation never invents a civic/creator name', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('deriveProfileIdentity defaults to no fabricated display name', () => {
+    const s = read('src/services/profileReadModel.js');
+    expect(s).not.toContain("displayFallback = 'Citizen'");
+    expect(s).toContain('const displayName = resolvedDisplayName || (resolvedId ? `user ${String(resolvedId).slice(0, 6)}` : \'—\');');
+  });
+
+  test('public/preview screens pass a null display fallback', () => {
+    expect(read('src/screens/Profile/ProfilePublicScreen.jsx')).not.toContain("displayFallback: 'Creator'");
+    expect(read('src/screens/Profile/ProfilePreviewScreen.jsx')).not.toContain("displayFallback: 'Arvdoul Citizen'");
+  });
+
+  test('userService derives name/handle from the uid prefix, never Member/Creator/creator', () => {
+    const s = read('src/services/userService.js');
+    expect(s).not.toContain("(isSelfUser ? 'Member' : 'Creator')");
+    expect(s).not.toContain(": 'creator')");
+    expect(s).toContain('`user ${String(userId).slice(0, 6)}`');
+  });
+});

@@ -156,7 +156,9 @@ export function deriveProfileIdentity(profile = {}, opts = {}) {
     handleFallbacks = [],
     handleFallback = 'citizen',
     displayCandidates = [],
-    displayFallback = 'Citizen',
+    // No fabricated civic label: an identity with no real name resolves to the
+    // uid prefix below, never the literal 'Citizen'/'Creator' (N405).
+    displayFallback = null,
     followerCandidates = [],
     followingCandidates = [],
     postCandidates = [],
@@ -176,7 +178,8 @@ export function deriveProfileIdentity(profile = {}, opts = {}) {
   }
   if (!handle) handle = handleFallback;
 
-  const displayName = pickDisplayName(displayCandidates, { fallback: displayFallback });
+  const resolvedDisplayName = pickDisplayName(displayCandidates, { fallback: displayFallback });
+  const displayName = resolvedDisplayName || (resolvedId ? `user ${String(resolvedId).slice(0, 6)}` : '—');
   const level = resolveLevelValue(...levelCandidates);
 
   const identity = {

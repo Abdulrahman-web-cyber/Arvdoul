@@ -313,7 +313,7 @@ export default function ProfilePublicScreen() {
       handleFallbacks: [profileData.displayName, profileData.email],
       handleFallback: 'creator',
       displayCandidates: [profileData.displayName, profileData.name],
-      displayFallback: 'Creator',
+      displayFallback: null,
       followerCandidates: [profileData.followerCount, profileData.followersCount],
       followingCandidates: [profileData.followingCount],
       postCandidates: [posts?.length, profileData.postCount],
