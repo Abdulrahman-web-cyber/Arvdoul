@@ -578,3 +578,23 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **185 suite
 
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N424–N427 closed.
+
+## Continuation session 4 (N430 — royal-standing object/string mismatch + royal-benefit overclaim)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N430 | `setActiveTitle` (`functions/levelSystem.js`) stores `activeTitle` as an **object** (`{ id, name, icon, domain }`), but `ProfileHeroSection` and `EditProfileScreen` compared `profile.activeTitle === 'duke' / 'king'` — a string compare against an object, always false. Every legitimately-granted royal title was therefore invisible (no Royal Family badge, no heraldic editor section). `ProfileHeroSection`'s fallback string compare over `activeTitle`/`titles` shared the defect. Separately the `ProfileSystemRoadmapModal` Duke/King privilege lists promised a “Royal Crown Profile Badge with ambient violet profile aura”, a “Golden Monarch Crown & Radiant Halo Frame on avatar across all screens” and “Royal Standing recorded in your citizenship standing” — none of which the platform renders (the crest aura is a level-unlocked ring, there is no golden halo cosmetic, and standing lives in the passport). | `profileReadModel` gained `resolveActiveTitleId` (object *and* string shapes) and `resolveRoyalFlag` (canonical flags → active-title id → denormalized `titles` array); `ProfileHeroSection`/`EditProfileScreen` consume them; the roadmap lists only rendered benefits (Royal Family badge, title on profile, standing in the passport). |
+
+Verified: `npx eslint src functions` exit 0 (0 errors, warnings only); full jest suite **185 suites / 2056 passed / 5 skipped / 2061 total** green; `npm run build` green. New `profileReadModel.test.js` cases (`resolveActiveTitleId`, `resolveRoyalFlag`) and a `noFabricatedData.test.js` (N430) guard pin both the read-model resolution and the corrected roadmap copy.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N270 is NOT_AN_ISSUE. N424–N430 closed.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 185 suites green
+npm run build                 # green
+```

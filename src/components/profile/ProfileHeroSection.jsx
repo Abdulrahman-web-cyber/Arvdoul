@@ -19,7 +19,7 @@ import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Sha
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickHandle, deriveHandle, pickDisplayName } from '../../services/profileReadModel.js';
+import { pickHandle, deriveHandle, pickDisplayName, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
@@ -349,9 +349,10 @@ export const ProfileHeroSection = memo(({
 
   // Royal status determination per shared level system
   const isRoyal = useMemo(() => {
-    if (profile?.isRoyal || profile?.royalFamily) return true;
-    if (profile?.activeTitle && ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(profile.activeTitle).toLowerCase())) return true;
-    if (Array.isArray(profile?.titles) && profile.titles.some(t => ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(t).toLowerCase()))) return true;
+    // The canonical flags and the active-title *object* the server writes
+    // (`activeTitle: { id, name, … }`) are resolved by the read model. A raw
+    // `activeTitle === 'duke'` string compare missed every granted title.
+    if (resolveRoyalFlag(profile)) return true;
     // Unknown dimensions stay null; `getRoyalEligibility` clamps internally and
     // fails closed, so an unmeasured profile is denied for the right reason
     // (no data) rather than because it was laundered into a measured 0.

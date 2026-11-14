@@ -292,6 +292,49 @@ export const ACHIEVEMENT_FIELDS = Object.freeze(['achievements', 'achievementsCo
 /** Title fields gated by their own `titles` scope. */
 export const TITLE_FIELDS = Object.freeze(['titles', 'activeTitle', 'primaryTitle']);
 
+/** Royal / noble title ids (a title *name* is never matched — only its id). */
+export const ROYAL_TITLE_IDS = Object.freeze(['king', 'queen', 'duke', 'duchess', 'sovereign']);
+
+/**
+ * The id of the active title, resolved from either the object shape the server
+ * writes (`activeTitle: { id, name, icon, domain }` from `setActiveTitle`) or a
+ * bare string (a legacy or hand-written value). Returns null when neither is a
+ * usable id. A raw `profile.activeTitle === 'duke'` comparison silently missed
+ * every real title, because the stored value is an object.
+ */
+export function resolveActiveTitleId(profile = {}) {
+  const active = profile?.activeTitle;
+  if (active && typeof active === 'object') {
+    const id = normalizeString(active.id);
+    if (id !== null) return id.toLowerCase();
+    const name = normalizeString(active.name);
+    return name !== null ? name.toLowerCase() : null;
+  }
+  const asString = normalizeString(active);
+  return asString !== null ? asString.toLowerCase() : null;
+}
+
+/**
+ * True when the profile holds a royal/noble title. Reads the canonical flag
+ * fields first, then the active title id (object or string) — never a raw
+ * `activeTitle === 'duke'` string compare against the stored object.
+ */
+export function resolveRoyalFlag(profile = {}) {
+  if (!profile) return false;
+  if (profile.isRoyal || profile.isRoyalFamily || profile.isDucal) return true;
+  const id = resolveActiveTitleId(profile);
+  if (id !== null && ROYAL_TITLE_IDS.includes(id)) return true;
+  // A denormalized `titles` array may hold ids/objects (or bare strings).
+  if (Array.isArray(profile.titles)) {
+    return profile.titles.some((t) => {
+      const candidate = t && typeof t === 'object' ? (t.id ?? t.titleId ?? t.name) : t;
+      const cleaned = normalizeString(candidate);
+      return cleaned !== null && ROYAL_TITLE_IDS.includes(cleaned.toLowerCase());
+    });
+  }
+  return false;
+}
+
 /**
  * Apply the capability decision exactly once. The view layer must consume the
  * result rather than re-checking privacy, so a section can never render while
@@ -402,6 +445,8 @@ export default {
   readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
+  resolveActiveTitleId,
+  resolveRoyalFlag,
   deriveProfileIdentity,
   projectProfileForViewer,
 };

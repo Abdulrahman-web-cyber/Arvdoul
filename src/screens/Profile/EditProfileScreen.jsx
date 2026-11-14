@@ -56,7 +56,7 @@ import {
   PROFILE_CONSTRAINTS, 
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
-import { isPlaceholderHandle, resolveCreatorFlag } from '../../services/profileReadModel.js';
+import { isPlaceholderHandle, resolveCreatorFlag, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
@@ -114,10 +114,7 @@ export default function EditProfileScreen() {
   const isCreatorAccount = resolveCreatorFlag(userProfile || {}, user || {}, userLevel);
 
   const isRoyalOrNoble = Boolean(
-    userProfile?.isRoyalFamily ||
-    userProfile?.isDucal ||
-    userProfile?.activeTitle === 'duke' ||
-    userProfile?.activeTitle === 'king' ||
+    resolveRoyalFlag(userProfile) ||
     (userLevel != null && userLevel >= LEVEL_GATES.sovereign)
   );
 

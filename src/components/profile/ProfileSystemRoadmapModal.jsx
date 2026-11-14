@@ -584,15 +584,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <ul className="text-xs space-y-1.5 text-slate-400">
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>👑 Royal Crown Profile Badge</strong> with ambient violet profile aura.</span>
+                        <span><strong>👑 Royal Family badge</strong> on your profile, opening this standing panel.</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>⚜️ Duke / Duchess Title</strong> presented on your profile across the app.</span>
+                        <span><strong>⚜️ Duke / Duchess title</strong> presented on your profile across the app.</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>🏛️ Royal Standing</strong> recorded in your citizenship standing.</span>
+                        <span><strong>Royal standing</strong> recorded in your citizenship passport.</span>
                       </li>
                     </ul>
                   </div>
@@ -646,15 +646,11 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <ul className="text-xs space-y-1.5 text-slate-400">
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>👑 Golden Monarch Crown & Radiant Halo Frame</strong> on avatar across all screens.</span>
+                        <span><strong>👑 King / Queen title</strong> presented on your profile across the app.</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>👑 King / Queen Title</strong> presented on your profile across the app.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>⭐ Supreme Sovereign Standing</strong> recorded in your citizenship standing.</span>
+                        <span><strong>⭐ Supreme Sovereign standing</strong> recorded in your citizenship passport.</span>
                       </li>
                     </ul>
                   </div>

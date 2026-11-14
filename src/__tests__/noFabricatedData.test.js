@@ -4916,3 +4916,28 @@ describe('N426 — the Digital Passport reports the real account status', () => 
     expect(svc).toContain('accountStatus: (profile.accountStatus || profile.accountState || null)');
   });
 });
+
+describe('N430 — royal standing resolves the stored title object, not a string', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileHeroSection and EditProfileScreen resolve royal standing via the read model', () => {
+    const hero = read('src/components/profile/ProfileHeroSection.jsx');
+    // `setActiveTitle` writes `activeTitle` as an object; the old raw
+    // `activeTitle === 'duke'` string compare never matched a granted title.
+    expect(hero).toContain('resolveRoyalFlag(profile)');
+    expect(hero).not.toMatch(/\.activeTitle\s*===/);
+    const edit = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(edit).toContain('resolveRoyalFlag(userProfile)');
+    expect(edit).not.toMatch(/\.activeTitle\s*===/);
+  });
+
+  test('the roadmap modal advertises only the royal benefits the platform renders', () => {
+    const m = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    // There is no golden halo frame, no separate crown badge and no ambient
+    // violet aura unlocked by royal standing — the aura is a level-unlocked
+    // crest ring and the title renders as a badge + a passport field.
+    expect(m).not.toContain('Radiant Halo');
+    expect(m).not.toContain('ambient violet profile aura');
+    expect(m).toContain('Royal Family badge');
+  });
+});

@@ -25,6 +25,8 @@ import {
   readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
+  resolveActiveTitleId,
+  resolveRoyalFlag,
   deriveProfileIdentity,
   projectProfileForViewer,
   OFFLINE_PRESENCE,
@@ -108,6 +110,35 @@ describe('profileReadModel - standing flags', () => {
     expect(resolveVerifiedFlag({ isVerified: true })).toBe(true);
     expect(resolveVerifiedFlag({ verified: true })).toBe(true);
     expect(resolveVerifiedFlag({})).toBe(false);
+  });
+
+  it('active-title id resolves the object the server writes, not just a string', () => {
+    // setActiveTitle stores `activeTitle: { id, name, icon, domain }`.
+    expect(resolveActiveTitleId({ activeTitle: { id: 'duke', name: 'Duke' } })).toBe('duke');
+    expect(resolveActiveTitleId({ activeTitle: { name: 'King / Queen' } })).toBe('king / queen');
+    // Legacy / hand-written string form still resolves.
+    expect(resolveActiveTitleId({ activeTitle: 'duke' })).toBe('duke');
+    expect(resolveActiveTitleId({ activeTitle: {} })).toBeNull();
+    expect(resolveActiveTitleId({})).toBeNull();
+  });
+
+  it('royal flag reads the canonical fields and the active-title object', () => {
+    expect(resolveRoyalFlag({ isRoyalFamily: true })).toBe(true);
+    expect(resolveRoyalFlag({ isRoyal: true })).toBe(true);
+    expect(resolveRoyalFlag({ isDucal: true })).toBe(true);
+    // The object shape must be honoured — the raw `activeTitle === 'duke'`
+    // string compare this replaced missed every granted title.
+    expect(resolveRoyalFlag({ activeTitle: { id: 'duke' } })).toBe(true);
+    expect(resolveRoyalFlag({ activeTitle: { id: 'king' } })).toBe(true);
+    expect(resolveRoyalFlag({ activeTitle: 'duchess' })).toBe(true);
+    // A non-royal title or no title is not royal.
+    expect(resolveRoyalFlag({ activeTitle: { id: 'citizen' } })).toBe(false);
+    // A denormalized `titles` array (ids, objects or strings) is honoured.
+    expect(resolveRoyalFlag({ titles: [{ id: 'duke' }] })).toBe(true);
+    expect(resolveRoyalFlag({ titles: ['king'] })).toBe(true);
+    expect(resolveRoyalFlag({ titles: [{ titleId: 'duchess' }] })).toBe(true);
+    expect(resolveRoyalFlag({ titles: ['citizen'] })).toBe(false);
+    expect(resolveRoyalFlag({})).toBe(false);
   });
 
   it('avatar falls back to a deterministic SVG, never an empty string', () => {
