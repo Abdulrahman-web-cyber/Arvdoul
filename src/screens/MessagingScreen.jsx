@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { Search, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
 
@@ -430,12 +431,12 @@ export default function MessagingScreen() {
                       <img src={req.senderAvatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-purple-600/40 flex items-center justify-center text-sm font-bold text-white shrink-0">
-                        {(req.senderName || '?').charAt(0).toUpperCase()}
+                        {pickDisplayName([req.senderName], { fallback: req.senderId ? String(req.senderId).slice(0, 2).toUpperCase() : '—' }).charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0">
                       <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {req.senderName || 'Unknown user'}
+                        {pickDisplayName([req.senderName], { fallback: req.senderId ? `user ${String(req.senderId).slice(0, 6)}` : '—' })}
                       </p>
                       <p className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
                         wants to message you

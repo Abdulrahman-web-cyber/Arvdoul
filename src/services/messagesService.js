@@ -7,6 +7,7 @@
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
+import { pickDisplayName } from './profileReadModel.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import {
@@ -2781,7 +2782,9 @@ class UltimateMessagingService {
       id,
       conversationId,
       senderId: sender.uid,
-      senderName: sender.displayName || 'User',
+      // Identity is stored only when real; a nameless sender stays null so the
+      // reader can resolve the participant rather than assert a generic 'User'.
+      senderName: pickDisplayName([sender.displayName, sender.username], { fallback: null }),
       senderPhoto: sender.photoURL || null,
       type: validated.type,
       content: encryptedPayload ? null : validated.content,

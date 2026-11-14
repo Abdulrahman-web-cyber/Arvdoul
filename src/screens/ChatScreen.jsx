@@ -32,6 +32,7 @@ import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply } from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -539,6 +540,19 @@ export default function ChatScreen() {
     }
   }, [uid, conversationId]);
 
+  // A message's sender label is the real participant name, else the uid prefix —
+  // never a generic 'User'. `senderName` on the doc may itself be null (we no
+  // longer write a fabricated one), so fall through to the uid.
+  const resolveSenderLabel = useCallback((msg, isOwn) => {
+    if (isOwn) return 'You';
+    const resolved = pickDisplayName(
+      [conversation?.participantNames?.[msg.senderId], msg.senderName],
+      { fallback: null },
+    );
+    if (resolved) return resolved;
+    return msg.senderId ? `user ${String(msg.senderId).slice(0, 6)}` : '—';
+  }, [conversation]);
+
   // Reply / Edit / Forward / Pin handlers. MessageBubble renders these menu
   // actions unconditionally, so a missing handler was a control that did
   // nothing when tapped.
@@ -546,10 +560,10 @@ export default function ChatScreen() {
     setReplyTo({
       id: msg.id,
       senderId: msg.senderId,
-      senderName: msg.senderId === uid ? 'You' : (conversation?.participantNames?.[msg.senderId] || msg.senderName || 'User'),
+      senderName: resolveSenderLabel(msg, msg.senderId === uid),
       content: msg.content || '',
     });
-  }, [uid, conversation]);
+  }, [uid, conversation, resolveSenderLabel]);
 
   const handleEdit = useCallback(async (msg) => {
     const next = window.prompt('Edit message', msg.content || '');
@@ -785,7 +799,7 @@ export default function ChatScreen() {
               key={`${msg.id}-bubble`}
               message={msg}
               isOwn={isOwn}
-              senderName={conversation?.participantNames?.[msg.senderId] || (isOwn ? 'You' : 'User')}
+              senderName={resolveSenderLabel(msg, isOwn)}
               senderAvatar={conversation?.participantAvatars?.[msg.senderId]}
               onReaction={handleReaction}
               onDelete={async () => {
@@ -961,7 +975,7 @@ export default function ChatScreen() {
                         )}
                       >
                         <span className="text-gray-400 block mb-0.5">
-                          {m.senderName || 'User'} · {m.createdAt?.toDate ? format(m.createdAt.toDate(), 'p') : ''}
+                          {resolveSenderLabel(m, m.senderId === uid)} · {m.createdAt?.toDate ? format(m.createdAt.toDate(), 'p') : ''}
                         </span>
                         <span className="line-clamp-2">{m.content || '(media message)'}</span>
                       </button>
@@ -1009,7 +1023,7 @@ export default function ChatScreen() {
                           )}
                         >
                           <span className="text-gray-400 block mb-0.5">
-                            {r.senderName || 'User'} · {r.createdAt?.toDate ? format(r.createdAt.toDate(), 'p') : ''}
+                            {resolveSenderLabel(r, r.senderId === uid)} · {r.createdAt?.toDate ? format(r.createdAt.toDate(), 'p') : ''}
                           </span>
                           <span className="line-clamp-2">{r.content || '(media message)'}</span>
                         </button>

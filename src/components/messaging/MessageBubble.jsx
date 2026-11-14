@@ -129,7 +129,7 @@ const MessageBubble = React.memo(({
             />
           ) : (
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 text-[10px] text-white flex items-center justify-center font-bold">
-              {(senderName?.[0] || 'U').toUpperCase()}
+              {(senderName?.[0] || '?').toUpperCase()}
             </div>
           )}
         </div>

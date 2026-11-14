@@ -4289,3 +4289,38 @@ describe('N400 — marketplace seller + review count are real or absent', () => 
     expect(src).toContain("unknownNumber(prod.reviewsCount) != null");
   });
 });
+
+describe('N401 — messaging/call identity is real or a uid prefix', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('messagesService stores senderName only when real', () => {
+    const s = read('src/services/messagesService.js');
+    expect(s).not.toContain("senderName: sender.displayName || 'User'");
+    expect(s).toContain("senderName: pickDisplayName([sender.displayName, sender.username], { fallback: null })");
+  });
+
+  test('callService never labels an unresolved peer "User"', () => {
+    const s = read('src/services/callService.js');
+    expect(s).not.toContain("name: 'User'");
+    expect(s).not.toContain("profile.displayName || profile.username || 'User'");
+    expect(s).toContain("pickDisplayName([profile.displayName, profile.username]");
+  });
+
+  test('ChatScreen resolves sender labels, never a generic "User"', () => {
+    const s = read('src/screens/ChatScreen.jsx');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).toContain('resolveSenderLabel');
+  });
+
+  test('MessagingScreen request rows resolve a real name or uid prefix', () => {
+    const s = read('src/screens/MessagingScreen.jsx');
+    expect(s).not.toContain("req.senderName || 'Unknown user'");
+    expect(s).toContain("pickDisplayName([req.senderName]");
+  });
+
+  test('MessageBubble fallback initial is neutral, not "U"', () => {
+    const s = read('src/components/messaging/MessageBubble.jsx');
+    expect(s).not.toContain("(senderName?.[0] || 'U')");
+    expect(s).toContain("(senderName?.[0] || '?')");
+  });
+});
