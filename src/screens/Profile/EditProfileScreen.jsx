@@ -278,8 +278,16 @@ export default function EditProfileScreen() {
         uniqueUser = `${cleanBase}_${suffix}`;
       }
       setFormData(prev => ({ ...prev, username: uniqueUser }));
-      setUsernameAvailability('available');
-      toast.success(`Generated unique handle: @${uniqueUser}`);
+      // `generateUniqueUsername` may fall back to a time/random-suffixed handle
+      // without re-querying availability, so verify before claiming it is free.
+      setUsernameAvailability('checking');
+      try {
+        const res = await userService.checkUsernameAvailability(uniqueUser);
+        setUsernameAvailability(res?.available ? 'available' : 'taken');
+      } catch {
+        setUsernameAvailability('error');
+      }
+      toast.success(`Generated handle: @${uniqueUser}`);
     } catch (e) {
       console.warn('Generate username err:', e);
       toast.error('Could not generate unique username');
@@ -807,7 +815,7 @@ export default function EditProfileScreen() {
                         ? "bg-arvdoul-purple/20 hover:bg-arvdoul-purple/30 text-[#B978FF] border border-arvdoul-purple/30" 
                         : "bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-200"
                     )}
-                    title="Generate a guaranteed unique username via userService"
+                    title="Suggest an available username"
                   >
                     <Sparkles className={cn("w-3 h-3", isGeneratingUsername && "animate-spin")} />
                     <span>Auto-Generate</span>

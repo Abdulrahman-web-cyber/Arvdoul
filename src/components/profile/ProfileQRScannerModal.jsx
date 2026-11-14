@@ -6,7 +6,7 @@
  * - Real-time camera viewfinder with laser scan sweep and optical target frame
  * - Hardware acceleration using BarcodeDetector API when available
  * - File upload scanning (upload screenshot or photo of QR code)
- * - Manual Arvdoul Global ID / Username input as 100% reliable fallback
+ * - Manual Arvdoul Global ID / Username input (works without a camera)
  * - Instant parsing & direct profile navigation
  * 
  * @component

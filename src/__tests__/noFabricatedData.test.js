@@ -4246,10 +4246,11 @@ describe('N398 — profile surfaces render real identity or a neutral blank', ()
     expect(s).toContain("pickHandle([profile?.username, profile?.handle]) || ''");
   });
 
-  test('ProfileAvatar accessible name is not the generic "User"', () => {
+  test('ProfileAvatar accessible name carries no invented identity label', () => {
     const s = read('src/components/profile/ProfileAvatar.jsx');
     expect(s).not.toContain("name || 'User'");
-    expect(s).toContain("name || 'Member'");
+    expect(s).not.toContain("name || 'Member'");
+    expect(s).toContain("aria-label={name ? `${name}'s avatar");
   });
 
   test('ProfileTipModal records real party names, never "Creator"/"Supporter"', () => {
@@ -4555,5 +4556,34 @@ describe('N413 — profile/reel surfaces do not label an unknown author as "Crea
   test('ProfileVerificationModal submits a resolved applicant name, not a generic "Creator"', () => {
     const s = read('src/components/profile/ProfileVerificationModal.jsx');
     expect(s).not.toContain("applicantName: profile.displayName || 'Creator'");
+  });
+
+  test('avatar/video-creator surfaces do not label an unknown person "Member"/"Creator"', () => {
+    const avatar = read('src/components/profile/ProfileAvatar.jsx');
+    expect(avatar).not.toContain("'Member'");
+    const info = read('src/components/Videos/VideoCreatorInfo.jsx');
+    expect(info).not.toContain("creator.name || 'Creator'");
+    const modal = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(modal).not.toContain("pendingApplication.category || 'Creator'");
+  });
+});
+
+describe('N414 — username generator and identity copy do not assert unverified uniqueness', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('EditProfileScreen re-checks availability instead of claiming "guaranteed unique"', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).not.toContain('title="Generate a guaranteed unique username via userService"');
+    expect(s).not.toContain("setFormData(prev => ({ ...prev, username: uniqueUser }));\n      setUsernameAvailability('available');");
+    expect(s).toContain('const res = await userService.checkUsernameAvailability(uniqueUser);');
+  });
+
+  test('QR scanner / QR modal drop the "100% reliable"/"100% unique" claims', () => {
+    expect(read('src/components/profile/ProfileQRScannerModal.jsx')).not.toContain('100% reliable');
+    expect(read('src/components/profile/ProfileQRCodeModal.jsx')).not.toContain('100% unique global identity code');
+  });
+
+  test('userService does not describe a random-suffixed handle as "guaranteed"', () => {
+    expect(read('src/services/userService.js')).not.toContain('// Guaranteed fallback');
   });
 });

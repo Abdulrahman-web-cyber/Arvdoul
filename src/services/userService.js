@@ -345,7 +345,7 @@ class ProfessionalUserService {
       const found = results.find(r => r.available);
       if (found) return found.candidate;
 
-      // Guaranteed fallback
+      // Last-resort fallback (the candidate list was exhausted)
       const basePrefix = validCandidates[0] ? validCandidates[0].slice(0, 10) : 'arv_user';
       return `${basePrefix}_${Date.now().toString(36).slice(-4)}${Math.random().toString(36).substring(2, 4)}`.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
     } catch (error) {

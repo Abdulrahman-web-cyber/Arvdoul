@@ -269,7 +269,7 @@ export const ProfileVerificationModal = memo(({
                     isDark ? "bg-white/[0.03] border-white/10" : "bg-slate-50 border-slate-200"
                   )}>
                     <div className="text-[11px] text-slate-400 font-semibold">Submitted Category</div>
-                    <div className="font-bold">{pendingApplication.category || 'Creator'}</div>
+                    <div className="font-bold">{pendingApplication.category || '—'}</div>
                     {pendingApplication.reason && (
                       <>
                         <div className="text-[11px] text-slate-400 font-semibold pt-1">Statement</div>

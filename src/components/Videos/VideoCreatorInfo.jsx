@@ -34,7 +34,7 @@ const VideoCreatorInfo = memo(({
         >
           <img
             src={creator.avatar || '/assets/default-profile.png'}
-            alt={creator.name || 'Creator'}
+            alt={creator.name || ''}
             className="w-12 h-12 rounded-full border-2 border-white object-cover"
           />
           {creator.isVerified && (

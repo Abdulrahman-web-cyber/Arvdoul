@@ -139,7 +139,7 @@ const ProfileQRCodeModal = memo(({
             </div>
             <h3 className="text-lg font-bold">Universal Profile QR</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              100% unique global identity code
+              Scannable link to your profile
             </p>
           </div>
 
