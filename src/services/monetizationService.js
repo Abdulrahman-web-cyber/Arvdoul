@@ -484,7 +484,9 @@ class MonetizationService {
   }
 
   async getMonetizationStats(userId) {
-    if (!userId) return { balance: 0, level: { level: 1, progress: 0 }, totalTransactions: 0 };
+    // No uid means nothing is known: a fabricated `balance: 0` / `level: 1`
+    // would render as a measured empty account. Unknown stays null (N404).
+    if (!userId) return { balance: null, level: null, totalTransactions: null };
     const [balance, levelInfo, history] = await Promise.all([
       this.getBalance(userId),
       this.getUserLevel(userId),

@@ -4382,3 +4382,11 @@ describe('N403 — remaining identity placeholders are resolved or neutral', () 
     expect(s).toContain("pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'Member' })");
   });
 });
+
+describe('N404 — monetization stats do not fabricate a balance/level for an unknown uid', () => {
+  test('getMonetizationStats returns null (unknown), never balance 0 / level 1', () => {
+    const s = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(s).not.toContain("return { balance: 0, level: { level: 1, progress: 0 }, totalTransactions: 0 };");
+    expect(s).toContain('return { balance: null, level: null, totalTransactions: null };');
+  });
+});
