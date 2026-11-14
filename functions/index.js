@@ -89,6 +89,10 @@ merge(require('./communities.js'));
 // feedback). The rule only lets the organizer update the event document, so
 // these cross-user mutations must go through callables.
 merge(require('./events.js'));
+// Community `stats.eventCount` trigger (N434): the community document is
+// server-write-only, so the derived "Events" counter must be maintained here
+// (a client cannot write it). Counts published/open/live/ended events only.
+merge(require('./eventCounters.js'));
 // Server-authoritative collaboration projects (team roles, content versions,
 // review/publish). Membership is privilege data; the client never writes the
 // project document or its team/content subcollections.

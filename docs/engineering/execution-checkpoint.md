@@ -613,11 +613,22 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **188 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N433 closed.
 
+## Continuation session 7 (N434 — community `stats.eventCount` had no writer)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N434 | `communities/{communityId}.stats.eventCount` is seeded `0` at community create (`functions/communities.js#createCommunity`) and **never written again** (`postCount`/`memberCount` have writers; `eventCount` does not), yet `CommunityDetailScreen.jsx` renders it as the community "Events" stat and `communityService.getCommunityStats` reads it. Every community therefore showed a fabricated "Events 0" regardless of member activity — the same counter-with-no-writer class as N431/N433. Events carry a `communityId` (client `eventService.createEvent`), so the count is derivable, but the community document is server-write-only so the derived counter must come from a server trigger. | New `functions/eventCounters.js#onEventWrite` (firestore `events/{eventId}` `onWrite`) applies a **net delta** to the owning community's `stats.eventCount` (`-1` before / `+1` after; a status-only or registration write cancels to zero, so no community is read or written). `COUNTED_EVENT_STATUSES = ['published','open','live','ended']` (draft/cancelled do not count; cancel/delete decrements). One batched `db.getAll` + one `db.batch`; **only counts toward a community the organizer is a member of** (forgery guard). New `communityEventCountSourceGuard.test.js` (guards job) pins the merge, trigger shape, net-delta logic, status set, membership guard and the real UI consumer. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **189 suites / 2081 passed / 5 skipped / 2086 total** green; `npm run build` green. Also created `docs/engineering/implementation-plan-30.md` (the 30-task/sub-task working plan).
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N434 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 187 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 189 suites green
 npm run build                 # green
 ```

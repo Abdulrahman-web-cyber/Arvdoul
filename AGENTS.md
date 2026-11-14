@@ -545,6 +545,17 @@ pure recency (N433). The server shard hash + doc-id layout must stay
 byte-identical to `src/utils/CountersManager.js`. `postCounterSourceGuard.test.js`
 (guards job) pins all of this.
 
+## Derived counters are written by a server trigger, never seeded and forgotten
+`communities/{communityId}.stats.eventCount` was seeded `0` at community create and
+never written, so the community "Events" card showed a permanent `0` (N434). The
+community document is server-write-only, so a derived counter that a client cannot
+maintain must be maintained by a `functions/*.js` trigger: `functions/eventCounters.js`
+(`onEventWrite` on `events/{eventId}`) applies a **net delta** (`-1` before, `+1` after;
+a write that does not change the counted status cancels to zero) and only counts an
+event toward a community the organizer is a member of. When you seed a `stats.*`
+counter, add the writer in the same change — a seeded counter with no writer is a
+fabricated `0`. `communityEventCountSourceGuard.test.js` (guards job) pins this.
+
 ## No fabricated security claims
 Do not render a "secure"/"encrypted" claim a feature cannot back. Messaging has
 no key provisioning (`generateUserKeys`/`unlockPrivateKey` have no caller and no

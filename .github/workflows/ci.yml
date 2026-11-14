@@ -391,6 +391,7 @@ jobs:
           src/__tests__/followerCounterSourceGuard.test.js
           src/__tests__/achievementMetricSourceGuard.test.js
           src/__tests__/postCounterSourceGuard.test.js
+          src/__tests__/communityEventCountSourceGuard.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
       # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the
