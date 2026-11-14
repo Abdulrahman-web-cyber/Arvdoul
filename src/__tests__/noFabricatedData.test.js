@@ -2625,6 +2625,7 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
       'src/screens/LoginScreen.jsx',
       'src/screens/ForgotPassword.jsx',
       'src/screens/VerifyEmailScreen.jsx',
+      'src/screens/ResetPassword.jsx',
     ]) {
       const s = read(file);
       expect(s).not.toMatch(/[Ee]nd-to-end encrypted/i);
