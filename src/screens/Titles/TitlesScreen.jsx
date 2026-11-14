@@ -112,7 +112,12 @@ export default function TitlesScreen() {
     });
   }, [catalog, selectedDomain]);
 
-  const activeTitleObj = catalog[activeTitleId] || { name: profile?.primaryTitle || 'Resident', icon: '🏛️' };
+  // The active title is only what the profile actually holds. A user with no
+  // granted title renders the honest empty state rather than the Level-1
+  // 'Resident' standing the platform has not yet granted them.
+  const activeTitleObj = profile?.primaryTitle
+    ? (catalog[activeTitleId] || { name: profile.primaryTitle, icon: null })
+    : null;
 
   if (loading) {
     return (
@@ -138,7 +143,7 @@ export default function TitlesScreen() {
               )}
             </h2>
             <p className="text-xs text-gray-500">
-              Active: {profile?.primaryTitle || activeTitleObj.name || 'Resident'} · {earnedTitles.length} Earned Titles
+              Active: {profile?.primaryTitle || activeTitleObj?.name || '—'} · {earnedTitles.length} Earned Titles
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -170,8 +175,8 @@ export default function TitlesScreen() {
                 Primary Identity Title
               </span>
               <h2 id="active-title-heading" className="text-2xl font-black tracking-tight mt-1 flex items-center space-x-2">
-                <span className="text-2xl">{activeTitleObj.icon || '👑'}</span>
-                <span>{profile?.primaryTitle || activeTitleObj.name || 'Resident'}</span>
+                <span className="text-2xl">{activeTitleObj?.icon || '👑'}</span>
+                <span>{profile?.primaryTitle || activeTitleObj?.name || '—'}</span>
               </h2>
               <p className="text-xs text-gray-400 mt-1 max-w-md">
                 This title appears beside your handle across all feeds, spaces, digital passport credentials, and citizen registry artifacts.
@@ -181,7 +186,7 @@ export default function TitlesScreen() {
               <span className="text-xs text-gray-500 block">Civic Standing</span>
               <span className="text-sm font-semibold text-emerald-400 flex items-center justify-end gap-1">
                 <ShieldCheck className="w-4 h-4" />
-                <span>{profile?.isVerified ? 'Verified Sovereign' : 'Citizen Resident'}</span>
+                <span>{profile?.isVerified ? 'Verified' : 'Unverified'}</span>
               </span>
             </div>
           </div>

@@ -4207,3 +4207,18 @@ describe('N396 — discovery shortcuts claim no ranking they do not compute', ()
     expect(s).toContain('<ForYouSection isDark={isDark} onSelect={handleCategoryClick} />');
   });
 });
+
+describe('N397 — TitlesScreen renders the granted title or nothing', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Titles/TitlesScreen.jsx'), 'utf8');
+
+  test('a profile with no granted title is not shown as "Resident"/"Citizen Resident"', () => {
+    // The screen defaulted the active title to the Level-1 'Resident' standing
+    // and the civic badge to 'Citizen Resident'/'Verified Sovereign' — asserting
+    // a rank the platform had not granted.
+    expect(src).not.toMatch(/\|\| 'Resident'/);
+    expect(src).not.toContain("'Citizen Resident'");
+    expect(src).not.toContain("'Verified Sovereign'");
+    expect(src).toContain("const activeTitleObj = profile?.primaryTitle");
+    expect(src).toContain("{profile?.isVerified ? 'Verified' : 'Unverified'}");
+  });
+});
