@@ -668,11 +668,24 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **192 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N438 closed.
 
+## Continuation session 12 (N439 — comment reaction counts written to shards but never summed on read)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N439 | `commentService.likeComment`/`dislikeComment`/`removeLikeDislike` increment a sharded `counter_shards` counter for `comments/{id}` (fields `likes`/`dislikes`) and never write the numeric fields on the comment doc (they stay the create-time `0`). No reader resolved the shard sum, so `CommentsDrawer` (`formatCount(comment.likes)` ~953 + "Best" sort ~265) and `VideoComments` (`comment.likes ?? '—'` ~464 + sort ~244) showed a fabricated `0` likes on every comment, and `subscribeToPostComments` replaced an optimistic like count with that seeded `0`. `likesBy` is capped at `REACTION_ARRAY_CAP` (200), so it is not a substitute. Same shard-written/raw-read class as N431/N433/N437. | New `CountersManager.applyAll` overlays the shard sum onto a batch of items in bounded `getAll` chunks (legacy fallback when no shard exists, like `apply`). `commentService._overlayReactionCounts` applies it in `getCommentsByPost`, `getComment`, `getReplies`, and the `subscribeToPostComments` snapshot callback (before the nested build). New `commentReactionCounterSourceGuard.test.js` (guards job) pins the call sites + the batched read and behaviourally tests sum/fallback/batching. |
+
+Also verified this session (no change needed): T3 (`live_streams.stats` — all four seeds have real writers + readers; the two `stats.totalViewers` assignments are in-memory read clamps, not writes) and T6 (event lifecycle → community `stats.eventCount` parity: `createEvent` seeds `draft` (uncounted), `publishEvent`→`published` (+1), `deleteEvent`→`cancelled` (−1), all covered by the `onEventWrite` trigger).
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **193 suites / 2106 passed / 5 skipped / 2111 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N439 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 192 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 193 suites green
 npm run build                 # green
 ```

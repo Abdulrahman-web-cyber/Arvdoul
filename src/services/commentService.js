@@ -400,6 +400,8 @@ class UltimateCommentService {
         }
       }
 
+      await this._overlayReactionCounts(comments);
+
       let processedComments = comments;
       if (options.nested === true && options.parentId === null) {
         processedComments = this._buildNestedComments(comments);
@@ -470,6 +472,7 @@ class UltimateCommentService {
         createdAt: commentData.createdAt?.toDate?.() || new Date(),
         updatedAt: commentData.updatedAt?.toDate?.() || new Date()
       };
+      await this._overlayReactionCounts([comment]);
 
       this.cache.set(cacheKey, { comment, timestamp: Date.now() });
 
@@ -944,6 +947,7 @@ class UltimateCommentService {
           updatedAt: data.updatedAt?.toDate?.() || new Date()
         });
       });
+      await this._overlayReactionCounts(replies);
 
       const hasMore = snapshot.size === pageSize;
       const nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
@@ -988,7 +992,7 @@ class UltimateCommentService {
 
         const q = this.firestoreMethods.query(commentsRef, ...conditions);
 
-        const unsubscribe = this.firestoreMethods.onSnapshot(q, (snapshot) => {
+        const unsubscribe = this.firestoreMethods.onSnapshot(q, async (snapshot) => {
           const comments = [];
           snapshot.forEach(docSnap => {
             const data = docSnap.data();
@@ -999,6 +1003,10 @@ class UltimateCommentService {
               updatedAt: data.updatedAt?.toDate?.() || new Date()
             });
           });
+          // The numeric reaction fields on the doc are never written (the counts
+          // live in shards), so overlay the real sums before emitting — otherwise
+          // the live update replaces an optimistic like count with the seeded 0.
+          await this._overlayReactionCounts(comments);
 
           let processedComments = comments;
           if (options.nested === true) {
@@ -1138,6 +1146,29 @@ class UltimateCommentService {
       links,
       language: 'en'
     };
+  }
+
+  // Comment reaction counts are sharded counters: `likeComment`/`dislikeComment`/
+  // `removeLikeDislike` increment `counter_shards` for `comments/{id}` (fields
+  // `likes`/`dislikes`) and never write the numeric fields on the comment doc —
+  // which stay at their create-time `0`. Every read path must therefore overlay
+  // the shard sum (falling back to the raw field only when no shard exists), or
+  // the UI renders a fabricated `0` likes on every comment (N439). `likesBy` is
+  // NOT a substitute: it is capped at `REACTION_ARRAY_CAP`, so it undercounts
+  // high-reaction comments.
+  async _overlayReactionCounts(comments) {
+    if (!Array.isArray(comments) || comments.length === 0) return comments;
+    try {
+      await countersManager.applyAll({
+        items: comments,
+        collection: 'comments',
+        fields: ['likes', 'dislikes'],
+        scope: 'top',
+      });
+    } catch (error) {
+      logger.warn('Comment reaction-count overlay failed', { error: error?.message });
+    }
+    return comments;
   }
 
   _buildNestedComments(comments) {

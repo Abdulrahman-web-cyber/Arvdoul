@@ -526,6 +526,19 @@ not re-add a client `postCount` increment — the removed one only ever fired on
 *repost*, so a normal post never moved the count and the field could be minted
 (N438). `src/__tests__/postAuthorCountSourceGuard.test.js` (guards job) pins it.
 
+## Comment reaction counts have one source of truth
+`comments/{id}.likes`/`.dislikes` are seeded `0` at create and are **not** the
+live count — `commentService.likeComment`/`dislikeComment`/`removeLikeDislike`
+increment a sharded `counter_shards` counter (docPath `comments/{id}`) and never
+write the numeric fields on the doc. Every read path must overlay the shard sum,
+or the UI renders a fabricated `0` (N439). Use `CountersManager.applyAll`
+(batched, bounded `getAll` chunks) via `commentService._overlayReactionCounts`,
+which is applied in `getCommentsByPost`, `getComment`, `getReplies` **and** the
+`subscribeToPostComments` snapshot callback (the realtime path must overlay too,
+or a live update replaces an optimistic like count with the seeded `0`).
+`likesBy` is not a substitute — it is capped at `REACTION_ARRAY_CAP` (200), so it
+undercounts. `commentReactionCounterSourceGuard.test.js` (guards job) pins it.
+
 ## Achievement/title metrics are computed, never assumed
 `ACHIEVEMENTS_CATALOG` / `TITLES_CATALOG` criteria are scored against metric
 fields on `users/{uid}`. A criterion whose metric has **no writer** reads a

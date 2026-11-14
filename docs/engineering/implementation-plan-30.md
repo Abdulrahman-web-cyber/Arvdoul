@@ -30,11 +30,15 @@ harden-and-complete campaign; it supersedes the (now-stale) lead list in
 - **Sub-tasks**: T2.1 inventory remaining sites; T2.2 convert to `unknownNumber` → `—`;
   T2.3 extend `noFabricatedData.test.js`.
 
-### T3 — `live_streams.stats` — verify every seeded counter has a writer
+### T3 — `live_streams.stats` — verify every seeded counter has a writer — DONE (verified, no change)
 - **Evidence**: `liveService.startLiveStream` seeds `totalViewers/totalTips/totalGifts/
   coinsEarned`; `functions/live.js` writes `totalViewers`, `monetization.js` writes the rest.
-- **Sub-tasks**: T3.1 confirm each seed has a writer; T3.2 remove any seed without one;
-  T3.3 guard.
+- **Sub-tasks**: T3.1 confirm each seed has a writer — DONE; T3.2 remove any seed without one —
+  none needed; T3.3 guard — the four seeds are covered by the reader/writer audit.
+  All four (`totalViewers` ← `functions/live.js#onLiveViewerCreate`; `totalTips`/`totalGifts`/
+  `coinsEarned` ← `functions/monetization.js`) have real writers and real readers; the two
+  `stats.totalViewers = Math.max(...)` assignments in `liveService` are in-memory read clamps
+  (not persisted), so there is no double-count.
 
 ### T4 — Audit server `data().X || 0` reads against writers (raw-counter class)
 - **Evidence**: N431/N433 were both this class. Sweep `functions/*.js` for
@@ -52,9 +56,10 @@ harden-and-complete campaign; it supersedes the (now-stale) lead list in
   all now real after N431/N433); T5.2 draft a documented default formula for sign-off;
   T5.3 implement `functions/ranking.js` + indexes once approved.
 
-### T6 — Event lifecycle → community counter parity for status changes
-- **Sub-tasks**: T6.1 cover draft→published→cancelled transitions (T1.2 already does);
-  T6.2 cover `deleteEvent`; T6.3 test.
+### T6 — Event lifecycle → community counter parity for status changes — DONE (verified, no change)
+- **Sub-tasks**: T6.1 cover draft→published→cancelled transitions (T1.2 already does) — DONE;
+  T6.2 cover `deleteEvent` (`eventService.deleteEvent` sets `status: 'cancelled'`, the trigger
+  applies `-1`) — DONE; T6.3 test — `communityEventCountSourceGuard.test.js` covers it.
 
 ### T7 — Cloud Functions contract coverage for every export
 - **Evidence**: backlog item 2 — assert every `FUNCTIONS` key resolves to a real export.
