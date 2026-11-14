@@ -39,7 +39,11 @@ harden-and-complete campaign; it supersedes the (now-stale) lead list in
 ### T4 — Audit server `data().X || 0` reads against writers (raw-counter class)
 - **Evidence**: N431/N433 were both this class. Sweep `functions/*.js` for
   `data().\w+Count || 0` / `stats.\w+ || 0` and prove a writer exists.
-- **Sub-tasks**: T4.1 grep inventory; T4.2 classify each; T4.3 fix dead reads; T4.4 guard.
+- **Sub-tasks**: T4.1 grep inventory — DONE; T4.2 classify each — DONE
+  (`feed.js`/`video.js`/`stories.js` reads verified; `levelSystem.js` metrics are
+  N432-overlaid; the `*.data().count` reads are shard sums); T4.3 fix dead reads —
+  found **N435** (video `stats.comments`) and fixed it; T4.4 guard — DONE
+  (`videoCommentCounterSourceGuard.test.js`).
 
 ## TIER 2 — Backend completeness
 

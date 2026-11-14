@@ -1016,6 +1016,31 @@ exports.aggregateVideoLikes = pubsub.schedule('every 5 minutes').onRun(async () 
   }, 'aggregation_cursor_likes');
 });
 
+// Video comments live in the shared `comments` collection keyed by `postId`
+// (the client's `VideoComments` passes the video id as the target), so unlike
+// views/likes there is no per-video shard subcollection to sum. Before this
+// mirror `videos/{id}.stats.comments` was seeded `0` and never written — the
+// client's comment counter targeted `posts/{videoId}` (a document that does
+// not exist for a video), so the count was a fabricated `0` on the video card
+// and in `updateVideoRankingScores` (N435). A bounded `.count()` per video is
+// the authoritative read (no collection scan).
+exports.aggregateVideoComments = pubsub.schedule('every 5 minutes').onRun(async () => {
+  return processBatchWithCursor('videos', async (doc) => {
+    const agg = await db.collection('comments')
+      .where('postId', '==', doc.id)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    const totalComments = agg.data().count || 0;
+    const stored = doc.data().stats?.comments;
+    // Only write when it changed, so a quiet run costs one aggregate read and
+    // no write (the Algolia `onWrite` index does not churn).
+    if (stored !== totalComments) {
+      await doc.ref.update({ 'stats.comments': totalComments, updatedAt: FieldValue.serverTimestamp() });
+    }
+  }, 'aggregation_cursor_comments');
+});
+
 exports.updateVideoRankingScores = pubsub.schedule('every 15 minutes').onRun(async () => {
   return processBatchWithCursor('videos', async (doc) => {
     const data = doc.data();

@@ -141,13 +141,13 @@ const VideoComments = memo(({
             replyTo.id,
             uid,
             textToSend,
-            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
+            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL, targetType: 'video' }
           )
         : await getCommentService().createComment(
             video.id,
             uid,
             textToSend,
-            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
+            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL, targetType: 'video' }
           );
 
       if (res?.offlineQueued) {

@@ -214,7 +214,15 @@ class UltimateCommentService {
       const docRef = await this.firestoreMethods.addDoc(commentsRef, commentData);
       const commentId = docRef.id;
 
-      await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
+      // The post-comment counter is a sharded counter on `posts/{postId}`. A
+      // video comment is submitted with the video id as the target (the
+      // `comments` doc carries `postId: <videoId>`), so incrementing here would
+      // create a phantom `posts/{videoId}` counter document that no reader ever
+      // sees — `videos/{id}.stats.comments` is maintained server-side by
+      // `aggregateVideoComments` from the `comments` collection instead (N435).
+      if (options.targetType !== 'video') {
+        await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
+      }
 
       if (options.parentId) {
         await countersManager.increment({ docPath: `comments/${options.parentId}`, field: 'replies' });

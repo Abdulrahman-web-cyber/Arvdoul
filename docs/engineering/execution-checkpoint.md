@@ -624,11 +624,22 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **189 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N434 closed.
 
+## Continuation session 8 (N435 — video `stats.comments` had no writer)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N435 | `videos/{id}.stats.comments` is seeded `0` and **never written**. The video comment UI (`VideoComments`) submits with the *video id* as the target, so `commentService.createComment` incremented a sharded `posts/{videoId}` counter — a document that does not exist for a video, read by nobody — and `videos/{id}.stats.comments` stayed a fabricated `0`. That zero feeds `updateVideoRankingScores` (the `comments * 2` ranking term) and the video card's comment count. | New scheduled `functions/video.js#aggregateVideoComments` derives `stats.comments` from the real `comments` collection with a bounded `.count()` (`.where('postId','==',videoId).where('isDeleted','==',false)`, no scan), mirroring `aggregateVideoViews`/`aggregateVideoLikes`, writing only on change. The client no longer increments the phantom post counter for a video comment (`VideoComments` passes `targetType: 'video'`; `createComment` skips the `posts/*` increment). New `videoCommentCounterSourceGuard.test.js` (guards job) pins the mirror, the ranking read, the client guard and the UI tagging. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **190 suites / 2085 passed / 5 skipped / 2090 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N435 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 189 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 190 suites green
 npm run build                 # green
 ```
