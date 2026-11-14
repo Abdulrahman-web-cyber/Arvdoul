@@ -4681,4 +4681,35 @@ describe('N417 — no generic person-word fallback ("Member"/"Creator") on named
     expect(body).not.toMatch(/Tuesday 18:00|Saturday 10:00/);
   });
 });
+
+describe('N418 — the menu never asserts an unbacked version/number claim on a launcher badge', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
+
+  test('no "AI 3.0" model-version claim', () => {
+    expect(src).not.toContain('AI 3.0');
+  });
+
+  test('no "Top 100" leaderboard-size claim', () => {
+    expect(src).not.toContain('Top 100');
+  });
+});
+
+describe('N419 — the composer draft preview and social-context card assert no fabricated engagement or name', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the draft preview does not render a measured "0" like/comment count', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    expect(s).not.toContain('{/* Mock interaction footer */}');
+    expect(s).toContain('Preview — engagement appears after publishing');
+    expect(s).not.toContain('<span>Just now</span>');
+  });
+
+  test('ProfileSocialContext/ProfileMutualFriends do not default the target to "Creator"', () => {
+    const ctx = read('src/components/profile/ProfileSocialContext.jsx');
+    expect(ctx).not.toContain("targetName = 'Creator'");
+    expect(ctx).toContain("targetName || 'this profile'");
+    const mutual = read('src/components/profile/ProfileMutualFriends.jsx');
+    expect(mutual).not.toContain("targetName = 'Creator'");
+  });
+});
 });

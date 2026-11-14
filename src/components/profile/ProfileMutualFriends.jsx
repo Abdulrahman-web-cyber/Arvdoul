@@ -13,7 +13,7 @@ const ProfileMutualFriends = memo(({
   sharedCommunities = [],
   relationship = null,
   isFollowing = false,
-  targetName = 'Creator',
+  targetName = null,
   theme = 'light',
   capabilities = null,
   onFriendPress,

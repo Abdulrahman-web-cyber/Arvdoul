@@ -80,7 +80,7 @@ export default function MenuScreen() {
       icon: Sparkles,
       gradient: "from-amber-500 via-pink-500 to-purple-600",
       path: "/ai-studio",
-      badge: "AI 3.0",
+      badge: "AI",
     },
     {
       title: "Audio Synthesizer",
@@ -130,7 +130,7 @@ export default function MenuScreen() {
     { id: "perks", category: "community", icon: Gift, label: "Perks & Virtual Gift Rewards", description: "Platform perks, level-up coin rewards & virtual gift sharing", color: "#ec4899", path: "/perks", badge: "Rewards" },
     { id: "titles", category: "community", icon: Award, label: "Civic & Nobility Titles", description: "Nobility titles, ceremonial honours & civic provenance", color: "#a855f7", path: "/titles", badge: "Titles" },
     { id: "reputation", category: "community", icon: Zap, label: "Civic Trust & Reputation", description: "Multidimensional trust score, influence & community contribution", color: "#10b981", path: "/reputation", badge: "Rep" },
-    { id: "rankings", category: "community", icon: Trophy, label: "Global Creator Leaderboards", description: "Top creators, reputation badges & ranking XP", color: "#fbbf24", path: "/rankings", badge: "Top 100" },
+    { id: "rankings", category: "community", icon: Trophy, label: "Global Creator Leaderboards", description: "Top creators, reputation badges & ranking XP", color: "#fbbf24", path: "/rankings", badge: "Board" },
     { id: "coins", category: "community", icon: Coins, label: "Coin Treasury & Top-Up", description: "Purchase virtual coins and support favorite creators", color: "#f59e0b", path: "/coins", badge: userCoins ? `${formattedCoins} Coins` : "Coins" },
     { id: "wallet", category: "community", icon: Wallet, label: "Sovereign Treasury Wallet", description: "Coins ledger, monthly subscriptions & withdrawal earnings", color: "#059669", path: "/wallet", badge: "Ledger" },
     { id: "community", category: "community", icon: Layers, label: "Communities & Circles", description: "Discover niche creator communities and forums", color: "#3b82f6", path: "/community", badge: null },

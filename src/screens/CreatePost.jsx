@@ -2028,7 +2028,7 @@ export function ModerationStatus({ defaultOpen = false }) {
   );
 }
 
-// ── POST PREVIEW (live mock‑up) ────────────────────────────────────────
+// ── POST PREVIEW (draft render) ────────────────────────────────────────
 function PostPreview() {
   const { state } = useCreatePostState();
   const { user } = useAuth();
@@ -2081,7 +2081,7 @@ function PostPreview() {
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span>Just now</span>
+              <span>Preview</span>
               {state.location && (
                 <>
                   <span>•</span>
@@ -2150,11 +2150,10 @@ function PostPreview() {
         </div>
       )}
 
-      {/* Mock interaction footer */}
+      {/* Draft preview footer: no engagement exists yet, so it is not shown as a
+          measured "0" — the audience scope is the only real signal here. */}
       <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
-        <span className="flex items-center gap-1"><Icons.Heart className="w-4 h-4" /> 0</span>
-        <span className="flex items-center gap-1"><Icons.MessageCircle className="w-4 h-4" /> 0</span>
-        <span className="flex items-center gap-1"><Icons.Share2 className="w-4 h-4" /> Share</span>
+        <span>Preview — engagement appears after publishing</span>
         <span className="flex items-center gap-1 text-purple-500 font-medium">
           <Icons.Eye className="w-4 h-4" /> {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label || "Public"}
         </span>

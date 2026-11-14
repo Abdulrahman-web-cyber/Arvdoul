@@ -17,7 +17,7 @@ const ProfileSocialContext = memo(({
   sharedCommunities = [],
   relationship = null,
   isFollowing = false,
-  targetName = 'Creator',
+  targetName = null,
   theme = 'dark',
   capabilities = null,
   onFriendClick,
@@ -190,7 +190,7 @@ const ProfileSocialContext = memo(({
               : followsYou
               ? 'Follows your profile'
               : isFollowing
-              ? `You follow ${targetName}`
+              ? `You follow ${targetName || 'this profile'}`
               : 'Follow to connect'}
           </div>
         </div>
