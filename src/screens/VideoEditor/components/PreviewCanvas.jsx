@@ -36,7 +36,8 @@ export default function PreviewCanvas({
     opacity: 100
   },
   activeEffect = 'none',
-  mainVideoUrl = null
+  mainVideoUrl = null,
+  resolutionLabel = null
 }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -258,9 +259,13 @@ export default function PreviewCanvas({
             <Eye className="w-3.5 h-3.5 text-cyan-400" />
             <span>Original</span>
           </div>
-          <div className="px-2 py-0.5 rounded-full bg-indigo-600/80 backdrop-blur-md border border-indigo-400/40 text-white text-[10px] font-extrabold tracking-wider shadow-md">
-            4K
-          </div>
+          {/* The canvas badge reports the project's selected output preset; a
+              hardcoded "4K" claimed a resolution the source clip may not have. */}
+          {resolutionLabel && (
+            <div className="px-2 py-0.5 rounded-full bg-indigo-600/80 backdrop-blur-md border border-indigo-400/40 text-white text-[10px] font-extrabold tracking-wider shadow-md">
+              {resolutionLabel}
+            </div>
+          )}
         </div>
 
         {/* Rule-of-Thirds Grid Lines (Subtle Framing) */}
@@ -417,5 +422,6 @@ PreviewCanvas.propTypes = {
   filterId: PropTypes.string,
   adjustments: PropTypes.object,
   activeEffect: PropTypes.string,
-  mainVideoUrl: PropTypes.string
+  mainVideoUrl: PropTypes.string,
+  resolutionLabel: PropTypes.string
 };

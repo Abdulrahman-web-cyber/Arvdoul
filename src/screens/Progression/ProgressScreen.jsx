@@ -213,7 +213,7 @@ export default function ProgressScreen() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {upcomingPerks.map((perk) => (
               <div
-                key={perk.minLevel}
+                key={`${perk.minLevel}-${perk.title}`}
                 className={`p-4 rounded-xl border flex items-start space-x-3.5 ${
                   isDark ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200'
                 }`}
@@ -261,7 +261,7 @@ export default function ProgressScreen() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {unlockedPerks.map((perk) => (
               <div
-                key={perk.minLevel}
+                key={`${perk.minLevel}-${perk.title}`}
                 className={`p-4 rounded-xl border flex items-start space-x-3.5 ${
                   isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-white border-gray-200'
                 }`}

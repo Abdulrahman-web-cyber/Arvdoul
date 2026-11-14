@@ -33,18 +33,6 @@ const MESSAGING_CONFIG = {
     GROUP_MAX_PARTICIPANTS: 250,
     MESSAGE_HISTORY_FOREVER: true,
   },
-  PREMIUM: {
-    ENABLED: true,
-    VIDEO_MAX_SIZE: 2 * 1024 * 1024 * 1024,
-    FILE_MAX_SIZE: 2 * 1024 * 1024 * 1024,
-    VIDEO_QUALITY: '4k',
-    CLOUD_STORAGE: '100GB',
-    THEMES: true,
-    MESSAGE_EFFECTS: true,
-    ADVANCED_SEARCH: true,
-    PRIORITY_SUPPORT: true,
-    END_TO_END_ENCRYPTION: true,
-  },
   MONETIZATION: {
     ADS_ENABLED: true,
     CONVERSATION_LIST_AD_INTERVAL: 5,
@@ -132,27 +120,12 @@ const MESSAGING_CONFIG = {
     PROVIDER: 'algolia',
   },
   GROUP_ROLES: ['admin', 'moderator', 'member'],
-  JOIN_APPROVAL: {
-    ENABLED: true,
-    REQUIRED_APPROVERS: 1,
-  },
-  PUSH_NOTIFICATIONS: {
-    ENABLED: true,
-    RETRY_ATTEMPTS: 3,
-    BACKOFF_FACTOR: 2,
-    INITIAL_DELAY_MS: 1000,
-  },
   MESSAGE_TTL_DAYS: 365,
   INVITE_BASE_URL: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_INVITE_BASE_URL) || window.location.origin,
   EDIT_HISTORY_LIMIT: 10,
   THREAD_DEPTH_MAX: 3,
   TEXT_MAX_LENGTH: 5000,
   GIPHY_API_KEY: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GIPHY_API_KEY) || '',
-  STICKER_FALLBACK_PACK: [
-    { id: 'smile', url: '/stickers/smile.png' },
-    { id: 'heart', url: '/stickers/heart.png' },
-    { id: 'thumbsup', url: '/stickers/thumbsup.png' },
-  ],
 };
 
 //  CRYPTO HELPERS (FULL IMPLEMENTATION)
@@ -2454,7 +2427,10 @@ class UltimateMessagingService {
         }));
       }
     }
-    return MESSAGING_CONFIG.STICKER_FALLBACK_PACK.filter(s => s.id.includes(query.toLowerCase()));
+    // No GIPHY key configured and no bundled sticker pack ships with the app;
+    // return an honest empty result so the UI renders its empty state rather
+    // than pointing at /stickers/*.png assets that do not exist.
+    return [];
   }
 
   async searchGifs(query) {

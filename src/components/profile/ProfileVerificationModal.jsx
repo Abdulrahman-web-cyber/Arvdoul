@@ -18,7 +18,7 @@ import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';
 import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
-import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
+import { LEVEL_GATES, XP_RULES } from '../../shared/levelConfig.cjs';
 
 const CATEGORIES = [
   'Content Creator / Artist',
@@ -327,7 +327,7 @@ export const ProfileVerificationModal = memo(({
 
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
                       <div className="font-bold text-slate-700 dark:text-slate-300">How to level up:</div>
-                      <p>Share posts (+10 XP), receive likes and comments, stream (+1 XP/min), and build community trust.</p>
+                      <p>Share posts (+{XP_RULES.post_created.xp} XP), receive likes and comments, stream (+{XP_RULES.live_minute.xp} XP/min), and build community trust.</p>
                     </div>
                   </div>
 

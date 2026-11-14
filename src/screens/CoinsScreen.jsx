@@ -65,13 +65,17 @@ export default function CoinsScreen() {
   const [subTier, setSubTier] = useState(null); // subscription tier being bought
   const [currentSub, setCurrentSub] = useState(null);
 
-  // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names, perks
-  // and popularity are presentation. The monthly coin line is derived from the
+  // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names and
+  // popularity are presentation. The monthly coin line is derived from the
   // tier's `coinsPerMonth` so it can never disagree with the server grant.
+  // No perk bullet is listed here: the server grants ONLY the monthly coin
+  // credit (functions/monetization.js#creditSubscriptionCoins) — it never reads
+  // a subscription to gate ads, badges, analytics, discounts or support, so
+  // advertising those perks would fabricate a capability (N422).
   const TIER_PRESENTATION = {
-    basic: { name: 'Basic', perks: ['Ad-free browsing', 'Priority support'] },
-    pro: { name: 'Pro', popular: true, perks: ['Creator badge', 'Advanced analytics', 'Boost discounts'] },
-    premium: { name: 'Premium', perks: ['Verified badge', 'Early features', 'Top support'] },
+    basic: { name: 'Basic', perks: [] },
+    pro: { name: 'Pro', popular: true, perks: [] },
+    premium: { name: 'Premium', perks: [] },
   };
   const SUBSCRIPTION_TIERS = Object.entries(SUBSCRIPTION_TIERS_CANONICAL).map(([id, cfg]) => {
     const presentation = TIER_PRESENTATION[id] || { name: id, perks: [] };
@@ -574,8 +578,8 @@ export default function CoinsScreen() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4">
                 <Crown className="w-8 h-8 text-blue-500" />
               </div>
-              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Premium Features</h3>
-              <p className={colors.secondary}>Unlock exclusive features and monetization options</p>
+              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Marketplace &amp; Polls</h3>
+              <p className={colors.secondary}>Buy creator digital goods and back your predictions in community polls</p>
             </div>
           </div>
         </div>
@@ -603,7 +607,7 @@ export default function CoinsScreen() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className={cn("text-sm", colors.secondary)}>Secure payment • Instant delivery • 24/7 support</span>
+              <span className={cn("text-sm", colors.secondary)}>Secure Stripe payment • Coins credited after server verification • Support tickets</span>
             </div>
             <button
               onClick={() => navigate('/create-post')}

@@ -564,3 +564,17 @@ exit 0 (0 errors); `npm run build` green.
 
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
 ranking formula, a product decision). N270 re-classified NOT_AN_ISSUE.
+
+## Continuation session 3 (N424–N427 — fabricated-capability audit, level perks + passport + menu)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N424 | `PassportScreen` advertised a biometric credential the platform cannot produce (“BIOMETRIC PASS”, “Biometrics” tab, “Decrypting authenticated citizen credentials…”; `MenuScreen` “Biometric sovereign passport”). No WebAuthn / `navigator.credentials` / biometric capture exists. | Page retitled “CITIZEN IDENTITY”, tab “Identity”, loader reworded, menu copy de-biometricised. |
+| N425 | `LEVEL_PERKS` / `LEVEL_GATES` sold perks and gates with no implementation (Custom Badge, Custom Accent, Enhanced Identity Card, Citizen Council, Priority Cashout Review, Nation Founder Circle, Monarch Halo; dead gates `giftBoost`/`earlyAccessStudio`/`customBadge`/`citizenCouncil`/`founderCircle`). Settings cosmetic tracker listed them; `PerksRewardsScreen` claimed “verified gift earnings, coin milestone bonuses, civic governance rights”. | Perk table reduced to honours-able benefits; five dead gates removed from both `levelConfig.cjs` copies (synced via `scripts/sync-shared-config.mjs`); Settings tracker lists only Top Creator Standing + Crest Radiance; PerksRewards copy corrected. |
+| N426 | Digital Passport hardcoded “Active Citizen” regardless of account state; `passportService` never surfaced `accountStatus`. | Payload now exposes the real `accountStatus` (null when absent); screen renders it, “—” when unknown. |
+| N427 | Menu hub overclaimed “4K” editor + “4K UHD” badge, “24/7 ticket support”, “royalty payouts”. | Copy corrected to “Multi-track video editor”, “support tickets”, “creator payouts”. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **185 suites / 2052 passed / 5 skipped / 2057 total** green; `functions/levelConfig.cjs` byte-identical to `src/shared/levelConfig.cjs`. New guards in `noFabricatedData.test.js` (N424–N427) plus updated `levelConfig.test.js`, `levelSystem.test.js`, `settingsScreen.test.jsx`.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N424–N427 closed.

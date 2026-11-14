@@ -4713,3 +4713,206 @@ describe('N419 — the composer draft preview and social-context card assert no 
   });
 });
 });
+
+describe('N420 — level perks and royal copy never advertise financial rates the server does not honour', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const cfg = read('src/shared/levelConfig.cjs');
+
+  test('LEVEL_PERKS makes no XP-multiplier / coin-bonus / fee-rebate claim', () => {
+    // functions/xpAward.js applies `rule.xp` with no level multiplier,
+    // functions/monetization.js credits `pkg.coins` with no store bonus, and
+    // there is no platform withdrawal fee at all (withdrawalSettlement.js), so
+    // none of these can be honoured.
+    expect(cfg).not.toMatch(/\d+x XP Multiplier/);
+    expect(cfg).not.toContain('Coin Store Bonus');
+    expect(cfg).not.toContain('Fee Rebate');
+    expect(cfg).not.toContain('earning multiplier');
+  });
+
+  test('the shared config stays byte-identical in functions/', () => {
+    expect(read('functions/levelConfig.cjs')).toBe(cfg);
+  });
+
+  test('the royal roadmap modal states titles/standing, not veto or broadcast powers', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    expect(s).not.toContain('XP Multiplier');
+    expect(s).not.toContain('Fee Rebate');
+    expect(s).not.toContain('Constitutional Council Veto');
+    expect(s).not.toContain('Global Broadcast Alert');
+    expect(s).not.toContain('Immortalization');
+  });
+
+  test('the video editor canvas reports the real resolution, never a hardcoded 4K', () => {
+    const canvas = read('src/screens/VideoEditor/components/PreviewCanvas.jsx');
+    expect(canvas).not.toMatch(/>\s*4K\s*</);
+    expect(canvas).toContain('resolutionLabel');
+    const drawer = read('src/screens/VideoEditor/components/MediaDrawer.jsx');
+    expect(drawer).not.toContain('4K Videos');
+  });
+});
+
+describe('N421 — service config blocks never assert capabilities the app does not implement', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('notificationsService declares no unimplemented security/compliance/monetization channels', () => {
+    const s = read('src/services/notificationsService.js');
+    // Nothing reads these keys, and none of the claims is true: notifications
+    // are plaintext Firestore docs (no TLS_1.3/AES_256 config the client sets),
+    // there is no email/websocket/desktop delivery channel, and no per-open /
+    // per-click coin reward or ad revenue share exists in functions/.
+    expect(s).not.toContain('TLS_1.3');
+    expect(s).not.toContain('AES_256');
+    expect(s).not.toContain('REVENUE_SHARE');
+    expect(s).not.toContain('SPONSORED_NOTIFICATIONS');
+    expect(s).not.toContain('ENGAGEMENT_REWARDS');
+    expect(s).not.toContain('WEB_SOCKET');
+    expect(s).not.toContain('PROVIDERS: [');
+  });
+});
+
+describe('N422 — subscription tiers advertise only the server-granted coin credit', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('SubscriptionScreen lists no perk the server does not grant', () => {
+    const s = read('src/screens/SubscriptionScreen.jsx');
+    // functions/monetization.js#createSubscription only calls
+    // creditSubscriptionCoins (monthly coins); nothing reads a subscription to
+    // gate ads, support, badges, analytics, discounts or branding.
+    expect(s).not.toContain('Ad-free browsing');
+    expect(s).not.toContain('Priority support');
+    expect(s).not.toContain('Advanced analytics');
+    expect(s).not.toContain('Boost discounts');
+    expect(s).not.toContain('Priority payouts');
+    expect(s).not.toContain('Dedicated support');
+    expect(s).not.toContain('Custom branding');
+    expect(s).toContain('coins monthly');
+  });
+
+  test('CoinsScreen lists no perk the server does not grant', () => {
+    const s = read('src/screens/CoinsScreen.jsx');
+    expect(s).not.toContain('Ad-free browsing');
+    expect(s).not.toContain('Priority support');
+    expect(s).not.toContain('Advanced analytics');
+    expect(s).not.toContain('Boost discounts');
+    expect(s).not.toContain('Top support');
+    expect(s).not.toContain('Early features');
+    expect(s).toContain('coins monthly');
+  });
+
+  test('no server code reads a subscription to grant an entitlement', () => {
+    const mon = read('functions/monetization.js');
+    expect(mon).not.toMatch(/ad.?free/i);
+    expect(mon).not.toMatch(/prioritySupport|priority_support/i);
+  });
+});
+
+describe('N423 — progression copy never claims a ceremony or status the server never grants', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PerksRewardsScreen does not claim coronation or permanent citizenship', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    // getPrestigeInfo() derives a Roman-numeral prestige rank from level alone;
+    // there is no coronation routine and no "permanent historical citizenship"
+    // grant anywhere in functions/, so those claims cannot be honoured.
+    expect(s).not.toContain('sovereign coronation eligibility');
+    expect(s).not.toContain('permanent historical citizenship');
+    expect(s).toContain('Roman Numeral Prestige tiers');
+  });
+});
+
+describe('N424 — the Digital Passport never claims biometric capture it does not perform', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PassportScreen labels the identity page honestly (no "Biometric Pass")', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    // No WebAuthn / navigator.credentials / face-or-fingerprint capture exists
+    // anywhere in src or functions, so a "Biometric" tab and a
+    // "BIOMETRIC PASS" document title advertise a capability the platform has
+    // no code to back.
+    expect(s).not.toMatch(/biometric/i);
+    expect(s).toContain("label: 'Identity'");
+  });
+
+  test('MenuScreen does not advertise a biometric passport', () => {
+    const s = read('src/screens/Menu/MenuScreen.jsx');
+    expect(s).not.toMatch(/biometric/i);
+  });
+});
+
+describe('N425 — level perks and cosmetic-unlock copy only list honours-able benefits', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const cfg = read('src/shared/levelConfig.cjs');
+
+  test('LEVEL_PERKS does not sell perks with no implementation', () => {
+    // Each of these advertised a feature the codebase has no code for:
+    // "Custom Badge" (no badge-colour picker / writer), "Custom Accent"
+    // (no accent writer), "Enhanced Identity Card" (no music-studio or
+    // collections showcase), "Citizen Council" (no proposal/vote system),
+    // "Priority Cashout Review" (withdrawalSettlement has no priority queue),
+    // "Nation Founder Circle" (no platform-wide event/broadcast host), and
+    // "Monarch Halo" (no halo cosmetic exists).
+    expect(cfg).not.toContain('Custom Badge');
+    expect(cfg).not.toContain('Custom Accent');
+    expect(cfg).not.toContain('Enhanced Identity Card');
+    expect(cfg).not.toContain('Citizen Council');
+    expect(cfg).not.toContain('Priority Cashout Review');
+    expect(cfg).not.toContain('Founder Circle');
+    expect(cfg).not.toContain('Monarch Halo');
+    expect(cfg).not.toContain('music studio');
+    expect(cfg).not.toContain('broadcast alert');
+  });
+
+  test('LEVEL_GATES drops the gates that only powered the fabricated copy', () => {
+    // `giftBoost`, `earlyAccessStudio`, `customBadge`, `citizenCouncil` and
+    // `founderCircle` had no reader anywhere except the fabricated copy.
+    expect(cfg).not.toContain('giftBoost');
+    expect(cfg).not.toContain('earlyAccessStudio');
+    expect(cfg).not.toContain('customBadge');
+    expect(cfg).not.toContain('citizenCouncil');
+    expect(cfg).not.toContain('founderCircle');
+  });
+
+  test('MenuScreen does not claim 4K export or a 24/7 human support SLA', () => {
+    const s = read('src/screens/Menu/MenuScreen.jsx');
+    // The editor exports webm via MediaRecorder at the project's selected
+    // resolution — it makes no 4K guarantee; support is a ticket queue, not a
+    // staffed 24/7 desk.
+    expect(s).not.toContain('4K');
+    expect(s).not.toContain('24/7');
+    expect(s).not.toContain('royalty payouts');
+    // The coin store footer promised "Instant delivery • 24/7 support"; coins
+    // are credited only after server-side Stripe verification and support is a
+    // ticket queue, so neither claim holds.
+    const coins = read('src/screens/CoinsScreen.jsx');
+    expect(coins).not.toContain('Instant delivery');
+    expect(coins).not.toContain('24/7');
+    // No "Premium Features / exclusive features" — buying coins unlocks no
+    // capability; the real coin sinks are gifts, boosts, marketplace and polls.
+    expect(coins).not.toContain('Premium Features');
+    expect(coins).not.toContain('exclusive features');
+  });
+
+  test('the Settings cosmetic tracker lists only real unlocks', () => {
+    const s = read('src/screens/SettingsScreen.jsx');
+    expect(s).not.toContain('Custom Badge');
+    expect(s).not.toContain('Custom Profile Accent');
+    expect(s).not.toContain('Monarch Halo');
+    expect(s).toContain('Top Creator Standing');
+    expect(s).toContain('Crest Radiance');
+  });
+});
+
+describe('N426 — the Digital Passport reports the real account status', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PassportScreen does not hardcode "Active Citizen"', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(s).not.toContain('Active Citizen');
+    expect(s).toContain('passport.accountStatus');
+  });
+
+  test('passportService exposes the account status and never assumes active', () => {
+    const svc = read('src/services/passportService.js');
+    expect(svc).toContain('accountStatus: (profile.accountStatus || profile.accountState || null)');
+  });
+});

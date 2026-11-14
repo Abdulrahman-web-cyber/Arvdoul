@@ -200,7 +200,7 @@ export default function CreatorPayoutScreen() {
         { stripeAccountId: payoutAccountId }
       );
       if (res?.success) {
-        toast.success('Payout request submitted! Funds will arrive within 2-3 business days.');
+        toast.success('Payout request submitted. Stripe processes the transfer after review — timing depends on your bank and region.');
         setRequestModal(false);
         setWithdrawAmount('');
         loadData();

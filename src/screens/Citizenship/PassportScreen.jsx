@@ -91,7 +91,7 @@ export default function PassportScreen() {
   const [passport, setPassport] = useState(null);
   const [showQR, setShowQR] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const [activePage, setActivePage] = useState('biometric'); // 'biometric' | 'visas' | 'honors' | 'clearance'
+  const [activePage, setActivePage] = useState('identity'); // 'identity' | 'visas' | 'honors' | 'clearance'
   const [selectedStamp, setSelectedStamp] = useState(null);
   const [copiedId, setCopiedId] = useState(false);
 
@@ -157,7 +157,7 @@ export default function PassportScreen() {
           <ArvdoulNationalCrest className="w-16 h-16 text-amber-500/80 animate-pulse mx-auto" />
           <div className="space-y-1">
             <p className="text-xs font-mono uppercase tracking-[0.25em] font-semibold text-amber-400">Arvdoul Sovereign Registry</p>
-            <p className="text-[11px] text-gray-500">Decrypting authenticated citizen credentials...</p>
+            <p className="text-[11px] text-gray-500">Loading authenticated citizen credentials...</p>
           </div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function PassportScreen() {
   }
 
   const pages = [
-    { id: 'biometric', label: 'Biometrics', icon: UserCheck },
+    { id: 'identity', label: 'Identity', icon: UserCheck },
     { id: 'visas', label: 'Visa Stamps', icon: Stamp, badge: passport.visaStamps?.filter(s => s.verified).length },
     { id: 'honors', label: 'Civic Honors', icon: Crown },
     { id: 'clearance', label: 'Border Clearance', icon: QrCode },
@@ -258,9 +258,9 @@ export default function PassportScreen() {
         </div>
 
         {/* ========================================================================= */}
-        {/* PAGE 1: BIOMETRIC IDENTITY DOCUMENT                                       */}
+        {/* PAGE 1: IDENTITY DOCUMENT                                                 */}
         {/* ========================================================================= */}
-        {activePage === 'biometric' && (
+        {activePage === 'identity' && (
           <div className="space-y-4">
             <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden transition-all shadow-2xl ${
               isDark
@@ -281,7 +281,7 @@ export default function PassportScreen() {
                       Arvdoul Sovereign Nation
                     </span>
                     <h2 className="text-sm font-extrabold font-mono tracking-tight text-slate-800 dark:text-slate-200">
-                      PASSEPORT DIPLOMATIQUE / BIOMETRIC PASS
+                      PASSEPORT DIPLOMATIQUE / CITIZEN IDENTITY
                     </h2>
                     <span className="text-[10px] text-slate-400 font-mono">
                       CIVIL REGISTRY CODE • {passport.citizenId}
@@ -365,7 +365,9 @@ export default function PassportScreen() {
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">National Status</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                        Active Citizen
+                        {passport.accountStatus
+                          ? String(passport.accountStatus).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                          : '—'}
                       </span>
                     </div>
 

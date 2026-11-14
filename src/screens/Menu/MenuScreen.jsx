@@ -52,7 +52,7 @@ export default function MenuScreen() {
   const quickLaunchers = useMemo(() => [
     {
       title: "Digital Passport",
-      desc: "Biometric identity & visas",
+      desc: "Citizen identity & visas",
       icon: ShieldCheck,
       gradient: "from-amber-600 via-orange-600 to-yellow-500",
       path: "/passport",
@@ -68,11 +68,11 @@ export default function MenuScreen() {
     },
     {
       title: "Video Studio Pro",
-      desc: "Multi-track 4K editor",
+      desc: "Multi-track video editor",
       icon: Video,
       gradient: "from-blue-600 via-indigo-600 to-purple-600",
       path: "/video-editor",
-      badge: "4K UHD",
+      badge: "Studio",
     },
     {
       title: "AI Co-Pilot Studio",
@@ -104,13 +104,13 @@ export default function MenuScreen() {
   const allHubItems = useMemo(() => [
     // Creator Suite
     { id: "ai-studio", category: "creator", icon: Sparkles, label: "AI Creator Co-Pilot", description: "Viral hooks, scriptwriting & multi-lingual localization", color: "#a855f7", path: "/ai-studio", badge: "AI Pro" },
-    { id: "video-editor", category: "creator", icon: Video, label: "Video Studio Pro", description: "4K multi-track timeline editor with filters & stickers", color: "#6366f1", path: "/video-editor", badge: "Pro" },
+    { id: "video-editor", category: "creator", icon: Video, label: "Video Studio Pro", description: "Multi-track timeline editor with filters & stickers", color: "#6366f1", path: "/video-editor", badge: "Pro" },
     { id: "audio-editor", category: "creator", icon: Music, label: "Audio Editor & Synthesizer", description: "Multi-waveform audio splicing & volume normalizer", color: "#ec4899", path: "/audio-editor", badge: "New" },
     { id: "thumbnail-designer", category: "creator", icon: Sliders, label: "Thumbnail & Poster Studio", description: "Layer-based typography, gradients & presets", color: "#06b6d4", path: "/thumbnail-designer", badge: "Design" },
     { id: "create-story", category: "creator", icon: Flame, label: "Create 24h Vibe Story", description: "Ephemeral stories with interactive stickers", color: "#f97316", path: "/create-story", badge: null },
     { id: "collaboration", category: "creator", icon: Layers, label: "Collaboration Studio", description: "Multi-creator shared projects & co-authored workspaces", color: "#8b5cf6", path: "/collaboration", badge: "Collab" },
     { id: "creator-dashboard", category: "creator", icon: TrendingUp, label: "Creator Dashboard & Analytics", description: "Reach metrics, audience retention & coin revenue", color: "#10b981", path: "/creator/dashboard", badge: "Stats" },
-    { id: "creator-onboarding", category: "creator", icon: Award, label: "Creator Verification & Grants", description: "Accreditation, royalty payouts & sovereign creator status", color: "#ec4899", path: "/creator/onboarding", badge: "Apply" },
+    { id: "creator-onboarding", category: "creator", icon: Award, label: "Creator Verification & Grants", description: "Accreditation, creator payouts & creator status", color: "#ec4899", path: "/creator/onboarding", badge: "Apply" },
     { id: "creator-payout", category: "creator", icon: Wallet, label: "Monetization & Payouts", description: "Stripe Connect payout balance and tip-jar logs", color: "#f59e0b", path: "/creator-payout", badge: "Earn" },
 
     // Social & Feeds
@@ -125,7 +125,7 @@ export default function MenuScreen() {
     { id: "saved", category: "social", icon: Bookmark, label: "Saved Items & Collections", description: "Bookmarked media, reels, and inspiration folders", color: "#8b5cf6", path: "/saved", badge: null },
 
     // Civic Nation, Community & Progression
-    { id: "passport", category: "community", icon: ShieldCheck, label: "Digital Commonwealth Passport", description: "Biometric sovereign passport, visa stamps & nation dossier", color: "#f59e0b", path: "/passport", badge: "ID" },
+    { id: "passport", category: "community", icon: ShieldCheck, label: "Digital Commonwealth Passport", description: "Sovereign citizen passport, visa stamps & nation dossier", color: "#f59e0b", path: "/passport", badge: "ID" },
     { id: "progress", category: "community", icon: TrendingUp, label: "Progression & Level Milestones", description: "XP level tree, tier progression & stage unlocks", color: "#6366f1", path: "/progress", badge: "Level" },
     { id: "perks", category: "community", icon: Gift, label: "Perks & Virtual Gift Rewards", description: "Platform perks, level-up coin rewards & virtual gift sharing", color: "#ec4899", path: "/perks", badge: "Rewards" },
     { id: "titles", category: "community", icon: Award, label: "Civic & Nobility Titles", description: "Nobility titles, ceremonial honours & civic provenance", color: "#a855f7", path: "/titles", badge: "Titles" },
@@ -142,7 +142,7 @@ export default function MenuScreen() {
     { id: "settings", category: "system", icon: Settings, label: "Account & App Settings", description: "Account security, notifications, and language", color: "#6b7280", path: "/settings", badge: null },
     { id: "privacy", category: "system", icon: Shield, label: "Privacy & Security", description: "Two-factor auth, blocked users & visibility", color: "#10b981", path: "/settings#privacy", badge: null },
     { id: "appearance", category: "system", icon: Palette, label: "Theme & Appearance", description: "Dark mode, OLED accents & display density", color: "#8b5cf6", path: "/settings#appearance", badge: null },
-    { id: "help", category: "system", icon: HelpCircle, label: "Help Center & Support", description: "Community guidelines, FAQ & 24/7 ticket support", color: "#3b82f6", path: "/help", badge: null },
+    { id: "help", category: "system", icon: HelpCircle, label: "Help Center & Support", description: "Community guidelines, FAQ & support tickets", color: "#3b82f6", path: "/help", badge: null },
   ], [unreadCounts, formattedCoins, userCoins]);
 
   // Filtered items based on active category & search query

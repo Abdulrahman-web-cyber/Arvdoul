@@ -185,6 +185,10 @@ class PassportService {
       capabilities,
       isVerified,
       isCreator,
+      // The account's real status (active / suspended / deleted / …). The
+      // passport must report this, never a hardcoded "Active Citizen". Absent
+      // status stays null so the UI renders "—" instead of assuming active.
+      accountStatus: (profile.accountStatus || profile.accountState || null),
       // The creator suite is gated by the `creatorInfo` scope.
       creatorTier: capabilities.canViewCreatorInfo || isOwner ? (projected.creatorTier || null) : null,
       royalEligibility: {

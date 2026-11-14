@@ -736,6 +736,7 @@ export default function VideoEditorScreen() {
             onSelectClip={handleSelectClip}
             onUpdateClip={handleUpdateClip}
             aspectRatio={selectedResolution?.aspect || '16:9'}
+            resolutionLabel={selectedResolution?.label || null}
             filterId={filterId}
             adjustments={adjustments}
             activeEffect={activeEffect}
