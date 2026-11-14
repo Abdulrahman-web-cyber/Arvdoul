@@ -512,7 +512,7 @@ export default function MenuScreen() {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-            Arvdoul Supreme Suite • v3.0.0 Pro • 100% Production Ready
+            Arvdoul • Built with care
           </p>
         </div>
       </div>

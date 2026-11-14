@@ -4528,3 +4528,12 @@ describe('N411 — the passport identity strip is not a fabricated machine-reada
     expect(s).toContain('passport.identityLines?.[0]');
   });
 });
+
+describe('N412 — the menu footer does not assert an unverifiable version/production status', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
+
+  test('no "v3.0.0 Pro • 100% Production Ready" claim', () => {
+    expect(src).not.toContain('Production Ready');
+    expect(src).not.toContain('v3.0.0');
+  });
+});
