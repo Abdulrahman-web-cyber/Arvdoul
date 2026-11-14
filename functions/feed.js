@@ -528,7 +528,10 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
 
     posts = posts.map(p => {
       if (p.personalizationScore == null) {
-        const engagement = (p.likes||0) + (p.comments||0)*2 + (p.shares||0)*3;
+        // Engagement lives under `stats`; the top-level aliases are never
+        // written (same defect class as N433/N444).
+        const s = p.stats || {};
+        const engagement = (s.likes || 0) + (s.comments || 0) * 2 + (s.shares || 0) * 3;
         const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime())/3600000 : 0;
         p.personalizationScore = engagement * Math.exp(-ageHours / 48);
       }
@@ -645,7 +648,10 @@ exports.getPersonalizedFeedML = functions.https.onCall(async (data, context) => 
       .map((doc) => {
         const p = { id: doc.id, ...doc.data() };
         if (p.personalizationScore == null) {
-          const engagement = (p.likes || 0) + (p.comments || 0) * 2 + (p.shares || 0) * 3;
+          // Engagement lives under `stats`; the top-level aliases are never
+          // written (same defect class as N433/N444).
+          const s = p.stats || {};
+          const engagement = (s.likes || 0) + (s.comments || 0) * 2 + (s.shares || 0) * 3;
           const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime()) / 3600000 : 0;
           p.personalizationScore = engagement * Math.exp(-ageHours / 48);
         }

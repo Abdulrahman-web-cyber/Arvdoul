@@ -20,17 +20,18 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
   `Date.now()`, so a client/SDK retry of a committed-but-unacknowledged tip double-charged the
   sender. Fix: the client builds one stable key per tip intent (`newIdempotencyKey`) and passes
   it; the server uses the caller key and falls back to `crypto.randomUUID()` only for direct
-  API callers. `purchaseMarketplaceItem` had the same class — it now prefers a caller
+  API callers. `ProfileTipModal` had the same `Date.now()` key (now one stable key per send +
+  a re-entrancy guard). `purchaseMarketplaceItem` had the same class — it now prefers a caller
   key/`orderId` and falls back to `uuidv4()`, never `Date.now()`.
   `moneyPathIdempotencyKeyGuard.test.js` (guards job) pins all of it.
-- **N448 (HIGH, closed):** `commentService.getCommentsByPost` never applied the block/mute
-  graph, so a blocked/muted author's comments still rendered under a post (and in `PostCard`'s
-  preview). Fix: the thread resolves the viewer (`options.viewerId` or the live session) and
-  drops hidden authors on both the Firestore and local-cache merge paths; `CommentsDrawer` and
-  `VideoComments` pass `viewerId`. `commentBlockFiltering.test.js` (guards job) drives the real
-  service.
+- **N448 (HIGH, closed):** the comment read paths never applied the block/mute graph, so a
+  blocked/muted author's comments still rendered under a post (and in `PostCard`'s preview, and
+  via the live subscription). Fix: `getCommentsByPost` (Firestore + local-cache merge),
+  `getReplies` and `subscribeToPostComments` resolve the viewer and drop hidden authors;
+  `CommentsDrawer` and `VideoComments` pass `viewerId`. `commentBlockFiltering.test.js`
+  (guards job) drives the real service and pins all three surfaces.
 
-Latest verified: **199 suites / 2132 passed (5 skipped), exit 0**; `npm run lint` exit 0
+Latest verified: **199 suites / 2134 passed (5 skipped), exit 0**; `npm run lint` exit 0
 (0 errors); `npm run build` green (with the Firestore emulator live on 127.0.0.1:8080).
 
 ## This session — video/reel viewer-state reality (N354–N355)

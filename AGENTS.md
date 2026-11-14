@@ -205,8 +205,14 @@ as failures.
   home/service feed, Sparks video feed, the post `CommentsDrawer`, the `VideoComments`
   sheet (Sparks/Reels/VideoDetail — comments **and** replies), the story/Vibe strip
   (`storyService.getStoriesFeed` + `subscribeToFeed`, matching the fan-out's `ownerId`),
-  search, and friend suggestions. A surface that renders user content without one of these
-  is the recurring N22x bug class.
+  search, and friend suggestions. **The comment thread filters inside `commentService`, not
+  only in the drawer**: `getCommentsByPost` (Firestore + local-cache merge), `getReplies`
+  and `subscribeToPostComments` each resolve the viewer (`options.viewerId` or the live
+  session) and drop hidden authors, so `PostCard`'s preview and the live subscription are
+  covered too — a component-level filter alone left mutes unenforced and the realtime path
+  unguarded. A surface that renders user content without one of these is the recurring
+  N22x bug class (`commentBlockFiltering.test.js`, guards job, pins the three comment
+  paths).
 - **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
   `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
   (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the

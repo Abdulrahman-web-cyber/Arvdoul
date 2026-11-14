@@ -590,7 +590,12 @@ class UltimateFeedService {
         logger.warn('Local optimistic-post merge failed', { error: e?.message });
       }
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
-      return posts.slice(0, limit);
+      const page = posts.slice(0, limit);
+      // Same shard overlay the ranked path applies: `posts/{id}.stats.*` is
+      // seeded 0 and never written, so without this the degraded feed renders
+      // fabricated zeros for likes/comments/shares (N444 class). Best-effort.
+      await this._overlayFeedCounters({ fallback: page });
+      return page;
     } catch (error) {
       logger.warn('Latest feed source failed', { userId, error: error?.message });
       return [];
@@ -842,6 +847,10 @@ class UltimateFeedService {
         });
       });
       const nextCursor = posts.length > 0 ? { postId: posts[posts.length - 1].id } : null;
+      // `posts/{id}.stats.*` is seeded 0 and never written (every mutation
+      // increments a sharded `counter_shards` doc), so overlay the sums before
+      // returning — otherwise the latest tab renders fabricated zeros (N444).
+      await this._overlayFeedCounters({ latest: posts });
       const result = { success: true, feed: posts, nextCursor };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;

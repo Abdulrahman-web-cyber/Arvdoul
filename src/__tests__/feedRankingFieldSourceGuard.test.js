@@ -66,4 +66,24 @@ describe('home feed ranks on real engagement counters (N444)', () => {
     expect(src).not.toMatch(/p\.avgWatchTime/);
     expect(src).not.toMatch(/WATCH_TIME_WEIGHT/);
   });
+
+  test('every feed read path overlays the shard sums before returning', () => {
+    // The ranked path overlays in `_fetchOptimizedSources`; the `latest` tab and
+    // the degraded/error fallback each build their own page and must overlay too,
+    // or they render fabricated `stats` zeros.
+    const latest = src.slice(src.indexOf('async _getLatestFeed('), src.indexOf('async _getMLPersonalizedFeed('));
+    expect(latest).toMatch(/await this\._overlayFeedCounters\(\{ latest: posts \}\)/);
+    const fallback = src.slice(src.indexOf('async _getFallbackSimpleFeed('), src.indexOf('async _getTrendingFeedPaginated('));
+    expect(fallback).toMatch(/await this\._overlayFeedCounters\(\{ fallback: page \}\)/);
+  });
+
+  test('the server feed rankers read post.stats.*, not the unwritten top-level aliases (N433/N444)', () => {
+    const feedFn = fs.readFileSync(path.join(root, 'functions/feed.js'), 'utf8');
+    // Both `getPersonalizedFeed` and `getPersonalizedFeedML` fall back to a
+    // local score when `personalizationScore` is unset; that fallback must read
+    // the real `stats` map.
+    expect(feedFn).not.toMatch(/engagement = \(p\.likes\s*\|\|\s*0\)/);
+    expect(feedFn).not.toMatch(/engagement = \(p\.likes \|\| 0\)/);
+    expect(feedFn).toMatch(/const s = p\.stats \|\| \{\}/);
+  });
 });
