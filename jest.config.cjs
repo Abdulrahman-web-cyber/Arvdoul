@@ -31,6 +31,14 @@ module.exports = {
     // The behaviour test for the settlement money-path loads the real
     // `functions/withdrawalSettlement.js`, so map the import to a thin stub.
     '^firebase-functions$': '<rootDir>/tests/stubs/firebase-functions.cjs',
+    // Vendor SDKs constructed at module load by `functions/video.js` /
+    // `functions/stories.js` resolve credentials over the network and hang
+    // under Jest. The emulator-backed money-path test loads the real
+    // `functions/video.js`, so map these to inert stubs (see the stub header).
+    '^@google-cloud/storage$': '<rootDir>/tests/stubs/vendor-sdks.cjs',
+    '^@google-cloud/video-intelligence$': '<rootDir>/tests/stubs/vendor-sdks.cjs',
+    '^@google-cloud/speech$': '<rootDir>/tests/stubs/vendor-sdks.cjs',
+    '^@mux/mux-node$': '<rootDir>/tests/stubs/vendor-sdks.cjs',
     // Vite loads stylesheets; Jest needs them stubbed or any screen that
     // imports one fails to load with a syntax error.
     '\\.(css|less|scss|sass)$': '<rootDir>/tests/styleMock.cjs',

@@ -1131,6 +1131,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         limit: COMMENTS_PAGE_SIZE,
         sortBy: ranking,
         startAfter: reset ? null : postState.nextCursor,
+        viewerId: currentUser?.uid,
       });
       if (!mountedRef.current) return;
       if (result.success) {
@@ -1190,11 +1191,11 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
           }
         }
       }
-    }, { parentId: null, limit: COMMENTS_PAGE_SIZE });
+    }, { parentId: null, limit: COMMENTS_PAGE_SIZE, viewerId: currentUser?.uid });
     return () => {
       if (typeof unsubscribeRef.current === 'function') unsubscribeRef.current();
     };
-  }, [isOpen, postId, prependRoot, addReply, updateComment]);
+  }, [isOpen, postId, prependRoot, addReply, updateComment, currentUser?.uid]);
 
   // ── Offline queue ───────────────────────────────────
   useEffect(() => {
@@ -1227,6 +1228,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         limit: COMMENTS_PAGE_SIZE,
         sortBy: ranking,
         startAfter: postState.nextCursor,
+        viewerId: currentUser?.uid,
       });
       if (!mountedRef.current) return;
       if (result.success) appendComments(postId, result.comments, result.hasMore, result.nextCursor);
@@ -1362,6 +1364,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       const result = await commentService.getReplies(commentId, {
         limit: REPLIES_PAGE_SIZE,
         startAfter,
+        viewerId: currentUser?.uid,
       });
       if (!mountedRef.current) return;
       if (result.success) {

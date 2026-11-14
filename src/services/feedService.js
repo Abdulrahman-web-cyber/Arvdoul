@@ -42,7 +42,6 @@ const FEED_CONFIG = {
     EXPERIMENT_GROUPS: ['control', 'weight_tuning', 'exploration_boost', 'ml_personalized'],
     SESSION_BOOST_TTL_MS: 5 * 60 * 1000,
     MAX_BOOST_FACTOR: 2.0,
-    WATCH_TIME_WEIGHT: 0.3,
     BOOST_COOLDOWN_MS: 10 * 1000,
     MAX_BOOSTS_PER_MINUTE: 5,
     FALLBACK_SCORE_WEIGHTS: {
@@ -1118,7 +1117,38 @@ class UltimateFeedService {
       Promise.race([p, new Promise(resolve => setTimeout(() => resolve(), FEED_CONFIG.PERFORMANCE.REQUEST_TIMEOUT))])
     );
     await Promise.allSettled(timedPromises);
+    await this._overlayFeedCounters(sources);
     return sources;
+  }
+
+  /**
+   * Overlay the sharded post counters onto every fetched feed post *before*
+   * scoring. `posts/{id}.stats.{likes,comments,shares,saves,views}` are seeded
+   * `0` at create and never written — every mutation routes its increment to a
+   * sharded `counter_shards` document (`CountersManager`, inside
+   * `firestoreService.toggleLike`/`toggleSave`/`sharePost` and
+   * `commentService.createComment`). Without this overlay the fallback ranker
+   * read a constant 0 (every post scored identically, so the feed collapsed to
+   * pure recency) and the card rendered fabricated zeros. The sponsored/boosted
+   * sources already overlay themselves; this covers the rest in one batched
+   * `getAll` per chunk. Best-effort: a shard read failure leaves the raw value.
+   */
+  async _overlayFeedCounters(sources) {
+    const items = [];
+    Object.values(sources).forEach((posts) => {
+      if (Array.isArray(posts)) posts.forEach((p) => { if (p && p.id) items.push(p); });
+    });
+    if (items.length === 0) return;
+    try {
+      await countersManager.applyAll({
+        items,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        scope: 'stats',
+      });
+    } catch (error) {
+      logger.warn('Feed counter overlay failed; ranking may be stale', { error: error?.message });
+    }
   }
 
   _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds) {
@@ -1150,10 +1180,10 @@ class UltimateFeedService {
       let finalScore = baseScore * weight;
 
       if (p.toxicityScore !== undefined) finalScore *= (1 - (p.toxicityScore || 0));
-      if (p.avgWatchTime !== undefined) {
-        const watchBoost = 1 + (p.avgWatchTime / 60) * FEED_CONFIG.ALGORITHM.WATCH_TIME_WEIGHT;
-        finalScore *= Math.min(2.0, watchBoost);
-      }
+      // Average watch time is not tracked on posts (or mirrored for videos — the
+      // server writes `stats.totalWatchTime`, not an average), so no writer ever
+      // sets `avgWatchTime`; the boost was dead code. The engagement term below
+      // already carries views, so watch time is intentionally not re-weighted.
       // A paid, still-active promotion raises the post's rank for every viewer.
       if (p.isBoosted) finalScore *= FEED_CONFIG.MONETISATION.BOOST_RANKING_FACTOR;
 
@@ -1173,10 +1203,15 @@ class UltimateFeedService {
 
   _calculateFallbackScore(post) {
     const w = FEED_CONFIG.ALGORITHM.FALLBACK_SCORE_WEIGHTS;
-    const likes = post.likeCount || post.likes || 0;
-    const comments = post.commentCount || post.comments || 0;
-    const shares = post.shareCount || post.shares || 0;
-    const views = post.viewCount || post.views || 0;
+    // The canonical engagement counters are `posts/{id}.stats.*`, overlaid from
+    // the shards by `_overlayFeedCounters`. The previous top-level
+    // `likeCount`/`viewCount`/… aliases have no writer anywhere, so the
+    // engagement term was a constant 0 and every post scored identically (pure
+    // recency). Keep the aliases only as a legacy fallback for un-overlaid rows.
+    const likes = post.stats?.likes ?? post.likeCount ?? post.likes ?? 0;
+    const comments = post.stats?.comments ?? post.commentCount ?? post.comments ?? 0;
+    const shares = post.stats?.shares ?? post.shareCount ?? post.shares ?? 0;
+    const views = post.stats?.views ?? post.viewCount ?? post.views ?? 0;
     const ageHours = post.createdAt ? (Date.now() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60) : 24;
     const recencyScore = Math.exp(-ageHours / 24);
     const engagementScore = (

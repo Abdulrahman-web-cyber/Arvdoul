@@ -2,6 +2,37 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — feed ranking, money-path idempotency, comment block gate (N444–N448)
+
+- **N444 (MEDIUM, closed):** `feedService._calculateFallbackScore` read top-level
+  `likeCount`/`commentCount`/`shareCount`/`viewCount` — **no writer sets those** (engagement
+  lives in sharded `counter_shards`; `posts/{id}.stats.*` is seeded `0`). Every post scored
+  identically, so the fallback feed collapsed to pure recency. Fix: `_fetchOptimizedSources`
+  overlays the shard sums (`_overlayFeedCounters` → `countersManager.applyAll`, one bounded
+  `getAll` per field-chunk) before scoring; the scorer reads `post.stats.*`. Locked by
+  `feedRankingFieldSourceGuard.test.js` (guards job).
+- **N445 (LOW, closed):** the `p.avgWatchTime` ranking branch (×`WATCH_TIME_WEIGHT`) was dead
+  — no post writer sets an average watch time. Removed with the constant.
+- **N446 (LOW, closed):** `videoService.getVideoAnalytics` was dead code reading a
+  `videos/{id}/stats` subcollection no writer populates; removed with its facade export, and
+  the upload `stats` seed now writes the canonical `avgWatchTime` (was `averageWatchTime`).
+- **N447 (HIGH, closed):** `videoService.sendTip` derived its server idempotency key from
+  `Date.now()`, so a client/SDK retry of a committed-but-unacknowledged tip double-charged the
+  sender. Fix: the client builds one stable key per tip intent (`newIdempotencyKey`) and passes
+  it; the server uses the caller key and falls back to `crypto.randomUUID()` only for direct
+  API callers. `purchaseMarketplaceItem` had the same class — it now prefers a caller
+  key/`orderId` and falls back to `uuidv4()`, never `Date.now()`.
+  `moneyPathIdempotencyKeyGuard.test.js` (guards job) pins all of it.
+- **N448 (HIGH, closed):** `commentService.getCommentsByPost` never applied the block/mute
+  graph, so a blocked/muted author's comments still rendered under a post (and in `PostCard`'s
+  preview). Fix: the thread resolves the viewer (`options.viewerId` or the live session) and
+  drops hidden authors on both the Firestore and local-cache merge paths; `CommentsDrawer` and
+  `VideoComments` pass `viewerId`. `commentBlockFiltering.test.js` (guards job) drives the real
+  service.
+
+Latest verified: **199 suites / 2132 passed (5 skipped), exit 0**; `npm run lint` exit 0
+(0 errors); `npm run build` green (with the Firestore emulator live on 127.0.0.1:8080).
+
 ## This session — video/reel viewer-state reality (N354–N355)
 
 - **N354 (MEDIUM, closed):** `videoService.formatVideoItem` seeded `isLiked`/`isSaved`

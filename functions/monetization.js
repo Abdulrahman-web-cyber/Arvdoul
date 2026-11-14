@@ -1761,11 +1761,17 @@ exports.processVideoEvent = functions.https.onCall(async (data, context) => {
 exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
-    const { productId, orderId } = data || {};
+    const { productId, orderId, idempotencyKey } = data || {};
     if (!productId) throw new functions.https.HttpsError('invalid-argument', 'productId required.');
     await checkRateLimit(uid, 'marketplacePurchase', 10, 60000);
 
-    const key = generateIdempotencyKey(orderId || `mp-${uid}-${productId}-${Date.now()}`);
+    // The idempotency key must be stable across retries of the SAME purchase
+    // intent or a network retry double-debits and double-decrements stock.
+    // Prefer the caller-supplied key (or a client-generated orderId); only fall
+    // back to a random key for direct API callers, never `Date.now()`.
+    const key = generateIdempotencyKey(
+      idempotencyKey || orderId || `mp-${uid}-${productId}-${uuidv4()}`
+    );
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
     const result = await createFirestoreTransaction(async (t) => {

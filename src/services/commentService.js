@@ -121,6 +121,39 @@ class UltimateCommentService {
     return this.firestore;
   }
 
+  /**
+   * The viewer whose block/mute relationships apply to a read. Prefers the
+   * caller-supplied id (screens pass the live session uid) and falls back to
+   * the live Firebase session, so no screen can leak a blocked author's
+   * comments by simply omitting the option.
+   */
+  async _resolveViewerId(explicitViewerId) {
+    if (explicitViewerId) return explicitViewerId;
+    try {
+      const { getAuthInstance } = await import('../firebase/firebase.js');
+      const auth = await getAuthInstance();
+      return auth?.currentUser?.uid || null;
+    } catch (err) {
+      logger.warn('Comment viewer resolution failed; not filtering', { error: err?.message });
+      return null;
+    }
+  }
+
+  /**
+   * Creators whose comments must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('Comment hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async createComment(postId, userId, content, options = {}) {
     const startTime = Date.now();
     const operationId = `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -310,6 +343,14 @@ class UltimateCommentService {
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
 
+      // Block/mute enforcement: a blocked, blocked-by or muted author's
+      // comments must not surface to the viewer. Every other read surface
+      // (feed, notifications, search, ranking, stories, live, videos) resolves
+      // this through the graph spine; the comment thread previously did not, so
+      // blocking someone still showed their comments under a post.
+      const viewerId = await this._resolveViewerId(options.viewerId);
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
+
       // Callers pass the cursor as `startAfter` (the drawer's name); accept
       // `cursor` too. The paginated query never applied a cursor, so the
       // drawer's "load more" re-fetched page 1 forever and (deduped by id)
@@ -361,6 +402,7 @@ class UltimateCommentService {
         snapshot.forEach(docSnap => {
           const data = docSnap.data();
           if (data.isDeleted || data.isHidden) return;
+          if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
           if (options.parentId === null || options.parentId === undefined) {
             if (data.parentId) return;
           } else if (options.parentId !== 'all') {
@@ -385,6 +427,7 @@ class UltimateCommentService {
           if (Array.isArray(localStored)) {
             localStored.forEach(lc => {
               if (lc && lc.id && !commentMap.has(lc.id)) {
+                if (hiddenAuthors.size > 0 && hiddenAuthors.has(lc.userId)) return;
                 const comment = {
                   ...lc,
                   createdAt: lc.createdAt ? new Date(lc.createdAt) : new Date(),
@@ -911,6 +954,9 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
+      const viewerId = await this._resolveViewerId(options.viewerId);
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
+
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
       const conditions = [
         this.firestoreMethods.where('parentId', '==', commentId),
@@ -940,6 +986,7 @@ class UltimateCommentService {
       const replies = [];
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
+        if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
         replies.push({
           id: docSnap.id,
           ...data,
@@ -981,6 +1028,13 @@ class UltimateCommentService {
       try {
         await this._ensureInitialized();
 
+        // Block/mute enforcement for the live thread: resolve the viewer's
+        // hidden-author set once for the subscription and drop those authors
+        // from every snapshot (the component-level filter only knew about
+        // blocks, and never about mutes).
+        const viewerId = await this._resolveViewerId(options.viewerId);
+        const hiddenAuthors = await this._getHiddenAuthors(viewerId);
+
         const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
         const conditions = [
           this.firestoreMethods.where('postId', '==', postId),
@@ -1003,6 +1057,7 @@ class UltimateCommentService {
           const comments = [];
           snapshot.forEach(docSnap => {
             const data = docSnap.data();
+            if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
             comments.push({
               id: docSnap.id,
               ...data,

@@ -620,7 +620,7 @@ exports.payPerView = onCall(async (data, context) => {
 // ======================================================================
 exports.sendTip = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, amount, message } = data;
+  const { videoId, amount, message, idempotencyKey } = data;
   if (!videoId || !amount || amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'videoId and positive amount required');
 
   await checkRateLimit(uid, 'sendTip', 10, 60000);
@@ -633,7 +633,16 @@ exports.sendTip = onCall(async (data, context) => {
     const ownerId = video.userId;
     if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot tip yourself');
 
-    const transferResult = await transferCoinsInternal(uid, ownerId, amount, 'tip', { videoId, message: message || '', idempotencyKey: `tip_${uid}_${videoId}_${Date.now()}` });
+    // A tip is a per-intent action: the caller supplies a stable key so an SDK
+    // retry of the same intent debits once, while a genuinely new tip gets a new
+    // key. A `Date.now()` fallback would make the key change on every retry and
+    // double-charge; a fixed key would make a legitimate second tip a silent
+    // no-op. Require the client key and generate a random one only as a last
+    // resort for direct API callers.
+    const key = (typeof idempotencyKey === 'string' && idempotencyKey.length > 0)
+      ? idempotencyKey
+      : `tip_${uid}_${videoId}_${crypto.randomUUID()}`;
+    const transferResult = await transferCoinsInternal(uid, ownerId, amount, 'tip', { videoId, message: message || '', idempotencyKey: key });
     await db.collection('tips').add({ videoId, fromUserId: uid, toUserId: ownerId, amount, message: message || '', createdAt: FieldValue.serverTimestamp() });
     await enqueuePush(ownerId, {
       type: 'tip', senderId: uid, videoId, amount, title: 'You received a tip!',
@@ -1132,6 +1141,11 @@ exports.cleanupOldShareEvents = pubsub.schedule('every 24 hours').onRun(async ()
   oldEvents.forEach(doc => batch.delete(doc.ref));
   await batch.commit();
   return null;
-});// Roadmap: video CDN / adaptive bitrate. Replace direct Storage URLs with CDN
+});// Shared internals exposed for the emulator-backed money-path tests only. A
+// plain object export is ignored by `index.js#merge` (which deploys only
+// functions carrying `__trigger`/`__endpoint`), so nothing here ships.
+module.exports.__test__ = { transferCoinsInternal };
+
+// Roadmap: video CDN / adaptive bitrate. Replace direct Storage URLs with CDN
 // edge URLs (Cloudflare / Mux / AWS CloudFront) and generate HLS/DASH manifests
 // for adaptive bitrate. Tracked work, not shipped behavior.

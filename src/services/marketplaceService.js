@@ -130,7 +130,12 @@ class MarketplaceService {
     // receipt for a purchase that never happened.
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
-      const result = (await callFunction(FUNCTIONS.PURCHASE_MARKETPLACE_ITEM, { productId })) || {};
+      const { newIdempotencyKey } = await import('../utils/IdempotencyKey.js');
+      // Stable key for this purchase intent: a transport-level retry of the
+      // same call reuses it, so the server debits once. (A fresh click is a new
+      // intent and gets a new key.)
+      const idempotencyKey = newIdempotencyKey();
+      const result = (await callFunction(FUNCTIONS.PURCHASE_MARKETPLACE_ITEM, { productId, idempotencyKey })) || {};
       if (!result.success || !result.order) {
         throw new Error('Purchase did not complete: the server returned no order.');
       }

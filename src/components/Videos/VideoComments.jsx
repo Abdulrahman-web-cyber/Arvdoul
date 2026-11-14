@@ -76,6 +76,7 @@ const VideoComments = memo(({
           nested: true,
           limit: 50,
           cacheFirst: false,
+          viewerId: viewerUid,
         });
         const mapComment = (c) => ({
           id: c.id,

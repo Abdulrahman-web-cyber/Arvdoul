@@ -10,6 +10,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { featureFlagService } from './featureFlagService.js';
+import { newIdempotencyKey } from '../utils/IdempotencyKey.js';
 
 const VIDEO_CONFIG = {
   UPLOAD: {
@@ -451,7 +452,7 @@ class UltimateVideoService {
       fileSize: file.size,
       muxPlaybackId: playbackId,
       thumbnails: [],
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, averageWatchTime: 0, totalWatchTime: 0 },
+      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, avgWatchTime: 0, totalWatchTime: 0 },
       monetization: metadata.monetization || { type: 'none' },
       rankingScore: 0,
       viralScore: 0,
@@ -886,7 +887,7 @@ class UltimateVideoService {
     if (amount < VIDEO_CONFIG.MONETIZATION.TIPS.MIN_AMOUNT || amount > VIDEO_CONFIG.MONETIZATION.TIPS.MAX_AMOUNT) {
       throw new VideoError('invalid-tip', `Tip amount must be between ${VIDEO_CONFIG.MONETIZATION.TIPS.MIN_AMOUNT} and ${VIDEO_CONFIG.MONETIZATION.TIPS.MAX_AMOUNT}`);
     }
-    const res = await this.fns.sendTip({ videoId, amount, message });
+    const res = await this.fns.sendTip({ videoId, amount, message, idempotencyKey: newIdempotencyKey() });
     return res.data;
   }
 
@@ -906,29 +907,6 @@ class UltimateVideoService {
       watermarked: true,
     });
     return { success: true, url: data.url, watermarked: true };
-  }
-
-  async getVideoAnalytics(videoId) {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw new VideoError('unauthenticated', 'Login required');
-    const video = await this.getVideo(videoId);
-    if (!video.success) throw new VideoError('not-found', 'Video not found');
-    if (video.video.userId !== currentUser.uid && !currentUser.isAdmin) {
-      throw new VideoError('permission-denied', 'Not authorized');
-    }
-    const statsRef = collection(this.firestore, 'videos', videoId, 'stats');
-    const q = query(statsRef, orderBy('timestamp', 'desc'), limit(30));
-    const snap = await getDocs(q);
-    const dailyStats = snap.docs.map(d => ({ date: d.id, ...d.data() }));
-    return {
-      videoId,
-      totalViews: video.video.stats.views,
-      totalLikes: video.video.stats.likes,
-      totalShares: video.video.stats.shares,
-      averageWatchTime: video.video.stats.averageWatchTime,
-      dailyStats,
-    };
   }
 
   async getAudioLibrary(options = {}) {
@@ -1270,7 +1248,6 @@ const videoService = {
   purchaseVideoAccess: (vid) => getVideoService().purchaseVideoAccess(vid),
   sendTip: (vid, amt, msg) => getVideoService().sendTip(vid, amt, msg),
   setVideoChapters: (vid, uid, ch) => getVideoService().setVideoChapters(vid, uid, ch),
-  getVideoAnalytics: (vid) => getVideoService().getVideoAnalytics(vid),
   getAudioLibrary: (o) => getVideoService().getAudioLibrary(o),
   applyEffect: (vid, e) => getVideoService().applyEffect(vid, e),
   createDuet: (orig, file, meta) => getVideoService().createDuet(orig, file, meta),
