@@ -48,12 +48,14 @@ const CATEGORIES = [
 /**
  * Discovery cards data
  */
-// Real trending discovery: loaded from the feed service (trendingScore-ranked).
+// Discovery shortcuts. These are navigation entries into real search tabs /
+// routes — not a ranking claim: no trending score is computed for them, so the
+// copy describes the destination rather than asserting "most viewed/shared".
 const DISCOVERY_ITEMS = [
-  { id: 'reels', title: 'Trending Reels', subtitle: 'Most viewed this week', key: 'videos' },
-  { id: 'creators', title: 'Top Creators', subtitle: 'Follow the best', key: 'users' },
-  { id: 'posts', title: 'Viral Posts', subtitle: 'Most shared', key: 'posts' },
-  { id: 'communities', title: 'Communities', subtitle: 'Join the conversation', key: 'communities' },
+  { id: 'reels', title: 'Reels', subtitle: 'Short-form video', key: 'videos' },
+  { id: 'creators', title: 'Creators', subtitle: 'Find people to follow', key: 'people' },
+  { id: 'posts', title: 'Posts', subtitle: 'Browse public posts', key: 'posts' },
+  { id: 'communities', title: 'Communities', subtitle: 'Join a community', key: 'communities' },
 ];
 
 /**
@@ -332,7 +334,7 @@ const SearchScreen = memo(() => {
         )}
 
         {/* For You Section */}
-        <ForYouSection isDark={isDark} />
+        <ForYouSection isDark={isDark} onSelect={handleCategoryClick} />
 
         {/* Explore Categories */}
         <ExploreCategories
@@ -596,7 +598,7 @@ RecentSearches.displayName = 'RecentSearches';
 /**
  * For You Section
  */
-const ForYouSection = memo(({ isDark }) => (
+const ForYouSection = memo(({ isDark, onSelect }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -613,15 +615,18 @@ const ForYouSection = memo(({ isDark }) => (
     </div>
     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
       {DISCOVERY_ITEMS.map((item, index) => (
-        <motion.div
+        <motion.button
           key={item.id}
+          type="button"
+          onClick={() => onSelect?.(item.key)}
+          aria-label={`${item.title} — ${item.subtitle}`}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: index * 0.1 }}
           whileHover={{ scale: 1.05, y: -5 }}
           whileTap={{ scale: 0.98 }}
           className={cn(
-            'flex-shrink-0 w-[180px] h-[150px] rounded-2xl overflow-hidden',
+            'flex-shrink-0 w-[180px] h-[150px] rounded-2xl overflow-hidden text-left',
             'cursor-pointer relative group'
           )}
           style={{
@@ -645,7 +650,7 @@ const ForYouSection = memo(({ isDark }) => (
           </div>
           {/* Gradient overlay on hover */}
           <div className="absolute inset-0 bg-gradient-to-t from-arvdoul-purple/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
-        </motion.div>
+        </motion.button>
       ))}
     </div>
   </motion.div>

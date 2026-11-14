@@ -4191,3 +4191,19 @@ describe('N395 — named-user surfaces resolve identity through the read model',
     expect(s).toContain("pickDisplayName([comment?.userName], { fallback: 'Member' })");
   });
 });
+
+describe('N396 — discovery shortcuts claim no ranking they do not compute', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('SearchScreen discovery cards are navigation, not fabricated trend claims', () => {
+    const s = read('src/screens/SearchScreen.jsx');
+    expect(s).not.toContain("'Trending Reels'");
+    expect(s).not.toContain("'Most viewed this week'");
+    expect(s).not.toContain("'Viral Posts'");
+    expect(s).not.toContain("'Most shared'");
+    expect(s).not.toContain("'Top Creators'");
+    // Cards are real controls wired to a handler.
+    expect(s).toContain('onClick={() => onSelect?.(item.key)}');
+    expect(s).toContain('<ForYouSection isDark={isDark} onSelect={handleCategoryClick} />');
+  });
+});
