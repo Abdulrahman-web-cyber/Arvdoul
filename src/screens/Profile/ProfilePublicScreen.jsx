@@ -18,6 +18,7 @@ import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import {
   resolveCount,
+  pickDisplayName,
   deriveProfileIdentity,
   projectProfileForViewer,
   OFFLINE_PRESENCE,
@@ -573,7 +574,7 @@ export default function ProfilePublicScreen() {
             mutualFriends={mutualFriends}
             relationship={relationship}
             isFollowing={isFollowing}
-            targetName={effectiveProfile?.displayName || 'Creator'}
+            targetName={pickDisplayName([effectiveProfile?.displayName, effectiveProfile?.name], { fallback: null }) || ((effectiveProfile?.id || effectiveProfile?.uid || userId) ? `user ${String(effectiveProfile?.id || effectiveProfile?.uid || userId).slice(0, 6)}` : 'this user')}
             theme={theme}
             capabilities={capabilities}
             // The mutual-friends card is a summary, and `ProfileSocialContext`

@@ -686,7 +686,7 @@ const formatDuration = (seconds) => {
           >
             <img
               src={currentReel.creator.avatar}
-              alt={currentReel.creator.name || 'Creator'}
+              alt={currentReel.creator.name || ''}
               className="w-full h-full rounded-full object-cover border-2 border-black"
             />
           </div>
@@ -799,7 +799,7 @@ const formatDuration = (seconds) => {
               />
               <div>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold font-display">{currentReel.creator.name || 'Creator'}</span>
+                  <span className="text-xs font-bold font-display">{currentReel.creator.name || (currentReel.creator.id ? `user ${String(currentReel.creator.id).slice(0, 6)}` : '')}</span>
                   {currentReel.creator.verified && <CheckCircle2 className="w-3.5 h-3.5 text-arvdoul-blue fill-arvdoul-blue/20" />}
                 </div>
                 {currentReel.creator.username && (

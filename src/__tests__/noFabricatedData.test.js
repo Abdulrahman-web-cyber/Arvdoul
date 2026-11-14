@@ -4537,3 +4537,23 @@ describe('N412 — the menu footer does not assert an unverifiable version/produ
     expect(src).not.toContain('v3.0.0');
   });
 });
+
+describe('N413 — profile/reel surfaces do not label an unknown author as "Creator"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ReelsScreen resolves an unknown reel author to a uid prefix, not "Creator"', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).not.toContain("currentReel.creator.name || 'Creator'");
+    expect(s).toContain("currentReel.creator.id ? `user ${String(currentReel.creator.id).slice(0, 6)}`");
+  });
+
+  test('ProfilePublicScreen social-context name comes from the read model', () => {
+    const s = read('src/screens/Profile/ProfilePublicScreen.jsx');
+    expect(s).not.toContain("effectiveProfile?.displayName || 'Creator'");
+  });
+
+  test('ProfileVerificationModal submits a resolved applicant name, not a generic "Creator"', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain("applicantName: profile.displayName || 'Creator'");
+  });
+});

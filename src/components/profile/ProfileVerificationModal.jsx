@@ -130,7 +130,7 @@ export const ProfileVerificationModal = memo(({
     try {
       const userService = getUserService();
       const res = await userService.submitVerificationApplication(userId, {
-        applicantName: profile.displayName || 'Creator',
+        applicantName: pickDisplayName([profile.displayName, profile.name], { fallback: null }) || `user ${String(userId).slice(0, 6)}`,
         username: profile.username || '',
         category,
         reason: statement.trim(),
