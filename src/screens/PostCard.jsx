@@ -16,6 +16,7 @@ import * as monetizationService from '../services/monetizationService';
 import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
+import { resolveActorName } from '../services/profileReadModel.js';
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
@@ -1190,8 +1191,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isRepost && (
         <div className="mx-3 my-2 rounded-2xl border p-3" style={{ borderColor: tokens.border }}>
           <div className="flex items-center gap-2 mb-1">
-            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || 'Original author'} className="w-6 h-6 rounded-full object-cover" />
-            <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || 'Original author'}</span>
+            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || ''} className="w-6 h-6 rounded-full object-cover" />
+            <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || resolveActorName([], post.originalAuthorId)}</span>
           </div>
           {post.originalContent && (
             <p className="text-sm whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.originalContent}</p>

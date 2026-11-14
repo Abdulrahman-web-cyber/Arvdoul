@@ -9,6 +9,7 @@ import { getEventService } from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { resolveActorName } from '../../services/profileReadModel.js';
 import { format, isPast, isFuture, isToday } from "date-fns";
 
 const EventDetailScreen = () => {
@@ -533,17 +534,17 @@ const EventDetailScreen = () => {
                           >
                             <button
                               type="button"
-                              aria-label={`View ${attendee.displayName || attendee.username || 'attendee'} profile`}
+                              aria-label={`View ${resolveActorName([attendee.displayName, attendee.username], attendee.id)} profile`}
                               className="cursor-pointer w-full"
                               onClick={() => navigate(`/profile/${attendee.id}`)}
                             >
                               <img
-                                src={getSafeAvatarUrl(attendee.photoURL, attendee.displayName || attendee.username || 'Attendee', attendee.id)}
+                                src={getSafeAvatarUrl(attendee.photoURL, attendee.displayName || attendee.username || '', attendee.id)}
                                 alt=""
                                 className="w-16 h-16 mx-auto rounded-full object-cover mb-2 bg-gray-200 dark:bg-gray-600"
                               />
                               <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                {attendee.displayName || attendee.username || 'Attendee'}
+                                {resolveActorName([attendee.displayName, attendee.username], attendee.id)}
                               </p>
                             </button>
                             {attendee.status === 'checked_in' ? (

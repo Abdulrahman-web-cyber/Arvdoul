@@ -157,7 +157,7 @@ class PassportService {
     // The "MRZ" is a stylised identity strip, not an ICAO 9303 machine-readable
     // zone: the platform holds no passport number, sex or birth-date data, so
     // the check digits/expiry tail a real MRZ requires are not synthesized.
-    const sanitizedUsername = (profile.username || 'CITIZEN').toUpperCase().replace(/[^A-Z0-9]/g, '<');
+    const sanitizedUsername = (profile.username || '').toUpperCase().replace(/[^A-Z0-9]/g, '<');
     const identityLine1 = `ARVDOUL<${sanitizedUsername.padEnd(20, '<')}`.slice(0, 44);
     const identityLine2 = citizenId.replace(/[^A-Z0-9]/g, '<').slice(0, 44);
 
@@ -223,7 +223,7 @@ class PassportService {
         title: 'Genesis Citizen',
         ministry: 'Ministry of State Registry',
         category: 'Founding',
-        issuedAt: issueDate || 'Genesis Era',
+        issuedAt: issueDate,
         verified: true,
         sealType: 'gold',
         icon: '🏛️',
@@ -244,7 +244,7 @@ class PassportService {
       title: 'Border Clearance',
       ministry: 'Sovereign Border Agency',
       category: 'Security',
-      issuedAt: hasIdentityCredential ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasIdentityCredential ? issueDate : null,
       verified: hasIdentityCredential,
       sealType: 'emerald',
       icon: '🛡️',
@@ -262,7 +262,7 @@ class PassportService {
       title: 'Civic Vanguard',
       ministry: 'Chancellery of Civic Merit',
       category: 'Civic',
-      issuedAt: hasVanguard ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasVanguard ? issueDate : null,
       verified: hasVanguard,
       sealType: 'indigo',
       icon: '⚔️',
@@ -279,7 +279,7 @@ class PassportService {
       title: 'Creative Laureate',
       ministry: 'Guild of Sovereign Media',
       category: 'Creative',
-      issuedAt: hasCreative ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasCreative ? issueDate : null,
       verified: hasCreative,
       sealType: 'amber',
       icon: '🎨',
@@ -296,7 +296,7 @@ class PassportService {
       title: 'Diplomatic Envoy',
       ministry: 'Diplomatic Mission Corps',
       category: 'Diplomatic',
-      issuedAt: hasDiplomatic ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasDiplomatic ? issueDate : null,
       verified: hasDiplomatic,
       sealType: 'ruby',
       icon: '📜',
@@ -314,7 +314,7 @@ class PassportService {
       title: 'Honors Legion',
       ministry: 'High Council of Honors',
       category: 'Prestige',
-      issuedAt: hasHonors ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasHonors ? issueDate : null,
       verified: hasHonors,
       sealType: 'gold',
       icon: '👑',

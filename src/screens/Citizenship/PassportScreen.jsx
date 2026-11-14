@@ -374,7 +374,7 @@ export default function PassportScreen() {
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Issuance Epoch</span>
                       <span className="font-bold text-slate-800 dark:text-slate-100">
-                        {passport.issueDate || 'Genesis Era'}
+                        {passport.issueDate || '—'}
                       </span>
                     </div>
                   </div>
@@ -388,12 +388,12 @@ export default function PassportScreen() {
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Progression</span>
                   <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">Level {passport.level ?? '—'}</span>
-                  <span className="text-[9px] text-slate-500 block truncate">{passport.rankTitle || 'Registered'}</span>
+                  <span className="text-[9px] text-slate-500 block truncate">{passport.rankTitle || '—'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Active Days</span>
                   <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{passport.activeDaysCount ?? '—'}</span>
-                  <span className="text-[9px] text-slate-500 block">{passport.activeStreak != null ? `${passport.activeStreak}d streak` : 'Perpetual'}</span>
+                  <span className="text-[9px] text-slate-500 block">{passport.activeStreak != null ? `${passport.activeStreak}d streak` : '—'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Verified Visas</span>
@@ -406,7 +406,7 @@ export default function PassportScreen() {
               <div className={`mt-6 pt-4 border-t border-amber-500/20 font-mono text-[10px] sm:text-xs leading-relaxed tracking-[0.2em] select-all overflow-x-auto ${
                 isDark ? 'text-amber-400/80' : 'text-slate-800'
               }`}>
-                <p className="whitespace-pre">{passport.identityLines?.[0] || `ARVDOUL<${(passport.username || 'CITIZEN').toUpperCase()}`}</p>
+                <p className="whitespace-pre">{passport.identityLines?.[0] || `ARVDOUL<${(passport.username || '').toUpperCase()}`}</p>
                 <p className="whitespace-pre">{passport.identityLines?.[1] || passport.citizenId}</p>
               </div>
             </div>
@@ -525,7 +525,7 @@ export default function PassportScreen() {
 
                       <div className="mt-3 pt-2.5 border-t border-current/20 flex items-center justify-between text-[10px] font-mono opacity-70">
                         <span>{stamp.ministry}</span>
-                        <span>{stamp.issuedAt || 'Pending'}</span>
+                        <span>{stamp.issuedAt || (stamp.verified ? '—' : 'Pending')}</span>
                       </div>
                     </div>
                   );

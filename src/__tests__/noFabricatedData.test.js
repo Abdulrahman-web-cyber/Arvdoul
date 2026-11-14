@@ -4458,7 +4458,7 @@ describe('N408 — no unbacked cryptographic / audit claims in the UI', () => {
     const s = read('src/services/passportService.js');
     expect(s).not.toContain('Permanent right of passage and cryptographic peer clearance');
     expect(s).toContain('const hasIdentityCredential = isVerified === true');
-    expect(s).toContain('issuedAt: hasIdentityCredential ? (issueDate');
+    expect(s).toContain('issuedAt: hasIdentityCredential ? issueDate : null');
   });
 
   test('no screen claims cryptographic stamping/attestation', () => {
@@ -4600,5 +4600,39 @@ describe('N415 — no residual fabricated identity defaults in read model / veri
     const s = read('src/services/userService.js');
     expect(s).not.toContain("applicationData.applicantName || applicationData.displayName || 'Applicant'");
     expect(s).not.toContain("applicationData.category || 'Creator'");
+  });
+});
+
+describe('N416 — no fabricated person/era labels on list, event, sound and passport surfaces', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('sound lists show a neutral placeholder, never an invented "Unknown artist"', () => {
+    const s = read('src/screens/Sounds/SoundsScreen.jsx');
+    expect(s).not.toContain("'Unknown artist'");
+  });
+
+  test('reposts resolve the original author from real data, never "Original author"', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).not.toContain("'Original author'");
+    expect(s).toContain('resolveActorName');
+  });
+
+  test('event roster resolves attendee names, never an invented "Attendee"', () => {
+    const s = read('src/screens/Event/EventDetailScreen.jsx');
+    expect(s).not.toContain("'Attendee'");
+    expect(s).not.toContain("'attendee'");
+    expect(s).toContain('resolveActorName');
+  });
+
+  test('passport never mints a CITIZEN handle or Genesis/Epoch issuance date', () => {
+    const svc = read('src/services/passportService.js');
+    expect(svc).not.toContain("'CITIZEN'");
+    expect(svc).not.toContain("'Genesis Era'");
+    expect(svc).not.toContain("'Epoch I'");
+    const screen = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(screen).not.toContain("'CITIZEN'");
+    expect(screen).not.toContain("'Genesis Era'");
+    expect(screen).not.toContain("'Perpetual'");
+    expect(screen).not.toContain("'Registered'");
   });
 });

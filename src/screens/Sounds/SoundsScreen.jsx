@@ -272,7 +272,7 @@ export default function SoundsScreen() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 truncate">{snd.artist || 'Unknown artist'} • {snd.genre || 'Audio'}</p>
+                    <p className="text-xs text-gray-400 truncate">{snd.artist || '—'} • {snd.genre || 'Audio'}</p>
                     <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
                       <span>⏱️ {snd.duration || '—'}</span>
                       {snd.bpm != null && <span>⚡️ {snd.bpm} BPM</span>}
@@ -330,7 +330,7 @@ export default function SoundsScreen() {
               )}
               <div className="min-w-0">
                 <h4 className="font-bold text-xs text-white truncate">{currentSound.title}</h4>
-                <p className="text-[11px] text-gray-400 truncate">{currentSound.artist || 'Unknown artist'}</p>
+                <p className="text-[11px] text-gray-400 truncate">{currentSound.artist || '—'}</p>
               </div>
             </div>
 
