@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import marketplaceService from '../../services/marketplaceService';
 import { unknownNumber } from '../../lib/unknownNumber';
+import { pickDisplayName } from '../../services/profileReadModel.js';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const CATEGORIES = ['All', 'Digital Assets', 'Audio & Sounds', 'Merch & Apparel', 'Mentorship & VIP'];
@@ -208,7 +209,7 @@ export default function MarketplaceScreen() {
                         {(prod.creator?.name || '?').charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="text-xs text-gray-400 font-medium truncate">{prod.creator?.name || 'Seller'}</span>
+                    <span className="text-xs text-gray-400 font-medium truncate">{pickDisplayName([prod.creator?.name, prod.creator?.displayName, prod.creator?.username], { fallback: '—' })}</span>
                   </div>
 
                   <h3
@@ -221,7 +222,7 @@ export default function MarketplaceScreen() {
                   <div className="flex items-center justify-between pt-1">
                     {typeof prod.rating === 'number' && prod.rating > 0 ? (
                       <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
-                        <Star className="w-3.5 h-3.5 fill-yellow-400" /> {prod.rating} ({unknownNumber(prod.reviewsCount) ?? 0})
+                        <Star className="w-3.5 h-3.5 fill-yellow-400" /> {prod.rating}{unknownNumber(prod.reviewsCount) != null ? ` (${unknownNumber(prod.reviewsCount)})` : ''}
                       </div>
                     ) : (
                       <span className="text-[11px] text-gray-400">No reviews yet</span>
@@ -283,7 +284,7 @@ export default function MarketplaceScreen() {
                   )}
                   <div>
                     <h3 className="font-bold text-xs text-emerald-400 uppercase">{selectedProduct.category}</h3>
-                    <span className="text-sm font-semibold text-white">{selectedProduct.creator?.name || 'Seller'}</span>
+                    <span className="text-sm font-semibold text-white">{pickDisplayName([selectedProduct.creator?.name, selectedProduct.creator?.displayName, selectedProduct.creator?.username], { fallback: '—' })}</span>
                   </div>
                 </div>
                 <button onClick={() => setSelectedProduct(null)} className="text-gray-400 hover:text-white p-1">

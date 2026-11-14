@@ -4274,3 +4274,18 @@ describe('N399 — poll options and event host never fabricate a label', () => {
     expect(s).toContain("{hostDisplay || '—'}");
   });
 });
+
+describe('N400 — marketplace seller + review count are real or absent', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+
+  test('a seller with no name is not labelled "Seller"', () => {
+    expect(src).not.toContain("prod.creator?.name || 'Seller'");
+    expect(src).not.toContain("selectedProduct.creator?.name || 'Seller'");
+    expect(src).toContain("pickDisplayName([prod.creator?.name, prod.creator?.displayName, prod.creator?.username], { fallback: '—' })");
+  });
+
+  test('an unknown review count is omitted, not claimed as 0', () => {
+    expect(src).not.toContain("unknownNumber(prod.reviewsCount) ?? 0");
+    expect(src).toContain("unknownNumber(prod.reviewsCount) != null");
+  });
+});
