@@ -4088,3 +4088,19 @@ describe('N390 — Marketplace does not render a zero-star rating as if measured
     expect(src).toMatch(/prod\.salesCount > 0/);
   });
 });
+
+describe('N391 — PassportScreen renders "—" instead of a fabricated civic identity', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Citizenship/PassportScreen.jsx'), 'utf8');
+
+  test('a missing citizen tier / rank / name is not laundered into a concrete standing', () => {
+    // The screen defaulted a missing tier to 'Resident'/'Platform Resident',
+    // the holder name to 'Citizen Holder', the handle to 'State Resident' and
+    // the rank to 'Arrival' — asserting standing the profile may not have.
+    expect(src).not.toMatch(/citizenTier\?\.tier \|\| '(Resident|Platform Resident)'/);
+    expect(src).not.toMatch(/displayName \|\| 'Citizen Holder'/);
+    expect(src).not.toMatch(/'State Resident'/);
+    expect(src).not.toMatch(/rankTitle \|\| 'Arrival'/);
+    expect(src).toMatch(/citizenTier\?\.tier \|\| '—'/);
+    expect(src).toMatch(/rankTitle \|\| '—'/);
+  });
+});

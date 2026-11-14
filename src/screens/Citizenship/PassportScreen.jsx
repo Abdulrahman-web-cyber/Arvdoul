@@ -293,7 +293,7 @@ export default function PassportScreen() {
                   <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border inline-block ${
                     isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-amber-600/30 bg-amber-50 text-amber-900'
                   }`}>
-                    {passport.citizenTier?.tier || 'Resident'}
+                    {passport.citizenTier?.tier || '—'}
                   </span>
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function PassportScreen() {
                     {passport.photoURL ? (
                       <img
                         src={passport.photoURL}
-                        alt={passport.displayName || 'Citizen'}
+                        alt={passport.displayName || '—'}
                         className="w-28 h-32 rounded-xl object-cover"
                       />
                     ) : (
@@ -329,13 +329,13 @@ export default function PassportScreen() {
                   <div>
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Citizen Holder Name</span>
                     <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>{passport.displayName || 'Citizen Holder'}</span>
+                      <span>{passport.displayName || '—'}</span>
                       {passport.isVerified && (
                         <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                       )}
                     </h3>
                     <p className="text-xs text-amber-500 dark:text-amber-400 font-mono">
-                      {passport.username ? `@${passport.username}` : 'State Resident'}
+                      {passport.username ? `@${passport.username}` : '—'}
                     </p>
                   </div>
 
@@ -347,7 +347,7 @@ export default function PassportScreen() {
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Diplomatic Tier</span>
                       <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                         <Crown className="w-3.5 h-3.5" />
-                        {passport.citizenTier?.tier || 'Platform Resident'}
+                        {passport.citizenTier?.tier || '—'}
                       </span>
                     </div>
 
@@ -356,7 +356,7 @@ export default function PassportScreen() {
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Civic Rank</span>
                       <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                        {passport.rankTitle || 'Arrival'}
+                        {passport.rankTitle || '—'}
                       </span>
                     </div>
 
