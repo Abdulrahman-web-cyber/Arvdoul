@@ -154,9 +154,12 @@ class PassportService {
       issueDate,
     });
 
+    // The "MRZ" is a stylised identity strip, not an ICAO 9303 machine-readable
+    // zone: the platform holds no passport number, sex or birth-date data, so
+    // the check digits/expiry tail a real MRZ requires are not synthesized.
     const sanitizedUsername = (profile.username || 'CITIZEN').toUpperCase().replace(/[^A-Z0-9]/g, '<');
-    const mrtdLine1 = `P<ARV${sanitizedUsername.padEnd(20, '<')}`.slice(0, 44);
-    const mrtdLine2 = `${citizenId.replace(/[^A-Z0-9]/g, '<')}5ARV0001014M9912316<<<<<<<<<<<<<<02`.slice(0, 44);
+    const identityLine1 = `ARVDOUL<${sanitizedUsername.padEnd(20, '<')}`.slice(0, 44);
+    const identityLine2 = citizenId.replace(/[^A-Z0-9]/g, '<').slice(0, 44);
 
     return {
       userId: targetUserId,
@@ -191,7 +194,7 @@ class PassportService {
       },
       visaStamps,
       nationalMotto: 'Veritas, Civitas, Concordia',
-      mrtdLines: [mrtdLine1, mrtdLine2],
+      identityLines: [identityLine1, identityLine2],
     };
   }
 

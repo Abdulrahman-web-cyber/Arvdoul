@@ -402,12 +402,12 @@ export default function PassportScreen() {
                 </div>
               </div>
 
-              {/* Machine Readable Travel Document (MRTD) Zone */}
+              {/* Citizen identity strip (stylised, not an ICAO 9303 MRZ) */}
               <div className={`mt-6 pt-4 border-t border-amber-500/20 font-mono text-[10px] sm:text-xs leading-relaxed tracking-[0.2em] select-all overflow-x-auto ${
                 isDark ? 'text-amber-400/80' : 'text-slate-800'
               }`}>
-                <p className="whitespace-pre">{passport.mrtdLines?.[0] || `P<ARV${(passport.username || 'CITIZEN').toUpperCase()}<<<<<<<<<<<<<<<<<<<<<<<<<<`}</p>
-                <p className="whitespace-pre">{passport.mrtdLines?.[1] || `${passport.citizenId}5ARV0001014M9912316<<<<<<<<<<<<<<02`}</p>
+                <p className="whitespace-pre">{passport.identityLines?.[0] || `ARVDOUL<${(passport.username || 'CITIZEN').toUpperCase()}`}</p>
+                <p className="whitespace-pre">{passport.identityLines?.[1] || passport.citizenId}</p>
               </div>
             </div>
 

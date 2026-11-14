@@ -4510,3 +4510,21 @@ describe('N410 — verification/reward surfaces do not overstate what the platfo
     expect(s).not.toMatch(/catch \{ return 'Unknown'; \}/);
   });
 });
+
+describe('N411 — the passport identity strip is not a fabricated machine-readable zone', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('passportService exposes identityLines, not an ICAO-9303 mrtdLines', () => {
+    const s = read('src/services/passportService.js');
+    expect(s).not.toContain('mrtdLine2');
+    expect(s).not.toContain('5ARV0001014M9912316');
+    expect(s).toContain('identityLines: [identityLine1, identityLine2]');
+  });
+
+  test('PassportScreen renders identityLines and no hardcoded MRZ tail', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(s).not.toContain('mrtdLines');
+    expect(s).not.toContain('5ARV0001014M9912316');
+    expect(s).toContain('passport.identityLines?.[0]');
+  });
+});
