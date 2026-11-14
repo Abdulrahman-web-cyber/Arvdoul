@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Heart, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getMonetizationService } from '../../services/monetizationService.js';
+import { pickDisplayName } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 
 const PRESET_AMOUNTS = [10, 50, 100, 250, 500, 1000];
@@ -28,6 +29,10 @@ export default function ProfileTipModal({
   const [success, setSuccess] = useState(false);
 
   const recipientId = recipient?.id || recipient?.uid;
+  // Names are metadata on the transaction record; an unknown party stays
+  // undefined rather than being recorded as a fabricated 'Creator'/'Supporter'.
+  const recipientName = pickDisplayName([recipient?.displayName, recipient?.username], { fallback: null });
+  const senderName = pickDisplayName([currentUser?.displayName, currentUser?.username], { fallback: null });
   const currentUserId = currentUser?.uid || currentUser?.id;
 
   // Fetch current user's balance
@@ -96,8 +101,8 @@ export default function ProfileTipModal({
         'creator_tip',
         {
           note: note.trim() || undefined,
-          recipientName: recipient.displayName || recipient.username || 'Creator',
-          senderName: currentUser.displayName || currentUser.username || 'Supporter',
+          recipientName: recipientName ?? undefined,
+          senderName: senderName ?? undefined,
         },
         idempotencyKey
       );
@@ -160,7 +165,7 @@ export default function ProfileTipModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                Tip {recipient?.displayName || recipient?.username || 'Creator'}
+                Tip{recipientName ? ` ${recipientName}` : ''}
                 <Sparkles className="w-4 h-4 text-amber-500" />
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">

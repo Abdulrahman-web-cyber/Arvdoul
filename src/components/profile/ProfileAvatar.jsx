@@ -92,11 +92,11 @@ const ProfileAvatar = memo(({
           !isOwner && 'cursor-pointer'
         )}
         style={{ width: size, height: size }}
-        aria-label={`${name || 'User'}'s avatar${isOwner ? ' (click to view)' : ''}`}
+        aria-label={`${name || 'Member'}'s avatar${isOwner ? ' (click to view)' : ''}`}
       >
         <img
           src={effectiveSrc}
-          alt={name || 'User avatar'}
+          alt={name || 'Member avatar'}
           className="w-full h-full object-cover rounded-full"
           onError={handleImageError}
         />

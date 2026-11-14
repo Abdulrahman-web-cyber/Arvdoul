@@ -14,6 +14,7 @@ import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
+import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
 
 const ProfileQRCodeModal = memo(({
@@ -28,8 +29,8 @@ const ProfileQRCodeModal = memo(({
   const [showScanner, setShowScanner] = useState(false);
 
   const isDark = theme === 'dark';
-  const username = profile?.username || 'user';
-  const displayName = profile?.displayName || profile?.name || 'Creator';
+  const username = pickHandle([profile?.username, profile?.handle]) || '';
+  const displayName = pickDisplayName([profile?.displayName, profile?.name], { fallback: '—' });
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
 
   // Deterministic global identity code from canonical helper

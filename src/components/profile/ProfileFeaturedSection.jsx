@@ -15,6 +15,7 @@ import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Pin, Play, Images, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { pickDisplayName } from '../../services/profileReadModel.js';
 
 const ProfileFeaturedSection = memo(({
   profile,
@@ -25,7 +26,7 @@ const ProfileFeaturedSection = memo(({
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
-  const creatorName = profile?.displayName || 'Creator';
+  const creatorName = pickDisplayName([profile?.displayName, profile?.name], { fallback: '—' });
 
   // Extract pinned or featured posts if available (strictly real posts)
   const items = React.useMemo(() => {

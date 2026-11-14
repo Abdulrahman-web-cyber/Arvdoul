@@ -4222,3 +4222,39 @@ describe('N397 — TitlesScreen renders the granted title or nothing', () => {
     expect(src).toContain("{profile?.isVerified ? 'Verified' : 'Unverified'}");
   });
 });
+
+describe('N398 — profile surfaces render real identity or a neutral blank', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileCitizenshipCard does not assert a "Resident" tier when unknown', () => {
+    const s = read('src/components/profile/ProfileCitizenshipCard.jsx');
+    expect(s).not.toContain("{passport.citizenTier?.tier || 'Resident'}");
+    expect(s).toContain("{passport.citizenTier?.tier || '—'}");
+  });
+
+  test('ProfileFeaturedSection resolves the creator name through the read model', () => {
+    const s = read('src/components/profile/ProfileFeaturedSection.jsx');
+    expect(s).not.toContain("profile?.displayName || 'Creator'");
+    expect(s).toContain("pickDisplayName([profile?.displayName, profile?.name], { fallback: '—' })");
+  });
+
+  test('ProfileQRCodeModal resolves handle + name without "user"/"Creator"', () => {
+    const s = read('src/components/profile/ProfileQRCodeModal.jsx');
+    expect(s).not.toContain("profile?.username || 'user'");
+    expect(s).not.toContain("profile?.displayName || profile?.name || 'Creator'");
+    expect(s).toContain("pickHandle([profile?.username, profile?.handle]) || ''");
+  });
+
+  test('ProfileAvatar accessible name is not the generic "User"', () => {
+    const s = read('src/components/profile/ProfileAvatar.jsx');
+    expect(s).not.toContain("name || 'User'");
+    expect(s).toContain("name || 'Member'");
+  });
+
+  test('ProfileTipModal records real party names, never "Creator"/"Supporter"', () => {
+    const s = read('src/components/profile/ProfileTipModal.jsx');
+    expect(s).not.toContain("recipient.displayName || recipient.username || 'Creator'");
+    expect(s).not.toContain("currentUser.displayName || currentUser.username || 'Supporter'");
+    expect(s).toContain("pickDisplayName([recipient?.displayName, recipient?.username], { fallback: null })");
+  });
+});
