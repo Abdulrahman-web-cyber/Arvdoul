@@ -951,11 +951,18 @@ class UltimateCommentService {
 
       const hasMore = snapshot.size === pageSize;
       const nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
+      // `snapshot.size` is only this page; the sharded `replies` counter is the
+      // exact total (the drawer uses it for the expander label).
+      const total = await countersManager.get({
+        docPath: `comments/${commentId}`,
+        field: 'replies',
+        fallback: snapshot.size,
+      });
 
       return {
         success: true,
         replies,
-        total: snapshot.size,
+        total,
         parentCommentId: commentId,
         hasMore,
         nextCursor
@@ -1158,12 +1165,21 @@ class UltimateCommentService {
   // high-reaction comments.
   async _overlayReactionCounts(comments) {
     if (!Array.isArray(comments) || comments.length === 0) return comments;
+    // The drawer's reply expander reads a derived `repliesCount` field, which no
+    // read path ever populated — so a comment with pre-existing replies showed
+    // no expander until the viewer replied themselves. Initialize it from the
+    // doc and overlay the sharded `replies` count (`_buildNestedComments` later
+    // overwrites `replies` with the child array, so the alias must be distinct).
+    for (const c of comments) {
+      if (c && c.repliesCount === undefined) c.repliesCount = 0;
+    }
     try {
       await countersManager.applyAll({
         items: comments,
         collection: 'comments',
-        fields: ['likes', 'dislikes'],
+        fields: ['likes', 'dislikes', 'replies'],
         scope: 'top',
+        fieldAliases: { replies: 'repliesCount' },
       });
     } catch (error) {
       logger.warn('Comment reaction-count overlay failed', { error: error?.message });

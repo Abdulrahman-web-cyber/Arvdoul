@@ -34,7 +34,10 @@ describe('comment reaction counts resolve their sharded counter (N439)', () => {
     // The overlay helper exists and targets the comment reaction fields.
     expect(commentServiceSrc).toMatch(/async _overlayReactionCounts\(comments\)/);
     expect(commentServiceSrc).toMatch(/collection: 'comments'/);
-    expect(commentServiceSrc).toMatch(/fields: \['likes', 'dislikes'\]/);
+    expect(commentServiceSrc).toMatch(/fields: \['likes', 'dislikes', 'replies'\]/);
+    // `replies` is aliased to the derived `repliesCount` the drawer reads, so
+    // the overlay never clobbers the `replies` array the nested build writes.
+    expect(commentServiceSrc).toMatch(/fieldAliases: \{ replies: 'repliesCount' \}/);
 
     // getCommentsByPost, getComment, getReplies and the realtime subscription
     // each call it (4 call sites in the service).
@@ -99,5 +102,36 @@ describe('countersManager.applyAll overlays shard sums', () => {
     }
     await mgr.applyAll({ items, collection: 'comments', fields: ['likes'], scope: 'top' });
     items.forEach((it, i) => expect(it.likes).toBe(i));
+  });
+
+  test('aliases a shard field onto a derived field (replies → repliesCount)', async () => {
+    const shardStore = new Map();
+    const mgr = makeManager(shardStore);
+    shardStore.set(`counter_shards/${mgr._shardKey('comments/c1', 'replies', 0)}`, 4);
+
+    const items = [{ id: 'c1', likes: 0, repliesCount: 0 }];
+    await mgr.applyAll({
+      items,
+      collection: 'comments',
+      fields: ['replies'],
+      scope: 'top',
+      fieldAliases: { replies: 'repliesCount' },
+    });
+    expect(items[0].repliesCount).toBe(4);
+    // `replies` itself is untouched (it may be the child array).
+    expect(items[0].replies).toBeUndefined();
+  });
+
+  test('a non-numeric legacy (replies array after a nested build) does not leak', async () => {
+    const mgr = makeManager(new Map());
+    const items = [{ id: 'c1', replies: [{ id: 'r1' }], repliesCount: undefined }];
+    await mgr.applyAll({
+      items,
+      collection: 'comments',
+      fields: ['replies'],
+      scope: 'top',
+      fieldAliases: { replies: 'repliesCount' },
+    });
+    expect(items[0].repliesCount).toBe(0);
   });
 });

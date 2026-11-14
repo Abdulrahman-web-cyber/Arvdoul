@@ -537,7 +537,10 @@ which is applied in `getCommentsByPost`, `getComment`, `getReplies` **and** the
 `subscribeToPostComments` snapshot callback (the realtime path must overlay too,
 or a live update replaces an optimistic like count with the seeded `0`).
 `likesBy` is not a substitute — it is capped at `REACTION_ARRAY_CAP` (200), so it
-undercounts. `commentReactionCounterSourceGuard.test.js` (guards job) pins it.
+undercounts. The drawer's reply expander reads a derived `repliesCount`, not the
+`replies` child array `_buildNestedComments` writes, so the overlay aliases the
+sharded `replies` counter onto `repliesCount` and never onto `replies`.
+`commentReactionCounterSourceGuard.test.js` (guards job) pins it.
 
 ## Achievement/title metrics are computed, never assumed
 `ACHIEVEMENTS_CATALOG` / `TITLES_CATALOG` criteria are scored against metric

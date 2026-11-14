@@ -164,10 +164,13 @@ class CountersManager {
    * @param {string} [opts.idField='id']
    * @param {string[]} opts.fields
    * @param {string} [opts.scope='top'] - 'stats' writes item.stats[field]
-   * @param {number} [opts.chunkSize=20]
+   * @param {number} [opts.chunkSize]
+   * @param {Object} [opts.fieldAliases] - shard field → target field on the item
+   *   (e.g. `{ replies: 'repliesCount' }`, because the drawer's reply count is a
+   *   derived field, not the `replies` array `_buildNestedComments` writes).
    * @returns {Promise<Array>} the same items array
    */
-  async applyAll({ items, collection, idField = 'id', fields, scope = 'top', chunkSize }) {
+  async applyAll({ items, collection, idField = 'id', fields, scope = 'top', chunkSize, fieldAliases = {} }) {
     if (!Array.isArray(items) || items.length === 0 || !Array.isArray(fields) || fields.length === 0) {
       return items;
     }
@@ -206,13 +209,16 @@ class CountersManager {
       chunk.forEach((item, localIdx) => {
         fields.forEach((field) => {
           const key = `${localIdx}\u0000${field}`;
-          const legacy = scope === 'stats' ? (item.stats && item.stats[field]) || 0 : item[field] || 0;
+          const rawLegacy = scope === 'stats' ? (item.stats && item.stats[field]) : item[field];
+          // Coerce: a non-numeric legacy (e.g. `replies` after a nested build
+          // turned it into an array) is not a count and falls back to 0.
+          const legacy = Number.isFinite(Number(rawLegacy)) ? Number(rawLegacy) : 0;
           const value = sums.has(key) ? sums.get(key) : legacy;
           if (scope === 'stats') {
             item.stats = item.stats || {};
             item.stats[field] = value;
           } else {
-            item[field] = value;
+            item[fieldAliases[field] || field] = value;
           }
         });
       });

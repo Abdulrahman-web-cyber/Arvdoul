@@ -24,11 +24,13 @@ harden-and-complete campaign; it supersedes the (now-stale) lead list in
   - [x] T1.3 Merge in `functions/index.js`; guard test; CI `guards`; ledger; AGENTS.md.
 - **Exit**: a community's Events card shows the real count; guard pins it.
 
-### T2 — Extend the fabricated-data sweep to remaining display `X || 0`
+### T2 — Extend the fabricated-data sweep to remaining display `X || 0` — DONE (verified clean)
 - **Evidence**: `scripts/`-adjacent sweep done for most; re-audit `Admin/*`, `Economy/*`,
   `Profile/*` for `amount || 0`, `count || 0`, `balance || 0` in *display* position.
-- **Sub-tasks**: T2.1 inventory remaining sites; T2.2 convert to `unknownNumber` → `—`;
-  T2.3 extend `noFabricatedData.test.js`.
+- **Sub-tasks**: T2.1 inventory remaining sites — DONE (full `src` sweep of `?? 0`/`|| 0`);
+  T2.2 convert to `unknownNumber` → `—` — none needed (every remaining hit is either
+  pre-gated on presence, a non-display accumulator, or an event-handler coordinate);
+  T2.3 extend `noFabricatedData.test.js` — already covers the display cases.
 
 ### T3 — `live_streams.stats` — verify every seeded counter has a writer — DONE (verified, no change)
 - **Evidence**: `liveService.startLiveStream` seeds `totalViewers/totalTips/totalGifts/
@@ -63,8 +65,10 @@ harden-and-complete campaign; it supersedes the (now-stale) lead list in
 
 ### T7 — Cloud Functions contract coverage for every export
 - **Evidence**: backlog item 2 — assert every `FUNCTIONS` key resolves to a real export.
-- **Sub-tasks**: T7.1 extend `deployIntegrity.test.js`; T7.2 every export has a caller or
-  is explicitly internal.
+- **Sub-tasks**: T7.1 extend `deployIntegrity.test.js` — DONE (`deployIntegrity`
+  "every FUNCTIONS key resolves to a deployed export"); T7.2 every export has a caller or is
+  explicitly internal — DONE (`functionsInventoryGuard.test.js`: no dead FUNCTIONS key, no
+  ad-hoc callable literal, no new unreferenced callable; baseline may only shrink).
 
 ### T8 — Firestore rules ↔ query parity for the top query shapes
 - **Sub-tasks**: T8.1 static `queryToRuleMatrix` test; T8.2 emulator adversarial suite.
