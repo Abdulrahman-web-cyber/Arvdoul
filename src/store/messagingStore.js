@@ -141,7 +141,9 @@ export const useMessagingStore = create((set, get) => ({
       id: optimisticId,
       conversationId,
       senderId: userId,
-      senderName: displayName || 'Unknown',
+      // Optimistic identity only when real; the reader resolves the real
+      // participant rather than showing a fabricated 'Unknown' sender.
+      senderName: displayName || null,
       senderPhoto: photoURL || null,
       type: messageData.type || 'text',
       content: messageData.content || '',

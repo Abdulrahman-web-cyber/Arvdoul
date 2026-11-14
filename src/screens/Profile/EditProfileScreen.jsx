@@ -357,7 +357,7 @@ export default function EditProfileScreen() {
 
   const handleRemoveAvatar = useCallback(async () => {
     if (!currentUid) return;
-    const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || 'Citizen', currentUid);
+    const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || null, currentUid);
     setAvatarFile(null);
     setAvatarPreview(defaultAvatar);
     if (userService?.updateUserProfile) {

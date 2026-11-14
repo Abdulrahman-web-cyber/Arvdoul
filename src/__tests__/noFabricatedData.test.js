@@ -4353,3 +4353,32 @@ describe('N402 — auth identity and remaining surfaces never assert a generic "
     expect(read('src/screens/Community/CommunityDetailScreen.jsx')).not.toContain("member.displayName || 'User'");
   });
 });
+
+describe('N403 — remaining identity placeholders are resolved or neutral', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('messagingStore optimistic sender is null when unknown', () => {
+    expect(read('src/store/messagingStore.js')).not.toContain("senderName: displayName || 'Unknown'");
+  });
+
+  test('RankingsScreen a11y label resolves the entrant, never "Unknown"', () => {
+    const s = read('src/screens/Rankings/RankingsScreen.jsx');
+    expect(s).not.toContain("|| item.community?.name || 'Unknown'");
+    expect(s).toContain('pickDisplayName([item.user?.displayName, item.user?.username, item.community?.name]');
+  });
+
+  test('EditProfile / ProfileMy avatar fallbacks are not "Citizen"', () => {
+    expect(read('src/screens/Profile/EditProfileScreen.jsx')).not.toContain("formData.displayName || 'Citizen'");
+    expect(read('src/screens/Profile/ProfileMyScreen.jsx')).not.toContain("deriveHandle(currentUser?.email) || 'Citizen'");
+  });
+
+  test('CommunitySettings does not assert a "Guest" role', () => {
+    expect(read('src/screens/Community/CommunitySettingsScreen.jsx')).not.toContain("myRole || 'Guest'");
+  });
+
+  test('GroupInfo resolves the added member name through the read model', () => {
+    const s = read('src/screens/GroupInfoScreen.jsx');
+    expect(s).not.toContain("targetUser.displayName || 'Member'");
+    expect(s).toContain("pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'Member' })");
+  });
+});

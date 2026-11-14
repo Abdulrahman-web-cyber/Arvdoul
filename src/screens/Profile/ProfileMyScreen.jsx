@@ -155,7 +155,7 @@ export default function ProfileMyScreen() {
       handleFallbacks: [currentUser?.displayName, base.displayName, currentUser?.email, base.email],
       handleFallback: 'citizen',
       displayCandidates: [currentUser?.displayName, currentUser?.name, base.displayName, base.name],
-      displayFallback: deriveHandle(currentUser?.email) || 'Citizen',
+      displayFallback: deriveHandle(currentUser?.email) || (currentUserId ? `user ${String(currentUserId).slice(0, 6)}` : '—'),
       followerCandidates: [base.followerCount, base.followersCount, currentUser?.followerCount],
       followingCandidates: [base.followingCount, currentUser?.followingCount],
       postCandidates: [base.postCount, posts?.length],

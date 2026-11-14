@@ -163,7 +163,7 @@ const RankCard = ({ rank, item, isDark }) => {
           : "bg-white hover:bg-slate-50 border-slate-200"
       )}
       role="listitem"
-      aria-label={`Rank ${rank}: ${item.user?.displayName || item.community?.name || 'Unknown'}`}
+      aria-label={`Rank ${rank}: ${pickDisplayName([item.user?.displayName, item.user?.username, item.community?.name], { fallback: (item.user?.uid || item.user?.id) ? `user ${String(item.user.uid || item.user.id).slice(0, 6)}` : '—' })}`}
     >
       {/* Rank Indicator */}
       <div className="w-8 text-center shrink-0 flex items-center justify-center">

@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getMessagingService } from '../services/messagesService';
 import userService from '../services/userService';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import { cn } from '../lib/utils';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { toast } from 'sonner';
@@ -234,7 +235,7 @@ export default function GroupInfoScreen() {
     try {
       const svc = getMessagingService();
       await svc.addParticipants(conversationId, [targetUid], user.uid);
-      toast.success(`${targetUser.displayName || 'Member'} added to group!`);
+      toast.success(`${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'Member' })} added to group!`);
       setParticipants((prev) => [...prev, targetUid]);
       setParticipantDetails((prev) => ({ ...prev, [targetUid]: targetUser }));
       setMemberResults((prev) => prev.filter((u) => (u.uid || u.id) !== targetUid));

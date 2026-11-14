@@ -364,7 +364,7 @@ export default function CommunitySettingsScreen() {
                 <span className="capitalize">{community?.privacy || 'public'}</span>
                 <span>·</span>
                 <span className="text-purple-400 font-semibold uppercase text-[10px]">
-                  Your Role: {myRole || 'Guest'}
+                  Your Role: {myRole || '—'}
                 </span>
               </div>
             </div>
