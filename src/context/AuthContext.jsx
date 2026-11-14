@@ -183,15 +183,21 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
         ? user.displayName.toLowerCase().replace(/[^a-z0-9_]/g, '')
         : (user.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (userProfile?.username && !isDigitsOnly(userProfile.username) ? userProfile.username : 'member')));
 
+  // An unresolved identity stays the real uid prefix; the literal 'User' was a
+  // fabricated name (N402). Falls back only when there is no profile/auth name
+  // and no email local part to derive from (e.g. a phone-only session).
+  const uidLabel = `user ${String(user.uid || '').slice(0, 6)}`;
+  const resolvedDisplayName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || uidLabel;
+
   const userData = {
     uid: user.uid,
     email: user.email,
     emailVerified: user.emailVerified,
-    displayName: userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
+    displayName: resolvedDisplayName,
     username: cleanDerivedUsername,
     photoURL: getSafeAvatarUrl(
       userProfile?.photoURL || user.photoURL,
-      userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
+      resolvedDisplayName,
       user.uid
     ),
     phoneNumber: userProfile?.phoneNumber || user.phoneNumber,

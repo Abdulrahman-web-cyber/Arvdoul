@@ -16,6 +16,7 @@ import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 import achievementService from "../../services/achievementService";
 import { formatCount } from "../../lib/searchUtils";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
+import { pickDisplayName } from "../../services/profileReadModel.js";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -818,7 +819,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                         themeColors.text
                       )}
                     >
-                      {currentUser?.displayName || "User"}
+                      {pickDisplayName([currentUser?.displayName, currentUser?.username], { fallback: currentUser?.uid ? `user ${String(currentUser.uid).slice(0, 6)}` : '—' })}
                     </h3>
 
                     {/* Unique Username with Verification Badge */}

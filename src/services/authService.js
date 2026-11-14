@@ -878,7 +878,7 @@ class ProductionAuthService {
           const lastName = (step1.lastName || additionalInfo?.profile?.family_name || '').trim();
           const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
 
-          const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || 'User';
+          const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || `user ${String(user.uid).slice(0, 6)}`;
           const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
           
           let nameCandidate = (firstName && lastName)
@@ -924,7 +924,7 @@ class ProductionAuthService {
         } catch (profileError) {
           logger.error('❌ Profile creation failed', profileError);
           this._storePendingProfile(user.uid, {
-            displayName: user.displayName || 'User',
+            displayName: user.displayName || `user ${String(user.uid).slice(0, 6)}`,
             email: user.email,
             photoURL: user.photoURL,
             authProvider: 'google',
@@ -950,7 +950,7 @@ class ProductionAuthService {
           userId: user.uid,
           email: user.email,
           emailVerified: true,
-          displayName: user.displayName || profile?.displayName || 'User',
+          displayName: user.displayName || profile?.displayName || `user ${String(user.uid).slice(0, 6)}`,
           photoURL: user.photoURL || profile?.photoURL || null,
           isNewUser: isAccountNew,
           hasExistingProfile: Boolean(profile && !profileCreated),

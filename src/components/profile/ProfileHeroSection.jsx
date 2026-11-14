@@ -19,7 +19,7 @@ import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Sha
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickHandle, deriveHandle } from '../../services/profileReadModel.js';
+import { pickHandle, deriveHandle, pickDisplayName } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
@@ -295,12 +295,13 @@ export const ProfileHeroSection = memo(({
     setShowRoadmapModal(true);
   }, []);
 
-  const profileUid = profile?.id || profile?.uid || 'user';
+  const profileUid = profile?.id || profile?.uid || null;
 
   // The call route keys off a conversation id, not a user id: resolve (or
   // create) the direct conversation first so the signaling doc has the
   // `participants` array the rules require.
   const handleStartCall = useCallback(async () => {
+    if (!profileUid) return;
     try {
       const { getMessagingService } = await import('../../services/messagesService.js');
       const { conversation } = await getMessagingService().createConversation([profileUid]);
@@ -310,8 +311,8 @@ export const ProfileHeroSection = memo(({
     }
   }, [profileUid, navigate]);
 
-  const displayName = profile?.displayName || profile?.name || 'User';
-  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || 'user';
+  const displayName = pickDisplayName([profile?.displayName, profile?.name], { fallback: profileUid ? `user ${String(profileUid).slice(0, 6)}` : '—' });
+  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || null;
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
 
   // Status flags strictly derived from profile without fabricated defaults
@@ -374,17 +375,18 @@ export const ProfileHeroSection = memo(({
   const isOnline = Boolean(profile?.presence?.status === 'online' || profile?.isOnline === true);
 
   // Copy handle to clipboard
+  const handleLabel = username || displayName;
   const handleCopyHandle = useCallback(async (e) => {
     e?.stopPropagation?.();
     try {
-      await navigator.clipboard.writeText(`@${username}`);
+      await navigator.clipboard.writeText(`@${handleLabel}`);
       setCopiedHandle(true);
-      toast.success(`Copied @${username} to clipboard`);
+      toast.success(`Copied @${handleLabel} to clipboard`);
       setTimeout(() => setCopiedHandle(false), 2000);
     } catch {
-      toast.info(`@${username}`);
+      toast.info(`@${handleLabel}`);
     }
-  }, [username]);
+  }, [handleLabel]);
 
   // Real Bio, Tagline, Location, Website without placeholder stubs
   const bio = (typeof profile?.bio === 'string' && profile.bio.trim()) ? profile.bio.trim() : (typeof profile?.about === 'string' ? profile.about.trim() : '');
@@ -488,7 +490,7 @@ export const ProfileHeroSection = memo(({
               className="group/handle inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer"
               title="Click to copy handle"
             >
-              <span>@{username}</span>
+              <span>@{handleLabel}</span>
               {copiedHandle ? (
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
               ) : (

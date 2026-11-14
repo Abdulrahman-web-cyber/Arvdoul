@@ -4324,3 +4324,32 @@ describe('N401 — messaging/call identity is real or a uid prefix', () => {
     expect(s).toContain("(senderName?.[0] || '?')");
   });
 });
+
+describe('N402 — auth identity and remaining surfaces never assert a generic "User"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('AuthContext derives the session name from real data or the uid prefix', () => {
+    const s = read('src/context/AuthContext.jsx');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).toContain('const resolvedDisplayName = userProfile?.displayName || user.displayName || user.email?.split(\'@\')[0] || uidLabel;');
+  });
+
+  test('authService never seeds "User" as a display name', () => {
+    const s = read('src/services/authService.js');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).toContain('`user ${String(user.uid).slice(0, 6)}`');
+  });
+
+  test('ProfileHeroSection resolves name/handle without ' + "'User'/'user'", () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).not.toContain("deriveHandle(displayName) || 'user'");
+    expect(s).toContain('pickDisplayName([profile?.displayName, profile?.name]');
+  });
+
+  test('QuickAccessPanel / GiftScreen / CommunityDetail resolve member identity', () => {
+    expect(read('src/components/Shared/QuickAccessPanel.jsx')).not.toContain('currentUser?.displayName || "User"');
+    expect(read('src/screens/GiftScreen.jsx')).not.toContain("recipient?.name || 'User'");
+    expect(read('src/screens/Community/CommunityDetailScreen.jsx')).not.toContain("member.displayName || 'User'");
+  });
+});

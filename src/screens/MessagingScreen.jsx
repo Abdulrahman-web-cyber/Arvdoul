@@ -229,7 +229,7 @@ export default function MessagingScreen() {
               <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_16px_rgba(168,85,247,0.35)]"
                 style={{ background: BRAND_GRADIENT }}>
                 <img
-                  src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'User', user?.uid)}
+                  src={getSafeAvatarUrl(user?.photoURL, user?.displayName, user?.uid)}
                   alt="My Profile"
                   className={`w-full h-full rounded-full object-cover border-2 ${isDark ? 'border-[#030614]' : 'border-white'}`}
                 />

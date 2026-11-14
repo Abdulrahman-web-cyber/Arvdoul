@@ -9,6 +9,7 @@ import { getCommunityService } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
 import { unknownNumber } from '../../lib/unknownNumber.js';
+import { pickDisplayName } from '../../services/profileReadModel.js';
 
 const CommunityDetailScreen = () => {
   const { communityId } = useParams();
@@ -527,7 +528,7 @@ const CommunityDetailScreen = () => {
                         <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500" />
                       </div>
                       <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {member.displayName || 'User'}
+                        {pickDisplayName([member.displayName, member.username], { fallback: 'Member' })}
                       </p>
                       <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${getRoleBadgeColor(member.role)}`}>
                         {member.role}

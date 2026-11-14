@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import { ArrowLeft, Coins, Loader2, Send } from 'lucide-react';
 
 import { VIRTUAL_GIFTS as GIFTS } from '../data/videoData';
@@ -105,11 +106,11 @@ export default function GiftScreen() {
             <img src={recipient.avatar} alt={recipient?.name} className="w-14 h-14 rounded-full object-cover" />
           ) : (
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xl">
-              {(recipient?.name || 'U').charAt(0).toUpperCase()}
+              {(pickDisplayName([recipient?.name], { fallback: '?' })).charAt(0).toUpperCase()}
             </div>
           )}
           <div>
-            <p className={cn('font-semibold', colors.text)}>{recipient?.name || 'User'}</p>
+            <p className={cn('font-semibold', colors.text)}>{pickDisplayName([recipient?.name], { fallback: '—' })}</p>
             <p className={cn('text-sm', colors.secondary)}>Sending a gift of coins</p>
           </div>
         </div>
