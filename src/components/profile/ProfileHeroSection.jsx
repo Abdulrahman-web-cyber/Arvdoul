@@ -325,7 +325,7 @@ export const ProfileHeroSection = memo(({
   // everyone else is "Creator". The literal 'Top Creator' claimed the higher
   // standing for any creator regardless of level.
   const creatorBadgeLabel = useMemo(
-    () => getIdentityBadge(profile?.level, { isCreator })?.label || 'Creator',
+    () => getIdentityBadge(profile?.level, { isCreator })?.label || null,
     [profile?.level, isCreator],
   );
 
@@ -539,7 +539,7 @@ export const ProfileHeroSection = memo(({
                 </button>
               ) : null}
 
-              {isCreator && (
+              {isCreator && creatorBadgeLabel && (
                 <span className={cn(
                   "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
                   isDark

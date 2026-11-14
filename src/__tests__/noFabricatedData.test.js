@@ -4587,3 +4587,18 @@ describe('N414 — username generator and identity copy do not assert unverified
     expect(read('src/services/userService.js')).not.toContain('// Guaranteed fallback');
   });
 });
+
+describe('N415 — no residual fabricated identity defaults in read model / verification', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('resolveAvatarUrl does not pass a literal "User" name', () => {
+    const s = read('src/services/profileReadModel.js');
+    expect(s).not.toContain("getSafeAvatarUrl(photoURL, displayName || 'User'");
+  });
+
+  test('verification applications do not persist "Applicant"/"Creator"', () => {
+    const s = read('src/services/userService.js');
+    expect(s).not.toContain("applicationData.applicantName || applicationData.displayName || 'Applicant'");
+    expect(s).not.toContain("applicationData.category || 'Creator'");
+  });
+});

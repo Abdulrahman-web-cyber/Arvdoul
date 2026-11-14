@@ -81,7 +81,9 @@ export function resolveActorName(candidates, userId) {
 
 /** Avatar with a real photo, else a deterministic SVG; never a broken URL. */
 export function resolveAvatarUrl(photoURL, displayName, userId) {
-  return getSafeAvatarUrl(photoURL, displayName || 'User', userId || '');
+  // Do NOT substitute a literal 'User' — the generator derives initials from
+  // the uid when no real name is known, so we never mint an identity label.
+  return getSafeAvatarUrl(photoURL, displayName || '', userId || '');
 }
 
 /** First numeric candidate (0 counts), else 0. */

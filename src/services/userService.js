@@ -972,9 +972,9 @@ class ProfessionalUserService {
 
     const docData = {
       userId,
-      applicantName: applicationData.applicantName || applicationData.displayName || 'Applicant',
+      applicantName: applicationData.applicantName || applicationData.displayName || null,
       username: applicationData.username || '',
-      category: applicationData.category || 'Creator',
+      category: applicationData.category || null,
       reason: applicationData.reason || '',
       portfolioLink: applicationData.portfolioLink || applicationData.website || '',
       // An unknown follower count stays null so the review queue shows
