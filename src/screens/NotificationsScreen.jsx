@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2, UserCheck } from "lucide-react";
 import notificationsService from '../services/notificationsService';
+import { pickDisplayName } from '../services/profileReadModel';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import Button from '../design-system/Button.jsx';
@@ -255,7 +256,7 @@ export default function NotificationsScreen() {
       const svc = getUserService();
       await svc.sendFriendRequest(user.uid, targetId);
       setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
-      toast.success(`Friend request sent to ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+      toast.success(`Friend request sent to ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! ✨`);
     } catch {
       try {
         const { getUserService } = await import('../services/userService.js');
@@ -267,13 +268,13 @@ export default function NotificationsScreen() {
           toast.success('Follow request sent');
         } else {
           setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
-          toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+          toast.success(`Now following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! ✨`);
         }
       } catch {
         // Both the friend request and the follow failed — do not claim a
         // connection that was never made.
         setNetworkActionState((prev) => ({ ...prev, [targetId]: 'idle' }));
-        toast.error(`Could not connect with ${targetUser.displayName || targetUser.username || 'user'}`);
+        toast.error(`Could not connect with ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
       }
     }
   };
@@ -289,7 +290,7 @@ export default function NotificationsScreen() {
         await svc.unfollowUser(user.uid, targetId);
         setFollowing((prev) => prev.filter((u) => (u.id || u.uid) !== targetId));
         setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: null } }));
-        toast.info(`Unfollowed ${targetUser.displayName || targetUser.username || 'user'}`);
+        toast.info(`Unfollowed ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
       } else {
         const result = await svc.followUser(user.uid, targetId);
         if (result?.requested || result?.requestStatus === 'pending') {
@@ -299,7 +300,7 @@ export default function NotificationsScreen() {
         } else {
           setFollowing((prev) => [...prev, targetUser]);
           setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: true, requestStatus: null } }));
-          toast.success(`Following ${targetUser.displayName || targetUser.username || 'user'}! 🎉`);
+          toast.success(`Following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! 🎉`);
         }
       }
     } catch {
@@ -856,7 +857,7 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {requests.map((req) => {
                     const reqUser = req.sender || req.user || req;
-                    const reqName = reqUser.displayName || reqUser.username || reqUser.name || 'User';
+                    const reqName = pickDisplayName([reqUser.displayName, reqUser.username, reqUser.name], { fallback: 'Member' });
                     const reqId = req.id || req.requestId;
                     return (
                       <div
@@ -923,7 +924,7 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {followRequests.map((req) => {
                     const reqUser = req.fromUser || req.sender || {};
-                    const reqName = reqUser.displayName || reqUser.username || reqUser.name || 'User';
+                    const reqName = pickDisplayName([reqUser.displayName, reqUser.username, reqUser.name], { fallback: 'Member' });
                     const reqAvatar = reqUser.photoURL || reqUser.avatar || null;
                     const busy = pendingFollowRequestAction === req.id;
                     return (
@@ -990,7 +991,7 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {followers.map((fUser) => {
-                    const fName = fUser.displayName || fUser.username || 'Follower';
+                    const fName = pickDisplayName([fUser.displayName, fUser.username], { fallback: 'Member' });
                     return (
                       <div
                         key={fUser.id || fUser.uid}
@@ -1079,7 +1080,7 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {following.map((gUser) => {
-                    const gName = gUser.displayName || gUser.username || 'User';
+                    const gName = pickDisplayName([gUser.displayName, gUser.username], { fallback: 'Member' });
                     const gId = gUser.id || gUser.uid;
                     return (
                       <div
@@ -1146,7 +1147,7 @@ export default function NotificationsScreen() {
             ) : (
                   <div className="space-y-2.5">
                     {recommended.map((rUser) => {
-                      const rName = rUser.displayName || rUser.username || 'Suggested';
+                      const rName = pickDisplayName([rUser.displayName, rUser.username], { fallback: 'Member' });
                       const rId = rUser.id || rUser.uid;
                       const actionStatus = networkActionState[rId];
                       return (

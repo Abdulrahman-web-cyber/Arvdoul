@@ -4160,3 +4160,34 @@ describe('N394 — event countdown, post stats/ranking and author placeholders a
     expect(p).not.toContain("poll.creator?.name || 'Anonymous'");
   });
 });
+
+describe('N395 — named-user surfaces resolve identity through the read model', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('NotificationsScreen never labels a person "User"/"Follower"/"Suggested"', () => {
+    const s = read('src/screens/NotificationsScreen.jsx');
+    expect(s).not.toContain("|| 'User'");
+    expect(s).not.toContain("|| 'Follower'");
+    expect(s).not.toContain("|| 'Suggested'");
+    expect(s).not.toContain("|| 'user'");
+    expect(s).toContain("pickDisplayName([reqUser.displayName, reqUser.username, reqUser.name], { fallback: 'Member' })");
+  });
+
+  test('AdminUserManagementScreen falls back to "Member", never "User"', () => {
+    const s = read('src/screens/Admin/AdminUserManagementScreen.jsx');
+    expect(s).not.toContain("u.displayName || 'User'");
+    expect(s).toContain("pickDisplayName([u.displayName, u.username], { fallback: 'Member' })");
+  });
+
+  test('LoginScreen welcome toast omits the name when it is unknown', () => {
+    const s = read('src/screens/LoginScreen.jsx');
+    expect(s).not.toContain("userInfo?.displayName || 'User'");
+    expect(s).toContain("pickDisplayName([userInfo?.displayName, userInfo?.name, userInfo?.username], { fallback: null })");
+  });
+
+  test('CommentsDrawer never labels a commenter or the viewer "User"', () => {
+    const s = read('src/screens/CommentsDrawer.jsx');
+    expect(s).not.toContain("comment.userName || 'User'");
+    expect(s).toContain("pickDisplayName([comment?.userName], { fallback: 'Member' })");
+  });
+});

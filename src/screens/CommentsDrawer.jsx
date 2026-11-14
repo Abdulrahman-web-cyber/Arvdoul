@@ -11,6 +11,7 @@ import { MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2, Pin, Heart
 import commentService from '../services/commentService.js';
 import notificationsService from '../services/notificationsService.js';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../utils/avatarUtils.js';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import userService from '../services/userService.js';
 import storageService from '../services/storageService.js';
 import { triggerHaptic } from '../utils/haptics';
@@ -610,7 +611,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
     <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 backdrop-blur-sm bg-opacity-90">
       <div className="flex gap-2">
         <img
-          src={getSafeAvatarUrl(currentUser?.photoURL, currentUser?.displayName || 'User', currentUser?.uid)}
+          src={getSafeAvatarUrl(currentUser?.photoURL, pickDisplayName([currentUser?.displayName], { fallback: 'You' }), currentUser?.uid)}
           alt=""
           className="w-9 h-9 rounded-full object-cover ring-2 ring-purple-500/30"
         />
@@ -856,6 +857,8 @@ const CommentItem = memo(({
     } catch { return ''; }
   }, [comment?.createdAt]);
 
+  const commentDisplayName = pickDisplayName([comment?.userName], { fallback: 'Member' });
+
   const avatarUrl = useMemo(() => {
     if (!comment) return '';
     if (comment.userAvatar && !comment.userAvatar.includes('default')) return comment.userAvatar;
@@ -911,11 +914,11 @@ const CommentItem = memo(({
       )}
       <div className="flex gap-2 py-2 group">
         <button onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} className="flex-shrink-0">
-          <img src={getSafeAvatarUrl(avatarUrl, comment.userName || 'User', comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
+          <img src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-bold text-sm dark:text-white truncate">{comment.userName || 'User'}</span>
+            <span className="font-bold text-sm dark:text-white truncate">{commentDisplayName}</span>
             {timeAgo && <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>}
             {comment.isEdited && (
               <button onClick={() => onToggleHistory(comment)} className="text-[10px] text-purple-400 underline hover:text-purple-600 transition-colors">edited</button>

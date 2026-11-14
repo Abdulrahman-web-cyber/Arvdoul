@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { safeReturnPath, clearOnboardingRequired } from "../utils/profileCompletion.js";
+import { pickDisplayName } from "../services/profileReadModel.js";
 import { brandRgba, tokens } from "../design-system/tokens.js";
 
 // Import country codes (same as signup)
@@ -1195,7 +1196,8 @@ export default function LoginScreen() {
       navigate('/setup-profile', { replace: true, state: { welcomeMessage: true, isLogin: true, userData: userInfo, method: 'google' } });
       return;
     }
-    toast.success(`Welcome back, ${userInfo?.displayName || 'User'}!`);
+    const welcomeName = pickDisplayName([userInfo?.displayName, userInfo?.name, userInfo?.username], { fallback: null });
+    toast.success(welcomeName ? `Welcome back, ${welcomeName}!` : 'Welcome back!');
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo?.displayName, isLogin: true } });
   };
