@@ -595,6 +595,10 @@ Server-side, `functions/postCounters.js#aggregatePostCounters` mirrors the shard
 (now including `views`) onto `stats.*` so server readers (`feed.js` ranking) get a real
 number; `views` was missing from `POST_COUNTER_FIELDS`, so the view-weighted engagement
 term was a constant 0 (N441).
+A server-side ranking function must read only fields its own aggregator writes: story
+`personalizeFeed` scored on `stats.likes`/`stats.shares`, which `aggregateStoryStats`
+never writes (reactions live in the `stats.reactions` map) — read `stats.reactions`
+instead (N442, `storyRankingFieldSourceGuard.test.js`).
 The same distinction applies to `videos/{id}.stats.saves`, which is server-owned and
 written only by the `toggleVideoSave` callable keyed on `videos/{id}/saved_by/{uid}`
 (N436, `videoSaveCounterSourceGuard.test.js`).

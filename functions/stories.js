@@ -836,7 +836,13 @@ exports.personalizeFeed = functions.https.onCall(async (data, context) => {
 
   const scored = merged.map(s => {
     const stats = s.stats || {};
-    const engagement = (stats.likes||0)*1.5 + (stats.comments||0)*2.5 + (stats.shares||0)*4 + (stats.views||0)*0.2;
+    // Read the fields `aggregateStoryStats` actually writes. The previous
+    // per-reaction `likes`/`shares` stat reads are never populated (reactions
+    // are stored as the per-emoji `stats.reactions` map), so those terms were a
+    // constant 0 and story ranking ignored reactions and shares entirely (N442).
+    const reactions = Object.values(stats.reactions || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    const engagement = reactions * 2.5 + (stats.comments || 0) * 2.5
+      + (stats.replies || 0) * 2 + (stats.shares || 0) * 4 + (stats.views || 0) * 0.2;
     const ageHours = (now - (s.createdAt?.toDate() || now)) / 3600000;
     const decay = Math.exp(-ageHours / 12);
     const randomFactor = 0.95 + Math.random() * 0.1;
