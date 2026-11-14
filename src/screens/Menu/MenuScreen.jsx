@@ -8,7 +8,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
-import { pickDisplayName, pickHandle, deriveHandle } from "../../services/profileReadModel.js";
+import { pickHandle, deriveHandle, resolveActorName } from "../../services/profileReadModel.js";
 
 // Animation Variants
 const containerVariants = {
@@ -41,7 +41,7 @@ export default function MenuScreen() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const activeUser = currentUser || user;
-  const userDisplayName = pickDisplayName([activeUser?.displayName, activeUser?.name], { fallback: 'Member' });
+  const userDisplayName = resolveActorName([activeUser?.displayName, activeUser?.name], activeUser?.uid || activeUser?.id);
   const userHandle = pickHandle([activeUser?.username]) || deriveHandle(userDisplayName);
   // An absent balance is unknown, not zero: rendering "0 Coins" claims an empty
   // wallet while the profile document has not loaded.

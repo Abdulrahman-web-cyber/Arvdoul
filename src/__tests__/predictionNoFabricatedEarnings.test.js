@@ -34,4 +34,21 @@ describe('post performance prediction — no fabricated earnings', () => {
     expect(src).toContain('state.insights.reach');
     expect(src).toContain('state.insights.viralScore');
   });
+
+  test('the server does not invent a specific "best time" from no dataset', () => {
+    const src = read('functions/moderation.js');
+    const start = src.indexOf('exports.predictPostPerformance');
+    const body = src.slice(start, start + 4000);
+    expect(body).not.toContain('bestTime');
+    expect(body).not.toMatch(/Tuesday 18:00|Saturday 10:00/);
+    // A generic weekday/weekend window is allowed, but only as a labeled convention.
+    expect(body).toContain('suggestedWindow');
+  });
+
+  test('the composer renders a suggested window, never a "Best time" claim', () => {
+    const src = read('src/screens/CreatePost.jsx');
+    expect(src).not.toContain('state.insights.bestTime');
+    expect(src).not.toContain('Best time:');
+    expect(src).toContain('suggestedWindow');
+  });
 });

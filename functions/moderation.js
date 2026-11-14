@@ -505,20 +505,20 @@ exports.predictPostPerformance = functions.https.onCall(async (data, context) =>
     factors.push('An active boost expands distribution.');
   }
 
-  // Scheduled posting: weekday-morning and weekday-evening windows historically
-  // perform best. This is a heuristic derived from the supplied time only.
-  let bestTime = 'Post now';
+  // Scheduled posting: a generic weekday/weekend convention only. Arvdoul has
+  // no measured posting-time dataset, so this is NOT a "best time" derived from
+  // real performance — it is a widely-used scheduling convention, labeled as
+  // such, and it never invents a specific timestamp.
+  let suggestedWindow = null;
   if (scheduledTime) {
     const when = new Date(scheduledTime);
     if (!Number.isNaN(when.getTime())) {
-      const hour = when.getHours();
       const isWeekend = [0, 6].includes(when.getDay());
       reach *= isWeekend ? 0.95 : 1.05;
       factors.push(isWeekend ? 'Weekend posts see slightly lower weekday traffic.' : 'Weekday posting aligns with peak traffic.');
-      bestTime = isWeekend ? 'Saturday 10:00' : 'Tuesday 18:00';
+      suggestedWindow = isWeekend ? 'Weekend' : 'Weekday';
     }
   }
-  if (!scheduledTime) bestTime = 'Tuesday 18:00';
 
   // Reach/engagement/viral score are a deterministic authoring heuristic shown
   // with the factors that produced them. No coin figure is returned: the
@@ -531,7 +531,7 @@ exports.predictPostPerformance = functions.https.onCall(async (data, context) =>
     reach: Math.round(reach).toLocaleString(),
     engagement: Number(engagement.toFixed(1)),
     viralScore,
-    bestTime,
+    suggestedWindow,
     factors,
     deterministic: true,
   };

@@ -9,7 +9,7 @@ import { Trophy, Crown, Medal, ArrowUp, ArrowDown, Minus, Star, Users, Flame, Li
 import { RANKING_CONFIG } from '../../services/rankingService.js';
 import rankingService from '../../services/rankingService.js';
 import { cn } from '../../lib/utils';
-import { pickDisplayName, pickHandle, deriveHandle } from '../../services/profileReadModel.js';
+import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../../services/profileReadModel.js';
 
 const TabButton = ({ active, onClick, children, icon: Icon, isDark }) => (
   <button
@@ -176,7 +176,7 @@ const RankCard = ({ rank, item, isDark }) => {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <h4 className="font-bold text-xs sm:text-sm truncate flex items-center gap-1.5">
-          <span>{pickDisplayName([item.user?.displayName, item.community?.name], { fallback: 'Member' })}</span>
+          <span>{resolveActorName([item.user?.displayName, item.community?.name], item.user?.id || item.userId || item.id)}</span>
           {item.badge && <TierBadge tier={item.badge} />}
         </h4>
         <p className="text-slate-400 text-xs truncate font-mono">

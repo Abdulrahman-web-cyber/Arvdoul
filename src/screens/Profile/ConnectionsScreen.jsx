@@ -14,7 +14,7 @@ import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickDisplayName, pickHandle, deriveHandle } from '../../services/profileReadModel.js';
+import { pickHandle, deriveHandle, resolveActorName } from '../../services/profileReadModel.js';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
@@ -511,7 +511,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           <div className="space-y-2.5">
             {currentItems.map((citizen) => {
               const citizenId = citizen.id || citizen.uid;
-              const citizenName = pickDisplayName([citizen.displayName, citizen.name], { fallback: 'Member' });
+              const citizenName = resolveActorName([citizen.displayName, citizen.name], citizen.id || citizen.uid);
               const citizenHandle = pickHandle([citizen.username]) || deriveHandle(citizenName);
               const safeAvatar = getSafeAvatarUrl(citizen.photoURL, citizenName, citizenId);
               const rank = citizen.level ? getRankTitle(citizen.level) : null;

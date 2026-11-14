@@ -10,7 +10,7 @@ import { cn } from '../lib/utils';
 import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown, Users, Loader2, Trash2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
-import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
+import { pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 import ErrorState from '../design-system/ErrorState.jsx';
@@ -324,7 +324,7 @@ export default function StoriesScreen() {
       const res = await getStoryService().getStoryViewers(storyId, { limit: 100 });
       const items = (res?.viewers || []).map((v) => {
         const p = v.profile || {};
-        const name = pickDisplayName([p.displayName, p.name], { fallback: 'Member' });
+        const name = resolveActorName([p.displayName, p.name], p.id || p.uid);
         return {
           userId: v.userId,
           name,

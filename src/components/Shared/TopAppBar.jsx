@@ -12,7 +12,7 @@ import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
-import { pickHandle, deriveHandle, pickDisplayName } from "../../services/profileReadModel.js";
+import { pickHandle, deriveHandle, resolveActorName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
@@ -333,9 +333,9 @@ export const TopAppBar = ({
   const cleanUsername = pickHandle([rawUsername])
     || deriveHandle(effectiveUser?.displayName)
     || null;
-  const userDisplayName = pickDisplayName(
+  const userDisplayName = resolveActorName(
     [effectiveUser?.displayName, effectiveUser?.name],
-    { fallback: 'Member' }
+    effectiveUser?.uid
   );
   const userAvatarUrl = getSafeAvatarUrl(effectiveUser?.photoURL, userDisplayName, effectiveUser?.uid || '');
 

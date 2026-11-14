@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import userService from '../services/userService';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
-import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
+import { pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
@@ -161,7 +161,7 @@ export default function BlockedAccountsScreen() {
             <ul className="space-y-2.5">
               {state.items.map((item) => {
                 const id = item.id || item.uid;
-                const name = pickDisplayName([item.displayName, item.name], { fallback: 'Member' });
+                const name = resolveActorName([item.displayName, item.name], item.id || item.uid);
                 const handle = pickHandle([item.username]) || deriveHandle(name);
                 const avatar = getSafeAvatarUrl(item.photoURL, name, id);
                 const busy = busyId === id;

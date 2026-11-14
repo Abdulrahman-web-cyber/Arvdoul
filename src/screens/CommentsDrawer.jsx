@@ -11,7 +11,7 @@ import { MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2, Pin, Heart
 import commentService from '../services/commentService.js';
 import notificationsService from '../services/notificationsService.js';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../utils/avatarUtils.js';
-import { pickDisplayName } from '../services/profileReadModel.js';
+import { pickDisplayName, resolveActorName } from '../services/profileReadModel.js';
 import userService from '../services/userService.js';
 import storageService from '../services/storageService.js';
 import { triggerHaptic } from '../utils/haptics';
@@ -857,7 +857,7 @@ const CommentItem = memo(({
     } catch { return ''; }
   }, [comment?.createdAt]);
 
-  const commentDisplayName = pickDisplayName([comment?.userName], { fallback: 'Member' });
+  const commentDisplayName = resolveActorName([comment?.userName], comment?.userId);
 
   const avatarUrl = useMemo(() => {
     if (!comment) return '';
@@ -1797,7 +1797,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             {replyTarget && (
               <div className="border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm p-2">
                 <div className="flex justify-between items-center mb-1 px-2">
-                  <span className="text-xs text-purple-400">Replying to @{replyTarget.userName || 'user'}</span>
+                  <span className="text-xs text-purple-400">Replying to @{resolveActorName([replyTarget.userName], replyTarget.userId)}</span>
                   <button onClick={() => setReplyTarget(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
                     <X className="w-3 h-3" />
                   </button>
@@ -1805,7 +1805,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 <CommentComposer
                   onSubmit={(content, _, type, blob) => handleSubmitComment(content, replyTarget.id, type, blob)}
                   loading={false}
-                  placeholder={`Reply to ${replyTarget.userName || 'user'}...`}
+                  placeholder={`Reply to ${resolveActorName([replyTarget.userName], replyTarget.userId)}...`}
                   onTyping={handleTyping}
                   currentUser={currentUser}
                   draftKey={`reply_${replyTarget.id}`}

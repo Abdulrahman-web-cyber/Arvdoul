@@ -13,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickDisplayName } from '../../services/profileReadModel';
+import { resolveActorName } from '../../services/profileReadModel';
 
 const ROLE_BADGE_STYLES = {
   owner: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
@@ -97,7 +97,7 @@ export default function CommunitySettingsScreen() {
         id,
         role: info?.role || 'member',
         joinedAt: info?.joinedAt,
-        displayName: pickDisplayName([info?.displayName, info?.name], { fallback: 'Member' }),
+        displayName: resolveActorName([info?.displayName, info?.name], id),
         avatar: getSafeAvatarUrl(info?.avatar || info?.photoURL, info?.displayName || id, id),
       }));
       setMembers(memberEntries);
@@ -107,7 +107,7 @@ export default function CommunitySettingsScreen() {
         id,
         requestedAt: info?.requestedAt,
         status: info?.status || 'pending',
-        displayName: pickDisplayName([info?.displayName], { fallback: 'Member' }),
+        displayName: resolveActorName([info?.displayName], id),
         avatar: getSafeAvatarUrl(info?.avatar || info?.photoURL, info?.displayName || id, id),
       }));
       setPendingRequests(requestEntries);
@@ -132,7 +132,7 @@ export default function CommunitySettingsScreen() {
           id,
           role: info?.role || 'member',
           joinedAt: info?.joinedAt,
-          displayName: pickDisplayName([info?.displayName, info?.name], { fallback: 'Member' }),
+          displayName: resolveActorName([info?.displayName, info?.name], id),
           avatar: getSafeAvatarUrl(info?.avatar || info?.photoURL, info?.displayName || id, id),
         }));
         setMembers(memberEntries);

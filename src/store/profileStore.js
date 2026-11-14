@@ -19,7 +19,7 @@ import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
-import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
+import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 
 /**
  * Whether a profile grid read must use the approved-follower query shape — i.e.
@@ -202,9 +202,10 @@ export const useProfileStore = create(
         const appCurrentUser = useAppStore.getState().currentUser || getStoredUser();
         const storedUid = getStoredUid();
         const effectiveUid = currentUserId || storedUid;
-        const fallbackDisplayName = isOwner
-          ? pickDisplayName([appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)], { fallback: 'Member' })
-          : 'Creator';
+        const fallbackDisplayName = pickDisplayName(
+          [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
+          { fallback: resolveActorName([], effectiveUid || userId) }
+        );
         const fallbackUsername = isOwner
           ? pickHandle([appCurrentUser?.username, deriveHandle(appCurrentUser?.email)])
           : null;
@@ -262,9 +263,10 @@ export const useProfileStore = create(
         const localAuth = getStoredUser() || {};
 
         const rawDisplayName = localAuth.displayName || localAuth.name;
-        const fallbackDisplayName = isOwner
-          ? pickDisplayName([rawDisplayName, deriveHandle(localAuth.email)], { fallback: 'Member' })
-          : 'Creator';
+        const fallbackDisplayName = pickDisplayName(
+          [rawDisplayName, deriveHandle(localAuth.email)],
+          { fallback: resolveActorName([], effectiveUid || userId) }
+        );
         const fallbackUsername = isOwner
           ? pickHandle([localAuth.username, deriveHandle(localAuth.email)])
           : null;

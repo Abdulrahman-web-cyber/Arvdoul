@@ -1647,12 +1647,12 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
     // whenever the real display name/handle was missing, and AboutScreen printed
     // 'Citizen' as a rank. All three now use the read model (or an em-dash).
     const bar = fs.readFileSync(path.join(root, 'src/components/Shared/TopAppBar.jsx'), 'utf8');
-    expect(bar).toContain('pickDisplayName');
+    expect(bar).toContain('resolveActorName');
     expect(bar).not.toContain("effectiveUser?.displayName || 'Citizen'");
     expect(bar).not.toContain("|| 'citizen'");
 
     const conn = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
-    expect(conn).toContain('pickDisplayName');
+    expect(conn).toContain('resolveActorName');
     expect(conn).not.toContain("citizen.displayName || 'Citizen'");
     expect(conn).not.toContain("citizen.username || 'citizen'");
 
@@ -2842,7 +2842,9 @@ describe('MenuScreen and RankingsScreen use the read model, not a Citizen stub',
     const s = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
     expect(s).not.toContain('activeUser?.displayName || "Citizen"');
     expect(s).not.toContain('activeUser?.username || "citizen"');
-    expect(s).toContain('pickDisplayName(');
+    // The name resolves through the read model to a real uid prefix, never a
+    // generic "Member"/"Citizen" word.
+    expect(s).toContain('resolveActorName(');
     expect(s).toContain('pickHandle(');
     // A missing balance must not claim an empty wallet.
     expect(s).not.toContain("typeof activeUser?.coins === 'number' ? activeUser.coins : 0");
@@ -3514,7 +3516,7 @@ describe('Author identity is never fabricated across write + hydrate paths', () 
     const src = read('src/services/commentService.js');
     expect(src).not.toContain('`User_${userId.slice(0, 8)}`');
     expect(src).not.toContain('`user_${userId.slice(0, 8)}`');
-    expect(src).toContain('pickDisplayName([options.userName])');
+    expect(src).toContain('resolveActorName([options.userName], userId)');
     expect(src).toContain("deriveHandle(options.userUsername) || ''");
   });
 
@@ -4133,7 +4135,7 @@ describe('N393 — community member lists use the read model, not synthetic "Cit
 
   test('a member without a display name is "Member", never `Citizen_<id>`', () => {
     expect(src).not.toMatch(/Citizen_\$\{/);
-    expect(src).toMatch(/pickDisplayName\(\[info\?\.displayName, info\?\.name\], \{ fallback: 'Member' \}\)/);
+    expect(src).toMatch(/resolveActorName\(\[info\?\.displayName, info\?\.name\], id\)/);
   });
 });
 
@@ -4156,7 +4158,7 @@ describe('N394 — event countdown, post stats/ranking and author placeholders a
   test('QuestionCard and PollsScreen fall back to "Member", never "Anonymous"', () => {
     const q = read('src/screens/PostCard/QuestionCard.jsx');
     expect(q).not.toContain("answer.userName || 'Anonymous'");
-    expect(q).toContain("pickDisplayName([answer.userName], { fallback: 'Member' })");
+    expect(q).toContain("resolveActorName([answer.userName], answer.userId)");
     const p = read('src/screens/Polls/PollsScreen.jsx');
     expect(p).not.toContain("poll.creator?.name || 'Anonymous'");
   });
@@ -4171,13 +4173,13 @@ describe('N395 — named-user surfaces resolve identity through the read model',
     expect(s).not.toContain("|| 'Follower'");
     expect(s).not.toContain("|| 'Suggested'");
     expect(s).not.toContain("|| 'user'");
-    expect(s).toContain("pickDisplayName([reqUser.displayName, reqUser.username, reqUser.name], { fallback: 'Member' })");
+    expect(s).toContain("resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || reqId)");
   });
 
   test('AdminUserManagementScreen falls back to "Member", never "User"', () => {
     const s = read('src/screens/Admin/AdminUserManagementScreen.jsx');
     expect(s).not.toContain("u.displayName || 'User'");
-    expect(s).toContain("pickDisplayName([u.displayName, u.username], { fallback: 'Member' })");
+    expect(s).toContain("resolveActorName([u.displayName, u.username], u.id || u.uid)");
   });
 
   test('LoginScreen welcome toast omits the name when it is unknown', () => {
@@ -4189,7 +4191,7 @@ describe('N395 — named-user surfaces resolve identity through the read model',
   test('CommentsDrawer never labels a commenter or the viewer "User"', () => {
     const s = read('src/screens/CommentsDrawer.jsx');
     expect(s).not.toContain("comment.userName || 'User'");
-    expect(s).toContain("pickDisplayName([comment?.userName], { fallback: 'Member' })");
+    expect(s).toContain("resolveActorName([comment?.userName], comment?.userId)");
   });
 });
 
@@ -4381,7 +4383,7 @@ describe('N403 — remaining identity placeholders are resolved or neutral', () 
   test('GroupInfo resolves the added member name through the read model', () => {
     const s = read('src/screens/GroupInfoScreen.jsx');
     expect(s).not.toContain("targetUser.displayName || 'Member'");
-    expect(s).toContain("pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'Member' })");
+    expect(s).toContain("resolveActorName([targetUser.displayName, targetUser.username], targetUser.id || targetUser.uid)");
   });
 });
 
@@ -4635,4 +4637,48 @@ describe('N416 — no fabricated person/era labels on list, event, sound and pas
     expect(screen).not.toContain("'Perpetual'");
     expect(screen).not.toContain("'Registered'");
   });
+
+describe('N417 — no generic person-word fallback ("Member"/"Creator") on named-user surfaces', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const files = [
+    'src/screens/NotificationsScreen.jsx',
+    'src/screens/Admin/AdminUserManagementScreen.jsx',
+    'src/screens/PostCard/QuestionCard.jsx',
+    'src/screens/BlockedAccountsScreen.jsx',
+    'src/screens/Rankings/RankingsScreen.jsx',
+    'src/screens/Polls/PollsScreen.jsx',
+    'src/screens/GroupInfoScreen.jsx',
+    'src/screens/Profile/ConnectionsScreen.jsx',
+    'src/screens/StoriesScreen.jsx',
+    'src/screens/Community/CommunityDetailScreen.jsx',
+    'src/screens/Community/CommunitySettingsScreen.jsx',
+    'src/components/Shared/TopAppBar.jsx',
+    'src/screens/Menu/MenuScreen.jsx',
+    'src/screens/CommentsDrawer.jsx',
+    'src/store/profileStore.js',
+  ];
+
+  test('no surface falls back to a fabricated "Member" person label', () => {
+    for (const f of files) {
+      expect(read(f)).not.toContain("fallback: 'Member'");
+    }
+  });
+
+  test('each surface resolves an absent name through resolveActorName (a real uid prefix)', () => {
+    for (const f of files) {
+      expect(read(f)).toContain('resolveActorName');
+    }
+  });
+
+  test('the post-prediction panel reports a labeled window, never a fabricated "best time"', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    expect(s).not.toContain('state.insights.bestTime');
+    expect(s).not.toContain('Best time:');
+    expect(s).toContain('suggestedWindow');
+    const fn = read('functions/moderation.js');
+    const start = fn.indexOf('exports.predictPostPerformance');
+    const body = fn.slice(start, start + 4000);
+    expect(body).not.toMatch(/Tuesday 18:00|Saturday 10:00/);
+  });
+});
 });

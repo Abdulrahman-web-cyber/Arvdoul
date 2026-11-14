@@ -10,7 +10,7 @@ import {
   ShieldCheck, XCircle, Clock
 } from 'lucide-react';
 import { listUsers, applyUserAdminAction } from '../../services/callableService.js';
-import { pickDisplayName } from '../../services/profileReadModel.js';
+import { resolveActorName } from '../../services/profileReadModel.js';
 
 // Callable responses serialise Firestore timestamps as {_seconds} or ISO
 // strings depending on runtime; render only real values, never "Invalid Date".
@@ -176,7 +176,7 @@ const AdminUserManagementScreen = () => {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-900 dark:text-white">
-                              {pickDisplayName([u.displayName, u.username], { fallback: 'Member' })}
+                              {resolveActorName([u.displayName, u.username], u.id || u.uid)}
                             </span>
                             {u.isVerified && (
                               <ShieldCheck className="w-4 h-4 text-blue-500" />

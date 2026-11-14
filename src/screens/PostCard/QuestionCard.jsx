@@ -7,7 +7,7 @@ import { unknownNumber } from '../../lib/unknownNumber.js';
 import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Send, MessageCircle, X, Save, ChevronDown, ChevronUp, Lock, Sparkles, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getReputationBand } from '../../services/levelSystemService.js';
-import { pickDisplayName } from '../../services/profileReadModel.js';
+import { resolveActorName } from '../../services/profileReadModel.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -136,7 +136,7 @@ const AnswerItem = React.memo(({
 
   const reputationLevel = getReputationLevel(unknownNumber(answer.userReputation));
   const timeAgo = formatRelativeTime(answer.createdAt);
-  const safeUserName = pickDisplayName([answer.userName], { fallback: 'Member' });
+  const safeUserName = resolveActorName([answer.userName], answer.userId);
   const safeUserPhoto = answer.userPhoto || '/assets/default-profile.png';
 
   return (

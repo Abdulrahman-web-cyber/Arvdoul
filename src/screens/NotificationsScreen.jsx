@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2, UserCheck } from "lucide-react";
 import notificationsService from '../services/notificationsService';
-import { pickDisplayName } from '../services/profileReadModel';
+import { pickDisplayName, resolveActorName } from '../services/profileReadModel';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import Button from '../design-system/Button.jsx';
@@ -857,8 +857,8 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {requests.map((req) => {
                     const reqUser = req.sender || req.user || req;
-                    const reqName = pickDisplayName([reqUser.displayName, reqUser.username, reqUser.name], { fallback: 'Member' });
                     const reqId = req.id || req.requestId;
+                    const reqName = resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || reqId);
                     return (
                       <div
                         key={reqId}
@@ -924,7 +924,7 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {followRequests.map((req) => {
                     const reqUser = req.fromUser || req.sender || {};
-                    const reqName = pickDisplayName([reqUser.displayName, reqUser.username, reqUser.name], { fallback: 'Member' });
+                    const reqName = resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || req.id);
                     const reqAvatar = reqUser.photoURL || reqUser.avatar || null;
                     const busy = pendingFollowRequestAction === req.id;
                     return (
@@ -991,7 +991,7 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {followers.map((fUser) => {
-                    const fName = pickDisplayName([fUser.displayName, fUser.username], { fallback: 'Member' });
+                    const fName = resolveActorName([fUser.displayName, fUser.username], fUser.id || fUser.uid);
                     return (
                       <div
                         key={fUser.id || fUser.uid}
@@ -1080,8 +1080,8 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {following.map((gUser) => {
-                    const gName = pickDisplayName([gUser.displayName, gUser.username], { fallback: 'Member' });
                     const gId = gUser.id || gUser.uid;
+                    const gName = resolveActorName([gUser.displayName, gUser.username], gId);
                     return (
                       <div
                         key={gId}
@@ -1147,8 +1147,8 @@ export default function NotificationsScreen() {
             ) : (
                   <div className="space-y-2.5">
                     {recommended.map((rUser) => {
-                      const rName = pickDisplayName([rUser.displayName, rUser.username], { fallback: 'Member' });
                       const rId = rUser.id || rUser.uid;
+                      const rName = resolveActorName([rUser.displayName, rUser.username], rId);
                       const actionStatus = networkActionState[rId];
                       return (
                         <div

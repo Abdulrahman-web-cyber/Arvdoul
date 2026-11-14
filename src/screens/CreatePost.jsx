@@ -1985,7 +1985,9 @@ export function InsightsPanel({ defaultOpen = false }) {
         <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
         <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
         <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
-        <div className="col-span-2"><span className="text-gray-500">Best time:</span> {state.insights.bestTime}</div>
+        {state.insights.suggestedWindow && (
+          <div className="col-span-2"><span className="text-gray-500">Suggested window:</span> {state.insights.suggestedWindow}</div>
+        )}
       </div>
       {Array.isArray(state.insights.factors) && state.insights.factors.length > 0 && (
         <ul className="text-xs text-gray-500 dark:text-gray-400 list-disc pl-4 space-y-0.5">
