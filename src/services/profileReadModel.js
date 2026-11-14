@@ -67,6 +67,18 @@ export function pickDisplayName(candidates, { fallback = 'Creator', rejectPlaceh
   return fallback;
 }
 
+/**
+ * Resolve a *notification/actor* label from a real name, else a uid prefix.
+ * An unresolvable actor must never be rendered as a generic word like
+ * "Someone"/"Anonymous" (a fabricated identity); the uid prefix is real and
+ * still lets the recipient identify the account (N407).
+ */
+export function resolveActorName(candidates, userId) {
+  const name = pickDisplayName(candidates, { fallback: null });
+  if (name) return name;
+  return userId ? `user ${String(userId).slice(0, 6)}` : '—';
+}
+
 /** Avatar with a real photo, else a deterministic SVG; never a broken URL. */
 export function resolveAvatarUrl(photoURL, displayName, userId) {
   return getSafeAvatarUrl(photoURL, displayName || 'User', userId || '');

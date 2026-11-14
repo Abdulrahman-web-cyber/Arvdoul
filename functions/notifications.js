@@ -431,7 +431,7 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   // fallback must be a real sentence, never the fabricated `"<name> like"` /
   // `"Someone like"` (the type word is not a verb).
   const senderSnap = await db.collection('users').doc(senderId).get();
-  const senderName = senderSnap.exists ? (senderSnap.data().displayName || senderSnap.id) : 'Someone';
+  const senderName = senderSnap.exists ? (senderSnap.data().displayName || senderSnap.id) : `user ${String(senderId).slice(0, 6)}`;
   const message = notificationData.message
     || (senderSnap.exists ? `${senderName} sent you a notification` : 'You have a new notification');
   const payload = {

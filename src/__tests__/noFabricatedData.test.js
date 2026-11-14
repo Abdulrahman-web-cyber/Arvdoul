@@ -4413,3 +4413,39 @@ describe('N405 — identity derivation never invents a civic/creator name', () =
     expect(s).toContain('`user ${String(userId).slice(0, 6)}`');
   });
 });
+
+describe('N407 — notification/actor labels never say "Someone"/"Unknown"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('resolveActorName falls back to a uid prefix, never a generic word', () => {
+    const s = read('src/services/profileReadModel.js');
+    expect(s).toContain('export function resolveActorName');
+    expect(s).toContain("return userId ? `user ${String(userId).slice(0, 6)}` : '—';");
+  });
+
+  test('client services/screens derive actor labels from real data or the uid prefix', () => {
+    for (const rel of [
+      'src/services/userService.js',
+      'src/services/storyService.js',
+      'src/services/messagesService.js',
+      'src/services/commentService.js',
+      'src/services/notificationsService.js',
+      'src/components/Shared/IncomingCallBanner.jsx',
+      'src/screens/ChatScreen.jsx',
+    ]) {
+      expect(read(rel)).not.toContain("'Someone'");
+    }
+  });
+
+  test('cloud functions do not fabricate a "Someone"/"Unknown" actor', () => {
+    for (const rel of [
+      'functions/comments.js',
+      'functions/notifications.js',
+      'functions/monetization.js',
+    ]) {
+      const s = read(rel);
+      expect(s).not.toContain("'Someone'");
+      expect(s).not.toContain("'Unknown'");
+    }
+  });
+});

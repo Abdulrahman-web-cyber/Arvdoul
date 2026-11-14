@@ -596,7 +596,7 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
     // proved here, and `gift_received` is a trusted type a client may not mint).
     if (result && result.receiverId && result.receiverId !== senderUid) {
       const receiverSnap = await admin.firestore().collection('users').doc(senderUid).get();
-      const senderName = receiverSnap.exists ? (receiverSnap.data().displayName || senderUid) : 'Someone';
+      const senderName = receiverSnap.exists ? (receiverSnap.data().displayName || senderUid) : `user ${String(senderUid).slice(0, 6)}`;
       await writeNotification(result.receiverId, {
         type: 'gift_received',
         title: 'Gift received! 🎁',

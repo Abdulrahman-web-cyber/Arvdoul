@@ -1007,7 +1007,7 @@ class UltimateNotificationsService {
       recipientId: toUserId,
       senderId: fromUserId,
       title: 'New friend request',
-      message: `${fromDisplayName || 'Someone'} sent you a friend request`,
+      message: `${fromDisplayName || `user ${String(fromUserId).slice(0, 6)}`} sent you a friend request`,
       // requestId is the friend_requests doc id, so the recipient's Accept /
       // Decline buttons act on the real request document.
       metadata: { fromUserId, requestId: `${fromUserId}_${toUserId}` },

@@ -282,13 +282,13 @@ exports.processMentions = functions.firestore
       enqueuePush(userId, {
         type: 'mention',
         title: 'You were mentioned in a comment',
-        body: `${commentData.userName || 'Someone'} mentioned you in a comment`,
+        body: `${commentData.userName || `user ${String(commentData.userId).slice(0, 6)}`} mentioned you in a comment`,
         data: {
           commentId,
           targetType,
           targetId,
           authorId,
-          authorName: commentData.userName || 'Unknown',
+          authorName: commentData.userName || `user ${String(commentData.userId).slice(0, 6)}`,
         },
       })
     );

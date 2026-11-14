@@ -376,7 +376,7 @@ export default function ChatScreen() {
   const typingText = useMemo(() => {
     const names = Object.entries(typingUsers)
       .filter(([, v]) => v === true || v?.isTyping)
-      .map(([id]) => conversation?.participantNames?.[id] || 'Someone');
+      .map(([id]) => conversation?.participantNames?.[id] || `user ${String(id).slice(0, 6)}`);
     if (names.length === 0) return null;
     return names.length === 1 ? `${names[0]} is typing...` : 'Several people are typing...';
   }, [typingUsers, conversation]);

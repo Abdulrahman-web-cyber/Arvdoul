@@ -1270,7 +1270,7 @@ class UltimateCommentService {
               recipientId: docSnap.id,
               senderId: context.userId,
               title: 'You were mentioned in a comment',
-              message: `${context.userName || 'Someone'} mentioned you in a comment`,
+              message: `${pickDisplayName([context.userName], { fallback: `user ${String(context.userId).slice(0, 6)}` })} mentioned you in a comment`,
               data: {
                 commentId: context.commentId,
                 postId: context.postId,

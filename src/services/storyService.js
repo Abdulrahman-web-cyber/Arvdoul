@@ -971,7 +971,7 @@ class UltimateStoryService {
       recipientId: collaboratorId,
       senderId: currentUser.uid,
       title: 'Story collaboration invite',
-      message: `${currentUser.displayName || 'Someone'} invited you to collaborate on a story`,
+      message: `${currentUser.displayName || `user ${String(currentUser.uid).slice(0, 6)}`} invited you to collaborate on a story`,
       metadata: { storyId },
     });
     return { success: true };
@@ -1820,14 +1820,17 @@ class UltimateStoryService {
       const notificationsService = await import('./notificationsService.js');
       const userService = await import('./userService.js');
       const ownerProfile = await userService.getUserProfile(ownerId).catch(() => null);
+      const ownerName = (ownerProfile?.displayName && ownerProfile.displayName !== 'User')
+        ? ownerProfile.displayName
+        : `user ${String(ownerId).slice(0, 6)}`;
       for (const userId of taggedUserIds) {
         await notificationsService.sendNotification({
           type: notificationsService.TYPES.MENTION,
           recipientId: userId,
           senderId: ownerId,
-          senderName: ownerProfile?.displayName || 'Someone',
+          senderName: ownerName,
           title: 'You were tagged in a story',
-          message: `${ownerProfile?.displayName || 'Someone'} tagged you in their story`,
+          message: `${ownerName} tagged you in their story`,
           actionUrl: `/story/${storyId}`,
           metadata: { storyId },
           priority: 'high',

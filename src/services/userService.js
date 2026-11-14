@@ -13,7 +13,7 @@ import { offlineQueue } from '../utils/OfflineQueue.js';
 import { PROFILE_CONSTRAINTS, validateProfileUpdate, PRIVATE_PROFILE_FIELDS, PRIVATE_PROFILE_COLLECTION, splitProfileFields } from "../config/profileContracts.js";
 import { AVATAR_PALETTES } from '../utils/avatarUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
-import { projectProfileForViewer } from './profileReadModel.js';
+import { projectProfileForViewer, resolveActorName } from './profileReadModel.js';
 import { socialGraphService } from './socialGraphService.js';
 
 const USER_CONFIG = {
@@ -1109,7 +1109,7 @@ class ProfessionalUserService {
           recipientId: followingId,
           senderId: followerId,
           title: 'New follow request',
-          message: `${requester?.displayName || 'Someone'} requested to follow you`,
+          message: `${resolveActorName([requester?.displayName, requester?.username], followerId)} requested to follow you`,
           metadata: { fromUserId: followerId, requestId: `${followerId}_${followingId}` },
           priority: 'normal',
         });
@@ -1307,7 +1307,7 @@ class ProfessionalUserService {
           recipientId: requesterId,
           senderId: ownerId,
           title: 'Follow request accepted',
-          message: `${owner?.displayName || 'Someone'} accepted your follow request`,
+          message: `${resolveActorName([owner?.displayName, owner?.username], ownerId)} accepted your follow request`,
           metadata: { userId: ownerId },
         });
       } catch (e) {
@@ -1612,7 +1612,7 @@ class ProfessionalUserService {
       if (snap.exists() && snap.data().status === 'pending') return { success: true, alreadyRequested: true };
       // Re-sending after decline/cancel is allowed (status resets to pending).
       transaction.set(requestRef, {
-        fromUserId, toUserId, fromUserDisplayName: fromUser?.displayName || 'Someone',
+        fromUserId, toUserId, fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
         fromUserPhotoURL: fromUser?.photoURL || null, status: 'pending',
         createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
@@ -1626,7 +1626,7 @@ class ProfessionalUserService {
         await getNotificationsService().createFriendRequestNotification(
           fromUserId,
           toUserId,
-          fromUser?.displayName || 'Someone'
+          resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId)
         );
       } catch (e) {
         logger.warn('Friend-request notification failed', { fromUserId, toUserId, error: e?.message });
@@ -1702,7 +1702,7 @@ class ProfessionalUserService {
         await notif.sendNotification({
           type: 'friend_accepted', recipientId: requesterId, senderId: userId,
           title: 'Friend request accepted',
-          message: `${accepter?.displayName || 'Someone'} accepted your request`,
+          message: `${resolveActorName([accepter?.displayName, accepter?.username], userId)} accepted your request`,
           metadata: { friendId: userId }
         });
       } catch (e) {

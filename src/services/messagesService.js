@@ -1378,7 +1378,7 @@ class UltimateMessagingService {
     // callable. Best-effort: a push failure must never fail the send.
     const recipients = conv.conversation.participants.filter(p => p !== currentUser.uid);
     const mentionedIds = message.mentions || [];
-    const senderName = currentUser.displayName || 'Someone';
+    const senderName = pickDisplayName([currentUser.displayName], { fallback: `user ${String(currentUser.uid).slice(0, 6)}` });
     const preview = this._getMessagePreview(message);
     recipients.forEach(async uid => {
       if (!conv.conversation.mutedBy?.includes(uid) && await this._shouldSendPushNotification(uid)) {
