@@ -4126,3 +4126,12 @@ describe('N392 — missing timestamps are omitted, not claimed as "just now"', (
     expect(s).toMatch(/if \(!value\) return null;/);
   });
 });
+
+describe('N393 — community member lists use the read model, not synthetic "Citizen_xxxxx" names', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Community/CommunitySettingsScreen.jsx'), 'utf8');
+
+  test('a member without a display name is "Member", never `Citizen_<id>`', () => {
+    expect(src).not.toMatch(/Citizen_\$\{/);
+    expect(src).toMatch(/pickDisplayName\(\[info\?\.displayName, info\?\.name\], \{ fallback: 'Member' \}\)/);
+  });
+});
