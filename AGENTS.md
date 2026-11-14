@@ -127,6 +127,16 @@ as failures.
   from `profileStore`) and keep it otherwise; the public shape is backed by the
   `posts(authorId, authorIsPrivate, status, visibility, isDeleted, createdAt)` index.
   Do not re-add a bare `authorIsPrivate == false` gate to the post read rules.
+- **A block hides the direct thread itself, not just its inbox row.**
+  `messagesService.getConversation` (the single thread read entry point —
+  `getMessages`, `subscribeToConversation`, `reactToMessage`, `deleteMessage`,
+  `editMessage` all route through it) gates a `direct` conversation between a
+  blocked pair on both the fresh read **and** the cache-first path, via
+  `_isDirectBlocked` (one cached `getRelationship`). Without it the inbox filter
+  (`getUserConversations`, N245) could be bypassed by opening `/chat/:id`
+  directly. Groups/channels are never gated (a block must not hide a whole group
+  for one member); the gate fails open on a graph error so a blip cannot lock a
+  user out of their own thread (N443, `messagingThreadBlockGate.test.js`).
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
   the `deleteUserData` cloud function. The cloud function name and the client method name are
   intentionally different — do not rename one to match the other.

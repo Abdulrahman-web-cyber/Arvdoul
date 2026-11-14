@@ -948,6 +948,24 @@ class UltimateMessagingService {
     }
   }
 
+  /** True when a 1:1 conversation is between a blocked pair (either direction).
+   *  Groups/channels are never "direct", so they are never gated by a block.
+   *  One cached spine read (`getRelationship` reports both directions); fails
+   *  open on a graph error so a transient blip cannot lock a user out of their
+   *  own thread — the block is still enforced at the write path. */
+  async _isDirectBlocked(conv, viewerId) {
+    if (conv?.type !== 'direct') return false;
+    const other = (conv.participants || []).find((p) => p !== viewerId);
+    if (!other) return false;
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(viewerId, other);
+      return Boolean(edge.isBlocking || edge.isBlockedBy);
+    } catch {
+      return false;
+    }
+  }
+
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }
   async acceptFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.acceptFriendRequest(uid, reqId); }
   async rejectFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.rejectFriendRequest(uid, reqId); }
@@ -1045,6 +1063,12 @@ class UltimateMessagingService {
 
     const cached = this.conversationsCache.get(conversationId);
     if (cached && options.cacheFirst !== false) {
+      // The block gate below must also cover the cached path: a thread cached
+      // before the block would otherwise stay openable from the cache (N443).
+      if (await this._isDirectBlocked(cached, currentUser.uid)) {
+        this.conversationsCache.delete(conversationId);
+        return { success: false, error: 'Conversation unavailable' };
+      }
       this.metrics.cacheHits++;
       return { success: true, conversation: cached, cached: true };
     }
@@ -1058,6 +1082,16 @@ class UltimateMessagingService {
     if (!conv.participants.includes(currentUser.uid)) throw new Error('Not a participant');
     if (conv.hiddenFor?.includes(currentUser.uid)) {
       return { success: false, error: 'Conversation hidden' };
+    }
+    // A block is terminal for a 1:1 thread (N443). `getUserConversations`
+    // already drops it from the inbox, but the thread stayed openable by a
+    // direct link (`/chat/:conversationId`) and every read/write that routes
+    // through here (getMessages, subscribeToConversation, react/delete/edit).
+    // Gate at this single entry point so the block hides the thread itself, not
+    // just its inbox row. Groups/channels are unaffected (a block must not hide
+    // a whole group for one member).
+    if (await this._isDirectBlocked(conv, currentUser.uid)) {
+      return { success: false, error: 'Conversation unavailable' };
     }
     if (!conv.participantDetails || options.refreshParticipants) {
       conv.participantDetails = await this._getParticipantDetailsBatch(conv.participants);
