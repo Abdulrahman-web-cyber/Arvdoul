@@ -102,7 +102,9 @@ describe('Cloud Functions deploy contract', () => {
     // money-path modules, never deployed standalone.
     // notificationWriter.js is the trusted server-side in-app notification
     // writer (N382), required by the functions that prove the event.
-    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js', 'notificationWriter.js']);
+    // userMetrics.js computes the real engagement metrics (N432) that
+    // evaluateAchievements scores, required by levelSystem.js.
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js', 'notificationWriter.js', 'userMetrics.js']);
     const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.

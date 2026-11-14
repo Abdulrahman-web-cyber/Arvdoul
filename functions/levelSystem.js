@@ -20,6 +20,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
 const { awardXp, awardXpSafe } = require('./xpAward');
+const { computeUserMetrics } = require('./userMetrics');
 const {
   LEVELS,
   XP_RULES,
@@ -254,6 +255,15 @@ exports.evaluateAchievements = functions
       const userData = userSnap.data() || {};
       const existingIds = new Set(existingSnaps.docs.map((d) => d.id));
 
+      // The catalog criteria read metric fields (`commentsCount`,
+      // `pollVotesCount`, `profilesVisitedCount`, `giftsSentCount`,
+      // `hostedLive`, …) that no writer populates on `users/{uid}`, so without
+      // this the evaluator always saw 0 and those achievements were
+      // unearnable (N432). Compute the real values and overlay them on the
+      // stored doc; a metric that cannot be resolved stays absent (unmet).
+      const computed = await computeUserMetrics(uid);
+      const stats = { ...userData, ...computed };
+
       const newlyEarned = [];
       const batch = db.batch();
 
@@ -263,21 +273,21 @@ exports.evaluateAchievements = functions
         let eligible = true;
         const c = ach.criteria;
 
-        if (c.minLevel && (userData.level || 1) < c.minLevel) eligible = false;
-        if (c.minStreak && (userData.activeStreak || 0) < c.minStreak) eligible = false;
-        if (c.minPosts && (userData.postsCount || userData.postCount || 0) < c.minPosts) eligible = false;
-        if (c.minLikes && (userData.likesCount || 0) < c.minLikes) eligible = false;
-        if (c.isCreator && !userData.isCreator) eligible = false;
-        if (c.hostedLive && !userData.hostedLive) eligible = false;
-        if (c.pollVotes && (userData.pollVotesCount || 0) < c.pollVotes) eligible = false;
-        if (c.commentsCount && (userData.commentsCount || 0) < c.commentsCount) eligible = false;
-        if (c.profilesVisited && (userData.profilesVisitedCount || 0) < c.profilesVisited) eligible = false;
-        if (c.friendsCount && (userData.friendsCount || userData.mutualConnectionsCount || 0) < c.friendsCount) eligible = false;
-        if (c.giftsSent && (userData.giftsSentCount || 0) < c.giftsSent) eligible = false;
-        if (c.lifetimeCoinsEarned && (userData.lifetimeCoinsEarned || userData.totalEarned || 0) < c.lifetimeCoinsEarned) eligible = false;
-        if (c.hasPassport && !userData.hasPassport && !userData.passportCreated) eligible = false;
-        if (c.isRoyal && !userData.isRoyal && userData.primaryTitle !== 'Duke' && userData.primaryTitle !== 'King / Queen') eligible = false;
-        if (c.isPioneer && !userData.isPioneer) eligible = false;
+        if (c.minLevel && (stats.level || 1) < c.minLevel) eligible = false;
+        if (c.minStreak && (stats.activeStreak || 0) < c.minStreak) eligible = false;
+        if (c.minPosts && (stats.postsCount || stats.postCount || 0) < c.minPosts) eligible = false;
+        if (c.minLikes && (stats.likesCount || 0) < c.minLikes) eligible = false;
+        if (c.isCreator && !stats.isCreator) eligible = false;
+        if (c.hostedLive && !stats.hostedLive) eligible = false;
+        if (c.pollVotes && (stats.pollVotesCount || 0) < c.pollVotes) eligible = false;
+        if (c.commentsCount && (stats.commentsCount || 0) < c.commentsCount) eligible = false;
+        if (c.profilesVisited && (stats.profilesVisitedCount || 0) < c.profilesVisited) eligible = false;
+        if (c.friendsCount && (stats.friendsCount || stats.mutualConnectionsCount || 0) < c.friendsCount) eligible = false;
+        if (c.giftsSent && (stats.giftsSentCount || 0) < c.giftsSent) eligible = false;
+        if (c.lifetimeCoinsEarned && (stats.lifetimeCoinsEarned || stats.totalEarned || 0) < c.lifetimeCoinsEarned) eligible = false;
+        if (c.hasPassport && !stats.hasPassport && !stats.passportCreated) eligible = false;
+        if (c.isRoyal && !stats.isRoyal && stats.primaryTitle !== 'Duke' && stats.primaryTitle !== 'King / Queen') eligible = false;
+        if (c.isPioneer && !stats.isPioneer) eligible = false;
 
         if (eligible) {
           const itemRef = achievementsCol.doc(ach.id);

@@ -512,6 +512,23 @@ doc-id layout must stay byte-identical to `src/utils/CountersManager.js`.
 Do not add a raw `data().followerCount || 0` read on the server — it always
 returned a fabricated `0` (N431).
 
+## Achievement/title metrics are computed, never assumed
+`ACHIEVEMENTS_CATALOG` / `TITLES_CATALOG` criteria are scored against metric
+fields on `users/{uid}`. A criterion whose metric has **no writer** reads a
+permanent `0` and denies every qualifying user — a fabricated *zero*, the
+inverse of fabricated standing (N432: 14/21 achievements and 8/15 titles were
+unearnable this way). `functions/userMetrics.js#computeUserMetrics` computes the
+metrics that have a real, cheap source with bounded `.count()` aggregation reads
+(no collection scan) and `evaluateAchievements` overlays them on the stored doc
+(`{ ...userData, ...computed }`) before scoring; an unresolvable metric stays
+absent (fail-closed → unmet, never a fabricated pass). When you add a criterion,
+add its metric to `computeUserMetrics` (or don't add the criterion). Do not
+"satisfy" a criterion by writing a `|| 0` default. `achievementMetricSourceGuard.test.js`
+(guards job) pins the wiring. Metrics with no defined source (the
+reputation/contribution/influence model, `likesCount` shard sum, `friendsCount`,
+`lifetimeCoinsEarned`, `hasPassport`, `isPioneer`/`isFounder`) stay BLOCKED in the
+N432 ledger row until the product defines them.
+
 ## No fabricated security claims
 Do not render a "secure"/"encrypted" claim a feature cannot back. Messaging has
 no key provisioning (`generateUserKeys`/`unlockPrivateKey` have no caller and no

@@ -601,11 +601,22 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **186 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N270 is NOT_AN_ISSUE. N424–N431 closed.
 
+## Continuation session 6 (N432 — achievements/titles scored against metric fields no writer populates)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N432 | `evaluateAchievements` / `claimTitle` score criteria against `users/{uid}` metric fields (`commentsCount`, `pollVotesCount`, `profilesVisitedCount`, `giftsSentCount`, `hostedLive`, `likesCount`, `friendsCount`, `lifetimeCoinsEarned`, `hasPassport`/`passportCreated`, `isPioneer`, and for titles `contributionScore`/`reputationScore`/`influenceScore`/`creationsCount`/`isFounder`) that **no client or server path ever writes**. The evaluators therefore read a permanent `0` and deny every qualifying user: **14 of 21 achievements and 8 of 15 titles are unearnable** (incl. royal `duke`/`king`, whose `minAchievements`/`reputation`/`contribution`/`influence` dimensions are permanently 0). A fabricated *zero* that denies a real accomplishment — the inverse of the fabricated-standing class. | New `functions/userMetrics.js#computeUserMetrics` aggregates the collections the platform actually writes with bounded `.count()` aggregation reads (no collection scan): `comments.userId`→`commentsCount`, `poll_votes.userId`→`pollVotesCount`, `profile_views.viewerId`→`profilesVisitedCount`, `gift_transactions.senderId`→`giftsSentCount`, `live_streams.userId`→`hostedLive`. `evaluateAchievements` overlays it (`const stats = { ...userData, ...computed }`) and scores that; an unresolvable metric stays absent (fail-closed). Metrics with no defined source remain BLOCKED in the ledger (reputation/contribution/influence model, `likesCount` shard sum, `friendsCount`, `lifetimeCoinsEarned`, `hasPassport`, `isPioneer`/`isFounder`). |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **187 suites / 2069 passed / 5 skipped / 2074 total** green; `npm run build` green. New `achievementMetricSourceGuard.test.js` (added to the hard-failing `guards` CI job) pins the module, the overlay, the real writer field names, the bounded aggregation shape and the fail-closed behaviour. `functionsContract.test.js` shared-module allowlist extended for `userMetrics.js`.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N432 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
-NODE_OPTIONS=--experimental-vm-modules npx jest   # 186 suites green
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 187 suites green
 npm run build                 # green
 ```
