@@ -41,7 +41,21 @@ export default function PostAnalyticsScreen() {
           // Reading non-existent top-level `views`/`likes` rendered a measured
           // "0" for every post. An absent stat stays null and renders '—'.
           const stat = (value) => (typeof value === 'number' ? value : null);
-          const views = stat(postDoc.stats?.views ?? postDoc.viewsCount ?? postDoc.views);
+          // Views are a sharded counter (`recordPostView` writes `counter_shards`,
+          // never `stats.views`), so reading `stats.views` showed the seeded `0`
+          // as a real total. Resolve the true sum through CountersManager, falling
+          // back to any legacy `stats.views` only when no shard exists yet (N437).
+          let views = null;
+          try {
+            const { countersManager } = await import('../utils/CountersManager.js');
+            views = await countersManager.get({
+              docPath: `posts/${postId}`,
+              field: 'views',
+              fallback: stat(postDoc.stats?.views) ?? 0,
+            });
+          } catch {
+            views = stat(postDoc.stats?.views);
+          }
           const likes = stat(postDoc.stats?.likes ?? postDoc.likesCount);
           const comments = stat(postDoc.stats?.comments ?? postDoc.commentsCount);
           const shares = stat(postDoc.stats?.shares ?? postDoc.sharesCount);

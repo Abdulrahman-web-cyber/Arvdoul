@@ -79,3 +79,18 @@ describe('post engagement counters have a single authoritative source (N433)', (
     expect(scoreBlock).not.toMatch(/post\.viewCount/);
   });
 });
+
+describe('PostAnalyticsScreen resolves the real (sharded) view total (N437)', () => {
+  const screen = read('src/screens/PostAnalyticsScreen.jsx');
+
+  test('reads the sharded view counter, not the seeded stats.views', () => {
+    // `recordPostView` writes `counter_shards`, never `stats.views`, so the raw
+    // field is a permanent 0. The screen must sum the shards via CountersManager.
+    expect(screen).toMatch(/countersManager\.get\(\{[\s\S]*?field: 'views'/);
+    expect(screen).toMatch(/docPath: `posts\/\$\{postId\}`/);
+  });
+
+  test('the raw seeded stats.views is never presented as the measured total', () => {
+    expect(screen).not.toMatch(/stat\(postDoc\.stats\?\.views \?\? postDoc\.viewsCount \?\? postDoc\.views\)/);
+  });
+});

@@ -545,6 +545,16 @@ pure recency (N433). The server shard hash + doc-id layout must stay
 byte-identical to `src/utils/CountersManager.js`. `postCounterSourceGuard.test.js`
 (guards job) pins all of this.
 
+**Post *views* are a sharded counter, not `stats.views`.** `recordPostView`
+(`functions/analytics.js`) increments `counter_shards` for `posts/{id}`; no writer
+ever sets `posts/{id}.stats.views` (it stays the create-time `0`). Any surface that
+shows a post's view total must resolve it through `CountersManager.get({ docPath:
+'posts/{id}', field: 'views' })` (falling back to `stats.views` only when no shard
+exists yet) — reading the raw field shows a fabricated `0` (N437, `PostAnalyticsScreen`).
+The same distinction applies to `videos/{id}.stats.saves`, which is server-owned and
+written only by the `toggleVideoSave` callable keyed on `videos/{id}/saved_by/{uid}`
+(N436, `videoSaveCounterSourceGuard.test.js`).
+
 ## Derived counters are written by a server trigger, never seeded and forgotten
 `communities/{communityId}.stats.eventCount` was seeded `0` at community create and
 never written, so the community "Events" card showed a permanent `0` (N434). The

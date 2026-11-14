@@ -646,6 +646,17 @@ Verified: `npx eslint src functions --quiet` exit 0; full jest suite **191 suite
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N436 closed.
 
+## Continuation session 10 (N437 — post analytics "Views" read a seeded zero)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N437 | `PostAnalyticsScreen` rendered `posts/{id}.stats.views` as the real view total, but post views are a sharded `counter_shards` counter (`recordPostView` → `incrementShardedCounter`); nothing writes `stats.views`, so it stays the create-time `0`. Every post's analytics showed a measured `0` views and a `0%` engagement rate. | The screen now resolves views via `CountersManager.get({ docPath: 'posts/{id}', field: 'views', fallback: stats.views })` (the shard layout `recordPostView` writes). `postCounterSourceGuard.test.js` pins the sharded read and forbids presenting the raw seeded field. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **191 suites / 2092 passed / 5 skipped / 2097 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N437 closed.
+
 ### Resume commands
 ```
 cd /workspace/project/Arvdoul
