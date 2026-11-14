@@ -525,9 +525,25 @@ absent (fail-closed → unmet, never a fabricated pass). When you add a criterio
 add its metric to `computeUserMetrics` (or don't add the criterion). Do not
 "satisfy" a criterion by writing a `|| 0` default. `achievementMetricSourceGuard.test.js`
 (guards job) pins the wiring. Metrics with no defined source (the
-reputation/contribution/influence model, `likesCount` shard sum, `friendsCount`,
+reputation/contribution/influence model, `friendsCount`,
 `lifetimeCoinsEarned`, `hasPassport`, `isPioneer`/`isFounder`) stay BLOCKED in the
 N432 ledger row until the product defines them.
+
+## Post engagement counters have one source of truth
+`posts/{postId}.stats.{likes,comments,shares,saves}` are seeded `0` at create and
+are **not** the live count — every like/save/share/comment mutation increments a
+sharded `counter_shards` document (client `CountersManager`, inside
+`firestoreService.toggleLike`/`toggleSave`/`sharePost` and
+`commentService.createComment`/`deleteComment`). `functions/postCounters.js` is
+the authoritative reader (`readPostCounterShards` sums every field for one post in
+a single batched `db.getAll`) and the scheduled `aggregatePostCounters` mirror
+writes the sums back onto `posts/{postId}.stats` so server readers (feed ranking,
+the Algolia post index) read a real number. Never read a top-level
+`post.likeCount`/`commentCount`/`shareCount`/`viewCount` — no writer populates
+them, so the engagement term was a constant `0` and feed ranking collapsed to
+pure recency (N433). The server shard hash + doc-id layout must stay
+byte-identical to `src/utils/CountersManager.js`. `postCounterSourceGuard.test.js`
+(guards job) pins all of this.
 
 ## No fabricated security claims
 Do not render a "secure"/"encrypted" claim a feature cannot back. Messaging has
