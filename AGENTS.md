@@ -49,7 +49,10 @@ as failures.
   `deriveHandle`), avatar fallback (`resolveAvatarUrl`), count/level coercion
   (`resolveCount`, `resolveLevelValue`), the standing-score clamp (`readStandingScore`),
   creator/verified flags (`resolveCreatorFlag`,
-  `resolveVerifiedFlag`) — and applies the capability decision exactly once
+  `resolveVerifiedFlag`), the royal-standing decision (`resolveRoyalFlag` /
+  `resolveActiveTitleId` — the server stores `activeTitle` as an **object**
+  `{id,name,…}`, so a raw `activeTitle === 'duke'` string compare is always
+  false) — and applies the capability decision exactly once
   (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
   `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
   `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
