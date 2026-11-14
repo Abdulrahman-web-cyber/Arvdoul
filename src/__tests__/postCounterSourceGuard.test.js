@@ -94,3 +94,42 @@ describe('PostAnalyticsScreen resolves the real (sharded) view total (N437)', ()
     expect(screen).not.toMatch(/stat\(postDoc\.stats\?\.views \?\? postDoc\.viewsCount \?\? postDoc\.views\)/);
   });
 });
+
+describe('Every post read path overlays the full sharded field set (N439)', () => {
+  const fsSrc = read('src/services/firestoreService.js');
+  // The post counters that live in `counter_shards` (docPath `posts/{id}`) plus
+  // the server-written gift totals. A reader that overlays a subset renders the
+  // seeded `0` for the omitted field — `getPost` dropped `comments` and the
+  // post-detail view showed a fabricated comment count while the feed was right.
+  const POST_SHARD_FIELDS = ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'];
+
+  const overlayFieldSets = () => {
+    const sets = [];
+    const re = /countersManager\.(apply|applyAll)\(\{[\s\S]*?\}\)/g;
+    let m;
+    while ((m = re.exec(fsSrc))) {
+      const fields = m[0].match(/fields:\s*\[([^\]]*)\]/);
+      if (fields) sets.push({ call: m[1], fields: fields[1] });
+    }
+    return sets;
+  };
+
+  test('getPost overlays every sharded post field (incl. comments)', () => {
+    // Anchor on the single-doc apply in getPost.
+    const getPostBlock = fsSrc.slice(
+      fsSrc.indexOf('async getPost('),
+      fsSrc.indexOf('async getPostsByUser('),
+    );
+    for (const field of POST_SHARD_FIELDS) {
+      expect(getPostBlock).toContain(`'${field}'`);
+    }
+  });
+
+  test('no post-read overlay silently omits a sharded field', () => {
+    // Every `countersManager.apply*` on `posts/` must cover the full field set.
+    const offenders = overlayFieldSets()
+      .filter((s) => s.fields.includes("'likes'")) // a post overlay
+      .filter((s) => !POST_SHARD_FIELDS.every((f) => s.fields.includes(`'${f}'`)));
+    expect(offenders).toEqual([]);
+  });
+});

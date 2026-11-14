@@ -575,6 +575,15 @@ pure recency (N433). The server shard hash + doc-id layout must stay
 byte-identical to `src/utils/CountersManager.js`. `postCounterSourceGuard.test.js`
 (guards job) pins all of this.
 
+**Every post read path must overlay the full sharded field set.** A client reader
+resolves the live values with `countersManager.apply`/`applyAll` (`fields:
+['likes','comments','saves','shares','gifts','giftValue']`, docPath `posts/{id}`).
+Omitting a field leaves the seeded `0` on screen — `getPost` dropped `comments`, so
+the post-detail view showed a fabricated comment count while the feed (which overlays
+the set) was correct (N439). `getPostsByUser` uses the batched `applyAll` rather than
+one `apply` per post. `postCounterSourceGuard.test.js` fails if any `posts/` overlay
+omits a sharded field.
+
 **Post *views* are a sharded counter, not `stats.views`.** `recordPostView`
 (`functions/analytics.js`) increments `counter_shards` for `posts/{id}`; no writer
 ever sets `posts/{id}.stats.views` (it stays the create-time `0`). Any surface that

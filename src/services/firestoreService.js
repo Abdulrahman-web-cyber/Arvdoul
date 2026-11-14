@@ -402,7 +402,10 @@ class EnterpriseFirestoreService {
       const postSnap = await getDoc(postRef);
       if (!postSnap.exists()) return { success: false, error: 'Post not found', code: 'not-found' };
       const postData = { id: postSnap.id, ...postSnap.data() };
-      await countersManager.apply({ data: postData, docPath: `posts/${postId}`, fields: ['likes', 'saves', 'shares', 'gifts', 'giftValue'] });
+      // `comments` is sharded-incremented (docPath `posts/{id}`) by
+      // commentService/firestoreService; omitting it here left the post-detail
+      // view rendering the seeded `0` while the feed showed the real count.
+      await countersManager.apply({ data: postData, docPath: `posts/${postId}`, fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'] });
       this.cache.set(postId, { ...postData, _cachedAt: Date.now() });
       return { success: true, post: postData, cached: false };
     } catch (error) {
@@ -469,11 +472,14 @@ class EnterpriseFirestoreService {
       
       const q = query(postsRef, ...conditions);
       const snap = await getDocs(q);
-      const posts = await Promise.all(snap.docs.map(async (doc) => {
-        const data = { id: doc.id, ...doc.data() };
-        await countersManager.apply({ data, docPath: `posts/${doc.id}`, fields: ['likes', 'saves', 'shares', 'gifts', 'giftValue'] });
-        return data;
-      }));
+      const posts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      // Batched shard overlay (one `getAll` per field-chunk) — `comments` is
+      // sharded-incremented too, so it must be in the field set (see getPost).
+      await countersManager.applyAll({
+        items: posts,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'],
+      });
       const hasMore = snap.docs.length === (options.limit || 10);
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
       
