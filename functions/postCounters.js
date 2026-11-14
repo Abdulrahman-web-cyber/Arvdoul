@@ -63,26 +63,31 @@ function shardRef(docPath, field, shardIndex) {
 }
 
 /**
- * Sum the shard documents for one post counter.
+ * Sum the shard documents for every counter field of one post in a single
+ * batched `getAll` RPC (no per-field round-trip, no scan).
  *
- * @returns {Promise<{ value: number, found: number }>} `found === 0` means the
- *   counter was never incremented (no shards), so a caller must not report a
- *   real zero over a legacy value it cannot see.
+ * @returns {Promise<Object<string, {value: number, found: number}>>} keyed by field.
  */
-async function readPostCounterShards(postId, field) {
+async function readPostCounterShards(postId, fields = POST_COUNTER_FIELDS) {
   const docPath = `posts/${postId}`;
   const refs = [];
-  for (let i = 0; i < COUNTER_SHARDS; i++) refs.push(shardRef(docPath, field, i));
-  const snaps = await db.getAll(...refs);
-  let value = 0;
-  let found = 0;
-  for (const snap of snaps) {
-    if (snap.exists) {
-      value += snap.data().value || 0;
-      found++;
+  const keys = [];
+  for (const field of fields) {
+    for (let i = 0; i < COUNTER_SHARDS; i++) {
+      refs.push(shardRef(docPath, field, i));
+      keys.push(field);
     }
   }
-  return { value, found };
+  const snaps = await db.getAll(...refs);
+  const out = {};
+  for (const field of fields) out[field] = { value: 0, found: 0 };
+  snaps.forEach((snap, idx) => {
+    if (!snap.exists) return;
+    const field = keys[idx];
+    out[field].value += snap.data().value || 0;
+    out[field].found += 1;
+  });
+  return out;
 }
 
 /**
@@ -117,8 +122,9 @@ exports.aggregatePostCounters = functions.pubsub
       const patch = {};
       let changed = false;
 
+      const sums = await readPostCounterShards(postId);
       for (const field of POST_COUNTER_FIELDS) {
-        const { value, found } = await readPostCounterShards(postId, field);
+        const { value, found } = sums[field];
         // No shard means the counter was never incremented: leave the stored
         // value untouched (a pre-shard post may already carry a real number).
         if (found === 0) continue;
