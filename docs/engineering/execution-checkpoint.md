@@ -2,6 +2,38 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — counter atomicity / fabricated ranking / comment seeds (N479–N482)
+
+- **N479 (HIGH, closed):** `collectionsService.addToCollection`/`removeFromCollection`
+  maintained `itemCount` with a non-atomic read-modify-write (`getDoc` then
+  `updateDoc((itemCount||0) ± 1)`; remove clamped `Math.max(0, …)`). Concurrent
+  adds lost updates, a duplicate submit double-counted, and a repeated remove
+  decremented again (the clamp hid the drift). Now one `runTransaction` with the
+  atomic `increment(±1)` sentinel; remove only decrements when the item existed
+  (idempotent `alreadyRemoved`). `collectionsCounterAtomicity.test.js` pins
+  concurrent-add, idempotent-remove, non-owner-denied, no-read-modify-write.
+- **N480 (MEDIUM, closed):** `analyticsService.getUserAnalytics` caught a failed
+  ranking read and returned `{ rank: null, totalCreators: 0, percentile: null }`
+  — a fabricated measured population of 0 (and keys the real result never has).
+  Now returns the honest unavailable shape
+  `{ position: null, percentile: null, label: null, total: null }` and logs.
+- **N481 (MEDIUM, closed):** `commentService.addComment` seeded
+  `viewCount`/`shareCount`/`sentimentScore` as `0` (no writer, no reader —
+  comments are not search-indexed) and `reports: 0` (superseded by the
+  server-written `reportCount`, read by `AdminContentManagementScreen`). All
+  four removed.
+- **N482 (MEDIUM, closed):** `collectionsService.shareCollection` + the
+  `sharedWith` array were a dead control — nothing called the method, the
+  `collections` rules grant a read only to the `userId` owner (so a "shared"
+  user could never read it), and the UI renders only the owner's own
+  collections. Method, seed and both `sharedWith` auth branches removed, plus
+  the write-only `coverPostId` parameter/field (no caller ever passed it and no
+  reader consumes it).
+
+Latest verified: **204 suites / 2179 passed (5 skipped), exit 0**;
+`npx eslint --quiet src functions` exit 0 (0 errors, 867 warnings); `npm run build` green.
+`readScopePrivacyRules.test.js` 15/15 against the local Firestore emulator.
+
 ## This session — read-scope / fabrication / dead-control batches (N472–N477)
 
 Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) dead controls.

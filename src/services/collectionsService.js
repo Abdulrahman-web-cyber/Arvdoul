@@ -26,7 +26,7 @@ class CollectionsService {
     this.cache.invalidatePattern(`*${userId}*`);
   }
 
-  async createCollection(userId, { name, coverPostId = null, description = '' }) {
+  async createCollection(userId, { name, description = '' }) {
     await this.ensureInitialized();
     const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
     const nameClean = String(name || '').trim().slice(0, 60);
@@ -35,9 +35,7 @@ class CollectionsService {
       userId,
       name: nameClean,
       description: String(description || '').slice(0, 200),
-      coverPostId,
       itemCount: 0,
-      sharedWith: [], // collaborative user list
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -77,7 +75,7 @@ class CollectionsService {
 
   async deleteCollection(userId, collectionId) {
     await this.ensureInitialized();
-    const { doc, getDoc, deleteDoc, writeBatch } = await import('firebase/firestore');
+    const { doc, getDoc, writeBatch } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'collections', collectionId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return { success: false, error: 'Collection not found.' };
@@ -94,36 +92,54 @@ class CollectionsService {
 
   async addToCollection(userId, collectionId, post) {
     await this.ensureInitialized();
-    const { collection, doc, getDoc, addDoc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const { collection, doc, runTransaction, increment, serverTimestamp } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'collections', collectionId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) throw new Error('Collection not found.');
-    const data = snap.data();
-    if (data.userId !== userId && !data.sharedWith?.includes(userId)) throw new Error('Not authorized.');
+    const itemRef = doc(collection(this.firestore, 'collections', collectionId, 'items'));
 
-    const itemRef = await addDoc(collection(this.firestore, 'collections', collectionId, 'items'), {
-      postId: post.id,
-      snapshot: post,
-      addedAt: serverTimestamp(),
+    // `itemCount` is the size of the `items` subcollection, so the item write
+    // and the counter bump must be one atomic unit. A read-modify-write
+    // (`(data.itemCount || 0) + 1` from a stale `getDoc`) lost an update under
+    // two concurrent adds, and a duplicate submit double-counted — the
+    // transaction re-reads the counter and `increment` is atomic, so N
+    // concurrent adds land on exactly N.
+    await runTransaction(this.firestore, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('Collection not found.');
+      const data = snap.data();
+      if (data.userId !== userId) throw new Error('Not authorized.');
+      tx.set(itemRef, {
+        postId: post.id,
+        snapshot: post,
+        addedAt: serverTimestamp(),
+      });
+      tx.update(ref, { itemCount: increment(1), updatedAt: serverTimestamp() });
     });
-    await updateDoc(ref, { itemCount: (data.itemCount || 0) + 1, updatedAt: serverTimestamp() });
     this._invalidate(userId);
     return { success: true, itemId: itemRef.id };
   }
 
   async removeFromCollection(userId, collectionId, itemId) {
     await this.ensureInitialized();
-    const { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const { doc, runTransaction, increment, serverTimestamp } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'collections', collectionId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { success: false };
-    const data = snap.data();
-    if (data.userId !== userId && !data.sharedWith?.includes(userId)) throw new Error('Not authorized.');
+    const itemRef = doc(this.firestore, 'collections', collectionId, 'items', itemId);
 
-    await deleteDoc(doc(this.firestore, 'collections', collectionId, 'items', itemId));
-    await updateDoc(ref, { itemCount: Math.max(0, (data.itemCount || 0) - 1), updatedAt: serverTimestamp() });
+    // Idempotent + atomic: only decrement when the item actually existed, so a
+    // retry (or two concurrent removes of the same item) cannot drive the
+    // counter negative. The previous `Math.max(0, …)` clamp hid that drift
+    // instead of preventing it.
+    const result = await runTransaction(this.firestore, async (tx) => {
+      const [colSnap, itemSnap] = await Promise.all([tx.get(ref), tx.get(itemRef)]);
+      if (!colSnap.exists()) return { success: false };
+      const data = colSnap.data();
+      if (data.userId !== userId) throw new Error('Not authorized.');
+      if (!itemSnap.exists()) return { success: true, alreadyRemoved: true };
+      tx.delete(itemRef);
+      tx.update(ref, { itemCount: increment(-1), updatedAt: serverTimestamp() });
+      return { success: true };
+    });
     this._invalidate(userId);
-    return { success: true };
+    return result;
   }
 
   async getCollectionItems(userId, collectionId, options = {}) {
@@ -148,26 +164,12 @@ class CollectionsService {
   }
 
   /**
-   * Share a collection with another user.
+   * A `sharedWith` collaborative-list feature was never wired: nothing called
+   * this method, the rules grant a collection read only to its `userId` owner
+   * (so a "shared" user could never read it), and the UI rendered only the
+   * owner's own collections. The method is removed rather than left as a
+   * control that cannot work.
    */
-  async shareCollection(userId, collectionId, targetUserId) {
-    await this.ensureInitialized();
-    const { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } = await import('firebase/firestore');
-    const ref = doc(this.firestore, 'collections', collectionId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) throw new Error('Collection not found.');
-    if (snap.data().userId !== userId) throw new Error('Not authorized.');
-
-    await updateDoc(ref, {
-      sharedWith: arrayUnion(targetUserId),
-      updatedAt: serverTimestamp()
-    });
-
-    this._invalidate(userId);
-    this._invalidate(targetUserId);
-
-    return { success: true };
-  }
 }
 
 async function getDocsLike(firestore, collectionId) {

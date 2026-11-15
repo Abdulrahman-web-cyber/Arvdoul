@@ -368,7 +368,14 @@ class UltimateAnalyticsService {
       try {
         analytics.ranking = await this.getCreatorRanking(userId);
       } catch (rankErr) {
-        analytics.ranking = { rank: null, totalCreators: 0, percentile: null };
+        // A failed ranking read is *unknown*, not a measured "0 creators".
+        // `getCreatorRanking`'s own catch already returns an unavailable shape;
+        // this path previously fabricated a different one carrying a
+        // `totalCreators` of 0 (a measured population of zero, for a read that
+        // merely failed) with keys no consumer reads. Keep one honest shape:
+        // the ranking is unavailable.
+        logger.warn('Creator ranking unavailable', { error: rankErr?.message, userId });
+        analytics.ranking = { position: null, percentile: null, label: null, total: null };
       }
 
       this.cache.set(cacheKey, analytics);

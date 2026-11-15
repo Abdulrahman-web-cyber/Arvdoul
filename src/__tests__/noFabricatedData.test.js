@@ -3711,6 +3711,16 @@ describe('Creator ranking never fabricates a percentile from an unmaintained fie
     expect(svc).toContain("label: null,");
   });
 
+  test('N480 — a failed ranking read is unknown, never a measured totalCreators of 0', () => {
+    // `getUserAnalytics` caught a ranking failure and returned
+    // `{ rank: null, totalCreators: 0, percentile: null }` — a fabricated
+    // measured population of 0 (and keys the real result never has). The
+    // honest shape reports the ranking as unavailable.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('totalCreators: 0');
+    expect(svc).toContain('{ position: null, percentile: null, label: null, total: null }');
+  });
+
   test('the dashboard does not default an absent rank to "New Creator"', () => {
     const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
     expect(s).not.toContain("ranking.label || 'New Creator'");
@@ -4965,5 +4975,18 @@ describe('N476 — comment stats never report unwritten aggregates as measured',
     expect(src).not.toContain('topCommenters: []');
     expect(src).toContain('averageLikes: null');
     expect(src).toContain('topCommenters: null');
+  });
+
+  test('N481 — the comment create path seeds no counter with no writer', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/commentService.js'), 'utf8');
+    // `viewCount`/`shareCount`/`sentimentScore` had no writer anywhere and no
+    // reader (comments are not search-indexed), and `reports` was superseded by
+    // the server-written `reportCount` (`functions/moderation.js`
+    // `reportContent`, read by AdminContentManagementScreen). Seeding them as
+    // `0` presented unmeasured metrics as measured zeros on every comment doc.
+    expect(src).not.toMatch(/^\s*viewCount: 0,\s*$/m);
+    expect(src).not.toMatch(/^\s*shareCount: 0,\s*$/m);
+    expect(src).not.toMatch(/^\s*sentimentScore: 0,\s*$/m);
+    expect(src).not.toMatch(/^\s*reports: 0,\s*$/m);
   });
 });

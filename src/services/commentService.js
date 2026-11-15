@@ -216,7 +216,6 @@ class UltimateCommentService {
         likes: 0,
         dislikes: 0,
         replies: 0,
-        reports: 0,
         likesBy: [],
         dislikesBy: [],
 
@@ -229,10 +228,6 @@ class UltimateCommentService {
         isLocked: false,
         moderationStatus: 'pending',
         moderationScore: 0,
-
-        viewCount: 0,
-        shareCount: 0,
-        sentimentScore: 0,
 
         createdAt: this.firestoreMethods.serverTimestamp(),
         updatedAt: this.firestoreMethods.serverTimestamp(),
