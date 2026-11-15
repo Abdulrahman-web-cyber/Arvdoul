@@ -414,33 +414,59 @@ exports.cleanupSoftDeletedVideos = functions.pubsub.schedule('every 24 hours').o
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - VIDEO_CONFIG.CLEANUP.SOFT_DELETE_RETENTION_DAYS);
   const videosRef = db.collection('videos');
-  const snapshot = await videosRef
-    .where('isDeleted', '==', true)
-    .where('deletedAt', '<', cutoff)
-    .get();
-  const batch = db.batch();
-  snapshot.forEach((doc) => {
-    batch.delete(doc.ref);
-    const video = doc.data();
-    if (video.storagePath) {
-      const bucket = admin.storage().bucket();
-      const file = bucket.file(video.storagePath);
-      file.delete().catch(console.warn);
-    }
-  });
-  await batch.commit();
+  const bucket = admin.storage().bucket();
+  // Page with a bounded batch: the old version did one unbounded `.get()` and a
+  // single batch delete, which throws (>500 ops) once more than 500 videos have
+  // aged past retention — the cleanup silently failed and the backlog grew.
+  let deleted = 0;
+  for (;;) {
+    const snapshot = await videosRef
+      .where('isDeleted', '==', true)
+      .where('deletedAt', '<', cutoff)
+      .limit(400)
+      .get();
+    if (snapshot.empty) break;
+    const batch = db.batch();
+    snapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+      const video = doc.data();
+      if (video.storagePath) {
+        bucket.file(video.storagePath).delete().catch(() => {});
+      }
+    });
+    await batch.commit();
+    deleted += snapshot.size;
+    if (snapshot.size < 400) break;
+  }
+  if (deleted) console.log(`Cleaned up ${deleted} soft-deleted videos.`);
   return null;
 });
 
 // Cleanup rate limit documents (daily)
+//
+// The flat `rate_limits` collection accumulates one parent doc per
+// (user × action) from the shared sharded limiter (`rateLimit.js`, which stamps
+// `expireAt`) and one doc per window from `messagesService._recordRateLimit`
+// (which stamps `expiresAt`). The old query filtered on `expiresAt` ONLY, so it
+// never matched the shared limiter's docs — the collection grew unbounded. It
+// was also an unbounded `.get()` with a single >500-op batch. Query both field
+// names (single-field indexes are automatic) and page with a bounded batch.
 exports.cleanupRateLimits = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
   const now = admin.firestore.Timestamp.now();
   const rateLimitsRef = db.collection('rate_limits');
-  const expired = await rateLimitsRef.where('expiresAt', '<', now).get();
-  const batch = db.batch();
-  expired.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
-  console.log(`Cleaned up ${expired.size} expired rate limit documents.`);
+  let deleted = 0;
+  for (const field of ['expireAt', 'expiresAt']) {
+    for (;;) {
+      const expired = await rateLimitsRef.where(field, '<', now).limit(400).get();
+      if (expired.empty) break;
+      const batch = db.batch();
+      expired.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += expired.size;
+      if (expired.size < 400) break;
+    }
+  }
+  console.log(`Cleaned up ${deleted} expired rate limit documents.`);
   return null;
 });
 

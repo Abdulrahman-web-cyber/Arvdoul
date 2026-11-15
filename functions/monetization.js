@@ -1210,23 +1210,34 @@ exports.auditCoins = functions.pubsub.schedule('every 24 hours').onRun(async (co
 exports.recoverStuckWithdrawals = functions.pubsub.schedule('every 5 minutes').onRun(async (context) => {
   try {
     const now = new Date();
-    const staleDocs = await admin.firestore().collection('withdrawal_requests')
-      .where('status', '==', 'processing')
-      .where('lockExpiresAt', '<', now)
-      .get();
+    // Drain the whole stuck backlog in bounded pages so a large backlog is
+    // released without an unbounded read or a >500-op batch (the old version
+    // read every matching doc into a single batch, which throws once more than
+    // 500 locks are stuck).
+    let reset = 0;
+    for (;;) {
+      const staleDocs = await admin.firestore().collection('withdrawal_requests')
+        .where('status', '==', 'processing')
+        .where('lockExpiresAt', '<', now)
+        .limit(400)
+        .get();
+      if (staleDocs.empty) break;
 
-    const batch = admin.firestore().batch();
-    staleDocs.forEach(doc => {
-      batch.update(doc.ref, {
-        status: 'pending',
-        processingError: 'Lock expired – automatically reset',
-        lockOwner: admin.firestore.FieldValue.delete(),
-        lockExpiresAt: admin.firestore.FieldValue.delete(),
+      const batch = admin.firestore().batch();
+      staleDocs.forEach(doc => {
+        batch.update(doc.ref, {
+          status: 'pending',
+          processingError: 'Lock expired – automatically reset',
+          lockOwner: admin.firestore.FieldValue.delete(),
+          lockExpiresAt: admin.firestore.FieldValue.delete(),
+        });
       });
-    });
-    await batch.commit();
-    if (staleDocs.size > 0) {
-      console.log(`Reset ${staleDocs.size} stuck withdrawal locks.`);
+      await batch.commit();
+      reset += staleDocs.size;
+      if (staleDocs.size < 400) break;
+    }
+    if (reset > 0) {
+      console.log(`Reset ${reset} stuck withdrawal locks.`);
     }
     return null;
   } catch (err) {

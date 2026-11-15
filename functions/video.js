@@ -1136,10 +1136,20 @@ exports.detectStuckVideos = pubsub.schedule('every 24 hours').onRun(async () => 
 
 exports.cleanupOldShareEvents = pubsub.schedule('every 24 hours').onRun(async () => {
   const cutoff = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-  const oldEvents = await db.collection('share_events').where('createdAt', '<=', cutoff).limit(500).get();
-  const batch = db.batch();
-  oldEvents.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
+  // Drain the whole 30-day backlog: re-query a bounded page until empty. A
+  // single `.limit(500)` read/day fell behind any day with >500 shares, so old
+  // events accumulated forever (the collection has no other reader).
+  let deleted = 0;
+  for (;;) {
+    const oldEvents = await db.collection('share_events').where('createdAt', '<=', cutoff).limit(400).get();
+    if (oldEvents.empty) break;
+    const batch = db.batch();
+    oldEvents.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    deleted += oldEvents.size;
+    if (oldEvents.size < 400) break;
+  }
+  if (deleted) logger.info('share_events cleanup', { deleted });
   return null;
 });// Shared internals exposed for the emulator-backed money-path tests only. A
 // plain object export is ignored by `index.js#merge` (which deploys only

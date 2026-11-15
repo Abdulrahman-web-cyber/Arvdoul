@@ -476,21 +476,26 @@ exports.cleanupOldCalls = functions.pubsub
   .schedule('every 24 hours')
   .onRun(async (context) => {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const snaps = await db.collection('calls')
-      .where('status', 'in', ['ended', 'terminated', 'completed', 'failed'])
-      .where('createdAt', '<', Timestamp.fromDate(cutoff))
-      .limit(200)
-      .get();
-
-    if (snaps.empty) return null;
-
+    // Drain the whole backlog: re-query a bounded page until nothing matches.
+    // Each page is deleted before the next read, so no cursor is needed and a
+    // backlog larger than one page is not left behind (the old single `limit`
+    // read only ever cleaned 200 calls per day).
     let totalDeleted = 0;
-    for (const doc of snaps.docs) {
-      const deletedSignals = await deleteSignalsSubcollection(doc.ref);
-      await doc.ref.delete();
-      totalDeleted += 1 + deletedSignals;
+    for (;;) {
+      const snaps = await db.collection('calls')
+        .where('status', 'in', ['ended', 'terminated', 'completed', 'failed'])
+        .where('createdAt', '<', Timestamp.fromDate(cutoff))
+        .limit(200)
+        .get();
+      if (snaps.empty) break;
+      for (const doc of snaps.docs) {
+        const deletedSignals = await deleteSignalsSubcollection(doc.ref);
+        await doc.ref.delete();
+        totalDeleted += 1 + deletedSignals;
+      }
+      if (snaps.size < 200) break;
     }
-    log('INFO', 'Old calls cleaned up', { totalDeleted });
+    if (totalDeleted) log('INFO', 'Old calls cleaned up', { totalDeleted });
     return null;
   });
 

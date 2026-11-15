@@ -739,44 +739,59 @@ async function sendDigestEmail(to, subject, html) {
 exports.generateNotificationDigest = functions.pubsub
   .schedule('every 6 hours')
   .onRun(async () => {
-    const usersSnap = await db.collection('users').select().limit(1000).get(); // batch processing
-    for (const userDoc of usersSnap.docs) {
-      const userId = userDoc.id;
-      const prefsSnap = await db.collection('user_settings').doc(userId).get();
-      const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
-      // Opt-out, matching the client default (`digestEnabled: true`). Requiring
-      // an explicit `true` here meant the digest never ran: the Settings screen
-      // never writes the flag, so every user was silently skipped.
-      if (prefs?.digestEnabled === false) continue;
-      const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
-      const notifsRef = db.collection('users').doc(userId).collection('notifications');
-      const q = notifsRef.where('createdAt', '>=', Timestamp.fromDate(cutoff)).orderBy('createdAt', 'desc').limit(20);
-      const snap = await q.get();
-      if (snap.empty) continue;
-      const byType = {};
-      snap.forEach(doc => {
-        const type = doc.data().type;
-        byType[type] = (byType[type] || 0) + 1;
-      });
-      const digestMessage = Object.entries(byType).map(([t, c]) => `${c} ${t}s`).join(', ');
-      // In-app digest record (respects the in-app opt-out). Routed through the
-      // canonical writer so it bumps the unread shard; the previous direct
-      // `set()` left the digest uncounted in the Alerts badge.
-      if (prefs.inApp !== false) {
-        await writeNotification(userId, {
-          type: 'digest',
-          title: 'Your digest',
-          message: `You have ${digestMessage}`,
+    // Walk EVERY user with a `__name__` cursor. The previous single
+    // `.limit(1000)` read only ever digested the first 1000 accounts, so every
+    // user beyond that never received a digest at all.
+    const PAGE = 500;
+    let cursor = null;
+    let processed = 0;
+    for (;;) {
+      let usersQuery = db.collection('users').select().orderBy('__name__').limit(PAGE);
+      if (cursor) usersQuery = usersQuery.startAfter(cursor);
+      const usersSnap = await usersQuery.get();
+      if (usersSnap.empty) break;
+      for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const prefsSnap = await db.collection('user_settings').doc(userId).get();
+        const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
+        // Opt-out, matching the client default (`digestEnabled: true`). Requiring
+        // an explicit `true` here meant the digest never ran: the Settings screen
+        // never writes the flag, so every user was silently skipped.
+        if (prefs?.digestEnabled === false) continue;
+        const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+        const notifsRef = db.collection('users').doc(userId).collection('notifications');
+        const q = notifsRef.where('createdAt', '>=', Timestamp.fromDate(cutoff)).orderBy('createdAt', 'desc').limit(20);
+        const snap = await q.get();
+        if (snap.empty) continue;
+        const byType = {};
+        snap.forEach(doc => {
+          const type = doc.data().type;
+          byType[type] = (byType[type] || 0) + 1;
         });
-      }
-      // Email delivery (respects the email opt-out).
-      if (prefs.email !== false) {
-        const to = await getUserEmail(userId);
-        if (to) {
-          await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);
+        const digestMessage = Object.entries(byType).map(([t, c]) => `${c} ${t}s`).join(', ');
+        // In-app digest record (respects the in-app opt-out). Routed through the
+        // canonical writer so it bumps the unread shard; the previous direct
+        // `set()` left the digest uncounted in the Alerts badge.
+        if (prefs.inApp !== false) {
+          await writeNotification(userId, {
+            type: 'digest',
+            title: 'Your digest',
+            message: `You have ${digestMessage}`,
+          });
         }
+        // Email delivery (respects the email opt-out).
+        if (prefs.email !== false) {
+          const to = await getUserEmail(userId);
+          if (to) {
+            await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);
+          }
+        }
+        processed += 1;
       }
+      cursor = usersSnap.docs[usersSnap.docs.length - 1];
+      if (usersSnap.size < PAGE) break;
     }
+    log('INFO', 'Notification digest completed', { processed });
     return null;
   });
 

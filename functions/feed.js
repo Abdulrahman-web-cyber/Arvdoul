@@ -262,14 +262,20 @@ exports.cleanupAndRetryFanoutTasks = functions.pubsub
   .schedule('every 15 minutes')
   .onRun(async (context) => {
     const cutoff = new Date(Date.now() - STALE_TASK_AGE_MS);
-    const staleSnap = await db.collection('fanout_tasks')
-      .where('status', 'in', ['completed', 'failed'])
-      .where('createdAt', '<', admin.firestore.Timestamp.fromDate(cutoff))
-      .get();
-    if (!staleSnap.empty) {
+    // Drain the whole stale backlog in bounded pages (the old version read every
+    // completed/failed task into one batch, which throws >500 ops and then
+    // silently never cleaned the rest).
+    for (;;) {
+      const staleSnap = await db.collection('fanout_tasks')
+        .where('status', 'in', ['completed', 'failed'])
+        .where('createdAt', '<', admin.firestore.Timestamp.fromDate(cutoff))
+        .limit(400)
+        .get();
+      if (staleSnap.empty) break;
       const batch = db.batch();
       staleSnap.forEach(doc => batch.delete(doc.ref));
       await commitBatchWithRetry(batch);
+      if (staleSnap.size < 400) break;
     }
 
     const retryCutoff = new Date(Date.now() - FAILED_TASK_RETRY_AGE_MS);
