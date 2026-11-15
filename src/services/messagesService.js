@@ -1819,31 +1819,41 @@ class UltimateMessagingService {
     if (!canDelete && !deleteForEveryone) throw new Error('Cannot delete others’ messages');
 
     if (deleteForEveryone) {
+      const unreadParticipants = conv.conversation.participants.filter(pid => pid !== msg.senderId && !msg.readBy?.includes(pid));
+      const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
       await this.fs.runTransaction(this.firestore, async (transaction) => {
-        transaction.update(msgRef, { isDeleted: true, deletedAt: this.fs.serverTimestamp(), deletedBy: userId });
-        const unreadParticipants = conv.conversation.participants.filter(pid => pid !== msg.senderId && !msg.readBy?.includes(pid));
-        for (const pid of unreadParticipants) {
-          await this._decrementUnreadCounter(conversationId, pid, 1, transaction);
-        }
-        const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
+        // Firestore requires every transaction read to precede every write, so
+        // resolve the `last_messages` repair FIRST. Reading it after the
+        // `transaction.update`/shard writes below made the SDK throw
+        // ("all reads must be executed before all writes"), so delete-for-
+        // everyone always failed and left the counter/`last_messages` stale.
         const lastSnap = await transaction.get(lastMessageRef);
+        let lastMessagePatch;
         if (lastSnap.exists() && lastSnap.data().messageId === messageId) {
           // `msg.createdAt` is a stored value, but a legacy/offline-written doc
           // may hold an ISO string, so guard the Timestamp conversion.
           const deletedAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt);
           const prev = await this._getPreviousMessage(conversationId, conv.conversation, deletedAt);
-          if (prev) {
-            transaction.set(lastMessageRef, {
-              messageId: prev.id,
-              text: this._getMessagePreview(prev),
-              senderId: prev.senderId,
-              type: prev.type,
-              timestamp: prev.createdAt,
-              updatedAt: this.fs.serverTimestamp(),
-            });
-          } else {
-            transaction.delete(lastMessageRef);
-          }
+          lastMessagePatch = prev
+            ? {
+                messageId: prev.id,
+                text: this._getMessagePreview(prev),
+                senderId: prev.senderId,
+                type: prev.type,
+                timestamp: prev.createdAt,
+                updatedAt: this.fs.serverTimestamp(),
+              }
+            : null;
+        }
+
+        transaction.update(msgRef, { isDeleted: true, deletedAt: this.fs.serverTimestamp(), deletedBy: userId });
+        for (const pid of unreadParticipants) {
+          await this._decrementUnreadCounter(conversationId, pid, 1, transaction);
+        }
+        if (lastMessagePatch === null && lastSnap.exists() && lastSnap.data().messageId === messageId) {
+          transaction.delete(lastMessageRef);
+        } else if (lastMessagePatch) {
+          transaction.set(lastMessageRef, lastMessagePatch);
         }
       });
     } else {
@@ -3077,16 +3087,11 @@ class UltimateMessagingService {
   }
 
   async _decrementUnreadCounter(conversationId, userId, delta, transaction) {
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
+    if (delta <= 0) return;
     const counterId = `unread_${conversationId}_${userId}`;
-    const shard = Math.floor(Math.random() * shardCount);
-    const shardedCounterRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', shard.toString());
-    const snap = await transaction.get(shardedCounterRef);
-    const current = snap.exists() ? snap.data().count : 0;
-    transaction.set(shardedCounterRef, {
-      count: Math.max(0, current - delta),
-      updatedAt: this.fs.serverTimestamp(),
-    }, { merge: true });
+    const shard = Math.floor(Math.random() * MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT);
+    const shardedCounterRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', String(shard));
+    this._writeShardDelta(shardedCounterRef, -delta, transaction);
 
     await this._decrementTotalUnread(userId, delta, transaction);
   }
@@ -3095,12 +3100,7 @@ class UltimateMessagingService {
     const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.TOTAL_SHARD_COUNT;
     const shard = Math.floor(Math.random() * shardCount);
     const totalCounterRef = this.fs.doc(this.firestore, 'user_unread_totals', userId, 'shards', shard.toString());
-    const snap = await transaction.get(totalCounterRef);
-    const current = snap.exists() ? snap.data().count : 0;
-    transaction.set(totalCounterRef, {
-      count: current + delta,
-      updatedAt: this.fs.serverTimestamp(),
-    }, { merge: true });
+    this._writeShardDelta(totalCounterRef, delta, transaction);
   }
 
   async _decrementTotalUnread(userId, delta, transaction) {
@@ -3108,12 +3108,28 @@ class UltimateMessagingService {
     const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.TOTAL_SHARD_COUNT;
     const shard = Math.floor(Math.random() * shardCount);
     const totalCounterRef = this.fs.doc(this.firestore, 'user_unread_totals', userId, 'shards', shard.toString());
-    const snap = await transaction.get(totalCounterRef);
-    const current = snap.exists() ? snap.data().count : 0;
-    transaction.set(totalCounterRef, {
-      count: Math.max(0, current - delta),
-      updatedAt: this.fs.serverTimestamp(),
-    }, { merge: true });
+    this._writeShardDelta(totalCounterRef, -delta, transaction);
+  }
+
+  /**
+   * Apply a shard delta atomically. The shards of a counter are a SUM (every
+   * reader adds all of them), so the delta must be applied with
+   * `FieldValue.increment` and MUST NOT be clamped per shard: the previous
+   * read-then-`Math.max(0, current - delta)` dropped the decrement whenever the
+   * chosen shard happened to be empty, so the unread badge drifted upward and
+   * never reached zero. `increment` keeps the sum exact even when a single
+   * shard dips negative. `transaction` is optional — a caller with no ambient
+   * transaction writes directly.
+   */
+  _writeShardDelta(ref, delta, transaction) {
+    const payload = { count: this.fs.increment(delta), updatedAt: this.fs.serverTimestamp() };
+    if (transaction) {
+      transaction.set(ref, payload, { merge: true });
+      return Promise.resolve();
+    }
+    return this.fs.setDoc(ref, payload, { merge: true }).catch((err) => {
+      logger.warn('[Messaging] unread shard update failed', { error: err?.message });
+    });
   }
 
   async getTotalUnreadCount(userId) {

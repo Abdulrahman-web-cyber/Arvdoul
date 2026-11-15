@@ -2,6 +2,47 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — unread-counter integrity: notification + message shards (N485–N487)
+
+Theme: the sharded unread counters (a SUM of 10 shards) lost decrements and
+fabricated "all read" states. Same counter-integrity class as N479/N486.
+
+- **N485 (HIGH, closed):** `functions/notifications.js#markAllNotificationsRead`
+  marked only the first 500 unread notifications, then wrote `0` to every shard
+  counter unconditionally — a user with >500 unread saw the Alerts badge drop to
+  `0` while the rest stayed unread (fabricated "all read"). Now it marks in
+  bounded batches until none remain and rewrites the shards to the REAL remaining
+  unread `count()`; a backlog above the batch ceiling stays honestly counted.
+  Guard: `markAllNotificationsReadGuard.test.js` (guards job).
+- **N486 (HIGH, closed):** the notification unread counter lost decrements —
+  `markNotificationRead`/`deleteNotification` decremented a RANDOM shard with
+  `Math.max(0, current - 1)`, so a decrement on an empty shard was clamped to
+  nothing and the total drifted upward forever (badge over-counts, never hits 0).
+  New shared `decrementUnreadShard(userId)` reads all shards in one transaction
+  and decrements one that actually holds a count (drift-correcting when all are
+  empty). Guard: `notificationUnreadShardDecrementGuard.test.js` (guards job).
+- **N487 (HIGH, closed):** the MESSAGE unread counters
+  (`unread_counters`, `user_unread_totals`) had the same lost-decrement defect,
+  and `messagesService.deleteMessage` was doubly broken: the delete-for-me branch
+  called `_decrementUnreadCounter(cid, uid, 1)` WITHOUT the required transaction
+  (`transaction.get` → `TypeError`), and the delete-for-everyone branch issued
+  `transaction.get()` AFTER its writes — which the Firestore SDK rejects ("all
+  reads before all writes"), so delete-for-everyone always threw. Fix: shard
+  deltas use `FieldValue.increment(±delta)` (exact sum, never a clamped
+  read-modify-write); `_writeShardDelta` takes an optional transaction so the
+  delete-for-me path writes directly; the delete-for-everyone transaction reads
+  `last_messages` BEFORE its writes. Guard:
+  `messageUnreadCounterDecrementGuard.test.js` (guards job) drives the real
+  service with a transaction mock that enforces read-before-write.
+
+Latest verified: **207 suites / 2190 passed (5 skipped), exit 0**;
+`npm run lint` exit 0 (0 errors, 867 warnings); `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision); N432 partially BLOCKED (metrics with no
+defined source). N424–N487 closed.
+
 ## This session — counter atomicity / fabricated ranking / comment seeds (N479–N482)
 
 - **N479 (HIGH, closed):** `collectionsService.addToCollection`/`removeFromCollection`

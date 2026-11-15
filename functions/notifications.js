@@ -45,6 +45,38 @@ async function runTransactionWithRetry(updateFn, maxRetries = 5) {
   }
 }
 
+const NOTIFICATION_SHARDS = 10;
+
+// Decrement ONE unread notification from the sharded counter.
+//
+// The shards are a SUM (the client adds every `{uid}_shard_{n}.count`), so a
+// decrement must actually reduce that sum by one. The old code picked a RANDOM
+// shard and wrote `Math.max(0, current - 1)`: when the random shard was already
+// 0 the decrement was clamped to nothing, so every such decrement was lost and
+// the badge drifted upward (it over-counted unread notifications for the life
+// of the account). Pick a shard that actually holds a count instead, and
+// decrement the real total when they are all empty (a drift correction, never a
+// silent no-op).
+async function decrementUnreadShard(userId) {
+  await runTransactionWithRetry(async (t) => {
+    const refs = [];
+    for (let i = 0; i < NOTIFICATION_SHARDS; i++) {
+      refs.push(db.collection('notification_counters').doc(`${userId}_shard_${i}`));
+    }
+    const snaps = await t.getAll(...refs);
+    let total = 0;
+    let idx = -1;
+    snaps.forEach((s, i) => {
+      const c = s.exists ? (s.data().count || 0) : 0;
+      total += c;
+      if (idx === -1 && c > 0) idx = i;
+    });
+    if (total <= 0) return; // already zero — nothing to decrement
+    if (idx === -1) idx = 0;
+    t.set(refs[idx], { count: Math.max(0, (snaps[idx].data()?.count || 0) - 1) }, { merge: true });
+  });
+}
+
 // ----------------------------------------------------------------------
 // SHARDED PUSH RATE LIMITER (10 shards)
 // ----------------------------------------------------------------------
@@ -493,15 +525,7 @@ exports.markNotificationRead = functions.https.onCall(async (data, context) => {
   if (!snap.exists) return { success: false };
   if (snap.data().read) return { success: true, alreadyRead: true };
   await notifRef.update({ read: true, readAt: FieldValue.serverTimestamp() });
-  // Decrement unread counter (sharded) with transaction to avoid negative
-  const shardCount = 10;
-  const shardIndex = Math.floor(Math.random() * shardCount);
-  const counterRef = db.collection('notification_counters').doc(`${userId}_shard_${shardIndex}`);
-  await runTransactionWithRetry(async (t) => {
-    const snap = await t.get(counterRef);
-    const current = snap.exists ? snap.data().count : 0;
-    t.set(counterRef, { count: Math.max(0, current - 1) }, { merge: true });
-  });
+  await decrementUnreadShard(userId);
   return { success: true };
 });
 
@@ -510,21 +534,40 @@ exports.markNotificationRead = functions.https.onCall(async (data, context) => {
 // ======================================================================
 exports.markAllNotificationsRead = functions.https.onCall(async (data, context) => {
   const userId = context.auth.uid;
-  const batch = db.batch();
   const notifsRef = db.collection('users').doc(userId).collection('notifications');
-  const q = notifsRef.where('read', '==', false).limit(500);
-  const snapshot = await q.get();
-  snapshot.forEach(doc => batch.update(doc.ref, { read: true, readAt: FieldValue.serverTimestamp() }));
-  await batch.commit();
-  // Reset all shard counters to 0
+
+  // Mark unread notifications in bounded batches until none remain. A single
+  // 500-doc batch that then zeroed every shard counter fabricated "0 unread":
+  // notifications beyond the first 500 stayed unread (the list still showed
+  // them) while the badge claimed the inbox was empty.
+  const PAGE = 500;
+  const MAX_BATCHES = 20;
+  let marked = 0;
+  for (let i = 0; i < MAX_BATCHES; i++) {
+    const snapshot = await notifsRef.where('read', '==', false).limit(PAGE).get();
+    if (snapshot.empty) break;
+    const batch = db.batch();
+    snapshot.forEach(doc => batch.update(doc.ref, { read: true, readAt: FieldValue.serverTimestamp() }));
+    await batch.commit();
+    marked += snapshot.size;
+    if (snapshot.size < PAGE) break;
+  }
+
+  // The shard counters are a sum, so write the REAL remaining unread total
+  // rather than an unconditional 0: only when every unread notification was
+  // marked is that total 0. A backlog larger than the batch ceiling is left
+  // honestly counted, never reported as empty.
+  const remainingSnap = await notifsRef.where('read', '==', false).count().get();
+  const remaining = remainingSnap.data().count;
+
   const shardCount = 10;
   const promises = [];
   for (let i = 0; i < shardCount; i++) {
     const counterRef = db.collection('notification_counters').doc(`${userId}_shard_${i}`);
-    promises.push(counterRef.set({ count: 0 }, { merge: true }));
+    promises.push(counterRef.set({ count: i === 0 ? remaining : 0 }, { merge: true }));
   }
   await Promise.all(promises);
-  return { success: true, markedCount: snapshot.size };
+  return { success: true, markedCount: marked, remaining };
 });
 
 // ======================================================================
@@ -539,14 +582,7 @@ exports.deleteNotification = functions.https.onCall(async (data, context) => {
   const wasUnread = !snap.data().read;
   await notifRef.delete();
   if (wasUnread) {
-    const shardCount = 10;
-    const shardIndex = Math.floor(Math.random() * shardCount);
-    const counterRef = db.collection('notification_counters').doc(`${userId}_shard_${shardIndex}`);
-    await runTransactionWithRetry(async (t) => {
-      const snap = await t.get(counterRef);
-      const current = snap.exists ? snap.data().count : 0;
-      t.set(counterRef, { count: Math.max(0, current - 1) }, { merge: true });
-    });
+    await decrementUnreadShard(userId);
   }
   return { success: true };
 });
