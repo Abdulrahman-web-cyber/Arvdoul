@@ -2,7 +2,7 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
-## This session — background-job backlog draining + a wrong-field cleanup query (N493)
+## This session — background-job backlog draining, a wrong-field cleanup query, an unbounded account-deletion scan, and a fan-out trigger collision (N493–N495)
 
 - **N493 (HIGH, closed):** `functions/index.js#cleanupRateLimits` filtered the
   flat `rate_limits` collection on `expiresAt`, but the shared sharded limiter
@@ -16,16 +16,26 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
   1000 users. Fix: every job bounds its read with `.limit()` and drains with a
   cursor / re-query loop; `cleanupRateLimits` queries BOTH field names; the
   digest walks all users with a `__name__` cursor. Guard:
-  `scheduledJobHygieneGuard.test.js` (guards job) pins the bounded-read + drain
-  shape, the dual-field query and the writer fields.
+  `scheduledJobHygieneGuard.test.js` (guards job).
+- **N494 (MEDIUM, closed):** `functions/user.js#deleteUserData` removed the user
+  from recommendations with an unbounded `collectionGroup('users')` read + one
+  batch (throws past 500 ops → half-deleted account). Now bounded pages.
+- **N495 (HIGH, closed):** `feed.js#fanoutPostOnCreate` and
+  `stories.js#processFanoutTask` both listen on `fanout_tasks/{taskId}`. Each
+  claims the task by flipping `status` to `processing`; the loser then ran its
+  `processFanoutTaskInternal` on a non-`pending` doc and marked the task
+  **`failed` — "Missing required fields"** (post tasks have no `storyId`, story
+  tasks no `postId`), cancelling the winner's fan-out. Both retriers collided the
+  same way. Fix: each trigger/retrier claims only the task type it owns. Guard:
+  `fanoutTaskOwnershipGuard.test.js` (guards job).
 
 Verified: `npx eslint src functions --quiet` exit 0; full jest suite
-**212 suites / 2202 passed (5 skipped), 2207 total** green; `npm run build` green.
+**213 suites / 2204 passed (5 skipped), 2209 total** green; `npm run build` green.
 
 ### Findings status
 Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
 ranking formula, a product decision); N432 partially BLOCKED (metrics with no
-defined source). N424–N493 closed.
+defined source). N424–N495 closed.
 
 ## This session — unbounded sweeps, notification-counter parity, upload-cap enforcement (N488–N492)
 
