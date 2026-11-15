@@ -2,6 +2,31 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — background-job backlog draining + a wrong-field cleanup query (N493)
+
+- **N493 (HIGH, closed):** `functions/index.js#cleanupRateLimits` filtered the
+  flat `rate_limits` collection on `expiresAt`, but the shared sharded limiter
+  (`functions/rateLimit.js`) stamps `expireAt` on its parent docs — so those docs
+  were never matched and the collection grew without bound while the job logged
+  "0 cleaned". It and five sibling background jobs
+  (`cleanupSoftDeletedVideos`, `cleanupOldCalls`, `cleanupOldShareEvents`,
+  `recoverStuckWithdrawals`, `cleanupAndRetryFanoutTasks`) each did one
+  unbounded/single-page read into a single batch (throws >500 ops, or silently
+  leaves a backlog); `generateNotificationDigest` only ever digested the first
+  1000 users. Fix: every job bounds its read with `.limit()` and drains with a
+  cursor / re-query loop; `cleanupRateLimits` queries BOTH field names; the
+  digest walks all users with a `__name__` cursor. Guard:
+  `scheduledJobHygieneGuard.test.js` (guards job) pins the bounded-read + drain
+  shape, the dual-field query and the writer fields.
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite
+**212 suites / 2202 passed (5 skipped), 2207 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision); N432 partially BLOCKED (metrics with no
+defined source). N424–N493 closed.
+
 ## This session — unbounded sweeps, notification-counter parity, upload-cap enforcement (N488–N492)
 
 Theme: scheduled jobs that silently covered only a prefix, server-written

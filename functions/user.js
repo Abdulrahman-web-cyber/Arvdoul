@@ -331,13 +331,22 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
     await privateDocRef.delete().catch(() => {});
     await userDocRef.delete();
 
-    // Remove from user recommendations (collection group)
+    // Remove from user recommendations (collection group). Bounded pages: the
+    // group spans every `users` subcollection at any depth, so an unbounded
+    // `.get()` + single batch could blow the function's read/timeout budget (or
+    // throw >500 ops) and leave the account half-cleaned.
     try {
-      const recGroupQuery = db.collectionGroup('users').where('userId', '==', userId);
-      const recDocs = await recGroupQuery.get();
-      const batch = db.batch();
-      recDocs.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
+      for (;;) {
+        const recDocs = await db.collectionGroup('users')
+          .where('userId', '==', userId)
+          .limit(400)
+          .get();
+        if (recDocs.empty) break;
+        const batch = db.batch();
+        recDocs.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        if (recDocs.size < 400) break;
+      }
     } catch (err) {
       log('WARN', 'Could not remove user from recommendations', { error: err.message });
     }
