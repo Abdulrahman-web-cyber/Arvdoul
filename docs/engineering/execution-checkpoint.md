@@ -30,9 +30,19 @@ _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `ori
   the write-only `coverPostId` parameter/field (no caller ever passed it and no
   reader consumes it).
 
+- **N483 (MEDIUM, closed):** `counter_shards` granted `allow read: if isSignedIn()`
+  (which also grants `list`) — no client queries the collection
+  (`CountersManager` uses `getAll` on computed doc refs), so the listable grant
+  exposed the whole engagement map. Split to `allow get`/`allow list: if false`.
+  `readScopePrivacyRules.test.js` (N483) pins it.
+- **N484 (LOW, closed):** `commentService.editComment` wrote `_editCount` /
+  `_lastEditedAt` that nothing reads (non-atomic `(n||0)+1`, and a client
+  `new Date()` on a server-owned surface). Both removed; `isEdited` + the
+  `history` subcollection are the real edit signals.
+
 Latest verified: **204 suites / 2179 passed (5 skipped), exit 0**;
 `npx eslint --quiet src functions` exit 0 (0 errors, 867 warnings); `npm run build` green.
-`readScopePrivacyRules.test.js` 15/15 against the local Firestore emulator.
+`readScopePrivacyRules.test.js` 16/16 against the local Firestore emulator.
 
 ## This session — read-scope / fabrication / dead-control batches (N472–N477)
 

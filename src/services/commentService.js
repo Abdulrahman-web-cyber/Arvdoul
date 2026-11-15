@@ -561,9 +561,7 @@ class UltimateCommentService {
       await this.firestoreMethods.updateDoc(commentRef, {
         ...updates,
         updatedAt: this.firestoreMethods.serverTimestamp(),
-        lastActivityAt: this.firestoreMethods.serverTimestamp(),
-        _lastEditedAt: new Date().toISOString(),
-        _editCount: (comment.comment._editCount || 0) + 1
+        lastActivityAt: this.firestoreMethods.serverTimestamp()
       });
 
       this._invalidateCommentCache(commentId);

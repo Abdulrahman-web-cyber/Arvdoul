@@ -47,11 +47,14 @@ describe('counter_shards keeps its documented (N207) shape', () => {
     expect(block).toMatch(/N207/);
   });
 
-  test('read is signed-in, not world-readable', () => {
+  test('read is signed-in point-reads only, never world-readable or listable', () => {
     const start = rules.indexOf('match /counter_shards/{shardId}');
     const block = rules.slice(start, start + 2400);
     expect(block).not.toMatch(/allow read: if true;/);
-    expect(block).toMatch(/allow read: if isSignedIn\(\);/);
+    // N483: split so `list` is denied (no client queries the collection).
+    expect(block).toMatch(/allow get: if isSignedIn\(\);/);
+    expect(block).toMatch(/allow list: if false;/);
+    expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
   });
 
   test('create/update pin the single numeric `value` field and bound the delta', () => {

@@ -156,6 +156,17 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     }
   });
 
+  test('counter shards are point-read only, never listable (N483)', () => {
+    // CountersManager resolves a shard with `getAll(...)` on computed doc refs —
+    // no client queries this collection. A bare `allow read` also granted
+    // `list`, exposing the whole platform's engagement map to any signed-in
+    // client.
+    const b = block(rules, 'match /counter_shards/{shardId}');
+    expect(b).toContain('allow get: if isSignedIn();');
+    expect(b).toContain('allow list: if false;');
+    expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
+  });
+
   test('achievements/titles reads honour the section privacy scope', () => {
     for (const [marker, section] of [
       ['match /achievements/{userId}', 'achievements'],

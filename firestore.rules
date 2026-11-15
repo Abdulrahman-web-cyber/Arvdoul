@@ -1519,7 +1519,15 @@ service cloud.firestore {
       // complete forgery defence. The full fix is to move every counter mutation
       // server-side (Admin SDK bypasses rules) and set `allow write: if false`.
       // Tracked in the ledger.
-      allow read: if isSignedIn();
+      //
+      // Reads are point reads only: `CountersManager.apply`/`applyAll` resolve a
+      // shard with `getAll(...)` on computed `doc(...)` refs — no client ever
+      // runs a query on this collection. A bare `allow read` also granted
+      // `list`, so any signed-in client could enumerate every counter shard
+      // (the whole platform's engagement map). Split the grant so `list` is
+      // denied.
+      allow get: if isSignedIn();
+      allow list: if false;
       allow create: if isSignedIn()
         && request.resource.data.keys().hasAll(['value'])
         && request.resource.data.keys().size() == 1
