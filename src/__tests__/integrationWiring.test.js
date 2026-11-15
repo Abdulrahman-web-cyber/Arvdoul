@@ -322,6 +322,21 @@ describe('post-embedded Q&A is wired end-to-end', () => {
     expect(callables).toContain("ACCEPT_ANSWER: 'acceptAnswer'");
   });
 
+  test('addAnswer honours the client idempotency key so a retry cannot double-post', () => {
+    // QuestionCard already generates a per-submit `idempotencyKey`; the callable
+    // must read it (it was ignored, so a dropped response + retry appended a
+    // second answer). The dedupe doc is replayed inside the same transaction.
+    const mod = read('functions/questions.js');
+    const body = mod.slice(mod.indexOf('exports.addAnswer ='), mod.indexOf('exports.editAnswer ='));
+    expect(body).toContain('idempotencyKey');
+    expect(body).toContain("collection('answer_idempotency')");
+    expect(body).toContain('dedupeSnap.exists');
+    // The client must actually forward the key.
+    const svc = read('src/services/firestoreService.js');
+    const svcBody = svc.slice(svc.indexOf('async addAnswer('), svc.indexOf('async editAnswer('));
+    expect(svcBody).toContain('idempotencyKey');
+  });
+
   test('answer_votes is server-write and self-read only', () => {
     const rules = read('firestore.rules');
     const m = rules.match(/match \/posts\/\{postId\}\/answer_votes\/\{voteId\} \{[\s\S]*?\n {4}\}/);

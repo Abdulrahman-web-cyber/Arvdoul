@@ -4954,3 +4954,16 @@ describe('N430 — royal standing resolves the stored title object, not a string
     expect(m).toContain('Royal Family badge');
   });
 });
+
+describe('N476 — comment stats never report unwritten aggregates as measured', () => {
+  test('getCommentStats returns null (unknown) for aggregates with no writer', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/commentService.js'), 'utf8');
+    // `averageLikes`/`averageReplies`/`topCommenters` had no writer anywhere;
+    // returning `0`/`[]` presented them as measured statistics.
+    expect(src).not.toContain('averageLikes: 0');
+    expect(src).not.toContain('averageReplies: 0');
+    expect(src).not.toContain('topCommenters: []');
+    expect(src).toContain('averageLikes: null');
+    expect(src).toContain('topCommenters: null');
+  });
+});

@@ -1619,13 +1619,17 @@ class UltimateCommentService {
 
       const snapshot = await this.firestoreMethods.getCountFromServer(q);
 
+      // Only the server-side count is measured here. `averageLikes`,
+      // `averageReplies` and `topCommenters` had no writer anywhere in the
+      // codebase, so returning `0`/`[]` presented unwritten values as measured
+      // statistics. Return them as `null` (unknown) instead.
       return {
         success: true,
         stats: {
           totalComments: snapshot.data().count,
-          averageLikes: 0,
-          averageReplies: 0,
-          topCommenters: []
+          averageLikes: null,
+          averageReplies: null,
+          topCommenters: null,
         }
       };
 

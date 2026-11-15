@@ -54,17 +54,28 @@ exports.addAnswer = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'addAnswer', 20, 60000);
 
-  const { postId } = data || {};
+  const { postId, idempotencyKey } = data || {};
   const text = stripHtml(data?.answer).slice(0, MAX_ANSWER_LENGTH);
   if (!postId) throw new functions.https.HttpsError('invalid-argument', 'postId required');
   if (!text) throw new functions.https.HttpsError('invalid-argument', 'Answer cannot be empty');
 
   const postRef = db.collection('posts').doc(postId);
   const answerId = `ans_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Retry-stable: the same idempotency key from the same user on the same post
+  // replays the stored answer id instead of appending a duplicate answer. The
+  // client already generates a per-submit key (QuestionCard) but nothing read it,
+  // so a retry after a dropped response appended a second answer.
+  const dedupeRef = typeof idempotencyKey === 'string' && idempotencyKey
+    ? db.collection('answer_idempotency').doc(`${uid}_${postId}_${idempotencyKey}`)
+    : null;
   const profileSnap = await db.collection('users').doc(uid).get();
   const profile = profileSnap.exists ? profileSnap.data() : {};
 
-  await db.runTransaction(async (t) => {
+  const result = await db.runTransaction(async (t) => {
+    if (dedupeRef) {
+      const dedupeSnap = await t.get(dedupeRef);
+      if (dedupeSnap.exists) return { answerId: dedupeSnap.data().answerId, replayed: true };
+    }
     const postSnap = await t.get(postRef);
     if (!postSnap.exists) throw new functions.https.HttpsError('not-found', 'Post not found');
     const question = postSnap.data().question;
@@ -88,11 +99,20 @@ exports.addAnswer = functions.https.onCall(async (data, context) => {
       createdAt: new Date().toISOString(),
     });
     t.update(postRef, { 'question.answers': answers, updatedAt: FieldValue.serverTimestamp() });
+    if (dedupeRef) {
+      t.set(dedupeRef, {
+        answerId, userId: uid, postId,
+        createdAt: FieldValue.serverTimestamp(),
+        // TTL field (Firestore TTL policy reaps it), matching the ledger pattern.
+        expireAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+    }
+    return { answerId, replayed: false };
   });
 
-  await awardXpSafe(uid, 'answer_created', { source: answerId });
+  if (!result.replayed) await awardXpSafe(uid, 'answer_created', { source: result.answerId });
 
-  return { success: true, answerId };
+  return { success: true, answerId: result.answerId };
 });
 
 exports.editAnswer = functions.https.onCall(async (data, context) => {
