@@ -110,8 +110,13 @@ describe('search reindex completeness', () => {
     expect(reindex).toContain('buildUserRecord');
     expect(reindex).toContain('buildPostRecord');
     expect(reindex).toContain('buildVideoRecord');
-    expect(reindex).toMatch(/collection\('posts'\)/);
-    expect(reindex).toMatch(/collection\('videos'\)/);
+    // Each collection is walked by the shared paginating helper (N488), which
+    // owns the `db.collection(...)` access.
+    expect(reindex).toMatch(/reindexCollection\('posts'/);
+    expect(reindex).toMatch(/reindexCollection\('videos'/);
+    const helper = src.slice(src.indexOf('async function reindexCollection'), src.indexOf('exports.batchReindex'));
+    expect(helper).toMatch(/firestore\.collection\(collectionName\)/);
+    expect(helper).toMatch(/startAfter\(cursor\)/);
   });
 });
 

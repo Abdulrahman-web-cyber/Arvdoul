@@ -3060,32 +3060,6 @@ class UltimateMessagingService {
     }
   }
 
-  async _incrementUnreadCounters(conversationId, senderId, participantIds) {
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
-    const promises = [];
-
-    for (const userId of participantIds) {
-      if (userId === senderId) continue;
-      const shard = Math.floor(Math.random() * shardCount);
-      const counterId = `unread_${conversationId}_${userId}`;
-      const shardedCounterRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', shard.toString());
-
-      promises.push(
-        this.fs.runTransaction(this.firestore, async (transaction) => {
-          const snap = await transaction.get(shardedCounterRef);
-          const current = snap.exists() ? snap.data().count : 0;
-          transaction.set(shardedCounterRef, {
-            count: current + 1,
-            updatedAt: this.fs.serverTimestamp(),
-          }, { merge: true });
-
-          await this._incrementTotalUnread(userId, 1, transaction);
-        })
-      );
-    }
-    await Promise.allSettled(promises);
-  }
-
   async _decrementUnreadCounter(conversationId, userId, delta, transaction) {
     if (delta <= 0) return;
     const counterId = `unread_${conversationId}_${userId}`;
@@ -3094,13 +3068,6 @@ class UltimateMessagingService {
     this._writeShardDelta(shardedCounterRef, -delta, transaction);
 
     await this._decrementTotalUnread(userId, delta, transaction);
-  }
-
-  async _incrementTotalUnread(userId, delta, transaction) {
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.TOTAL_SHARD_COUNT;
-    const shard = Math.floor(Math.random() * shardCount);
-    const totalCounterRef = this.fs.doc(this.firestore, 'user_unread_totals', userId, 'shards', shard.toString());
-    this._writeShardDelta(totalCounterRef, delta, transaction);
   }
 
   async _decrementTotalUnread(userId, delta, transaction) {

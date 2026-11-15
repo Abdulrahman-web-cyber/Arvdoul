@@ -2360,7 +2360,17 @@ service cloud.firestore {
     // daily video-upload counter, defeating the per-tier upload limit (and
     // making the legitimate owner's own increment exceed the limit and fail).
     match /daily_upload_counters/{shardId} {
-      allow read, delete: if isSignedIn() &&
+      // The daily upload limit is the SUM of today's shards, so the client reads
+      // every shard (`getAll`) before incrementing one — including the shards
+      // that do not exist yet (a missing doc has `resource == null`, so an
+      // owner-keyed read would throw and be denied). The id is bound to the
+      // caller, so a point read of any of the caller's own shards is safe; a
+      // `list` would let a client enumerate other users' counters, so it stays
+      // denied (mirrors `counter_shards`).
+      allow get: if isSignedIn() &&
+        shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
+      allow list: if false;
+      allow delete: if isSignedIn() &&
         resource.data.userId == uid() &&
         shardId.matches('upload_' + uid() + '_[0-9]{4}-[0-9]{2}-[0-9]{2}_shard_[0-9]+');
       // The value is bounded, not just the id: a fresh shard starts at 1 and

@@ -1139,22 +1139,30 @@ class UltimateVideoService {
   async _checkDailyUploadLimitSharded(userId) {
     const today = new Date().toISOString().split('T')[0];
     const shards = VIDEO_CONFIG.UPLOAD.COUNTER_SHARDS;
-    const shardIndex = Math.floor(Math.random() * shards);
-    const shardId = `upload_${userId}_${today}_shard_${shardIndex}`;
-    const shardRef = doc(this.firestore, 'daily_upload_counters', shardId);
 
     const userRef = doc(this.firestore, 'users', userId);
     const userSnap = await getDoc(userRef);
     const tier = userSnap.exists() ? (userSnap.data().subscription?.tier || 'free') : 'free';
     const dailyLimit = VIDEO_CONFIG.UPLOAD.DAILY_LIMIT_PER_USER[tier] || 5;
 
+    const shardRefs = Array.from({ length: shards }, (_, i) =>
+      doc(this.firestore, 'daily_upload_counters', `upload_${userId}_${today}_shard_${i}`));
+
+    // The shards are a SUM of today's uploads. The previous version read ONE
+    // random shard and compared that single value to the daily limit, so the
+    // per-tier cap was never enforced — a user could upload up to `shards ×
+    // dailyLimit` (and probabilistically more) before a random shard happened
+    // to hit the limit. Read every shard and compare the real total.
     let success = false;
     try {
       await runTransaction(this.firestore, async (tx) => {
-        const snap = await tx.get(shardRef);
-        const current = snap.exists() ? snap.data().count : 0;
-        if (current >= dailyLimit) throw new Error('LIMIT_EXCEEDED');
-        tx.set(shardRef, { userId, date: today, shard: shardIndex, count: current + 1, updatedAt: serverTimestamp() }, { merge: true });
+        const snaps = await tx.getAll(...shardRefs);
+        const total = snaps.reduce((sum, s) => sum + (s.exists() ? (s.data().count || 0) : 0), 0);
+        if (total >= dailyLimit) throw new Error('LIMIT_EXCEEDED');
+        const shardIndex = Math.floor(Math.random() * shards);
+        const shardSnap = snaps[shardIndex];
+        const current = shardSnap.exists() ? (shardSnap.data().count || 0) : 0;
+        tx.set(shardRefs[shardIndex], { userId, date: today, shard: shardIndex, count: current + 1, updatedAt: serverTimestamp() }, { merge: true });
         success = true;
       });
     } catch (err) {

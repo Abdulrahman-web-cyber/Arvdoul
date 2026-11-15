@@ -13,6 +13,7 @@ const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
 const { checkIsAdmin, getUserEmail } = require('./auth');
 const { writeAudit } = require('./admin');
+const { writeNotification } = require('./notificationWriter');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -487,31 +488,23 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   }
 
   // Store in‑app notification (only when the in-app channel is on)
-  const notificationId = uuidv4();
   if (inAppEnabled) {
-    const notificationDoc = {
-      id: notificationId,
+    // Canonical writer keeps the record and the unread shard in step.
+    const notificationId = await writeNotification(recipientId, {
       type: notificationData.type,
       title: notificationData.title,
       message,
-      read: false,
-      clicked: false,
       senderId,
       senderName,
       metadata: notificationData.metadata || {},
-      createdAt: FieldValue.serverTimestamp(),
-    };
-    await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set(notificationDoc);
+    });
 
-    // Increment unread counter (sharded)
-    const shardCount = 10;
-    const shardIndex = Math.floor(Math.random() * shardCount);
-    const counterRef = db.collection('notification_counters').doc(`${recipientId}_shard_${shardIndex}`);
-    await counterRef.set({ count: FieldValue.increment(1) }, { merge: true });
+    log('INFO', 'Notification created', { pushId, notificationId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
+    return { success: true, pushId, notificationId, pushEnabled, inAppEnabled };
   }
 
-  log('INFO', 'Notification created', { pushId, notificationId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
-  return { success: true, pushId, notificationId, pushEnabled, inAppEnabled };
+  log('INFO', 'Notification created', { pushId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
+  return { success: true, pushId, notificationId: null, pushEnabled, inAppEnabled };
 });
 
 // ======================================================================
@@ -699,15 +692,15 @@ exports.processBulkNotifications = functions.firestore
       const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
       if (prefs && prefs.inApp === false && prefs.push === false) continue;
       const notificationId = uuidv4();
-      await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set({
+      // Route through the canonical writer so the unread shard is bumped too;
+      // a direct `set()` here left every bulk notification counted as read
+      // (the Alerts badge never moved) even though `read: false`.
+      await writeNotification(recipientId, {
         id: notificationId,
         type: template.type || 'system',
         title: template.title || 'Announcement',
         message: template.message || '',
-        read: false,
-        clicked: false,
         metadata: template.metadata || {},
-        createdAt: FieldValue.serverTimestamp(),
       });
       delivered++;
     }
@@ -766,16 +759,14 @@ exports.generateNotificationDigest = functions.pubsub
         byType[type] = (byType[type] || 0) + 1;
       });
       const digestMessage = Object.entries(byType).map(([t, c]) => `${c} ${t}s`).join(', ');
-      // In-app digest record (respects the in-app opt-out).
+      // In-app digest record (respects the in-app opt-out). Routed through the
+      // canonical writer so it bumps the unread shard; the previous direct
+      // `set()` left the digest uncounted in the Alerts badge.
       if (prefs.inApp !== false) {
-        const digestId = uuidv4();
-        await db.collection('users').doc(userId).collection('notifications').doc(digestId).set({
-          id: digestId,
+        await writeNotification(userId, {
           type: 'digest',
           title: 'Your digest',
           message: `You have ${digestMessage}`,
-          read: false,
-          createdAt: FieldValue.serverTimestamp(),
         });
       }
       // Email delivery (respects the email opt-out).

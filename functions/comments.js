@@ -359,24 +359,59 @@ exports.cleanupOldCommentData = functions.pubsub
 // ----------------------------------------------------------------------
 // 5. deleteOldRateLimitShards – scheduled cleanup (prevents unbounded growth)
 // ----------------------------------------------------------------------
+//
+// Page the `shards` collection group with a cursor instead of one unbounded
+// `.get()`: the group spans every `rate_limits/{user_action}/shards/*` document
+// (one per user × action × shard), so a single read grows without bound and
+// eventually exceeds the 60s function timeout / memory limit — leaving stale
+// shards behind exactly as the job was meant to prevent.
 exports.deleteOldRateLimitShards = functions.pubsub
   .schedule('every 12 hours')
   .onRun(async (context) => {
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000); // keep last 2 days
-    const shardCollections = await db.collectionGroup('shards').get();
-
+    const PAGE = 500;
+    const group = db.collectionGroup('shards');
+    let cursor = null;
+    let scanned = 0;
     let deleted = 0;
-    for (const doc of shardCollections.docs) {
-      const data = doc.data();
-      if (data.expireAt && data.expireAt.toDate() < cutoff) {
-        await doc.ref.delete();
-        deleted++;
-      } else if (data.windowStart && data.windowStart < cutoff.getTime()) {
-        await doc.ref.delete();
-        deleted++;
+    let batch = db.batch();
+    let batchOps = 0;
+    const flush = async () => {
+      if (batchOps > 0) {
+        await batch.commit();
+        batch = db.batch();
+        batchOps = 0;
       }
+    };
+    for (;;) {
+      let q = group.orderBy('__name__').limit(PAGE);
+      if (cursor) q = q.startAfter(cursor);
+      const snap = await q.get();
+      if (snap.empty) break;
+      scanned += snap.size;
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        // `expireAt` is written as a Timestamp by the shared limiter, but a
+        // numeric-ms value is tolerated too; `windowStart` is always ms.
+        const expMs = data.expireAt
+          ? (typeof data.expireAt.toDate === 'function'
+              ? data.expireAt.toDate().getTime()
+              : (typeof data.expireAt === 'number' ? data.expireAt : null))
+          : null;
+        const expiredByTs = expMs != null && expMs < cutoff.getTime();
+        const expiredByWindow = typeof data.windowStart === 'number' && data.windowStart < cutoff.getTime();
+        if (expiredByTs || expiredByWindow) {
+          batch.delete(doc.ref);
+          batchOps++;
+          deleted++;
+          if (batchOps >= 450) await flush();
+        }
+      }
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.size < PAGE) break;
     }
-    log('info', 'Old rate limit shards cleaned up', { deleted });
+    await flush();
+    log('info', 'Old rate limit shards cleaned up', { deleted, scanned });
     return null;
   });
 

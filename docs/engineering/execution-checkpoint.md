@@ -2,6 +2,50 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — unbounded sweeps, notification-counter parity, upload-cap enforcement (N488–N492)
+
+Theme: scheduled jobs that silently covered only a prefix, server-written
+notification rows that never moved the unread counter, a per-tier limit that was
+never actually enforced, an unbounded collection-group read, and dead
+double-count risk.
+
+- **N488 (HIGH, closed):** `functions/search.js#batchReindex` (24h) claimed to
+  rebuild the indices but ran `collection('users').limit(500)` once — a 100k
+  collection left ~99.5k users unindexed. Now walks each collection with a
+  `__name__` cursor (`reindexCollection`). Guard:
+  `reindexCoversWholeCollectionGuard.test.js` (guards job).
+- **N489 (HIGH, closed):** `notifications.js#processBulkNotifications` and
+  `#generateNotificationDigest` wrote `read: false` rows with a bare `set()` that
+  never bumped `notification_counters` (announcements/digests never showed in the
+  Alerts badge); `scheduledPosts.js#notifyAuthorPublished` bumped the counter
+  AFTER an idempotent `create()` whose re-run is a no-op (unread with no row).
+  All server in-app writes now go through `notificationWriter.writeNotification`,
+  and the scheduled-post bump sits after the `ALREADY_EXISTS` early-return. Guard:
+  `notificationCounterParityGuard.test.js` (guards job).
+- **N490 (HIGH, closed):** `videoService._checkDailyUploadLimitSharded` compared
+  ONE random shard's count to the tier limit, but the shards are a SUM — a `free`
+  user (10 shards, limit 5) could upload ~50 videos. Now reads every shard
+  (`tx.getAll`) and compares the real total; the `daily_upload_counters` rule
+  gains an owner-keyed `get` (an absent shard has `resource == null`) with `list`
+  still denied. Guard: `dailyUploadLimitEnforcementGuard.test.js` (guards job).
+- **N491 (MEDIUM, closed):** `functions/comments.js#deleteOldRateLimitShards`
+  (12h) did one unbounded `collectionGroup('shards').get()` (grows without bound →
+  timeout, stale shards survive). Now cursor-paged with batched deletes. Guard:
+  `rateLimitShardCleanupGuard.test.js` (guards job).
+- **N492 (LOW, closed):** dead `messagesService._incrementUnreadCounters`/
+  `_incrementTotalUnread` (no caller — the server `onMessageCreated` trigger owns
+  unread increments) removed to remove a double-count trap.
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite
+**211 suites / 2198 passed (5 skipped), 2204 total** green; the only failure
+(`integrationWiring.test.js`) was an assertion on the pre-N488 inline shape and
+was updated to the paginating helper.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision); N432 partially BLOCKED (metrics with no
+defined source). N424–N492 closed.
+
 ## This session — unread-counter integrity: notification + message shards (N485–N487)
 
 Theme: the sharded unread counters (a SUM of 10 shards) lost decrements and

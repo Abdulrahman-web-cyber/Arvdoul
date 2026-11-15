@@ -280,6 +280,10 @@ jobs:
           src/__tests__/markAllNotificationsReadGuard.test.js
           src/__tests__/notificationUnreadShardDecrementGuard.test.js
           src/__tests__/messageUnreadCounterDecrementGuard.test.js
+          src/__tests__/notificationCounterParityGuard.test.js
+          src/__tests__/reindexCoversWholeCollectionGuard.test.js
+          src/__tests__/dailyUploadLimitEnforcementGuard.test.js
+          src/__tests__/rateLimitShardCleanupGuard.test.js
           src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js
