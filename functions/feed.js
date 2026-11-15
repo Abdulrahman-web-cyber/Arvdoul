@@ -161,6 +161,12 @@ exports.fanoutPostOnCreate = functions.firestore
     const taskData = snap.data();
     const taskRef = snap.ref;
 
+    // `fanout_tasks` is shared with story fan-out (`stories.js`
+    // `processFanoutTask`). Both triggers fire for every created doc; claim only
+    // post tasks so the two handlers cannot cancel each other's work (the loser
+    // would otherwise find status !== 'pending' and mark the task failed).
+    if (!taskData || !taskData.postId) return;
+
     let shouldProcess = false;
     await db.runTransaction(async (t) => {
       const doc = await t.get(taskRef);

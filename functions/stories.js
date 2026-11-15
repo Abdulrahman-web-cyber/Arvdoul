@@ -262,6 +262,13 @@ exports.processFanoutTask = functions.firestore
     const taskId = context.params.taskId;
     const taskData = snap.data();
     if (!taskData || taskData.status !== 'pending') return;
+    // The SAME `fanout_tasks/{taskId}` collection is written by two producers:
+    // posts (`feed.js` `fanoutPostOnCreate`, carrying `postId`) and stories
+    // (`{ storyId }`). Both triggers fire for every created doc, and both used
+    // to claim it unconditionally — so the loser's `processFanoutTaskInternal`
+    // found status !== 'pending' and marked the task `failed` with "Missing
+    // required fields", cancelling the winner's fan-out. Claim only story tasks.
+    if (!taskData.storyId) return;
     await processFanoutTaskInternal(snap.ref, taskId, taskData);
   });
 
@@ -691,6 +698,10 @@ exports.retryFailedFanoutTasks = functions.pubsub
 
     for (const doc of failedSnap.docs) {
       const data = doc.data();
+      // Only story tasks (post tasks carry `postId` and are retried by
+      // `feed.js#cleanupAndRetryFanoutTasks`). Without this guard the story
+      // retrier would mark every failed POST task as "Missing required fields".
+      if (!data.storyId) continue;
       await doc.ref.update({
         status: 'pending',
         retries: (data.retries || 0) + 1,
