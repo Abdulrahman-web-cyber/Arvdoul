@@ -320,6 +320,9 @@ describe('ConflictResolutionScreen - real queued operations only', () => {
     const src = fs.readFileSync(path.join(root, 'src/utils/OfflineQueue.js'), 'utf8');
     expect(src).toContain('async getPending(');
     expect(src).toContain('async remove(id)');
+    // `createdAt` is an ISO string, so a `(b.createdAt - a.createdAt)`
+    // comparator is NaN (a no-op) and "newest first" never held.
+    expect(src).toContain('new Date(b.createdAt || 0) - new Date(a.createdAt || 0)');
   });
 });
 
@@ -1313,6 +1316,16 @@ describe('Vibes master-spec: cost control (spec §57/58)', () => {
     expect(src).toContain("doc.ref.collection('analytics_shards')");
     expect(src).toContain("'stats.completions': completions");
     expect(src).toContain("'stats.completionRate'");
+  });
+
+  test('story create seeds only counters a real writer maintains', () => {
+    // `viewerCount` and `likes` had no writer (story reactions live in
+    // `reaction_shards` -> `stats.reactions`; viewers are the owner-only
+    // `viewers` list), so a seeded `0` advertised an unmeasured metric as a
+    // measured zero. Only server-aggregated counters may be seeded.
+    const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(src).not.toMatch(/stats:\s*\{[^}]*viewerCount: 0/);
+    expect(src).not.toMatch(/stats:\s*\{[^}]*\blikes: 0/);
   });
 });
 

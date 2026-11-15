@@ -1828,7 +1828,10 @@ class UltimateMessagingService {
         const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
         const lastSnap = await transaction.get(lastMessageRef);
         if (lastSnap.exists() && lastSnap.data().messageId === messageId) {
-          const prev = await this._getPreviousMessage(conversationId, conv.conversation, msg.createdAt.toDate());
+          // `msg.createdAt` is a stored value, but a legacy/offline-written doc
+          // may hold an ISO string, so guard the Timestamp conversion.
+          const deletedAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt);
+          const prev = await this._getPreviousMessage(conversationId, conv.conversation, deletedAt);
           if (prev) {
             transaction.set(lastMessageRef, {
               messageId: prev.id,

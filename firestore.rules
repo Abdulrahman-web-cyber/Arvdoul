@@ -536,7 +536,12 @@ service cloud.firestore {
     // is signed-in — a world-readable grant let anyone with the public project
     // config enumerate every handle (and its uid) over the REST API.
     match /usernames/{username} {
-      allow read: if isSignedIn();
+      // Point reads only: share/QR resolution and the availability check both
+      // `getDoc(doc(...))` a single name. `allow read` also granted `list`, which
+      // let any signed-in client enumerate every claimed username (the whole
+      // user->handle directory). Split the grant so `list` is denied.
+      allow get: if isSignedIn();
+      allow list: if false;
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       // A claimed username is immutable except by the user who already owns the
       // doc, and even they may never reassign its `userId`. The previous
@@ -556,8 +561,10 @@ service cloud.firestore {
     // block them from ever changing their username.
     match /previous_usernames/{username} {
       // Same registry boundary as `usernames`: only authenticated share/QR
-      // resolution reads it.
-      allow read: if isSignedIn();
+      // resolution point-reads it. `allow read` would also grant `list`, which
+      // exposes the full rename history (old handle -> uid).
+      allow get: if isSignedIn();
+      allow list: if false;
       allow create: if isSignedIn() && request.resource.data.userId == uid() &&
         get(/databases/$(database)/documents/usernames/$(username)).data.userId == uid();
       allow update, delete: if false;

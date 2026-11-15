@@ -144,6 +144,18 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(code).not.toMatch(/allow read: if true;/);
   });
 
+  test('the username registry is point-read only, never listable (N472)', () => {
+    // `allow read` grants `get` AND `list`; the registry is only ever point-read
+    // (share/QR resolution, availability check), so a listable grant let any
+    // signed-in client enumerate every claimed handle over the REST API.
+    for (const marker of ['match /usernames/{username}', 'match /previous_usernames/{username}']) {
+      const b = block(rules, marker);
+      expect(b).toContain('allow get: if isSignedIn();');
+      expect(b).toContain('allow list: if false;');
+      expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
+    }
+  });
+
   test('achievements/titles reads honour the section privacy scope', () => {
     for (const [marker, section] of [
       ['match /achievements/{userId}', 'achievements'],

@@ -452,9 +452,12 @@ class UltimateStoryService {
       linkUrl: storyData.linkUrl || null, // link sticker
       templateId: storyData.templateId || null,
       stats: {
-        views: 0, viewerCount: 0, likes: 0, comments: 0, shares: 0, replies: 0,
+        // Only counters a real writer maintains are seeded. `viewerCount` and
+        // `likes` had no writer (story reactions live in `reaction_shards` ->
+        // `stats.reactions`; viewers are the owner-only `viewers` list), so a
+        // seeded `0` advertised an unmeasured metric as a measured zero.
+        views: 0, comments: 0, shares: 0, replies: 0,
         reactions: STORY_CONFIG.REACTION_TYPES.reduce((acc, r) => ({ ...acc, [r]: 0 }), {}),
-        completionRate: 0, forwardTaps: 0, backTaps: 0,
       },
       createdAt: now,
       updatedAt: now,
