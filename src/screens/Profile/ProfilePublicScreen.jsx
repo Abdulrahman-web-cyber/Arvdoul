@@ -67,6 +67,7 @@ export default function ProfilePublicScreen() {
   const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const storeFollowLoading = useProfileStore((state) => state.followLoading);
   const storeMutualFriends = useProfileStore((state) => state.mutualFriends);
+  const storeMutualFriendsResolved = useProfileStore((state) => state.mutualFriendsResolved);
   const storeHighlights = useProfileStore((state) => state.highlights);
 
   const [localLoading, setLocalLoading] = useState(true);
@@ -195,6 +196,7 @@ export default function ProfilePublicScreen() {
   const profileData = storeProfile;
   const posts = storePosts;
   const mutualFriends = storeMutualFriends;
+  const mutualFriendsResolved = storeMutualFriendsResolved;
   const loading = localLoading || storeLoading;
   const targetUid = storeProfile?.id || storeProfile?.uid || routeUserId;
   const handleLoadMorePosts = useCallback(() => {
@@ -572,6 +574,7 @@ export default function ProfilePublicScreen() {
           {/* 2. Social Context Bar (Mutual Friends, Shared Communities, Follows You) */}
           <ProfileMutualFriends
             mutualFriends={mutualFriends}
+            mutualFriendsResolved={mutualFriendsResolved}
             relationship={relationship}
             isFollowing={isFollowing}
             targetName={pickDisplayName([effectiveProfile?.displayName, effectiveProfile?.name], { fallback: null }) || ((effectiveProfile?.id || effectiveProfile?.uid || userId) ? `user ${String(effectiveProfile?.id || effectiveProfile?.uid || userId).slice(0, 6)}` : 'this user')}

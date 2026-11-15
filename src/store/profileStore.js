@@ -55,6 +55,10 @@ const initialState = {
   
   // Mutual friends
   mutualFriends: [],
+  // Distinguishes a resolved empty list ("No mutual friends") from an
+  // unresolved/failed read. Without it the card rendered a failed fetch as a
+  // measured "No mutual friends".
+  mutualFriendsResolved: false,
   mutualFriendsLoading: false,
   
   // Posts
@@ -136,6 +140,9 @@ export const useProfileStore = create(
         state.requestSeq = requestId;
         state.loading = true;
         state.error = null;
+        // A new profile load invalidates any prior mutual-friends result.
+        state.mutualFriends = [];
+        state.mutualFriendsResolved = false;
       });
       
       try {
@@ -160,17 +167,21 @@ export const useProfileStore = create(
         
         // Fetch mutual friends if not owner
         let mutualFriends = [];
+        let mutualFriendsResolved = false;
         if (!isOwner && currentUserId) {
           try {
             const mutualResult = await userService.getMutualFriends(currentUserId, userId);
             // userService returns `{ success, mutualFriends }`; reading `.users`
             // here always produced [] so the social-context bar never rendered.
             mutualFriends = mutualResult?.mutualFriends?.slice(0, 5) || [];
+            mutualFriendsResolved = true;
           } catch (e) {
             console.warn('Could not fetch mutual friends:', e);
           }
-        }
-        
+        } else {
+          // Owner view (or no viewer): there is no mutual set to resolve.
+          mutualFriendsResolved = true;
+        }        
         // Fetch level if not available
         let level = profile?.level || null;
         
@@ -244,6 +255,7 @@ export const useProfileStore = create(
           state.isOwner = isOwner;
           state.followStatus = followStatus;
           state.mutualFriends = mutualFriends;
+          state.mutualFriendsResolved = mutualFriendsResolved;
           state.level = resolvedProfile.level ?? level ?? null;
           state.balance = balance;
           state.position = position;
@@ -727,6 +739,8 @@ export const useProfileStore = create(
       
       set((state) => {
         state.mutualFriendsLoading = true;
+        // A fresh fetch invalidates the prior result until it resolves.
+        state.mutualFriendsResolved = false;
       });
       
       try {
@@ -735,11 +749,14 @@ export const useProfileStore = create(
         if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
           state.mutualFriends = result?.mutualFriends?.slice(0, 5) || [];
+          state.mutualFriendsResolved = true;
           state.mutualFriendsLoading = false;
         });
       } catch (error) {
         console.error('❌ Load mutual friends failed:', error);
         if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
+        // Leave `mutualFriendsResolved` false so the card stays hidden rather
+        // than claiming a measured "No mutual friends".
         set((state) => {
           state.mutualFriendsLoading = false;
         });

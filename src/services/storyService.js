@@ -1680,14 +1680,12 @@ class UltimateStoryService {
     const lastAdKey = `lastAdImpression_${userId}`;
     const lastAd = localStorage.getItem(lastAdKey);
     if (lastAd && Date.now() - parseInt(lastAd) < STORY_CONFIG.ADS.FREQ_CAP_MINUTES * 60 * 1000) return stories;
-    try {
-      const userDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', userId));
-      const lastServerAd = userDoc.data()?.lastAdImpression;
-      if (lastServerAd && Date.now() - lastServerAd.toDate().getTime() < STORY_CONFIG.ADS.FREQ_CAP_MINUTES * 60 * 1000) return stories;
-    } catch (e) {
-      // Server-side ad frequency cap could not be read; the local cap still applies.
-      logger.warn('Story ad frequency-cap read failed', { userId, error: e?.message });
-    }
+    // The per-user ad frequency cap is enforced locally (`lastAdKey`). The
+    // former server-side cap read `users/{uid}.lastAdImpression`, but NO writer
+    // ever sets that field (the `users/{uid}` write is denied by the rules and
+    // no server path mirrors it), so the read always returned undefined — a
+    // wasted read on every story fetch, plus an unguarded `.toDate()`. Removed
+    // rather than left as a control that can never trip.
 
     let targetingProfile = {};
     try {

@@ -14,6 +14,7 @@ import { cn } from '../../lib/utils';
 
 const ProfileSocialContext = memo(({
   mutualFriends = [],
+  mutualFriendsResolved = false,
   sharedCommunities = [],
   relationship = null,
   isFollowing = false,
@@ -30,12 +31,17 @@ const ProfileSocialContext = memo(({
   // must not render either list (this card previously bypassed the engine).
   const communitiesCount = Array.isArray(sharedCommunities) ? sharedCommunities.length : 0;
   const canShowFriends = capabilities?.canViewFriends === true;
+  // Distinguish a resolved empty list ("No mutual friends") from an unresolved
+  // or failed read: only a resolved list may render the card, so a denied/failed
+  // fetch never masquerades as a measured zero.
+  const friendsResolved = mutualFriendsResolved === true;
+  const showFriends = canShowFriends && friendsResolved;
   // No shared-community source is wired yet, so the card only renders when real
   // shared memberships exist; an empty card would advertise a dead feature.
   const canShowCommunities = capabilities?.canViewCommunities === true && communitiesCount > 0;
   const canShowRelationship = Boolean(relationship) || isFollowing;
 
-  if (!canShowFriends && !canShowCommunities && !canShowRelationship) {
+  if (!showFriends && !canShowCommunities && !canShowRelationship) {
     return null;
   }
 
@@ -66,7 +72,7 @@ const ProfileSocialContext = memo(({
         : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
     )}>
       {/* 1. Mutual Friends Card */}
-      {canShowFriends && (
+      {showFriends && (
       <div 
         onClick={() => onFriendClick?.()}
         className={cn(

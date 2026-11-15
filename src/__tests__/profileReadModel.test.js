@@ -475,12 +475,17 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       const src = read('src/components/profile/ProfileSocialContext.jsx');
       expect(src).toContain('capabilities?.canViewFriends === true');
       expect(src).toContain('capabilities?.canViewCommunities === true');
-      expect(src).toContain('canShowFriends &&');
+      expect(src).toContain('showFriends &&');
       expect(src).toContain('canShowCommunities &&');
       expect(src).toContain('canShowRelationship &&');
+      // A failed/unresolved mutual-friends read must not render as a measured
+      // "No mutual friends": the card only shows once the read resolved.
+      expect(src).toContain('const friendsResolved = mutualFriendsResolved === true;');
+      expect(src).toContain('const showFriends = canShowFriends && friendsResolved;');
       // The wrapper must forward the map from the screen.
       const wrapper = read('src/components/profile/ProfileMutualFriends.jsx');
       expect(wrapper).toContain('capabilities={capabilities}');
+      expect(wrapper).toContain('mutualFriendsResolved={mutualFriendsResolved}');
       const screen = read('src/screens/Profile/ProfilePublicScreen.jsx');
       expect(screen).toMatch(/<ProfileMutualFriends[\s\S]*?capabilities=\{capabilities\}/);
       // The card calls its handler with NO argument, so a `(friend) => ...`

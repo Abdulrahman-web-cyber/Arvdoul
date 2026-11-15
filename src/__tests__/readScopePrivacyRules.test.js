@@ -57,6 +57,22 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(rb).toMatch(/allow read: if isSignedIn\(\) && \(reactorId == uid\(\) \|\| isAdmin\(\)\)/);
   });
 
+  test('comment like/dislike markers are readable only by their owner/admin', () => {
+    const b = block(rules, 'match /comments/{commentId}');
+    // The marker doc id is the liker's uid; the tallies live on the comment doc,
+    // so a world/signed-in read would expose who liked/disliked each comment.
+    for (const [marker, varName] of [
+      ['match /likes/{likerId}', 'likerId'],
+      ['match /dislikes/{dislikerId}', 'dislikerId'],
+    ]) {
+      const start = b.indexOf(marker);
+      expect(start).toBeGreaterThan(-1);
+      const mb = b.slice(start, start + 300);
+      expect(mb).not.toMatch(/allow read: if isSignedIn\(\);\n/);
+      expect(mb).toMatch(new RegExp(`allow read: if isSignedIn\\(\\) && \\(${varName} == uid\\(\\) \\|\\| isAdmin\\(\\)\\)`));
+    }
+  });
+
   test('comment edit history read is scoped to the comment author/admin', () => {
     const b = block(rules, 'match /comments/{commentId}');
     const start = b.indexOf('match /history/{historyId}');
