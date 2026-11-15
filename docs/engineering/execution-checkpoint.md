@@ -2,6 +2,39 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — read-scope / fabrication / dead-control batches (N472–N477)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) dead controls.
+
+- **N472 (HIGH, closed):** `usernames/{name}` and `previous_usernames/{name}`
+  granted `allow read: if isSignedIn()`, which also grants `list` — so any
+  signed-in client could enumerate the entire claimed-handle registry (and the
+  old-handle rename history) over the REST API. Every client path is a point
+  read (`getDoc` for share/QR resolution, the availability check). Fix: both
+  blocks now grant `allow get: if isSignedIn(); allow list: if false;`.
+  `readScopePrivacyRules.test.js` pins it.
+- **N473 (MEDIUM, closed):** `OfflineQueue.getPending` sorted `createdAt` (an
+  ISO string) by subtraction → `NaN`, so the "newest first" ordering of the
+  offline conflict UI never held. Fixed to parse to `Date`.
+- **N474 (MEDIUM, closed):** `messagesService.deleteMessage` called
+  `msg.createdAt.toDate()` unguarded; a legacy/offline ISO-string value threw a
+  `TypeError` that aborted the delete transaction. Guarded.
+- **N475 (MEDIUM, closed):** `storyService.createStory` seeded
+  `stats.viewerCount: 0` and `stats.likes: 0` — no writer maintains either
+  (reactions live in `reaction_shards`; viewers in the owner-only list), so the
+  seed presented an unmeasured metric as a measured zero. Both seeds removed.
+- **N476 (MEDIUM, closed):** `commentService.getCommentStats` returned
+  `averageLikes: 0`, `averageReplies: 0`, `topCommenters: []` with no writer.
+  Now `null` (unknown).
+- **N477 (MEDIUM, closed):** `functions/questions.js#addAnswer` ignored the
+  client `idempotencyKey` — a retry appended a duplicate answer and
+  double-awarded XP. Now records an in-transaction `answer_idempotency` dedupe
+  doc (TTL) and replays the stored `answerId` on a repeat.
+
+Latest verified: **203 suites / 2173 passed (5 skipped), exit 0**;
+`npx eslint --quiet src functions` exit 0 (0 errors); `npm run build` green.
+Committed as `fix(N472-N475)` and `fix(N476-N477)`.
+
 ## This session — dead RTDB presence (N458) + story shard read leak (N459)
 
 Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) dead controls.
