@@ -1000,7 +1000,13 @@ service cloud.firestore {
       // Each shard is restricted to its known counter keys (+ updatedAt) so a
       // client cannot write arbitrary data into the aggregation collections.
       match /view_shards/{shardId} {
-        allow read: if isSignedIn();
+        // Raw shard totals are rolled up server-side; the only client reader is
+        // the creator's own insights panel (`storyService.getStoryInsights` /
+        // `subscribeToInsights`, which gate on `story.userId == uid`). A
+        // signed-in read exposed one creator's private story view count to
+        // every other user — scope to the creator and admins (same boundary as
+        // analytics_shards). Clients still *write* their own view increment.
+        allow read: if isSignedIn() && (vibeData().userId == uid() || isAdmin());
         // Create starts from an absent (0) counter, so the initial value is the
         // whole delta and must already be bounded.
         allow create: if isSignedIn() &&
@@ -1013,9 +1019,10 @@ service cloud.firestore {
       }
       match /reaction_shards/{shardId} {
         // The raw reaction tallies are rolled up server-side and the creator
-        // sees the aggregate; no client reads the raw shards. Scope to
-        // signed-in (the reactor path is authenticated).
-        allow read: if isSignedIn();
+        // sees the aggregate; the only client reader is the creator's insights
+        // panel. A signed-in read leaked one creator's private story reaction
+        // totals to every other user — scope to the creator and admins.
+        allow read: if isSignedIn() && (vibeData().userId == uid() || isAdmin());
         allow create: if isSignedIn() &&
           request.resource.data.keys().hasOnly(['❤️', '🔥', '😂', '😢', '😮', '👍', 'updatedAt']) &&
           reactionShardCreateBounded();

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown, Users, Loader2, Trash2 } from "lucide-react";
+import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Music, ChevronDown, Users, Loader2, Trash2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
 import { pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
@@ -15,13 +15,16 @@ import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 import ErrorState from '../design-system/ErrorState.jsx';
 
+// Only categories with a real backing model are offered. `close_friends` had no
+// list/edge collection (`isCloseFriend` was hardcoded false and every
+// `close_friends` story was written as public) and `live` had no live-story
+// concept (`isLive` was hardcoded false) — both tabs matched nothing, so they
+// were dead controls and are withheld until the model exists (N456).
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
   { id: 'sponsored', label: 'Sponsored & Rewards', icon: Sparkles, color: 'text-amber-400' },
   { id: 'friends', label: 'Friends', icon: null },
   { id: 'following', label: 'Following', icon: null },
-  { id: 'close_friends', label: 'Close Friends', icon: Star, color: 'text-green-400' },
-  { id: 'live', label: 'Live', icon: Radio, color: 'text-red-500', isLive: true },
 ];
 
 const QUICK_EMOJIS = ['❤️', '🔥', '👏', '😮', '😂', '💎'];
@@ -96,21 +99,45 @@ export default function StoriesScreen() {
         const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
         if (cancelled) return;
         const groups = feed?.groups || [];
+
+        // Story docs carry no authorName/authorPhoto (the writer never sets
+        // them), so the previous `authorName || g.userId` rendered the raw uid
+        // and the avatar fell back to the stock placeholder. Hydrate the real
+        // creator profiles in one batched read and build an honest identity.
+        const { getSocialGraphService } = await import('../services/socialGraphService.js');
+        const graph = getSocialGraphService();
+        const creatorIds = [...new Set(groups.map((g) => g.userId).filter(Boolean))];
+        let creators = new Map();
+        let follows = new Map();
+        try {
+          const [profiles, edges] = await Promise.all([
+            graph.hydrateProfiles(creatorIds, { viewerId: user?.uid || null }),
+            user?.uid ? graph.getEdgeSet(user.uid, creatorIds) : Promise.resolve(new Map()),
+          ]);
+          creators = new Map(profiles.map((p) => [p.id, p]));
+          follows = edges;
+        } catch (err) {
+          // Identity hydration is best-effort; the honest uid fallback stands in.
+          toast.error('Some creator details could not be loaded.');
+        }
+        if (cancelled) return;
+
         const mapped = groups.map((g) => {
           const storiesArr = g.stories || [];
-          const author = storiesArr[0]?.authorName || g.userId;
-          const authorPhoto = storiesArr[0]?.authorPhoto || '/assets/default-profile.png';
+          const profile = creators.get(g.userId) || null;
+          const edge = follows.get(g.userId) || null;
+          const name = resolveActorName([profile?.displayName, profile?.name], g.userId);
           return {
             id: g.userId,
             user: {
               id: g.userId,
-              name: author,
-              username: author.toLowerCase().replace(/\s+/g, '.'),
-              avatar: authorPhoto,
-              verified: false,
-              category: 'Following',
-              isCloseFriend: false,
-              isLive: false,
+              name,
+              username: pickHandle([profile?.username]) || deriveHandle(name) || '',
+              avatar: getSafeAvatarUrl(profile?.photoURL, name, g.userId),
+              verified: Boolean(profile?.isVerified),
+              // Real relationship, not an asserted "Following": a mutual follow
+              // is a Friend, a one-way follow is Following, otherwise Discover.
+              category: edge?.isMutualFriend ? 'Friends' : edge?.isFollowing ? 'Following' : 'Discover',
             },
             timeAgo: relativeTime(storiesArr[0]?.createdAt),
             itemsCount: storiesArr.length,
@@ -200,11 +227,9 @@ export default function StoriesScreen() {
             id: first.userId || '',
             name: first.authorName || 'Highlight',
             username: '',
-            avatar: first.authorPhoto || '/assets/default-profile.png',
+            avatar: getSafeAvatarUrl(first.authorPhoto, first.authorName, first.userId),
             verified: false,
-            category: 'Following',
-            isCloseFriend: false,
-            isLive: false,
+            category: 'Highlight',
           },
           timeAgo: null,
           mediaUrl: items[0].url,
@@ -230,8 +255,6 @@ export default function StoriesScreen() {
       if (activeCategory === 'sponsored' && !story.isSponsored) return false;
       if (activeCategory === 'friends' && story.user.category !== 'Friends') return false;
       if (activeCategory === 'following' && story.user.category !== 'Following' && story.user.category !== 'Friends') return false;
-      if (activeCategory === 'close_friends' && !story.user.isCloseFriend) return false;
-      if (activeCategory === 'live' && !story.user.isLive) return false;
 
       // Search filter
       if (searchQuery.trim()) {
@@ -746,8 +769,7 @@ export default function StoriesScreen() {
                 <Icon
                   className={cn(
                     'w-3.5 h-3.5',
-                    tab.color || 'text-white',
-                    tab.isLive && 'animate-pulse'
+                    tab.color || 'text-white'
                   )}
                 />
               )}
@@ -863,11 +885,6 @@ export default function StoriesScreen() {
                       referrerPolicy="no-referrer"
                       className="w-7 h-7 md:w-8 md:h-8 rounded-full object-cover"
                     />
-                    {story.user.isLive && (
-                      <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-red-600 text-[8px] font-black rounded-md text-white border border-black shadow">
-                        LIVE
-                      </span>
-                    )}
                   </div>
 
                   {/* Name & Time */}
@@ -886,51 +903,45 @@ export default function StoriesScreen() {
                   </div>
                 </div>
 
-                {/* Top right badges: Close friends green star or Live badge or Sponsored AD badge */}
+                {/* Top right badge: Sponsored AD only (no close-friend/live
+                    model exists to back those badges). */}
                 {story.isSponsored && (
                   <div className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-400 to-yellow-500 text-[8px] font-black text-slate-950 backdrop-blur-md flex items-center gap-0.5 shadow-lg">
                     <Sparkles className="w-2.5 h-2.5" />
                     <span>AD</span>
                   </div>
                 )}
-                {story.user.isCloseFriend && (
-                  <div className="w-5 h-5 rounded-full bg-green-500/90 backdrop-blur-md flex items-center justify-center shadow-lg">
-                    <Star className="w-3 h-3 text-white fill-white" />
-                  </div>
-                )}
-                {story.user.isLive && (
-                  <div className="px-1.5 py-0.5 rounded-md bg-red-600/90 text-[9px] font-bold text-white backdrop-blur-md flex items-center gap-1 shadow-lg">
-                    <span>LIVE</span>
-                  </div>
-                )}
               </div>
 
               {/* BOTTOM: Story Type Badges & Multi-Story Dots */}
               <div className="relative z-10 flex items-center justify-between w-full pt-2">
-                {/* Media badge (camera, video, music, location) */}
+                {/* Media badge — reflects the real story `type`
+                    (image | video | audio | text | event). */}
                 <div className="w-6 h-6 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/90">
                   {story.badgeType === 'video' && <Camera className="w-3 h-3" />}
-                  {story.badgeType === 'photo' && <Sparkles className="w-3 h-3" />}
-                  {story.badgeType === 'music' && <Music className="w-3 h-3" />}
-                  {story.badgeType === 'location' && <MapPin className="w-3 h-3 text-cyan-400" />}
-                  {story.badgeType === 'live' && <Radio className="w-3 h-3 text-red-400 animate-pulse" />}
-                  {story.badgeType === 'star' && <Star className="w-3 h-3 text-green-400 fill-green-400" />}
+                  {story.badgeType === 'image' && <Sparkles className="w-3 h-3" />}
+                  {story.badgeType === 'audio' && <Music className="w-3 h-3" />}
+                  {story.badgeType === 'event' && <Calendar className="w-3 h-3 text-cyan-400" />}
                 </div>
 
-                {/* Multi-story progress dots (e.g. 3 ...) */}
-                <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-1.5 py-1 rounded-full border border-white/10">
-                  {Array.from({ length: story.itemsCount || 3 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        'w-1.5 h-1.5 rounded-full',
-                        i === 0
-                          ? 'bg-gradient-to-r from-purple-400 to-blue-400'
-                          : 'bg-white/40'
-                      )}
-                    />
-                  ))}
-                </div>
+                {/* Multi-story progress dots — only when the group actually holds
+                    more than one item (a single story shows none, not a
+                    fabricated 3). */}
+                {story.itemsCount > 1 && (
+                  <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-1.5 py-1 rounded-full border border-white/10">
+                    {Array.from({ length: Math.min(story.itemsCount, 8) }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          'w-1.5 h-1.5 rounded-full',
+                          i === 0
+                            ? 'bg-gradient-to-r from-purple-400 to-blue-400'
+                            : 'bg-white/40'
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           );

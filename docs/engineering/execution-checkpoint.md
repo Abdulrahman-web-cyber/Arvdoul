@@ -2,6 +2,83 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — dead RTDB presence (N458) + story shard read leak (N459)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) dead controls.
+
+- **N458 (MEDIUM, closed):** the 1:1 chat header's "Online / Last seen" line read
+  the Realtime-Database `status/{uid}` path, which **no writer anywhere populates**
+  (`messagesService.setUserOnline` had zero callers), so the line could never
+  render real presence — a dead control. The `messagingStore` `presence` /
+  `presenceSubscription` slice and `setPresence` action had no reader/caller
+  either. Fix: `ChatScreen` now reads the counterpart through
+  `socialGraphService.getPresenceMap([uid])` — the single sanctioned, scope-gated
+  reader (N321) — and renders the honest `isOnline`/`lastActive` (a denied/failed
+  read leaves it blank, never a fabricated "Online"). Removed the writer-less
+  `setUserOnline`/`subscribeToUserPresence` methods, the `PRESENCE`/`LAST_SEEN`
+  RTDB path constants, the facade exports, the `presence_update` event branch and
+  the dead store slice (typing stays — it has a real writer). Guards:
+  `chatPresenceWiring.test.js` (new, guards job) + `subscriptionLifecycleGuard.test.js`.
+- **N459 (MEDIUM, closed):** a creator's raw story view/reaction totals
+  (`stories/{id}/view_shards`, `/reaction_shards`) were readable by **every
+  signed-in user** (`allow read: if isSignedIn();`). The shard sums are rolled up
+  server-side and the only client reader is the creator's own insights panel
+  (`storyService.getStoryInsights`/`subscribeToInsights`, gated on
+  `story.userId == uid`); the sibling `analytics_shards` was already
+  creator-scoped. Fix: both reads scoped to
+  `isSignedIn() && (vibeData().userId == uid() || isAdmin())`.
+  `livePresenceAndHealthPrivacyRules.test.js` (guards job) pins the boundary.
+
+Latest verified: **203 suites / 2169 passed (5 skipped), exit 0**; `npx eslint
+--quiet` exit 0 (0 errors); `npm run build` green.
+
+## This session — messaging inbox + Vibes fabrication/dead-control sweep (N452–N457)
+
+Theme (2) fabrication/integrity + (3) dead-control sweep across the messaging
+inbox and the Vibes grid.
+
+- **N452 (HIGH, closed):** the inbox online dot read `presenceOnline` — a field
+  **no writer ever set** (`users/{uid}` has no `isOnline`; presence moved to the
+  scope-gated `user_presence/{uid}` at N321, and the RTDB `status/` path is dead),
+  so every dot rendered "offline" forever; the header also painted a hardcoded
+  green dot claiming the *viewer* was online. Fix: `socialGraphService.getPresenceMap(ids)`
+  is the one sanctioned presence reader (per-doc, scope-gated; a denied/failed
+  read is omitted → renders offline, never a fabricated online);
+  `getUserConversations` hydrates only 1:1 counterparts and sets the real
+  `presenceOnline`; the row dot is direct-only and the header dot is gone.
+- **N453 (HIGH, closed):** every inbox row showed "No messages yet" because the
+  preview read `c.lastMessage`, a field no writer sets. `sendMessage` writes
+  `last_messages/{cid}` (participant-only per rules). Fix:
+  `messagesService._fetchLastMessages(ids)` reads it in bounded `documentId() in`
+  chunks; the dead `hasAttachment`/`hasPhoto`/`photoPreview` props were replaced
+  by a real `attachmentType` badge from the stored message `type`.
+- **N454 (HIGH, closed):** every inbox unread badge rendered 0 because the screen
+  read `c.unreadCounts[uid]`, a field no writer sets (the server maintains sharded
+  `unread_counters/unread_{cid}_{uid}/shards/{n}`). Fix:
+  `messagesService._fetchUnreadCounts(userId, ids)` sums the shards (one bounded
+  `getDocs` per conversation); `unreadCount` is attached and absent → `null`
+  (no badge, not a fabricated 0); the row badge and roll-up read it.
+- **N455 (HIGH, closed):** the Vibes grid showed the raw uid as the creator name
+  (story docs carry no `authorName`/`authorPhoto`) and asserted
+  `verified: false` / `category: 'Following'` for everyone. Fix: `StoriesScreen`
+  hydrates the real creators in one batched `hydrateProfiles` + `getEdgeSet` read;
+  honest name (`resolveActorName`), handle, avatar (`getSafeAvatarUrl`), real
+  `verified`, and Friends/Following/Discover from the real edge.
+- **N456 (MEDIUM, closed):** the Close Friends and Live category tabs (and their
+  badges) had no backing model — `isCloseFriend`/`isLive` were hardcoded `false`.
+  Removed until the model exists.
+- **N457 (LOW, closed):** the multi-story dots fabricated "3" for a single-item
+  group (`itemsCount || 3`) and the media badge keyed on a `badgeType` no writer
+  emits (`'photo'`/`'music'`/… vs the real `image`/`video`/`audio`/…). Fix: dots
+  only when `itemsCount > 1`; badge reflects the real story `type`.
+
+New guard suites (guards CI job): `inboxPreviewPresenceWiring.test.js`,
+`vibesCreatorIdentityWiring.test.js`.
+
+Latest verified: **202 suites / 2160 passed (5 skipped), exit 0**; the 29-suite
+guards subset green (668 passed); `npx eslint --quiet` exit 0 (0 errors);
+`npm run build` green.
+
 ## This session — feed ranking, money-path idempotency, comment block gate (N444–N448)
 
 - **N444 (MEDIUM, closed):** `feedService._calculateFallbackScore` read top-level

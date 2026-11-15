@@ -22,6 +22,7 @@ const isConstraint = (c) => c && c[QueryConstraintBrand] === true;
 const firestoreMock = {
   collection: () => ({}),
   collectionGroup: () => ({}),
+  documentId: () => ({ __docId: true }),
   doc: (_db, coll, id) => ({ __doc: true, coll, id }),
   getDoc: async (ref) => ({
     id: ref.id,

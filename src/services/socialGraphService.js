@@ -496,6 +496,20 @@ class SocialGraphService {
     return map;
   }
 
+  /**
+   * Public presence map for a bounded id list: `Map<uid, { isOnline, lastActive }>`.
+   * This is the only sanctioned way for a surface (the inbox) to render an
+   * online dot, so presence is read from the one scope-gated `user_presence`
+   * doc the rules authorize — never re-derived from a different collection
+   * (the messaging RTDB `status/` path is dead; N452).
+   */
+  async getPresenceMap(userIds) {
+    const ids = [...new Set((userIds || []).filter(Boolean))].slice(0, MAX_HYDRATE_IDS);
+    if (!ids.length) return new Map();
+    await this._ensureInitialized();
+    return this._fetchPresenceMap(ids);
+  }
+
   /** List a relationship kind with hydrated, viewer-projected profiles. */
   async listConnections(userId, kind, { viewerId = null, limit = DEFAULT_PAGE_SIZE, cursor = null } = {}) {
     const { ids, hasMore, nextCursor } = await this.listEdges(userId, kind, { limit, cursor });

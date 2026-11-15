@@ -93,6 +93,13 @@ merge(require('./events.js'));
 // server-write-only, so the derived "Events" counter must be maintained here
 // (a client cannot write it). Counts published/open/live/ended events only.
 merge(require('./eventCounters.js'));
+// Community `stats.postCount`/`stats.activityScore` trigger (N451): the
+// community document is server-write-only, so the derived "Posts" counter must
+// be maintained here. A net-delta trigger on posts/{postId} counts a live
+// published community post (+1) and decrements on delete/unpublish (-1), plus a
+// reconciliation job for pre-trigger drift. Previously only the create callable
+// incremented the counters and nothing decremented them.
+merge(require('./communityPostCounters.js'));
 // Server-authoritative collaboration projects (team roles, content versions,
 // review/publish). Membership is privilege data; the client never writes the
 // project document or its team/content subcollections.

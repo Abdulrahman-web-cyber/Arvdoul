@@ -9,7 +9,8 @@
  * messagesService:
  *
  *  - conversation loaded by :conversationId (title, participants, type)
- *  - realtime subscription: new messages, typing indicators, presence
+ *  - realtime subscription: new messages, typing indicators
+ *  - 1:1 counterpart presence read from `user_presence/{uid}` (N458)
  *  - send text (E2EE handled by the service)
  *  - send images/videos/files and VOICE messages (MediaRecorder -> upload ->
  *    send; the recorder bug `ondata` -> `ondataavailable` is fixed)
@@ -51,7 +52,11 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
-  const [presence, setPresence] = useState({});
+  // 1:1 counterpart presence, read from the scope-gated `user_presence/{uid}`
+  // via the social-graph spine. The old Realtime-Database `status/` path this
+  // screen subscribed to was never written by any code (N458), so the header's
+  // "Online / Last seen" could never render.
+  const [presence, setPresence] = useState(null);
   const [atBottom, setAtBottom] = useState(true);
   const [newSinceScroll, setNewSinceScroll] = useState(0);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -140,8 +145,6 @@ export default function ChatScreen() {
             setConversation(event.conversation);
           } else if (event.type === 'typing_update') {
             setTypingUsers((prev) => ({ ...prev, ...(event.typing || {}) }));
-          } else if (event.type === 'presence_update') {
-            setPresence((prev) => ({ ...prev, [event.userId]: event.presence }));
           } else if (event.type === 'new_message') {
             // Debounced reload: getMessages decrypts E2EE content server-side.
             if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
@@ -381,22 +384,49 @@ export default function ChatScreen() {
     return names.length === 1 ? `${names[0]} is typing...` : 'Several people are typing...';
   }, [typingUsers, conversation]);
 
-  // Live presence for a 1:1 chat (RTDB `.info/connected` style payload:
-  // { online, lastSeen }). Only meaningful when there is a single other
-  // participant, so a group header keeps showing its member count.
+  // Live presence for a 1:1 chat, read from the scope-gated
+  // `user_presence/{uid}` (N321). `presence` is the counterpart's
+  // `{ isOnline, lastActive }` map entry, or null when unknown/denied.
+  // Only meaningful when there is a single other participant, so a group
+  // header keeps showing its member count.
   const presenceText = useMemo(() => {
     if (otherParticipants.length !== 1) return null;
-    const p = presence[otherParticipants[0]];
+    const p = presence;
     if (!p) return null;
-    if (p.online) return 'Online';
-    if (p.lastSeen) {
-      const mins = Math.floor((Date.now() - Number(p.lastSeen)) / 60000);
+    if (p.isOnline) return 'Online';
+    const la = p.lastActive;
+    if (la) {
+      const when = la?.toDate ? la.toDate() : new Date(la);
+      const mins = Math.floor((Date.now() - when.getTime()) / 60000);
+      if (!Number.isFinite(mins) || mins < 0) return null;
       if (mins < 1) return 'Last seen just now';
       if (mins < 60) return `Last seen ${mins}m ago`;
       return `Last seen ${Math.floor(mins / 60)}h ago`;
     }
     return null;
   }, [presence, otherParticipants]);
+
+  // Fetch the 1:1 counterpart's presence once per conversation. This is the
+  // only place the chat header learns "Online" / "Last seen": a denied or
+  // failed read leaves `presence` null and the header shows the participant
+  // count instead of a fabricated status.
+  useEffect(() => {
+    let cancelled = false;
+    const counterpart = otherParticipants.length === 1 ? otherParticipants[0] : null;
+    setPresence(null);
+    if (!counterpart) return () => { cancelled = true; };
+    (async () => {
+      try {
+        const { getSocialGraphService } = await import('../services/socialGraphService.js');
+        const map = await getSocialGraphService().getPresenceMap([counterpart]);
+        if (!cancelled) setPresence(map.get(counterpart) || null);
+      } catch (err) {
+        if (!cancelled) setPresence(null);
+        console.warn('ChatScreen: counterpart presence read failed', err?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [otherParticipants]);
 
   // Conversation info panel: pinned messages, shared media, search
   const openInfoPanel = useCallback(async () => {
