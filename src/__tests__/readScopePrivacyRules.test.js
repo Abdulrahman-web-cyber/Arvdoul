@@ -109,12 +109,18 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
       'match /spaces/{spaceId}',
       'match /sounds/{soundId}',
       'match /marketplace_items/{itemId}',
-      'match /copyright_registry/{workId}',
     ]) {
       const b = block(rules, marker);
       expect(b).not.toMatch(/allow read: if true;/);
       expect(b).toMatch(/allow read: if isSignedIn\(\);/);
     }
+    // `copyright_registry` has no client reader, so the read is scoped to the
+    // registrant (or an admin) rather than any signed-in client.
+    const copyright = block(rules, 'match /copyright_registry/{workId}');
+    expect(copyright).not.toMatch(/allow read: if true;/);
+    expect(copyright).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(copyright).toMatch(/allow read: if isSignedIn\(\) &&/);
+    expect(copyright).toMatch(/resource\.data\.registeredBy == uid\(\)/);
   });
 
   test('no `allow read: if true` rule remains anywhere in the ruleset', () => {

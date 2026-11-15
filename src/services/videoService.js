@@ -452,7 +452,11 @@ class UltimateVideoService {
       fileSize: file.size,
       muxPlaybackId: playbackId,
       thumbnails: [],
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, avgWatchTime: 0, totalWatchTime: 0 },
+      // `avgWatchTime` is deliberately NOT seeded: no writer ever computes it
+      // (the server writes `stats.totalWatchTime`, not an average), so a seeded
+      // `0` would present an unwritten value as a measured average. `views`/
+      // `likes`/`comments`/`shares`/`saves` ARE maintained by server writers.
+      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0 },
       monetization: metadata.monetization || { type: 'none' },
       rankingScore: 0,
       viralScore: 0,

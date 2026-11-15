@@ -87,12 +87,18 @@ class PollService {
 
       return items;
     } catch (err) {
+      // Rethrow instead of returning `[]`: a swallowed failure rendered as an
+      // empty-but-successful list ("No polls yet") and made the screen's own
+      // `catch { toast.error('Failed to load polls') }` unreachable.
       log.error('Error fetching polls from Firestore', err);
-      return [];
+      throw err;
     }
   }
 
-  async votePoll(pollId, optionId, userCoins = 0, wagerCoins = 0, user = null) {
+  // `_userCoins`/`_wagerCoins` are retained positionally for existing callers
+  // (`PollsScreen` passes `0, 0, user`); prediction-market wagers were removed
+  // (see `functions/polls.js#votePoll`), so the values are intentionally unused.
+  async votePoll(pollId, optionId, _userCoins = 0, _wagerCoins = 0, user = null) {
     if (!user?.uid) {
       throw new Error('Sign in to vote');
     }

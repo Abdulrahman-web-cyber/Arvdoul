@@ -193,7 +193,7 @@ exports.createMuxUpload = onCall({
       muxPlaybackId: null,
       stats: {
         views: 0, likes: 0, comments: 0, shares: 0, saves: 0,
-        avgWatchTime: 0, totalWatchTime: 0, viewerCount: 0,
+        totalWatchTime: 0, viewerCount: 0,
       },
       type: isReel ? 'reel' : 'video',
       music: null,
@@ -708,7 +708,7 @@ async function createRemix(originalVideoId, userId, remixType, metadata) {
     muxPlaybackId: null,
     originalVideoId,
     remixType,
-    stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, avgWatchTime: 0, totalWatchTime: 0, viewerCount: 0 },
+    stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 },
     type: 'video',
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -753,7 +753,7 @@ exports.createLiveStream = onCall(async (data, context) => {
     await videoRef.set({
       userId: uid, title: title || 'Live Stream', description: '', tags: tags || [], visibility: visibility || 'public',
       status: 'live', type: 'live', muxAssetId: null, muxPlaybackId: liveStream.playback_ids[0].id, liveStreamId: liveStream.id,
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, avgWatchTime: 0, totalWatchTime: 0, viewerCount: 0 },
+      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 },
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), monetization: { type: 'none' }, isDeleted: false,
     });
     return { success: true, videoId: videoRef.id, streamKey: liveStream.stream_key, playbackId: liveStream.playback_ids[0].id, rtmpUrl: liveStream.rtmp_url || 'rtmps://rtmp-live.mux.com:443/app' };

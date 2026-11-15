@@ -742,14 +742,19 @@ service cloud.firestore {
       ));
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
       // The per-user like/dislike marker (existence only; the tallies live on
-      // the comment doc). Scope the read to signed-in — the like path is
-      // authenticated and there is no anonymous reader.
+      // the comment doc). The ONLY reader is the liker's own "have I already
+      // liked this?" check (`commentService.likeComment`/`dislikeComment` read
+      // `comments/{id}/likes/{uid}`), so the previous signed-in read let any
+      // client enumerate who liked which comment (and, for a comment on a
+      // private/followers-only Vibe, the reactor identities). Scope to the
+      // marker's own user and admins — the same boundary the sibling
+      // `reactions` marker already uses (N301).
       match /likes/{likerId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() && (likerId == uid() || isAdmin());
         allow write: if isSignedIn() && likerId == uid();
       }
       match /dislikes/{dislikerId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() && (dislikerId == uid() || isAdmin());
         allow write: if isSignedIn() && dislikerId == uid();
       }
       // Per-user emoji reaction (mirrors the post reaction subcollection). The
@@ -1941,11 +1946,16 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
     }
     match /badges/{badgeId} {
-      allow read: if isSignedIn();
+      // Badge catalogue + assignments are admin-written (see AchievementsScreen,
+      // which reads the viewer's OWN earned badges from `achievements/{uid}/items`,
+      // never these collections). No client reader exists, so a signed-in read
+      // was a world-readable registry of every badge assignment. Scope to admin.
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
     match /user_badges/{userBadgeId} {
-      allow read: if isSignedIn();
+      // Same boundary as `badges`: admin-written, no client reader.
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
 
@@ -2043,11 +2053,11 @@ service cloud.firestore {
 
     // ==================== COPYRIGHT REGISTRY ====================
     match /copyright_registry/{workId} {
-      // Rights holders register works from the client (registerWork) or via
-      // admin import. The registry maps a work to its registrant, so it is not
-      // a public directory; the read is signed-in (the detection path is an
-      // authenticated flow). Registrants may remove their own works.
-      allow read: if isSignedIn();
+      // No client reads this registry (no `registerWork`/copyright reader exists
+      // in `src`), so the signed-in read was a world-readable map of every
+      // registered work -> registrant. Scope the read to the registrant/admin.
+      allow read: if isSignedIn() &&
+        (resource.data.registeredBy == uid() || resource.data.userId == uid() || isAdmin());
       allow create: if isSignedIn() &&
         (request.resource.data.registeredBy == uid() || request.resource.data.userId == uid());
       allow update: if isAdmin();
@@ -2151,7 +2161,10 @@ service cloud.firestore {
 
     // ==================== TRENDING (server-computed) ====================
     match /trending_topics/{topicId} {
-      allow read: if isSignedIn();
+      // No client reads this collection (the discovery rails read `trending/
+      // {type}` via `rankingService`); it is a server-computed topic rollup, so
+      // the signed-in read was a needless exposure. Server writes only.
+      allow read: if isAdmin();
       allow write: if false; // scheduled functions update
     }
 

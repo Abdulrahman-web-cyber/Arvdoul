@@ -1203,7 +1203,10 @@ export function AuthProvider({ children }) {
       try {
         const result = await userService.createUserProfile(user.uid, {
           ...profileData,
-          emailVerified: user.emailVerified || true,
+          // `user.emailVerified || true` was a constant `true` — it fabricated a
+          // verified email on every profile (and the `|| true` meant a false
+          // Firebase value could never be represented). Carry the real value.
+          emailVerified: Boolean(user.emailVerified),
           authProvider: user.authProvider || 'email',
           isProfileComplete: true
         });

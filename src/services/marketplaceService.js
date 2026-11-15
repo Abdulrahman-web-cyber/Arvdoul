@@ -175,9 +175,13 @@ class MarketplaceService {
       },
       priceCoins: Math.max(0, Number(productData.priceCoins) || 0),
       priceUsd: productData.priceUsd != null ? Number(productData.priceUsd) : null,
-      rating: 0,
-      reviewsCount: 0,
-      salesCount: 0,
+      // `rating`/`reviewsCount`/`salesCount` are NOT seeded. No writer ever sets
+      // a rating or a review count (there is no review pipeline), and the only
+      // sales writer (`functions/monetization.js#purchaseMarketplaceItem`)
+      // increments `salesCount` on an existing doc. Seeding them to `0` made
+      // every listing present an unwritten `0` as a measured rating/review count;
+      // `MarketplaceScreen` already renders "No reviews yet" when `rating` is
+      // absent, and `salesCount` is shown only when it is a positive number.
       image: productData.image || null,
       description: productData.description || '',
       includes: productData.includes ? productData.includes.split('\n') : [],

@@ -4,7 +4,6 @@
 
 export { default as VideoCard } from './VideoCard';
 export { default as VideoFeed } from './VideoFeed';
-export { default as VideoOverlay } from './VideoOverlay';
 export { default as VideoComments } from './VideoComments';
 export { default as VideoBottomSheet } from './VideoBottomSheet';
 export { default as VideoGiftModal } from './VideoGiftModal';
