@@ -4454,6 +4454,16 @@ describe('N405 — identity derivation never invents a civic/creator name', () =
     expect(read('src/screens/Profile/ProfilePreviewScreen.jsx')).not.toContain("displayFallback: 'Arvdoul Citizen'");
   });
 
+  test('AboutScreen resolves a nameless profile to the real uid prefix, never "Arvdoul Citizen" (N504)', () => {
+    // The About (details) surface still coerced a missing display name to the
+    // literal 'Arvdoul Citizen' — a fabricated civic identity, while the
+    // canonical `deriveProfileIdentity` and the sibling ProfilePreviewScreen
+    // resolve the real uid prefix.
+    const s = read('src/screens/Profile/AboutScreen.jsx');
+    expect(s).not.toContain("fallback: 'Arvdoul Citizen'");
+    expect(s).toContain('`user ${String(targetId).slice(0, 6)}`');
+  });
+
   test('userService derives name/handle from the uid prefix, never Member/Creator/creator', () => {
     const s = read('src/services/userService.js');
     expect(s).not.toContain("(isSelfUser ? 'Member' : 'Creator')");

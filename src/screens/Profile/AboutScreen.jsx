@@ -55,7 +55,7 @@ export default function AboutScreen() {
       ...base,
       id: base.id || base.uid || targetId,
       uid: base.uid || base.id || targetId,
-      displayName: pickDisplayName([base.displayName, base.name], { fallback: 'Arvdoul Citizen' }),
+      displayName: pickDisplayName([base.displayName, base.name], { fallback: null }) || (targetId ? `user ${String(targetId).slice(0, 6)}` : '—'),
       username: pickHandle([base.username]) || fallbackHandle || 'citizen',
       bio: base.bio || '',
       location: base.location || '',
