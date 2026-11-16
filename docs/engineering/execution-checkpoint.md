@@ -1180,3 +1180,19 @@ git log --oneline -5
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 222 suites green
 npm run build                                     # green
 ```
+
+### Session 16 close-out
+Branch `harden/deployment-readiness` (rebased onto `main` @ 7dab31b, the merge of
+PR #51 — the diff over `main` is N509–N518: 10 files added, 16 junk assets
+deleted, 107 modified, 1 rename). PR **#52** opened:
+https://github.com/Abdulrahman-web-cyber/Arvdoul/pull/52
+
+CI on the PR head: build / lint / tests (Node 22 + 24) / guards / rules / security
+audit / vulnerability scan **all green**; `Deploy Preview` succeeded. SonarCloud
+"Code Analysis" reports `failure` — verified **pre-existing**: the same check
+fails on `main` HEAD (7dab31b). It is a quality-gate on pre-existing patterns in
+files touched for accessibility, not a regression introduced here.
+
+Also added this session: `firebase.json` now long-caches `/fonts/**` (the
+self-hosted Inter/Clash Display woff2) instead of leaving it on the `no-cache`
+catch-all.
