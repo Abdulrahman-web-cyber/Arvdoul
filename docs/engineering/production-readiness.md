@@ -17,7 +17,18 @@ done._
 The `guards` job runs the invariant suites (architecture boundaries, Firebase
 cost, security services, deploy integrity, shared-config sync, Firestore rules
 compile/coverage, dead-event, orphan-module, dead-wiring, status-doc honesty,
-event-payload contract). New invariant suites are added there.
+event-payload contract, and the a11y AST guards
+`a11yInteractiveGuard`/`iconButtonA11yGuard`/`formControlA11yGuard`). New
+invariant suites are added there.
+
+Locally verified (this repo, Java 21 installed): the emulator-backed rules
+suites (`firestoreRulesCompile`, `socialGraphEdgeReadRules`, `readScopePrivacyRules`,
+`userPresencePrivacyRules`, `serverAuthoritativeFieldsRules`, `communityPrivacyRules`,
+`storyReplyPrivacyRules`, `livePresenceAndHealthPrivacyRules`, `counterShardForgeryGuard`,
+`storyShardForgeryGuard`, `messageDedupeGuard`, `videoReadPrivacyRules`,
+`notificationCounterRuleShape`, `postBoostAuthorityRules`, `partyReadFieldNameGuard`,
+`spacesRosterWiringGuard`) run under `firebase emulators:exec --only firestore` —
+**161 tests green**.
 
 ## 2. Observability
 
