@@ -297,6 +297,20 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/collaboration_projects/$(projectId)/team/$(uid()))
       );
     }
+
+    // An event's subcollections (registrations, check-ins, ...) carry attendee
+    // PII. No client reads them directly (the roster is served by the
+    // `getEventAttendees` callable), so the previous bare `isSignedIn()` read let
+    // any signed-in stranger enumerate every attendee list. Gate the read to the
+    // organizer, an attendee or an admin. An absent parent falls closed.
+    function eventAttendeeOrOrganizer(eventId) {
+      let e = /databases/$(database)/documents/events/$(eventId);
+      return isSignedIn() && exists(e) && (
+        get(e).data.organizerId == uid() ||
+        (get(e).data.attendees != null && get(e).data.attendees[uid()] != null) ||
+        isAdmin()
+      );
+    }
     function postListableShape() {
       return resource.data.isDeleted == false &&
         resource.data.status == 'published' &&
@@ -1680,7 +1694,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && authoredBy('organizerId');
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.organizerId;
       match /{subcollection}/{docId} {
-        allow read: if isSignedIn();
+        allow read: if eventAttendeeOrOrganizer(eventId);
         allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
         allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
       }

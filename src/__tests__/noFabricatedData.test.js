@@ -814,12 +814,23 @@ describe('Storage rules - upload paths enforced', () => {
     // These are the namespaces the client actually uploads to. A namespace
     // with no rule denies every upload (the N170 defect).
     for (const ns of [
-      'avatars', 'banners', 'posts', 'stories', 'messages', 'live',
+      'avatars', 'posts', 'stories', 'messages',
       'communities', 'sounds', 'videos', 'thumbnails', 'comments',
       'events', 'group-photos', 'audio_exports', 'temp', 'users',
     ]) {
       expect(rules).toContain(`match /${ns}/`);
     }
+  });
+
+  test('dead upload namespaces are not reintroduced (N507)', () => {
+    const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
+    // `banners` (no cover photos by product policy, no writer/reader) and
+    // `live` (streaming is signalling-only, no media upload) were dead,
+    // world/any-signed-in-readable upload targets. Removing the rule means a
+    // write to either namespace is denied by the catch-all. Do not re-add
+    // without a real writer.
+    expect(rules).not.toContain('match /banners/');
+    expect(rules).not.toContain('match /live/');
   });
 });
 

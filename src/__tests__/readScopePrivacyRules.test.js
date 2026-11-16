@@ -142,6 +142,17 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(svc).not.toMatch(/['"]privacy['"]/);
   });
 
+  test('event subcollections gate the read to organizer/attendee/admin (N508)', () => {
+    const b = block(rules, 'match /events/{eventId}');
+    // The nested subcollection read must not be a bare signed-in grant: it
+    // carries attendee PII and no client reads it directly.
+    expect(b).toMatch(/allow read: if eventAttendeeOrOrganizer\(eventId\)/);
+    expect(b).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(rules).toMatch(/function eventAttendeeOrOrganizer\(eventId\)/);
+    expect(rules).toMatch(/get\(e\)\.data\.organizerId == uid\(\)/);
+    expect(rules).toMatch(/get\(e\)\.data\.attendees\[uid\(\)\] != null/);
+  });
+
   test('advanced creator suite collections require sign-in', () => {
     for (const marker of [
       'match /spaces/{spaceId}',
