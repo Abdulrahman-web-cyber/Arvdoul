@@ -408,6 +408,7 @@ jobs:
           src/__tests__/videoCommentCounterSourceGuard.test.js
           src/__tests__/videoSaveCounterSourceGuard.test.js
           src/__tests__/commentReactionCounterSourceGuard.test.js
+          src/__tests__/collectionsCounterAtomicity.test.js
           src/__tests__/storyRankingFieldSourceGuard.test.js
           src/__tests__/feedRankingFieldSourceGuard.test.js
           src/__tests__/inboxPreviewPresenceWiring.test.js
