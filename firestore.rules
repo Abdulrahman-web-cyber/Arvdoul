@@ -2408,7 +2408,12 @@ service cloud.firestore {
 
     // ==================== APP CONFIG (server-managed, authenticated read) ====================
     match /config/{configId} {
-      allow read: if isSignedIn();
+      // Point reads only: the client resolves named docs (`config/monetization`,
+      // `config/feed_weights`) with `getDoc`. A bare `allow read` also granted
+      // `list`, exposing every server-managed config document to any signed-in
+      // client. Split the grant so `list` is denied.
+      allow get: if isSignedIn();
+      allow list: if false;
       allow write: if isAdmin();
     }
 

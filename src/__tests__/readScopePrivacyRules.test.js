@@ -167,6 +167,16 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
   });
 
+  test('server config is point-read only, never listable (N496)', () => {
+    // The client resolves named docs (`config/monetization`, `config/feed_weights`)
+    // with `getDoc` — no query. A bare `allow read` also granted `list`,
+    // exposing every server-managed config document to any signed-in client.
+    const b = block(rules, 'match /config/{configId}');
+    expect(b).toContain('allow get: if isSignedIn();');
+    expect(b).toContain('allow list: if false;');
+    expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
+  });
+
   test('achievements/titles reads honour the section privacy scope', () => {
     for (const [marker, section] of [
       ['match /achievements/{userId}', 'achievements'],
