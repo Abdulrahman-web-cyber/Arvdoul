@@ -226,8 +226,11 @@ class UltimateCommentService {
         isSpam: false,
         isHidden: false,
         isLocked: false,
+        // Fail-open visibility default. The `moderateComment` onCreate trigger
+        // (functions/comments.js) overwrites this with the real verdict; the
+        // numeric `moderationScore` is server-written only (a client-seeded 0
+        // presented "not yet scored" as a measured zero).
         moderationStatus: 'pending',
-        moderationScore: 0,
 
         createdAt: this.firestoreMethods.serverTimestamp(),
         updatedAt: this.firestoreMethods.serverTimestamp(),

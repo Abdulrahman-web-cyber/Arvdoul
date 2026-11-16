@@ -3718,7 +3718,10 @@ describe('Creator ranking never fabricates a percentile from an unmaintained fie
     // honest shape reports the ranking as unavailable.
     const svc = read('src/services/analyticsService.js');
     expect(svc).not.toContain('totalCreators: 0');
-    expect(svc).toContain('{ position: null, percentile: null, label: null, total: null }');
+    // Both the `getUserAnalytics` catch and `getCreatorRanking`'s own catch must
+    // report an unknown population, never a measured 0.
+    expect((svc.match(/position: null,\s*percentile: null,\s*label: null,\s*total: null/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(svc).not.toMatch(/position: null,\s*percentile: null,\s*label: null,\s*total: 0/);
   });
 
   test('the dashboard does not default an absent rank to "New Creator"', () => {
@@ -4988,5 +4991,8 @@ describe('N476 — comment stats never report unwritten aggregates as measured',
     expect(src).not.toMatch(/^\s*shareCount: 0,\s*$/m);
     expect(src).not.toMatch(/^\s*sentimentScore: 0,\s*$/m);
     expect(src).not.toMatch(/^\s*reports: 0,\s*$/m);
+    // N498 — `moderationScore` is server-written only (`functions/comments.js`
+    // `moderateComment`); the client seed presented "not yet scored" as 0.
+    expect(src).not.toMatch(/^\s*moderationScore: 0,\s*$/m);
   });
 });

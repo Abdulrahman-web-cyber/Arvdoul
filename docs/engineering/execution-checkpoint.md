@@ -2,6 +2,27 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — read-scope leaks, fabricated measured zeros, server-owned field seeds (N496–N498)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity sweep + (3) server-owned seeds.
+
+- **N496 (MEDIUM, closed):** `config/{configId}` granted `allow read: if
+  isSignedIn()` — which also grants `list` — while the client only ever
+  `getDoc`s named docs (`config/monetization`, `config/feed_weights`). Split to
+  `allow get: if isSignedIn(); allow list: if false;`. Same class as N472/N483.
+  Guard: `readScopePrivacyRules.test.js` (N496).
+- **N497 (MEDIUM, closed):** `analyticsService.getCreatorRanking`'s own catch
+  still returned `total: 0` (a measured population of 0 on a failed read) after
+  N480 fixed only the `getUserAnalytics` fallback. Now `total: null`; the N480
+  guard asserts BOTH catches report an unknown population.
+- **N498 (MEDIUM, closed):** `commentService.addComment` seeded
+  `moderationScore: 0` — a field the `moderateComment` trigger owns and the
+  comments update denylist forbids clients to touch — presenting "not yet
+  scored" as a measured 0. Seed removed; `noFabricatedData.test.js` (N498).
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite
+**213 suites / 2205 passed (5 skipped), 2210 total** green; `npm run build` green.
+
 ## This session — background-job backlog draining, a wrong-field cleanup query, an unbounded account-deletion scan, and a fan-out trigger collision (N493–N495)
 
 - **N493 (HIGH, closed):** `functions/index.js#cleanupRateLimits` filtered the
@@ -159,10 +180,15 @@ defined source). N424–N487 closed.
   `_lastEditedAt` that nothing reads (non-atomic `(n||0)+1`, and a client
   `new Date()` on a server-owned surface). Both removed; `isEdited` + the
   `history` subcollection are the real edit signals.
+- **N496 (MEDIUM, closed):** `config/{configId}` granted `allow read: if
+  isSignedIn()` (grants `list`) while the client only `getDoc`s named docs
+  (`config/monetization`, `config/feed_weights`). Split to `allow get` /
+  `allow list: if false`. `readScopePrivacyRules.test.js` (N496) pins it.
+  (Chosen id: the ledger max is N495, so the next free id is N496.)
 
-Latest verified: **204 suites / 2179 passed (5 skipped), exit 0**;
+Latest verified: **213 suites / 2205 passed (5 skipped), exit 0**;
 `npx eslint --quiet src functions` exit 0 (0 errors, 867 warnings); `npm run build` green.
-`readScopePrivacyRules.test.js` 16/16 against the local Firestore emulator.
+`readScopePrivacyRules.test.js` 17/17 against the local Firestore emulator.
 
 ## This session — read-scope / fabrication / dead-control batches (N472–N477)
 
