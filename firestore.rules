@@ -1145,21 +1145,35 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == uid();
     }
     match /highlights/{highlightId} {
-      // A highlight is a curated collection of the owner's (expired) stories;
-      // its document is profile content, not a public registry. Scope the read
-      // to signed-in clients (the discovery surfaces are all behind auth), never
-      // an anonymous project-config holder.
-      allow read: if isSignedIn();
+      // A highlight is a curated collection of the owner's stories; its document
+      // is profile content, not a public registry. The read is scoped to
+      // signed-in clients AND masked by the owner's profile privacy — the same
+      // `achievements` section scope `profileSectionReadable` enforces for a
+      // badge wall: the owner always, everyone when the owner is public,
+      // followers/connections only when the owner is private. A bare
+      // `isSignedIn()` leaked a private account's highlight grid to any
+      // authenticated client (N499).
+      allow read: if isSignedIn() &&
+        (isOwner(resource.data.userId) ||
+          profileSectionReadable(resource.data.userId, 'achievements', 'EVERYONE'));
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       allow update, delete: if isSignedIn() && resource.data.userId == uid();
-      // Highlight contents inherit the parent's visibility: readable by any
-      // signed-in user (the parent highlight itself is public), writable only
-      // by the highlight's owner.
       function highlightOwner() {
         return get(/databases/$(database)/documents/highlights/$(highlightId)).data.userId;
       }
+      // An entry carries a COPY of the story's content/media (`storyService
+      // .addToHighlight` writes `content`/`media`/`music`), so a followers-only
+      // or private Vibe, once highlighted, would otherwise become readable by
+      // every signed-in client even though `stories/{storyId}` denies them — the
+      // copy bypassed the parent's visibility gate. The read therefore enforces
+      // the parent highlight's owner visibility, not a blanket signed-in grant.
+      // The only client reader (`storyService.getHighlightStories`) resolves the
+      // parent highlight by id and never queries this subcollection, so a point
+      // read is the sole access shape.
       match /highlightStories/{storyId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() &&
+          (highlightOwner() == uid() ||
+            profileSectionReadable(highlightOwner(), 'achievements', 'EVERYONE'));
         allow write: if isSignedIn() && highlightOwner() == uid();
       }
     }

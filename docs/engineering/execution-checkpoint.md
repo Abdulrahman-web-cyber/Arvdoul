@@ -2,6 +2,30 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — highlight content-copy read leak (N499, reopens N270)
+
+Theme (1) read-authorization leaks.
+
+- **N499 (HIGH, closed):** `highlights/{id}` and `highlights/{id}/highlightStories`
+  were readable by every signed-in user, but `storyService.addToHighlight` writes
+  a COPY of the story's `content`/`media`/`music` onto each entry (the snapshot
+  used once the story expires and `stories/{id}` is deleted). So a followers-only
+  or private Vibe, once highlighted, was readable by any authenticated client
+  even though `stories/{storyId}` (`vibeVisibleToViewer` + `vibeNotBlocked`)
+  denies them — the highlight copy bypassed the parent visibility gate. The bare
+  `highlights` read also exposed a private account's whole highlight grid. This
+  **reopens N270**, whose "no story content" premise was false. Fix:
+  `highlights/{id}` read = `isOwner(resource.data.userId) ||
+  profileSectionReadable(resource.data.userId, 'achievements', 'EVERYONE')`;
+  `highlightStories/{storyId}` read = `highlightOwner() == uid() ||
+  profileSectionReadable(highlightOwner(), 'achievements', 'EVERYONE')`. The only
+  client reader (`storyService.getHighlightStories`) resolves the parent by id and
+  never queries the subcollection, so no composite index is needed. Guard:
+  `readScopePrivacyRules.test.js` (two new N499 cases).
+
+Verified: `npx eslint src/__tests__/readScopePrivacyRules.test.js --quiet` exit 0;
+full jest suite **213 suites / 2207 passed (5 skipped), 2212 total** green.
+
 ## This session — read-scope leaks, fabricated measured zeros, server-owned field seeds (N496–N498)
 
 Theme (1) read-authorization leaks + (2) fabrication/integrity sweep + (3) server-owned seeds.

@@ -99,7 +99,29 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
   test('highlights read requires sign-in', () => {
     const b = block(rules, 'match /highlights/{highlightId}');
     expect(b).not.toMatch(/allow read: if true;/);
-    expect(b).toMatch(/allow read: if isSignedIn\(\);/);
+    expect(b).toMatch(/allow read: if isSignedIn\(\)/);
+  });
+
+  test('highlights are masked by the owner profile privacy (N499)', () => {
+    const b = block(rules, 'match /highlights/{highlightId}');
+    // A bare signed-in grant leaked a private account's highlight grid to any
+    // authenticated client; the read now mirrors the profile-section decision.
+    expect(b).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(b).toMatch(/profileSectionReadable\(resource\.data\.userId, 'achievements', 'EVERYONE'\)/);
+  });
+
+  test('highlight entries enforce the parent highlight owner visibility (N499)', () => {
+    const b = block(rules, 'match /highlights/{highlightId}');
+    const start = b.indexOf('match /highlightStories/{storyId}');
+    expect(start).toBeGreaterThan(-1);
+    const sb = b.slice(start, start + 500);
+    // An entry copies the story content/media, so a blanket signed-in read
+    // bypassed the underlying story's visibility gate.
+    expect(sb).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(sb).toMatch(/highlightOwner\(\) == uid\(\)/);
+    expect(sb).toMatch(/profileSectionReadable\(highlightOwner\(\), 'achievements', 'EVERYONE'\)/);
+    // Still writable only by the highlight owner.
+    expect(sb).toMatch(/allow write: if isSignedIn\(\) && highlightOwner\(\) == uid\(\)/);
   });
 
   test('events read is status/relationship-gated (N266)', () => {
