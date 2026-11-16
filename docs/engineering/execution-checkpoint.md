@@ -2,6 +2,31 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — image-loading perf + Functions logging + storage/event read leaks (N505–N508)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) perf/observability.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N505 | 150 raw image elements, only 4 with `loading` — eager fetch + sync decode on every feed image, no reserved box (CLS). | New `src/components/Shared/LazyImage.jsx` (lazy by default, `decoding="async"`, reserved aspect box, honest placeholder on error). 81 JSX files migrated; the primitive is the only remaining image element. `imageLoadingGuard.test.js` (guards job). |
+| N506 | 13 `functions/*.js` modules logged through raw `console.*` + local `log()` shims. | New `functions/logger.js` (wraps `firebase-functions/logger`, JSON severity); every module requires it. `functionsLoggingGuard.test.js` (guards job); `functionsContract.test.js` lists `logger.js` as helper-only. |
+| N507 | `storage.rules` declared two dead namespaces: `banners/{uid}` (world-readable, no cover photos by product policy, no writer/reader) and `live/{uid}` (any-signed-in-readable; streaming is signalling-only, no media upload). Both pure upload attack surface. | Both `match` blocks removed; catch-all denies them. `noFabricatedData.test.js` (N507) + `storageRulesPathAlignment.test.js`. |
+| N508 | `events/{eventId}/{subcollection}/{docId}` was `allow read: if isSignedIn()` — any signed-in stranger could enumerate every event's attendee list (PII). No client reads it directly (roster is served by the `getEventAttendees` callable). | Read gated to organizer/attendee/admin via `eventAttendeeOrOrganizer(eventId)` (absent parent falls closed). `readScopePrivacyRules.test.js` (N508). |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **217 suites / 2220 passed (5 skipped), 2225 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED. N424–N508 closed.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 217 suites green
+npm run build                 # green
+```
+
 ## This session — highlight content-copy read leak (N499) + public-profile likes fabrication (N500)
 
 Theme (1) read-authorization leaks + (2) fabrication/integrity sweep.
