@@ -478,7 +478,7 @@ export default function ProjectDetailScreen() {
 
             {canEdit && (composerOpen ? (
               <div className="p-3 rounded-arvdoul-lg bg-arvdoul-surface border border-arvdoul-border space-y-3">
-                <input
+                <input aria-label="Name this content version"
                   autoFocus
                   value={draftTitle}
                   onChange={(e) => setDraftTitle(e.target.value)}

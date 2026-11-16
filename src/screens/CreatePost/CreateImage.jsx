@@ -963,7 +963,7 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
         }}
       >
         <div className="p-3 sm:p-4">
-          <textarea
+          <textarea aria-label="What's on your mind? Write a caption..."
             ref={textareaRef}
             value={value}
             onChange={handleChange}

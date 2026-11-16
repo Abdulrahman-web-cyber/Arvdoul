@@ -150,7 +150,7 @@ export default function ToolPanels({
                     {adjustments[param.id] ?? 100}{param.unit}
                   </span>
                 </div>
-                <input
+                <input aria-label={`${param.label} adjustment`}
                   type="range"
                   min={param.min}
                   max={param.max}
@@ -223,7 +223,7 @@ export default function ToolPanels({
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="md:col-span-2">
-              <input
+              <input aria-label="Add to Timeline"
                 type="text"
                 value={newText}
                 onChange={(e) => setNewText(e.target.value)}
@@ -233,7 +233,7 @@ export default function ToolPanels({
             </div>
 
             <div>
-              <select
+              <select aria-label="Font"
                 value={selectedFont}
                 onChange={(e) => setSelectedFont(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-white text-xs outline-none"
@@ -269,7 +269,7 @@ export default function ToolPanels({
               </div>
               <div className="flex-1 flex items-center gap-1">
                 <span className="text-[10px] text-gray-400">Size</span>
-                <input
+                <input aria-label="Size"
                   type="range"
                   min="16"
                   max="64"

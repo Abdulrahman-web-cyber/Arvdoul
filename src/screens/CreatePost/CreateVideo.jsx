@@ -770,7 +770,7 @@ export default function CreateVideo() {
         } ${isDark ? "bg-[#080C14]/80 border-[#1A2440]" : "bg-white/90 border-gray-200/50"}`}
         style={{ boxShadow: isDark ? "0 12px 35px rgba(0,0,0,0.6)" : "0 12px 35px rgba(0,0,0,0.15)" }}
       >
-        <input {...getInputProps()} />
+        <input aria-label="isDragActive ? border-purple-500 bg-purple-500/10 :" {...getInputProps()} />
         {!hasMedia ? (
           <EmptyState onUpload={() => fileInputRef.current?.click()} />
         ) : (

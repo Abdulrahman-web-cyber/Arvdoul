@@ -789,7 +789,7 @@ export const TopAppBar = ({
                       className="w-4 h-4 absolute left-3 pointer-events-none"
                       style={{ color: tokens.iconSecondary }}
                     />
-                    <input
+                    <input aria-label="Search Arvdoul posts, creators, tags..."
                       type="text"
                       value={searchQuery}
                       onChange={(e) => {

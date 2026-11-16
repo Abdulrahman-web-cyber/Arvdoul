@@ -133,7 +133,7 @@ const VideoGiftModal = memo(({
                 <Sparkles className="w-5 h-5 text-purple-400" />
                 <h3 className="font-bold text-lg text-white">Send a Gift</h3>
               </div>
-              <button onClick={onClose} disabled={sending} className="text-gray-400 hover:text-white p-1">
+              <button onClick={onClose} disabled={sending} aria-label="Close" className="text-gray-400 hover:text-white p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>

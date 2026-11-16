@@ -246,6 +246,20 @@ export const ThemeProvider = memo(({ children }) => {
     // Apply CSS custom properties for easy access
     root.style.setProperty('--arvdoul-primary', ARVDOUL_COLORS.primary.purple);
     root.style.setProperty('--arvdoul-gradient', ARVDOUL_GRADIENT);
+
+    // Keep the browser chrome in step with the canvas. index.html ships the
+    // dark token (#03071B); without this the address bar / status bar stayed
+    // near-black in light mode. `theme-color` is the documented way to tint it.
+    const canvas = resolvedTheme === 'light'
+      ? tokens.color.bg.light
+      : tokens.color.bg.dark;
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', canvas);
   }, [theme, resolvedTheme]);
 
   // Update theme

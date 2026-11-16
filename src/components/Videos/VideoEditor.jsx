@@ -228,7 +228,7 @@ const VideoEditor = memo(({
                 className="absolute h-full bg-purple-500/30"
                 style={{ left: `${(trimStart / (duration || maxDuration)) * 100}%`, width: `${((trimEnd - trimStart) / (duration || maxDuration)) * 100}%` }}
               />
-              <input
+              <input aria-label="Trim start"
                 type="range"
                 min={0}
                 max={duration || maxDuration}
@@ -236,7 +236,7 @@ const VideoEditor = memo(({
                 onChange={(e) => setTrimStart(Math.min(parseFloat(e.target.value), trimEnd - 1))}
                 className="absolute inset-0 w-full opacity-0 cursor-pointer"
               />
-              <input
+              <input aria-label="Trim end"
                 type="range"
                 min={0}
                 max={duration || maxDuration}
@@ -297,13 +297,13 @@ const VideoEditor = memo(({
           <div className="space-y-2">
             {textOverlays.map((overlay) => (
               <div key={overlay.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5">
-                <input
+                <input aria-label="Add Text"
                   type="text"
                   value={overlay.text}
                   onChange={(e) => setTextOverlays(textOverlays.map((t) => t.id === overlay.id ? { ...t, text: e.target.value } : t))}
                   className="flex-1 bg-transparent text-white border-b border-white/20 focus:outline-none"
                 />
-                <input
+                <input aria-label="Add Text"
                   type="color"
                   value={overlay.color}
                   onChange={(e) => setTextOverlays(textOverlays.map((t) => t.id === overlay.id ? { ...t, color: e.target.value } : t))}
@@ -391,7 +391,7 @@ const VideoEditor = memo(({
       {activeTab === 'schedule' && (
         <div className="px-4 pb-4 space-y-4">
           <p className="text-white/60 text-sm">Choose when to publish your video</p>
-          <input
+          <input aria-label="Choose when to publish your video"
             type="datetime-local"
             value={scheduleDate || ''}
             onChange={(e) => setScheduleDate(e.target.value)}

@@ -225,7 +225,7 @@ const ProfileCreatorDashboard = memo(({
           </button>
 
           <div className="relative">
-            <select
+            <select aria-label="Full Insights"
               value={selectedTimeframe}
               onChange={handleSelectTimeframe}
               className={cn(

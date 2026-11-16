@@ -904,7 +904,7 @@ export default function ThumbnailDesignerScreen() {
                       <span>Brightness</span>
                       <span className="font-mono text-purple-400">{adjustments.brightness}%</span>
                     </div>
-                    <input
+                    <input aria-label="Brightness"
                       type="range"
                       min="50"
                       max="150"
@@ -919,7 +919,7 @@ export default function ThumbnailDesignerScreen() {
                       <span>Contrast</span>
                       <span className="font-mono text-purple-400">{adjustments.contrast}%</span>
                     </div>
-                    <input
+                    <input aria-label="Contrast"
                       type="range"
                       min="50"
                       max="180"
@@ -934,7 +934,7 @@ export default function ThumbnailDesignerScreen() {
                       <span>Saturation</span>
                       <span className="font-mono text-purple-400">{adjustments.saturation}%</span>
                     </div>
-                    <input
+                    <input aria-label="Saturation"
                       type="range"
                       min="0"
                       max="200"
@@ -998,7 +998,7 @@ export default function ThumbnailDesignerScreen() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <input
+                    <input aria-label="Enter typography text..."
                       type="text"
                       defaultValue="ARVDOUL"
                       onChange={(e) => {
@@ -1058,7 +1058,7 @@ export default function ThumbnailDesignerScreen() {
 
                   <div className="flex items-center gap-2">
                     <span>Brush:</span>
-                    <input
+                    <input aria-label="Brush:"
                       type="range"
                       min="2"
                       max="30"
@@ -1138,7 +1138,7 @@ export default function ThumbnailDesignerScreen() {
                       <span>Vignette Edge</span>
                       <span className="font-mono text-purple-400">{adjustments.vignette}%</span>
                     </div>
-                    <input
+                    <input aria-label="Vignette Edge"
                       type="range"
                       min="0"
                       max="100"
@@ -1152,7 +1152,7 @@ export default function ThumbnailDesignerScreen() {
                       <span>Warmth & Glow</span>
                       <span className="font-mono text-purple-400">{adjustments.warmth}%</span>
                     </div>
-                    <input
+                    <input aria-label="Warmth &amp; Glow"
                       type="range"
                       min="0"
                       max="100"
@@ -1166,7 +1166,7 @@ export default function ThumbnailDesignerScreen() {
                       <span>Gaussian Blur</span>
                       <span className="font-mono text-purple-400">{adjustments.blur}px</span>
                     </div>
-                    <input
+                    <input aria-label="Gaussian Blur"
                       type="range"
                       min="0"
                       max="20"

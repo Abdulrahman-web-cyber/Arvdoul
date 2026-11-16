@@ -434,7 +434,7 @@ export default function MarketplaceScreen() {
               <form onSubmit={handleListProduct} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Product Title</label>
-                  <input
+                  <input aria-label="Product Title"
                     type="text"
                     required
                     placeholder="e.g. Master LUTs & Sound Kit 2026"
@@ -449,7 +449,7 @@ export default function MarketplaceScreen() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Category</label>
-                    <select
+                    <select aria-label="Category"
                       value={newCategory}
                       onChange={(e) => setNewCategory(e.target.value)}
                       className={`w-full p-3 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}
@@ -461,7 +461,7 @@ export default function MarketplaceScreen() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Price (Coins)</label>
-                    <input
+                    <input aria-label="Price (Coins)"
                       type="number"
                       required
                       value={newPriceCoins}
@@ -473,7 +473,7 @@ export default function MarketplaceScreen() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Description</label>
-                  <textarea
+                  <textarea aria-label="Description"
                     rows={3}
                     placeholder="Describe what the buyer gets..."
                     value={newDescription}

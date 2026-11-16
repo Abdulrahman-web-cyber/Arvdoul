@@ -79,4 +79,10 @@ describe('accessibility - interactive elements', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  test('the app shell offers a skip-to-content link and a matching main landmark (WCAG 2.4.1)', () => {
+    const layout = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.jsx'), 'utf8');
+    expect(layout).toMatch(/href="#main-content"/);
+    expect(layout).toMatch(/id="main-content"/);
+  });
 });

@@ -1111,7 +1111,7 @@ export default function ChatScreen() {
                 </button>
               ))}
             </div>
-            <textarea
+            <textarea aria-label="Add details (optional)"
               value={reportDetails}
               onChange={(e) => setReportDetails(e.target.value.slice(0, 500))}
               rows={3}

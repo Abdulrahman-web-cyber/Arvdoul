@@ -439,7 +439,7 @@ export default function CreateStory() {
             {/* Active Poll Overlay if enabled */}
             {activeTool === 'poll' && (
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input
+                <input aria-label="Ask a question..."
                   type="text"
                   value={pollQuestion}
                   onChange={(e) => setPollQuestion(e.target.value)}
@@ -521,7 +521,7 @@ export default function CreateStory() {
             {/* Text tool */}
             {activeTool === 'text' && (
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input
+                <input aria-label="Type your text…"
                   type="text"
                   value={storyText}
                   onChange={(e) => setStoryText(e.target.value)}
@@ -544,7 +544,7 @@ export default function CreateStory() {
             {/* Link sticker */}
             {activeTool === 'link' && (
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input
+                <input aria-label="https://…"
                   type="url"
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
@@ -567,7 +567,7 @@ export default function CreateStory() {
             {/* Location sticker */}
             {activeTool === 'location' && (
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input
+                <input aria-label="Add a location"
                   type="text"
                   value={storyLocation}
                   onChange={(e) => setStoryLocation(e.target.value)}
@@ -580,7 +580,7 @@ export default function CreateStory() {
             {/* Mention sticker */}
             {activeTool === 'mention' && (
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input
+                <input aria-label="@username"
                   type="text"
                   value={mentionHandle}
                   onChange={(e) => setMentionHandle(e.target.value)}
@@ -593,7 +593,7 @@ export default function CreateStory() {
             {/* Question sticker */}
             {activeTool === 'question' && (
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input
+                <input aria-label="Ask me a question…"
                   type="text"
                   value={pollQuestion}
                   onChange={(e) => setPollQuestion(e.target.value)}
@@ -608,7 +608,7 @@ export default function CreateStory() {
               <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
                 <div className="flex items-center justify-center gap-2">
                   <Timer className="w-4 h-4 text-violet-300" />
-                  <input
+                  <input aria-label="Timer duration in seconds"
                     type="number"
                     min="0"
                     max="86400"
@@ -656,6 +656,7 @@ export default function CreateStory() {
               {/* Flash */}
               <button
                 onClick={handleToggleFlash}
+                aria-label={`Flash: ${flashMode}`}
                 className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
               >
                 <Zap className={cn("w-4 h-4", flashMode === 'on' ? "text-amber-400" : "text-white")} />
@@ -664,6 +665,7 @@ export default function CreateStory() {
               {/* Flip */}
               <button
                 onClick={handleFlipCamera}
+                aria-label="Flip camera"
                 className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
               >
                 <RefreshCw className="w-4 h-4 text-white" />

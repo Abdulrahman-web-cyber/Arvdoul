@@ -564,7 +564,7 @@ export default function SpacesScreen() {
               <form onSubmit={handleCreateSpace} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Space Title / Topic</label>
-                  <input
+                  <input aria-label="Space Title / Topic"
                     type="text"
                     required
                     placeholder="e.g. Late Night Coding & Chill Beats 🎧"
@@ -578,7 +578,7 @@ export default function SpacesScreen() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Category</label>
-                  <select
+                  <select aria-label="Category"
                     value={newSpaceCategory}
                     onChange={(e) => setNewSpaceCategory(e.target.value)}
                     className={`w-full p-3.5 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}
@@ -594,7 +594,7 @@ export default function SpacesScreen() {
                     <span className="text-xs font-bold text-white block">Auto-Record Space</span>
                     <span className="text-[10px] text-gray-400">Save replay for followers after space ends</span>
                   </div>
-                  <input
+                  <input aria-label="Auto-Record Space"
                     type="checkbox"
                     checked={isRecordingEnabled}
                     onChange={(e) => setIsRecordingEnabled(e.target.checked)}

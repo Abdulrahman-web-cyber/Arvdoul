@@ -139,7 +139,7 @@ export default function MultiTrackConsole({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-medium">
             <span className="text-gray-400">Snap:</span>
-            <select
+            <select aria-label="Snap:"
               value={snapMode}
               onChange={(e) => setSnapMode(e.target.value)}
               className={cn(

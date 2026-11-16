@@ -436,7 +436,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           isDark ? "bg-white/[0.04] border-white/10 focus-within:border-purple-500/50" : "bg-white border-slate-200 focus-within:border-purple-400"
         )}>
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input
+          <input aria-label="View Perks"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

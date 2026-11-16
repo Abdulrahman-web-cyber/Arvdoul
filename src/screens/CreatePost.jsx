@@ -1860,7 +1860,7 @@ export function VisibilityPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
   return (
     <Panel icon={Icons.Eye} title="Visibility" defaultOpen={defaultOpen}>
-      <select value={state.visibility} onChange={e => dispatch({ type: "SET_VISIBILITY", payload: e.target.value })}
+      <select aria-label="return (" value={state.visibility} onChange={e => dispatch({ type: "SET_VISIBILITY", payload: e.target.value })}
         className={INPUT_CLASS}>
         {VISIBILITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -1893,7 +1893,7 @@ export function LocationPanel({ defaultOpen = false }) {
 
   return (
     <Panel icon={Icons.MapPin} title="Location" defaultOpen={defaultOpen}>
-      <input type="text" placeholder="Add location..." value={query} onChange={e => setQuery(e.target.value)}
+      <input aria-label="Add location..." type="text" placeholder="Add location..." value={query} onChange={e => setQuery(e.target.value)}
         onFocus={() => setShow(true)} onBlur={() => setTimeout(() => setShow(false), 200)}
         className={INPUT_CLASS} />
       {show && suggestions.length > 0 && (

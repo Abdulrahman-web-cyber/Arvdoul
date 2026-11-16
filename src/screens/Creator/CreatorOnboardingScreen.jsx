@@ -196,7 +196,7 @@ export default function CreatorOnboardingScreen() {
                   isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
                 }`}>
                   <LinkIcon className="w-4 h-4 text-gray-500 mr-2 shrink-0" />
-                  <input
+                  <input aria-label="https://..."
                     type="url"
                     placeholder="https://..."
                     value={link}

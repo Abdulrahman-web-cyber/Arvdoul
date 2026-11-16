@@ -1101,3 +1101,98 @@ npm run lint                  # exit 0
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 215 suites green
 npm run build                 # green
 ```
+
+## Continuation session 14 (N509–N511 + UI foundation — hardening wave)
+
+Branch `harden/n319-n320-analytics-live` (HEAD `22d9aa5`). Three mandated themes: read-authorization, fabrication/integrity, frontend-design hardening.
+
+**Read-authorization.** Re-audited `firestore.rules` (2469 lines) and `storage.rules`. Every live `allow read: if true` is gone (remaining textual hits are explanatory comments); the sensitive collections (`users_private`, `conversations`, `messages`, `notifications`, `coin_transactions`, `blocks`/`mutes`/`restricts`, `follow_requests`, `reports`, `moderation_logs`, `support_tickets`, `system_health`) are all owner/participant/admin-scoped. Storage rules keep public CDN media world-readable by design (unguessable download token) and owner/participant-scope everything private; `messages/` proves conversation membership cross-service. The one remaining broad grant — `comments/{id}` `isSignedIn()` — is an explicit, documented baseline in `readScopePrivacyRules.test.js`, and a per-document fix was rejected as unsafe (would require denormalising post visibility onto every comment, a write-amplification risk). No rules change made.
+
+**Fabrication/integrity.** N509 (invented folder taxonomy + dead `preset` filter in `SavedScreen`), N510 (share button 404 for saved videos).
+
+**Frontend design.** UI foundation (prior in-session work): self-hosted Inter + Clash Display under `public/fonts/`, `tokens.js`/`.css`/`.json` at v1.2.0 with `fontFamily`, `index.html` font preload + `theme-color` + corrected splash gradient/body font, runtime `theme-color` sync in `ThemeProvider`, global keyboard focus-visible policy. This session: `MainLayout` canvas now derives from `brandCanvasBackground(isDark)` (raw-hex gradients removed) and drops `w-screen` (100vw scrollbar overflow) for `w-full`.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N509 | `SavedScreen` hardcoded `COLLECTIONS = ['All','Design Systems','LUTs & VFX','Inspiration','Audio Library']` and filtered on `item.collection` — but saved posts carry no collection field and saved videos were hardcoded `'Saved'`, so every invented folder could only render an empty list. A `Presets` type filter/badge matched a `'preset'` type nothing writes. | Folder taxonomy + `preset` filter + `collection` label removed; single `TYPE_FILTERS` (All/Videos/Images/Audio/Text) matching real types; honest empty state distinguishes "nothing saved" from "no match" with a Clear-filters action. `noFabricatedData.test.js` (N509 case). |
+| N510 | `SavedScreen.handleShare` always built `${origin}/post/${id}`, so sharing a saved video copied a 404 (`/video/:id` is the real route). | Share path resolves per `item.source`. `noFabricatedData.test.js` (N510 case). |
+| N511 | 14 icon-only `<button>` elements had no accessible name (close buttons ×6, camera flash/flip, reverse/freeze switches, story reply, gift/modal closes). | All carry `aria-label`; switches add `role="switch"` + `aria-checked`. New `iconButtonA11yGuard.test.js` (walks all `src/**/*.jsx`) + registered in the `guards` CI job. |
+
+Verified: `npx eslint src --quiet` exit 0; full jest suite **221 suites / 2236 passed / 5 skipped / 2241 total** green; `npm run build` green. New guard suites `uiFoundationGuard` (11 tests) and `iconButtonA11yGuard` added to `.github/workflows/ci.yml` `guards` job.
+
+### Findings status
+Open: **N175** (rankings — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (metrics with no defined source). N509–N511 closed this session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 221 suites green
+npm run build                 # green
+```
+
+## Continuation session 15 (N512–N514 — accessibility + responsive wave)
+
+Branch `harden/n319-n320-analytics-live`. Fresh whole-repo discovery this session: the older root-level audit docs (`ARVDOUL_REMAINING_ISSUES.md`, 2026-08-03) were verified **stale** — every high-severity item they list (fake live viewers, un-completable coin purchases, missing sw.js push handlers, unreachable reels, missing `collections` index, rules holes) is already fixed and guarded in the current tree. Two genuinely unguarded defect classes remained and were closed.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N512 | **194 form controls had no programmatic accessible name** across 77 files (profile editor, create-event form, video-editor sliders, marketplace/polls/spaces selectors, admin forms, search inputs). A visible adjacent label with no `htmlFor` is announced as an unlabelled field (WCAG 1.3.1/4.1.2). | Every control now carries `aria-label` derived from its real adjacent label; ~38 heuristic fallbacks hand-corrected (e.g. `` `${param.label} adjustment` ``, "Timer duration in seconds", "Trim start/end"). New `formControlA11yGuard.test.js` (Babel-AST walker, `@babel/parser` only; placeholder NOT accepted) registered in the hard-failing `guards` CI job. |
+| N513 | **`100vw` overflow.** Global `html,body,#root { width:100vw !important }` + `VideoEditorScreen` `w-screen` + `Dialog` fullscreen `w-[100vw]` + `QuickAccessPanel` `maxWidth:100vw` all overflow by the desktop scrollbar width. | Root width → `100%`; components → `w-full`/`maxWidth:"100%"`. Bounded `calc(100vw - Npx)` kept. `uiFoundationGuard.test.js` N513 group fails on `w-screen`/unbounded `100vw`. App-shell `h-screen` → `h-[100dvh]` (mobile URL-bar safe). |
+| N514 | **No skip-to-content link** in the app shell (WCAG 2.4.1) — keyboard users tab through the full chrome on every route. | `MainLayout` adds `<a href="#main-content">Skip to content</a>` (hidden until focused); every `<main>` branch has `id="main-content"` + `tabIndex={-1}`. `a11yInteractiveGuard.test.js` pins both. |
+
+Also verified this session (no change needed): `firestore.rules` (178 match blocks) read grants — `users/{uid}` is a PII-free projection (contact + Stripe ids live in `users_private`), the `isSignedIn()` read grants are all public-content collections, the `rankings` double-grant is doc+subcollection nesting; all 3 `dangerouslySetInnerHTML` uses are DOMPurify-sanitised; the financial model (`COINS_PER_DOLLAR = 200`, integer coins, `coinsToUsd`) is canonical and guarded by 6+ money suites; `Math.random` (75 uses) is all idempotency-key/shard/seed, no fabrication; no empty handlers / no-op buttons / dead hrefs / duplicate ids / unlabeled anchors.
+
+Verified: full jest suite **220 suites / 2239 passed / 5 skipped / 2244 total** green; `npm run build` exit 0; `npx eslint src --quiet` exit 0; `/intro` + `/login` render in-browser.
+
+### Findings status
+Open: **N175** (rankings — BLOCKED on the ranking formula); N432 partially BLOCKED. N512–N514 closed this session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -4
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 220 suites green
+npm run build                                     # green
+```
+
+## Continuation session 16 (N515–N518 — deployment-readiness: config + static assets)
+
+Branch `harden/n319-n320-analytics-live`. Focus: everything a deploy would otherwise get wrong silently — environment/config drift and shipped static assets.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N515 | **Two names for the Stripe publishable key.** `monetizationService` read `VITE_STRIPE_PUBLIC_KEY`; `PaymentModal` + docs used `VITE_STRIPE_PUBLISHABLE_KEY`. Setting either left half the payment surface unconfigured. | `monetizationService` now reads `VITE_STRIPE_PUBLISHABLE_KEY`; the misleading "fallback simulation mode" log is corrected (no simulation exists). `envTemplateCoverage.test.js` bans `VITE_STRIPE_PUBLIC_KEY`. |
+| N516 | **`.env.example` advertised 6 dead vars and omitted 2 live ones.** Dead: `VITE_DEFAULT_PROFILE_PICTURE`, `VITE_ENCRYPTION_KEY`, `VITE_INITIAL_COIN_BALANCE`, `VITE_MUSIC_API_KEY`, `VITE_SAML_VERIFY_URL`, `VITE_SYSTEM_METRICS_URL` (0 refs). Missing: `VITE_APP_VERSION`, `VITE_LOG_ENDPOINT`. | `.env.example` rewritten to exactly the 22 read `VITE_*` vars + `OWNER_EMAILS`, each annotated; `envTemplateCoverage.test.js` (guards job) pins both directions. |
+| N517 | **Mislabeled raster assets + wrong manifest icon sizes.** `icons/icon.png` (JPEG 770×720) and `assets/default-profile.png` (JPEG 732×709) served as `image/png`; manifest declared `/logo/logo-light.png` (512×512) as `192x192`. | Both re-encoded as real PNGs (default-profile → 400×400, −62 KB); manifest now uses real `icons/icon-192.png` + `icons/icon-512.png`. `publicAssetIntegrity.test.js` (guards job) checks magic bytes vs extension + manifest icon dimensions + SW precache existence. |
+| N518 | **`public/Logo/` vs `public/logo/` case collision + unreferenced junk.** The duplicate dir already emitted a stray `dist/Logo/`; `*.original.png`, `logo-default.png`, `logo.svg`, the `aistudio` captures and a duplicate `Logo transparent.svg` had no reference. | Duplicate dir + 4 `logo/` files + `aistudio` + duplicate SVG removed; `ArvdoulLogo.jsx` now uses URL-safe `/icons/arvdoul-mark.svg` (was `/icons/Logo transparent.svg`, a space in a shipped filename). Guard pins collisions + whitespace filenames. |
+
+Verified: full jest suite **222 suites / 2248 passed / 5 skipped / 2253 total** green; `npm run build` exit 0 (no `dist/Logo`); `npx eslint src --quiet` exit 0; emulator-backed rules suites **161 passed** (this session).
+
+### Findings status
+Open: **N175** (rankings — BLOCKED on the ranking formula); N432 partially BLOCKED (metrics with no defined source). N515–N518 closed this session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -5
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 222 suites green
+npm run build                                     # green
+```
+
+### Session 16 close-out
+Branch `harden/deployment-readiness` (rebased onto `main` @ 7dab31b, the merge of
+PR #51 — the diff over `main` is N509–N518: 10 files added, 16 junk assets
+deleted, 107 modified, 1 rename). PR **#52** opened:
+https://github.com/Abdulrahman-web-cyber/Arvdoul/pull/52
+
+CI on the PR head: build / lint / tests (Node 22 + 24) / guards / rules / security
+audit / vulnerability scan **all green**; `Deploy Preview` succeeded. SonarCloud
+"Code Analysis" reports `failure` — verified **pre-existing**: the same check
+fails on `main` HEAD (7dab31b). It is a quality-gate on pre-existing patterns in
+files touched for accessibility, not a regression introduced here.
+
+Also added this session: `firebase.json` now long-caches `/fonts/**` (the
+self-hosted Inter/Clash Display woff2) instead of leaving it on the `no-cache`
+catch-all.

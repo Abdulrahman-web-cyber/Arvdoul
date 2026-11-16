@@ -876,3 +876,48 @@ takes over only on a `SKIP_WAITING` message; the banner reloads on the resulting
 `src/design-system/*.jsx` state primitives must use lucide icons, not emoji
 glyphs (`ErrorState` shipped `⚠️`, `PermissionDenied` shipped `🔒`).
 `sharedStatePrimitivesGuard.test.js` fails if an emoji returns.
+
+## Accessibility is enforced by AST guards
+Three hard-failing `guards`-job suites keep the a11y floor from eroding, all
+parsing `src/**/*.jsx`:
+- `a11yInteractiveGuard.test.js` — clickable non-button elements need a role +
+  keyboard handler, `<img>` needs `alt`, `<iframe>` needs `title`, and the app
+  shell keeps a `#main-content` skip link (WCAG 2.4.1).
+- `iconButtonA11yGuard.test.js` — an icon-only `<button>` needs
+  `aria-label`/`aria-labelledby`/`title`.
+- `formControlA11yGuard.test.js` — every `input`/`textarea`/`select` needs a
+  programmatic name (`aria-label`/`aria-labelledby`/`title`, a wrapping
+  `<label>`, or a matching `htmlFor`). A `placeholder` is **not** accepted.
+  It parses with `@babel/parser` + a local walker only — `@babel/traverse` is a
+  transitive dep, not a declared one, so do not import it in a test.
+
+Motion is handled centrally: `tokens.css` collapses animation/transition under
+`prefers-reduced-motion`, plus a `.arvdoul-reduce-motion` class for the manual
+"Reduce animations" setting. Do not hand-roll per-component motion opt-outs.
+
+## Full-bleed sizing uses 100%, never unbounded 100vw
+`html, body, #root` and full-screen shells size with `width: 100%`, not `100vw`
+(`100vw` includes the desktop scrollbar and forces a masked horizontal scroll).
+The app shell height is `h-[100dvh]` so the fixed bottom nav stays reachable
+while a mobile URL bar is showing. `uiFoundationGuard.test.js` fails on
+`w-screen` / unbounded `100vw`; a bounded `calc(100vw - Npx)` is allowed.
+
+## Config and shipped assets are guarded too
+Two deploy-time drift classes that no build error catches:
+- `envTemplateCoverage.test.js` (guards job) — `.env.example` must list exactly
+  the `VITE_*` variables the code reads (no read-but-undocumented, no
+  documented-but-unread), the Stripe publishable key has one canonical name
+  (`VITE_STRIPE_PUBLISHABLE_KEY`; `VITE_STRIPE_PUBLIC_KEY` is banned), and every
+  Vite env file (`.env`, `.env.local`, `.env.*.local`, …) is git-ignored so a
+  `git add -A` cannot commit a secret. Do not add a variable to `.env.example`
+  that nothing reads — it advertises a control that does not exist.
+- `publicAssetIntegrity.test.js` (guards job) — every image's magic bytes match
+  its extension (an `icon.png` that is really a JPEG breaks strict MIME hosts),
+  no sibling entries differ only by case, no whitespace in a shipped filename,
+  every `manifest.json` icon exists with the size it declares, and every
+  service-worker `PRECACHE_URLS` entry resolves under `public/`.
+
+`firebase-applet-config.json` is the one committed source of the public Firebase
+web config; `src/firebase/firebase.js` overlays `VITE_FIREBASE_*` on top. Do not
+duplicate the apiKey literal elsewhere.
+

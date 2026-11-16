@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Trash2, Search, Grid, List, Share2, Play, Plus, CheckSquare, Square, Folder, Sparkles, Film, Image as ImageIcon, Music } from "lucide-react";
+import { Bookmark, Trash2, Search, Grid, List, Share2, Play, CheckSquare, Square, Folder, Film, Image as ImageIcon, Music, FileText } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -14,12 +14,16 @@ import { pickDisplayName, deriveHandle, resolveAvatarUrl } from '../services/pro
 import { cn } from '../lib/utils';
 import { LazyImage } from '../components/Shared/LazyImage';
 
-const COLLECTIONS = [
-  'All',
-  'Design Systems',
-  'LUTs & VFX',
-  'Inspiration',
-  'Audio Library'
+// Media-type filters. Every option maps to a real saved item type: posts carry
+// `type` from `{text,image,video,audio,poll,link}` and saved videos are typed
+// `video`. There is no "preset" or "folder" content type — inventing filter
+// chips for them produced controls that could only ever show an empty list.
+const TYPE_FILTERS = [
+  { id: 'all', label: 'All Media' },
+  { id: 'video', label: 'Videos', icon: Film },
+  { id: 'image', label: 'Images', icon: ImageIcon },
+  { id: 'audio', label: 'Audio', icon: Music },
+  { id: 'text', label: 'Text', icon: FileText },
 ];
 
 // A save timestamp arrives as a Firestore Timestamp (posts) or an ISO string
@@ -65,10 +69,9 @@ export default function SavedScreen() {
             username: deriveHandle(p.authorHandle) || deriveHandle(p.authorUsername) || '',
             avatar: resolveAvatarUrl(p.authorPhoto, p.authorName, p.authorId),
           },
-          type: p.type || 'post',
+          type: p.type || 'text',
           thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
           savedAt: formatSavedDate(p.savedAt),
-          collection: p.collection || 'Saved',
           tags: p.hashtags || [],
         }));
         // Videos saved via `videoService.saveVideo` live in a separate
@@ -87,7 +90,6 @@ export default function SavedScreen() {
           thumbnail: v.thumbnail || '/assets/default-profile.png',
           videoUrl: v.videoUrl || '',
           savedAt: formatSavedDate(v.savedAt),
-          collection: 'Saved',
           tags: [],
         }));
         setItems([...videoItems, ...postItems]);
@@ -103,20 +105,15 @@ export default function SavedScreen() {
     return () => { cancelled = true; };
   }, [user?.uid, savedNonce]);
 
-  const [activeCollection, setActiveCollection] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
-  const [activeTypeFilter, setActiveTypeFilter] = useState('all'); // 'all' | 'video' | 'image' | 'audio' | 'preset'
+  const [activeTypeFilter, setActiveTypeFilter] = useState('all'); // 'all' | 'video' | 'image' | 'audio' | 'text'
 
   // Filtered items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // Collection filter
-      if (activeCollection !== 'All' && item.collection !== activeCollection) {
-        return false;
-      }
       // Type filter
       if (activeTypeFilter !== 'all' && item.type !== activeTypeFilter) {
         return false;
@@ -131,7 +128,7 @@ export default function SavedScreen() {
       }
       return true;
     });
-  }, [items, activeCollection, activeTypeFilter, searchQuery]);
+  }, [items, activeTypeFilter, searchQuery]);
 
   // Remove single item. Optimistic, but persisted — a local-only removal
   // reappears on reload, so the "Removed" toast would be a lie.
@@ -181,11 +178,13 @@ export default function SavedScreen() {
     }
   };
 
-  // Share item
+  // Share item. Videos live at /video/:id and posts at /post/:id — a single
+  // `/post/${id}` URL for a saved video produced a 404 link.
   const handleShare = (item) => {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(`${window.location.origin}/post/${item.id}`);
-      toast.success('Link copied to clipboard! 📋');
+      const path = item.source === 'video' ? `/video/${item.id}` : `/post/${item.id}`;
+      navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      toast.success('Link copied to clipboard');
     }
   };
 
@@ -265,7 +264,7 @@ export default function SavedScreen() {
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
+            <input aria-label="Search saved titles, tags, creators..."
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -278,52 +277,23 @@ export default function SavedScreen() {
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {[
-              { id: 'all', label: 'All Media' },
-              { id: 'video', label: 'Videos', icon: Film },
-              { id: 'image', label: 'Images', icon: ImageIcon },
-              { id: 'audio', label: 'Audio', icon: Music },
-              { id: 'preset', label: 'Presets', icon: Sparkles },
-            ].map((tf) => (
+            {TYPE_FILTERS.map((tf) => (
               <button
                 key={tf.id}
                 onClick={() => setActiveTypeFilter(tf.id)}
+                aria-pressed={activeTypeFilter === tf.id}
                 className={cn(
-                  "px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all border",
+                  "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all border",
                   activeTypeFilter === tf.id
                     ? "bg-purple-600 border-purple-500 text-white shadow-md shadow-purple-500/20"
                     : isDark ? "bg-white/5 border-white/10 text-gray-400 hover:text-white" : "bg-white border-gray-200 text-gray-600 hover:text-black"
                 )}
               >
+                {tf.icon && <tf.icon className="w-3.5 h-3.5" aria-hidden="true" />}
                 {tf.label}
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Collection Folders Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-4 scrollbar-none">
-          {COLLECTIONS.map((c) => (
-            <button
-              key={c}
-              onClick={() => setActiveCollection(c)}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all border",
-                activeCollection === c
-                  ? "bg-white text-black border-white shadow-md"
-                  : isDark ? "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10" : "bg-gray-200/70 border-gray-300 text-gray-700 hover:bg-gray-200"
-              )}
-            >
-              {c}
-            </button>
-          ))}
-          <button
-            onClick={() => navigate('/collections')}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-purple-400 border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 shrink-0 transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Folder</span>
-          </button>
         </div>
 
         {/* Batch Selection Action Bar */}
@@ -368,10 +338,22 @@ export default function SavedScreen() {
             <div className="w-16 h-16 mx-auto rounded-3xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
               <Bookmark className="w-8 h-8" />
             </div>
-            <h3 className="text-base font-bold">No saved items in this category</h3>
+            <h3 className="text-base font-bold">
+              {items.length === 0 ? 'Nothing saved yet' : 'No items match your filters'}
+            </h3>
             <p className="text-xs text-gray-400 max-w-sm mx-auto">
-              Tap the bookmark icon on any post, video, or spark across ARVDOUL to store it here.
+              {items.length === 0
+                ? 'Tap the bookmark icon on any post, video, or spark across ARVDOUL to store it here.'
+                : 'Try a different media type or clear your search.'}
             </p>
+            {items.length > 0 && (
+              <button
+                onClick={() => { setActiveTypeFilter('all'); setSearchQuery(''); }}
+                className="mt-2 px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-all"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -402,7 +384,7 @@ export default function SavedScreen() {
                   <div className="absolute top-2.5 left-2.5 p-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[10px] font-bold flex items-center gap-1">
                     {item.type === 'video' && <Play className="w-3 h-3 fill-white" />}
                     {item.type === 'audio' && <Music className="w-3 h-3" />}
-                    {item.type === 'preset' && <Sparkles className="w-3 h-3 text-amber-400" />}
+                    {item.type === 'image' && <ImageIcon className="w-3 h-3" />}
                     {item.duration && <span>{item.duration}</span>}
                   </div>
 
@@ -496,8 +478,6 @@ export default function SavedScreen() {
                       {item.author.username && <span>@{item.author.username}</span>}
                       <span>•</span>
                       <span>{item.savedAt || '—'}</span>
-                      <span>•</span>
-                      <span className="text-purple-400 font-semibold">{item.collection}</span>
                     </div>
                   </div>
 

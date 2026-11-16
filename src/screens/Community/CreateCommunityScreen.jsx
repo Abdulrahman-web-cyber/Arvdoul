@@ -378,7 +378,7 @@ const CreateCommunityScreen = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Community Name <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input aria-label="Enter community name"
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
@@ -401,7 +401,7 @@ const CreateCommunityScreen = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Description
                 </label>
-                <textarea
+                <textarea aria-label="What is this community about?"
                   value={formData.description}
                   onChange={(e) => handleChange('description', e.target.value)}
                   placeholder="What is this community about?"
@@ -437,7 +437,7 @@ const CreateCommunityScreen = () => {
                     </span>
                   ))}
                 </div>
-                <input
+                <input aria-label="Type a tag and press Enter"
                   type="text"
                   value={formData.tagInput}
                   onChange={(e) => handleChange('tagInput', e.target.value)}
@@ -572,7 +572,7 @@ const CreateCommunityScreen = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Community Rules & Guidelines
                 </label>
-                <textarea
+                <textarea aria-label="Define the rules and guidelines for your community..."
                   value={formData.rules}
                   onChange={(e) => handleChange('rules', e.target.value)}
                   placeholder="Define the rules and guidelines for your community..."
@@ -632,7 +632,7 @@ const CreateCommunityScreen = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Slow Mode Delay (seconds)
                     </label>
-                    <select
+                    <select aria-label="Slow Mode Delay (seconds)"
                       value={formData.moderation.slowModeDelay}
                       onChange={(e) => handleNestedChange('moderation', 'slowModeDelay', parseInt(e.target.value))}
                       className="w-full px-4 py-2 bg-white dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-lg text-gray-900 dark:text-white"

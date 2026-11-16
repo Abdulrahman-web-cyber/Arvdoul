@@ -533,7 +533,7 @@ const TextCard = React.memo(({
               </div>
               {showTtsSettings && (
                 <div className="space-y-2">
-                  <select
+                  <select aria-label=":"
                     onChange={e => setSelectedVoice(availableVoices.find(v => v.name === e.target.value) || null)}
                     className="w-full text-xs p-1.5 sm:p-2 rounded-lg bg-black/50 border border-white/20 text-white"
                   >
@@ -544,7 +544,7 @@ const TextCard = React.memo(({
                   </select>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-white">Speed</span>
-                    <input
+                    <input aria-label="Speed"
                       type="range"
                       min="0.5"
                       max="2"
@@ -572,7 +572,7 @@ const TextCard = React.memo(({
               style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', border: `1px solid rgba(255,255,255,0.1)` }}
             >
               <div className="flex flex-wrap gap-2">
-                <select
+                <select aria-label="Translate to language"
                   value={targetLang}
                   onChange={e => setTargetLang(e.target.value)}
                   className="text-xs p-1.5 sm:p-2 rounded-lg bg-black/50 border border-white/20 text-white"

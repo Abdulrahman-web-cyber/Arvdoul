@@ -179,7 +179,7 @@ export default function SoundsScreen() {
       <div className="space-y-4 mb-6">
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
+          <input aria-label="Search sounds, artists, genres or BPM..."
             type="text"
             placeholder="Search sounds, artists, genres or BPM..."
             value={searchQuery}
@@ -401,7 +401,7 @@ export default function SoundsScreen() {
               <form onSubmit={handleUploadAudio} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Track Title</label>
-                  <input
+                  <input aria-label="Track Title"
                     type="text"
                     required
                     placeholder="e.g. Midnight Horizon Beat (Prod. by Me)"
@@ -415,7 +415,7 @@ export default function SoundsScreen() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Genre / Mood</label>
-                  <select
+                  <select aria-label="Genre / Mood"
                     value={newGenre}
                     onChange={(e) => setNewGenre(e.target.value)}
                     className={`w-full p-3.5 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}

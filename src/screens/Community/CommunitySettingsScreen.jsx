@@ -439,7 +439,7 @@ export default function CommunitySettingsScreen() {
             )}>
               <div className="relative flex-1">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
+                <input aria-label="Search members by name or ID…"
                   type="text"
                   value={searchMemberQuery}
                   onChange={(e) => setSearchMemberQuery(e.target.value)}
@@ -693,7 +693,7 @@ export default function CommunitySettingsScreen() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">Community Name</label>
-                <input
+                <input aria-label="Community Name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -708,7 +708,7 @@ export default function CommunitySettingsScreen() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">Description</label>
-                <textarea
+                <textarea aria-label="Description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   disabled={!canManage}
@@ -723,7 +723,7 @@ export default function CommunitySettingsScreen() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">Community Rules &amp; Charter</label>
-                <textarea
+                <textarea aria-label="Community Rules &amp;amp; Charter"
                   value={rules}
                   onChange={(e) => setRules(e.target.value)}
                   disabled={!canManage}
@@ -783,7 +783,7 @@ export default function CommunitySettingsScreen() {
                   <div className="text-xs font-bold">Require Join Approval</div>
                   <div className="text-[11px] text-slate-400">Every new applicant must be reviewed in the queue.</div>
                 </div>
-                <input
+                <input aria-label="Require Join Approval"
                   type="checkbox"
                   checked={joinApproval}
                   onChange={(e) => setJoinApproval(e.target.checked)}
@@ -940,7 +940,7 @@ export default function CommunitySettingsScreen() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">Reason for ban (recorded in audit ledger)</label>
-                <input
+                <input aria-label="Ban Citizen from Community"
                   type="text"
                   value={banReason}
                   onChange={(e) => setBanReason(e.target.value)}

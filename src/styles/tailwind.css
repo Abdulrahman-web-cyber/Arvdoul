@@ -5,9 +5,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Keyboard-focus policy (a11y).
+ * 84 modules set `outline-none` to suppress the browser's default ring, but only
+ * 5 provided a replacement — so keyboard users lost focus indication across most
+ * of the app. This global `:focus-visible` default restores a tokenised ring for
+ * every interactive element. Components that opt into their own ring keep it:
+ * `focus-visible:outline-none` has higher specificity (0,2,0) than this rule
+ * (0,1,0) and still wins. Pointer clicks never match `:focus-visible`, so mouse
+ * users see no ring. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--arv-brand-violet);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Smoother type on the dark canvas. */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-family: var(--arv-font-sans);
+}
+
+/* Safe-area insets: notch / home-indicator aware padding for the fixed shell.
+ * Without these the bottom nav and full-height feeds clipped under the iOS
+ * home indicator and the top bar sat under the notch. */
+:root {
+  --arv-safe-top: env(safe-area-inset-top, 0px);
+  --arv-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --arv-safe-left: env(safe-area-inset-left, 0px);
+  --arv-safe-right: env(safe-area-inset-right, 0px);
+}
+
 /* CRITICAL MOBILE FIXES */
 html, body, #root {
-  width: 100vw !important;
+  /* A percentage width, not the viewport unit: the viewport unit includes the
+   * desktop scrollbar, which forced a horizontal overflow that the
+   * `overflow-x: hidden` below then had to mask. A percentage tracks the
+   * containing block exactly. */
+  width: 100% !important;
   min-height: 100vh !important;
   min-height: -webkit-fill-available !important;
   overflow-x: hidden !important;

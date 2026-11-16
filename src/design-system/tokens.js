@@ -14,7 +14,7 @@
  * trigger a visual regression review of the whole app.
  */
 
-export const TOKEN_VERSION = '1.1.0';
+export const TOKEN_VERSION = '1.2.0';
 
 export const tokens = {
   version: TOKEN_VERSION,
@@ -157,8 +157,12 @@ export const tokens = {
       black: 900,
     },
     fontFamily: {
+      // Both families are self-hosted under /public/fonts and declared in
+      // tokens.css. `display` is the characterful Clash Display face used for
+      // headings/brand numerals; `sans` is the Inter variable face used for
+      // body copy. Do not add a third family without adding an @font-face.
       sans: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-      display: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+      display: "'Clash Display', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
     },
   },
 

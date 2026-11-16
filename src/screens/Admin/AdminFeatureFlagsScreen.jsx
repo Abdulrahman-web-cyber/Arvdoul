@@ -158,7 +158,7 @@ const AdminFeatureFlagsScreen = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
+            <input aria-label="Reset All Overrides"
               type="text"
               placeholder="Search flag or description..."
               value={searchQuery}

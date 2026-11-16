@@ -180,7 +180,7 @@ const AnswerItem = React.memo(({
           </div>
           {isEditing ? (
             <div className="mt-2 space-y-2">
-              <textarea
+              <textarea aria-label="Expert"
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 className="w-full p-2 rounded-lg border text-sm"

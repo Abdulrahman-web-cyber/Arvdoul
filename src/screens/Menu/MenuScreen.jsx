@@ -372,7 +372,7 @@ export default function MenuScreen() {
               : "bg-white border-gray-200 focus-within:border-purple-400"
           }`}>
             <Search className={`w-4 h-4 ${isDark ? "text-gray-400" : "text-gray-500"}`} />
-            <input
+            <input aria-label="Search across 25+ studios, features &amp; settings..."
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

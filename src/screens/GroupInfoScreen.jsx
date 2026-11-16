@@ -345,7 +345,7 @@ export default function GroupInfoScreen() {
             <div className="space-y-4 max-w-md mx-auto text-left">
               <div>
                 <label className="text-xs font-semibold opacity-70 mb-1.5 block">Group Name</label>
-                <input
+                <input aria-label="Group Name"
                   type="text"
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
@@ -362,7 +362,7 @@ export default function GroupInfoScreen() {
 
               <div>
                 <label className="text-xs font-semibold opacity-70 mb-1.5 block">Description</label>
-                <textarea
+                <textarea aria-label="Description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="What is this group about?"
@@ -513,7 +513,7 @@ export default function GroupInfoScreen() {
 
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
-                <input
+                <input aria-label="Type name or username..."
                   type="text"
                   value={memberQuery}
                   onChange={(e) => handleSearchUsers(e.target.value)}

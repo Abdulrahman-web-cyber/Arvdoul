@@ -286,7 +286,7 @@ export default function CollectionsScreen() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
                     Folder Name
                   </label>
-                  <input
+                  <input aria-label="e.g. 3D Spatial Shaders, Audio Loops"
                     type="text"
                     required
                     value={newTitle}
@@ -303,7 +303,7 @@ export default function CollectionsScreen() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
                     Description (Optional)
                   </label>
-                  <input
+                  <input aria-label="Short summary of folder contents..."
                     type="text"
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}

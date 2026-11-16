@@ -277,7 +277,7 @@ export default function AIStudioScreen() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">What is your post about?</label>
-                <textarea
+                <textarea aria-label="What is your post about?"
                   value={captionTopic}
                   onChange={(e) => setCaptionTopic(e.target.value)}
                   placeholder="e.g. 5 mindset shifts for high-earning creators"
@@ -389,7 +389,7 @@ export default function AIStudioScreen() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Video Concept / Script Goal</label>
-                  <input
+                  <input aria-label="Video Concept / Script Goal"
                     type="text"
                     value={scriptTopic}
                     onChange={(e) => setScriptTopic(e.target.value)}
@@ -400,7 +400,7 @@ export default function AIStudioScreen() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Script Style</label>
-                  <select
+                  <select aria-label="Script Style"
                     value={scriptStyle}
                     onChange={(e) => setScriptStyle(e.target.value)}
                     className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
@@ -416,7 +416,7 @@ export default function AIStudioScreen() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Duration Target</label>
-                  <select
+                  <select aria-label="Duration Target"
                     value={scriptDuration}
                     onChange={(e) => setScriptDuration(Number(e.target.value))}
                     className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
@@ -481,7 +481,7 @@ export default function AIStudioScreen() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Subject & Scene</label>
-                <textarea
+                <textarea aria-label="Subject &amp; Scene"
                   value={promptSubject}
                   onChange={(e) => setPromptSubject(e.target.value)}
                   rows={3}
@@ -494,7 +494,7 @@ export default function AIStudioScreen() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Style</label>
-                  <select
+                  <select aria-label="Style"
                     value={promptStyle}
                     onChange={(e) => setPromptStyle(e.target.value)}
                     className={`w-full p-3 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}
@@ -508,7 +508,7 @@ export default function AIStudioScreen() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Aspect Ratio</label>
-                  <select
+                  <select aria-label="Aspect Ratio"
                     value={promptRatio}
                     onChange={(e) => setPromptRatio(e.target.value)}
                     className={`w-full p-3 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}
@@ -569,7 +569,7 @@ export default function AIStudioScreen() {
           >
             <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Paste caption or transcript for viral audit</label>
-              <textarea
+              <textarea aria-label="Paste caption or transcript for viral audit"
                 value={sentimentText}
                 onChange={(e) => setSentimentText(e.target.value)}
                 rows={3}
@@ -614,7 +614,7 @@ export default function AIStudioScreen() {
           >
             <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Content to Localize Globally</label>
-              <textarea
+              <textarea aria-label="Content to Localize Globally"
                 value={localizeText}
                 onChange={(e) => setLocalizeText(e.target.value)}
                 rows={3}

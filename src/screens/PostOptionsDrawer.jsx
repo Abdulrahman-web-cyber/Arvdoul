@@ -1239,7 +1239,7 @@ const ReportModal = ({ reasons, value, onChange, onConfirm, onCancel, loading, t
         className={cn('relative w-full max-w-md p-5 rounded-2xl shadow-2xl', isDark ? 'bg-gray-900' : 'bg-white')}
       >
         <h3 className="text-xl font-bold mb-4 text-center">Report Post</h3>
-        <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full p-2.5 rounded-xl border dark:border-gray-700 dark:bg-gray-800 mb-4 text-sm">
+        <select aria-label="Report Post" value={value} onChange={(e) => onChange(e.target.value)} className="w-full p-2.5 rounded-xl border dark:border-gray-700 dark:bg-gray-800 mb-4 text-sm">
           <option value="">Select reason...</option>
           {reasons.map(r => <option key={r}>{r}</option>)}
         </select>

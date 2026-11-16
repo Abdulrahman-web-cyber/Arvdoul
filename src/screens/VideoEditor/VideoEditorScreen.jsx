@@ -705,7 +705,7 @@ export default function VideoEditorScreen() {
   };
 
   return (
-    <div className={`flex flex-col h-screen w-screen overflow-hidden select-none font-sans ${isDark ? 'bg-gray-950 text-white' : 'bg-slate-50 text-gray-900'}`}>
+    <div className={`flex flex-col h-[100dvh] w-full overflow-hidden select-none font-sans ${isDark ? 'bg-gray-950 text-white' : 'bg-slate-50 text-gray-900'}`}>
       {/* 1. Studio Header */}
       <EditorHeader
         projectName={projectName}

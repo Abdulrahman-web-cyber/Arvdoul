@@ -7,6 +7,7 @@ import TopAppBar from "@components/Shared/TopAppBar";
 import BottomNav from "@components/Shared/BottomNav";
 import useScreenView from "../hooks/useScreenView.js";
 import { cn } from "../lib/utils";
+import { brandCanvasBackground } from "../design-system/tokens.js";
 
 /** Accept only same-origin, in-app paths from an event payload. */
 function safeInternalPath(url) {
@@ -64,34 +65,48 @@ export default function MainLayout({ children }) {
   return (
     <div
       className={cn(
-        "flex flex-col h-screen w-screen overflow-hidden",
-        isDark
-          ? "bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]"
-          : "bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]"
+        // The viewport-width utility overflows by the scrollbar width on
+        // desktop and caused a horizontal scrollbar; `w-full` fills the shell.
+        // `h-[100dvh]` tracks the *dynamic* viewport so the fixed bottom nav and
+        // the shell bottom stay reachable while a mobile URL bar is showing
+        // (a plain `h-screen`/100vh measures the tall viewport and clips them).
+        "flex flex-col h-[100dvh] w-full overflow-hidden"
       )}
+      // Canvas comes from the design-system helper (base colour + brand glow),
+      // replacing the raw-hex gradients that bypassed the tokens.
+      style={{ background: brandCanvasBackground(isDark) }}
     >
+      {/* Keyboard bypass for the fixed chrome (WCAG 2.4.1). Visually hidden
+          until focused, then pinned to the top-left above everything. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[300] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-arvdoul-purple focus:shadow-lg dark:focus:bg-[#0b1020] dark:focus:text-white"
+      >
+        Skip to content
+      </a>
+
       {/* Top App Bar (Hidden on immersive full-screen video feeds and individual chat) */}
       {!hideTopAppBar && <TopAppBar />}
 
       {/* Main Content */}
       {isImmersiveVideo ? (
-        <main className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : isIndividualChat || isDedicatedStudioOrCall || isCreateStory ? (
-        <main className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : isCreatePost ? (
-        <main className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20">
           {children}
         </main>
       ) : isFullHeightFeed ? (
-        <main className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : (
-        <main className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 w-full">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 w-full">
           <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
             {children}
           </div>

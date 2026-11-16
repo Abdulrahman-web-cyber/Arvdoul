@@ -982,7 +982,7 @@ const Range = memo(function Range({ id, label, value, min, max, step = 1, onChan
         <label htmlFor={id}>{label}</label>
         <span>{format ? format(value) : value}</span>
       </div>
-      <input
+      <input aria-label="return ("
         id={id}
         type="range"
         className="ie-range"
