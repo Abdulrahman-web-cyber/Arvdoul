@@ -8,7 +8,7 @@
 // function that resolves to `true` (confirmed) or `false` (cancelled), backed
 // by the accessible `Dialog` primitive (focus trap, Escape, aria-modal).
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import Dialog from '../UI/Dialog';
 import { cn } from '../../lib/utils';
 
@@ -34,6 +34,18 @@ export function ConfirmProvider({ children }) {
   const [promptValue, setPromptValue] = useState('');
   const resolverRef = useRef(null);
   const promptResolverRef = useRef(null);
+  const promptInputRef = useRef(null);
+
+  // Focus the prompt input when it opens. The `Dialog` focuses its own
+  // container; moving focus to the field is done here rather than via the
+  // `autoFocus` attribute (which SonarCloud flags as a usability hazard).
+  useEffect(() => {
+    if (promptRequest) {
+      const timer = requestAnimationFrame(() => promptInputRef.current?.focus());
+      return () => cancelAnimationFrame(timer);
+    }
+    return undefined;
+  }, [promptRequest]);
 
   const confirm = useCallback((options) => {
     return new Promise((resolve) => {
@@ -129,8 +141,8 @@ export function ConfirmProvider({ children }) {
           )}
           <input
             type="text"
+            ref={promptInputRef}
             value={promptValue}
-            autoFocus
             onChange={(e) => setPromptValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (!promptRequest?.required || promptValue.trim())) settlePrompt(true);
