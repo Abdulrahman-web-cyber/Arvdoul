@@ -45,6 +45,8 @@ function detectFormat(buf) {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
   if (buf.length >= 6 && buf.subarray(0, 6).toString('ascii').startsWith('GIF8')) return 'gif';
   if (buf.length >= 12 && buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') return 'webp';
+  if (buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'wOF2') return 'woff2';
+  if (buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'wOFF') return 'woff';
   return null;
 }
 
@@ -69,7 +71,8 @@ function jpegSize(buf) {
 }
 
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
-const EXPECTED = { png: ['png'], jpg: ['jpeg'], jpeg: ['jpeg'], gif: ['gif'], webp: ['webp'] };
+const FONT_EXT = new Set(['woff2', 'woff']);
+const EXPECTED = { png: ['png'], jpg: ['jpeg'], jpeg: ['jpeg'], gif: ['gif'], webp: ['webp'], woff2: ['woff2'], woff: ['woff'] };
 
 const allFiles = walk(PUBLIC);
 
@@ -82,6 +85,19 @@ describe('public/ asset integrity', () => {
       const fmt = detectFormat(fs.readFileSync(file));
       if (fmt && !EXPECTED[ext].includes(fmt)) {
         offenders.push(`${path.relative(root, file)} is ${fmt} but named .${ext}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('every webfont matches its extension', () => {
+    const offenders = [];
+    for (const file of allFiles) {
+      const ext = file.toLowerCase().split('.').pop();
+      if (!FONT_EXT.has(ext)) continue;
+      const fmt = detectFormat(fs.readFileSync(file));
+      if (fmt !== ext) {
+        offenders.push(`${path.relative(root, file)} is ${fmt || 'not a font'} but named .${ext}`);
       }
     }
     expect(offenders).toEqual([]);
