@@ -1540,7 +1540,9 @@ class UltimateCommentService {
           this.firestoreMethods.doc(this.firestore, 'comments', id)
         );
 
-        const snapshots = await this.firestoreMethods.getAll(...commentRefs);
+        const snapshots = await Promise.all(
+          commentRefs.map((ref) => this.firestoreMethods.getDoc(ref))
+        );
 
         for (const snap of snapshots) {
           if (!snap.exists()) continue;

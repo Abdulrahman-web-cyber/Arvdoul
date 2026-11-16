@@ -508,22 +508,23 @@ const formatDuration = (seconds) => {
   }
 
   return (
-    <div
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowUp') handlePrevReel();
-        if (e.key === 'ArrowDown') handleNextReel();
-        if (e.key === ' ') setIsPlaying(!isPlaying);
-      }}
-      onWheel={handleWheel}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      tabIndex={0}
-      aria-label="Reels"
-      className={cn(
-        "relative h-full w-full overflow-hidden select-none flex flex-col justify-between focus:outline-none",
-        isDark ? "bg-[#060814] text-white" : "bg-black text-white"
-      )}
-    >
+    <div className="relative h-full w-full bg-[#03071B] flex items-center justify-center overflow-hidden">
+      <div
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowUp') handlePrevReel();
+          if (e.key === 'ArrowDown') handleNextReel();
+          if (e.key === ' ') setIsPlaying(!isPlaying);
+        }}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        tabIndex={0}
+        aria-label="Reels"
+        className={cn(
+          "relative h-full w-full lg:max-w-[440px] lg:aspect-[9/16] lg:max-h-[calc(100dvh-2rem)] lg:rounded-2xl lg:border lg:border-white/15 lg:shadow-2xl overflow-hidden select-none flex flex-col justify-between focus:outline-none",
+          isDark ? "bg-[#060814] text-white" : "bg-black text-white"
+        )}
+      >
       {/* Background Reel Media / Video Player */}
       <div
         onDoubleClick={handleDoubleTap}
@@ -590,17 +591,19 @@ const formatDuration = (seconds) => {
       <header className="relative z-30 pt-4 px-5 flex items-center justify-between">
         
         {/* Left: ARVDOUL Brand Logo */}
-        <div
+        <button
+          type="button"
+          aria-label="Go to Arvdoul Home"
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 cursor-pointer"
+          className="flex items-center gap-2 cursor-pointer rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue flex items-center justify-center font-black text-sm text-white shadow-arvdoul-glow">
+          <div className="w-8 h-8 rounded-xl bg-arvdoul-gradient flex items-center justify-center font-black text-sm text-white shadow-arvdoul-glow">
             A
           </div>
           <span className="text-sm font-black font-display tracking-wider uppercase">
             ARVDOUL
           </span>
-        </div>
+        </button>
 
         {/* Center: Following & For You Tabs */}
         <div className="flex items-center gap-6">
@@ -681,16 +684,18 @@ const formatDuration = (seconds) => {
         
         {/* Creator Avatar with Follow Ring (+) */}
         <div className="relative mb-2">
-          <div
+          <button
+            type="button"
+            aria-label={`Open ${currentReel.creator.name || 'creator'} profile`}
             onClick={() => currentReel.creator.id && navigate(`/profile/${currentReel.creator.id}`)}
-            className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue cursor-pointer shadow-arvdoul-glow"
+            className="w-12 h-12 rounded-full p-0.5 bg-arvdoul-gradient cursor-pointer shadow-arvdoul-glow block"
           >
             <LazyImage
               src={currentReel.creator.avatar}
               alt={currentReel.creator.name || ''}
               className="w-full h-full rounded-full object-cover border-2 border-black"
             />
-          </div>
+          </button>
           {currentReel.creator.id && currentReel.creator.id !== user?.uid && (
             <button
               onClick={() => handleFollow(currentReel.creator)}
@@ -981,12 +986,13 @@ const formatDuration = (seconds) => {
       />
 
       {/* Share / Report sheet for the active reel */}
-      <VideoBottomSheet
-        isOpen={(sheetView === 'share' || sheetView === 'report') && Boolean(currentReel)}
-        onClose={() => setSheetView(null)}
-        initialView={sheetView === 'report' ? 'report' : 'share'}
-        video={currentReel}
-      />
+        <VideoBottomSheet
+          isOpen={(sheetView === 'share' || sheetView === 'report') && Boolean(currentReel)}
+          onClose={() => setSheetView(null)}
+          initialView={sheetView === 'report' ? 'report' : 'share'}
+          video={currentReel}
+        />
+      </div>
     </div>
   );
 }

@@ -30,7 +30,8 @@ describe('daily upload limit is the SUM of the day\'s shards (N490)', () => {
       src.indexOf('async _checkFollowStatus')
     );
     expect(fn.length).toBeGreaterThan(0);
-    expect(fn).toMatch(/tx\.getAll\(\.\.\.shardRefs\)/);
+    expect(fn).toMatch(/Promise\.all\(shardRefs\.map\(/);
+    expect(fn).toMatch(/tx\.get\(/);
     expect(fn).toMatch(/reduce\(\(sum/);
     expect(fn).toMatch(/if \(total >= dailyLimit\) throw new Error\('LIMIT_EXCEEDED'\)/);
     // The old single-random-shard comparison is gone.

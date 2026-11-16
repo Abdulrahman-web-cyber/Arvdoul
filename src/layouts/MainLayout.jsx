@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@context/ThemeContext";
 import TopAppBar from "@components/Shared/TopAppBar";
 import BottomNav from "@components/Shared/BottomNav";
+import DesktopNavRail from "@components/Shared/DesktopNavRail";
 import useScreenView from "../hooks/useScreenView.js";
 import { cn } from "../lib/utils";
 import { brandCanvasBackground } from "../design-system/tokens.js";
@@ -53,13 +54,16 @@ export default function MainLayout({ children }) {
     location.pathname.startsWith("/live") ||
     location.pathname.startsWith("/camera")
   );
-  
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
   const isCreatePost = location.pathname.startsWith("/create-post");
   const isCreateStory = location.pathname.startsWith("/create-story");
 
   // create-post displays the top app bar and bottom nav; stories, immersive video and studios hide them
   const hideTopAppBar = isImmersiveVideo || isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
+  const hideTopAppBarOnDesktop = isAdminRoute || location.pathname === "/home" || location.pathname === "/";
   const hideBottomNav = isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
+  const showDesktopRail = !isDedicatedStudioOrCall && !isCreateStory;
   const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || location.pathname === "/messages";
 
   return (
@@ -85,36 +89,55 @@ export default function MainLayout({ children }) {
         Skip to content
       </a>
 
-      {/* Top App Bar (Hidden on immersive full-screen video feeds and individual chat) */}
-      {!hideTopAppBar && <TopAppBar />}
+      <div className="flex flex-1 min-h-0 w-full overflow-hidden">
+        {showDesktopRail && <DesktopNavRail />}
 
-      {/* Main Content */}
-      {isImmersiveVideo ? (
-        <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
-          {children}
-        </main>
-      ) : isIndividualChat || isDedicatedStudioOrCall || isCreateStory ? (
-        <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
-          {children}
-        </main>
-      ) : isCreatePost ? (
-        <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20">
-          {children}
-        </main>
-      ) : isFullHeightFeed ? (
-        <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
-          {children}
-        </main>
-      ) : (
-        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 w-full">
-          <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+          {/* Top App Bar (Hidden on immersive full-screen video feeds and individual chat;
+              desktop /home and /admin* rely on DesktopNavRail / AdminNavHeader) */}
+          {!hideTopAppBar && (
+            hideTopAppBarOnDesktop ? (
+              <div className="lg:hidden shrink-0">
+                <TopAppBar />
+              </div>
+            ) : (
+              <TopAppBar />
+            )
+          )}
+
+          {/* Main Content */}
+          {isImmersiveVideo ? (
+            <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+              {children}
+            </main>
+          ) : isIndividualChat || isDedicatedStudioOrCall || isCreateStory ? (
+            <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+              {children}
+            </main>
+          ) : isCreatePost ? (
+            <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20 lg:pb-8">
+              {children}
+            </main>
+          ) : isFullHeightFeed ? (
+            <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
+              {children}
+            </main>
+          ) : (
+            <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 lg:pb-8 w-full">
+              <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
+                {children}
+              </div>
+            </main>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Navigation (mobile/tablet only — desktop uses DesktopNavRail) */}
+      {!hideBottomNav && (
+        <div className="lg:hidden shrink-0">
+          <BottomNav />
+        </div>
       )}
-
-      {/* Bottom Navigation */}
-      {!hideBottomNav && <BottomNav />}
     </div>
   );
 }

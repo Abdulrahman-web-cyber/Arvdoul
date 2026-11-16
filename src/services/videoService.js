@@ -1156,7 +1156,7 @@ class UltimateVideoService {
     let success = false;
     try {
       await runTransaction(this.firestore, async (tx) => {
-        const snaps = await tx.getAll(...shardRefs);
+        const snaps = await Promise.all(shardRefs.map((ref) => tx.get(ref)));
         const total = snaps.reduce((sum, s) => sum + (s.exists() ? (s.data().count || 0) : 0), 0);
         if (total >= dailyLimit) throw new Error('LIMIT_EXCEEDED');
         const shardIndex = Math.floor(Math.random() * shards);

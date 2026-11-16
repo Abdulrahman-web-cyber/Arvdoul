@@ -6,7 +6,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3000",
+    "dev": "tsx server.ts",
+    "start": "node server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src/ functions/ --ext .js,.jsx",
@@ -20,6 +21,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@google/genai": "^3.3.0",
     "@stripe/react-stripe-js": "^6.8.1",
     "@stripe/stripe-js": "^9.13.0",
     "@tanstack/react-query": "^5.101.4",
@@ -39,6 +41,7 @@
     "dayjs": "^1.11.21",
     "dompurify": "^3.4.10",
     "emoji-picker-react": "^4.19.1",
+    "express": "^5.3.0",
     "firebase": "^12.7.0",
     "focus-trap-react": "^12.0.3",
     "framer-motion": "^10.16.16",
@@ -78,6 +81,7 @@
     "tippy.js": "^6.3.7",
     "use-debounce": "^10.1.1",
     "uuid": "^14.0.0",
+    "ws": "^8.23.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
@@ -90,8 +94,10 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
+    "@types/express": "^5.0.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.4.16",
     "babel-jest": "^30.4.1",
@@ -111,6 +117,7 @@
     "prettier": "^3.7.4",
     "source-map-explorer": "^2.5.3",
     "tailwindcss": "^3.3.6",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^8.0.16",
     "vite-bundle-visualizer": "^1.2.1",

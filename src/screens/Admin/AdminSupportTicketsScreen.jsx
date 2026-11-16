@@ -4,26 +4,32 @@ import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ArrowLeft, MessageCircle, Search, Send, User, Bot, Sparkles, ChevronRight, X } from "lucide-react";
+import { MessageCircle, Search, Send, User, Bot, ChevronRight, X } from "lucide-react";
+import { useAuth } from '../../context/AuthContext';
 import { supportAutomationService } from '../../services/supportAutomationService.js';
-import { callFunction, FUNCTIONS } from '../../services/callableService.js';
+import { callFunction, FUNCTIONS, fetchAdminStatus } from '../../services/callableService.js';
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
+import AdminNavHeader from '../../components/Admin/AdminNavHeader.jsx';
 
 const AdminSupportTicketsScreen = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('open'); // 'all' | 'open' | 'in_progress' | 'resolved'
+  const [denied, setDenied] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('open');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyMessage, setReplyMessage] = useState('');
-
-  // Live tickets only; the collection is the source of truth.
   const [tickets, setTickets] = useState([]);
 
-  // The queue is read through the admin callable: support_tickets is
-  // user-owned, so a plain client query cannot see every customer's ticket.
   useEffect(() => {
     const loadTickets = async () => {
       try {
+        if (!user?.uid || !(await fetchAdminStatus())) {
+          setDenied(true);
+          setLoading(false);
+          return;
+        }
         const res = await callFunction(FUNCTIONS.ADMIN_LIST_SUPPORT_TICKETS, { limit: 50 });
         setTickets(Array.isArray(res?.tickets) ? res.tickets : []);
       } catch {
@@ -34,10 +40,8 @@ const AdminSupportTicketsScreen = () => {
       }
     };
     loadTickets();
-  }, []);
+  }, [user?.uid]);
 
-  // Send agent reply — the callable re-verifies admin, appends the message and
-  // records the status change in moderation_logs. No client-side privileged write.
   const handleSendReply = async () => {
     if (!replyMessage.trim() || !selectedTicket) return;
 
@@ -54,7 +58,7 @@ const AdminSupportTicketsScreen = () => {
         { sender: 'agent', text: reply, timestamp: new Date().toISOString() },
       ];
       const updated = { ...selectedTicket, status: 'resolved', messages };
-      setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updated : t)));
+      setTickets((prev) => prev.map((t) => (t.id === selectedTicket.id ? updated : t)));
       setSelectedTicket(updated);
       setReplyMessage('');
 
@@ -64,7 +68,6 @@ const AdminSupportTicketsScreen = () => {
     }
   };
 
-  // Quick auto-resolution helper
   const handleAutoSuggest = () => {
     if (!selectedTicket || !selectedTicket.messages?.length) return;
     const triage = supportAutomationService.triageSupportTicket(selectedTicket.messages[0].text);
@@ -73,7 +76,7 @@ const AdminSupportTicketsScreen = () => {
     }
   };
 
-  const filteredTickets = tickets.filter(t => {
+  const filteredTickets = tickets.filter((t) => {
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -85,172 +88,157 @@ const AdminSupportTicketsScreen = () => {
     );
   });
 
-  return (
-    <div id="admin-support-screen" className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Top Bar */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              id="back-btn-support"
-              onClick={() => navigate('/admin')}
-              className="p-2 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-              aria-label="Back to Admin"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Support Ticket Center</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
-                  <Bot className="w-3.5 h-3.5" />
-                  AI Triage Active
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                Inquiry resolution, user assistance, and automated triage routing
-              </p>
-            </div>
-          </div>
+  if (denied) {
+    return <PermissionDenied onGoHome={() => navigate('/')} />;
+  }
 
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
-            {['open', 'in_progress', 'resolved', 'all'].map(status => (
+  return (
+    <div id="admin-support-screen" className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <AdminNavHeader
+        title="Support Ticket Center"
+        subtitle="Inquiry resolution, user assistance, and automated triage routing"
+        actions={
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            {['open', 'in_progress', 'resolved', 'all'].map((status) => (
               <button
                 key={status}
+                type="button"
                 onClick={() => setStatusFilter(status)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition ${
+                className={`px-3 py-1 rounded-md text-xs font-semibold capitalize whitespace-nowrap shrink-0 transition cursor-pointer ${
                   statusFilter === status
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 {status.replace('_', ' ')}
               </button>
             ))}
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Search */}
-        <div className="flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input aria-label="Search user, subject, or email..."
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              aria-label="Search user, subject, or email"
               type="text"
               placeholder="Search user, subject, or email..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
             />
           </div>
-          <div className="text-xs text-gray-500 font-medium">
+          <div className="text-xs text-slate-500 font-medium tabular-nums">
             {filteredTickets.length} tickets in queue
           </div>
         </div>
 
-        {/* Tickets List */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {!loading && filteredTickets.length === 0 && (
-              <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+              <div className="p-12 text-center text-sm text-slate-500 dark:text-slate-400">
                 {tickets.length === 0
                   ? 'No support tickets have been submitted yet.'
                   : 'No tickets match this filter.'}
               </div>
             )}
-            {filteredTickets.map(tkt => (
-              <div
+            {filteredTickets.map((tkt) => (
+              <button
                 key={tkt.id}
+                type="button"
                 onClick={() => setSelectedTicket(tkt)}
-                className="p-5 flex items-center justify-between gap-4 hover:bg-gray-50/70 dark:hover:bg-gray-700 transition cursor-pointer"
+                className="w-full text-left p-5 flex items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition cursor-pointer"
               >
-                <div className="flex items-start gap-3.5">
+                <div className="flex items-start gap-3.5 min-w-0">
                   <div
-                    className={`p-2.5 rounded-xl ${
+                    className={`p-2.5 rounded-lg shrink-0 ${
                       tkt.priority === 'high'
-                        ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                        : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                        ? 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400'
+                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                     }`}
                   >
                     <MessageCircle className="w-5 h-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-gray-900 dark:text-white">{tkt.subject}</span>
-                      <span className="text-xs text-gray-400 font-mono">#{tkt.id}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm text-slate-900 dark:text-white">{tkt.subject}</span>
+                      <span className="text-xs text-slate-400 font-mono tabular-nums">#{tkt.id}</span>
                       {tkt.autoResolved && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                          <Bot className="w-3 h-3" /> Auto-Resolved
-                        </span>
+                        <>
+                          <span aria-hidden="true" className="text-slate-400">·</span>
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                            <Bot className="w-3.5 h-3.5" /> Auto-Resolved
+                          </span>
+                        </>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
                       <span>{tkt.userName} ({tkt.userEmail})</span>
-                      <span>•</span>
-                      <span>Category: <b className="text-gray-700 dark:text-gray-300 capitalize">{String(tkt.category || 'uncategorised').replace('_', ' ')}</b></span>
+                      <span aria-hidden="true">·</span>
+                      <span>Category: <strong className="text-slate-700 dark:text-slate-300 capitalize">{String(tkt.category || 'uncategorised').replace('_', ' ')}</strong></span>
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize ${
+                    className={`text-xs font-semibold capitalize ${
                       tkt.status === 'resolved'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        ? 'text-emerald-600 dark:text-emerald-400'
                         : tkt.status === 'in_progress'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-amber-600 dark:text-amber-400'
                     }`}
                   >
-                    {tkt.status.replace('_', ' ')}
+                    {String(tkt.status || 'open').replace('_', ' ')}
                   </span>
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Ticket Inspection & Reply Drawer/Modal */}
       {selectedTicket && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="bg-white dark:bg-slate-900 rounded-xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
           >
-            {/* Modal Header */}
-            <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base text-gray-900 dark:text-white">{selectedTicket.subject}</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  #{selectedTicket.id} • {selectedTicket.userName} ({selectedTicket.userEmail})
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-base text-slate-900 dark:text-white truncate">{selectedTicket.subject}</h3>
+                <p className="text-xs text-slate-500 mt-0.5 tabular-nums truncate">
+                  #{selectedTicket.id} · {selectedTicket.userName} ({selectedTicket.userEmail})
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedTicket(null)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                aria-label="Close ticket dialog"
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Conversation Log */}
             <div className="p-5 flex-1 overflow-y-auto space-y-4">
               {selectedTicket.messages?.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`p-4 rounded-2xl text-xs sm:text-sm ${
+                  className={`p-4 rounded-xl text-xs sm:text-sm ${
                     msg.sender === 'user'
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 ml-0 mr-8'
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 mr-8'
                       : msg.sender === 'ai_bot'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200 ml-8 mr-0 border border-indigo-200 dark:border-indigo-800'
-                      : 'bg-blue-600 text-white ml-8 mr-0'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ml-8 border border-blue-200 dark:border-blue-900'
+                        : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 ml-8'
                   }`}
                 >
-                  <div className="font-bold mb-1 flex items-center gap-1.5">
+                  <div className="font-semibold mb-1 flex items-center gap-1.5">
                     {msg.sender === 'ai_bot' ? (
                       <>
                         <Bot className="w-3.5 h-3.5" />
@@ -270,42 +258,44 @@ const AdminSupportTicketsScreen = () => {
               ))}
             </div>
 
-            {/* Response Composer */}
-            <div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-500">Compose Official Response</span>
+                <span className="text-xs font-semibold text-slate-500">Compose Official Response</span>
                 <button
                   type="button"
                   onClick={handleAutoSuggest}
-                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Insert AI Suggestion</span>
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Insert Triage Draft</span>
                 </button>
               </div>
 
-              <textarea aria-label="Insert AI Suggestion"
+              <textarea
+                aria-label="Official support response"
                 rows={3}
                 value={replyMessage}
-                onChange={e => setReplyMessage(e.target.value)}
+                onChange={(e) => setReplyMessage(e.target.value)}
                 placeholder="Type resolution details to send to user..."
-                className="w-full p-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+                className="w-full p-3 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
               />
 
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
+                  type="button"
                   onClick={() => setSelectedTicket(null)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                 >
                   Close
                 </button>
                 <button
+                  type="button"
                   onClick={handleSendReply}
                   disabled={!replyMessage.trim()}
-                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 rounded-lg transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Dispatch & Resolve</span>
+                  <span>Dispatch &amp; Resolve</span>
                 </button>
               </div>
             </div>

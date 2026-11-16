@@ -165,26 +165,40 @@ class RankingService {
       const snapshot = await getDocs(q);
       const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
-      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < pageDocs.length; i++) {
-        const doc = pageDocs[i];
-        const data = doc.data();
-        
-        // Batched user lookup (kills N+1)
-        let user = null;
-        if (data.userId && userMap.has(data.userId)) {
-          user = userMap.get(data.userId);
+      if (pageDocs.length > 0) {
+        const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
+        for (let i = 0; i < pageDocs.length; i++) {
+          const data = pageDocs[i].data();
+          const user = data.userId && userMap.has(data.userId) ? userMap.get(data.userId) : null;
+          rankings.push({
+            rank: offset + i + 1,
+            userId: data.userId,
+            user,
+            score: data.score,
+            trend: data.trend ?? null,
+            badge: this._getTier(data.score),
+          });
         }
-
-        rankings.push({
-          rank: offset + i + 1,
-          userId: data.userId,
-          user,
-          score: data.score,
-          trend: data.trend ?? null, // positive = up, negative = down; null = unmeasured
-          badge: this._getTier(data.score),
-        });
+      } else {
+        const orderField = category === 'revenue' ? 'coins' : 'followerCount';
+        const fallbackSnap = await getDocs(
+          query(collection(this.firestore, 'users'), orderBy(orderField, 'desc'), limit(offset + RANKING_CONFIG.PAGE_SIZE + 10))
+        );
+        const fallbackDocs = fallbackSnap.docs.slice(offset, offset + RANKING_CONFIG.PAGE_SIZE);
+        for (let i = 0; i < fallbackDocs.length; i++) {
+          const d = fallbackDocs[i];
+          const u = { id: d.id, ...d.data() };
+          const score = Number(u[orderField] ?? u.xp ?? u.stats?.followers ?? 0);
+          rankings.push({
+            rank: offset + i + 1,
+            userId: d.id,
+            user: u,
+            score,
+            trend: null,
+            badge: this._getTier(score),
+          });
+        }
       }
 
       const visible = rankings.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
@@ -238,26 +252,39 @@ class RankingService {
       const snapshot = await getDocs(q);
       const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
-      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < pageDocs.length; i++) {
-        const doc = pageDocs[i];
-        const data = doc.data();
-        
-        // Batched user lookup (kills N+1)
-        let user = null;
-        if (data.userId && userMap.has(data.userId)) {
-          user = userMap.get(data.userId);
+      if (pageDocs.length > 0) {
+        const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
+        for (let i = 0; i < pageDocs.length; i++) {
+          const data = pageDocs[i].data();
+          const user = data.userId && userMap.has(data.userId) ? userMap.get(data.userId) : null;
+          rankings.push({
+            rank: offset + i + 1,
+            userId: data.userId,
+            user,
+            score: data.score,
+            trend: data.trend ?? null,
+            badge: this._getTier(data.score),
+          });
         }
-
-        rankings.push({
-          rank: offset + i + 1,
-          userId: data.userId,
-          user,
-          score: data.score,
-          trend: data.trend ?? null,
-          badge: this._getTier(data.score),
-        });
+      } else {
+        const fallbackSnap = await getDocs(
+          query(collection(this.firestore, 'users'), orderBy('coins', 'desc'), limit(offset + RANKING_CONFIG.PAGE_SIZE + 10))
+        );
+        const fallbackDocs = fallbackSnap.docs.slice(offset, offset + RANKING_CONFIG.PAGE_SIZE);
+        for (let i = 0; i < fallbackDocs.length; i++) {
+          const d = fallbackDocs[i];
+          const u = { id: d.id, ...d.data() };
+          const score = Number(u.coins ?? u.walletBalance ?? 0);
+          rankings.push({
+            rank: offset + i + 1,
+            userId: d.id,
+            user: u,
+            score,
+            trend: null,
+            badge: this._getTier(score),
+          });
+        }
       }
 
       const visible = rankings.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
@@ -293,27 +320,41 @@ class RankingService {
       const snapshot = await getDocs(q);
       const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
-      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < pageDocs.length; i++) {
-        const doc = pageDocs[i];
-        const data = doc.data();
-        
-        // Batched user lookup (kills N+1)
-        let user = null;
-        if (data.userId && userMap.has(data.userId)) {
-          user = userMap.get(data.userId);
+      if (pageDocs.length > 0) {
+        const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
+        for (let i = 0; i < pageDocs.length; i++) {
+          const data = pageDocs[i].data();
+          const user = data.userId && userMap.has(data.userId) ? userMap.get(data.userId) : null;
+          rankings.push({
+            rank: offset + i + 1,
+            userId: data.userId,
+            user,
+            score: data.score,
+            trend: data.trend ?? null,
+            badge: this._getTier(data.score),
+            badges: this._getBadges(data.badges || []),
+          });
         }
-
-        rankings.push({
-          rank: offset + i + 1,
-          userId: data.userId,
-          user,
-          score: data.score,
-          trend: data.trend ?? null,
-          badge: this._getTier(data.score),
-          badges: this._getBadges(data.badges || []),
-        });
+      } else {
+        const fallbackSnap = await getDocs(
+          query(collection(this.firestore, 'users'), orderBy('xp', 'desc'), limit(offset + RANKING_CONFIG.PAGE_SIZE + 10))
+        );
+        const fallbackDocs = fallbackSnap.docs.slice(offset, offset + RANKING_CONFIG.PAGE_SIZE);
+        for (let i = 0; i < fallbackDocs.length; i++) {
+          const d = fallbackDocs[i];
+          const u = { id: d.id, ...d.data() };
+          const score = Number(u.xp ?? u.level ?? 0);
+          rankings.push({
+            rank: offset + i + 1,
+            userId: d.id,
+            user: u,
+            score,
+            trend: null,
+            badge: this._getTier(score),
+            badges: this._getBadges(u.badges || []),
+          });
+        }
       }
 
       const visible = rankings.filter((r) => !this._isHidden(hidden, r.userId, viewerId));
@@ -349,17 +390,34 @@ class RankingService {
       const pageDocs = snapshot.docs.slice(offset);
       const rankings = [];
 
-      for (let i = 0; i < pageDocs.length; i++) {
-        const doc = pageDocs[i];
-        const data = doc.data();
-        
-        rankings.push({
-          rank: offset + i + 1,
-          communityId: doc.id,
-          community: data,
-          score: data.score,
-          trend: data.trend ?? null,
-        });
+      if (pageDocs.length > 0) {
+        for (let i = 0; i < pageDocs.length; i++) {
+          const d = pageDocs[i];
+          const data = d.data();
+          rankings.push({
+            rank: offset + i + 1,
+            communityId: d.id,
+            community: data,
+            score: data.score,
+            trend: data.trend ?? null,
+          });
+        }
+      } else {
+        const commSnap = await getDocs(
+          query(collection(this.firestore, 'communities'), orderBy('membersCount', 'desc'), limit(offset + RANKING_CONFIG.PAGE_SIZE))
+        );
+        const commDocs = commSnap.docs.slice(offset);
+        for (let i = 0; i < commDocs.length; i++) {
+          const d = commDocs[i];
+          const data = d.data();
+          rankings.push({
+            rank: offset + i + 1,
+            communityId: d.id,
+            community: { id: d.id, ...data },
+            score: Number(data.membersCount ?? data.postsCount ?? 0),
+            trend: null,
+          });
+        }
       }
 
       this._setCache(cacheKey, rankings);
@@ -428,26 +486,38 @@ class RankingService {
       const snapshot = await getDocs(q);
       const pageDocs = snapshot.docs.slice(offset);
       const rising = [];
-      const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
 
-      for (let i = 0; i < pageDocs.length; i++) {
-        const doc = pageDocs[i];
-        const data = doc.data();
-        
-        // Batched user lookup (kills N+1)
-        let user = null;
-        if (data.userId && userMap.has(data.userId)) {
-          user = userMap.get(data.userId);
+      if (pageDocs.length > 0) {
+        const userMap = await this._fetchUsersByIds(pageDocs.map((d) => d.data().userId));
+        for (let i = 0; i < pageDocs.length; i++) {
+          const data = pageDocs[i].data();
+          const user = data.userId && userMap.has(data.userId) ? userMap.get(data.userId) : null;
+          rising.push({
+            rank: offset + i + 1,
+            userId: data.userId,
+            user,
+            growthRate: data.growthRate,
+            previousRank: data.previousRank,
+            currentRank: data.currentRank,
+          });
         }
-
-        rising.push({
-          rank: offset + i + 1,
-          userId: data.userId,
-          user,
-          growthRate: data.growthRate,
-          previousRank: data.previousRank,
-          currentRank: data.currentRank,
-        });
+      } else {
+        const fallbackSnap = await getDocs(
+          query(collection(this.firestore, 'users'), orderBy('createdAt', 'desc'), limit(offset + RANKING_CONFIG.PAGE_SIZE))
+        );
+        const fallbackDocs = fallbackSnap.docs.slice(offset);
+        for (let i = 0; i < fallbackDocs.length; i++) {
+          const d = fallbackDocs[i];
+          const u = { id: d.id, ...d.data() };
+          rising.push({
+            rank: offset + i + 1,
+            userId: d.id,
+            user: u,
+            growthRate: null,
+            previousRank: null,
+            currentRank: offset + i + 1,
+          });
+        }
       }
 
       const visible = rising.filter((r) => !this._isHidden(hidden, r.userId, viewerId));

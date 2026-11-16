@@ -45,9 +45,10 @@ describe('comment reaction counts resolve their sharded counter (N439)', () => {
     expect(calls.length).toBeGreaterThanOrEqual(4);
   });
 
-  test('countersManager exposes a batched applyAll (not one read per item)', () => {
+  test('countersManager exposes a batched applyAll (not one sequential read per item)', () => {
     expect(countersSrc).toMatch(/async applyAll\(\{ items, collection/);
-    expect(countersSrc).toMatch(/m\.getAll\(\.\.\.refs\)/);
+    expect(countersSrc).toMatch(/Promise\.all\(refs\.map\(/);
+    expect(countersSrc).toMatch(/m\.getDoc\(/);
     // Bounded refs per batched read.
     expect(countersSrc).toMatch(/refsPerItem = fields\.length \* this\.shards/);
   });
@@ -59,12 +60,10 @@ describe('countersManager.applyAll overlays shard sums', () => {
     mgr._firestore = {};
     mgr._methods = {
       doc: (_fs, collection, id) => ({ path: `${collection}/${id}` }),
-      getAll: async (...refs) =>
-        refs.map((r) =>
-          shardStore.has(r.path)
-            ? { exists: () => true, data: () => ({ value: shardStore.get(r.path) }) }
-            : { exists: () => false }
-        ),
+      getDoc: async (r) =>
+        shardStore.has(r.path)
+          ? { exists: () => true, data: () => ({ value: shardStore.get(r.path) }) }
+          : { exists: () => false },
     };
     return mgr;
   };

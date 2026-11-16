@@ -2,7 +2,7 @@
 //
 // Global · Contextual · Intelligent · Full Canvas Manipulation · Multi-Photo Filmstrip · 10-Tool Grid
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -156,6 +156,15 @@ export default function ThumbnailDesignerScreen() {
   // Drawing state
   const [drawColor, setDrawColor] = useState(tokens.color.brand.violet);
   const [drawSize, setDrawSize] = useState(8);
+  const drawCanvasRef = useRef(null);
+  const isDrawingRef = useRef(false);
+  const drawSnapshotsRef = useRef([]);
+
+  // Layer pointer dragging state
+  const draggingLayerRef = useRef(null);
+
+  // Real RGB Histogram computed from canvas pixels
+  const [histogram, setHistogram] = useState({ r: [], g: [], b: [], unavailable: false });
 
   // Crop aspect
   const [cropAspect, setCropAspect] = useState('16:9'); // '16:9' | '9:16' | '1:1' | '4:3' | 'free'
@@ -194,6 +203,52 @@ export default function ThumbnailDesignerScreen() {
     const adjStyle = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%) saturate(${adjustments.saturation}%) blur(${adjustments.blur}px)`;
     return `${adjStyle} ${presetStyle}`.trim();
   }, [adjustments, activeFilter]);
+
+  // Compute live 32-bin RGB histogram from rendered pixels whenever photo or adjustments change
+  useEffect(() => {
+    if (!currentPhoto?.url) return undefined;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const w = 128;
+        const h = 72;
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        if (!ctx) return;
+        if (ctx.filter !== undefined) ctx.filter = computedFilter;
+        ctx.drawImage(img, 0, 0, w, h);
+        const { data } = ctx.getImageData(0, 0, w, h);
+        const bins = 32;
+        const rHist = new Array(bins).fill(0);
+        const gHist = new Array(bins).fill(0);
+        const bHist = new Array(bins).fill(0);
+        for (let i = 0; i < data.length; i += 4) {
+          rHist[Math.min(bins - 1, Math.floor((data[i] / 256) * bins))] += 1;
+          gHist[Math.min(bins - 1, Math.floor((data[i + 1] / 256) * bins))] += 1;
+          bHist[Math.min(bins - 1, Math.floor((data[i + 2] / 256) * bins))] += 1;
+        }
+        const maxPeak = Math.max(1, ...rHist, ...gHist, ...bHist);
+        setHistogram({
+          r: rHist.map((v) => v / maxPeak),
+          g: gHist.map((v) => v / maxPeak),
+          b: bHist.map((v) => v / maxPeak),
+          unavailable: false,
+        });
+      } catch {
+        setHistogram({ r: [], g: [], b: [], unavailable: true });
+      }
+    };
+    img.onerror = () => {
+      if (!cancelled) setHistogram({ r: [], g: [], b: [], unavailable: true });
+    };
+    img.src = currentPhoto.url;
+    return () => { cancelled = true; };
+  }, [currentPhoto?.url, computedFilter]);
 
   // Push Snapshot
   const pushState = useCallback((newAdj, newFilter, newLayers) => {
@@ -344,6 +399,11 @@ export default function ThumbnailDesignerScreen() {
           ctx.strokeRect(36, 36, exportW - 72, exportH - 72);
         }
 
+        // Freehand Drawing Canvas composite
+        if (drawCanvasRef.current) {
+          ctx.drawImage(drawCanvasRef.current, 0, 0, exportW, exportH);
+        }
+
         // Layers
         layers.filter((l) => l.visible).forEach((layer) => {
           const lx = (layer.x / 100) * exportW;
@@ -475,37 +535,38 @@ export default function ThumbnailDesignerScreen() {
 
         {/* Right: Color Histogram + Export Button */}
         <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Histogram Visualization (Mini Color Curve Graph) */}
+          {/* Live Pixel RGB Histogram */}
           <div
-            className="w-14 sm:w-18 h-7 sm:h-8 rounded-lg bg-black/50 border border-white/[0.1] p-1 flex items-end justify-between overflow-hidden shadow-inner"
-            title="RGB Histogram"
+            className="w-16 sm:w-20 h-7 sm:h-8 rounded-lg bg-black/50 border border-white/[0.1] p-1 flex items-center justify-center overflow-hidden shadow-inner"
+            title={histogram.unavailable ? 'Histogram unavailable for cross-origin asset' : 'Live RGB Histogram'}
           >
-            <svg className="w-full h-full" viewBox="0 0 100 40" preserveAspectRatio="none">
-              {/* Red Channel Curve */}
-              <path
-                d="M 0 38 Q 20 5, 45 22 T 80 10 T 100 35"
-                fill="none"
-                stroke="#EF4444"
-                strokeWidth="1.5"
-                opacity="0.85"
-              />
-              {/* Green Channel Curve */}
-              <path
-                d="M 0 35 Q 25 18, 50 8 T 75 25 T 100 38"
-                fill="none"
-                stroke="#10B981"
-                strokeWidth="1.5"
-                opacity="0.85"
-              />
-              {/* Blue / Purple Channel Curve */}
-              <path
-                d="M 0 39 Q 30 10, 55 14 T 85 5 T 100 30"
-                fill="none"
-                stroke={tokens.color.brand.violet}
-                strokeWidth="1.5"
-                opacity="0.9"
-              />
-            </svg>
+            {histogram.unavailable || histogram.r.length === 0 ? (
+              <span className="text-[9px] font-mono text-white/40">RGB N/A</span>
+            ) : (
+              <svg className="w-full h-full" viewBox="0 0 100 40" preserveAspectRatio="none">
+                {(['r', 'g', 'b']).map((ch) => {
+                  const pts = histogram[ch]
+                    .map((val, idx) => {
+                      const px = (idx / Math.max(1, histogram[ch].length - 1)) * 100;
+                      const py = 39 - Math.min(38, val * 36);
+                      return `${px.toFixed(1)},${py.toFixed(1)}`;
+                    })
+                    .join(' ');
+                  const stroke =
+                    ch === 'r' ? '#EF4444' : ch === 'g' ? '#10B981' : tokens.color.brand.blue;
+                  return (
+                    <polyline
+                      key={ch}
+                      points={pts}
+                      fill="none"
+                      stroke={stroke}
+                      strokeWidth="1.5"
+                      opacity="0.88"
+                    />
+                  );
+                })}
+              </svg>
+            )}
           </div>
 
           {/* Glowing Purple Export Button */}
@@ -534,15 +595,34 @@ export default function ThumbnailDesignerScreen() {
         <div
           ref={compareFrameRef}
           onPointerDown={isComparing ? () => setDraggingCompare(true) : undefined}
-          onPointerMove={isComparing ? (e) => {
-            if (!draggingCompare) return;
-            const rect = compareFrameRef.current?.getBoundingClientRect();
-            if (!rect?.width) return;
-            const pct = ((e.clientX - rect.left) / rect.width) * 100;
-            setCompareSlider(Math.min(100, Math.max(0, pct)));
-          } : undefined}
-          onPointerUp={isComparing ? () => setDraggingCompare(false) : undefined}
-          onPointerLeave={isComparing ? () => setDraggingCompare(false) : undefined}
+          onPointerMove={(e) => {
+            if (isComparing && draggingCompare) {
+              const rect = compareFrameRef.current?.getBoundingClientRect();
+              if (!rect?.width) return;
+              const pct = ((e.clientX - rect.left) / rect.width) * 100;
+              setCompareSlider(Math.min(100, Math.max(0, pct)));
+            } else if (draggingLayerRef.current) {
+              const rect = compareFrameRef.current?.getBoundingClientRect();
+              if (!rect?.width || !rect?.height) return;
+              const xPct = Math.min(95, Math.max(5, ((e.clientX - rect.left) / rect.width) * 100));
+              const yPct = Math.min(95, Math.max(5, ((e.clientY - rect.top) / rect.height) * 100));
+              const dragId = draggingLayerRef.current;
+              setLayers((prev) =>
+                prev.map((l) => (l.id === dragId ? { ...l, x: Number(xPct.toFixed(1)), y: Number(yPct.toFixed(1)) } : l))
+              );
+            }
+          }}
+          onPointerUp={() => {
+            if (draggingCompare) setDraggingCompare(false);
+            if (draggingLayerRef.current) {
+              draggingLayerRef.current = null;
+              pushState(adjustments, activeFilter, layers);
+            }
+          }}
+          onPointerLeave={() => {
+            if (draggingCompare) setDraggingCompare(false);
+            draggingLayerRef.current = null;
+          }}
           className={cn(
             'relative w-full max-w-3xl aspect-[16/10] sm:aspect-[16/9] rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.85)] border border-white/[0.12] bg-black transition-transform duration-200',
             cropAspect === '1:1' && 'max-w-md aspect-square',
@@ -600,7 +680,48 @@ export default function ThumbnailDesignerScreen() {
             <div className="absolute inset-0 border-8 border-[#f4eedb] shadow-inner pointer-events-none" />
           )}
 
-          {/* Dynamic Layers (Text & Stickers) */}
+          {/* Freehand Drawing Overlay Canvas */}
+          <canvas
+            ref={drawCanvasRef}
+            width={1280}
+            height={720}
+            onPointerDown={(e) => {
+              if (activeTool !== 'draw') return;
+              const canvas = drawCanvasRef.current;
+              const ctx = canvas?.getContext('2d');
+              if (!canvas || !ctx) return;
+              drawSnapshotsRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+              const rect = canvas.getBoundingClientRect();
+              const cx = ((e.clientX - rect.left) / rect.width) * canvas.width;
+              const cy = ((e.clientY - rect.top) / rect.height) * canvas.height;
+              isDrawingRef.current = true;
+              ctx.strokeStyle = drawColor;
+              ctx.lineWidth = drawSize * 2;
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+            }}
+            onPointerMove={(e) => {
+              if (activeTool !== 'draw' || !isDrawingRef.current) return;
+              const canvas = drawCanvasRef.current;
+              const ctx = canvas?.getContext('2d');
+              if (!canvas || !ctx) return;
+              const rect = canvas.getBoundingClientRect();
+              const cx = ((e.clientX - rect.left) / rect.width) * canvas.width;
+              const cy = ((e.clientY - rect.top) / rect.height) * canvas.height;
+              ctx.lineTo(cx, cy);
+              ctx.stroke();
+            }}
+            onPointerUp={() => { isDrawingRef.current = false; }}
+            onPointerLeave={() => { isDrawingRef.current = false; }}
+            className={cn(
+              'absolute inset-0 w-full h-full z-10 touch-none',
+              activeTool === 'draw' ? 'cursor-crosshair pointer-events-auto' : 'pointer-events-none'
+            )}
+          />
+
+          {/* Dynamic Layers (Text & Stickers) — pointer-draggable */}
           {layers
             .filter((l) => l.visible)
             .map((layer) => {
@@ -608,8 +729,17 @@ export default function ThumbnailDesignerScreen() {
                 return (
                   <div
                     key={layer.id}
+                    role="button"
+                    tabIndex={0}
+                    onPointerDown={(e) => {
+                      if (layer.locked || activeTool === 'draw') return;
+                      e.stopPropagation();
+                      setSelectedLayerId(layer.id);
+                      draggingLayerRef.current = layer.id;
+                    }}
                     onClick={() => setSelectedLayerId(layer.id)}
-                    className="absolute cursor-move z-10 select-none group"
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedLayerId(layer.id); }}
+                    className="absolute cursor-move z-10 select-none group touch-none"
                     style={{
                       left: `${layer.x}%`,
                       top: `${layer.y}%`,
@@ -642,8 +772,17 @@ export default function ThumbnailDesignerScreen() {
                 return (
                   <div
                     key={layer.id}
+                    role="button"
+                    tabIndex={0}
+                    onPointerDown={(e) => {
+                      if (layer.locked || activeTool === 'draw') return;
+                      e.stopPropagation();
+                      setSelectedLayerId(layer.id);
+                      draggingLayerRef.current = layer.id;
+                    }}
                     onClick={() => setSelectedLayerId(layer.id)}
-                    className="absolute cursor-move z-10 select-none"
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedLayerId(layer.id); }}
+                    className="absolute cursor-move z-10 select-none touch-none"
                     style={{
                       left: `${layer.x}%`,
                       top: `${layer.y}%`,
@@ -997,20 +1136,54 @@ export default function ThumbnailDesignerScreen() {
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <input aria-label="Enter typography text..."
                       type="text"
-                      defaultValue="ARVDOUL"
+                      value={layers.find((l) => l.id === selectedLayerId && l.type === 'text')?.text || ''}
                       onChange={(e) => {
                         const val = e.target.value;
                         setLayers((prev) =>
                           prev.map((l) => (l.id === selectedLayerId ? { ...l, text: val } : l))
                         );
                       }}
-                      placeholder="Enter typography text..."
-                      className="flex-1 bg-white/[0.06] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-purple-500"
+                      placeholder="Select a text layer or click + Add Text"
+                      className="flex-1 min-w-[160px] bg-white/[0.06] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-purple-500"
                     />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-white/70">Size</span>
+                      <input
+                        aria-label="Text Font Size"
+                        type="range"
+                        min="20"
+                        max="96"
+                        value={layers.find((l) => l.id === selectedLayerId && l.type === 'text')?.fontSize || 54}
+                        onChange={(e) => {
+                          const size = Number(e.target.value);
+                          setLayers((prev) =>
+                            prev.map((l) => (l.id === selectedLayerId && l.type === 'text' ? { ...l, fontSize: size } : l))
+                          );
+                        }}
+                        className="w-20 accent-purple-500 cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {['#FFFFFF', '#000000', '#F59E0B', '#EF4444', '#10B981', tokens.color.brand.violet].map((clr) => (
+                        <button
+                          type="button"
+                          key={clr}
+                          aria-label={`Text color ${clr}`}
+                          onClick={() => {
+                            setLayers((prev) =>
+                              prev.map((l) => (l.id === selectedLayerId && l.type === 'text' ? { ...l, color: clr } : l))
+                            );
+                          }}
+                          className="w-5 h-5 rounded-full border border-white/30 cursor-pointer"
+                          style={{ backgroundColor: clr }}
+                        />
+                      ))}
+                    </div>
                     <button
+                      type="button"
                       onClick={() => {
                         const newLayer = {
                           id: `layer-text-${Date.now()}`,
@@ -1028,9 +1201,9 @@ export default function ThumbnailDesignerScreen() {
                         };
                         setLayers((prev) => [newLayer, ...prev]);
                         setSelectedLayerId(newLayer.id);
-                        toast.success('Text layer added');
+                        toast.success('Text layer added — drag it directly on canvas');
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition"
+                      className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition cursor-pointer"
                     >
                       + Add Text
                     </button>
@@ -1040,15 +1213,17 @@ export default function ThumbnailDesignerScreen() {
 
               {/* Drawing Tool */}
               {activeTool === 'draw' && (
-                <div className="flex items-center gap-4 text-xs font-semibold">
+                <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
                   <div className="flex items-center gap-2">
                     <span>Color:</span>
                     {[tokens.color.brand.violet, '#EF4444', '#10B981', '#3B82F6', '#F59E0B', '#FFFFFF'].map((color) => (
                       <button
+                        type="button"
                         key={color}
+                        aria-label={`Brush color ${color}`}
                         onClick={() => setDrawColor(color)}
                         className={cn(
-                          'w-6 h-6 rounded-full border-2 transition',
+                          'w-6 h-6 rounded-full border-2 transition cursor-pointer',
                           drawColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'
                         )}
                         style={{ backgroundColor: color }}
@@ -1066,6 +1241,35 @@ export default function ThumbnailDesignerScreen() {
                       onChange={(e) => setDrawSize(Number(e.target.value))}
                       className="accent-purple-500"
                     />
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const canvas = drawCanvasRef.current;
+                        const ctx = canvas?.getContext('2d');
+                        const snap = drawSnapshotsRef.current.pop();
+                        if (ctx && snap) ctx.putImageData(snap, 0, 0);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-xs cursor-pointer"
+                    >
+                      Undo Stroke
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const canvas = drawCanvasRef.current;
+                        const ctx = canvas?.getContext('2d');
+                        if (canvas && ctx) {
+                          drawSnapshotsRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+                          ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }
+                      }}
+                      className="px-3 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs cursor-pointer"
+                    >
+                      Clear Drawing
+                    </button>
                   </div>
                 </div>
               )}
@@ -1252,14 +1456,16 @@ export default function ThumbnailDesignerScreen() {
           const isActive = p.id === activePhotoId;
 
           return (
-            <div
+            <button
+              type="button"
               key={p.id}
               onClick={() => {
                 setActivePhotoId(p.id);
                 toast.info(`Switched to Image ${p.num}`);
               }}
+              aria-label={`Select Canvas ${p.name}`}
               className={cn(
-                'relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 shrink-0 group',
+                'relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 shrink-0 group text-left',
                 isActive
                   ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-[#03071B] shadow-[0_0_16px_rgba(139,30,243,0.7)] scale-105'
                   : 'opacity-70 hover:opacity-100 border border-white/[0.1]'
@@ -1267,7 +1473,7 @@ export default function ThumbnailDesignerScreen() {
             >
               <LazyImage src={p.url} alt={p.name} className="w-full h-full object-cover" />
 
-              {/* Number Badge (1, 2, 3...) in top left corner as shown in Image 3 */}
+              {/* Number Badge (1, 2, 3...) in top left corner */}
               <div
                 className={cn(
                   'absolute top-1 left-1 w-4 h-4 rounded-md flex items-center justify-center text-[10px] font-black shadow-md',
@@ -1276,7 +1482,7 @@ export default function ThumbnailDesignerScreen() {
               >
                 {p.num}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -1434,7 +1640,10 @@ export default function ThumbnailDesignerScreen() {
                 {layers.map((l) => (
                   <div
                     key={l.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedLayerId(l.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedLayerId(l.id); }}
                     className={cn(
                       'p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition',
                       selectedLayerId === l.id
@@ -1453,6 +1662,8 @@ export default function ThumbnailDesignerScreen() {
 
                     <div className="flex items-center gap-1 text-slate-400">
                       <button
+                        type="button"
+                        aria-label={l.visible ? `Hide ${l.name}` : `Show ${l.name}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           setLayers((prev) =>
@@ -1465,6 +1676,8 @@ export default function ThumbnailDesignerScreen() {
                       </button>
                       {l.type !== 'image' && (
                         <button
+                          type="button"
+                          aria-label={`Delete ${l.name}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setLayers((prev) => prev.filter((item) => item.id !== l.id));

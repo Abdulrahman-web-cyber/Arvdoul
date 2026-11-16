@@ -724,8 +724,8 @@ export default function ChatScreen() {
   // States
   if (loading) {
     return (
-      <div className={cn('min-h-screen pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
-        <div className="max-w-3xl mx-auto px-4 pt-6 space-y-4">
+      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+        <div className="max-w-4xl mx-auto px-4 pt-6 space-y-4">
           <Skeleton className="h-12 w-full rounded-2xl" />
           <Skeleton className="h-24 w-2/3 rounded-2xl" />
           <Skeleton className="h-24 w-1/2 rounded-2xl ml-auto" />
@@ -737,8 +737,8 @@ export default function ChatScreen() {
 
   if (loadError && !conversation) {
     return (
-      <div className={cn('min-h-screen pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
-        <div className="max-w-3xl mx-auto px-4 pt-6">
+      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+        <div className="max-w-4xl mx-auto px-4 pt-6">
           <ErrorState title="Could not open conversation" message={loadError} onRetry={() => { setLoadError(null); setLoading(true); loadMessages().finally(() => setLoading(false)); }} />
         </div>
       </div>
@@ -746,10 +746,14 @@ export default function ChatScreen() {
   }
 
   return (
-    <div className={cn('flex flex-col h-screen', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+    <div className={cn('flex flex-col h-[100dvh] w-full max-w-5xl mx-auto lg:py-4', isDark ? 'text-white' : 'text-gray-900')}>
+      <div className={cn(
+        'flex flex-col flex-1 min-h-0 w-full overflow-hidden lg:rounded-2xl lg:border',
+        isDark ? 'bg-[#0B0F17] lg:border-white/10' : 'bg-gray-50 lg:border-slate-200 lg:shadow-sm'
+      )}>
       {/* Header */}
       <header className={cn('sticky top-0 z-20 backdrop-blur-xl border-b', isDark ? 'bg-[#0B0F17]/85 border-white/10' : 'bg-white/85 border-gray-200')}>
-        <div className="max-w-3xl mx-auto px-3 h-14 flex items-center gap-3">
+        <div className="max-w-4xl mx-auto px-3 h-14 flex items-center gap-3">
           <button
             onClick={() => navigate('/messages')}
             aria-label="Back to conversations"
@@ -1144,7 +1148,7 @@ export default function ChatScreen() {
 
       {/* Reply / editing banner */}
       {replyTo && (
-        <div className={cn('max-w-3xl mx-auto w-full px-3')}>
+        <div className={cn('max-w-4xl mx-auto w-full px-3')}>
           <div className={cn('flex items-center gap-2 rounded-t-xl border-l-2 border-purple-500 px-3 py-2', isDark ? 'bg-white/5' : 'bg-slate-100')}>
             <Reply className="w-4 h-4 text-purple-400 shrink-0" aria-hidden="true" />
             <div className="flex-1 min-w-0">
@@ -1165,13 +1169,13 @@ export default function ChatScreen() {
 
       {/* Typing indicator */}
       {typingText && !loading && (
-        <div className="max-w-3xl mx-auto w-full px-4 pb-1 text-[11px] text-purple-400">
+        <div className="max-w-4xl mx-auto w-full px-4 pb-1 text-[11px] text-purple-400">
           {typingText}
         </div>
       )}
 
       {/* Input */}
-      <div className="max-w-3xl mx-auto w-full">
+      <div className="max-w-4xl mx-auto w-full">
         <MessageInput
           onSendMessage={handleSendMessage}
           onSendMedia={handleSendMedia}
@@ -1221,6 +1225,7 @@ export default function ChatScreen() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

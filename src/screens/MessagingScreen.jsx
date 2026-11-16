@@ -243,7 +243,7 @@ export default function MessagingScreen() {
       </div>
 
       {/* Main Screen Content */}
-      <div className="relative z-10 max-w-3xl w-full mx-auto px-4 pt-3">
+      <div className="relative z-10 max-w-5xl w-full mx-auto px-4 sm:px-6 pt-3">
         {/* Top Header Bar */}
         <header className="flex items-center justify-between py-2">
           {/* Left: User Avatar with Luminous Gradient Ring + Brand Title */}
@@ -269,7 +269,6 @@ export default function MessagingScreen() {
                 <h1 className={`font-extrabold text-xl tracking-tight font-display ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   Messages
                 </h1>
-                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
               </div>
               <p className={`text-[11px] font-medium ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
                 Connect <span className="text-purple-500">•</span> Share <span className="text-blue-500">•</span> Grow
@@ -280,6 +279,8 @@ export default function MessagingScreen() {
           {/* Right Action Icons: Search, AI Sparkles, New Chat + */}
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              aria-label="Focus message search"
               onClick={() => {
                 const searchEl = document.getElementById('message-search-input');
                 searchEl?.focus();
@@ -295,19 +296,23 @@ export default function MessagingScreen() {
             </button>
 
             <button
+              type="button"
+              aria-label="Open AI Studio"
               onClick={() => navigate('/ai-studio')}
-              className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600/80 to-blue-600/80 border border-purple-400/30 hover:scale-105 flex items-center justify-center text-white transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+              className="w-9 h-9 rounded-full bg-arvdoul-gradient border border-white/20 hover:scale-105 flex items-center justify-center text-white transition-all shadow-sm"
               title="AI Assistant"
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
             </button>
 
             <button
+              type="button"
+              aria-label="New message"
               onClick={() => {
                 navigate('/messages/new');
                 toast.success('Compose new conversation');
               }}
-              className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white flex items-center justify-center shadow-lg shadow-purple-500/25 transition-all hover:scale-105"
+              className="w-9 h-9 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center shadow-lg transition-all hover:scale-105"
               title="New Message"
             >
               <Plus className="w-5 h-5" />
@@ -388,10 +393,11 @@ export default function MessagingScreen() {
             {/* Horizontal Pinned Stories/Conversations Carousel */}
             <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-2">
               {pinnedItems.map((item) => (
-                <div
+                <button
                   key={item.id}
+                  type="button"
                   onClick={() => navigate(`/messages/${item.id}`)}
-                  className={`w-24 shrink-0 p-2.5 rounded-2xl border transition-all flex flex-col items-center text-center cursor-pointer group shadow-sm relative ${
+                  className={`w-24 shrink-0 p-2.5 rounded-2xl border transition-all flex flex-col items-center text-center cursor-pointer group shadow-sm relative focus:outline-none focus:ring-2 focus:ring-arvdoul-purple ${
                     isDark
                       ? 'bg-[#090e29]/80 border-white/10 hover:border-purple-500/40 hover:bg-[#0d143a]/90'
                       : 'bg-white border-slate-200 hover:border-purple-500/40 hover:bg-purple-50/40'
@@ -427,11 +433,11 @@ export default function MessagingScreen() {
 
                   {/* Unread badge pill if present */}
                   {item.unread > 0 && (
-                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.2 rounded-full bg-purple-600 text-white text-[9px] font-black shadow-md">
+                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.2 rounded-full bg-purple-600 text-white text-[9px] font-black tabular-nums shadow-md">
                       {item.unread}
                     </span>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -531,18 +537,19 @@ export default function MessagingScreen() {
           {filteredConversations.map((item) => (
             <div
               key={item.id}
-              onClick={() => navigate(`/messages/${item.id}`)}
-              className={`p-3 rounded-2xl border transition-all flex items-center justify-between cursor-pointer group shadow-sm ${
+              className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 group shadow-sm ${
                 isDark
                   ? 'bg-[#090e29]/75 border-white/10 hover:border-purple-500/40 hover:bg-[#0d143a]/90'
                   : 'bg-white border-slate-200 hover:border-purple-500/40 hover:bg-purple-50/30'
               }`}
             >
-              {/* Left: Avatar with optional active dot + Text content */}
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                {/* Active status dot — only meaningful for a 1:1 thread, and
-                    only when the counterpart is actually online (real
-                    user_presence). A group row never shows a presence dot. */}
+              {/* Left: Semantic conversation opener button */}
+              <button
+                type="button"
+                onClick={() => navigate(`/messages/${item.id}`)}
+                className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              >
+                {/* Active status dot — only meaningful for a 1:1 thread */}
                 {item.type === 'direct' && item.activeDot && (
                   <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_6px_#3b82f6] shrink-0" aria-label="Online" />
                 )}
@@ -582,14 +589,13 @@ export default function MessagingScreen() {
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
 
-              {/* Right: Time, Attachment Badge, Mute Icon, Unread Badge, Pin */}
-              <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
-                <span className={`text-[11px] font-medium ${isDark ? 'text-gray-400' : 'text-slate-400'}`}>{item.time}</span>
+              {/* Right: Time, Attachment Badge, Mute Icon, Pin, Unread Badge */}
+              <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
+                <span className={`text-[11px] font-medium tabular-nums ${isDark ? 'text-gray-400' : 'text-slate-400'}`}>{item.time}</span>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Attachment kind from the real last message */}
                   {item.attachmentType && (
                     <span className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-500/10 text-slate-500 dark:text-slate-300">
                       {item.attachmentType === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
@@ -600,24 +606,22 @@ export default function MessagingScreen() {
                     </span>
                   )}
 
-                  {/* Muted icon */}
                   {item.muted && (
-                    <BellOff className="w-3.5 h-3.5 text-gray-400" />
+                    <BellOff className="w-3.5 h-3.5 text-gray-400" aria-label="Muted" />
                   )}
 
-                  {/* Pin toggle — real pinnedBy membership */}
+                  {/* Pin toggle — sibling button, never nested */}
                   <button
                     type="button"
                     aria-label={item.pinned ? 'Unpin conversation' : 'Pin conversation'}
-                    onClick={(e) => { e.stopPropagation(); handleTogglePin(item.id, item.pinned); }}
-                    className={`p-0.5 rounded transition-colors ${item.pinned ? 'text-purple-500' : 'text-gray-400 hover:text-purple-500'}`}
+                    onClick={() => handleTogglePin(item.id, item.pinned)}
+                    className={`p-1 rounded transition-colors ${item.pinned ? 'text-purple-500' : 'text-gray-400 hover:text-purple-500'}`}
                   >
                     <Pin className={`w-3.5 h-3.5 ${item.pinned ? 'rotate-45' : ''}`} />
                   </button>
 
-                  {/* Unread Counter Pill */}
                   {item.unread > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[11px] font-black shadow-[0_0_10px_rgba(168,85,247,0.4)]">
+                    <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[11px] font-black tabular-nums shadow-[0_0_10px_rgba(168,85,247,0.4)]">
                       {item.unread}
                     </span>
                   )}
@@ -630,11 +634,13 @@ export default function MessagingScreen() {
 
       {/* Floating Action Button (FAB) for New Conversation */}
       <button
+        type="button"
+        aria-label="Compose new message"
         onClick={() => {
           navigate('/messages/new');
           toast.success('Compose a new message');
         }}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.6)] hover:scale-110 transition-transform active:scale-95"
+        className="fixed right-5 bottom-20 lg:bottom-8 z-40 w-14 h-14 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.6)] hover:scale-110 transition-transform active:scale-95"
         title="Compose New Message"
       >
         <MessageSquare className="w-6 h-6 fill-white/20" />

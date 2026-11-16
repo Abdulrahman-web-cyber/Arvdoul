@@ -156,6 +156,7 @@ const VideosScreen = () => {
       {/* Floating View Switcher Button (Feed / Grid toggle) */}
       <div className="absolute top-4 left-4 z-40 flex items-center gap-2">
         <button
+          type="button"
           onClick={() => setViewMode(prev => prev === 'feed' ? 'grid' : 'feed')}
           className="px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105"
           style={{
@@ -179,6 +180,7 @@ const VideosScreen = () => {
         </button>
 
         <button
+          type="button"
           onClick={() => navigate('/reels')}
           className="px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400 border-pink-500/30"
           title="Open Fullscreen Reels"
@@ -272,10 +274,11 @@ const GridView = memo(({
           ].map(tab => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => onFeedTypeChange?.(tab.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 feedType === tab.id
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                  ? 'bg-arvdoul-gradient text-white shadow-md'
                   : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
               }`}
             >
@@ -298,17 +301,18 @@ const GridView = memo(({
           }
         />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
           {videos.map((video, index) => (
-            <motion.div
+            <motion.button
               key={video.id}
+              type="button"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...spring.card, delay: index * 0.04 }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onVideoClick(video, index)}
-              className="relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-gray-900"
+              className="w-full text-left relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-gray-900 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
             >
               <LazyImage
                 src={video.thumbnailUrl || video.thumbnail || '/assets/default-profile.png'}
@@ -325,7 +329,7 @@ const GridView = memo(({
                 <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-black text-cyan-300 border border-white/10 uppercase">
                   {video.quality || '1080p'}
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white/90 border border-white/10 font-mono">
+                <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white/90 border border-white/10 font-mono tabular-nums">
                   {video.duration ? `${video.duration}s` : '0:30'}
                 </span>
               </div>
@@ -354,13 +358,13 @@ const GridView = memo(({
                   {video.title || 'Untitled Story'}
                 </p>
 
-                <div className="flex items-center gap-2 text-[11px] text-white/70 font-medium">
+                <div className="flex items-center gap-2 text-[11px] text-white/70 font-medium tabular-nums">
                   <span>{video.likesFormatted || (video.likes == null ? '—' : video.likes.toLocaleString())} likes</span>
                   <span>•</span>
                   <span>{video.views == null ? '—' : video.views.toLocaleString()} views</span>
                 </div>
               </div>
-            </motion.div>
+            </motion.button>
           ))}
         </div>
       )}

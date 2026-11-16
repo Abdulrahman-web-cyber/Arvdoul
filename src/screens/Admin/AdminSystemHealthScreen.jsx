@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  ArrowLeft,
-  Activity,
   RefreshCw,
   Database,
   Shield,
@@ -14,19 +12,21 @@ import {
   Cpu,
   Radio,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { rumService } from '../../services/rumService.js';
-import { backfillPostPrivacy } from '../../services/callableService.js';
+import { backfillPostPrivacy, fetchAdminStatus } from '../../services/callableService.js';
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
+import AdminNavHeader from '../../components/Admin/AdminNavHeader.jsx';
 
 const AdminSystemHealthScreen = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [denied, setDenied] = useState(false);
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState(new Date().toLocaleTimeString());
   const [backfillRunning, setBackfillRunning] = useState(false);
   const [backfillResult, setBackfillResult] = useState(null);
 
-  // Component probes. Each entry is measured for real (Firestore round-trip,
-  // client heap, RUM vitals); a probe that cannot run reports `unknown` rather
-  // than a fabricated latency.
   const [services, setServices] = useState([
     { id: 'db', name: 'Firestore Database', icon: Database, status: 'unknown', latency: null, details: 'Not probed yet — run a health check.' },
     { id: 'auth', name: 'Firebase Identity & Auth', icon: Shield, status: 'unknown', latency: null, details: 'Sign-in is validated by the current session.' },
@@ -36,7 +36,6 @@ const AdminSystemHealthScreen = () => {
     { id: 'cdn', name: 'Edge Cache & Reverse Proxy', icon: Wifi, status: 'unknown', latency: null, details: 'Static bundle served from the CDN edge.' },
   ]);
 
-  // Telemetry — real browser measurements only. null renders as an em dash.
   const [telemetry, setTelemetry] = useState({
     avgLatency: null,
     activeConnections: null,
@@ -55,17 +54,16 @@ const AdminSystemHealthScreen = () => {
     }
   })();
 
-  // Pull whatever the browser already recorded for this session.
   const readSessionTelemetry = useCallback(() => {
     let fcp = null;
     let lcp = null;
     try {
       const paints = performance.getEntriesByType('paint') || [];
-      const fcpEntry = paints.find(p => p.name === 'first-contentful-paint');
+      const fcpEntry = paints.find((p) => p.name === 'first-contentful-paint');
       if (fcpEntry) fcp = Math.round(fcpEntry.startTime);
       const vitals = rumService.getWebVitals();
       lcp = vitals?.lcp != null ? Math.round(vitals.lcp) : null;
-      setTelemetry(prev => ({
+      setTelemetry((prev) => ({
         ...prev,
         fcpMs: fcp,
         lcpMs: lcp,
@@ -80,12 +78,16 @@ const AdminSystemHealthScreen = () => {
   }, []);
 
   useEffect(() => {
-    readSessionTelemetry();
-  }, [readSessionTelemetry]);
+    const check = async () => {
+      if (!user?.uid || !(await fetchAdminStatus())) {
+        setDenied(true);
+        return;
+      }
+      readSessionTelemetry();
+    };
+    check();
+  }, [user?.uid, readSessionTelemetry]);
 
-  // Admin maintenance: re-sync the denormalised `authorIsPrivate` flag on legacy
-  // posts. Admin-gated + audit-logged server-side; paged, so it can be re-run
-  // until it reports zero updates.
   const runPrivacyBackfill = async () => {
     setBackfillRunning(true);
     setBackfillResult(null);
@@ -101,7 +103,6 @@ const AdminSystemHealthScreen = () => {
     }
   };
 
-  // Diagnostic Runner — every number below is measured, never estimated.
   const runLiveDiagnostics = async () => {
     setRunningDiagnostics(true);
     toast.info('Running live platform health probe…');
@@ -110,13 +111,22 @@ const AdminSystemHealthScreen = () => {
       const { getAdminService } = await import('../../services/adminService.js');
       const { status: dbStatus, latencyMs: dbLatency } = await getAdminService().probeDatabase();
 
-      setServices(prev => prev.map(s => (
-        s.id === 'db'
-          ? { ...s, latency: dbLatency, status: dbStatus, details: dbStatus === 'operational' ? 'Round-trip to Firestore measured just now.' : 'Last probe failed; retry to re-measure.' }
-          : s
-      )));
+      setServices((prev) =>
+        prev.map((s) =>
+          s.id === 'db'
+            ? {
+                ...s,
+                latency: dbLatency,
+                status: dbStatus,
+                details: dbStatus === 'operational'
+                  ? 'Round-trip to Firestore measured just now.'
+                  : 'Last probe failed; retry to re-measure.',
+              }
+            : s
+        )
+      );
 
-      if (dbLatency !== null) setTelemetry(prev => ({ ...prev, avgLatency: dbLatency }));
+      if (dbLatency !== null) setTelemetry((prev) => ({ ...prev, avgLatency: dbLatency }));
 
       readSessionTelemetry();
       setLastCheckTime(new Date().toLocaleTimeString());
@@ -132,131 +142,109 @@ const AdminSystemHealthScreen = () => {
     }
   };
 
-  return (
-    <div id="admin-health-screen" className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Top Bar */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              id="back-btn-health"
-              onClick={() => navigate('/admin')}
-              className="p-2 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-              aria-label="Back to Admin"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">System Health & Telemetry</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                  <Activity className="w-3.5 h-3.5" />
-                  {services.some(sv => sv.status === 'operational') ? 'Probe Complete' : 'Awaiting Probe'}
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                SLO monitoring, real-time latency probes, and infrastructure reliability
-              </p>
-            </div>
-          </div>
+  if (denied) {
+    return <PermissionDenied onGoHome={() => navigate('/')} />;
+  }
 
+  return (
+    <div id="admin-health-screen" className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <AdminNavHeader
+        title="System Health & Telemetry"
+        subtitle="Real-time browser vitals, database round-trip probes, and privacy maintenance"
+        actions={
           <button
             id="run-diagnostics-btn"
+            type="button"
             onClick={runLiveDiagnostics}
             disabled={runningDiagnostics}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 rounded-lg transition disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${runningDiagnostics ? 'animate-spin' : ''}`} />
             <span>Run Health Check</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* Telemetry Metrics Row — measured values only, em dash when unknown */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Firestore Round-trip</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-xs text-slate-500">Firestore Round-trip</span>
+            <div className="text-xl font-bold mt-1 tabular-nums">
               {telemetry.avgLatency === null ? '—' : `${telemetry.avgLatency} ms`}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Long Tasks</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-xs text-slate-500">Long Tasks</span>
+            <div className="text-xl font-bold mt-1 tabular-nums">
               {telemetry.longTasks === null ? '—' : telemetry.longTasks}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Client Memory</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-xs text-slate-500">Client Memory</span>
+            <div className="text-xl font-bold mt-1 tabular-nums">
               {telemetry.memoryHeapMb === null ? '—' : `${telemetry.memoryHeapMb} MB`}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">First Contentful Paint</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-xs text-slate-500">First Contentful Paint</span>
+            <div className="text-xl font-bold mt-1 tabular-nums">
               {telemetry.fcpMs === null ? '—' : `${telemetry.fcpMs} ms`}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Largest Contentful Paint</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-xs text-slate-500">Largest Contentful Paint</span>
+            <div className="text-xl font-bold mt-1 tabular-nums">
               {telemetry.lcpMs === null ? '—' : `${telemetry.lcpMs} ms`}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Network</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-xs text-slate-500">Network</span>
+            <div className="text-xl font-bold mt-1">
               {networkType}
             </div>
           </div>
         </div>
 
-        {/* Services Health Grid */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold">Infrastructure Components</h2>
-            <span className="text-xs text-gray-500">Last verified: {lastCheckTime}</span>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-semibold">Infrastructure Components</h2>
+            <span className="text-xs text-slate-500 tabular-nums">Last checked: {lastCheckTime}</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {services.map(svc => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {services.map((svc) => {
               const Icon = svc.icon;
               return (
                 <div
                   key={svc.id}
-                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700 flex flex-col justify-between"
+                  className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-sm text-gray-900 dark:text-white">{svc.name}</h3>
-                          <span className={`text-xs font-semibold flex items-center gap-1 ${
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm">{svc.name}</h3>
+                        <span
+                          className={`text-xs font-medium capitalize ${
                             svc.status === 'operational'
                               ? 'text-emerald-600 dark:text-emerald-400'
                               : svc.status === 'degraded'
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : 'text-gray-500 dark:text-gray-400'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full inline-block ${
-                              svc.status === 'operational' ? 'bg-emerald-500' : svc.status === 'degraded' ? 'bg-amber-500' : 'bg-gray-400'
-                            }`} />
-                            {svc.status}
-                          </span>
-                        </div>
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          {svc.status}
+                        </span>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{svc.details}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{svc.details}</p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-gray-200/60 dark:border-gray-700/60 flex items-center justify-between text-xs text-gray-500">
-                    <span>Latency: <b className="text-gray-900 dark:text-white">{svc.latency === null ? '—' : `${svc.latency}ms`}</b></span>
-                    <span>Status: <b className="text-gray-900 dark:text-white capitalize">{svc.status}</b></span>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 tabular-nums">
+                    <span>Latency: <strong className="text-slate-900 dark:text-white">{svc.latency === null ? '—' : `${svc.latency}ms`}</strong></span>
+                    <span className="capitalize">{svc.status}</span>
                   </div>
                 </div>
               );
@@ -264,39 +252,32 @@ const AdminSystemHealthScreen = () => {
           </div>
         </div>
 
-        {/* Maintenance Operations — admin-gated, audit-logged server-side */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Maintenance Operations</h2>
-            <span className="text-xs text-gray-500">Admin-only · recorded in the audit log</span>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold">Maintenance Operations</h2>
+            <span className="text-xs text-slate-500">Admin-only · recorded in audit log</span>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex-1">
-              <h3 className="font-bold text-sm text-gray-900 dark:text-white">Re-sync post privacy flags</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <h3 className="font-semibold text-sm">Re-sync post privacy flags</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Rewrites the denormalised <code>authorIsPrivate</code> flag on posts published before the field
                 existed, so a private account&apos;s history is not left world-readable. Paged and resumable —
                 re-run until it reports zero updates.
               </p>
               {backfillResult && (
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">
-                  Scanned{' '}
-                  <b className="text-gray-900 dark:text-white">
-                    {backfillResult.usersScanned === null ? '—' : backfillResult.usersScanned}
-                  </b>{' '}
-                  users · updated{' '}
-                  <b className="text-gray-900 dark:text-white">
-                    {backfillResult.postsUpdated === null ? '—' : backfillResult.postsUpdated}
-                  </b>{' '}
-                  posts
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 tabular-nums">
+                  Scanned <strong>{backfillResult.usersScanned === null ? '—' : backfillResult.usersScanned}</strong> users
+                  {' · '}updated <strong>{backfillResult.postsUpdated === null ? '—' : backfillResult.postsUpdated}</strong> posts
                 </p>
               )}
             </div>
             <button
               id="run-privacy-backfill-btn"
+              type="button"
               onClick={runPrivacyBackfill}
               disabled={backfillRunning}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition shadow-sm disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Database className="w-3.5 h-3.5" />
               {backfillRunning ? 'Running…' : 'Run privacy backfill'}

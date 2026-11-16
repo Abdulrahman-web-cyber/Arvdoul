@@ -2957,26 +2957,57 @@ function EditPostLoader() {
   React.useEffect(() => {
     const file = location.state?.videoFile;
     const url = location.state?.videoUrl;
-    if ((!file && !url) || videoRef.current) return;
+    const audioFile = location.state?.audioFile;
+    const audioDataUrl = location.state?.audioDataUrl;
+    const prefillContent = location.state?.prefillContent;
+    if ((!file && !url && !audioFile && !audioDataUrl && !prefillContent) || videoRef.current) return;
     videoRef.current = true;
-    dispatch({
-      type: "SET_MEDIA_ITEMS",
-      payload: [{
-        id: "video-export",
-        type: "video",
-        file: file || null,
-        url: file ? "" : url,
-        preview: url || "",
-        name: location.state?.title || "video",
-        alt: "",
-      }],
-    });
-    if (location.state?.title) dispatch({ type: "SET_CONTENT", payload: `${location.state.title} ` });
-    // The editor labels the handoff with `mediaType`; honour it when it is a
-    // known post type instead of always assuming "video".
-    const handedType = location.state?.mediaType;
-    dispatch({ type: "SET_POST_TYPE", payload: handedType === 'audio' || handedType === 'photo' ? handedType : 'video' });
-    dispatch({ type: "SET_STEP", payload: 2 });
+
+    if (file || url) {
+      dispatch({
+        type: "SET_MEDIA_ITEMS",
+        payload: [{
+          id: "video-export",
+          type: "video",
+          file: file || null,
+          url: file ? "" : url,
+          preview: url || "",
+          name: location.state?.title || "video",
+          alt: "",
+        }],
+      });
+      if (location.state?.title) dispatch({ type: "SET_CONTENT", payload: `${location.state.title} ` });
+      const handedType = location.state?.mediaType;
+      dispatch({ type: "SET_POST_TYPE", payload: handedType === 'audio' || handedType === 'photo' ? handedType : 'video' });
+      dispatch({ type: "SET_STEP", payload: 2 });
+      return;
+    }
+
+    if (audioFile || audioDataUrl) {
+      const localUrl = audioDataUrl || (audioFile ? URL.createObjectURL(audioFile) : "");
+      dispatch({
+        type: "SET_TYPE_DATA",
+        payload: {
+          audio: {
+            url: localUrl,
+            previewUrl: localUrl,
+            file: audioFile || null,
+            title: location.state?.title || "Audio Mix",
+            artist: "",
+          },
+        },
+      });
+      if (location.state?.title) dispatch({ type: "SET_CONTENT", payload: `${location.state.title} ` });
+      dispatch({ type: "SET_POST_TYPE", payload: "audio" });
+      dispatch({ type: "SET_STEP", payload: 2 });
+      return;
+    }
+
+    if (typeof prefillContent === 'string' && prefillContent.trim()) {
+      dispatch({ type: "SET_CONTENT", payload: prefillContent });
+      dispatch({ type: "SET_POST_TYPE", payload: location.state?.prefillType || "text" });
+      dispatch({ type: "SET_STEP", payload: 2 });
+    }
   }, [location.state, dispatch]);
 
   // "Use in Reel" from the Sounds library navigates here with the chosen track

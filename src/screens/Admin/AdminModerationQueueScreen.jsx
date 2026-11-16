@@ -6,8 +6,9 @@ import { useAuth } from '../../context/AuthContext';
 import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle, XCircle, Flag, AlertTriangle, User, MessageSquare, Image as ImageIcon, ChevronRight } from "lucide-react";
+import { CheckCircle, XCircle, Flag, AlertTriangle, User, MessageSquare, Image as ImageIcon, ChevronRight } from "lucide-react";
 import PermissionDenied from '../../design-system/PermissionDenied.jsx';
+import AdminNavHeader from '../../components/Admin/AdminNavHeader.jsx';
 
 const AdminModerationQueueScreen = () => {
   const navigate = useNavigate();
@@ -19,13 +20,14 @@ const AdminModerationQueueScreen = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  // One server-side read covers every report collection (post and story
-  // reports included), so the queue cannot drift from the report routing table.
   useEffect(() => {
     const load = async () => {
       try {
-        // Cheap gate first so a non-admin never fires an admin callable.
-        if (!(await fetchAdminStatus())) { setDenied(true); setLoading(false); return; }
+        if (!user?.uid || !(await fetchAdminStatus())) {
+          setDenied(true);
+          setLoading(false);
+          return;
+        }
         const res = await callFunction(FUNCTIONS.ADMIN_LIST_MODERATION_REPORTS, { limit: 100 });
         setReports(Array.isArray(res?.reports) ? res.reports : []);
       } catch {
@@ -35,18 +37,15 @@ const AdminModerationQueueScreen = () => {
       }
     };
     load();
-  }, []);
+  }, [user?.uid]);
 
-  const filteredReports = reports.filter(r => {
+  const filteredReports = reports.filter((r) => {
     if (filter === 'all') return true;
     return r.status === filter;
   });
 
-  // Moderation decisions are server-authoritative: the callable re-checks
-  // admins/{uid}, updates the report and writes an audit entry. Clients cannot
-  // write report status directly (rules deny it), so this is the only path.
   const handleReportAction = async (reportId, action) => {
-    const report = reports.find(r => r.id === reportId);
+    const report = reports.find((r) => r.id === reportId);
     try {
       const decision = { resolve: 'resolved', dismiss: 'dismissed', warn: 'warned', remove: 'removed' }[action] || 'escalated';
       await callFunction(FUNCTIONS.RESOLVE_USER_REPORT, {
@@ -54,7 +53,7 @@ const AdminModerationQueueScreen = () => {
         action: decision,
         reportType: report?.type || 'user',
       });
-      setReports(prev => prev.map(r => (r.id === reportId ? { ...r, status: decision } : r)));
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status: decision } : r)));
       toast.success(`Report ${action}ed successfully`);
       setShowDetailModal(false);
     } catch {
@@ -65,34 +64,31 @@ const AdminModerationQueueScreen = () => {
   const getReportTypeIcon = (type) => {
     switch (type) {
       case 'user':
-        return <User className="w-5 h-5 text-red-500" />;
+        return <User className="w-4 h-4 text-red-500" />;
       case 'post':
-        return <MessageSquare className="w-5 h-5 text-orange-500" />;
+        return <MessageSquare className="w-4 h-4 text-orange-500" />;
       case 'comment':
-        return <MessageSquare className="w-5 h-5 text-yellow-500" />;
+        return <MessageSquare className="w-4 h-4 text-amber-500" />;
       case 'video':
-        return <ImageIcon className="w-5 h-5 text-purple-500" />;
+        return <ImageIcon className="w-4 h-4 text-arvdoul-purple" />;
       default:
-        return <Flag className="w-5 h-5 text-gray-500" />;
+        return <Flag className="w-4 h-4 text-slate-500" />;
     }
   };
 
-  const getPriorityColor = (priority) => {
+  const getPriorityText = (priority) => {
     switch (priority) {
       case 'high':
-        return 'bg-red-100 text-red-700';
+        return 'text-red-600 dark:text-red-400';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-700';
+        return 'text-amber-600 dark:text-amber-400';
       case 'low':
-        return 'bg-green-100 text-green-700';
+        return 'text-emerald-600 dark:text-emerald-400';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'text-slate-500';
     }
   };
 
-  // The reporter's display name may be absent (no resolved profile) — fall back
-  // to the real reporter uid, never a fabricated handle. `reportedItemName` is
-  // never written by the server; the real target id is the report's own field.
   const reporterLabel = (report) => report?.reporterName || report?.reporterId || null;
   const reportedItemLabel = (report) =>
     report?.reportedItemName
@@ -101,235 +97,192 @@ const AdminModerationQueueScreen = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="w-10 h-10 border-4 border-slate-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (denied) {
-    return (
-      <PermissionDenied onGoHome={() => navigate('/')} />
-    );
+    return <PermissionDenied onGoHome={() => navigate('/')} />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <AdminNavHeader
+        title="Moderation Queue"
+        subtitle="Review reported posts, users, videos, comments, and safety escalations"
+        actions={
+          <span className="text-xs font-semibold text-red-600 dark:text-red-400 tabular-nums whitespace-nowrap shrink-0">
+            {reports.filter((r) => r.status === 'pending').length} Pending
+          </span>
+        }
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg w-fit">
+          {['pending', 'reviewing', 'resolved', 'all'].map((status) => (
             <button
-              onClick={() => navigate('/admin')}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"
+              key={status}
+              type="button"
+              onClick={() => setFilter(status)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition cursor-pointer ${
+                filter === status
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
             >
-              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+              {status}
             </button>
-            <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                Moderation Queue
-              </h1>
-              <p className="text-sm text-gray-500">
-                Review reported content and users
-              </p>
-            </div>
-            <div className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 rounded-full">
-              <span className="text-sm font-medium text-red-700 dark:text-red-400">
-                {reports.filter(r => r.status === 'pending').length} Pending
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Filters */}
-        <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 mb-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-          <div className="flex gap-2">
-            {['pending', 'reviewing', 'resolved', 'all'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors capitalize ${
-                  filter === status
-                    ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
 
-        {/* Reports List */}
-        <div className="space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
           {filteredReports.map((report) => (
-            <motion.div
-              key={report.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
-            >
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-xl">
-                  {getReportTypeIcon(report.type)}
-                </div>
+            <div key={report.id} className="p-4 sm:p-5 flex items-start gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+              <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg shrink-0">
+                {getReportTypeIcon(report.type)}
+              </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${getPriorityColor(report.priority)}`}>
-                          {report.priority}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {report.type} report
-                        </span>
-                      </div>
-                      <p className="font-medium text-gray-900 dark:text-white line-clamp-2">
-                        {report.reason || 'No reason provided'}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Reported by {reporterLabel(report) ? `@${reporterLabel(report)}` : 'unknown'} • {new Date(report.createdAt).toLocaleDateString()}
-                      </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-xs mb-1">
+                      <span className={`font-semibold capitalize ${getPriorityText(report.priority)}`}>
+                        {report.priority || 'normal'} priority
+                      </span>
+                      <span aria-hidden="true" className="text-slate-400">·</span>
+                      <span className="text-slate-500 capitalize">{report.type} report</span>
                     </div>
-
-                    <button
-                      onClick={() => {
-                        setSelectedReport(report);
-                        setShowDetailModal(true);
-                      }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm"
-                    >
-                      Review <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <p className="font-medium text-sm text-slate-900 dark:text-white line-clamp-2">
+                      {report.reason || 'No reason provided'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 tabular-nums">
+                      Reported by {reporterLabel(report) ? `@${reporterLabel(report)}` : 'unknown'} · {new Date(report.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
 
-                  {report.content && (
-                    <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
-                        {report.content}
-                      </p>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedReport(report);
+                      setShowDetailModal(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-xs font-semibold shrink-0 cursor-pointer"
+                  >
+                    Review <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
+
+                {report.content && (
+                  <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                    {report.content}
+                  </p>
+                )}
               </div>
-            </motion.div>
+            </div>
           ))}
 
           {filteredReports.length === 0 && (
-            <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-              <CheckCircle className="w-12 h-12 mx-auto text-green-400 mb-3" />
-              <p className="text-gray-500">No reports to review</p>
+            <div className="p-12 text-center">
+              <CheckCircle className="w-10 h-10 mx-auto text-emerald-500 mb-2" />
+              <p className="text-sm text-slate-500">No reports to review</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Report Detail Modal */}
       {showDetailModal && selectedReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl"
           >
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              Report Details
-            </h2>
+            <h2 className="text-lg font-semibold mb-4">Report Details</h2>
 
-            <div className="space-y-4">
-              {/* Report Info */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Report ID</span>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedReport.id}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Type</span>
-                    <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedReport.type}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Priority</span>
-                    <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${getPriorityColor(selectedReport.priority)}`}>
-                      {selectedReport.priority}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Status</span>
-                    <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedReport.status}</p>
-                  </div>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="text-xs text-slate-500">Report ID</span>
+                  <p className="font-mono text-xs font-medium mt-0.5">{selectedReport.id}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Type</span>
+                  <p className="font-medium capitalize mt-0.5">{selectedReport.type}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Priority</span>
+                  <p className={`font-semibold capitalize mt-0.5 ${getPriorityText(selectedReport.priority)}`}>
+                    {selectedReport.priority}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500">Status</span>
+                  <p className="font-medium capitalize mt-0.5">{selectedReport.status}</p>
                 </div>
               </div>
 
-              {/* Reason */}
               <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Reason</h3>
-                <p className="text-gray-900 dark:text-white">{selectedReport.reason}</p>
+                <h3 className="text-xs font-medium text-slate-500 mb-1">Reason</h3>
+                <p>{selectedReport.reason}</p>
               </div>
 
-              {/* Content */}
               {selectedReport.content && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Reported Content</h3>
-                  <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                    <p className="text-gray-900 dark:text-white">{selectedReport.content}</p>
-                  </div>
+                  <h3 className="text-xs font-medium text-slate-500 mb-1">Reported Content</h3>
+                  <p className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm">{selectedReport.content}</p>
                 </div>
               )}
 
-              {/* Reporter & Reported */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Reported By</h3>
-                  <p className="font-medium text-gray-900 dark:text-white">{reporterLabel(selectedReport) ? `@${reporterLabel(selectedReport)}` : 'unknown'}</p>
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                  <h3 className="text-xs font-medium text-slate-500 mb-1">Reported By</h3>
+                  <p className="font-medium text-xs">{reporterLabel(selectedReport) ? `@${reporterLabel(selectedReport)}` : 'unknown'}</p>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Reported Item</h3>
-                  <p className="font-medium text-gray-900 dark:text-white">{reportedItemLabel(selectedReport) ? `@${reportedItemLabel(selectedReport)}` : '—'}</p>
+                <div>
+                  <h3 className="text-xs font-medium text-slate-500 mb-1">Reported Item</h3>
+                  <p className="font-medium text-xs">{reportedItemLabel(selectedReport) ? `@${reportedItemLabel(selectedReport)}` : '—'}</p>
                 </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap gap-2">
               <button
+                type="button"
                 onClick={() => handleReportAction(selectedReport.id, 'dismiss')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-medium"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
               >
-                <XCircle className="w-5 h-5" />
-                Dismiss
+                <XCircle className="w-4 h-4" /> Dismiss
               </button>
               <button
+                type="button"
                 onClick={() => handleReportAction(selectedReport.id, 'warn')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 rounded-xl font-medium text-yellow-700 dark:text-yellow-400"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 rounded-lg text-xs font-semibold text-amber-700 dark:text-amber-300 cursor-pointer"
               >
-                <AlertTriangle className="w-5 h-5" />
-                Warn
+                <AlertTriangle className="w-4 h-4" /> Warn
               </button>
               <button
+                type="button"
                 onClick={() => handleReportAction(selectedReport.id, 'remove')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-xl font-medium text-red-700 dark:text-red-400"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 rounded-lg text-xs font-semibold text-red-700 dark:text-red-300 cursor-pointer"
               >
-                <XCircle className="w-5 h-5" />
-                Remove
+                <XCircle className="w-4 h-4" /> Remove
               </button>
               <button
+                type="button"
                 onClick={() => handleReportAction(selectedReport.id, 'resolve')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-xl font-medium text-green-700 dark:text-green-400"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 cursor-pointer"
               >
-                <CheckCircle className="w-5 h-5" />
-                Resolve
+                <CheckCircle className="w-4 h-4" /> Resolve
               </button>
             </div>
 
             <div className="mt-4 flex justify-end">
               <button
+                type="button"
                 onClick={() => setShowDetailModal(false)}
-                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
               >
                 Close
               </button>

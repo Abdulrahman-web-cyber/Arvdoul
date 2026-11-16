@@ -4,26 +4,32 @@ import { useState, useEffect } from "react";
 import { usePrompt } from '../../components/Shared/ConfirmProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, CheckCircle2, Lock, Globe, Flag } from "lucide-react";
-import { callFunction, FUNCTIONS } from '../../services/callableService.js';
+import { Search, CheckCircle2, Lock, Globe, Flag } from "lucide-react";
+import { useAuth } from '../../context/AuthContext';
+import { callFunction, FUNCTIONS, fetchAdminStatus } from '../../services/callableService.js';
 import { unknownNumber } from '../../lib/unknownNumber.js';
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
+import AdminNavHeader from '../../components/Admin/AdminNavHeader.jsx';
 
 const AdminCommunityManagementScreen = () => {
   const prompt = usePrompt();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [privacyFilter, setPrivacyFilter] = useState('all');
-
-  // Real community directory — populated only from the admin callable.
   const [communities, setCommunities] = useState([]);
 
-  // Directory is read through the admin callable so governance fields never
-  // depend on a client-side write path.
   useEffect(() => {
     const loadCommunities = async () => {
       setLoading(true);
       try {
+        if (!user?.uid || !(await fetchAdminStatus())) {
+          setDenied(true);
+          setLoading(false);
+          return;
+        }
         const res = await callFunction(FUNCTIONS.ADMIN_LIST_COMMUNITIES, { limit: 50 });
         setCommunities(Array.isArray(res?.communities) ? res.communities : []);
       } catch {
@@ -34,36 +40,39 @@ const AdminCommunityManagementScreen = () => {
       }
     };
     loadCommunities();
-  }, []);
+  }, [user?.uid]);
 
-  // Governance mutations are server-authoritative: the callable re-checks
-  // admins/{uid}, writes the field, records a strike subdoc and audits.
-  const handleToggleVerified = async comm => {
+  const handleToggleVerified = async (comm) => {
     const newStatus = !comm.isVerified;
     try {
       await callFunction(FUNCTIONS.ADMIN_SET_COMMUNITY_VERIFIED, {
         communityId: comm.id,
         verified: newStatus,
       });
-      setCommunities(prev =>
-        prev.map(c => (c.id === comm.id ? { ...c, isVerified: newStatus } : c))
+      setCommunities((prev) =>
+        prev.map((c) => (c.id === comm.id ? { ...c, isVerified: newStatus } : c))
       );
-      toast.success(`Community "${comm.name || comm.id}" marked as ${newStatus ? 'VERIFIED' : 'UNVERIFIED'}`);
+      toast.success(`Community "${comm.name || comm.id}" marked as ${newStatus ? 'verified' : 'unverified'}`);
     } catch {
       toast.error('Could not update community verification.');
     }
   };
 
-  const handleIssueStrike = async comm => {
-    const reason = await prompt({ title: 'Issue policy strike', description: `Strike "${comm.name || comm.id}" for a guideline breach.`, placeholder: 'Describe the breach', confirmText: 'Issue strike' });
+  const handleIssueStrike = async (comm) => {
+    const reason = await prompt({
+      title: 'Issue policy strike',
+      description: `Strike "${comm.name || comm.id}" for a guideline breach.`,
+      placeholder: 'Describe the breach',
+      confirmText: 'Issue strike',
+    });
     if (!reason) return;
     try {
       await callFunction(FUNCTIONS.ADMIN_ISSUE_COMMUNITY_STRIKE, {
         communityId: comm.id,
         reason,
       });
-      setCommunities(prev =>
-        prev.map(c => (c.id === comm.id ? { ...c, strikesCount: (c.strikesCount || 0) + 1 } : c))
+      setCommunities((prev) =>
+        prev.map((c) => (c.id === comm.id ? { ...c, strikesCount: (c.strikesCount || 0) + 1 } : c))
       );
       toast.warning(`Strike issued to "${comm.name || comm.id}".`);
     } catch {
@@ -71,7 +80,7 @@ const AdminCommunityManagementScreen = () => {
     }
   };
 
-  const filtered = communities.filter(c => {
+  const filtered = communities.filter((c) => {
     if (privacyFilter !== 'all' && c.privacy !== privacyFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -82,151 +91,136 @@ const AdminCommunityManagementScreen = () => {
     );
   });
 
-  return (
-    <div id="admin-communities-screen" className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Top Bar */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              id="back-btn-communities"
-              onClick={() => navigate('/admin')}
-              className="p-2 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-              aria-label="Back to Admin"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Community Governance</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
-                  Directory Oversight
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                Hub verification, policy adherence, member health, and community strike records
-              </p>
-            </div>
-          </div>
+  if (denied) {
+    return <PermissionDenied onGoHome={() => navigate('/')} />;
+  }
 
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
-            {['all', 'public', 'private'].map(p => (
+  return (
+    <div id="admin-communities-screen" className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <AdminNavHeader
+        title="Community Governance"
+        subtitle="Hub verification, policy adherence, member health, and community strike records"
+        actions={
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            {['all', 'public', 'private'].map((p) => (
               <button
                 key={p}
+                type="button"
                 onClick={() => setPrivacyFilter(p)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition ${
+                className={`px-3 py-1 rounded-md text-xs font-semibold capitalize transition whitespace-nowrap shrink-0 cursor-pointer ${
                   privacyFilter === p
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 {p}
               </button>
             ))}
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Search */}
-        <div className="flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input aria-label="Search community name, slug, or creator..."
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              aria-label="Search community name, slug, or creator"
               type="text"
               placeholder="Search community name, slug, or creator..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
             />
           </div>
-          <div className="text-xs text-gray-500 font-medium">
+          <div className="text-xs text-slate-500 font-medium tabular-nums">
             {loading ? 'Loading communities…' : `${filtered.length} communities listed`}
           </div>
         </div>
 
-        {/* Communities Grid */}
         {!loading && filtered.length === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 text-center text-sm text-slate-500 dark:text-slate-400">
             {communities.length === 0
               ? 'No communities have been created yet.'
               : 'No communities match this filter.'}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {filtered.map(comm => (
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map((comm) => (
             <div
               key={comm.id}
-              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm flex flex-col justify-between"
+              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between gap-4"
             >
               <div>
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div>
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-base text-gray-900 dark:text-white">{comm.name || comm.id}</h3>
+                      <h3 className="font-semibold text-base text-slate-900 dark:text-white truncate">{comm.name || comm.id}</h3>
                       {comm.isVerified && (
-                        <span className="p-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400">
-                          <CheckCircle2 className="w-4 h-4" />
-                        </span>
+                        <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" aria-label="Verified community" />
                       )}
                     </div>
-                    <span className="text-xs font-mono text-gray-400">c/{comm.slug || comm.id}</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      <span className="font-mono">c/{comm.slug || comm.id}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="inline-flex items-center gap-1 capitalize">
+                        {comm.privacy === 'public' ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        {comm.privacy || 'public'}
+                      </span>
+                    </div>
                   </div>
-
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      comm.privacy === 'public'
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                        : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                    }`}
-                  >
-                    {comm.privacy === 'public' ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                    <span className="capitalize">{comm.privacy}</span>
-                  </span>
                 </div>
 
-                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">
+                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-4">
                   {comm.description || 'No description provided.'}
                 </p>
 
-                <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-xs mb-4">
+                <div className="grid grid-cols-3 gap-3 py-3 border-y border-slate-100 dark:border-slate-800 text-xs tabular-nums">
                   <div>
-                    <span className="text-gray-500">Members</span>
-                    <div className="font-bold text-gray-900 dark:text-white">{(() => { const v = comm.stats?.memberCount ?? comm.memberCount; return typeof v === 'number' ? v.toLocaleString() : '—'; })()}</div>
+                    <span className="text-slate-500 dark:text-slate-400">Members</span>
+                    <div className="font-semibold text-slate-900 dark:text-white mt-0.5">
+                      {(() => { const v = comm.stats?.memberCount ?? comm.memberCount; return typeof v === 'number' ? v.toLocaleString() : '—'; })()}
+                    </div>
                   </div>
                   <div>
-                    <span className="text-gray-500">Posts</span>
-                    <div className="font-bold text-gray-900 dark:text-white">{(() => { const v = comm.stats?.postCount ?? comm.postCount; return typeof v === 'number' ? v.toLocaleString() : '—'; })()}</div>
+                    <span className="text-slate-500 dark:text-slate-400">Posts</span>
+                    <div className="font-semibold text-slate-900 dark:text-white mt-0.5">
+                      {(() => { const v = comm.stats?.postCount ?? comm.postCount; return typeof v === 'number' ? v.toLocaleString() : '—'; })()}
+                    </div>
                   </div>
                   <div>
-                    <span className="text-gray-500">Strikes</span>
-                    <div className={`font-bold ${Number(comm.strikesCount) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                    <span className="text-slate-500 dark:text-slate-400">Strikes</span>
+                    <div className={`font-semibold mt-0.5 ${Number(comm.strikesCount) > 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
                       {unknownNumber(comm.strikesCount) ?? '—'}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
-                <span className="text-xs text-gray-500">
-                  Lead: <b className="text-gray-800 dark:text-gray-200">{comm.ownerHandle || comm.ownerId || '—'}</b>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  Lead: <span className="font-semibold text-slate-800 dark:text-slate-200">{comm.ownerHandle || comm.ownerId || '—'}</span>
                 </span>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
+                    type="button"
                     onClick={() => handleToggleVerified(comm)}
-                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                       comm.isVerified
-                        ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                        ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200'
                     }`}
                   >
                     {comm.isVerified ? 'Remove Badge' : 'Grant Verified'}
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => handleIssueStrike(comm)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition"
+                    className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition cursor-pointer"
+                    aria-label={`Issue strike to ${comm.name || comm.id}`}
                     title="Issue Strike"
                   >
                     <Flag className="w-4 h-4" />

@@ -370,6 +370,137 @@ class AudioStudioEngine {
     const nyquist = this.ctx.sampleRate / 2;
     return Math.round((freq / nyquist) * this.analyser.frequencyBinCount);
   }
+
+  /**
+   * Renders the active multitrack mix (including track volume/pan/mute/solo + master EQ)
+   * into a stereo AudioBuffer using OfflineAudioContext.
+   */
+  async renderOfflineMix({
+    tracks = [],
+    duration = 0,
+    eqBands = [],
+    eqEnabled = true,
+    masterVolume = 0.85,
+    sampleRate = 48000,
+  } = {}) {
+    if (typeof window === 'undefined') throw new Error('Audio rendering requires a browser');
+    const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OfflineCtx) throw new Error('OfflineAudioContext not supported');
+
+    const safeDuration = Math.max(0.5, Number(duration) || 0);
+    const frameCount = Math.ceil(safeDuration * sampleRate);
+    const offline = new OfflineCtx(2, frameCount, sampleRate);
+
+    const masterGain = offline.createGain();
+    masterGain.gain.value = Math.max(0, Math.min(2, masterVolume));
+
+    // Attach EQ chain before offline.destination
+    let lastNode = masterGain;
+    if (eqEnabled && Array.isArray(eqBands) && eqBands.length > 0) {
+      eqBands.forEach((band) => {
+        const filter = offline.createBiquadFilter();
+        if (band.type === 'HPF') {
+          filter.type = 'highpass';
+          filter.frequency.value = band.freq;
+          filter.Q.value = band.q || 0.707;
+        } else if (band.type === 'LPF') {
+          filter.type = 'lowpass';
+          filter.frequency.value = band.freq;
+          filter.Q.value = band.q || 0.707;
+        } else {
+          filter.type = 'peaking';
+          filter.frequency.value = band.freq;
+          filter.gain.value = band.gain;
+          filter.Q.value = band.q || 1;
+        }
+        lastNode.connect(filter);
+        lastNode = filter;
+      });
+    }
+    lastNode.connect(offline.destination);
+
+    const anySolo = tracks.some((t) => t.solo);
+    let scheduledCount = 0;
+
+    tracks.forEach((track) => {
+      const audible = !track.muted && (!anySolo || track.solo);
+      const tGain = offline.createGain();
+      tGain.gain.value = audible ? Math.pow(10, (track.volume ?? 0) / 20) : 0;
+
+      const tPanner = offline.createStereoPanner();
+      tPanner.pan.value = Math.max(-1, Math.min(1, (track.pan ?? 0) / 50));
+
+      tGain.connect(tPanner);
+      tPanner.connect(masterGain);
+
+      (track.clips || []).forEach((clip) => {
+        if (!clip.buffer) return;
+        const src = offline.createBufferSource();
+        src.buffer = clip.buffer;
+        src.connect(tGain);
+        const startAt = Math.max(0, Number(clip.start) || 0);
+        const playLen = Math.max(0.05, Math.min(clip.duration || clip.buffer.duration, clip.buffer.duration));
+        src.start(startAt, 0, playLen);
+        scheduledCount += 1;
+      });
+    });
+
+    if (scheduledCount === 0) {
+      throw new Error('no_audible_clips');
+    }
+
+    return offline.startRendering();
+  }
+
+  /**
+   * Encodes a rendered AudioBuffer as a 16-bit PCM WAV Blob.
+   */
+  encodeWavBlob(audioBuffer) {
+    const numChannels = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const length = audioBuffer.length;
+    const bytesPerSample = 2;
+    const blockAlign = numChannels * bytesPerSample;
+    const dataByteLength = length * blockAlign;
+    const buffer = new ArrayBuffer(44 + dataByteLength);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, str) => {
+      for (let i = 0; i < str.length; i += 1) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + dataByteLength, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataByteLength, true);
+
+    const channels = [];
+    for (let ch = 0; ch < numChannels; ch += 1) {
+      channels.push(audioBuffer.getChannelData(ch));
+    }
+
+    let offset = 44;
+    for (let i = 0; i < length; i += 1) {
+      for (let ch = 0; ch < numChannels; ch += 1) {
+        const sample = Math.max(-1, Math.min(1, channels[ch][i] || 0));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+        offset += 2;
+      }
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
 }
 
 export const audioStudioEngine = new AudioStudioEngine();

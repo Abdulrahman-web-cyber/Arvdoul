@@ -4,18 +4,19 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, Download, ShieldCheck, Clock, User, ChevronDown, ChevronRight, Code, RefreshCw } from "lucide-react";
+import { Search, Download, ShieldCheck, Clock, User, ChevronDown, ChevronRight, Code, RefreshCw } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
+import { fetchAdminStatus } from '../../services/callableService.js';
+import PermissionDenied from '../../design-system/PermissionDenied.jsx';
+import AdminNavHeader from '../../components/Admin/AdminNavHeader.jsx';
 
-// Firestore timestamps arrive as { seconds, nanoseconds } objects; ISO strings
-// come from client-side writes. Render whatever is actually present.
-const formatTimestamp = value => {
+const formatTimestamp = (value) => {
   if (!value) return 'unknown time';
   const date = typeof value?.toDate === 'function'
     ? value.toDate()
     : value?.seconds != null
-    ? new Date(value.seconds * 1000)
-    : new Date(value);
+      ? new Date(value.seconds * 1000)
+      : new Date(value);
   return Number.isNaN(date.getTime()) ? 'unknown time' : date.toLocaleString();
 };
 
@@ -23,17 +24,20 @@ const AdminAuditLogsScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
   const [logs, setLogs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState('all');
   const [expandedLogId, setExpandedLogId] = useState(null);
 
-  // The server writes every administrative intervention through writeAudit()
-  // in functions/admin.js, which appends to moderation_logs (admin-readable).
-  // That collection — not a never-written client buffer — is the audit trail.
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
+      if (!user?.uid || !(await fetchAdminStatus())) {
+        setDenied(true);
+        setLoading(false);
+        return;
+      }
       const { getAdminService } = await import('../../services/adminService.js');
       const rows = await getAdminService().listAuditLogs(100);
       setLogs(rows);
@@ -43,13 +47,12 @@ const AdminAuditLogsScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.uid]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Export audit trail
   const handleExport = () => {
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(logs, null, 2))}`;
     const downloadAnchor = document.createElement('a');
@@ -61,7 +64,7 @@ const AdminAuditLogsScreen = () => {
     toast.success('Audit trail exported to JSON.');
   };
 
-  const filteredLogs = logs.filter(l => {
+  const filteredLogs = logs.filter((l) => {
     if (selectedAction !== 'all') {
       const action = String(l.action || '').toLowerCase();
       const target = String(l.targetType || '').toLowerCase();
@@ -77,78 +80,63 @@ const AdminAuditLogsScreen = () => {
     );
   });
 
-  return (
-    <div id="admin-audit-logs-screen" className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Top Bar */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              id="back-btn-audit"
-              onClick={() => navigate('/admin')}
-              className="p-2 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-              aria-label="Back to Admin"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Security Audit Logs</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Append-Only Trail
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                Immutable record of administrative interventions, financial mutations, and security events
-              </p>
-            </div>
-          </div>
+  if (denied) {
+    return <PermissionDenied onGoHome={() => navigate('/')} />;
+  }
 
-          <div className="flex items-center gap-3">
+  return (
+    <div id="admin-audit-logs-screen" className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <AdminNavHeader
+        title="Security Audit Logs"
+        subtitle="Immutable record of administrative interventions, financial mutations, and security events"
+        actions={
+          <div className="flex items-center gap-2">
             <button
               id="refresh-logs-btn"
+              type="button"
               onClick={fetchLogs}
-              className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
               aria-label="Refresh Logs"
             >
-              <RefreshCw className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              <RefreshCw className="w-4 h-4 text-slate-600 dark:text-slate-300" />
             </button>
             <button
               id="export-audit-btn"
+              type="button"
               onClick={handleExport}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 rounded-xl transition shadow-sm"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 rounded-lg transition whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export Trail</span>
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Filter & Search Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input aria-label="Export Trail"
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              aria-label="Search audit logs"
               type="text"
               placeholder="Search action, actor, or ID..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
-            {['all', 'withdrawal', 'community', 'verification', 'report', 'user'].map(cat => (
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-x-auto">
+            {['all', 'withdrawal', 'community', 'verification', 'report', 'user'].map((cat) => (
               <button
                 key={cat}
+                type="button"
                 onClick={() => setSelectedAction(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition ${
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize whitespace-nowrap shrink-0 transition cursor-pointer ${
                   selectedAction === cat
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {cat}
@@ -157,66 +145,75 @@ const AdminAuditLogsScreen = () => {
           </div>
         </div>
 
-        {/* Logs Table / List */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {loading && (
+              <div className="p-10 text-center text-sm text-slate-500">Loading audit logs…</div>
+            )}
             {!loading && filteredLogs.length === 0 && (
-              <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+              <div className="p-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                <ShieldCheck className="w-8 h-8 mx-auto text-slate-400 mb-2" />
                 {logs.length === 0
                   ? 'No administrative actions have been recorded yet.'
                   : 'No log entries match this filter.'}
               </div>
             )}
-            {filteredLogs.map(log => {
+            {filteredLogs.map((log) => {
               const isExpanded = expandedLogId === log.id;
               return (
-                <div key={log.id} className="p-4 sm:p-5 hover:bg-gray-50/60 dark:hover:bg-gray-700 transition">
-                  <div
+                <div key={log.id} className="p-4 sm:p-5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                  <button
+                    type="button"
                     onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                    className="flex items-center justify-between gap-4 cursor-pointer"
+                    aria-expanded={isExpanded}
+                    className="w-full text-left flex items-center justify-between gap-4 cursor-pointer"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-gray-400" aria-hidden="true">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-slate-400 shrink-0" aria-hidden="true">
                         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-gray-900 dark:text-white font-mono">{log.action || 'unknown_action'}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm text-slate-900 dark:text-white font-mono">
+                            {log.action || 'unknown_action'}
+                          </span>
                           {log.targetType && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                              {log.targetType}
-                            </span>
+                            <>
+                              <span aria-hidden="true" className="text-slate-400">·</span>
+                              <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                {log.targetType}
+                              </span>
+                            </>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5">
-                          <User className="w-3 h-3 text-gray-400" />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap tabular-nums">
+                          <User className="w-3 h-3 text-slate-400 shrink-0" />
                           <span>{log.actorId || log.actorUid || 'unknown actor'}</span>
-                          <span>•</span>
-                          <Clock className="w-3 h-3 text-gray-400" />
+                          <span aria-hidden="true">·</span>
+                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
                           <span>{formatTimestamp(log.createdAt)}</span>
                         </p>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-mono">
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-300 tabular-nums">
                         {log.targetId || log.id}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
-                  {/* Expanded JSON Inspector */}
                   {isExpanded && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
-                      className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700"
+                      className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800"
                     >
-                      <div className="text-xs font-semibold text-gray-500 mb-1 flex items-center gap-1">
+                      <div className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
                         <Code className="w-3.5 h-3.5" />
                         <span>Forensic Payload Data</span>
                       </div>
-                      <pre className="p-3 bg-gray-900 text-gray-100 rounded-xl text-xs font-mono overflow-x-auto">
+                      <pre className="p-3 bg-slate-950 text-slate-100 rounded-lg text-xs font-mono overflow-x-auto">
                         {JSON.stringify(log.details || {}, null, 2)}
                       </pre>
                     </motion.div>

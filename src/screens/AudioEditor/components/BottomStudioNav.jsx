@@ -6,6 +6,7 @@ import { BRAND_GRADIENT } from '../../../design-system/tokens.js';
 
 export default function BottomStudioNav({
   isDark = true,
+  isRecording = false,
   onOpenMedia,
   onOpenPlugins,
   onRecord,
@@ -19,8 +20,9 @@ export default function BottomStudioNav({
       )}>
         {/* Media */}
         <button
+          type="button"
           onClick={onOpenMedia}
-          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-purple-400 transition cursor-pointer"
+          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-arvdoul-purple transition cursor-pointer"
         >
           <FolderOpen className="w-4 h-4" />
           <span>Media</span>
@@ -28,36 +30,44 @@ export default function BottomStudioNav({
 
         {/* Plugins */}
         <button
+          type="button"
           onClick={onOpenPlugins}
-          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-purple-400 transition cursor-pointer"
+          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-arvdoul-purple transition cursor-pointer"
         >
           <Grid className="w-4 h-4" />
           <span>Plugins</span>
         </button>
 
-        {/* Elevated Center (+) Record / Add Button */}
+        {/* Elevated Center (+) Import / Add Track Button */}
         <button
-          onClick={onRecord}
-          className="w-12 h-12 -mt-5 rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(139,30,243,0.6)] hover:scale-110 active:scale-95 transition-all cursor-pointer"
+          type="button"
+          onClick={onOpenMedia}
+          className="w-12 h-12 -mt-5 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
           style={{ background: BRAND_GRADIENT }}
-          title="Record / Add Track"
+          aria-label="Import Audio Track"
+          title="Import Audio Track"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />
         </button>
 
         {/* Record Mic */}
         <button
+          type="button"
           onClick={onRecord}
-          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-rose-400 transition cursor-pointer"
+          className={cn(
+            "flex flex-col items-center gap-1 text-[10px] font-semibold transition cursor-pointer",
+            isRecording ? "text-rose-500" : "hover:text-rose-400"
+          )}
         >
           <Mic className="w-4 h-4" />
-          <span>Record</span>
+          <span>{isRecording ? 'Stop' : 'Record'}</span>
         </button>
 
         {/* Settings */}
         <button
+          type="button"
           onClick={onOpenSettings}
-          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-purple-400 transition cursor-pointer"
+          className="flex flex-col items-center gap-1 text-[10px] font-semibold hover:text-arvdoul-purple transition cursor-pointer"
         >
           <Settings className="w-4 h-4" />
           <span>Settings</span>

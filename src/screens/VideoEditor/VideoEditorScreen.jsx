@@ -4,7 +4,9 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers as LayersIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
+import aiStudioService from '../../services/aiStudioService';
 import { INITIAL_TRACKS, RESOLUTION_PRESETS } from "./constants";
 
 import EditorHeader from './components/EditorHeader';
@@ -538,37 +540,195 @@ export default function VideoEditorScreen() {
         setSelectedClipId(newClip.id);
         if (location.state.title) setProjectName(location.state.title);
       })();
+    } else if (location.state?.script?.rawScriptText) {
+      initialMediaLoaded.current = true;
+      const lines = location.state.script.rawScriptText
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(0, 8);
+      if (lines.length > 0) {
+        const scriptClips = lines.map((line, i) => ({
+          id: `script-${Date.now()}-${i}`,
+          startTime: i * 4,
+          duration: 3.8,
+          text: line.slice(0, 90),
+          fontFamily: 'Plus Jakarta Sans',
+          color: '#FFFFFF',
+          bgColor: 'rgba(3, 7, 27, 0.72)',
+          fontSize: 24,
+          position: { x: 50, y: 80 },
+        }));
+        const nextTracks = tracks.map((t) =>
+          t.id === 'track-text' ? { ...t, clips: [...(t.clips || []), ...scriptClips] } : t
+        );
+        pushHistory(nextTracks);
+        if (location.state.script.title) setProjectName(location.state.script.title.slice(0, 48));
+        toast.success(`Loaded ${scriptClips.length} script cues onto Text Track.`);
+      }
     }
   }, [location.state]);
 
-  // AI Copilot Actions
-  const handleApplyAITool = (toolId) => {
+  // AI Copilot Actions (real Web Audio + Gemini API pipeline)
+  const handleApplyAITool = async (toolId) => {
     setIsProcessingAI(true);
-    setAiStatusMessage(
-      toolId === 'captions'
-        ? 'Transcribing audio and aligning video subtitles...'
-        : toolId === 'smart_cut'
-        ? 'Detecting silence and cutting dead air...'
-        : toolId === 'enhance'
-        ? 'Filtering background noise & boosting clarity...'
-        : 'Rotoscoping subject and removing background...'
-    );
+    try {
+      const targetClip =
+        selectedClip ||
+        currentVideoClip ||
+        tracks.flatMap((t) => t.clips || []).find((c) => c.url);
 
-    setTimeout(() => {
       if (toolId === 'captions') {
-        handleAddTextClip({
-          text: '✨ Powered by ARVDOUL AI Engine',
-          fontFamily: 'Plus Jakarta Sans',
-          color: '#ffffff',
-          bgColor: 'rgba(147, 51, 234, 0.4)',
-          fontSize: 28,
+        setAiStatusMessage('Extracting audio & transcribing speech...');
+        if (!targetClip?.url) {
+          toast.error('Add a video or audio clip to the timeline first.');
+          return;
+        }
+        const resp = await fetch(targetClip.url);
+        if (!resp.ok) throw new Error('Could not read clip audio.');
+        const blob = await resp.blob();
+        const audioBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = String(reader.result || '');
+            resolve(result.includes(',') ? result.split(',')[1] : result);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
         });
-      } else if (toolId === 'smart_cut') {
-        handleSplitClip();
+        const transcript = await aiStudioService.transcribeAudio({
+          audioBase64,
+          mimeType: blob.type || 'video/webm',
+        });
+        if (!transcript?.text && !(transcript?.segments?.length > 0)) {
+          toast.error('No speech detected or transcription unavailable.');
+          return;
+        }
+        const segments =
+          transcript.segments?.length > 0
+            ? transcript.segments
+            : transcript.text
+                .split(/(?<=[.!?])\s+/)
+                .filter(Boolean)
+                .map((s, idx) => ({
+                  startSec: (targetClip.startTime || 0) + idx * 3,
+                  endSec: (targetClip.startTime || 0) + (idx + 1) * 3,
+                  text: s,
+                }));
+        const captionClips = segments.map((seg, idx) => ({
+          id: `caption-${Date.now()}-${idx}`,
+          startTime: Number(seg.startSec) || (targetClip.startTime || 0) + idx * 3,
+          duration: Math.max(1.2, (Number(seg.endSec) || idx * 3 + 3) - (Number(seg.startSec) || idx * 3)),
+          text: String(seg.text || '').trim(),
+          fontFamily: 'Plus Jakarta Sans',
+          color: '#FFFFFF',
+          bgColor: 'rgba(3, 7, 27, 0.78)',
+          fontSize: 26,
+          position: { x: 50, y: 84 },
+        }));
+        const nextTracks = tracks.map((t) =>
+          t.id === 'track-text' ? { ...t, clips: [...(t.clips || []), ...captionClips] } : t
+        );
+        pushHistory(nextTracks);
+        toast.success(`Generated ${captionClips.length} synced subtitle clips.`);
+        return;
       }
+
+      if (toolId === 'smart_cut') {
+        setAiStatusMessage('Scanning waveform energy to cut silent dead air...');
+        if (!targetClip?.url) {
+          toast.error('Select a video or audio clip first.');
+          return;
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) throw new Error('Web Audio API unavailable.');
+        const resp = await fetch(targetClip.url);
+        const arr = await resp.arrayBuffer();
+        const tmpCtx = new AudioCtx();
+        let audioBuffer;
+        try {
+          audioBuffer = await tmpCtx.decodeAudioData(arr);
+        } finally {
+          tmpCtx.close().catch(() => {});
+        }
+        const samples = audioBuffer.getChannelData(0);
+        const winSize = Math.max(1, Math.floor(audioBuffer.sampleRate * 0.1)); // 100ms windows
+        const silenceThreshold = 0.014;
+        const segments = [];
+        let speechStart = null;
+        let silenceCount = 0;
+
+        for (let i = 0; i < samples.length; i += winSize) {
+          let sumSq = 0;
+          const end = Math.min(samples.length, i + winSize);
+          for (let j = i; j < end; j++) sumSq += samples[j] * samples[j];
+          const rms = Math.sqrt(sumSq / (end - i));
+          const tSec = i / audioBuffer.sampleRate;
+
+          if (rms >= silenceThreshold) {
+            if (speechStart === null) speechStart = Math.max(0, tSec - 0.1);
+            silenceCount = 0;
+          } else if (speechStart !== null) {
+            silenceCount += 0.1;
+            if (silenceCount >= 0.45) {
+              segments.push({ start: speechStart, end: tSec - 0.25 });
+              speechStart = null;
+              silenceCount = 0;
+            }
+          }
+        }
+        if (speechStart !== null) {
+          segments.push({ start: speechStart, end: audioBuffer.duration });
+        }
+        if (segments.length <= 1) {
+          toast.info('No extended silences (>0.45s) detected in this clip.');
+          return;
+        }
+        let cursor = targetClip.startTime || 0;
+        const cutClips = segments
+          .filter((seg) => seg.end - seg.start >= 0.35)
+          .map((seg, idx) => {
+            const dur = Math.max(0.4, seg.end - seg.start);
+            const piece = {
+              ...targetClip,
+              id: `${targetClip.id}-cut-${idx}-${Date.now().toString().slice(-4)}`,
+              startTime: cursor,
+              duration: Number(dur.toFixed(2)),
+              trimStart: Number(seg.start.toFixed(2)),
+              title: `${targetClip.title || 'Clip'} #${idx + 1}`,
+            };
+            cursor += piece.duration;
+            return piece;
+          });
+        const nextTracks = tracks.map((t) =>
+          (t.clips || []).some((c) => c.id === targetClip.id)
+            ? { ...t, clips: t.clips.flatMap((c) => (c.id === targetClip.id ? cutClips : [c])) }
+            : t
+        );
+        pushHistory(nextTracks);
+        toast.success(`Trimmed dead air into ${cutClips.length} clean segments.`);
+        return;
+      }
+
+      if (toolId === 'enhance') {
+        setAiStatusMessage('Calibrating visual contrast & color punch...');
+        setAdjustments((prev) => ({
+          ...prev,
+          brightness: 104,
+          contrast: 112,
+          saturate: 118,
+        }));
+        toast.success('Calibrated studio grading applied.');
+        return;
+      }
+
+      toast.info('Subject rotoscoping requires server WebCodecs pipeline.');
+    } catch (err) {
+      toast.error(err?.message || 'Tool processing failed.');
+    } finally {
       setIsProcessingAI(false);
       setAiStatusMessage('');
-    }, 1500);
+    }
   };
 
   // Adjustment Controls

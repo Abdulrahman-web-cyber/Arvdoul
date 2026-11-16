@@ -4,14 +4,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, Eye, Trash2, Flag, Image as ImageIcon, Video, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Search, Eye, Trash2, Flag, Image as ImageIcon, Video, FileText, CheckCircle, XCircle } from "lucide-react";
 import PermissionDenied from '../../design-system/PermissionDenied.jsx';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import AdminNavHeader from '../../components/Admin/AdminNavHeader.jsx';
 
-// A missing/unknown count renders as "—", never as a fabricated 0 (a post whose
-// stats never loaded is not a post with zero views).
 const formatStat = (value) => {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n.toLocaleString() : "—";
@@ -34,7 +32,7 @@ const AdminContentManagementScreen = () => {
         const { getAdminService } = await import('../../services/adminService.js');
         const rows = await getAdminService().listContent(100);
         setContent(rows);
-      } catch (err) {
+      } catch {
         toast.error('Could not load content.');
       } finally {
         setLoading(false);
@@ -43,17 +41,17 @@ const AdminContentManagementScreen = () => {
     load();
   }, [user]);
 
-  const filteredContent = content.filter(c => {
-    if (filter === 'all') return true;
-    return c.type === filter;
-  }).filter(c => {
-    if (!searchQuery) return true;
-    return c.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           c.authorName?.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredContent = content
+    .filter((c) => {
+      if (filter === 'all') return true;
+      return c.type === filter;
+    })
+    .filter((c) => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return c.content?.toLowerCase().includes(q) || c.authorName?.toLowerCase().includes(q);
+    });
 
-  // Moderation decisions are server-authoritative: the callable re-checks
-  // admins/{uid}, updates the document and writes the audit entry.
   const handleContentAction = async (contentId, action) => {
     try {
       await callFunction(FUNCTIONS.ADMIN_MODERATE_CONTENT, {
@@ -61,8 +59,8 @@ const AdminContentManagementScreen = () => {
         contentId,
         action,
       });
-      setContent(prev => prev.map(c => (c.id === contentId ? { ...c, isDeleted: action === 'remove' } : c)));
-      toast.success(action === 'remove' ? 'Content removed.' : 'Content restored.');
+      setContent((prev) => prev.map((c) => (c.id === contentId ? { ...c, isDeleted: action === 'remove' } : c)));
+      toast.success(action === 'remove' ? 'Content removed.' : 'Content updated.');
     } catch (error) {
       toast.error(error?.message || 'Action failed.');
     }
@@ -73,167 +71,145 @@ const AdminContentManagementScreen = () => {
       case 'image':
         return <ImageIcon className="w-5 h-5 text-blue-500" />;
       case 'video':
-        return <Video className="w-5 h-5 text-purple-500" />;
+        return <Video className="w-5 h-5 text-arvdoul-purple" />;
       default:
-        return <FileText className="w-5 h-5 text-gray-500" />;
+        return <FileText className="w-5 h-5 text-slate-500" />;
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="w-10 h-10 border-4 border-slate-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (denied) {
-    return (
-      <PermissionDenied onGoHome={() => navigate('/')} />
-    );
+    return <PermissionDenied onGoHome={() => navigate('/')} />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/admin')}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                Content Management
-              </h1>
-              <p className="text-sm text-gray-500">Manage posts, videos, and media</p>
-            </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <AdminNavHeader
+        title="Content Management"
+        subtitle="Manage posts, videos, and media across the platform"
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative flex-1 sm:max-w-sm">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              aria-label="Search posts and media"
+              type="text"
+              placeholder="Search content..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+            />
           </div>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Filters */}
-        <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 mb-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input aria-label="Manage posts, videos, and media"
-                type="text"
-                placeholder="Search content..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-500"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {['all', 'text', 'image', 'video'].map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setFilter(type)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors capitalize ${
-                    filter === type
-                      ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {type === 'all' ? 'All' : type}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+            {['all', 'text', 'image', 'video'].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setFilter(type)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition cursor-pointer ${
+                  filter === type
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {type === 'all' ? 'All' : type}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Content List */}
-        <div className="space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
           {filteredContent.map((item) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
-            >
-              <div className="flex gap-4">
-                <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
-                  {item.media?.[0]?.url ? (
-                    <LazyImage src={item.media[0].url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      {getContentIcon(item.type)}
-                    </div>
+            <div key={item.id} className="p-4 sm:p-5 flex gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+              <div className="w-14 h-14 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
+                {item.media?.[0]?.url ? (
+                  <LazyImage src={item.media[0].url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  getContentIcon(item.type)
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm text-slate-900 dark:text-white line-clamp-2">
+                      {item.content || 'No content'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 tabular-nums">
+                      by @{item.authorName} · {new Date(item.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/post/${item.id}`)}
+                      className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                      aria-label="View post"
+                      title="View"
+                    >
+                      <Eye className="w-4 h-4 text-slate-500" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/profile/${item.authorId}`)}
+                      className="px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs text-slate-500 cursor-pointer"
+                      aria-label={`View author ${item.authorName || item.authorId}`}
+                    >
+                      @{item.authorName}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContentAction(item.id, 'hide')}
+                      className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                      aria-label="Hide post"
+                      title="Hide"
+                    >
+                      <XCircle className="w-4 h-4 text-amber-500" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContentAction(item.id, 'delete')}
+                      className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                      aria-label="Delete post"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 tabular-nums">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5" /> {formatStat(item.stats?.views)} views
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" /> {formatStat(item.stats?.likes)} likes
+                  </span>
+                  {item.reportCount > 0 && (
+                    <span className="flex items-center gap-1 text-red-500 font-medium">
+                      <Flag className="w-3.5 h-3.5" /> {item.reportCount} reports
+                    </span>
                   )}
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white line-clamp-2">
-                        {item.content || 'No content'}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        by @{item.authorName} • {new Date(item.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => navigate(`/post/${item.id}`)}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                        title="View"
-                      >
-                        <Eye className="w-4 h-4 text-gray-500" />
-                      </button>
-                      <button
-                        onClick={() => navigate(`/profile/${item.authorId}`)}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                        title="View Author"
-                      >
-                        <span className="text-xs text-gray-500">@{item.authorName}</span>
-                      </button>
-                      <button
-                        onClick={() => handleContentAction(item.id, 'hide')}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                        title="Hide"
-                      >
-                        <XCircle className="w-4 h-4 text-yellow-500" />
-                      </button>
-                      <button
-                        onClick={() => handleContentAction(item.id, 'delete')}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 mt-2 text-sm">
-                    <span className="flex items-center gap-1 text-gray-500">
-                      <Eye className="w-4 h-4" /> {formatStat(item.stats?.views)} views
-                    </span>
-                    <span className="flex items-center gap-1 text-gray-500">
-                      <CheckCircle className="w-4 h-4" /> {formatStat(item.stats?.likes)} likes
-                    </span>
-                    {item.reportCount > 0 && (
-                      <span className="flex items-center gap-1 text-red-500">
-                        <Flag className="w-4 h-4" /> {item.reportCount} reports
-                      </span>
-                    )}
-                  </div>
-                </div>
               </div>
-            </motion.div>
+            </div>
           ))}
 
           {filteredContent.length === 0 && (
-            <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-              <FileText className="w-12 h-12 mx-auto text-gray-400 mb-3" />
-              <p className="text-gray-500">No content found</p>
+            <div className="p-12 text-center">
+              <FileText className="w-10 h-10 mx-auto text-slate-400 mb-2" />
+              <p className="text-sm text-slate-500">No content found</p>
             </div>
           )}
         </div>

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { RefreshCw, Compass, AlertCircle, ChevronDown, ChevronUp, Coins, Gift, Check } from "lucide-react";
+import { RefreshCw, Compass, AlertCircle, ChevronDown, ChevronUp, Coins, Gift, Check, Trophy, Radio, Wand2, Film, Headphones, Image as ImageIcon, ArrowRight } from "lucide-react";
 import { Virtuoso } from 'react-virtuoso';
 import feedService from '../services/feedService';
 import userService from '../services/userService';
@@ -20,6 +20,7 @@ import PostOptionsDrawer from './PostOptionsDrawer';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { triggerHaptic } from '../utils/haptics';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import { LazyImage } from '../components/Shared/LazyImage';
 import { openDB } from 'idb';
 import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
@@ -1333,10 +1334,46 @@ export default function HomeScreen() {
   const openComments = useCallback((post) => { setActivePost(post); setShowComments(true); }, []);
   const openOptions = useCallback((post) => { setActivePost(post); setShowOptions(true); }, []);
 
+  // Desktop discovery rail data (bounded one-shot reads, no listeners)
+  const [topCreators, setTopCreators] = useState([]);
+  const [liveSpaces, setLiveSpaces] = useState([]);
+  const [discoveryLoaded, setDiscoveryLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ getRankingService }, spacesMod] = await Promise.all([
+          import('../services/rankingService.js'),
+          import('../services/spacesService.js'),
+        ]);
+        const spacesSvc = spacesMod.spacesService || spacesMod.default;
+        const [creatorsRes, spacesRes] = await Promise.allSettled([
+          getRankingService().getCreatorRankings('engagement', 'month', 0, user?.uid ?? null),
+          spacesSvc.getActiveSpaces('All', user?.uid ?? null),
+        ]);
+        if (cancelled) return;
+        const creatorsList = creatorsRes.status === 'fulfilled'
+          ? (Array.isArray(creatorsRes.value) ? creatorsRes.value : creatorsRes.value?.rankings || [])
+          : [];
+        const spacesList = spacesRes.status === 'fulfilled' && Array.isArray(spacesRes.value)
+          ? spacesRes.value
+          : [];
+        setTopCreators(creatorsList.slice(0, 5));
+        setLiveSpaces(spacesList.slice(0, 4));
+      } catch {
+        // Non-fatal side rail failure
+      } finally {
+        if (!cancelled) setDiscoveryLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
   if (authLoading) {
     return (
       <div className={cn(
-        'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto py-6',
+        'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-6xl mx-auto px-4 py-6',
         isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <FeedSkeleton />
@@ -1359,81 +1396,85 @@ export default function HomeScreen() {
   return (
     <VisibilityProvider root={scrollerRootEl}>
       <div className={cn(
-        'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto',
+        'h-full min-h-0 w-full max-w-6xl mx-auto xl:grid xl:grid-cols-[minmax(0,640px)_320px] xl:justify-center xl:gap-8 overflow-hidden',
         isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
-        {/* Banners */}
-        <div className="relative flex-shrink-0 z-10">
-          <AnimatePresence>
-            {status === STATUS.REFRESHING && (
-              <motion.div
+        <div className="h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto xl:mx-0">
+          {/* Banners */}
+          <div className="relative flex-shrink-0 z-10">
+            <AnimatePresence>
+              {status === STATUS.REFRESHING && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="absolute top-0 left-1/2 -translate-x-1/2 z-50 bg-arvdoul-purple text-white px-4 py-1 rounded-full text-xs shadow-lg flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Refreshing...
+                </motion.div>
+              )}
+              {newPostsCount > 0 && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="absolute top-12 left-1/2 -translate-x-1/2 z-50 cursor-pointer bg-arvdoul-gradient text-white py-1.5 px-5 rounded-full text-xs font-semibold shadow-lg backdrop-blur-sm"
+                  onClick={insertNewPosts}
+                >
+                  {newPostsCount} new post{newPostsCount > 1 ? 's' : ''} – tap to refresh
+                </motion.button>
+              )}
+              <motion.button
+                type="button"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="absolute top-0 left-1/2 -translate-x-1/2 z-50 bg-purple-500 text-white px-4 py-1 rounded-full text-xs shadow-lg flex items-center gap-1"
+                onClick={handleRefresh}
+                aria-label="Refresh feed"
+                title="Refresh feed"
+                className="absolute top-12 right-3 z-40 rounded-full bg-black/40 dark:bg-white/10 backdrop-blur-md p-2 text-white shadow-lg transition-colors hover:bg-black/60"
               >
-                <RefreshCw className="w-3 h-3 animate-spin" /> Refreshing...
-              </motion.div>
-            )}
-            {newPostsCount > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="absolute top-12 left-1/2 -translate-x-1/2 z-50 cursor-pointer bg-gradient-to-r from-purple-500 to-pink-500 text-white py-1.5 px-5 rounded-full text-xs font-semibold shadow-lg backdrop-blur-sm"
-                onClick={insertNewPosts}
-              >
-                {newPostsCount} new post{newPostsCount > 1 ? 's' : ''} – tap to refresh
-              </motion.div>
-            )}
-            <motion.button
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              onClick={handleRefresh}
-              aria-label="Refresh feed"
-              title="Refresh feed"
-              className="absolute top-12 right-3 z-40 rounded-full bg-black/40 dark:bg-white/10 backdrop-blur-md p-2 text-white shadow-lg transition-colors hover:bg-black/60"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </motion.button>
-          </AnimatePresence>
-        </div>
+                <RefreshCw className="w-4 h-4" />
+              </motion.button>
+            </AnimatePresence>
+          </div>
 
-        {/* Feed container */}
-        <div className="relative flex-1 min-h-0 w-full">
-          <PullToRefresh pull={pull} threshold={threshold} isRefreshing={isRefreshing} />
-          {isInitialLoading && <FeedLoadingBanner />}
-          {showErrorState ? (
-            <div className="min-h-[60vh] flex items-center justify-center px-4">
-              <div className="text-center">
-                <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                <h3 className="text-xl font-bold mb-2 dark:text-white">Connection Error</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6">{error}</p>
-                <button onClick={handleRetry} className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium shadow-lg">Retry</button>
-              </div>
-            </div>
-          ) : showEmptyState ? (
-            <div className="min-h-[60vh] flex items-center justify-center px-4">
-              <div className="text-center max-w-sm">
-                <div className="w-16 h-16 rounded-full bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto mb-4">
-                  <Compass className="w-8 h-8" />
+          {/* Feed container */}
+          <div className="relative flex-1 min-h-0 w-full">
+            <PullToRefresh pull={pull} threshold={threshold} isRefreshing={isRefreshing} />
+            {isInitialLoading && <FeedLoadingBanner />}
+            {showErrorState ? (
+              <div className="min-h-[60vh] flex items-center justify-center px-4">
+                <div className="text-center">
+                  <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold mb-2 dark:text-white">Connection Error</h3>
+                  <p className="text-gray-500 dark:text-gray-400 mb-6">{error}</p>
+                  <button type="button" onClick={handleRetry} className="px-6 py-3 rounded-xl bg-arvdoul-gradient text-white font-medium shadow-lg">Retry</button>
                 </div>
-                <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
-                  {activeFeedTab === 'following' ? "No posts from following creators" : "No posts found yet"}
-                </h3>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                  {activeFeedTab === 'following'
-                    ? "Creators you follow will show up here. Switch to 'For You' or create your own post!"
-                    : "Be the first to share a post, thought, photo, or vibe with the community!"}
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => navigate('/create-post')}
-                    className="px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold text-sm shadow-lg shadow-purple-500/25 hover:opacity-95 transition-opacity cursor-pointer"
-                  >
-                    Create Post
-                  </button>
+              </div>
+            ) : showEmptyState ? (
+              <div className="min-h-[60vh] flex items-center justify-center px-4">
+                <div className="text-center max-w-sm">
+                  <div className="w-16 h-16 rounded-full bg-arvdoul-purple/10 text-arvdoul-purple dark:text-purple-300 flex items-center justify-center mx-auto mb-4">
+                    <Compass className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+                    {activeFeedTab === 'following' ? "No posts from following creators" : "No posts found yet"}
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                    {activeFeedTab === 'following'
+                      ? "Creators you follow will show up here. Switch to 'For You' or create your own post!"
+                      : "Be the first to share a post, thought, photo, or vibe with the community!"}
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/create-post')}
+                      className="px-5 py-2.5 rounded-full bg-arvdoul-gradient text-white font-semibold text-sm shadow-lg hover:opacity-95 transition-opacity cursor-pointer"
+                    >
+                      Create Post
+                    </button>
                   {activeFeedTab !== 'foryou' && (
                     <button
                       onClick={() => setActiveFeedTab('foryou')}
@@ -1517,11 +1558,12 @@ export default function HomeScreen() {
                           <div className="flex items-center gap-1.5">
                             {/* Coins Balance Pill */}
                             <button
+                              type="button"
                               onClick={() => {
                                 triggerHaptic('light');
                                 navigate('/coins');
                               }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold transition-colors cursor-pointer"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold tabular-nums transition-colors cursor-pointer"
                               title="Arvdoul Coins Balance"
                             >
                               <Coins className="w-3.5 h-3.5 text-amber-500" />
@@ -1530,11 +1572,12 @@ export default function HomeScreen() {
 
                             {/* Watch Ad / Claim Reward Button */}
                             <button
+                              type="button"
                               onClick={() => {
                                 triggerHaptic('medium');
                                 handleOpenRewardAd();
                               }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold shadow-sm shadow-purple-500/20 hover:opacity-95 transition-opacity cursor-pointer"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-arvdoul-gradient text-white text-xs font-bold tabular-nums shadow-sm hover:opacity-95 transition-opacity cursor-pointer"
                               title="Watch Sponsored Ad for Free Coins"
                             >
                               <Gift className="w-3.5 h-3.5" />
@@ -1559,6 +1602,8 @@ export default function HomeScreen() {
                                     Select Feed View
                                   </span>
                                   <button
+                                    type="button"
+                                    aria-label="Close feed view selector"
                                     onClick={() => setIsFilterShelfOpen(false)}
                                     className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-0.5 rounded cursor-pointer"
                                   >
@@ -1571,6 +1616,7 @@ export default function HomeScreen() {
                                     return (
                                       <button
                                         key={cat.id}
+                                        type="button"
                                         onClick={() => {
                                           triggerHaptic('light');
                                           if (cat.action) {
@@ -1583,7 +1629,7 @@ export default function HomeScreen() {
                                         className={cn(
                                           "flex flex-col items-start p-2.5 rounded-xl text-left transition-all cursor-pointer",
                                           isSelected
-                                            ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/20"
+                                            ? "bg-arvdoul-gradient text-white shadow-md"
                                             : "bg-gray-50 dark:bg-white/5 border border-gray-200/60 dark:border-white/5 text-gray-700 dark:text-gray-300 hover:bg-purple-500/10"
                                         )}
                                       >
@@ -1695,6 +1741,7 @@ export default function HomeScreen() {
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsRewardAdOpen(false)}
                   className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium cursor-pointer"
                 >
@@ -1704,6 +1751,181 @@ export default function HomeScreen() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
+
+        {/* Desktop Discovery Rail */}
+        <aside
+          aria-label="Discover creators and live audio"
+          className="hidden xl:flex flex-col gap-5 py-4 pr-2 min-h-0 overflow-y-auto"
+        >
+          {/* Top Creators */}
+          <section className={cn(
+            'rounded-2xl border p-4 space-y-3',
+            isDark ? 'bg-[#0b1024]/85 border-white/10' : 'bg-white/90 border-slate-200/80 shadow-sm'
+          )}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500" aria-hidden="true" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Top Creators</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/rankings')}
+                className="text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline flex items-center gap-1"
+              >
+                <span>Leaderboard</span>
+                <ArrowRight className="w-3 h-3" aria-hidden="true" />
+              </button>
+            </div>
+
+            {topCreators.length > 0 ? (
+              <div className="space-y-2">
+                {topCreators.map((entry) => {
+                  const u = entry.user || {};
+                  const creatorName = pickDisplayName(
+                    [u.displayName, u.name],
+                    { fallback: entry.userId ? `user ${String(entry.userId).slice(0, 6)}` : 'Creator' }
+                  );
+                  const creatorHandle = deriveHandle(u.username || u.email || creatorName);
+                  const avatar = getSafeAvatarUrl(u.photoURL || u.avatar, creatorName, entry.userId);
+                  return (
+                    <button
+                      key={entry.userId || entry.rank}
+                      type="button"
+                      onClick={() => entry.userId && navigate(`/profile/${entry.userId}`)}
+                      className={cn(
+                        'w-full flex items-center justify-between gap-2.5 p-2 rounded-xl text-left transition-colors',
+                        isDark ? 'hover:bg-white/5' : 'hover:bg-slate-50'
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-5 text-xs font-bold tabular-nums text-slate-400 text-center shrink-0">
+                          {entry.rank}
+                        </span>
+                        <LazyImage
+                          src={avatar}
+                          alt={creatorName}
+                          className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate text-slate-900 dark:text-white">{creatorName}</p>
+                          {creatorHandle && (
+                            <p className="text-[11px] truncate text-slate-500 dark:text-slate-400">@{creatorHandle}</p>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-semibold tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
+                        {entry.score == null ? '—' : Number(entry.score).toLocaleString()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 dark:text-slate-400 py-2">
+                {discoveryLoaded ? 'No creator rankings published yet.' : 'Loading creator rankings…'}
+              </p>
+            )}
+          </section>
+
+          {/* Live Audio Spaces */}
+          <section className={cn(
+            'rounded-2xl border p-4 space-y-3',
+            isDark ? 'bg-[#0b1024]/85 border-white/10' : 'bg-white/90 border-slate-200/80 shadow-sm'
+          )}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Radio className="w-4 h-4 text-emerald-500" aria-hidden="true" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Live Spaces</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/spaces')}
+                className="text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline flex items-center gap-1"
+              >
+                <span>Open Spaces</span>
+                <ArrowRight className="w-3 h-3" aria-hidden="true" />
+              </button>
+            </div>
+
+            {liveSpaces.length > 0 ? (
+              <div className="space-y-2">
+                {liveSpaces.map((space) => (
+                  <button
+                    key={space.id}
+                    type="button"
+                    onClick={() => navigate('/spaces')}
+                    className={cn(
+                      'w-full flex items-center justify-between gap-2 p-2.5 rounded-xl border text-left transition-colors',
+                      isDark ? 'bg-white/[0.03] border-white/10 hover:bg-white/10' : 'bg-slate-50 border-slate-200/70 hover:bg-slate-100'
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold truncate text-slate-900 dark:text-white">
+                        {space.title || 'Untitled Space'}
+                      </p>
+                      <p className="text-[11px] truncate text-slate-500 dark:text-slate-400">
+                        {space.host?.name || 'Host'} · {space.category || 'General'}
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 shrink-0">
+                      {space.audienceCount == null ? '—' : Number(space.audienceCount).toLocaleString()}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 py-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {discoveryLoaded ? 'No live audio rooms right now.' : 'Checking live audio rooms…'}
+                </p>
+                {discoveryLoaded && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/spaces')}
+                    className="text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline shrink-0"
+                  >
+                    Start one
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Creator Suite */}
+          <section className={cn(
+            'rounded-2xl border p-4 space-y-3',
+            isDark ? 'bg-[#0b1024]/85 border-white/10' : 'bg-white/90 border-slate-200/80 shadow-sm'
+          )}>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Creator Suite</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'AI Studio', path: '/ai-studio', icon: Wand2 },
+                { label: 'Video Editor', path: '/video-editor', icon: Film },
+                { label: 'Audio Studio', path: '/audio-editor', icon: Headphones },
+                { label: 'Thumbnails', path: '/thumbnail-designer', icon: ImageIcon },
+              ].map((tool) => {
+                const Icon = tool.icon;
+                return (
+                  <button
+                    key={tool.path}
+                    type="button"
+                    onClick={() => navigate(tool.path)}
+                    className={cn(
+                      'flex items-center gap-2 p-2.5 rounded-xl border text-left text-xs font-semibold transition-colors',
+                      isDark
+                        ? 'bg-white/[0.03] border-white/10 text-slate-200 hover:bg-white/10'
+                        : 'bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100'
+                    )}
+                  >
+                    <Icon className="w-4 h-4 text-arvdoul-purple dark:text-purple-300 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{tool.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </aside>
       </div>
     </VisibilityProvider>
   );

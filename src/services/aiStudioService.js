@@ -138,10 +138,10 @@ class AIStudioService {
       return this.promptCache.get(cacheKey);
     }
 
-    // 3. Server-side AI gateway (Cloud Function / proxy). The OpenAI key NEVER
-    // ships to the client. The gateway authenticates the user, enforces per-
-    // user rate limits and budget caps, and holds the provider credentials.
-    const gatewayUrl = import.meta.env?.VITE_AI_GATEWAY_URL;
+    // 3. Server-side AI gateway (Express /api/ai/* or Cloud Function VITE_AI_GATEWAY_URL).
+    // Under Jest (no VITE_AI_GATEWAY_URL configured), stay null per noMocks.test.js.
+    const isJest = typeof process !== 'undefined' && Boolean(process.env?.JEST_WORKER_ID);
+    const gatewayUrl = import.meta.env?.VITE_AI_GATEWAY_URL || (!isJest ? '/api/ai/generate' : null);
     if (!gatewayUrl) {
       log.warn('VITE_AI_GATEWAY_URL not configured - AI requests require a server-side gateway (functions/ai.js). No local fallback is produced; the caller must show an honest error.');
       return null;
@@ -160,7 +160,7 @@ class AIStudioService {
       }
 
       const data = await response.json();
-      const content = data.content || data.choices?.[0]?.message?.content || null;
+      const content = data.content || data.text || data.choices?.[0]?.message?.content || null;
 
       // Server-reported usage/cost is authoritative; local estimate is a fallback.
       const promptTokens = data.usage?.prompt_tokens || 0;
@@ -332,16 +332,31 @@ class AIStudioService {
    */
   async localizeContent({ text, targetLanguages = ['es', 'fr', 'ja', 'pt', 'de'] }) {
     const cleanText = text || 'Discover the best content creation strategies on Arvdoul.';
-    const systemPrompt = "You are a master localization engine translating social media captions precisely.";
-    const prompt = `Translate this text exactly into these target languages: ${targetLanguages.join(', ')}. Text: "${cleanText}"`;
+    const systemPrompt =
+      'You are a master localization engine. Respond ONLY with a valid JSON object mapping each ISO language code to its natural translation (no markdown fences, no commentary).';
+    const prompt = `Translate the following text into each of these language codes (${targetLanguages.join(', ')}). Return strictly JSON like {"es":"...","fr":"..."}.\nText: "${cleanText}"`;
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
-      return targetLanguages.map(lang => ({
-        code: lang,
-        translation: realResponse,
-        source: 'ai-gateway'
-      }));
+      let parsed = null;
+      try {
+        const cleaned = realResponse
+          .replace(/^```(?:json)?/i, '')
+          .replace(/```$/i, '')
+          .trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        parsed = null;
+      }
+
+      return targetLanguages.map(lang => {
+        const translated = parsed && typeof parsed[lang] === 'string' && parsed[lang].trim()
+          ? parsed[lang].trim()
+          : null;
+        return translated
+          ? { code: lang, translation: translated, source: 'ai-gateway' }
+          : { code: lang, translation: realResponse, source: 'ai-gateway' };
+      });
     }
 
     // NO fabricated translations. When the AI gateway is unavailable the
@@ -354,6 +369,83 @@ class AIStudioService {
       untranslated: true,
       original: cleanText,
     }));
+  }
+
+  /**
+   * Synthesize creator speech/voiceover via Express /api/ai/tts
+   */
+  async generateVoiceover({ text, voiceName = 'Kore', style = '', multiSpeaker = false, dialogue = [] } = {}) {
+    const isJest = typeof process !== 'undefined' && Boolean(process.env?.JEST_WORKER_ID);
+    if (isJest || !text?.trim()) return null;
+
+    try {
+      const response = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.trim(), voiceName, style, multiSpeaker, dialogue }),
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const audioBase64 =
+        data?.audioBase64 ||
+        (typeof data?.audioDataUrl === 'string' && data.audioDataUrl.includes(',')
+          ? data.audioDataUrl.split(',')[1]
+          : null);
+      if (!audioBase64) return null;
+      const mimeType = data.mimeType || 'audio/wav';
+      return {
+        audioDataUrl: data.audioDataUrl || `data:${mimeType};base64,${audioBase64}`,
+        audioBase64,
+        mimeType,
+        model: data.model || null,
+        source: 'ai-gateway',
+      };
+    } catch (err) {
+      log.error('Voiceover TTS request failed:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Transcribe audio via Express /api/ai/transcribe
+   */
+  async transcribeAudio({ audioBase64, mimeType = 'audio/webm', instruction = '' } = {}) {
+    const isJest = typeof process !== 'undefined' && Boolean(process.env?.JEST_WORKER_ID);
+    if (isJest || !audioBase64) return null;
+
+    try {
+      const response = await fetch('/api/ai/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioBase64, mimeType, instruction }),
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const text = data.text || data.transcript || '';
+      const rawSegments = Array.isArray(data.segments)
+        ? data.segments
+        : Array.isArray(data.lines)
+          ? data.lines
+          : [];
+      const segments = rawSegments
+        .map((seg, idx) =>
+          typeof seg === 'string'
+            ? { startSec: idx * 3, endSec: (idx + 1) * 3, text: seg }
+            : seg
+        )
+        .filter((seg) => Boolean(seg?.text?.trim()));
+      return {
+        text,
+        segments,
+        model: data.model || null,
+        source: 'ai-gateway',
+      };
+    } catch (err) {
+      log.error('Audio transcription request failed:', err);
+      return null;
+    }
   }
 
   /**

@@ -1,29 +1,64 @@
 // src/screens/AIStudio/AIStudioScreen.jsx
 //
-// Comprehensive AI toolkit: Viral Hooks, Caption Crafter, Reel Scriptwriter, Prompt Studio, Viral Analyzer & Localization
+// Comprehensive AI toolkit: Viral Hooks, Caption Crafter, Reel Scriptwriter, Prompt Studio,
+// Viral Analyzer, Global Localization, and Voiceover TTS & Transcription.
 
-import { useState } from "react";
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Flame, Copy, Check, Video, Image as ImageIcon, TrendingUp, Globe, ArrowRight, Play, Lightbulb, Crown } from "lucide-react";
+import {
+  Sparkles,
+  Flame,
+  Copy,
+  Check,
+  Video,
+  Image as ImageIcon,
+  TrendingUp,
+  Globe,
+  ArrowRight,
+  Play,
+  Lightbulb,
+  Mic,
+  Volume2,
+  Upload,
+  Download,
+  Sliders,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
 import aiStudioService from '../../services/aiStudioService';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { cn } from '../../lib/utils';
 
 const TABS = [
-  { id: 'captions', label: 'Viral Captions & Hooks', icon: Flame, color: 'from-orange-500 to-red-500' },
-  { id: 'scripts', label: 'Reel Scriptwriter', icon: Video, color: 'from-purple-500 to-pink-500' },
-  { id: 'prompts', label: 'AI Image Prompt Studio', icon: ImageIcon, color: 'from-blue-500 to-indigo-500' },
-  { id: 'sentiment', label: 'Viral Score & Retention', icon: TrendingUp, color: 'from-green-500 to-emerald-500' },
-  { id: 'localize', label: 'Global Localization', icon: Globe, color: 'from-amber-500 to-yellow-500' }
+  { id: 'captions', label: 'Captions & Hooks', icon: Flame },
+  { id: 'scripts', label: 'Reel Scriptwriter', icon: Video },
+  { id: 'voiceover', label: 'Voiceover & Transcribe', icon: Mic },
+  { id: 'prompts', label: 'Image Prompts', icon: ImageIcon },
+  { id: 'sentiment', label: 'Viral Retention', icon: TrendingUp },
+  { id: 'localize', label: 'Localization', icon: Globe },
 ];
+
+const TTS_VOICES = [
+  { id: 'Kore', label: 'Kore — Crisp Narrator' },
+  { id: 'Puck', label: 'Puck — Energetic Creator' },
+  { id: 'Charon', label: 'Charon — Deep Documentary' },
+  { id: 'Aoede', label: 'Aoede — Warm Conversational' },
+  { id: 'Fenrir', label: 'Fenrir — Trailer Bold' },
+];
+
+function base64ToBlob(base64, mimeType) {
+  const bytes = atob(base64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i += 1) {
+    arr[i] = bytes.charCodeAt(i);
+  }
+  return new Blob([arr], { type: mimeType });
+}
 
 export default function AIStudioScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user } = useAuth();
   const isDark = theme === 'dark';
 
   const [activeTab, setActiveTab] = useState('captions');
@@ -41,31 +76,37 @@ export default function AIStudioScreen() {
   const [scriptStyle, setScriptStyle] = useState('tech');
   const [generatedScript, setGeneratedScript] = useState(null);
 
+  // Voiceover & Transcription State
+  const [voiceText, setVoiceText] = useState('Welcome to Arvdoul — turn your raw ideas into studio-grade stories in minutes.');
+  const [voiceName, setVoiceName] = useState('Kore');
+  const [voiceStyle, setVoiceStyle] = useState('confident, clear, engaging studio narration');
+  const [generatedVoiceover, setGeneratedVoiceover] = useState(null);
+  const [transcriptResult, setTranscriptResult] = useState(null);
+  const transcribeInputRef = useRef(null);
+
   // Prompt Studio State
-  const [promptSubject, setPromptSubject] = useState('Cyberpunk neon rooftop creator studio overlooking futuristic Tokyo skyline');
+  const [promptSubject, setPromptSubject] = useState('Architectural creator studio overlooking Tokyo skyline at dusk');
   const [promptStyle, setPromptStyle] = useState('Cinematic 8K');
   const [promptRatio, setPromptRatio] = useState('9:16');
   const [generatedPrompt, setGeneratedPrompt] = useState(null);
 
   // Viral Sentiment State
-  const [sentimentText, setSentimentText] = useState('Stop scrolling! Here is the exact roadmap to earning your first $1,000 on Arvdoul with 0 platform fees. Save this post right now.');
+  const [sentimentText, setSentimentText] = useState('Here is the exact roadmap to building your creator business on Arvdoul without middlemen. Save this post for reference.');
   const [viralAnalysis, setViralAnalysis] = useState(null);
 
   // Localization State
-  const [localizeText, setLocalizeText] = useState('Welcome to Arvdoul, the ultimate creative economy platform for modern creators.');
+  const [localizeText, setLocalizeText] = useState('Welcome to Arvdoul, the creative economy platform built for modern creators.');
   const [translations, setTranslations] = useState(null);
   const [aiError, setAiError] = useState(null);
 
-  // Honest error text: AI features require the server-side gateway
-  // (functions/ai.js, exposed as VITE_AI_GATEWAY_URL). Without it, no output
-  // is fabricated — the user sees exactly why nothing was generated.
   const AI_UNAVAILABLE_MSG =
     'AI Studio is not configured yet. The AI gateway (VITE_AI_GATEWAY_URL → functions/ai.js) must be set up before captions, scripts, prompts or analyses can be generated. Nothing was fabricated to hide this.';
 
   const handleCopy = (text) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
-    toast.success('Copied to clipboard! 📋');
+    toast.success('Copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -76,7 +117,7 @@ export default function AIStudioScreen() {
     try {
       const res = await aiStudioService.generateCaptions({
         topic: captionTopic,
-        tone: captionTone
+        tone: captionTone,
       });
       if (!res) {
         setAiError(AI_UNAVAILABLE_MSG);
@@ -85,7 +126,7 @@ export default function AIStudioScreen() {
         return;
       }
       setGeneratedCaption(res);
-      toast.success('Generated caption! ✍️');
+      toast.success('Caption generated');
     } catch (err) {
       setAiError(err?.message || 'Failed to generate caption');
       setGeneratedCaption(null);
@@ -103,7 +144,7 @@ export default function AIStudioScreen() {
       const res = await aiStudioService.generateScript({
         topic: scriptTopic,
         duration: scriptDuration,
-        style: scriptStyle
+        style: scriptStyle,
       });
       if (!res) {
         setAiError(AI_UNAVAILABLE_MSG);
@@ -112,7 +153,7 @@ export default function AIStudioScreen() {
         return;
       }
       setGeneratedScript(res);
-      toast.success('Generated video storyboard! 🎬');
+      toast.success('Storyboard script generated');
     } catch (err) {
       setAiError(err?.message || 'Failed to generate script');
       setGeneratedScript(null);
@@ -122,7 +163,71 @@ export default function AIStudioScreen() {
     }
   };
 
-  // 3. Generate Image Prompt
+  // 3. Voiceover TTS
+  const handleGenerateVoiceover = async () => {
+    setLoading(true);
+    setAiError(null);
+    try {
+      const res = await aiStudioService.generateVoiceover({
+        text: voiceText,
+        voiceName,
+        style: voiceStyle,
+      });
+      if (!res) {
+        setAiError(AI_UNAVAILABLE_MSG);
+        setGeneratedVoiceover(null);
+        toast.error('AI gateway unavailable — no voiceover was synthesized');
+        return;
+      }
+      setGeneratedVoiceover(res);
+      toast.success('Studio voiceover ready');
+    } catch (err) {
+      setAiError(err?.message || 'Voiceover synthesis failed');
+      setGeneratedVoiceover(null);
+      toast.error('Voiceover synthesis failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3b. Transcribe Uploaded Audio
+  const handleTranscribeFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+    setAiError(null);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise((resolve, reject) => {
+        reader.onload = () => {
+          const raw = typeof reader.result === 'string' ? reader.result : '';
+          resolve(raw.includes(',') ? raw.split(',')[1] : raw);
+        };
+        reader.onerror = () => reject(new Error('Could not read audio file'));
+        reader.readAsDataURL(file);
+      });
+      const res = await aiStudioService.transcribeAudio({
+        audioBase64: base64,
+        mimeType: file.type || 'audio/webm',
+      });
+      if (!res) {
+        setAiError(AI_UNAVAILABLE_MSG);
+        setTranscriptResult(null);
+        toast.error('AI gateway unavailable — could not transcribe audio');
+        return;
+      }
+      setTranscriptResult({ ...res, fileName: file.name });
+      toast.success('Audio transcribed');
+    } catch (err) {
+      setAiError(err?.message || 'Transcription failed');
+      toast.error('Transcription failed');
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  // 4. Generate Image Prompt
   const handleGeneratePrompt = async () => {
     setLoading(true);
     setAiError(null);
@@ -130,7 +235,7 @@ export default function AIStudioScreen() {
       const res = await aiStudioService.craftImagePrompt({
         subject: promptSubject,
         style: promptStyle,
-        ratio: promptRatio
+        ratio: promptRatio,
       });
       if (!res) {
         setAiError(AI_UNAVAILABLE_MSG);
@@ -139,7 +244,7 @@ export default function AIStudioScreen() {
         return;
       }
       setGeneratedPrompt(res);
-      toast.success('AI Prompt crafted! 🎨');
+      toast.success('Image prompt crafted');
     } catch (err) {
       setAiError(err?.message || 'Failed to craft prompt');
       setGeneratedPrompt(null);
@@ -149,7 +254,7 @@ export default function AIStudioScreen() {
     }
   };
 
-  // 4. Analyze Viral Score
+  // 5. Analyze Viral Score
   const handleAnalyzeViral = async () => {
     setLoading(true);
     setAiError(null);
@@ -162,7 +267,7 @@ export default function AIStudioScreen() {
         return;
       }
       setViralAnalysis(res);
-      toast.success('AI analysis complete! 📊');
+      toast.success('Retention audit complete');
     } catch (err) {
       setAiError(err?.message || 'Analysis failed');
       setViralAnalysis(null);
@@ -172,16 +277,17 @@ export default function AIStudioScreen() {
     }
   };
 
-  // 5. Localize
+  // 6. Localize
   const handleLocalize = async () => {
     setLoading(true);
+    setAiError(null);
     try {
       const res = await aiStudioService.localizeContent({ text: localizeText });
       setTranslations(res);
       if (res.some((item) => item.untranslated)) {
-        toast.warning('AI translation unavailable - showing original text');
+        toast.warning('AI translation unavailable — showing original text');
       } else {
-        toast.success('Content localized into 5 languages! 🌍');
+        toast.success('Content localized into 5 languages');
       }
     } catch {
       toast.error('Localization failed');
@@ -190,123 +296,148 @@ export default function AIStudioScreen() {
     }
   };
 
+  const cardSurface = isDark
+    ? 'bg-[#080F2E] border-white/[0.08] text-white'
+    : 'bg-white border-slate-200 text-slate-900';
+
+  const inputSurface = isDark
+    ? 'bg-[#03071B] border-white/10 text-white placeholder:text-slate-500'
+    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400';
+
   return (
-    <div className="min-h-screen pb-28 pt-2 max-w-5xl mx-auto px-3 sm:px-6">
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-purple-900/90 via-indigo-900/80 to-pink-900/80 border border-purple-500/30 shadow-2xl backdrop-blur-xl mb-8">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full w-fit mb-3 border border-white/20">
-              <Sparkles className="w-4 h-4 text-yellow-300 animate-spin" style={{ animationDuration: '6s' }} />
-              <span className="text-xs font-semibold text-purple-200 uppercase tracking-wider">Arvdoul Intelligence Suite</span>
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
-              AI Creator Co-Pilot <Crown className="w-6 h-6 text-yellow-400" />
-            </h1>
-            <p className="text-gray-300 text-sm sm:text-base mt-2 max-w-xl">
-              Supercharge your creative workflow with viral hooks, multi-scene video scripts, prompt engineering, AI audience analysis, and global localization.
-            </p>
+    <div className="min-h-screen pb-28 pt-3 max-w-6xl mx-auto px-3 sm:px-6">
+      {/* Studio Header */}
+      <div
+        className={cn(
+          'rounded-2xl p-6 sm:p-8 border mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5',
+          cardSurface
+        )}
+      >
+        <div className="space-y-2 max-w-2xl">
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Arvdoul Creator Studio</span>
+            <span aria-hidden="true">·</span>
+            <span>Copy, Scripts, Voiceover &amp; Localization</span>
           </div>
-
-          <button
-            onClick={() => navigate('/create-post')}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-2xl font-bold shadow-lg shadow-purple-500/30 hover:scale-105 transition-all text-sm whitespace-nowrap"
-          >
-            <Sparkles className="w-4 h-4" /> Open Create Post
-          </button>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight font-display">
+            AI Creator Co-Pilot
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+            Draft hooks, direct multi-scene video scripts, synthesize studio voiceovers, transcribe audio, and localize posts directly into your Arvdoul workflow.
+          </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/create-post')}
+          className="px-5 py-2.5 bg-arvdoul-gradient text-white rounded-xl font-semibold text-sm flex items-center gap-2 hover:opacity-95 transition-opacity whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          <Sparkles className="w-4 h-4" />
+          Open Create Post
+        </button>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
+      {/* Segmented Navigation Tabs */}
+      <div
+        className={cn(
+          'flex items-center gap-1.5 overflow-x-auto p-1.5 rounded-xl border mb-6 scrollbar-none',
+          isDark ? 'bg-[#080F2E] border-white/[0.08]' : 'bg-slate-100 border-slate-200'
+        )}
+      >
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
+              type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl font-semibold text-sm whitespace-nowrap transition-all duration-200 ${
+              className={cn(
+                'flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-xs sm:text-sm whitespace-nowrap shrink-0 transition-colors cursor-pointer',
                 isActive
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25 scale-[1.02]'
-                  : isDark
-                  ? 'bg-gray-800/80 text-gray-300 hover:bg-gray-700 border border-gray-700/60'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 shadow-sm'
-              }`}
+                  ? isDark
+                    ? 'bg-arvdoul-gradient text-white'
+                    : 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              )}
             >
-              <div className={`p-1.5 rounded-lg bg-gradient-to-br ${tab.color} text-white`}>
-                <Icon className="w-4 h-4" />
-              </div>
+              <Icon className="w-4 h-4" />
               {tab.label}
             </button>
           );
         })}
       </div>
 
+      {/* Honest AI-unavailable banner */}
+      {aiError && (
+        <div className="mb-6 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
+          <div>
+            <p className="text-sm font-semibold text-amber-600 dark:text-amber-300 mb-1">AI Studio unavailable</p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80 leading-relaxed">{aiError}</p>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <AnimatePresence mode="wait">
-        {/* ==================== TAB 1: CAPTIONS & VIRAL HOOKS ==================== */}
-        {/* Honest AI-unavailable banner (shown on any tab after a failed call) */}
-        {aiError && (
-          <div className="mb-6 p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
-            <span className="text-xl" aria-hidden="true">⚠️</span>
-            <div>
-              <p className="text-sm font-bold text-amber-300 mb-1">AI Studio unavailable</p>
-              <p className="text-xs text-amber-200/80 leading-relaxed">{aiError}</p>
-            </div>
-          </div>
-        )}
-
+        {/* TAB 1: CAPTIONS & VIRAL HOOKS */}
         {activeTab === 'captions' && (
           <motion.div
             key="captions"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
             className="grid grid-cols-1 lg:grid-cols-12 gap-6"
           >
-            {/* Input Config */}
-            <div className={`lg:col-span-5 p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-5`}>
-              <div className="flex items-center gap-2 font-bold text-lg text-purple-400">
-                <Flame className="w-5 h-5 text-orange-500" />
-                Prompt & Tone Selector
+            <div className={cn('lg:col-span-5 p-6 rounded-2xl border space-y-5', cardSurface)}>
+              <div className="flex items-center gap-2 font-semibold text-base">
+                <Flame className="w-4 h-4 text-arvdoul-purple" />
+                Prompt &amp; Tone
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">What is your post about?</label>
-                <textarea aria-label="What is your post about?"
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  What is your post about?
+                </label>
+                <textarea
+                  aria-label="What is your post about?"
                   value={captionTopic}
                   onChange={(e) => setCaptionTopic(e.target.value)}
                   placeholder="e.g. 5 mindset shifts for high-earning creators"
                   rows={4}
-                  className={`w-full p-4 rounded-2xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none resize-none transition-all ${
-                    isDark ? 'bg-gray-800/90 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                  }`}
+                  className={cn(
+                    'w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none resize-none transition-colors',
+                    inputSurface
+                  )}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Voice & Tone</label>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Voice &amp; Tone
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'hype', label: '🔥 Viral & Hype' },
-                    { id: 'casual', label: '☕️ Casual & Relatable' },
-                    { id: 'educational', label: '🧠 Deep Dive' },
-                    { id: 'poetic', label: '✨ Aesthetic' },
-                    { id: 'story', label: '📖 Storytelling' },
-                    { id: 'humor', label: '😂 Meme & Sarcastic' }
+                    { id: 'hype', label: 'Viral & Hype' },
+                    { id: 'casual', label: 'Casual & Direct' },
+                    { id: 'educational', label: 'Deep Dive' },
+                    { id: 'poetic', label: 'Editorial' },
+                    { id: 'story', label: 'Storytelling' },
+                    { id: 'humor', label: 'Witty & Sarcastic' },
                   ].map((t) => (
                     <button
+                      type="button"
                       key={t.id}
                       onClick={() => setCaptionTone(t.id)}
-                      className={`p-2.5 rounded-xl text-xs font-medium border text-left transition-all ${
+                      className={cn(
+                        'p-2.5 rounded-xl text-xs font-medium border text-left transition-colors cursor-pointer',
                         captionTone === t.id
-                          ? 'border-purple-500 bg-purple-500/20 text-purple-300 font-bold'
-                          : isDark ? 'border-gray-700 bg-gray-800/40 text-gray-400 hover:border-gray-600' : 'border-gray-200 bg-gray-50 text-gray-600'
-                      }`}
+                          ? 'border-arvdoul-purple bg-arvdoul-purple/10 text-arvdoul-purple dark:text-white font-semibold'
+                          : isDark
+                          ? 'border-white/10 bg-[#03071B] text-slate-400 hover:border-white/20'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
+                      )}
                     >
                       {t.label}
                     </button>
@@ -315,58 +446,72 @@ export default function AIStudioScreen() {
               </div>
 
               <button
+                type="button"
                 onClick={handleGenerateCaption}
                 disabled={loading}
-                className="w-full py-4 rounded-2xl font-bold bg-arvdoul-gradient text-white shadow-xl shadow-purple-500/30 flex items-center justify-center gap-2 hover:opacity-95 transition-all disabled:opacity-50"
+                className="w-full py-3 rounded-xl font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-2 hover:opacity-95 transition-opacity disabled:opacity-50 cursor-pointer"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><Sparkles className="w-5 h-5" /> Generate Viral Caption</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><Sparkles className="w-4 h-4" /> Generate Caption</>}
               </button>
             </div>
 
-            {/* Output View */}
-            <div className={`lg:col-span-7 p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl flex flex-col justify-between`}>
+            <div className={cn('lg:col-span-7 p-6 rounded-2xl border flex flex-col justify-between', cardSurface)}>
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2 font-bold text-lg">
-                    <Sparkles className="w-5 h-5 text-purple-400" />
-                    AI Output & Viral Hook
+                  <div className="flex items-center gap-2 font-semibold text-base">
+                    <Sparkles className="w-4 h-4 text-arvdoul-purple" />
+                    Output &amp; Opening Hook
                   </div>
                 </div>
 
                 {generatedCaption ? (
                   <div className="space-y-4">
                     {generatedCaption.hook && (
-                      <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30">
-                        <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block mb-1">Generated Hook</span>
-                        <p className="text-base font-extrabold text-white">{generatedCaption.hook}</p>
+                      <div className="p-4 rounded-xl bg-arvdoul-purple/10 border border-arvdoul-purple/30">
+                        <span className="text-xs font-medium text-arvdoul-purple block mb-1">Opening Hook</span>
+                        <p className="text-base font-bold">{generatedCaption.hook}</p>
                       </div>
                     )}
 
-                    <div className="p-4 rounded-2xl bg-gray-800/60 border border-gray-700/60">
-                      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Complete Post Caption</span>
-                      <p className="text-sm text-gray-200 whitespace-pre-line leading-relaxed font-sans">{generatedCaption.body}</p>
+                    <div className={cn('p-4 rounded-xl border', inputSurface)}>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-2">
+                        Complete Post Caption
+                      </span>
+                      <p className="text-sm whitespace-pre-line leading-relaxed">{generatedCaption.body}</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="h-64 flex flex-col items-center justify-center text-center p-6 text-gray-500 border border-dashed border-gray-700/60 rounded-2xl">
-                    <Sparkles className="w-12 h-12 text-purple-500/40 mb-3 animate-pulse" />
-                    <p className="font-semibold text-sm">Enter a topic and tap Generate to craft a viral caption.</p>
+                  <div className="h-64 flex flex-col items-center justify-center text-center p-6 text-slate-500 border border-dashed border-slate-300 dark:border-white/10 rounded-xl">
+                    <Sparkles className="w-8 h-8 text-arvdoul-purple/50 mb-2" />
+                    <p className="font-medium text-sm">Enter a topic and select Generate to craft a post caption.</p>
                   </div>
                 )}
               </div>
 
               {generatedCaption && (
-                <div className="flex items-center gap-3 pt-6 border-t border-gray-800 mt-6">
+                <div className="flex items-center gap-3 pt-5 border-t border-slate-200 dark:border-white/10 mt-6">
                   <button
+                    type="button"
                     onClick={() => handleCopy(generatedCaption.body)}
-                    className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+                    className={cn(
+                      'flex-1 py-2.5 rounded-xl text-sm font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer',
+                      isDark ? 'border-white/15 bg-white/5 hover:bg-white/10 text-white' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-900'
+                    )}
                   >
-                    {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                    {copied ? 'Copied!' : 'Copy Caption'}
+                    {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copied' : 'Copy Caption'}
                   </button>
                   <button
-                    onClick={() => navigate('/create-post')}
-                    className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-600/30"
+                    type="button"
+                    onClick={() =>
+                      navigate('/create-post', {
+                        state: {
+                          prefillContent: generatedCaption.body,
+                          prefillType: 'text',
+                        },
+                      })
+                    }
+                    className="flex-1 py-2.5 bg-arvdoul-gradient text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-95 transition-opacity cursor-pointer"
                   >
                     <ArrowRight className="w-4 h-4" /> Use in Create Post
                   </button>
@@ -376,128 +521,366 @@ export default function AIStudioScreen() {
           </motion.div>
         )}
 
-        {/* ==================== TAB 2: REEL SCRIPTWRITER ==================== */}
+        {/* TAB 2: REEL SCRIPTWRITER */}
         {activeTab === 'scripts' && (
           <motion.div
             key="scripts"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
             className="space-y-6"
           >
-            <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
+            <div className={cn('p-6 rounded-2xl border space-y-4', cardSurface)}>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Video Concept / Script Goal</label>
-                  <input aria-label="Video Concept / Script Goal"
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Video Concept / Script Goal
+                  </label>
+                  <input
+                    aria-label="Video Concept / Script Goal"
                     type="text"
                     value={scriptTopic}
                     onChange={(e) => setScriptTopic(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
-                      isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                    }`}
+                    className={cn(
+                      'w-full p-3 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none',
+                      inputSurface
+                    )}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Script Style</label>
-                  <select aria-label="Script Style"
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Script Style
+                  </label>
+                  <select
+                    aria-label="Script Style"
                     value={scriptStyle}
                     onChange={(e) => setScriptStyle(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
-                      isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                    }`}
+                    className={cn(
+                      'w-full p-3 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none',
+                      inputSurface
+                    )}
                   >
-                    <option value="tech">Tech & Product</option>
-                    <option value="funny">Comedy & Skits</option>
+                    <option value="tech">Tech &amp; Product</option>
+                    <option value="funny">Comedy &amp; Skits</option>
                     <option value="educational">Educational</option>
                     <option value="storytelling">Storytelling</option>
                     <option value="motivational">Motivational</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Duration Target</label>
-                  <select aria-label="Duration Target"
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Duration Target
+                  </label>
+                  <select
+                    aria-label="Duration Target"
                     value={scriptDuration}
                     onChange={(e) => setScriptDuration(Number(e.target.value))}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
-                      isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                    }`}
+                    className={cn(
+                      'w-full p-3 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none tabular-nums',
+                      inputSurface
+                    )}
                   >
-                    <option value={15}>15 Seconds (Fast Hype)</option>
-                    <option value={30}>30 Seconds (Standard Reel)</option>
-                    <option value={60}>60 Seconds (Deep Dive)</option>
+                    <option value={15}>15 Seconds</option>
+                    <option value={30}>30 Seconds</option>
+                    <option value={60}>60 Seconds</option>
                   </select>
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={handleGenerateScript}
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 hover:opacity-95"
+                className="w-full py-3 rounded-xl font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-2 hover:opacity-95 cursor-pointer"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><Video className="w-5 h-5" /> Write Video Storyboard</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><Video className="w-4 h-4" /> Write Video Storyboard</>}
               </button>
             </div>
 
             {generatedScript && (
-              <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
-                <div className="flex items-center justify-between pb-4 border-b border-gray-800">
+              <div className={cn('p-6 rounded-2xl border space-y-4', cardSurface)}>
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-white/10">
                   <div>
-                    <h3 className="text-lg font-bold text-white">{generatedScript.title}</h3>
+                    <h3 className="text-lg font-bold">{generatedScript.title}</h3>
                     {generatedScript.estimatedPacing && generatedScript.suggestedBgm && (
-                      <p className="text-xs text-purple-400">Pacing: {generatedScript.estimatedPacing} • Audio: {generatedScript.suggestedBgm}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Pacing: {generatedScript.estimatedPacing} · Audio: {generatedScript.suggestedBgm}
+                      </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => navigate('/video-editor')}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md"
-                  >
-                    <Play className="w-3.5 h-3.5" /> Open in Video Editor Pro
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(generatedScript.rawScriptText)}
+                      className={cn(
+                        'px-3.5 py-2 rounded-xl text-xs font-semibold border cursor-pointer',
+                        isDark ? 'border-white/15 bg-white/5 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'
+                      )}
+                    >
+                      Copy Script
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate('/video-editor', {
+                          state: { script: generatedScript },
+                        })
+                      }
+                      className="px-4 py-2 bg-arvdoul-gradient text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5" /> Open in Video Editor Pro
+                    </button>
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-800/50 border border-gray-700/60 pt-2">
-                  <span className="text-[11px] text-gray-400 block font-semibold mb-2">Multi-scene script (AI output):</span>
-                  <p className="text-sm text-gray-200 whitespace-pre-line leading-relaxed">{generatedScript.rawScriptText}</p>
+                <div className={cn('p-4 rounded-xl border', inputSurface)}>
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-2">
+                    Multi-scene script
+                  </span>
+                  <p className="text-sm whitespace-pre-line leading-relaxed">{generatedScript.rawScriptText}</p>
                 </div>
               </div>
             )}
           </motion.div>
         )}
 
-        {/* ==================== TAB 3: PROMPT STUDIO ==================== */}
+        {/* TAB 3: VOICEOVER TTS & AUDIO TRANSCRIPTION */}
+        {activeTab === 'voiceover' && (
+          <motion.div
+            key="voiceover"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
+            className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+          >
+            {/* Text-to-Speech Synthesis */}
+            <div className={cn('lg:col-span-7 p-6 rounded-2xl border space-y-4', cardSurface)}>
+              <div className="flex items-center gap-2 font-semibold text-base">
+                <Volume2 className="w-4 h-4 text-arvdoul-purple" />
+                Studio Voiceover Synthesis
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Voiceover Script
+                </label>
+                <textarea
+                  aria-label="Voiceover Script"
+                  value={voiceText}
+                  onChange={(e) => setVoiceText(e.target.value)}
+                  rows={4}
+                  className={cn(
+                    'w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none resize-none',
+                    inputSurface
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Voice Talent
+                  </label>
+                  <select
+                    aria-label="Voice Talent"
+                    value={voiceName}
+                    onChange={(e) => setVoiceName(e.target.value)}
+                    className={cn('w-full p-3 rounded-xl text-sm border outline-none', inputSurface)}
+                  >
+                    {TTS_VOICES.map((v) => (
+                      <option key={v.id} value={v.id}>{v.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Delivery Style
+                  </label>
+                  <input
+                    aria-label="Delivery Style"
+                    type="text"
+                    value={voiceStyle}
+                    onChange={(e) => setVoiceStyle(e.target.value)}
+                    className={cn('w-full p-3 rounded-xl text-sm border outline-none', inputSurface)}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGenerateVoiceover}
+                disabled={loading || !voiceText.trim()}
+                className="w-full py-3 rounded-xl font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-2 hover:opacity-95 disabled:opacity-50 cursor-pointer"
+              >
+                {loading ? <LoadingSpinner size="sm" /> : <><Mic className="w-4 h-4" /> Synthesize Voiceover</>}
+              </button>
+
+              {generatedVoiceover && (
+                <div className={cn('p-4 rounded-xl border space-y-3', inputSurface)}>
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>Voice: {voiceName}</span>
+                    {generatedVoiceover.model && <span>{generatedVoiceover.model}</span>}
+                  </div>
+                  <audio controls src={generatedVoiceover.audioDataUrl} className="w-full" />
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <a
+                      href={generatedVoiceover.audioDataUrl}
+                      download={`arvdoul-voiceover-${Date.now()}.wav`}
+                      className={cn(
+                        'px-3.5 py-2 rounded-lg text-xs font-semibold border flex items-center gap-1.5',
+                        isDark ? 'border-white/15 bg-white/5 text-white' : 'border-slate-200 bg-white text-slate-900'
+                      )}
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download WAV
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate('/audio-editor', {
+                          state: {
+                            audioUrl: generatedVoiceover.audioDataUrl,
+                            title: `Voiceover (${voiceName})`,
+                          },
+                        })
+                      }
+                      className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-arvdoul-purple text-white flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sliders className="w-3.5 h-3.5" /> Send to Audio Studio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blob = base64ToBlob(generatedVoiceover.audioBase64, generatedVoiceover.mimeType);
+                        const audioFile = new File([blob], `voiceover-${Date.now()}.wav`, { type: generatedVoiceover.mimeType });
+                        navigate('/create-post', {
+                          state: {
+                            audioFile,
+                            prefillContent: voiceText,
+                            prefillType: 'audio',
+                          },
+                        });
+                      }}
+                      className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-arvdoul-gradient text-white flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ArrowRight className="w-3.5 h-3.5" /> Post Audio
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Audio Transcription */}
+            <div className={cn('lg:col-span-5 p-6 rounded-2xl border space-y-4 flex flex-col justify-between', cardSurface)}>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 font-semibold text-base">
+                  <Upload className="w-4 h-4 text-arvdoul-blue" />
+                  Audio &amp; Voice Transcription
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Upload a voice memo, podcast snippet, or video audio track to generate clean transcripts and timed caption lines.
+                </p>
+
+                <input
+                  ref={transcribeInputRef}
+                  type="file"
+                  accept="audio/*,video/*"
+                  onChange={handleTranscribeFile}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => transcribeInputRef.current?.click()}
+                  disabled={loading}
+                  className={cn(
+                    'w-full py-6 rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 text-xs font-semibold transition-colors cursor-pointer',
+                    isDark ? 'border-white/20 bg-[#03071B] hover:border-arvdoul-purple' : 'border-slate-300 bg-slate-50 hover:border-arvdoul-purple'
+                  )}
+                >
+                  <Upload className="w-5 h-5 text-arvdoul-purple" />
+                  <span>Select Audio File to Transcribe</span>
+                </button>
+
+                {transcriptResult && (
+                  <div className={cn('p-4 rounded-xl border space-y-2', inputSurface)}>
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span className="truncate">{transcriptResult.fileName}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(transcriptResult.text)}
+                        className="text-arvdoul-purple font-semibold hover:underline cursor-pointer"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-sm whitespace-pre-line leading-relaxed">{transcriptResult.text}</p>
+                  </div>
+                )}
+              </div>
+
+              {transcriptResult?.text && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate('/create-post', {
+                      state: {
+                        prefillContent: transcriptResult.text,
+                        prefillType: 'text',
+                      },
+                    })
+                  }
+                  className="w-full py-2.5 rounded-xl bg-arvdoul-gradient text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" /> Draft Post from Transcript
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* TAB 4: PROMPT STUDIO */}
         {activeTab === 'prompts' && (
           <motion.div
             key="prompts"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
             className="grid grid-cols-1 lg:grid-cols-12 gap-6"
           >
-            <div className={`lg:col-span-6 p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
-              <h3 className="font-bold text-lg text-blue-400 flex items-center gap-2">
-                <ImageIcon className="w-5 h-5" /> Image Concept Creator
+            <div className={cn('lg:col-span-6 p-6 rounded-2xl border space-y-4', cardSurface)}>
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-arvdoul-blue" /> Image Concept Creator
               </h3>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Subject & Scene</label>
-                <textarea aria-label="Subject &amp; Scene"
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Subject &amp; Scene
+                </label>
+                <textarea
+                  aria-label="Subject &amp; Scene"
                   value={promptSubject}
                   onChange={(e) => setPromptSubject(e.target.value)}
                   rows={3}
-                  className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
-                    isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                  }`}
+                  className={cn(
+                    'w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none',
+                    inputSurface
+                  )}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Style</label>
-                  <select aria-label="Style"
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Style
+                  </label>
+                  <select
+                    aria-label="Style"
                     value={promptStyle}
                     onChange={(e) => setPromptStyle(e.target.value)}
-                    className={`w-full p-3 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}
+                    className={cn('w-full p-3 rounded-xl text-xs border', inputSurface)}
                   >
                     <option>Cinematic 8K</option>
                     <option>Cyberpunk Anime</option>
@@ -507,40 +890,42 @@ export default function AIStudioScreen() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Aspect Ratio</label>
-                  <select aria-label="Aspect Ratio"
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    Aspect Ratio
+                  </label>
+                  <select
+                    aria-label="Aspect Ratio"
                     value={promptRatio}
                     onChange={(e) => setPromptRatio(e.target.value)}
-                    className={`w-full p-3 rounded-xl text-xs border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'}`}
+                    className={cn('w-full p-3 rounded-xl text-xs border tabular-nums', inputSurface)}
                   >
-                    <option value="9:16">9:16 (Reels & Stories)</option>
-                    <option value="1:1">1:1 (Square Feed Post)</option>
+                    <option value="9:16">9:16 (Reels &amp; Stories)</option>
+                    <option value="1:1">1:1 (Square Post)</option>
                     <option value="16:9">16:9 (Landscape Video)</option>
                   </select>
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={handleGeneratePrompt}
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 hover:opacity-95"
+                className="w-full py-3 rounded-xl font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-2 hover:opacity-95 cursor-pointer"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><Sparkles className="w-5 h-5" /> Craft Master Prompt</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><Sparkles className="w-4 h-4" /> Craft Master Prompt</>}
               </button>
             </div>
 
-            <div className={`lg:col-span-6 p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl flex flex-col justify-between`}>
+            <div className={cn('lg:col-span-6 p-6 rounded-2xl border flex flex-col justify-between', cardSurface)}>
               <div>
-                <h3 className="font-bold text-lg text-white mb-4">Crafted Prompt Result</h3>
+                <h3 className="font-semibold text-base mb-4">Crafted Prompt Result</h3>
                 {generatedPrompt ? (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-                      <span className="text-xs font-bold text-blue-400 uppercase tracking-wider block mb-1">Optimized Positive Prompt</span>
-                      <p className="text-xs font-mono text-gray-200 break-words leading-relaxed">{generatedPrompt.prompt}</p>
-                    </div>
+                  <div className={cn('p-4 rounded-xl border', inputSurface)}>
+                    <span className="text-xs font-medium text-arvdoul-blue block mb-1">Optimized Positive Prompt</span>
+                    <p className="text-xs font-mono break-words leading-relaxed">{generatedPrompt.prompt}</p>
                   </div>
                 ) : (
-                  <div className="h-48 flex items-center justify-center text-center text-gray-500 border border-dashed border-gray-700 rounded-2xl">
+                  <div className="h-48 flex items-center justify-center text-center text-slate-500 border border-dashed border-slate-300 dark:border-white/10 rounded-xl">
                     <p className="text-xs">Crafted prompt parameters will appear here.</p>
                   </div>
                 )}
@@ -548,8 +933,9 @@ export default function AIStudioScreen() {
 
               {generatedPrompt && (
                 <button
+                  type="button"
                   onClick={() => handleCopy(generatedPrompt.prompt)}
-                  className="w-full py-3 mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2"
+                  className="w-full py-2.5 mt-4 bg-arvdoul-blue hover:opacity-95 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Copy className="w-4 h-4" /> Copy Prompt for Generation
                 </button>
@@ -558,90 +944,101 @@ export default function AIStudioScreen() {
           </motion.div>
         )}
 
-        {/* ==================== TAB 4: VIRAL SENTIMENT & RETENTION ==================== */}
+        {/* TAB 5: VIRAL SENTIMENT & RETENTION */}
         {activeTab === 'sentiment' && (
           <motion.div
             key="sentiment"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
             className="space-y-6"
           >
-            <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Paste caption or transcript for viral audit</label>
-              <textarea aria-label="Paste caption or transcript for viral audit"
+            <div className={cn('p-6 rounded-2xl border space-y-4', cardSurface)}>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                Paste caption or transcript for retention audit
+              </label>
+              <textarea
+                aria-label="Paste caption or transcript for viral audit"
                 value={sentimentText}
                 onChange={(e) => setSentimentText(e.target.value)}
                 rows={3}
-                className={`w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-green-500 outline-none ${
-                  isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                }`}
+                className={cn('w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none', inputSurface)}
               />
               <button
+                type="button"
                 onClick={handleAnalyzeViral}
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-2 cursor-pointer"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><TrendingUp className="w-5 h-5" /> Analyze Viral Retention & Sentiment</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><TrendingUp className="w-4 h-4" /> Analyze Retention &amp; Clarity</>}
               </button>
             </div>
 
             {viralAnalysis && (
-              <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
+              <div className={cn('p-6 rounded-2xl border space-y-3', cardSurface)}>
                 <div className="flex items-center gap-2">
-                  <Lightbulb className="w-4 h-4 text-yellow-400" />
-                  <h4 className="font-bold text-sm text-white">AI Analysis of Your Content</h4>
+                  <Lightbulb className="w-4 h-4 text-amber-500" />
+                  <h4 className="font-semibold text-sm">Retention &amp; Hook Breakdown</h4>
                 </div>
-                <p className="text-sm text-gray-200 whitespace-pre-line leading-relaxed">
+                <p className="text-sm whitespace-pre-line leading-relaxed">
                   {viralAnalysis.rawAnalysis}
                 </p>
-                <p className="text-[11px] text-gray-500">
-                  Quantitative scores (viral %, sentiment %) require the full model pipeline and are not estimated locally.
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Quantitative reach metrics depend on live audience response and are never estimated locally.
                 </p>
               </div>
             )}
           </motion.div>
         )}
 
-        {/* ==================== TAB 5: GLOBAL LOCALIZATION ==================== */}
+        {/* TAB 6: GLOBAL LOCALIZATION */}
         {activeTab === 'localize' && (
           <motion.div
             key="localize"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16 }}
             className="space-y-6"
           >
-            <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Content to Localize Globally</label>
-              <textarea aria-label="Content to Localize Globally"
+            <div className={cn('p-6 rounded-2xl border space-y-4', cardSurface)}>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                Content to Localize Globally
+              </label>
+              <textarea
+                aria-label="Content to Localize Globally"
                 value={localizeText}
                 onChange={(e) => setLocalizeText(e.target.value)}
                 rows={3}
-                className={`w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-amber-500 outline-none ${
-                  isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                }`}
+                className={cn('w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none', inputSurface)}
               />
               <button
+                type="button"
                 onClick={handleLocalize}
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-2 cursor-pointer"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><Globe className="w-5 h-5" /> Localize into 5 Languages</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><Globe className="w-4 h-4" /> Localize into 5 Languages</>}
               </button>
             </div>
 
             {translations && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {translations.map((item, idx) => (
-                  <div key={idx} className={`p-4 rounded-2xl border ${isDark ? 'bg-gray-900/80 border-gray-800' : 'bg-white border-gray-200'} shadow-md space-y-2`}>
-                    <p className="text-xs text-gray-200 font-sans leading-relaxed">
+                  <div key={item.code || idx} className={cn('p-4 rounded-xl border space-y-2', cardSurface)}>
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold uppercase">{item.code}</span>
+                      {item.untranslated && <span>Untranslated</span>}
+                    </div>
+                    <p className="text-sm leading-relaxed">
                       {item.untranslated ? item.original : item.translation}
                     </p>
                     {!item.untranslated && (
                       <button
+                        type="button"
                         onClick={() => handleCopy(item.translation)}
-                        className="text-[11px] text-amber-400 font-semibold flex items-center gap-1 hover:underline pt-1"
+                        className="text-xs text-arvdoul-purple font-semibold flex items-center gap-1 hover:underline pt-1 cursor-pointer"
                       >
                         <Copy className="w-3 h-3" /> Copy translation
                       </button>

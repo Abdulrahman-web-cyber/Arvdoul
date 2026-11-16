@@ -197,7 +197,8 @@ class CountersManager {
       });
       if (refs.length === 0) continue;
 
-      const snaps = await m.getAll(...refs);
+      // Web SDK v12 has no getAll(); read bounded chunk refs concurrently via getDoc.
+      const snaps = await Promise.all(refs.map((r) => m.getDoc(r)));
       const sums = new Map();
       snaps.forEach((snap, k) => {
         if (!snap.exists()) return;
