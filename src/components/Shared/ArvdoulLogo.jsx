@@ -35,8 +35,10 @@ export const ArvdoulEmblem = memo(({
     : (theme === 'dark' ? 'dark' : (isDarkTheme ? 'dark' : 'light'));
 
   const isLight = effectiveTheme === 'light';
-  // Use exact transparent master logo matching Splash & Intro screens
-  const logoSrc = '/icons/Logo transparent.svg';
+  // Use the exact transparent master logo matching Splash & Intro screens.
+  // The asset name is URL-safe (no space, lowercase) so it resolves on every
+  // CDN/filesystem; it is the same master mark.
+  const logoSrc = '/icons/arvdoul-mark.svg';
 
   return (
     <div 

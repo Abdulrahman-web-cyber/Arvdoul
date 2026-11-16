@@ -1156,3 +1156,27 @@ git log --oneline -4
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 220 suites green
 npm run build                                     # green
 ```
+
+## Continuation session 16 (N515–N518 — deployment-readiness: config + static assets)
+
+Branch `harden/n319-n320-analytics-live`. Focus: everything a deploy would otherwise get wrong silently — environment/config drift and shipped static assets.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N515 | **Two names for the Stripe publishable key.** `monetizationService` read `VITE_STRIPE_PUBLIC_KEY`; `PaymentModal` + docs used `VITE_STRIPE_PUBLISHABLE_KEY`. Setting either left half the payment surface unconfigured. | `monetizationService` now reads `VITE_STRIPE_PUBLISHABLE_KEY`; the misleading "fallback simulation mode" log is corrected (no simulation exists). `envTemplateCoverage.test.js` bans `VITE_STRIPE_PUBLIC_KEY`. |
+| N516 | **`.env.example` advertised 6 dead vars and omitted 2 live ones.** Dead: `VITE_DEFAULT_PROFILE_PICTURE`, `VITE_ENCRYPTION_KEY`, `VITE_INITIAL_COIN_BALANCE`, `VITE_MUSIC_API_KEY`, `VITE_SAML_VERIFY_URL`, `VITE_SYSTEM_METRICS_URL` (0 refs). Missing: `VITE_APP_VERSION`, `VITE_LOG_ENDPOINT`. | `.env.example` rewritten to exactly the 22 read `VITE_*` vars + `OWNER_EMAILS`, each annotated; `envTemplateCoverage.test.js` (guards job) pins both directions. |
+| N517 | **Mislabeled raster assets + wrong manifest icon sizes.** `icons/icon.png` (JPEG 770×720) and `assets/default-profile.png` (JPEG 732×709) served as `image/png`; manifest declared `/logo/logo-light.png` (512×512) as `192x192`. | Both re-encoded as real PNGs (default-profile → 400×400, −62 KB); manifest now uses real `icons/icon-192.png` + `icons/icon-512.png`. `publicAssetIntegrity.test.js` (guards job) checks magic bytes vs extension + manifest icon dimensions + SW precache existence. |
+| N518 | **`public/Logo/` vs `public/logo/` case collision + unreferenced junk.** The duplicate dir already emitted a stray `dist/Logo/`; `*.original.png`, `logo-default.png`, `logo.svg`, the `aistudio` captures and a duplicate `Logo transparent.svg` had no reference. | Duplicate dir + 4 `logo/` files + `aistudio` + duplicate SVG removed; `ArvdoulLogo.jsx` now uses URL-safe `/icons/arvdoul-mark.svg` (was `/icons/Logo transparent.svg`, a space in a shipped filename). Guard pins collisions + whitespace filenames. |
+
+Verified: full jest suite **222 suites / 2248 passed / 5 skipped / 2253 total** green; `npm run build` exit 0 (no `dist/Logo`); `npx eslint src --quiet` exit 0; emulator-backed rules suites **161 passed** (this session).
+
+### Findings status
+Open: **N175** (rankings — BLOCKED on the ranking formula); N432 partially BLOCKED (metrics with no defined source). N515–N518 closed this session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -5
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 222 suites green
+npm run build                                     # green
+```

@@ -351,7 +351,7 @@ class MonetizationService {
       this.cfCreatePayoutAccount = cf(FUNCTIONS.CREATE_PAYOUT_ACCOUNT);
 
       // Initialize Stripe SDK asynchronously
-      const stripePublicKey = import.meta.env?.VITE_STRIPE_PUBLIC_KEY;
+      const stripePublicKey = import.meta.env?.VITE_STRIPE_PUBLISHABLE_KEY;
       if (stripePublicKey) {
         try {
           this.stripe = await loadStripe(stripePublicKey);
@@ -360,7 +360,10 @@ class MonetizationService {
           log.error('Stripe load error', err);
         }
       } else {
-        log.info('Stripe key missing; operating in dynamic double-entry fallback simulation mode.');
+        // No publishable key configured: the SDK is not loaded and the card
+        // flow reports "unavailable". Coin grants still go through the
+        // server-verified `purchaseCoins` callable (no client-side minting).
+        log.info('Stripe publishable key unconfigured; card checkout unavailable (server-verified purchase path still used).');
       }
 
       this.initialized = true;
