@@ -1131,3 +1131,28 @@ npm run lint                  # exit 0
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 221 suites green
 npm run build                 # green
 ```
+
+## Continuation session 15 (N512–N514 — accessibility + responsive wave)
+
+Branch `harden/n319-n320-analytics-live`. Fresh whole-repo discovery this session: the older root-level audit docs (`ARVDOUL_REMAINING_ISSUES.md`, 2026-08-03) were verified **stale** — every high-severity item they list (fake live viewers, un-completable coin purchases, missing sw.js push handlers, unreachable reels, missing `collections` index, rules holes) is already fixed and guarded in the current tree. Two genuinely unguarded defect classes remained and were closed.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N512 | **194 form controls had no programmatic accessible name** across 77 files (profile editor, create-event form, video-editor sliders, marketplace/polls/spaces selectors, admin forms, search inputs). A visible adjacent label with no `htmlFor` is announced as an unlabelled field (WCAG 1.3.1/4.1.2). | Every control now carries `aria-label` derived from its real adjacent label; ~38 heuristic fallbacks hand-corrected (e.g. `` `${param.label} adjustment` ``, "Timer duration in seconds", "Trim start/end"). New `formControlA11yGuard.test.js` (Babel-AST walker, `@babel/parser` only; placeholder NOT accepted) registered in the hard-failing `guards` CI job. |
+| N513 | **`100vw` overflow.** Global `html,body,#root { width:100vw !important }` + `VideoEditorScreen` `w-screen` + `Dialog` fullscreen `w-[100vw]` + `QuickAccessPanel` `maxWidth:100vw` all overflow by the desktop scrollbar width. | Root width → `100%`; components → `w-full`/`maxWidth:"100%"`. Bounded `calc(100vw - Npx)` kept. `uiFoundationGuard.test.js` N513 group fails on `w-screen`/unbounded `100vw`. App-shell `h-screen` → `h-[100dvh]` (mobile URL-bar safe). |
+| N514 | **No skip-to-content link** in the app shell (WCAG 2.4.1) — keyboard users tab through the full chrome on every route. | `MainLayout` adds `<a href="#main-content">Skip to content</a>` (hidden until focused); every `<main>` branch has `id="main-content"` + `tabIndex={-1}`. `a11yInteractiveGuard.test.js` pins both. |
+
+Also verified this session (no change needed): `firestore.rules` (178 match blocks) read grants — `users/{uid}` is a PII-free projection (contact + Stripe ids live in `users_private`), the `isSignedIn()` read grants are all public-content collections, the `rankings` double-grant is doc+subcollection nesting; all 3 `dangerouslySetInnerHTML` uses are DOMPurify-sanitised; the financial model (`COINS_PER_DOLLAR = 200`, integer coins, `coinsToUsd`) is canonical and guarded by 6+ money suites; `Math.random` (75 uses) is all idempotency-key/shard/seed, no fabrication; no empty handlers / no-op buttons / dead hrefs / duplicate ids / unlabeled anchors.
+
+Verified: full jest suite **220 suites / 2239 passed / 5 skipped / 2244 total** green; `npm run build` exit 0; `npx eslint src --quiet` exit 0; `/intro` + `/login` render in-browser.
+
+### Findings status
+Open: **N175** (rankings — BLOCKED on the ranking formula); N432 partially BLOCKED. N512–N514 closed this session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -4
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 220 suites green
+npm run build                                     # green
+```

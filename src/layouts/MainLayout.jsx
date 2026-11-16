@@ -76,28 +76,37 @@ export default function MainLayout({ children }) {
       // replacing the raw-hex gradients that bypassed the tokens.
       style={{ background: brandCanvasBackground(isDark) }}
     >
+      {/* Keyboard bypass for the fixed chrome (WCAG 2.4.1). Visually hidden
+          until focused, then pinned to the top-left above everything. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-[300] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-arvdoul-purple focus:shadow-lg dark:focus:bg-[#0b1020] dark:focus:text-white"
+      >
+        Skip to content
+      </a>
+
       {/* Top App Bar (Hidden on immersive full-screen video feeds and individual chat) */}
       {!hideTopAppBar && <TopAppBar />}
 
       {/* Main Content */}
       {isImmersiveVideo ? (
-        <main className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : isIndividualChat || isDedicatedStudioOrCall || isCreateStory ? (
-        <main className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : isCreatePost ? (
-        <main className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20">
           {children}
         </main>
       ) : isFullHeightFeed ? (
-        <main className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : (
-        <main className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 w-full">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 w-full">
           <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
             {children}
           </div>
