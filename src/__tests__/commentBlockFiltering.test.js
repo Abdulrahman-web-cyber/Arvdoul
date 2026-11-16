@@ -77,9 +77,22 @@ function wire(svc, rows) {
   };
 }
 
+// The service auto-initializes in its constructor. If we install the mock
+// methods before that in-flight `initialize()` resolves, it overwrites them
+// with the real `firebase/firestore` module (its `getDocs` cannot run a mock
+// query → empty snapshot), so the suite fails nondeterministically depending on
+// how fast the module import resolves. Await the real init first so nothing
+// clobbers the mock afterwards.
+async function wireStable(svc, rows) {
+  for (let i = 0; i < 200 && !svc.initialized; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  wire(svc, rows);
+}
+
 test('hidden (blocked/muted) authors are filtered from the thread', async () => {
   const svc = getCommentService();
-  wire(svc, [
+  await wireStable(svc, [
     { id: 'c1', userId: 'friend-1' },
     { id: 'c2', userId: 'blocked-1' },
     { id: 'c3', userId: 'friend-2' },
@@ -91,7 +104,7 @@ test('hidden (blocked/muted) authors are filtered from the thread', async () => 
 
 test('the viewer falls back to the live session when not passed explicitly', async () => {
   const svc = getCommentService();
-  wire(svc, [
+  await wireStable(svc, [
     { id: 'c1', userId: 'friend-1' },
     { id: 'c2', userId: 'blocked-1' },
   ]);
