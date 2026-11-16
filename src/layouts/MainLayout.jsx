@@ -7,6 +7,7 @@ import TopAppBar from "@components/Shared/TopAppBar";
 import BottomNav from "@components/Shared/BottomNav";
 import useScreenView from "../hooks/useScreenView.js";
 import { cn } from "../lib/utils";
+import { brandCanvasBackground } from "../design-system/tokens.js";
 
 /** Accept only same-origin, in-app paths from an event payload. */
 function safeInternalPath(url) {
@@ -64,11 +65,13 @@ export default function MainLayout({ children }) {
   return (
     <div
       className={cn(
-        "flex flex-col h-screen w-screen overflow-hidden",
-        isDark
-          ? "bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]"
-          : "bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]"
+        // The viewport-width utility overflows by the scrollbar width on
+        // desktop and caused a horizontal scrollbar; `w-full` fills the shell.
+        "flex flex-col h-screen w-full overflow-hidden"
       )}
+      // Canvas comes from the design-system helper (base colour + brand glow),
+      // replacing the raw-hex gradients that bypassed the tokens.
+      style={{ background: brandCanvasBackground(isDark) }}
     >
       {/* Top App Bar (Hidden on immersive full-screen video feeds and individual chat) */}
       {!hideTopAppBar && <TopAppBar />}

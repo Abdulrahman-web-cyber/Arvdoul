@@ -695,7 +695,7 @@ const SearchBar = ({ onSearch, onClose }) => {
           <button onClick={handleSearch} disabled={searching} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm flex-1 hover:bg-purple-700 transition-colors">
             Search
           </button>
-          <button onClick={onClose} className="p-2 rounded-xl border dark:border-gray-700"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} aria-label="Close comments" className="p-2 rounded-xl border dark:border-gray-700"><X className="w-5 h-5" /></button>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 text-xs">
@@ -1704,6 +1704,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 </select>
                 <button
                   onClick={onClose}
+                  aria-label="Close"
                   className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                   <X className="w-5 h-5" />

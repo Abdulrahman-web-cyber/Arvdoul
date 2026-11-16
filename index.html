@@ -12,8 +12,14 @@
     <link rel="icon" type="image/png" href="/icons/icon.png" />
     <link rel="apple-touch-icon" href="/icons/icon.png" />
     
-    <!-- Theme Color -->
-    <meta name="theme-color" content="#000000" />
+    <!-- Theme Color: matches the token canvas (#03071B dark). ThemeProvider
+         syncs this at runtime so light mode updates the browser chrome too. -->
+    <meta name="theme-color" content="#03071B" />
+
+    <!-- Self-hosted fonts: preload the two faces the shell paints with so the
+         first text render does not wait on the CSS fetch. -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/clash-display-600.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- Security hardening: first-party + external APIs with websocket and preview support.
          script-src is first-party only: the app loads no external scripts and uses
@@ -72,7 +78,7 @@
         background: #03071B;
         min-height: 100%;
         width: 100%;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
       }
       
       #root {
@@ -93,7 +99,7 @@
         left: 0;
         right: 0;
         height: 2.5px;
-        background: linear-gradient(90deg, #8B1EF3, #3B82F6, #EC4899);
+        background: linear-gradient(90deg, #8B1EF3, #4431F7, #055BFB);
         z-index: 99999;
         animation: topLoadingShimmer 1.5s ease-in-out infinite;
       }

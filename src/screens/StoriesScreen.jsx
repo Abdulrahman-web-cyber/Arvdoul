@@ -1244,6 +1244,7 @@ export default function StoriesScreen() {
                 <button
                   type="submit"
                   disabled={!replyText.trim()}
+                  aria-label="Send reply"
                   className="w-10 h-10 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg"
                 >
                   <Send className="w-4 h-4" />

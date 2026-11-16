@@ -5036,3 +5036,33 @@ describe('N476 — comment stats never report unwritten aggregates as measured',
     expect(src).not.toMatch(/^\s*moderationScore: 0,\s*$/m);
   });
 });
+
+describe('N509 — SavedScreen no longer ships an invented folder taxonomy', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/SavedScreen.jsx'), 'utf8');
+  test('the invented "Design Systems / LUTs & VFX / Audio Library" chips are gone', () => {
+    // The chips filtered on `item.collection`, but saved posts never carry a
+    // collection field (savePost writes only savedAt/snapshot) and saved videos
+    // were hardcoded to 'Saved' — so every invented folder could only ever
+    // render an empty list. Dead control + fabricated category.
+    expect(src).not.toContain('Design Systems');
+    expect(src).not.toContain('LUTs & VFX');
+    expect(src).not.toContain('Audio Library');
+    expect(src).not.toContain('COLLECTIONS');
+  });
+  test('no fabricated "preset" content type filter or badge', () => {
+    // Post types are {text,image,video,audio,poll,link}; nothing writes 'preset'.
+    expect(src).not.toContain("id: 'preset'");
+    expect(src).not.toContain("item.type === 'preset'");
+  });
+  test('saved items no longer render a meaningless "Saved" collection label', () => {
+    expect(src).not.toContain('item.collection');
+  });
+});
+
+describe('N510 — SavedScreen share links resolve per source', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/SavedScreen.jsx'), 'utf8');
+  test('videos share to /video/:id, not a broken /post/:id', () => {
+    expect(src).toContain("item.source === 'video' ? `/video/${item.id}` : `/post/${item.id}`");
+    expect(src).not.toMatch(/writeText\(`\$\{window\.location\.origin\}\/post\/\$\{item\.id\}`\)/);
+  });
+});

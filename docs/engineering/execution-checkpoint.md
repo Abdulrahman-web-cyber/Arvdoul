@@ -1101,3 +1101,33 @@ npm run lint                  # exit 0
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 215 suites green
 npm run build                 # green
 ```
+
+## Continuation session 14 (N509–N511 + UI foundation — hardening wave)
+
+Branch `harden/n319-n320-analytics-live` (HEAD `22d9aa5`). Three mandated themes: read-authorization, fabrication/integrity, frontend-design hardening.
+
+**Read-authorization.** Re-audited `firestore.rules` (2469 lines) and `storage.rules`. Every live `allow read: if true` is gone (remaining textual hits are explanatory comments); the sensitive collections (`users_private`, `conversations`, `messages`, `notifications`, `coin_transactions`, `blocks`/`mutes`/`restricts`, `follow_requests`, `reports`, `moderation_logs`, `support_tickets`, `system_health`) are all owner/participant/admin-scoped. Storage rules keep public CDN media world-readable by design (unguessable download token) and owner/participant-scope everything private; `messages/` proves conversation membership cross-service. The one remaining broad grant — `comments/{id}` `isSignedIn()` — is an explicit, documented baseline in `readScopePrivacyRules.test.js`, and a per-document fix was rejected as unsafe (would require denormalising post visibility onto every comment, a write-amplification risk). No rules change made.
+
+**Fabrication/integrity.** N509 (invented folder taxonomy + dead `preset` filter in `SavedScreen`), N510 (share button 404 for saved videos).
+
+**Frontend design.** UI foundation (prior in-session work): self-hosted Inter + Clash Display under `public/fonts/`, `tokens.js`/`.css`/`.json` at v1.2.0 with `fontFamily`, `index.html` font preload + `theme-color` + corrected splash gradient/body font, runtime `theme-color` sync in `ThemeProvider`, global keyboard focus-visible policy. This session: `MainLayout` canvas now derives from `brandCanvasBackground(isDark)` (raw-hex gradients removed) and drops `w-screen` (100vw scrollbar overflow) for `w-full`.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N509 | `SavedScreen` hardcoded `COLLECTIONS = ['All','Design Systems','LUTs & VFX','Inspiration','Audio Library']` and filtered on `item.collection` — but saved posts carry no collection field and saved videos were hardcoded `'Saved'`, so every invented folder could only render an empty list. A `Presets` type filter/badge matched a `'preset'` type nothing writes. | Folder taxonomy + `preset` filter + `collection` label removed; single `TYPE_FILTERS` (All/Videos/Images/Audio/Text) matching real types; honest empty state distinguishes "nothing saved" from "no match" with a Clear-filters action. `noFabricatedData.test.js` (N509 case). |
+| N510 | `SavedScreen.handleShare` always built `${origin}/post/${id}`, so sharing a saved video copied a 404 (`/video/:id` is the real route). | Share path resolves per `item.source`. `noFabricatedData.test.js` (N510 case). |
+| N511 | 14 icon-only `<button>` elements had no accessible name (close buttons ×6, camera flash/flip, reverse/freeze switches, story reply, gift/modal closes). | All carry `aria-label`; switches add `role="switch"` + `aria-checked`. New `iconButtonA11yGuard.test.js` (walks all `src/**/*.jsx`) + registered in the `guards` CI job. |
+
+Verified: `npx eslint src --quiet` exit 0; full jest suite **221 suites / 2236 passed / 5 skipped / 2241 total** green; `npm run build` green. New guard suites `uiFoundationGuard` (11 tests) and `iconButtonA11yGuard` added to `.github/workflows/ci.yml` `guards` job.
+
+### Findings status
+Open: **N175** (rankings — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (metrics with no defined source). N509–N511 closed this session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 221 suites green
+npm run build                 # green
+```

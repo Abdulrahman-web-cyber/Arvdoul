@@ -303,6 +303,7 @@ export default function Collage({
 
           <button
             onClick={onClose}
+            aria-label="Close"
             className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition"
           >
             <X className="w-5 h-5" />

@@ -656,6 +656,7 @@ export default function CreateStory() {
               {/* Flash */}
               <button
                 onClick={handleToggleFlash}
+                aria-label={`Flash: ${flashMode}`}
                 className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
               >
                 <Zap className={cn("w-4 h-4", flashMode === 'on' ? "text-amber-400" : "text-white")} />
@@ -664,6 +665,7 @@ export default function CreateStory() {
               {/* Flip */}
               <button
                 onClick={handleFlipCamera}
+                aria-label="Flip camera"
                 className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
               >
                 <RefreshCw className="w-4 h-4 text-white" />

@@ -241,6 +241,9 @@ export default function TrimSubPanel({
             <span>Reverse</span>
             <button
               onClick={onToggleReverse}
+              role="switch"
+              aria-checked={isReverse}
+              aria-label="Reverse clip"
               className={`w-10 h-5 rounded-full transition-colors relative ${
                 isReverse ? 'bg-purple-600' : 'bg-white/20'
               }`}
@@ -258,6 +261,9 @@ export default function TrimSubPanel({
             <span>Freeze Frame</span>
             <button
               onClick={onToggleFreezeFrame}
+              role="switch"
+              aria-checked={isFreezeFrame}
+              aria-label="Freeze frame"
               className={`w-10 h-5 rounded-full transition-colors relative ${
                 isFreezeFrame ? 'bg-purple-600' : 'bg-white/20'
               }`}

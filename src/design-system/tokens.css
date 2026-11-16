@@ -13,6 +13,36 @@
  * is handled separately via <MotionConfig reducedMotion="user">.)
  */
 
+/*
+ * Self-hosted fonts (no third-party runtime request — the app loads zero
+ * external font hosts). Inter ships as a single variable woff2 (400-900);
+ * Clash Display ships as two static weights. Both use `font-display: swap`
+ * so text paints immediately in the fallback and reflows once ready.
+ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Clash Display';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/clash-display-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Clash Display';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/clash-display-700.woff2') format('woff2');
+}
+
 :root {
   /* Brand */
   --arv-brand-violet: #8B1EF3;
@@ -95,6 +125,7 @@
 
   /* Typography */
   --arv-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --arv-font-display: 'Clash Display', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   /* Z-index */
   --arv-z-base: 0;

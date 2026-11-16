@@ -340,6 +340,7 @@ export default function ExportModal({
 
           <button
             onClick={onClose}
+            aria-label="Close"
             className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
           >
             <X className="w-4 h-4" />

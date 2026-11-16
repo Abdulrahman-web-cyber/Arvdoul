@@ -75,7 +75,7 @@ export default function PostDetails() {
   return (
     <div className={`fixed inset-0 z-50 flex flex-col ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
       <div className="absolute top-4 left-4 z-20"><button onClick={() => navigate(-1)} className="p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><ArrowLeft className="w-6 h-6" /></button></div>
-      <button onClick={handleShare} className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><Share2 className="w-6 h-6" /></button>
+      <button onClick={handleShare} aria-label="Share" className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><Share2 className="w-6 h-6" /></button>
 
       <motion.div drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.1} onDragEnd={handleDragEnd} style={{ x: dragX }} className={`flex-1 overflow-y-auto ${exitAnimating ? 'pointer-events-none' : ''}`} animate={exitAnimating ? { x: winWidth } : {}} transition={{ duration: 0.3 }}>
         <div className="max-w-3xl mx-auto pt-16 pb-24 px-4">
