@@ -7,6 +7,7 @@ import { Send, Paperclip, Mic, Smile, Image as ImageIcon, Video, File, MapPin, U
 import { toast } from 'sonner';
 import EmojiPicker from 'emoji-picker-react';
 import GIFPicker from '../Shared/GIFPicker';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const MessageInput = React.memo(({
   onSendMessage,
@@ -178,7 +179,7 @@ const MessageInput = React.memo(({
               )}
             >
               {file.type.startsWith('image/') ? (
-                <img
+                <LazyImage
                   src={URL.createObjectURL(file)}
                   alt={file.name}
                   className="h-20 w-20 object-cover"

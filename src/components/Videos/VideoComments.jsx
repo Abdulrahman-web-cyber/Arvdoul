@@ -8,6 +8,7 @@ import { formatTimeAgo, SPRING_ANIMATION } from '../../utils/videoUtils';
 import { pickDisplayName, deriveHandle } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const EMOJI_PRESETS = ['🔥', '❤️', '👏', '😂', '🚀', '💡', '💯', '🙌'];
 
@@ -422,7 +423,7 @@ const CommentItem = memo(({ comment, blockedUserIds, onLike, onReply }) => {
       {/* Avatar */}
       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500/80 to-pink-500/80 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ring-1 ring-white/20 shadow-md">
         {comment.user.avatar ? (
-          <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full rounded-full object-cover" />
+          <LazyImage src={comment.user.avatar} alt={comment.user.name} className="w-full h-full rounded-full object-cover" />
         ) : (
           comment.user.name?.[0]?.toUpperCase() || '?'
         )}

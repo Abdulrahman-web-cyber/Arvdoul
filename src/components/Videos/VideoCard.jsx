@@ -14,6 +14,7 @@ import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import useDoubleTap from '../../hooks/useDoubleTap.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /**
  * VideoCard - Comprehensive vertical video player with ARVDOUL futuristic design
@@ -397,7 +398,7 @@ const VideoCard = memo(({
         >
           <div className="flex -space-x-1.5 overflow-hidden">
             {video.mutualFriends.slice(0, 3).map((friend, i) => (
-              <img
+              <LazyImage
                 key={friend?.id || friend?.uid || i}
                 src={friend?.avatar || friend?.photoURL || '/assets/default-profile.png'}
                 alt={friend?.name || friend?.displayName || 'Mutual friend'}
@@ -429,7 +430,7 @@ const VideoCard = memo(({
             className="w-13 h-13 rounded-full p-0.5 shadow-xl shadow-purple-500/30 ring-2 ring-purple-400/80"
             style={{ background: BRAND_GRADIENT }}
           >
-            <img
+            <LazyImage
               src={video?.creator?.avatar || video?.creator?.photoURL || '/assets/default-profile.png'}
               alt={video?.creator?.name || video?.creator?.displayName || 'Video creator'}
               className="w-full h-full rounded-full object-cover"
@@ -724,7 +725,7 @@ const VideoCard = memo(({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative">
-              <img
+              <LazyImage
                 src={video?.creator?.avatar || video?.creator?.photoURL || '/assets/default-profile.png'}
                 alt={video?.creator?.name || video?.creator?.displayName || 'Video creator'}
                 className="w-10 h-10 rounded-full ring-2 ring-purple-500/80 object-cover"

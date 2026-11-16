@@ -814,12 +814,23 @@ describe('Storage rules - upload paths enforced', () => {
     // These are the namespaces the client actually uploads to. A namespace
     // with no rule denies every upload (the N170 defect).
     for (const ns of [
-      'avatars', 'banners', 'posts', 'stories', 'messages', 'live',
+      'avatars', 'posts', 'stories', 'messages',
       'communities', 'sounds', 'videos', 'thumbnails', 'comments',
       'events', 'group-photos', 'audio_exports', 'temp', 'users',
     ]) {
       expect(rules).toContain(`match /${ns}/`);
     }
+  });
+
+  test('dead upload namespaces are not reintroduced (N507)', () => {
+    const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
+    // `banners` (no cover photos by product policy, no writer/reader) and
+    // `live` (streaming is signalling-only, no media upload) were dead,
+    // world/any-signed-in-readable upload targets. Removing the rule means a
+    // write to either namespace is denied by the catch-all. Do not re-add
+    // without a real writer.
+    expect(rules).not.toContain('match /banners/');
+    expect(rules).not.toContain('match /live/');
   });
 });
 
@@ -1631,6 +1642,25 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
     const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ProfilePublicScreen.jsx'), 'utf8');
     expect(src).not.toContain('Number(profileData.level) || 1');
     expect(src).not.toContain('effectiveProfile.level || 1');
+  });
+
+  test('N500 — ProfilePublicScreen does not coerce a missing likes count to a measured 0', () => {
+    // `likesReceived`/`likesCount` have no writer anywhere, so `resolveCount`
+    // (fallback 0) made every public profile claim a measured "0 likes". The
+    // metric grid renders unknown as '—'; the screen must keep it unknown.
+    const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ProfilePublicScreen.jsx'), 'utf8');
+    expect(src).not.toContain('likesReceived: resolveCount(');
+    expect(src).toContain('unknownNumber(profileData.likesReceived ?? profileData.likesCount)');
+  });
+
+  test('N501 — socialGraphService.getSummary does not fabricate a measured friendCount of 0', () => {
+    // `friendCount` has no writer anywhere (friendships resolve live via
+    // `areFriends`), so `resolveCount` (fallback 0) fabricated a "0 friends"
+    // summary. `followerCount`/`followingCount` DO have real server writers
+    // (`functions/userCounters.js`), so they legitimately keep `resolveCount`.
+    const src = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
+    expect(src).not.toContain('friendCount: resolveCount(');
+    expect(src).toContain('friendCount: unknownNumber(data.friendCount)');
   });
 
   test('citizenship surfaces render an em-dash, not a fabricated tier/rank', () => {
@@ -3718,7 +3748,10 @@ describe('Creator ranking never fabricates a percentile from an unmaintained fie
     // honest shape reports the ranking as unavailable.
     const svc = read('src/services/analyticsService.js');
     expect(svc).not.toContain('totalCreators: 0');
-    expect(svc).toContain('{ position: null, percentile: null, label: null, total: null }');
+    // Both the `getUserAnalytics` catch and `getCreatorRanking`'s own catch must
+    // report an unknown population, never a measured 0.
+    expect((svc.match(/position: null,\s*percentile: null,\s*label: null,\s*total: null/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(svc).not.toMatch(/position: null,\s*percentile: null,\s*label: null,\s*total: 0/);
   });
 
   test('the dashboard does not default an absent rank to "New Creator"', () => {
@@ -4432,6 +4465,16 @@ describe('N405 — identity derivation never invents a civic/creator name', () =
     expect(read('src/screens/Profile/ProfilePreviewScreen.jsx')).not.toContain("displayFallback: 'Arvdoul Citizen'");
   });
 
+  test('AboutScreen resolves a nameless profile to the real uid prefix, never "Arvdoul Citizen" (N504)', () => {
+    // The About (details) surface still coerced a missing display name to the
+    // literal 'Arvdoul Citizen' — a fabricated civic identity, while the
+    // canonical `deriveProfileIdentity` and the sibling ProfilePreviewScreen
+    // resolve the real uid prefix.
+    const s = read('src/screens/Profile/AboutScreen.jsx');
+    expect(s).not.toContain("fallback: 'Arvdoul Citizen'");
+    expect(s).toContain('`user ${String(targetId).slice(0, 6)}`');
+  });
+
   test('userService derives name/handle from the uid prefix, never Member/Creator/creator', () => {
     const s = read('src/services/userService.js');
     expect(s).not.toContain("(isSelfUser ? 'Member' : 'Creator')");
@@ -4988,5 +5031,8 @@ describe('N476 — comment stats never report unwritten aggregates as measured',
     expect(src).not.toMatch(/^\s*shareCount: 0,\s*$/m);
     expect(src).not.toMatch(/^\s*sentimentScore: 0,\s*$/m);
     expect(src).not.toMatch(/^\s*reports: 0,\s*$/m);
+    // N498 — `moderationScore` is server-written only (`functions/comments.js`
+    // `moderateComment`); the client seed presented "not yet scored" as 0.
+    expect(src).not.toMatch(/^\s*moderationScore: 0,\s*$/m);
   });
 });

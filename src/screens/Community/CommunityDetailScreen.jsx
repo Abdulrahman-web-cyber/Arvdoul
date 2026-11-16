@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
 import { unknownNumber } from '../../lib/unknownNumber.js';
 import { resolveActorName } from '../../services/profileReadModel.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const CommunityDetailScreen = () => {
   const { communityId } = useParams();
@@ -238,7 +239,7 @@ const CommunityDetailScreen = () => {
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200">
                 {community.avatar ? (
-                  <img src={community.avatar} alt={community.name} className="w-full h-full object-cover" />
+                  <LazyImage src={community.avatar} alt={community.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
                     {community.name?.charAt(0)?.toUpperCase()}
@@ -386,7 +387,7 @@ const CommunityDetailScreen = () => {
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
                           {post.authorAvatar ? (
-                            <img src={post.authorAvatar} alt="" className="w-full h-full object-cover" />
+                            <LazyImage src={post.authorAvatar} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500" />
                           )}
@@ -403,7 +404,7 @@ const CommunityDetailScreen = () => {
                             <div className="mt-3 grid grid-cols-2 gap-2">
                               {post.media.slice(0, 4).map((media, i) => (
                                 <div key={i} className="aspect-video bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
-                                  <img src={media.url} alt="" className="w-full h-full object-cover" />
+                                  <LazyImage src={media.url} alt="" className="w-full h-full object-cover" />
                                 </div>
                               ))}
                             </div>
@@ -429,7 +430,7 @@ const CommunityDetailScreen = () => {
                 {/* Cover */}
                 {community.cover && (
                   <div className="h-40 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden">
-                    <img src={community.cover} alt="" className="w-full h-full object-cover" />
+                    <LazyImage src={community.cover} alt="" className="w-full h-full object-cover" />
                   </div>
                 )}
 

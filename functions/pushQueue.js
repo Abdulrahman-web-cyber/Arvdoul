@@ -16,6 +16,7 @@
 
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const admin = require('firebase-admin');
+const { logger } = require('./logger');
 
 const PUSH_QUEUE_COLLECTION = 'push_queue';
 
@@ -78,7 +79,7 @@ async function enqueuePush(userId, payload) {
       await client.createTask({ parent, task });
       return { queued: 'cloud_tasks' };
     } catch (error) {
-      console.warn('Cloud Tasks enqueue failed, falling back to Firestore queue:', error.message);
+      logger.warn('Cloud Tasks enqueue failed, falling back to Firestore queue', { error: error.message });
     }
   }
 

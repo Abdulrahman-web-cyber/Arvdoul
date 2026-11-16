@@ -9,6 +9,7 @@ import { cn, formatCount, getResultColor } from "../../lib/searchUtils";
 import ProfileAvatar from '../profile/ProfileAvatar';
 import EmptyState from '../../design-system/EmptyState.jsx';
 import LoadingSpinner from '../Shared/LoadingSpinner';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /**
  * Search Results Tabs
@@ -270,7 +271,7 @@ const VideoResult = memo(({ result, isDark }) => (
   <div className="flex gap-4 p-4">
     <div className="relative w-32 h-24 rounded-2xl overflow-hidden flex-shrink-0">
       {result.thumbnail || result.mediaUrl ? (
-        <img
+        <LazyImage
           src={result.thumbnail || result.mediaUrl}
           alt={result.title}
           className="w-full h-full object-cover"
@@ -348,7 +349,7 @@ const PostResult = memo(({ result, isDark }) => (
     </p>
     {result.mediaUrl && (
       <div className="mt-3 rounded-xl overflow-hidden">
-        <img src={result.mediaUrl} alt="Post media" className="w-full h-48 object-cover" />
+        <LazyImage src={result.mediaUrl} alt="Post media" className="w-full h-48 object-cover" />
       </div>
     )}
     <div className={cn(
@@ -370,7 +371,7 @@ PostResult.displayName = 'PostResult';
 const ImageResult = memo(({ result, isDark }) => (
   <div className="p-4">
     {result.mediaUrl || result.imageUrl ? (
-      <img
+      <LazyImage
         src={result.mediaUrl || result.imageUrl}
         alt={result.title || 'Image'}
         className="w-full rounded-xl object-cover max-h-64"

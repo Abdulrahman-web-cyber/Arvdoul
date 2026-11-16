@@ -1,6 +1,7 @@
 // src/screens/PostCard/QuestionCard.jsx
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useConfirm } from '../../components/Shared/ConfirmProvider.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { unknownNumber } from '../../lib/unknownNumber.js';
@@ -8,6 +9,7 @@ import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Sen
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getReputationBand } from '../../services/levelSystemService.js';
 import { resolveActorName } from '../../services/profileReadModel.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -86,6 +88,7 @@ const AnswerItem = React.memo(({
   onReport,
   tokens,
 }) => {
+  const confirm = useConfirm();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(answer.answer || '');
   const [userVote, setUserVote] = useState(answer.userVote || null);
@@ -124,7 +127,8 @@ const AnswerItem = React.memo(({
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Delete this answer permanently?')) {
+    const ok = await confirm({ title: 'Delete this answer?', description: 'This answer will be permanently removed.', confirmText: 'Delete', tone: 'danger' });
+    if (ok) {
       try {
         await onDelete(answer.id);
         toast.success('Answer deleted');
@@ -155,7 +159,7 @@ const AnswerItem = React.memo(({
       }}
     >
       <div className="flex items-start gap-3">
-        <img src={safeUserPhoto} className="w-9 h-9 rounded-full object-cover" alt="" />
+        <LazyImage src={safeUserPhoto} className="w-9 h-9 rounded-full object-cover" alt="" />
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold" style={{ color: tokens.text }}>{safeUserName}</span>

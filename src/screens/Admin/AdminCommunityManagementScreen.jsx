@@ -1,6 +1,7 @@
 // src/screens/Admin/AdminCommunityManagementScreen.jsx
 
 import { useState, useEffect } from "react";
+import { usePrompt } from '../../components/Shared/ConfirmProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, CheckCircle2, Lock, Globe, Flag } from "lucide-react";
@@ -8,6 +9,7 @@ import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { unknownNumber } from '../../lib/unknownNumber.js';
 
 const AdminCommunityManagementScreen = () => {
+  const prompt = usePrompt();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,7 +55,7 @@ const AdminCommunityManagementScreen = () => {
   };
 
   const handleIssueStrike = async comm => {
-    const reason = window.prompt(`Issue policy strike to "${comm.name || comm.id}". Specify guideline breach:`);
+    const reason = await prompt({ title: 'Issue policy strike', description: `Strike "${comm.name || comm.id}" for a guideline breach.`, placeholder: 'Describe the breach', confirmText: 'Issue strike' });
     if (!reason) return;
     try {
       await callFunction(FUNCTIONS.ADMIN_ISSUE_COMMUNITY_STRIKE, {

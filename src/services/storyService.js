@@ -310,7 +310,7 @@ class UltimateStoryService {
       }
     } catch (err) {
       // Rules may deny (expired/removed stories) — drop silently, never spam.
-      console.warn('[Vibes] analytics flush skipped:', err?.message);
+      logger.warn('[Vibes] analytics flush skipped', { error: err?.message });
     }
   }
 

@@ -52,7 +52,7 @@ const CLIENT_WRITE_PATHS = [
 ];
 
 const CLIENT_NAMESPACES = [
-  'avatars', 'banners', 'posts', 'stories', 'messages', 'live', 'communities',
+  'avatars', 'posts', 'stories', 'messages', 'communities',
   'sounds', 'videos', 'thumbnails', 'comments', 'events', 'group-photos',
   'audio_exports', 'temp', 'users',
 ];
@@ -73,7 +73,7 @@ describe('storage.rules ↔ client write paths', () => {
   test('message media is participant-scoped, never public', () => {
     const block = rules.slice(
       rules.indexOf('match /messages/'),
-      rules.indexOf('match /live/'),
+      rules.indexOf('match /communities/'),
     );
     expect(block).toContain('firestore.get(/databases/(default)/documents/conversations/');
     expect(block).toContain('.data.participants');
@@ -154,7 +154,6 @@ const canRunLive = Boolean(emulatorHost);
     const s = asUser('owner1');
     const paths = [
       ['avatars/owner1/a.jpg', 'image/jpeg'],
-      ['banners/owner1/b.jpg', 'image/jpeg'],
       ['posts/owner1/p.jpg', 'image/jpeg'],
       ['stories/owner1/s.jpg', 'image/jpeg'],
       ['videos/owner1/v.mp4', 'video/mp4'],

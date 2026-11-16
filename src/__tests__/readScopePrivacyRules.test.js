@@ -99,7 +99,29 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
   test('highlights read requires sign-in', () => {
     const b = block(rules, 'match /highlights/{highlightId}');
     expect(b).not.toMatch(/allow read: if true;/);
-    expect(b).toMatch(/allow read: if isSignedIn\(\);/);
+    expect(b).toMatch(/allow read: if isSignedIn\(\)/);
+  });
+
+  test('highlights are masked by the owner profile privacy (N499)', () => {
+    const b = block(rules, 'match /highlights/{highlightId}');
+    // A bare signed-in grant leaked a private account's highlight grid to any
+    // authenticated client; the read now mirrors the profile-section decision.
+    expect(b).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(b).toMatch(/profileSectionReadable\(resource\.data\.userId, 'achievements', 'EVERYONE'\)/);
+  });
+
+  test('highlight entries enforce the parent highlight owner visibility (N499)', () => {
+    const b = block(rules, 'match /highlights/{highlightId}');
+    const start = b.indexOf('match /highlightStories/{storyId}');
+    expect(start).toBeGreaterThan(-1);
+    const sb = b.slice(start, start + 500);
+    // An entry copies the story content/media, so a blanket signed-in read
+    // bypassed the underlying story's visibility gate.
+    expect(sb).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(sb).toMatch(/highlightOwner\(\) == uid\(\)/);
+    expect(sb).toMatch(/profileSectionReadable\(highlightOwner\(\), 'achievements', 'EVERYONE'\)/);
+    // Still writable only by the highlight owner.
+    expect(sb).toMatch(/allow write: if isSignedIn\(\) && highlightOwner\(\) == uid\(\)/);
   });
 
   test('events read is status/relationship-gated (N266)', () => {
@@ -118,6 +140,17 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     const svc = readFile('src/services/eventService.js');
     expect(svc).not.toMatch(/privacy:\s*data\.privacy/);
     expect(svc).not.toMatch(/['"]privacy['"]/);
+  });
+
+  test('event subcollections gate the read to organizer/attendee/admin (N508)', () => {
+    const b = block(rules, 'match /events/{eventId}');
+    // The nested subcollection read must not be a bare signed-in grant: it
+    // carries attendee PII and no client reads it directly.
+    expect(b).toMatch(/allow read: if eventAttendeeOrOrganizer\(eventId\)/);
+    expect(b).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(rules).toMatch(/function eventAttendeeOrOrganizer\(eventId\)/);
+    expect(rules).toMatch(/get\(e\)\.data\.organizerId == uid\(\)/);
+    expect(rules).toMatch(/get\(e\)\.data\.attendees\[uid\(\)\] != null/);
   });
 
   test('advanced creator suite collections require sign-in', () => {
@@ -162,6 +195,16 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     // `list`, exposing the whole platform's engagement map to any signed-in
     // client.
     const b = block(rules, 'match /counter_shards/{shardId}');
+    expect(b).toContain('allow get: if isSignedIn();');
+    expect(b).toContain('allow list: if false;');
+    expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
+  });
+
+  test('server config is point-read only, never listable (N496)', () => {
+    // The client resolves named docs (`config/monetization`, `config/feed_weights`)
+    // with `getDoc` — no query. A bare `allow read` also granted `list`,
+    // exposing every server-managed config document to any signed-in client.
+    const b = block(rules, 'match /config/{configId}');
     expect(b).toContain('allow get: if isSignedIn();');
     expect(b).toContain('allow list: if false;');
     expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);

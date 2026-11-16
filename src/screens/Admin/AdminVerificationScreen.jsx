@@ -1,6 +1,7 @@
 // src/screens/Admin/AdminVerificationScreen.jsx
 
 import { useState, useEffect } from "react";
+import { usePrompt } from '../../components/Shared/ConfirmProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -17,6 +18,7 @@ import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts
 import { getRankTitle } from '../../services/levelSystemService.js';
 
 const AdminVerificationScreen = () => {
+  const prompt = usePrompt();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending'); // 'all' | 'pending' | 'approved' | 'rejected'
@@ -68,8 +70,8 @@ const AdminVerificationScreen = () => {
 
   const handleApprove = applicant => decide(applicant, 'approved');
 
-  const handleReject = applicant => {
-    const reason = window.prompt('Specify reason for verification decline:');
+  const handleReject = async applicant => {
+    const reason = await prompt({ title: 'Decline verification', description: 'Explain why this verification request is declined.', placeholder: 'Reason', confirmText: 'Decline' });
     if (!reason) return;
     decide(applicant, 'rejected', reason);
   };

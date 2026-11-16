@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { cn } from "../../lib/utils";
 import { useTheme } from "../../context/ThemeContext";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const AUDIO_GENRES = [
   "✨ Original", "🎵 Electronic", "🎤 Hip-Hop", "🎸 Acoustic",
@@ -271,7 +272,7 @@ export default function CreateAudio() {
               )}
             >
               {coverUrl ? (
-                <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                <LazyImage src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center p-1 text-gray-400">
                   <Icons.Image className="w-5 h-5 mx-auto mb-1 opacity-70 group-hover:text-purple-400" />

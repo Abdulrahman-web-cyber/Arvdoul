@@ -2,6 +2,7 @@ import { memo } from "react";
 import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /**
  * ArvdoulEmblem - Brand Insignia using official light & dark high-resolution assets
@@ -50,7 +51,7 @@ export const ArvdoulEmblem = memo(({
       } ${animate ? 'hover:scale-105 active:scale-95 transition-transform duration-200' : ''} ${className}`}
       style={{ width: s, height: s }}
     >
-      <img
+      <LazyImage
         src={logoSrc}
         alt={alt}
         className="w-full h-full object-contain block select-none pointer-events-none drop-shadow-[0_2px_12px_rgba(139,30,243,0.35)]"

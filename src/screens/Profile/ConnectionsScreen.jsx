@@ -19,6 +19,7 @@ import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import { toast } from 'sonner';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const { userId } = useParams();
@@ -534,7 +535,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   >
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/20 dark:border-white/10 shadow-sm bg-slate-800">
-                        <img
+                        <LazyImage
                           src={safeAvatar}
                           alt={citizenName}
                           className="w-full h-full object-cover"

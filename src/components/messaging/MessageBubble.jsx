@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { Copy, Reply, Share, Trash2, Edit3, Flag, Lock, MoreVertical, CheckCheck, Clock, AlertCircle, Bookmark, Pin, MapPin, ExternalLink, User, X, Play, Pause, Volume2 } from "lucide-react";
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
 
@@ -122,7 +123,7 @@ const MessageBubble = React.memo(({
       {!isOwn && isGroup && isGroupStart && (
         <div className="flex-shrink-0 mt-1">
           {senderAvatar ? (
-            <img
+            <LazyImage
               src={senderAvatar}
               alt={senderName}
               className="w-7 h-7 rounded-full object-cover border border-white/10"
@@ -229,7 +230,7 @@ const MessageBubble = React.memo(({
             {/* IMAGE */}
             {type === 'image' && media?.url && (
               <div className="space-y-1.5">
-                <img
+                <LazyImage
                   src={media.url}
                   alt="Shared media"
                   onClick={() => setPreviewImage(media.url)}
@@ -242,7 +243,7 @@ const MessageBubble = React.memo(({
 
             {/* GIF */}
             {type === 'gif' && (media?.url || content) && (
-              <img
+              <LazyImage
                 src={media?.url || content}
                 alt="GIF"
                 onClick={() => setPreviewImage(media?.url || content)}
@@ -588,7 +589,7 @@ const MessageBubble = React.memo(({
           >
             <X className="w-6 h-6" />
           </button>
-          <img
+          <LazyImage
             src={previewImage}
             alt="Preview"
             className="max-w-full max-h-[90vh] rounded-2xl object-contain shadow-2xl"

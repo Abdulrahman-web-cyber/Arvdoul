@@ -17,7 +17,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import {
-  resolveCount,
   pickDisplayName,
   deriveProfileIdentity,
   projectProfileForViewer,
@@ -27,6 +26,7 @@ import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
+import { unknownNumber } from '../../lib/unknownNumber';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
 // Modular Profile Components
@@ -328,7 +328,11 @@ export default function ProfilePublicScreen() {
       ...profileData,
       ...identity,
       bio: typeof profileData.bio === 'string' ? profileData.bio : '',
-      likesReceived: resolveCount(profileData.likesReceived, profileData.likesCount),
+      // `likesReceived`/`likesCount` have no writer anywhere (the metric is not
+      // computed), so a `resolveCount` here coerced an absent value to a
+      // measured "0 likes" on every public profile. The grid renders unknown as
+      // '—'; keep an absent value unknown rather than fabricating a count.
+      likesReceived: unknownNumber(profileData.likesReceived ?? profileData.likesCount),
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
       links: Array.isArray(profileData.links) ? profileData.links : [],

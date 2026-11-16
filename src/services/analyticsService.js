@@ -562,12 +562,14 @@ class UltimateAnalyticsService {
 
       return ranking;
     } catch (error) {
-      // A failed read is unknown, not "New Creator".
+      // A failed read is unknown, not "New Creator" — and not a measured
+      // population of 0 either. `total` is the count of creators actually read
+      // on success; with no read it is unknown (null).
       return {
         position: null,
         percentile: null,
         label: null,
-        total: 0,
+        total: null,
       };
     }
   }

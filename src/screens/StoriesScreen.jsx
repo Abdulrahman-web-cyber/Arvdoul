@@ -14,6 +14,7 @@ import { pickHandle, deriveHandle, resolveActorName } from '../services/profileR
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 import ErrorState from '../design-system/ErrorState.jsx';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 // Only categories with a real backing model are offered. `close_friends` had no
 // list/edge collection (`isCloseFriend` was hardcoded false and every
@@ -864,7 +865,7 @@ export default function StoriesScreen() {
               )}
             >
               {/* Background Media Thumbnail */}
-              <img
+              <LazyImage
                 src={story.mediaUrl}
                 alt={story.caption || story.user.name}
                 referrerPolicy="no-referrer"
@@ -879,7 +880,7 @@ export default function StoriesScreen() {
                 <div className="flex items-center gap-1.5">
                   {/* Avatar with gradient glow ring */}
                   <div className="relative p-0.5 rounded-full bg-gradient-to-tr from-arvdoul-purple via-arvdoul-glow-magenta to-arvdoul-blue shadow-[0_0_10px_rgba(139,30,243,0.5)]">
-                    <img
+                    <LazyImage
                       src={story.user.avatar}
                       alt={story.user.name}
                       referrerPolicy="no-referrer"
@@ -990,7 +991,7 @@ export default function StoriesScreen() {
             <div className="absolute top-7 left-0 right-0 z-30 px-4 flex items-center justify-between">
               {/* Creator info */}
               <div className="flex items-center gap-2.5">
-                <img
+                <LazyImage
                   src={currentStory.user.avatar}
                   alt={currentStory.user.name}
                   referrerPolicy="no-referrer"
@@ -1065,7 +1066,7 @@ export default function StoriesScreen() {
               className="relative w-full h-full flex items-center justify-center cursor-pointer"
             >
               {currentItem?.url || currentStory.mediaUrl ? (
-                <img
+                <LazyImage
                   src={currentItem?.url || currentStory.mediaUrl}
                   alt={currentItem?.caption ? `Vibe by ${currentStory.user.name}: ${currentItem.caption}` : `Vibe by ${currentStory.user.name}`}
                   referrerPolicy="no-referrer"
@@ -1307,7 +1308,7 @@ export default function StoriesScreen() {
                               onClick={() => { setViewersOpen(false); navigate(`/profile/${v.userId}`); }}
                               className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-white/5 text-left"
                             >
-                              <img
+                              <LazyImage
                                 src={v.avatar}
                                 alt=""
                                 className="w-11 h-11 rounded-full object-cover border border-white/10"
@@ -1393,7 +1394,7 @@ export default function StoriesScreen() {
                     return (
                       <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-white/5">
                         {url ? (
-                          <img src={url} alt={st.content || 'Archived Vibe'} loading="lazy" className="w-full h-full object-cover" />
+                          <LazyImage src={url} alt={st.content || 'Archived Vibe'} loading="lazy" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 px-1 text-center">
                             {st.content || 'Text Vibe'}

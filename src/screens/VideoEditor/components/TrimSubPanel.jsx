@@ -4,6 +4,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Scissors, Slice, SplitSquareVertical, Trash2, Plus, Minus, ChevronDown, Check } from "lucide-react";
 import { formatTimecode } from '../constants';
+import { LazyImage } from '../../../components/Shared/LazyImage';
 
 export default function TrimSubPanel({
   selectedClip,
@@ -144,7 +145,7 @@ export default function TrimSubPanel({
             <div className="absolute inset-1 flex overflow-hidden rounded-xl opacity-80">
               {Array.from({ length: 8 }).map((_, i) => (
                 selectedClip?.thumbnail ? (
-                  <img
+                  <LazyImage
                     key={i}
                     src={selectedClip.thumbnail}
                     alt="frame"

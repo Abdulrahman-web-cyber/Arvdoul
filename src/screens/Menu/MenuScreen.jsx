@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
 import { pickHandle, deriveHandle, resolveActorName } from "../../services/profileReadModel.js";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // Animation Variants
 const containerVariants = {
@@ -200,7 +201,7 @@ export default function MenuScreen() {
             <div className="flex items-center gap-4">
               <div className="relative">
                 {activeUser?.photoURL ? (
-                  <img
+                  <LazyImage
                     src={activeUser.photoURL}
                     alt="Avatar"
                     className="w-16 h-16 rounded-2xl object-cover ring-2 ring-purple-500/50 shadow-lg"

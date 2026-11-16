@@ -47,6 +47,7 @@ import { getUserService } from "../services/userService";
 import { LOCAL_POSTS_KEY } from "../utils/localContentCache.js";
 import { pickDisplayName, deriveHandle } from "../services/profileReadModel.js";
 import { BRAND_GRADIENT, tokens } from "../design-system/tokens.js";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 // ── CONSTANTS & DESIGN TOKENS ──────────────────────────────────────────
 const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
@@ -2052,7 +2053,7 @@ function PostPreview() {
                 <Icons.Play className="w-8 h-8 opacity-80" />
               </div>
             ) : (
-              <img src={m.preview || m.url} alt={m.alt || ""} className="w-full h-full object-cover" />
+              <LazyImage src={m.preview || m.url} alt={m.alt || ""} className="w-full h-full object-cover" />
             )}
           </div>
         ))}
@@ -2067,7 +2068,7 @@ function PostPreview() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {authorPhoto ? (
-            <img src={authorPhoto} alt="" className="w-10 h-10 rounded-full object-cover border border-purple-500/30" />
+            <LazyImage src={authorPhoto} alt="" className="w-10 h-10 rounded-full object-cover border border-purple-500/30" />
           ) : (
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
               {authorName[0]?.toUpperCase() || "U"}

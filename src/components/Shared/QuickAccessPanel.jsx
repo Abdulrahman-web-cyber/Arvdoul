@@ -17,6 +17,7 @@ import achievementService from "../../services/achievementService";
 import { formatCount } from "../../lib/searchUtils";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import { pickDisplayName } from "../../services/profileReadModel.js";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -781,7 +782,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     />
 
                     {/* Profile image */}
-                    <img
+                    <LazyImage
                       src={profilePicture}
                       alt={currentUser?.displayName || "Profile"}
                       className="w-14 h-14 sm:w-18 sm:h-18 rounded-full border-4 absolute top-1 left-1 sm:top-1.5 sm:left-1.5 object-cover z-10"

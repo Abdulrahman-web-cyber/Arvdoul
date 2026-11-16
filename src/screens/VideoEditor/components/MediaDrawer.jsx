@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import { motion } from "framer-motion";
 import { X, Image as ImageIcon, Video, Music, Plus } from "lucide-react";
 import { STOCK_VIDEOS, STOCK_AUDIO } from '../constants';
+import { LazyImage } from '../../../components/Shared/LazyImage';
 
 export default function MediaDrawer({
   isOpen,
@@ -90,7 +91,7 @@ export default function MediaDrawer({
                   >
                     <div className="aspect-video relative overflow-hidden">
                       {video.thumbnail ? (
-                        <img
+                        <LazyImage
                           src={video.thumbnail}
                           alt={video.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

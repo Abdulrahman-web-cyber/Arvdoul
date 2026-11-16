@@ -2,6 +2,84 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
+## This session — image-loading perf + Functions logging + storage/event read leaks (N505–N508)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) perf/observability.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N505 | 150 raw image elements, only 4 with `loading` — eager fetch + sync decode on every feed image, no reserved box (CLS). | New `src/components/Shared/LazyImage.jsx` (lazy by default, `decoding="async"`, reserved aspect box, honest placeholder on error). 81 JSX files migrated; the primitive is the only remaining image element. `imageLoadingGuard.test.js` (guards job). |
+| N506 | 13 `functions/*.js` modules logged through raw `console.*` + local `log()` shims. | New `functions/logger.js` (wraps `firebase-functions/logger`, JSON severity); every module requires it. `functionsLoggingGuard.test.js` (guards job); `functionsContract.test.js` lists `logger.js` as helper-only. |
+| N507 | `storage.rules` declared two dead namespaces: `banners/{uid}` (world-readable, no cover photos by product policy, no writer/reader) and `live/{uid}` (any-signed-in-readable; streaming is signalling-only, no media upload). Both pure upload attack surface. | Both `match` blocks removed; catch-all denies them. `noFabricatedData.test.js` (N507) + `storageRulesPathAlignment.test.js`. |
+| N508 | `events/{eventId}/{subcollection}/{docId}` was `allow read: if isSignedIn()` — any signed-in stranger could enumerate every event's attendee list (PII). No client reads it directly (roster is served by the `getEventAttendees` callable). | Read gated to organizer/attendee/admin via `eventAttendeeOrOrganizer(eventId)` (absent parent falls closed). `readScopePrivacyRules.test.js` (N508). |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **217 suites / 2220 passed (5 skipped), 2225 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED. N424–N508 closed.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 217 suites green
+npm run build                 # green
+```
+
+## This session — highlight content-copy read leak (N499) + public-profile likes fabrication (N500)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity sweep.
+
+- **N499 (HIGH, closed):** `highlights/{id}` and `highlights/{id}/highlightStories`
+  were readable by every signed-in user, but `storyService.addToHighlight` writes
+  a COPY of the story's `content`/`media`/`music` onto each entry (the snapshot
+  used once the story expires and `stories/{id}` is deleted). So a followers-only
+  or private Vibe, once highlighted, was readable by any authenticated client
+  even though `stories/{storyId}` (`vibeVisibleToViewer` + `vibeNotBlocked`)
+  denies them — the highlight copy bypassed the parent visibility gate. The bare
+  `highlights` read also exposed a private account's whole highlight grid. This
+  **reopens N270**, whose "no story content" premise was false. Fix:
+  `highlights/{id}` read = `isOwner(resource.data.userId) ||
+  profileSectionReadable(resource.data.userId, 'achievements', 'EVERYONE')`;
+  `highlightStories/{storyId}` read = `highlightOwner() == uid() ||
+  profileSectionReadable(highlightOwner(), 'achievements', 'EVERYONE')`. The only
+  client reader (`storyService.getHighlightStories`) resolves the parent by id and
+  never queries the subcollection, so no composite index is needed. Guard:
+  `readScopePrivacyRules.test.js` (two new N499 cases).
+- **N500 (MEDIUM, closed):** `ProfilePublicScreen` built the profile with
+  `resolveCount(profileData.likesReceived, profileData.likesCount)` (fallback
+  `0`) while neither field has a writer anywhere in `src`/`functions` — so every
+  public profile rendered a measured "0 Likes". The grid consumer
+  (`ProfileMetricsGrid`) already renders unknown as `—`; the screen fabricated the
+  `0` first. Fixed to `unknownNumber(profileData.likesReceived ??
+  profileData.likesCount)`; dead `resolveCount` import dropped. Guard:
+  `noFabricatedData.test.js` (N500 case).
+
+Verified: `npx eslint src --quiet` exit 0; `npm run build` exit 0; full jest suite
+**213 suites / 2208 passed (5 skipped), 2213 total** green.
+
+## This session — read-scope leaks, fabricated measured zeros, server-owned field seeds (N496–N498)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity sweep + (3) server-owned seeds.
+
+- **N496 (MEDIUM, closed):** `config/{configId}` granted `allow read: if
+  isSignedIn()` — which also grants `list` — while the client only ever
+  `getDoc`s named docs (`config/monetization`, `config/feed_weights`). Split to
+  `allow get: if isSignedIn(); allow list: if false;`. Same class as N472/N483.
+  Guard: `readScopePrivacyRules.test.js` (N496).
+- **N497 (MEDIUM, closed):** `analyticsService.getCreatorRanking`'s own catch
+  still returned `total: 0` (a measured population of 0 on a failed read) after
+  N480 fixed only the `getUserAnalytics` fallback. Now `total: null`; the N480
+  guard asserts BOTH catches report an unknown population.
+- **N498 (MEDIUM, closed):** `commentService.addComment` seeded
+  `moderationScore: 0` — a field the `moderateComment` trigger owns and the
+  comments update denylist forbids clients to touch — presenting "not yet
+  scored" as a measured 0. Seed removed; `noFabricatedData.test.js` (N498).
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite
+**213 suites / 2205 passed (5 skipped), 2210 total** green; `npm run build` green.
+
 ## This session — background-job backlog draining, a wrong-field cleanup query, an unbounded account-deletion scan, and a fan-out trigger collision (N493–N495)
 
 - **N493 (HIGH, closed):** `functions/index.js#cleanupRateLimits` filtered the
@@ -159,10 +237,15 @@ defined source). N424–N487 closed.
   `_lastEditedAt` that nothing reads (non-atomic `(n||0)+1`, and a client
   `new Date()` on a server-owned surface). Both removed; `isEdited` + the
   `history` subcollection are the real edit signals.
+- **N496 (MEDIUM, closed):** `config/{configId}` granted `allow read: if
+  isSignedIn()` (grants `list`) while the client only `getDoc`s named docs
+  (`config/monetization`, `config/feed_weights`). Split to `allow get` /
+  `allow list: if false`. `readScopePrivacyRules.test.js` (N496) pins it.
+  (Chosen id: the ledger max is N495, so the next free id is N496.)
 
-Latest verified: **204 suites / 2179 passed (5 skipped), exit 0**;
+Latest verified: **213 suites / 2205 passed (5 skipped), exit 0**;
 `npx eslint --quiet src functions` exit 0 (0 errors, 867 warnings); `npm run build` green.
-`readScopePrivacyRules.test.js` 16/16 against the local Firestore emulator.
+`readScopePrivacyRules.test.js` 17/17 against the local Firestore emulator.
 
 ## This session — read-scope / fabrication / dead-control batches (N472–N477)
 
@@ -991,5 +1074,30 @@ cd /workspace/project/Arvdoul
 git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
 npm run lint                  # exit 0
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 193 suites green
+npm run build                 # green
+```
+
+## Continuation session 13 (N501–N504 — fabrication + UX-dialog hardening wave)
+
+Branch `harden/n319-n320-analytics-live`. Prior session closed N499/N500 (commits `0b007a8`, `4b96c05`). This session's 30-task list: T1/T2 were **non-issues** (all 11 `target="_blank"` already carry `rel="noopener noreferrer"`; all 3 `dangerouslySetInnerHTML` go through DOMPurify allowlists). T3 was a **false positive** (all 4 `<img>` already have `alt` on the next JSX line — the earlier scan's single-line heuristic missed them). T4–T10 verified no-fabrication (all `Math.random` hits are animation entropy / username / idempotency-key / a Fisher–Yates shuffle — no fabricated metrics; `callableAuthGate` + `deployIntegrity` + `snapshotErrorHandling` guards already green; `feature_flags`/`admins` function reads are bounded config reads).
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N501 | `socialGraphService.getSummary` returned `resolveCount(data.friendCount)` (fallback `0`) though `friendCount` has no writer anywhere (friendships resolve live via `areFriends`) — a measured "0 friends" that contradicted the consumer `ProfileMetricsGrid` (which treats absent as `—`). | `friendCount` now resolves via `unknownNumber(data.friendCount)`. `followerCount`/`followingCount` keep `resolveCount` (real server writers in `functions/userCounters.js`). `noFabricatedData.test.js` (N501 case). |
+| N502 | 5 raw `console.*` calls in `src/services` (callableService ×2, messagesService, notificationsService, storyService) bypassed the `utils/Logger` policy. | All routed through `logger.error`/`logger.warn`. New `serviceLoggingHygieneGuard.test.js` walks `src/services/**` and fails on any `console.*`; added to the hard-failing `guards` CI job. |
+| N503 | 15 blocking native dialogs (`window.confirm` ×11, `window.prompt` ×4) across 13 screens — main-thread freeze, unstyleable, inaccessible. | New `src/components/Shared/ConfirmProvider.jsx` (`useConfirm`/`usePrompt`, fail-closed) backed by the accessible `Dialog`; mounted under `AuthProvider` in `AppBootstrap`. All 15 sites converted. New `nativeDialogGuard.test.js`; added to the `guards` CI job. |
+| N504 | `AboutScreen` fabricated the display name `'Arvdoul Citizen'` for a nameless profile, while the canonical `deriveProfileIdentity` and the sibling `ProfilePreviewScreen` resolve the real uid prefix (`user <uid6>`). | The About surface now resolves `pickDisplayName([...], { fallback: null }) || \`user ${String(targetId).slice(0, 6)}\``. `noFabricatedData.test.js` (N504 case). |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **215 suites / 2213 passed / 5 skipped / 2218 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** (rankings — BLOCKED on the ranking formula); N432 partially BLOCKED. N424–N504 closed. All 30 tasks of this session's list resolved: T1–T3/T6–T10 were verified non-issues, T4–T11/T13 produced N501–N504. New guards: `serviceLoggingHygieneGuard`, `nativeDialogGuard`.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 215 suites green
 npm run build                 # green
 ```

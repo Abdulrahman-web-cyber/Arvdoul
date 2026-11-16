@@ -23,6 +23,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePrompt } from '../components/Shared/ConfirmProvider.jsx';
 import { useTheme } from '../context/ThemeContext';
 import { getMessagingService, MESSAGING_CONFIG } from '../services/messagesService.js';
 import MessageInput from '../components/messaging/MessageInput.jsx';
@@ -35,10 +36,12 @@ import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Boo
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 export default function ChatScreen() {
+  const prompt = usePrompt();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -596,7 +599,7 @@ export default function ChatScreen() {
   }, [uid, conversation, resolveSenderLabel]);
 
   const handleEdit = useCallback(async (msg) => {
-    const next = window.prompt('Edit message', msg.content || '');
+    const next = await prompt({ title: 'Edit message', defaultValue: msg.content || '', confirmText: 'Save' });
     if (next == null) return;
     const trimmed = next.trim();
     if (!trimmed || trimmed === msg.content) return;
@@ -976,7 +979,7 @@ export default function ChatScreen() {
                         aria-label={`Open media message ${m.id}`}
                       >
                         {m.media?.url || m.media?.downloadUrl ? (
-                          <img src={m.media.url || m.media.downloadUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          <LazyImage src={m.media.url || m.media.downloadUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
                           <div className="w-full h-full bg-purple-600/30 flex items-center justify-center">
                             <ImageIcon className="w-5 h-5 text-purple-300" />

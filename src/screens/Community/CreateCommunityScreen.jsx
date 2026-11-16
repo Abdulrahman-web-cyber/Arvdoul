@@ -8,6 +8,7 @@ import { Upload, X, Globe, Lock, Shield, Users, MessageCircle, Calendar, Check, 
 import { getCommunityService } from '../../services/communityService';
 import { getStorageService } from '../../services/storageService';
 import { useAuth } from '../../context/AuthContext';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const CreateCommunityScreen = () => {
   const navigate = useNavigate();
@@ -300,7 +301,7 @@ const CreateCommunityScreen = () => {
                 >
                   {formData.coverPreview ? (
                     <>
-                      <img
+                      <LazyImage
                         src={formData.coverPreview}
                         alt="Cover preview"
                         className="w-full h-full object-cover"
@@ -347,7 +348,7 @@ const CreateCommunityScreen = () => {
                     `}
                   >
                     {formData.avatarPreview ? (
-                      <img
+                      <LazyImage
                         src={formData.avatarPreview}
                         alt="Avatar preview"
                         className="w-full h-full object-cover"

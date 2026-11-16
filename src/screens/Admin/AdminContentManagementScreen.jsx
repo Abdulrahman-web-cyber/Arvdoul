@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, Eye, Trash2, Flag, Image as ImageIcon, Video, FileText, CheckCircle, XCircle } from "lucide-react";
 import PermissionDenied from '../../design-system/PermissionDenied.jsx';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // A missing/unknown count renders as "—", never as a fabricated 0 (a post whose
 // stats never loaded is not a post with zero views).
@@ -160,7 +161,7 @@ const AdminContentManagementScreen = () => {
               <div className="flex gap-4">
                 <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
                   {item.media?.[0]?.url ? (
-                    <img src={item.media[0].url} alt="" className="w-full h-full object-cover" />
+                    <LazyImage src={item.media[0].url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       {getContentIcon(item.type)}

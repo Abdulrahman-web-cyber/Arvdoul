@@ -8,6 +8,7 @@ import {
   Video, Type, Image as ImageIcon, Star, Sliders, Music,
   Trash2, Copy, Lock, Unlock, ArrowUp, ArrowDown
 } from 'lucide-react';
+import { LazyImage } from '../../../components/Shared/LazyImage';
 
 export default function LayersPanel({
   layers = [],
@@ -96,7 +97,7 @@ export default function LayersPanel({
                   {/* Thumbnail or Icon Box */}
                   <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/50 border border-white/10 flex items-center justify-center shrink-0">
                     {layer.thumbnail ? (
-                      <img
+                      <LazyImage
                         src={layer.thumbnail}
                         alt={layer.title}
                         className="w-full h-full object-cover"

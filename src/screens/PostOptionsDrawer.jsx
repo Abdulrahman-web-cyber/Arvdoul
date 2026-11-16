@@ -12,6 +12,7 @@ import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
 import feedService from '../services/feedService.js';
 import { callFunction, FUNCTIONS } from '../services/callableService.js';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -858,7 +859,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
             <div className="px-5 pt-5 pb-3 border-b dark:border-gray-800">
               <div className="flex items-center gap-4">
                 <button onClick={() => navigate(`/profile/${ownerId}`)} className="flex-shrink-0">
-                  <img
+                  <LazyImage
                     src={userService.getAvatarUrl(ownerId, post.authorName, post.authorPhoto)}
                     alt={`${post.authorName}'s avatar`}
                     className="w-16 h-16 rounded-full object-cover ring-3 ring-purple-500/50 shadow-lg"

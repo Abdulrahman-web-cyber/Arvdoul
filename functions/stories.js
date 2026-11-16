@@ -6,6 +6,7 @@
 // handling. Cloud Tasks requests are secured with OIDC (the token the queue
 // actually mints) and fanout tasks are deduplicated by task name.
 const functions = require('firebase-functions');
+const { log } = require('./logger');
 const admin = require('firebase-admin');
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const { OAuth2Client } = require('google-auth-library');
@@ -68,14 +69,6 @@ const videoModerationUrl = `https://${location}-${projectId}.cloudfunctions.net/
 // ----------------------------------------------------------------------
 //  STRUCTURED LOGGING
 // ----------------------------------------------------------------------
-function log(severity, message, meta = {}) {
-  console.log(JSON.stringify({
-    severity: severity.toUpperCase(),
-    message,
-    timestamp: new Date().toISOString(),
-    ...meta,
-  }));
-}
 
 // ----------------------------------------------------------------------
 //  BATCH COMMIT WITH EXPONENTIAL BACKOFF

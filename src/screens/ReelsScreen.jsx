@@ -17,6 +17,7 @@ import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import VideoComments from '../components/Videos/VideoComments';
 import { VIRTUAL_GIFTS } from '../data/videoData';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 export default function ReelsScreen() {
   const navigate = useNavigate();
@@ -684,7 +685,7 @@ const formatDuration = (seconds) => {
             onClick={() => currentReel.creator.id && navigate(`/profile/${currentReel.creator.id}`)}
             className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue cursor-pointer shadow-arvdoul-glow"
           >
-            <img
+            <LazyImage
               src={currentReel.creator.avatar}
               alt={currentReel.creator.name || ''}
               className="w-full h-full rounded-full object-cover border-2 border-black"
@@ -792,7 +793,7 @@ const formatDuration = (seconds) => {
         <div className="p-3 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 space-y-2 shadow-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img
+              <LazyImage
                 src={currentReel.creator.avatar}
                 alt={currentReel.creator.name}
                 className="w-9 h-9 rounded-full object-cover border border-arvdoul-purple"

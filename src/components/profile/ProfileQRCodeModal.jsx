@@ -16,6 +16,7 @@ import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
 import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ProfileQRCodeModal = memo(({
   isOpen,
@@ -152,7 +153,7 @@ const ProfileQRCodeModal = memo(({
             {/* User Identity Header */}
             <div className="flex items-center gap-2.5 mb-3 pt-1">
               <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-purple-500/30 shrink-0 bg-slate-100">
-                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                <LazyImage src={avatarUrl} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="text-left">
                 <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
@@ -176,7 +177,7 @@ const ProfileQRCodeModal = memo(({
                 </div>
               ) : qrDataUrl ? (
                 <div className="relative w-full h-full flex items-center justify-center">
-                  <img
+                  <LazyImage
                     src={qrDataUrl}
                     alt={`QR Code for ${displayName}`}
                     className="w-full h-full object-contain rounded-lg"
@@ -185,7 +186,7 @@ const ProfileQRCodeModal = memo(({
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-10 h-10 rounded-full bg-white p-0.5 shadow-md flex items-center justify-center">
                       <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-purple-600 to-cyan-500 p-[1.5px]">
-                        <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full bg-slate-900" />
+                        <LazyImage src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full bg-slate-900" />
                       </div>
                     </div>
                   </div>

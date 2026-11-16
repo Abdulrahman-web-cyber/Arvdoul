@@ -1,6 +1,7 @@
 // src/screens/CommentsDrawer.jsx
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { Virtuoso } from 'react-virtuoso';
 import { toast } from 'sonner';
@@ -24,6 +25,7 @@ import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 // One count formatter for the whole app (unknown -> '—'); a local copy drifted.
 import { formatCount } from '../lib/searchUtils';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
@@ -610,7 +612,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
   return (
     <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 backdrop-blur-sm bg-opacity-90">
       <div className="flex gap-2">
-        <img
+        <LazyImage
           src={getSafeAvatarUrl(currentUser?.photoURL, pickDisplayName([currentUser?.displayName], { fallback: 'You' }), currentUser?.uid)}
           alt=""
           className="w-9 h-9 rounded-full object-cover ring-2 ring-purple-500/30"
@@ -914,7 +916,7 @@ const CommentItem = memo(({
       )}
       <div className="flex gap-2 py-2 group">
         <button onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} className="flex-shrink-0">
-          <img src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
+          <LazyImage src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -1026,6 +1028,7 @@ const CommentItem = memo(({
 export default function CommentsDrawer({ isOpen, onClose, post, currentUser, theme }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const confirm = useConfirm();
   const isDark = theme === 'dark';
   const postId = post?.id;
   const deepLinkedCommentId = searchParams.get('commentId');
@@ -1458,7 +1461,8 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       toast.error('You can only delete your own comments');
       return;
     }
-    if (!window.confirm('Delete this comment?')) return;
+    const ok = await confirm({ title: 'Delete this comment?', description: 'This comment and its replies will be permanently removed.', confirmText: 'Delete', tone: 'danger' });
+    if (!ok) return;
     triggerHaptic('light');
     deleteCommentStore(postId, commentId);
     try {

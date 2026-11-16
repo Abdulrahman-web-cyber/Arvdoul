@@ -11,6 +11,7 @@
 import { memo } from "react";
 import { Users, UserCheck } from "lucide-react";
 import { cn } from '../../lib/utils';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ProfileSocialContext = memo(({
   mutualFriends = [],
@@ -90,7 +91,7 @@ const ProfileSocialContext = memo(({
                 style={{ zIndex: 10 - idx }}
               >
                 {f.photoURL ? (
-                  <img src={f.photoURL} alt={f.displayName || 'Friend'} className="w-full h-full object-cover" />
+                  <LazyImage src={f.photoURL} alt={f.displayName || 'Friend'} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">
                     {(f.displayName || f.name || 'U').charAt(0).toUpperCase()}

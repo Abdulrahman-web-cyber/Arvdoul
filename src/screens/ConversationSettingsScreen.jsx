@@ -3,6 +3,7 @@
 // Conversation info, mute/unmute, pin/unpin, leave group — backed by messagesService.
 
 import { useState, useEffect, useCallback } from "react";
+import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +13,7 @@ import { unknownNumber } from '../lib/unknownNumber.js';
 import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info, Archive, ArchiveRestore } from 'lucide-react';
 
 export default function ConversationSettingsScreen() {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { conversationId } = useParams();
   const { user } = useAuth();
@@ -110,7 +112,8 @@ export default function ConversationSettingsScreen() {
 
   const handleLeave = async () => {
     if (!user?.uid || acting) return;
-    if (!window.confirm('Leave this conversation?')) return;
+    const ok = await confirm({ title: 'Leave conversation?', description: 'You will no longer receive messages from this conversation.', confirmText: 'Leave', tone: 'danger' });
+    if (!ok) return;
     setActing(true);
     try {
       const { getMessagingService } = await import('../services/messagesService.js');

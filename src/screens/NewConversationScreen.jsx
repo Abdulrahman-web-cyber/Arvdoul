@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { X, Search, UserPlus, Loader2, ArrowLeft, Camera } from 'lucide-react';
 import storageService from '../services/storageService';
 import ErrorState from '../design-system/ErrorState.jsx';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const NewConversationScreen = () => {
   const navigate = useNavigate();
@@ -391,7 +392,7 @@ const NewConversationScreen = () => {
               {uploadingPhoto ? (
                 <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
               ) : groupPhoto ? (
-                <img src={groupPhoto} alt="Group" className="w-full h-full object-cover" />
+                <LazyImage src={groupPhoto} alt="Group" className="w-full h-full object-cover" />
               ) : (
                 <Camera className={cn('w-5 h-5', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
               )}
@@ -497,7 +498,7 @@ const NewConversationScreen = () => {
                 >
                   <div className="relative">
                     {u.photoURL ? (
-                      <img
+                      <LazyImage
                         src={u.photoURL}
                         alt={u.displayName}
                         className="w-12 h-12 rounded-full object-cover"

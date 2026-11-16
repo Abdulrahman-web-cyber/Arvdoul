@@ -4,6 +4,7 @@
 // Adheres strictly to zero-pill discipline, WCAG AA, and service-layer boundary.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useConfirm } from '../../components/Shared/ConfirmProvider.jsx';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -14,6 +15,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { resolveActorName } from '../../services/profileReadModel';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ROLE_BADGE_STYLES = {
   owner: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
@@ -31,6 +33,7 @@ const TABS = [
 ];
 
 export default function CommunitySettingsScreen() {
+  const confirm = useConfirm();
   const { communityId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -176,7 +179,8 @@ export default function CommunitySettingsScreen() {
   // Kick member from community
   const handleKickMember = async (targetUserId) => {
     if (!user?.uid || !canManage) return;
-    if (!window.confirm('Are you sure you want to remove this member from the community?')) return;
+    const ok = await confirm({ title: 'Remove member?', description: 'They will lose access to this community.', confirmText: 'Remove', tone: 'danger' });
+    if (!ok) return;
     setActionLoading(true);
     try {
       await communityService.leaveCommunity(communityId, targetUserId);
@@ -487,7 +491,7 @@ export default function CommunitySettingsScreen() {
                       )}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
+                        <LazyImage
                           src={member.avatar}
                           alt={member.displayName}
                           className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
@@ -629,7 +633,7 @@ export default function CommunitySettingsScreen() {
                 pendingRequests.map((req) => (
                   <div key={req.id} className="p-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <img
+                      <LazyImage
                         src={req.avatar}
                         alt={req.displayName}
                         className="w-10 h-10 rounded-full object-cover border border-white/10"

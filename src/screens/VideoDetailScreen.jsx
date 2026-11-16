@@ -16,6 +16,7 @@ import VideoComments from '../components/Videos/VideoComments';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Volume2, VolumeX, Loader2, Play } from "lucide-react";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 export default function VideoDetailScreen() {
   const { videoId } = useParams();
@@ -365,7 +366,7 @@ export default function VideoDetailScreen() {
                         >
                           <div className="aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/10">
                             {thumb ? (
-                              <img src={thumb} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <LazyImage src={thumb} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center"><Play className="w-6 h-6 text-white/60" /></div>
                             )}

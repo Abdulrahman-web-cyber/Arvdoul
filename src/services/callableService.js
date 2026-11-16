@@ -4,6 +4,7 @@
 // Ensures consistent error handling, app instance binding, and admin status retrieval.
 
 import { getFunctionsInstance } from '../firebase/firebase.js';
+import { logger } from '../utils/Logger.js';
 
 export const FUNCTIONS = {
   GET_ADMIN_STATUS: 'getAdminStatus',
@@ -183,7 +184,7 @@ export async function callFunction(functionName, data = {}) {
     const result = await callable(data);
     return result?.data;
   } catch (error) {
-    console.error(`[callableService] Error calling ${functionName}:`, error);
+    logger.error(`[callableService] Error calling ${functionName}`, { error: error?.message });
     throw error;
   }
 }
@@ -209,7 +210,7 @@ export async function fetchAdminStatus() {
     return Boolean(res?.isAdmin);
   } catch (err) {
     // If not configured or unauthenticated, default to false without crashing
-    console.warn('[callableService] fetchAdminStatus fallback: false', err?.message);
+    logger.warn('[callableService] fetchAdminStatus fallback: false', { error: err?.message });
     return false;
   }
 }

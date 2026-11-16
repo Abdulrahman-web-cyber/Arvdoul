@@ -61,6 +61,7 @@ import DrawingTool from '../../components/Shared/DrawingTool';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
 import { BRAND_GRADIENT, tokens, brandRgba} from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Icons (resolved defensively so a lucide-react rename can never crash render)
@@ -2549,7 +2550,7 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                           if (ok) toast.success('Photo added');
                         }}
                       >
-                        <img src={m.preview || m.url} alt="" />
+                        <LazyImage src={m.preview || m.url} alt="" />
                       </button>
                     ))}
                   </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles } from "lucide-react";
 import { Loader2, AlertTriangle } from 'lucide-react';
+import { LazyImage } from '../components/Shared/LazyImage';
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
   const navigate = useNavigate();
@@ -131,7 +132,7 @@ export default function PostAnalyticsScreen() {
         {post && (
           <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm flex items-start gap-4">
             {post.mediaUrl && (
-              <img
+              <LazyImage
                 src={post.mediaUrl}
                 alt="Post media"
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover flex-shrink-0"

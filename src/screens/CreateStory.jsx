@@ -10,6 +10,7 @@ import { X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle, 
 import { getStoryService } from '../services/storyService';
 import GIFPicker from '../components/Shared/GIFPicker';
 import { useFeatureFlag } from '../hooks/useFeatureFlag.js';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const CREATIVE_TOOLS = [
   { id: 'text', label: 'Text', icon: Type, color: 'text-white' },
@@ -409,7 +410,7 @@ export default function CreateStory() {
               />
             ) : (
               capturedPreview ? (
-                <img
+                <LazyImage
                   src={capturedPreview}
                   alt="Story capture preview"
                   className="w-full h-full object-cover"
@@ -623,7 +624,7 @@ export default function CreateStory() {
             {/* Selected GIF preview */}
             {selectedGif && (
               <div className="absolute top-20 right-4 z-10 w-24 rounded-2xl overflow-hidden border-2 border-white/40">
-                <img src={selectedGif.url} alt={selectedGif.title} className="w-full h-auto" />
+                <LazyImage src={selectedGif.url} alt={selectedGif.title} className="w-full h-auto" />
                 <button
                   onClick={() => setSelectedGif(null)}
                   className="w-full py-1 bg-black/70 text-white text-[10px] font-bold"

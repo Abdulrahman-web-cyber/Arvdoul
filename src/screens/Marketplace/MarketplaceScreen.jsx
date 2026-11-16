@@ -14,6 +14,7 @@ import marketplaceService from '../../services/marketplaceService';
 import { unknownNumber } from '../../lib/unknownNumber';
 import { pickDisplayName } from '../../services/profileReadModel.js';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const CATEGORIES = ['All', 'Digital Assets', 'Audio & Sounds', 'Merch & Apparel', 'Mentorship & VIP'];
 
@@ -184,7 +185,7 @@ export default function MarketplaceScreen() {
               <div>
                 <button type="button" aria-label={`View ${prod.title || 'product'}`} className="relative h-48 w-full overflow-hidden group cursor-pointer text-left" onClick={() => setSelectedProduct(prod)}>
                   {prod.image ? (
-                    <img src={prod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <LazyImage src={prod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-purple-900/60 to-blue-900/60 flex items-center justify-center">
                       <ShoppingBag className="w-10 h-10 text-white/40" />
@@ -203,7 +204,7 @@ export default function MarketplaceScreen() {
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2">
                     {prod.creator?.avatar ? (
-                      <img src={prod.creator.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                      <LazyImage src={prod.creator.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
                     ) : (
                       <div className="w-5 h-5 rounded-full bg-purple-600/50 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
                         {(prod.creator?.name || '?').charAt(0).toUpperCase()}
@@ -276,7 +277,7 @@ export default function MarketplaceScreen() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
                   {selectedProduct.creator?.avatar ? (
-                    <img src={selectedProduct.creator.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                    <LazyImage src={selectedProduct.creator.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-purple-600/50 flex items-center justify-center font-bold text-white shrink-0">
                       {(selectedProduct.creator?.name || '?').charAt(0).toUpperCase()}
@@ -294,7 +295,7 @@ export default function MarketplaceScreen() {
 
               <div className="relative h-64 rounded-2xl overflow-hidden">
                 {selectedProduct.image ? (
-                  <img src={selectedProduct.image} alt="" className="w-full h-full object-cover" />
+                  <LazyImage src={selectedProduct.image} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-purple-900/60 to-blue-900/60 flex items-center justify-center">
                     <ShoppingBag className="w-12 h-12 text-white/40" />

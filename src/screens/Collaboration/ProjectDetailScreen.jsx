@@ -14,6 +14,7 @@ import collaborationService, { COLLABORATION_CONFIG } from '../../services/colla
 import { copyToClipboard } from '../../utils/shareUtils';
 import { Dialog } from '../../components/UI/Dialog';
 import { ArrowLeft, Users, Clock, FileText, CheckCircle, XCircle, Share2, MoreVertical, Plus, Eye, Loader2 } from "lucide-react";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const formatRelativeTime = (value) => {
   // No timestamp means the age is unknown; return null so the caller omits it
@@ -300,7 +301,7 @@ export default function ProjectDetailScreen() {
         {/* Cover Image */}
         <div className="h-48 relative">
           {project.thumbnail ? (
-            <img
+            <LazyImage
               src={project.thumbnail}
               alt={project.name}
               className="w-full h-full object-cover"
@@ -437,7 +438,7 @@ export default function ProjectDetailScreen() {
                   )}
                 >
                   {meta.thumbnail ? (
-                    <img src={meta.thumbnail} alt={meta.title || 'Version'} className="w-16 h-16 rounded-lg object-cover" />
+                    <LazyImage src={meta.thumbnail} alt={meta.title || 'Version'} className="w-16 h-16 rounded-lg object-cover" />
                   ) : (
                     <div className="w-16 h-16 rounded-lg bg-white/5 flex items-center justify-center">
                       <FileText className="w-6 h-6 text-gray-500" />
@@ -551,7 +552,7 @@ export default function ProjectDetailScreen() {
                   )}
                 >
                   {member.avatar ? (
-                    <img src={member.avatar} alt={member.name || memberId} className="w-12 h-12 rounded-full object-cover" />
+                    <LazyImage src={member.avatar} alt={member.name || memberId} className="w-12 h-12 rounded-full object-cover" />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-arvdoul-purple/20 flex items-center justify-center text-arvdoul-purple font-semibold">
                       {(member.name || memberId || '?').slice(0, 1).toUpperCase()}

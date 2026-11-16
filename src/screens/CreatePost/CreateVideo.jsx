@@ -29,6 +29,7 @@ import Link from "@tiptap/extension-link";
 import CharacterCount from "@tiptap/extension-character-count";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 // ── Design Tokens (CSS variables) ───────────────────────────────────
 const DNA_GRADIENT = BRAND_GRADIENT;
 const DNA_SHADOW = "0 0 20px rgba(147,51,234,0.4)";
@@ -144,7 +145,7 @@ const SortableThumbnail = React.memo(
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(media.id); } }}
       >
         {media.thumbnailUrl ? (
-          <img
+          <LazyImage
             src={media.thumbnailUrl}
             alt={media.name}
             className="w-full h-full object-cover"

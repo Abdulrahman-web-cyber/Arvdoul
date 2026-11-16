@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { getCallService, CALL_STATUS } from '../services/callService';
 import { cn } from '../lib/utils';
 import { ArrowLeft, PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -188,7 +189,7 @@ export default function CallScreen() {
         {status !== 'active' && !error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             {peer?.avatar ? (
-              <img src={peer.avatar} alt={peer.name} className="w-24 h-24 rounded-full object-cover" />
+              <LazyImage src={peer.avatar} alt={peer.name} className="w-24 h-24 rounded-full object-cover" />
             ) : (
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-4xl font-bold">
                 {(peer?.name || 'U').charAt(0).toUpperCase()}

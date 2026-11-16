@@ -10,6 +10,7 @@ import { RANKING_CONFIG } from '../../services/rankingService.js';
 import rankingService from '../../services/rankingService.js';
 import { cn } from '../../lib/utils';
 import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../../services/profileReadModel.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const TabButton = ({ active, onClick, children, icon: Icon, isDark }) => (
   <button
@@ -105,7 +106,7 @@ const UserAvatar = ({ user, size = 'md' }) => {
       "rounded-full bg-gradient-to-tr from-arvdoul-purple to-arvdoul-indigo flex items-center justify-center text-white font-black overflow-hidden shadow-sm shrink-0"
     )}>
       {user?.avatar ? (
-        <img src={user.avatar} alt={user.displayName || 'Avatar'} className="w-full h-full object-cover" />
+        <LazyImage src={user.avatar} alt={user.displayName || 'Avatar'} className="w-full h-full object-cover" />
       ) : (
         (user?.displayName || user?.username || '?').charAt(0).toUpperCase()
       )}

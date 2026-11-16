@@ -378,6 +378,10 @@ jobs:
           src/__tests__/brandHexRatchetGuard.test.js
           src/__tests__/sharedStatePrimitivesGuard.test.js
           src/__tests__/storyExpiryGuard.test.js
+          src/__tests__/serviceLoggingHygieneGuard.test.js
+          src/__tests__/nativeDialogGuard.test.js
+          src/__tests__/imageLoadingGuard.test.js
+          src/__tests__/functionsLoggingGuard.test.js
           src/__tests__/reportRoutingParity.test.js
           src/__tests__/monetizationIdempotencyGuard.test.js
           src/__tests__/transactionOrderGuard.test.js
@@ -408,6 +412,7 @@ jobs:
           src/__tests__/videoCommentCounterSourceGuard.test.js
           src/__tests__/videoSaveCounterSourceGuard.test.js
           src/__tests__/commentReactionCounterSourceGuard.test.js
+          src/__tests__/collectionsCounterAtomicity.test.js
           src/__tests__/storyRankingFieldSourceGuard.test.js
           src/__tests__/feedRankingFieldSourceGuard.test.js
           src/__tests__/inboxPreviewPresenceWiring.test.js

@@ -16,6 +16,7 @@ import { pickHandle, deriveHandle, resolveActorName } from "../../services/profi
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -643,7 +644,7 @@ export const TopAppBar = ({
                     className="flex items-center gap-2.5 cursor-pointer select-none group min-w-0"
                   >
                     <div className="relative shrink-0">
-                      <img
+                      <LazyImage
                         src={userAvatarUrl}
                         alt={userDisplayName}
                         className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/50 group-hover:scale-105 transition-transform"

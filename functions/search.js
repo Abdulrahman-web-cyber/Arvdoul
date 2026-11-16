@@ -13,6 +13,7 @@
 //   - posts
 //   - videos
 const functions = require('firebase-functions');
+const { log, logger } = require('./logger');
 const admin = require('firebase-admin');
 const algoliasearch = require('algoliasearch');
 
@@ -38,26 +39,18 @@ if (ALGOLIA_APP_ID && ALGOLIA_ADMIN_KEY) {
     postIndex = client.initIndex('posts');
     videoIndex = client.initIndex('videos');
   } catch (err) {
-    console.error('Algolia client initialization failed:', err.message);
+    logger.error('Algolia client initialization failed', { error: err.message });
   }
 } else {
-  console.warn(
+  logger.warn(
     'Missing Algolia configuration (algolia.app_id / algolia.admin_key). ' +
-    'Real‑time indexing is disabled. Set via firebase functions:config:set.'
+    'Real-time indexing is disabled. Set via firebase functions:config:set.'
   );
 }
 
 // ----------------------------------------------------------------------
 //  STRUCTURED LOGGING
 // ----------------------------------------------------------------------
-function log(severity, message, data = {}) {
-  console.log(JSON.stringify({
-    severity: severity.toUpperCase(),
-    message,
-    ...data,
-    timestamp: new Date().toISOString(),
-  }));
-}
 
 // ----------------------------------------------------------------------
 //  RETRY HELPER – exponential backoff with jitter, max 3 attempts

@@ -1,6 +1,7 @@
 // src/screens/Admin/AdminEconomyScreen.jsx
 
 import { useState, useEffect, useCallback } from "react";
+import { usePrompt } from '../../components/Shared/ConfirmProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -34,6 +35,7 @@ const asCoins = (value) => {
 };
 
 const AdminEconomyScreen = () => {
+  const prompt = usePrompt();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,7 +147,7 @@ const AdminEconomyScreen = () => {
 
   // Payout rejection also runs server-side so the locked coins are released.
   const handleRejectPayout = async payoutId => {
-    const reason = window.prompt('Enter rejection reason for creator notification:');
+    const reason = await prompt({ title: 'Rejection reason', description: 'This reason is sent to the creator.', placeholder: 'Reason', confirmText: 'Reject' });
     if (!reason) return;
 
     try {

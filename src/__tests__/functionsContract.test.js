@@ -104,7 +104,9 @@ describe('Cloud Functions deploy contract', () => {
     // writer (N382), required by the functions that prove the event.
     // userMetrics.js computes the real engagement metrics (N432) that
     // evaluateAchievements scores, required by levelSystem.js.
-    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js', 'notificationWriter.js', 'userMetrics.js']);
+    // logger.js is the shared structured-logging surface (N506), required by
+    // every module that logs; it exports no functions.* triggers.
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js', 'notificationWriter.js', 'userMetrics.js', 'logger.js']);
     const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.
