@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { getCallService } from '../../services/callService.js';
 import { getUserService } from '../../services/userService.js';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 export default function IncomingCallBanner() {
   const { user } = useAuth();
@@ -102,7 +103,7 @@ export default function IncomingCallBanner() {
           role="dialog"
           aria-label="Incoming call"
         >
-          <img
+          <LazyImage
             src={caller?.avatar}
             alt=""
             className="w-11 h-11 rounded-full object-cover border border-arvdoul-purple/50"

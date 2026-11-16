@@ -16,6 +16,7 @@
 // fraud_limits: __system__ TTL field = expireAt
 const admin = require('firebase-admin');
 const functions = require('firebase-functions');
+const { logger } = require('./logger');
 const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
@@ -53,18 +54,17 @@ const createFirestoreTransaction = async (updateFn, maxRetries = 5) => {
       return await admin.firestore().runTransaction(updateFn);
     } catch (error) {
       if (attempt === maxRetries) throw error;
-      console.warn(`Transaction retry ${attempt}`, error.message);
+      logger.warn('Transaction retry', { attempt, error: error.message });
       await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 100));
     }
   }
 };
 
-const logEvent = (type, data) =>
-  console.log(JSON.stringify({ severity: 'INFO', type, ...data, timestamp: new Date().toISOString() }));
+const logEvent = (type, data) => logger.info(type, data);
 
 const handleError = (err) => {
   if (err instanceof functions.https.HttpsError) return err;
-  console.error('Unhandled error:', err);
+  logger.error('Unhandled error', { error: err.message });
   return new functions.https.HttpsError('internal', err.message || 'Unexpected error');
 };
 
@@ -145,7 +145,7 @@ const checkNewAccountAbuse = async (userId, amount) => {
         `High-value operation from account younger than ${SUSPICIOUS_NEW_ACCOUNT_HOURS}h`);
     }
   } catch (e) {
-    console.warn('New account abuse check failed', e);
+    logger.warn('New account abuse check failed', { error: e.message });
   }
 };
 
@@ -475,7 +475,7 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
         body: `You received ${amount} coins from ${senderUid}`,
         type: 'coin_transfer',
         data: { from: senderUid, amount },
-      }).catch(console.warn);
+      }).catch((e) => logger.warn('Coin transfer notification failed', { error: e.message }));
 
       return resultData;
     });
@@ -584,7 +584,7 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
           body: `You received a ${giftType} gift worth ${giftValue} coins`,
           type: 'gift_received',
           data: { from: senderUid, postId, giftType },
-        }).catch(console.warn);
+        }).catch((e) => logger.warn('Coin transfer notification failed', { error: e.message }));
       }
 
       return resultData;
@@ -604,7 +604,7 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
         senderId: senderUid,
         senderName,
         metadata: { postId, giftType, cost: giftValue },
-      }).catch((err) => console.warn('Gift notification failed:', err.message));
+      }).catch((err) => logger.warn('Gift notification failed', { error: err.message }));
     }
 
     // Gift XP: the sender's own action, plus the recipient's `gift_received`.
@@ -889,7 +889,7 @@ exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
       res.status(code).json({ error: err.message });
       return;
     }
-    console.error('processWithdrawal error:', err);
+    logger.error('processWithdrawal failed', { error: err.message });
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
@@ -1025,7 +1025,7 @@ exports.getSponsoredSearchResult = functions.https.onCall(async (data, context) 
       adId: bestAd.id, userId: uid, placement: 'search', query,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       expireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-    }).catch(console.warn);
+    }).catch((e) => logger.warn('Ad impression write failed', { error: e.message }));
 
     return {
       sponsoredResult: {
@@ -1053,7 +1053,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
   } catch (err) {
-    console.error('Webhook signature verification failed.', err.message);
+    logger.error('Webhook signature verification failed', { error: err.message });
     res.status(400).send(`Webhook Error: ${err.message}`);
     return;
   }
@@ -1156,7 +1156,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     }
 
     default:
-      console.log(`Unhandled event type ${event.type}`);
+      logger.info('Unhandled webhook event type', { type: event.type });
   }
 
   res.json({ received: true });
@@ -1237,11 +1237,11 @@ exports.recoverStuckWithdrawals = functions.pubsub.schedule('every 5 minutes').o
       if (staleDocs.size < 400) break;
     }
     if (reset > 0) {
-      console.log(`Reset ${reset} stuck withdrawal locks.`);
+      logger.info('Reset stuck withdrawal locks', { count: reset });
     }
     return null;
   } catch (err) {
-    console.error('Failed to recover stuck withdrawals:', err);
+    logger.error('Failed to recover stuck withdrawals', { error: err.message });
     return null;
   }
 });
@@ -2033,7 +2033,7 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
         body: `You received a ${giftType} gift worth ${giftValue} coins`,
         type: 'gift_received',
         data: { from: senderUid, streamId, giftType },
-      }).catch(console.warn);
+      }).catch((e) => logger.warn('Gift notification failed', { error: e.message }));
 
       return resultData;
     });
@@ -2168,7 +2168,7 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
         body: `You received a ${amount} coin tip`,
         type: 'tip_received',
         data: { from: senderUid, streamId, amount },
-      }).catch(console.warn);
+      }).catch((e) => logger.warn('Tip notification failed', { error: e.message }));
 
       return resultData;
     });

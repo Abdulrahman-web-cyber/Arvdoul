@@ -9,6 +9,7 @@ import { getPerksForLevel } from '../../services/levelSystemService';
 import { pickDisplayName, resolveAvatarUrl } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import ProfileCitizenshipCard from './ProfileCitizenshipCard';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ProfileFeedGrid = memo(({
   posts = [],
@@ -693,7 +694,7 @@ const ProfileFeedGrid = memo(({
               )}
             >
               {mediaUrl ? (
-                <img
+                <LazyImage
                   src={mediaUrl}
                   alt={item.title || item.caption || item.text || 'Media item'}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -786,7 +787,7 @@ const ProfileFeedGrid = memo(({
             >
               {mediaUrl && (
                 <div className="relative overflow-hidden bg-slate-900">
-                  <img
+                  <LazyImage
                     src={mediaUrl}
                     alt={item.title || item.caption || item.text || 'Media'}
                     className="w-full object-cover max-h-96 group-hover:scale-102 transition-transform duration-300"
@@ -910,7 +911,7 @@ const ProfileFeedGrid = memo(({
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-white/10 shrink-0">
                   {authorAvatar ? (
-                    <img src={authorAvatar} alt={authorName} className="w-full h-full object-cover" />
+                    <LazyImage src={authorAvatar} alt={authorName} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center font-bold text-sm text-purple-400">
                       {authorName.charAt(0)}
@@ -952,7 +953,7 @@ const ProfileFeedGrid = memo(({
             {/* Media Body */}
             {mediaUrl && (
               <div className="relative w-full bg-black max-h-[520px] overflow-hidden flex items-center justify-center">
-                <img
+                <LazyImage
                   src={mediaUrl}
                   alt={item.title || 'Post media'}
                   className="w-full max-h-[520px] object-contain"

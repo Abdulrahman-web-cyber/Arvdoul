@@ -14,6 +14,7 @@ import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pin, Heart, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ProfilePinnedPosts = memo(({
   posts = [],
@@ -110,7 +111,7 @@ const ProfilePinnedPosts = memo(({
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
             className="group relative aspect-[3/4] sm:aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
           >
-            <img
+            <LazyImage
               src={item.image}
               alt={item.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

@@ -13,6 +13,7 @@ import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 const DateTimePicker = lazy(() => import("react-datepicker"));
 import "react-datepicker/dist/react-datepicker.css";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // ── ARVDOUL DNA ──────────────────────────────────────────────────────
 const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
@@ -113,7 +114,7 @@ const EventPreview = React.memo(({ eventData, isDark }) => {
       } shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)]`}
     >
       {coverImage && (
-        <img
+        <LazyImage
           src={coverImage}
           alt=""
           loading="lazy"

@@ -6,6 +6,7 @@ import { Grid, Columns, Layout, Download, X, Sparkles, Image as ImageIcon, Plus,
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { tokens } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 export const COLLAGE_LAYOUTS = [
   { id: 'grid-2', count: 2, label: 'Split Vertical', icon: Columns },
@@ -363,7 +364,7 @@ export default function Collage({
                       )}
                       style={{ borderRadius: `${radius}px` }}
                     >
-                      <img
+                      <LazyImage
                         src={img.url}
                         alt="Slot"
                         className="w-full h-full object-cover select-none"
@@ -424,7 +425,7 @@ export default function Collage({
               <div className="grid grid-cols-4 gap-2">
                 {selectedImages.map((img) => (
                   <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group">
-                    <img src={img.url} alt="Thumb" className="w-full h-full object-cover" />
+                    <LazyImage src={img.url} alt="Thumb" className="w-full h-full object-cover" />
                     <button
                       onClick={() => handleRemoveImage(img.id)}
                       className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"

@@ -4,6 +4,7 @@
 // Algolia + Firestore search, and rate limiting.
 
 const functions = require('firebase-functions');
+const { log, logger } = require('./logger');
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
@@ -19,7 +20,7 @@ let algoliaSearchLib = null;
 try {
   algoliaSearchLib = require('algoliasearch');
 } catch (e) {
-  console.warn('algoliasearch package not installed – search will fall back to Firestore');
+  logger.warn('algoliasearch package not installed; search will fall back to Firestore');
 }
 
 const ALGOLIA_APP_ID = functions.config().algolia?.app_id;
@@ -40,14 +41,6 @@ const { checkRateLimit } = require('./rateLimit');
 // ----------------------------------------------------------------------
 //  LOGGING
 // ----------------------------------------------------------------------
-function log(severity, message, data = {}) {
-  console.log(JSON.stringify({
-    severity: severity.toUpperCase(),
-    message,
-    ...data,
-    timestamp: new Date().toISOString(),
-  }));
-}
 
 // ----------------------------------------------------------------------
 //  CONCURRENCY LIMITER

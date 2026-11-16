@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Loader2, X, Sparkles, Flame, Heart, Smile, ThumbsUp, PartyPopper } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const GIPHY_API_KEY = import.meta.env.VITE_GIPHY_API_KEY || null;
 const GIPHY_ENDPOINT = 'https://api.giphy.com/v1/gifs/search';
@@ -245,7 +246,7 @@ export default function GIFPicker({ onSelect, onClose }) {
                 onClick={() => onSelect?.(gif.images?.fixed_width?.url || gif.images?.original?.url, gif)}
                 className="aspect-square overflow-hidden rounded-xl bg-gray-800 hover:scale-105 active:scale-95 transition group relative"
               >
-                <img
+                <LazyImage
                   src={gif.images?.fixed_width_small?.url || gif.images?.fixed_width?.url}
                   alt={gif.title || 'GIF'}
                   loading="lazy"
@@ -263,7 +264,7 @@ export default function GIFPicker({ onSelect, onClose }) {
                 className="aspect-square overflow-hidden rounded-xl bg-gray-800 hover:scale-105 active:scale-95 transition group relative"
                 title={gif.title}
               >
-                <img
+                <LazyImage
                   src={gif.thumb || gif.url}
                   alt={gif.title}
                   loading="lazy"

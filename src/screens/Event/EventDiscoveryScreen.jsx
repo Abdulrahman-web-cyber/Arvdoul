@@ -13,6 +13,7 @@ import { getEventService } from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
 import Skeleton from 'react-loading-skeleton';
 import { format } from 'date-fns';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const EventDiscoveryScreen = () => {
   const navigate = useNavigate();
@@ -174,7 +175,7 @@ const EventDiscoveryScreen = () => {
         {/* Cover Image */}
         <div className={`relative ${isList ? 'w-48 h-32' : 'h-48'}`}>
           {event.coverImage ? (
-            <img 
+            <LazyImage 
               src={event.coverImage} 
               alt={event.title}
               className="w-full h-full object-cover"

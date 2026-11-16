@@ -13,6 +13,7 @@ import { useAppStore } from '../../store/appStore';
 import spacesService from '../../services/spacesService';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import { unknownNumber } from '../../lib/unknownNumber';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const CATEGORIES = ['All', 'Tech & AI', 'Music & Audio', 'Crypto & Web3', 'Chill Lounge', 'Creator Talk'];
 const EMOJI_REACTIONS = ['🔥', '💎', '🚀', '❤️', '👏', '💯', '👑'];
@@ -326,7 +327,7 @@ export default function SpacesScreen() {
                   <div className="flex flex-col items-center text-center p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 relative">
                     <div className="relative mb-2">
                       <div className="w-16 h-16 rounded-full ring-4 ring-purple-500 p-0.5 overflow-hidden shadow-lg shadow-purple-500/40">
-                        <img src={activeSpace.host.avatar} alt="" className="w-full h-full object-cover" />
+                        <LazyImage src={activeSpace.host.avatar} alt="" className="w-full h-full object-cover" />
                       </div>
                       <Crown className="w-5 h-5 text-yellow-400 absolute -top-2 -right-1 drop-shadow" />
                     </div>
@@ -347,7 +348,7 @@ export default function SpacesScreen() {
                     <div key={sp.id} className="flex flex-col items-center text-center p-4 rounded-2xl bg-gray-800/50 border border-gray-700/60 relative">
                       <div className="relative mb-2">
                         <div className={`w-16 h-16 rounded-full p-0.5 overflow-hidden ${sp.isSpeaking ? 'ring-4 ring-green-500 animate-pulse' : 'ring-2 ring-gray-600'}`}>
-                          <img src={sp.avatar} alt="" className="w-full h-full object-cover" />
+                          <LazyImage src={sp.avatar} alt="" className="w-full h-full object-cover" />
                         </div>
                         {sp.isMuted ? (
                           <MicOff className="w-4 h-4 text-red-400 bg-gray-900 rounded-full p-0.5 absolute -bottom-1 -right-1" />
@@ -379,7 +380,7 @@ export default function SpacesScreen() {
                   {activeSpace.listeners.map((l) => (
                     <div key={l.id} className="flex flex-col items-center shrink-0">
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-700">
-                        <img src={l.avatar} alt="" className="w-full h-full object-cover" />
+                        <LazyImage src={l.avatar} alt="" className="w-full h-full object-cover" />
                       </div>
                       <span className="text-[10px] text-gray-400 mt-1 max-w-[60px] truncate">{l.name}</span>
                     </div>
@@ -475,7 +476,7 @@ export default function SpacesScreen() {
                   </div>
                   <h4 className="text-sm font-bold text-white line-clamp-2 mb-3">{sp.title}</h4>
                   <div className="flex items-center gap-2">
-                    <img src={sp.host.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                    <LazyImage src={sp.host.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
                     <span className="text-xs text-gray-300 font-medium truncate">{sp.host.name} (Host)</span>
                   </div>
                 </div>

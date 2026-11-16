@@ -16,6 +16,7 @@ import { getStorageService } from "../../services/storageService";
 import { getAuthService } from "../../services/authService";
 import { openDB } from "idb";
 import { BRAND_GRADIENT } from "../../design-system/tokens.js";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ImageEditor = lazy(() => import("./ImageEditor"));
 const Collage = lazy(() => import("../../components/Shared/Collage"));
@@ -582,7 +583,7 @@ const HeroPreview = React.memo(({
               transition: isDragging ? "none" : "transform 0.1s ease-out",
             }}
           >
-            <img src={src} alt={item.alt || "Preview"} className="w-full h-full object-cover" draggable={false} />
+            <LazyImage src={src} alt={item.alt || "Preview"} className="w-full h-full object-cover" draggable={false} />
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-400 flex-col gap-2">
@@ -744,7 +745,7 @@ const Thumbnail = React.memo(({
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
     >
-      <img src={src || "/assets/placeholder.png"} alt={item.alt || ""} className="w-full h-full object-cover" draggable={false} />
+      <LazyImage src={src || "/assets/placeholder.png"} alt={item.alt || ""} className="w-full h-full object-cover" draggable={false} />
       {isUploading && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
           <div className="relative w-8 h-8">
@@ -1279,7 +1280,7 @@ const FullscreenViewer = React.memo(({
         onTouchEnd={resetControlsTimer}
         onWheel={resetControlsTimer}
       >
-        <img
+        <LazyImage
           src={src}
           alt={item.alt || "Fullscreen preview"}
           className="max-w-full max-h-[85vh] object-contain"

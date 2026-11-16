@@ -10,6 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { tokens } from '../../design-system/tokens.js';
 import { ChevronLeft, Undo2, Redo2, Layers, Sparkles, Wand2, Scissors, ChevronDown, Crop, Sliders, Sparkle, Zap, Minus, Plus, Maximize2, Image as ImageIcon, Type, Pencil, Smile, Square, MoreHorizontal, Columns, RotateCcw, Clock, SlidersHorizontal, Download, Eye, EyeOff, Trash2, X } from "lucide-react";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // Studio base canvas presets (vector gradient artwork, self-contained SVG)
 const STUDIO_CANVASES = [
@@ -553,7 +554,7 @@ export default function ThumbnailDesignerScreen() {
           }}
         >
           {/* Main Background Artwork */}
-          <img
+          <LazyImage
             src={currentPhoto.url}
             alt={currentPhoto.name}
             referrerPolicy="no-referrer"
@@ -666,7 +667,7 @@ export default function ThumbnailDesignerScreen() {
               className="absolute inset-y-0 right-0 overflow-hidden border-l-2 border-white pointer-events-none shadow-2xl z-20"
               style={{ width: `${100 - compareSlider}%` }}
             >
-              <img
+              <LazyImage
                 src={currentPhoto.url}
                 alt="Original Unedited"
                 referrerPolicy="no-referrer"
@@ -963,7 +964,7 @@ export default function ThumbnailDesignerScreen() {
                       )}
                     >
                       <div className="w-14 h-14 rounded-lg overflow-hidden relative">
-                        <img
+                        <LazyImage
                           src={currentPhoto.url}
                           alt={preset.name}
                           style={{ filter: preset.filter }}
@@ -1264,7 +1265,7 @@ export default function ThumbnailDesignerScreen() {
                   : 'opacity-70 hover:opacity-100 border border-white/[0.1]'
               )}
             >
-              <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+              <LazyImage src={p.url} alt={p.name} className="w-full h-full object-cover" />
 
               {/* Number Badge (1, 2, 3...) in top left corner as shown in Image 3 */}
               <div

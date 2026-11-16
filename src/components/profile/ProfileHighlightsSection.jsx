@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, ChevronRight, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import storyService from '../../services/storyService';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ProfileHighlightsSection = memo(({
   highlights = [],
@@ -146,7 +147,7 @@ const ProfileHighlightsSection = memo(({
             {/* Glowing Ring Container */}
             <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple via-[#D946EF] to-[#00F0FF] shadow-sm group-hover:shadow-[0_0_15px_rgba(139,30,243,0.4)] group-hover:scale-105 active:scale-95 transition-all duration-200">
               <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0b1021]">
-                <img
+                <LazyImage
                   src={item.cover}
                   alt={item.title}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"

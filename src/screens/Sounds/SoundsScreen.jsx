@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import { unknownNumber } from '../../lib/unknownNumber.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Cinematic'];
 
@@ -248,7 +249,7 @@ export default function SoundsScreen() {
 
                   <button type="button" aria-label={`${isThisPlaying ? 'Pause' : 'Play'} ${snd.title || 'sound'}`} className="relative w-14 h-14 rounded-2xl overflow-hidden shrink-0 group cursor-pointer" onClick={() => handlePlaySound(snd)}>
                     {snd.coverUrl ? (
-                      <img src={snd.coverUrl} alt="" className="w-full h-full object-cover" />
+                      <LazyImage src={snd.coverUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-purple-700/70 to-blue-700/70 flex items-center justify-center">
                         <Music className="w-5 h-5 text-white/70" />
@@ -322,7 +323,7 @@ export default function SoundsScreen() {
           <div className="max-w-4xl mx-auto rounded-3xl bg-gray-900/95 border border-purple-500/40 p-4 shadow-2xl backdrop-blur-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
               {currentSound.coverUrl ? (
-                <img src={currentSound.coverUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
+                <LazyImage src={currentSound.coverUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
               ) : (
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-700/70 to-blue-700/70 flex items-center justify-center shrink-0">
                   <Music className="w-5 h-5 text-white/70" />

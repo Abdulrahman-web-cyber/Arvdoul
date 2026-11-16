@@ -16,6 +16,7 @@ import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/UI/Dialog.jsx';
 import { ListRowsSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const FILTERS = [
   { id: 'All', label: 'All' },
@@ -872,7 +873,7 @@ export default function NotificationsScreen() {
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
                           {reqUser.photoURL || reqUser.avatar ? (
-                            <img
+                            <LazyImage
                               src={reqUser.photoURL || reqUser.avatar}
                               alt={reqName}
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
@@ -940,7 +941,7 @@ export default function NotificationsScreen() {
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
                           {reqAvatar ? (
-                            <img
+                            <LazyImage
                               src={reqAvatar}
                               alt={reqName}
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
@@ -1005,7 +1006,7 @@ export default function NotificationsScreen() {
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
                           {fUser.photoURL ? (
-                            <img
+                            <LazyImage
                               src={fUser.photoURL}
                               alt={fName}
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
@@ -1095,7 +1096,7 @@ export default function NotificationsScreen() {
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
                           {gUser.photoURL ? (
-                            <img
+                            <LazyImage
                               src={gUser.photoURL}
                               alt={gName}
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
@@ -1163,7 +1164,7 @@ export default function NotificationsScreen() {
                             className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                           >
                             {rUser.photoURL ? (
-                              <img
+                              <LazyImage
                                 src={rUser.photoURL}
                                 alt={rName}
                                 className="w-11 h-11 rounded-full object-cover border border-white/10"
@@ -1302,7 +1303,7 @@ export default function NotificationsScreen() {
                       >
                         {/* Left: Avatar with type icon */}
                         <div className="relative flex-shrink-0">
-                          <img
+                          <LazyImage
                             src={item.user.avatar}
                             alt={item.user.name}
                             referrerPolicy="no-referrer"
@@ -1430,7 +1431,7 @@ export default function NotificationsScreen() {
                               }}
                               className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-500/50 transition-all flex-shrink-0 relative group/thumb"
                             >
-                              <img
+                              <LazyImage
                                 src={item.thumbnail}
                                 alt="preview"
                                 referrerPolicy="no-referrer"

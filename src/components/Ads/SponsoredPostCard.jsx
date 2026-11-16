@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getMonetizationService } from '../../services/monetizationService';
 import { AD_REWARD_COINS } from '../../shared/levelConfig.cjs';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // The server (getAd callable) returns a creative as
 // `{ id, type, media, link, title, cta, advertiserId }`. The helpers below
@@ -236,7 +237,7 @@ export default function SponsoredPostCard({
         {/* Header: Brand Avatar, Name, Sponsored Pill, Menu */}
         <div className="p-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img
+            <LazyImage
               src={ad.brandAvatar}
               alt={ad.brandName}
               className="w-10 h-10 rounded-full object-cover border border-purple-500/30"
@@ -321,7 +322,7 @@ export default function SponsoredPostCard({
             aria-label={ad.ctaText || 'Learn more about this sponsored post'}
             className="relative block w-full aspect-video bg-black/40 cursor-pointer overflow-hidden group text-left"
           >
-            <img
+            <LazyImage
               src={ad.mediaUrl}
               alt={ad.title}
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -397,7 +398,7 @@ export default function SponsoredPostCard({
 
               {/* Video/Media presentation */}
               <div className="relative aspect-video rounded-2xl overflow-hidden mb-5 border border-white/10">
-                <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
+                <LazyImage src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center">
                   {!isRewarded ? (
                     <div className="flex flex-col items-center gap-2">

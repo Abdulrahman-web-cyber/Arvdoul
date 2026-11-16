@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Pin, Play, Images, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { pickDisplayName } from '../../services/profileReadModel.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ProfileFeaturedSection = memo(({
   profile,
@@ -107,7 +108,7 @@ const ProfileFeaturedSection = memo(({
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
             className="group relative aspect-[16/11] rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
           >
-            <img
+            <LazyImage
               src={item.cover}
               alt={item.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

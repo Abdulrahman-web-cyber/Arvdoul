@@ -23,6 +23,7 @@ import { pickHandle, deriveHandle, pickDisplayName, resolveRoyalFlag } from '../
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
@@ -435,7 +436,7 @@ export const ProfileHeroSection = memo(({
                 className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0b1021] block relative cursor-pointer group"
                 aria-label="Profile Avatar"
               >
-                <img
+                <LazyImage
                   src={avatarUrl}
                   alt={displayName}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

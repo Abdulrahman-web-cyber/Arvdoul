@@ -9,6 +9,7 @@
 // Required Firestore composite indexes are documented at the bottom of this file.
 
 const functions = require('firebase-functions');
+const { log } = require('./logger');
 const admin = require('firebase-admin');
 const { enqueuePush } = require('./pushQueue');
 const { checkRateLimit } = require('./rateLimit');
@@ -30,14 +31,6 @@ const FieldValue = admin.firestore.FieldValue;
 // ----------------------------------------------------------------------
 //  Structured Logging Helper
 // ----------------------------------------------------------------------
-function log(level, message, data = {}) {
-  console.log(JSON.stringify({
-    severity: level.toUpperCase(),
-    message,
-    ...data,
-    timestamp: new Date().toISOString(),
-  }));
-}
 
 // ----------------------------------------------------------------------
 //  Sharded rate limiter — the shared implementation in ./rateLimit.js.

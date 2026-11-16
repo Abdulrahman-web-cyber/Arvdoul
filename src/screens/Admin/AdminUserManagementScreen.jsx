@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { listUsers, applyUserAdminAction } from '../../services/callableService.js';
 import { resolveActorName } from '../../services/profileReadModel.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // Callable responses serialise Firestore timestamps as {_seconds} or ISO
 // strings depending on runtime; render only real values, never "Invalid Date".
@@ -166,7 +167,7 @@ const AdminUserManagementScreen = () => {
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
                           {u.photoURL ? (
-                            <img src={u.photoURL} alt="" className="w-full h-full object-cover" />
+                            <LazyImage src={u.photoURL} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-medium">
                               {u.displayName?.charAt(0)?.toUpperCase()}

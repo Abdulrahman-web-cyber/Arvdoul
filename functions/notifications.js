@@ -7,6 +7,7 @@
 // post.liked / user.followed, notification ranking (type weight + recency),
 // a scheduled smart digest, and monetization notification types.
 const functions = require('firebase-functions');
+const { log } = require('./logger');
 const admin = require('firebase-admin');
 const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
@@ -26,9 +27,6 @@ const Timestamp = admin.firestore.Timestamp;
 // ----------------------------------------------------------------------
 // LOGGING & HELPERS
 // ----------------------------------------------------------------------
-function log(severity, message, data = {}) {
-  console.log(JSON.stringify({ severity, message, ...data, timestamp: new Date().toISOString() }));
-}
 
 function chunkArray(arr, size) {
   const chunks = [];

@@ -14,6 +14,7 @@ import { pickDisplayName } from '../services/profileReadModel.js';
 import { ArrowLeft, Coins, Loader2, Send } from 'lucide-react';
 
 import { VIRTUAL_GIFTS as GIFTS } from '../data/videoData';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 export default function GiftScreen() {
   const { userId } = useParams();
@@ -103,7 +104,7 @@ export default function GiftScreen() {
         {/* Recipient */}
         <div className={cn('rounded-2xl p-5 border flex items-center gap-4 mb-6', colors.card)}>
           {recipient?.avatar ? (
-            <img src={recipient.avatar} alt={recipient?.name} className="w-14 h-14 rounded-full object-cover" />
+            <LazyImage src={recipient.avatar} alt={recipient?.name} className="w-14 h-14 rounded-full object-cover" />
           ) : (
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xl">
               {(pickDisplayName([recipient?.name], { fallback: '?' })).charAt(0).toUpperCase()}

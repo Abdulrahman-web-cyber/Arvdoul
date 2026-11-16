@@ -19,6 +19,7 @@
 //    not double-notify or double-count.
 
 const functions = require('firebase-functions');
+const { log } = require('./logger');
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
@@ -32,11 +33,6 @@ const FieldValue = admin.firestore.FieldValue;
 const DUE_BATCH_LIMIT = 50;
 const NOTIFICATION_SHARDS = 10;
 
-function log(severity, message, data = {}) {
-  const entry = { severity, message, ...data, timestamp: new Date().toISOString() };
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(entry));
-}
 
 /**
  * Best-effort author notification that a scheduled post went live. Idempotent:

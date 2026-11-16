@@ -21,6 +21,7 @@ import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { Search, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight, Image as ImageIcon, Video, Music, Mic, Paperclip } from "lucide-react";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 // Pinned Conversations data matching the exact screenshot
 // Master Conversation List matching the screenshots
@@ -255,7 +256,7 @@ export default function MessagingScreen() {
             >
               <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_16px_rgba(168,85,247,0.35)]"
                 style={{ background: BRAND_GRADIENT }}>
-                <img
+                <LazyImage
                   src={getSafeAvatarUrl(user?.photoURL, user?.displayName, user?.uid)}
                   alt="My Profile"
                   className={`w-full h-full rounded-full object-cover border-2 ${isDark ? 'border-[#030614]' : 'border-white'}`}
@@ -400,7 +401,7 @@ export default function MessagingScreen() {
                   <div className="relative mb-2">
                     <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_12px_rgba(168,85,247,0.3)]"
                         style={{ background: BRAND_GRADIENT }}>
-                      <img
+                      <LazyImage
                         src={item.avatar}
                         alt={item.name}
                         className={`w-full h-full rounded-full object-cover border-2 ${isDark ? 'border-[#090e29]' : 'border-white'}`}
@@ -454,7 +455,7 @@ export default function MessagingScreen() {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {req.senderAvatar ? (
-                      <img src={req.senderAvatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                      <LazyImage src={req.senderAvatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-purple-600/40 flex items-center justify-center text-sm font-bold text-white shrink-0">
                         {pickDisplayName([req.senderName], { fallback: req.senderId ? String(req.senderId).slice(0, 2).toUpperCase() : '—' }).charAt(0).toUpperCase()}
@@ -549,7 +550,7 @@ export default function MessagingScreen() {
                 {/* Avatar with Glow Ring */}
                 <div className="relative shrink-0">
                   <div className="w-12 h-12 rounded-full p-[1.5px] bg-gradient-to-tr from-purple-500/60 to-pink-500/60">
-                    <img
+                    <LazyImage
                       src={item.avatar}
                       alt={item.name}
                       className={`w-full h-full rounded-full object-cover border-2 ${isDark ? 'border-[#090e29]' : 'border-white'}`}

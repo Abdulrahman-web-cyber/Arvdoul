@@ -12,6 +12,7 @@ import { useNavBadges } from "../../hooks/useNavBadges";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
 import { BRAND_GRADIENT, brandRgba, tokens } from "../../design-system/tokens.js";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
@@ -535,7 +536,7 @@ const NavigationItem = memo(function NavigationItem({
       <span className="relative z-10 flex h-[34px] w-[48px] shrink-0 items-center justify-center group-hover:scale-105 transition-transform duration-200">
         {isProfile && userAvatar ? (
           <div className="relative flex items-center justify-center">
-            <img
+            <LazyImage
               src={userAvatar}
               alt=""
               aria-hidden="true"

@@ -15,6 +15,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { resolveActorName } from '../../services/profileReadModel';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const ROLE_BADGE_STYLES = {
   owner: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
@@ -490,7 +491,7 @@ export default function CommunitySettingsScreen() {
                       )}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
+                        <LazyImage
                           src={member.avatar}
                           alt={member.displayName}
                           className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
@@ -632,7 +633,7 @@ export default function CommunitySettingsScreen() {
                 pendingRequests.map((req) => (
                   <div key={req.id} className="p-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <img
+                      <LazyImage
                         src={req.avatar}
                         alt={req.displayName}
                         className="w-10 h-10 rounded-full object-cover border border-white/10"

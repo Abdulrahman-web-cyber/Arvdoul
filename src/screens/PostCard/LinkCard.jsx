@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion } from 'framer-motion';
 import { ExternalLink, Play, Share2, X } from "lucide-react";
 import { toast } from 'sonner';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const getHostname = (url) => {
   try { return new URL(url).hostname; } catch { return ''; }
@@ -73,7 +74,7 @@ const LinkCard = React.memo(({
       {/* Banner image (if available, not for video) */}
       {image && !isVideo && (
         <div className="relative w-full h-40 overflow-hidden">
-          <img src={image} alt="" className="w-full h-full object-cover transition-transform duration-500 hover:scale-105" />
+          <LazyImage src={image} alt="" className="w-full h-full object-cover transition-transform duration-500 hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
         </div>
       )}
@@ -81,7 +82,7 @@ const LinkCard = React.memo(({
       {/* Video inline preview (YouTube/Vimeo) */}
       {isVideo && !showVideoPreview && (
         <button type="button" aria-label="Watch video preview" className="relative w-full h-40 bg-black/50 flex items-center justify-center cursor-pointer" onClick={() => setShowVideoPreview(true)}>
-          {image && <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" />}
+          {image && <LazyImage src={image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" />}
           <div className="relative z-10 flex flex-col items-center">
             <div className="p-3 rounded-full bg-black/60 backdrop-blur-md">
               <Play className="w-8 h-8 text-white" aria-hidden="true" />
@@ -107,7 +108,7 @@ const LinkCard = React.memo(({
       <div className="p-3">
         {/* Header: favicon + hostname */}
         <div className="flex items-center gap-2 text-xs mb-2 flex-wrap" style={{ color: tokens.textSecondary }}>
-          <img src={`https://www.google.com/s2/favicons?domain=${hostname}&sz=16`} alt="" className="w-4 h-4" />
+          <LazyImage src={`https://www.google.com/s2/favicons?domain=${hostname}&sz=16`} alt="" className="w-4 h-4" />
           <span>{hostname}</span>
         </div>
 

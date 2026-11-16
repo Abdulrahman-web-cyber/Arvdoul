@@ -13,6 +13,7 @@ import { cn } from '../lib/utils';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, UserMinus, Shield, Edit2, Trash2, Link as LinkIcon, Loader2, CheckCircle2, Search, X } from "lucide-react";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 export default function GroupInfoScreen() {
   const confirm = useConfirm();
@@ -320,7 +321,7 @@ export default function GroupInfoScreen() {
             <div className="w-24 h-24 rounded-full p-[2px] shadow-[0_0_20px_rgba(168,85,247,0.35)]"
               style={{ background: BRAND_GRADIENT }}>
               {conversation?.photoURL ? (
-                <img
+                <LazyImage
                   src={conversation.photoURL}
                   alt={groupName}
                   className={cn(
@@ -549,7 +550,7 @@ export default function GroupInfoScreen() {
                         )}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <img
+                          <LazyImage
                             src={getSafeAvatarUrl(u.photoURL, u.displayName, uid)}
                             alt=""
                             className="w-8 h-8 rounded-full object-cover shrink-0"
@@ -598,7 +599,7 @@ export default function GroupInfoScreen() {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative shrink-0">
-                      <img
+                      <LazyImage
                         src={avatar}
                         alt={name}
                         className="w-10 h-10 rounded-full object-cover border border-white/10"

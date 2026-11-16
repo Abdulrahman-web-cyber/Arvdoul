@@ -11,6 +11,7 @@
 // Auth required. Idempotent, audited, and GDPR-compliant. Cursor-based
 // offloading with safety caps so no orphan records are left behind.
 const functions = require('firebase-functions');
+const { log } = require('./logger');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
 const { writeAudit } = require('./admin');
@@ -33,8 +34,6 @@ const deletionWorkerUrl = process.env.DELETION_WORKER_URL || '';
 // ----------------------------------------------------------------------
 //  UTILITY
 // ----------------------------------------------------------------------
-const log = (severity, message, data = {}) =>
-  console.log(JSON.stringify({ severity: severity.toUpperCase(), message, ...data, timestamp: new Date().toISOString() }));
 
 const chunkArray = (arr, size) => {
   const chunks = [];

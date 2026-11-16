@@ -36,6 +36,7 @@ import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Boo
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -978,7 +979,7 @@ export default function ChatScreen() {
                         aria-label={`Open media message ${m.id}`}
                       >
                         {m.media?.url || m.media?.downloadUrl ? (
-                          <img src={m.media.url || m.media.downloadUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          <LazyImage src={m.media.url || m.media.downloadUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
                           <div className="w-full h-full bg-purple-600/30 flex items-center justify-center">
                             <ImageIcon className="w-5 h-5 text-purple-300" />

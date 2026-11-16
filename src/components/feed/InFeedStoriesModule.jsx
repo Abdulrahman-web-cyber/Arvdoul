@@ -7,6 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import storyService from '../../services/storyService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
   const navigate = useNavigate();
@@ -107,7 +108,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
         >
           <div className="relative w-14 h-14 rounded-full p-[2px] bg-slate-200 dark:bg-slate-800">
             <div className="w-full h-full rounded-full overflow-hidden relative">
-              <img
+              <LazyImage
                 src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'You', user?.uid)}
                 alt="My Story"
                 className="w-full h-full object-cover"
@@ -139,7 +140,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
                 : isDark ? "bg-slate-800" : "bg-slate-300"
             )}>
               <div className="w-full h-full rounded-full overflow-hidden p-[2px] bg-white dark:bg-[#0f1424]">
-                <img
+                <LazyImage
                   src={creator.avatar}
                   alt={creator.name}
                   className="w-full h-full rounded-full object-cover group-hover:scale-110 transition-transform duration-300"

@@ -10,6 +10,7 @@ import { callFunction, FUNCTIONS } from "../../services/callableService.js";
 import * as Icons from "lucide-react";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // ── ARVDOUL DNA ──────────────────────────────────────────────────────
 const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
@@ -47,7 +48,7 @@ const LinkPreviewCard = React.memo(({ metadata, isDark }) => {
       } shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)]`}
     >
       {image && (
-        <img
+        <LazyImage
           src={image}
           alt=""
           loading="lazy"

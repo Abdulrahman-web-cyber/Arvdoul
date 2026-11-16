@@ -11,6 +11,7 @@ import {
 import { getCommunityService } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 import Skeleton from 'react-loading-skeleton';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const CommunityDirectoryScreen = () => {
   const navigate = useNavigate();
@@ -129,7 +130,7 @@ const CommunityDirectoryScreen = () => {
       {/* Cover Image */}
       <div className={`relative ${isList ? 'w-32 h-32' : 'h-32'}`}>
         {community.cover ? (
-          <img 
+          <LazyImage 
             src={community.cover} 
             alt={community.name}
             className="w-full h-full object-cover"
@@ -147,7 +148,7 @@ const CommunityDirectoryScreen = () => {
         <div className="absolute -bottom-8 left-4">
           <div className="w-16 h-16 rounded-full border-4 border-white dark:border-gray-800 overflow-hidden bg-white">
             {community.avatar ? (
-              <img 
+              <LazyImage 
                 src={community.avatar} 
                 alt={community.name}
                 className="w-full h-full object-cover"

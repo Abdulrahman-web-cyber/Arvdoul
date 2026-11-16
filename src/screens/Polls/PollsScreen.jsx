@@ -12,6 +12,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import pollService from '../../services/pollService';
 import { resolveActorName } from '../../services/profileReadModel';
+import { LazyImage } from '../../components/Shared/LazyImage';
 const CATEGORIES = ['All', 'Tech & Trends', 'Gear & Studio', 'Creator Economy'];
 
 /** Honest countdown label derived from the poll's real endsAt timestamp.
@@ -183,7 +184,7 @@ export default function PollsScreen() {
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="flex items-center gap-3">
                     {poll.creator?.avatar ? (
-                      <img src={poll.creator.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
+                      <LazyImage src={poll.creator.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
                     ) : (
                       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600/60 to-blue-600/60 flex items-center justify-center text-sm font-bold text-white shrink-0">
                         {(poll.creator?.name || '?').charAt(0).toUpperCase()}

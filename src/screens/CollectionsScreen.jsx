@@ -15,6 +15,7 @@ import EmptyState from '../design-system/EmptyState.jsx';
 import { cn } from '../lib/utils';
 import { unknownNumber } from '../lib/unknownNumber.js';
 import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 export default function CollectionsScreen() {
   const navigate = useNavigate();
@@ -189,7 +190,7 @@ export default function CollectionsScreen() {
               )}
             >
               {/* Cover Background */}
-              <img
+              <LazyImage
                 src={c.cover}
                 alt={c.title}
                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

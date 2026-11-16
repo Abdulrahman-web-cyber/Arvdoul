@@ -27,6 +27,7 @@ import { formatCoinsAsUsd } from '../shared/levelConfig.cjs';
 import GlassCard from '../components/UI/GlassCard';
 import GlassButton from '../components/UI/GlassButton';
 import { unknownNumber } from '../lib/unknownNumber.js';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 /**
  * VideoAnalyticsScreen - Creator dashboard with analytics
@@ -381,7 +382,7 @@ const VideosTab = ({ videos }) => {
         >
           {/* Thumbnail */}
           <div className="w-24 h-36 rounded-xl overflow-hidden flex-shrink-0 bg-gray-800">
-            <img
+            <LazyImage
               src={video.thumbnail}
               alt={video.title}
               className="w-full h-full object-cover"

@@ -14,6 +14,7 @@ import { ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRi
 import { toast } from 'sonner';
 import { ROYAL_ELIGIBILITY } from '../../shared/levelConfig.cjs';
 import { unknownNumber } from '../../lib/unknownNumber';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /**
  * Arvdoul Sovereign National Crest
@@ -306,7 +307,7 @@ export default function PassportScreen() {
                     isDark ? 'border-amber-500/40 bg-slate-950' : 'border-amber-600/40 bg-white'
                   }`}>
                     {passport.photoURL ? (
-                      <img
+                      <LazyImage
                         src={passport.photoURL}
                         alt={passport.displayName || '—'}
                         className="w-28 h-32 rounded-xl object-cover"
@@ -707,7 +708,7 @@ export default function PassportScreen() {
 
                 <div className="p-4 bg-white rounded-3xl inline-block shadow-2xl border-4 border-emerald-500/30">
                   {qrDataUrl ? (
-                    <img
+                    <LazyImage
                       src={qrDataUrl}
                       alt={`Citizen QR Pass for ${passport.displayName}`}
                       className="w-56 h-56 rounded-2xl object-contain mx-auto"
@@ -765,7 +766,7 @@ export default function PassportScreen() {
 
             <div className="my-5 p-4 bg-white rounded-2xl inline-block shadow-lg">
               {qrDataUrl && (
-                <img
+                <LazyImage
                   src={qrDataUrl}
                   alt={`Citizen QR for ${passport.displayName}`}
                   className="w-48 h-48 rounded-xl object-contain"

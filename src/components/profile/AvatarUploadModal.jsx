@@ -14,6 +14,7 @@ import { X, Upload, ZoomIn, ZoomOut, Check, Trash2, Camera, RefreshCw } from 'lu
 import { cn } from '../../lib/utils';
 import { getCroppedImg } from '../../utils/cropImage';
 import { toast } from 'sonner';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const AvatarUploadModal = memo(({
   isOpen,
@@ -218,7 +219,7 @@ const AvatarUploadModal = memo(({
                 <div className="relative w-32 h-32 mx-auto rounded-full overflow-hidden p-1 bg-gradient-to-tr from-arvdoul-purple via-arvdoul-blue to-arvdoul-glow-cyan shadow-xl">
                   <div className="w-full h-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                     {currentAvatarUrl ? (
-                      <img
+                      <LazyImage
                         src={currentAvatarUrl}
                         alt="Current Avatar"
                         className="w-full h-full object-cover"

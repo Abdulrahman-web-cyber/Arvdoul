@@ -32,6 +32,7 @@ import LinkCard from './PostCard/LinkCard';
 import { VIRTUAL_GIFTS } from '../data/videoData';
 // One count formatter for the whole app (unknown -> '—'); a local copy drifted.
 import { formatCount } from '../lib/searchUtils';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -471,7 +472,7 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
       </button>
       {visiblePreview.map(comment => (
         <div key={comment.id} className="flex gap-2 py-1">
-          <img src={comment.userAvatar || '/assets/default-profile.png'} className="w-6 h-6 rounded-full" alt="" />
+          <LazyImage src={comment.userAvatar || '/assets/default-profile.png'} className="w-6 h-6 rounded-full" alt="" />
           <div>
             <span className="text-xs font-semibold mr-1" style={{ color: tokens.text }}>{comment.userName}</span>
             <span className="text-xs" style={{ color: tokens.textSecondary }}>{comment.content}</span>
@@ -1106,7 +1107,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       <div className="p-3 flex items-start gap-3">
         <button onClick={() => navigate(`/profile/${post.authorId}`)} className="relative flex-shrink-0" aria-label={`Visit ${post.authorName}'s profile`}>
           <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-gradient-to-r from-purple-400 to-pink-600' : 'bg-transparent'}`} />
-          <img src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
+          <LazyImage src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
           {isPremium && <Crown className="absolute -top-1 -right-1 w-3 h-3 text-yellow-400" />}
           {isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
         </button>
@@ -1191,14 +1192,14 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isRepost && (
         <div className="mx-3 my-2 rounded-2xl border p-3" style={{ borderColor: tokens.border }}>
           <div className="flex items-center gap-2 mb-1">
-            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || ''} className="w-6 h-6 rounded-full object-cover" />
+            <LazyImage src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || ''} className="w-6 h-6 rounded-full object-cover" />
             <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || resolveActorName([], post.originalAuthorId)}</span>
           </div>
           {post.originalContent && (
             <p className="text-sm whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.originalContent}</p>
           )}
           {post.originalMedia?.length > 0 && (
-            <img src={post.originalMedia[0]?.url || post.originalMedia[0]?.thumbnail} alt="" className="mt-2 rounded-xl w-full max-h-60 object-cover" loading="lazy" />
+            <LazyImage src={post.originalMedia[0]?.url || post.originalMedia[0]?.thumbnail} alt="" className="mt-2 rounded-xl w-full max-h-60 object-cover" loading="lazy" />
           )}
           {post.originalPostId && (
             <button onClick={() => navigate(`/post/${post.originalPostId}`)} className="mt-2 text-xs font-medium" style={{ color: tokens.primary }}>

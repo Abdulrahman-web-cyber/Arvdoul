@@ -22,6 +22,7 @@ import { BadgeCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /**
  * ProfileAvatar Component
@@ -94,7 +95,7 @@ const ProfileAvatar = memo(({
         style={{ width: size, height: size }}
         aria-label={name ? `${name}'s avatar${isOwner ? ' (click to view)' : ''}` : `Profile avatar${isOwner ? ' (click to view)' : ''}`}
       >
-        <img
+        <LazyImage
           src={effectiveSrc}
           alt={name || ''}
           className="w-full h-full object-cover rounded-full"

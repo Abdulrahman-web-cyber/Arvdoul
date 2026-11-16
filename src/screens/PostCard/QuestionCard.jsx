@@ -9,6 +9,7 @@ import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Sen
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getReputationBand } from '../../services/levelSystemService.js';
 import { resolveActorName } from '../../services/profileReadModel.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -158,7 +159,7 @@ const AnswerItem = React.memo(({
       }}
     >
       <div className="flex items-start gap-3">
-        <img src={safeUserPhoto} className="w-9 h-9 rounded-full object-cover" alt="" />
+        <LazyImage src={safeUserPhoto} className="w-9 h-9 rounded-full object-cover" alt="" />
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold" style={{ color: tokens.text }}>{safeUserName}</span>

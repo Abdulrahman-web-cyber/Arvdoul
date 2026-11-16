@@ -12,6 +12,7 @@ import { cn } from '../../lib/utils';
 import collaborationService from '../../services/collaborationService';
 import { Dialog } from '../../components/UI/Dialog';
 import { Plus, Folder, Clock, Search, Filter, Loader2, Users } from "lucide-react";
+import { LazyImage } from '../../components/Shared/LazyImage';
 const STATUS_COLORS = {
   draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Draft' },
   in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
@@ -240,7 +241,7 @@ export default function ProjectDashboardScreen() {
                 {/* Thumbnail */}
                 <div className="h-32 relative">
                   {project.thumbnail ? (
-                    <img
+                    <LazyImage
                       src={project.thumbnail}
                       alt={project.name}
                       className="w-full h-full object-cover"

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 // Safe date normalizer
 const toDate = (dateish) => {
@@ -181,7 +182,7 @@ const EventCard = React.memo(({
       <div className="relative h-24 overflow-hidden">
         {hasBanner ? (
           <>
-            <img src={bannerUrl} alt="cover" className="w-full h-full object-cover" />
+            <LazyImage src={bannerUrl} alt="cover" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           </>
         ) : (

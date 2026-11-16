@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import PropTypes from 'prop-types';
 import { Eye, EyeOff, Lock, Unlock, Plus, Video, Type, Image as ImageIcon, Music, Mic } from "lucide-react";
 import { formatMinutesSeconds } from '../constants';
+import { LazyImage } from '../../../components/Shared/LazyImage';
 
 export default function MultiTrackTimeline({
   tracks = [],
@@ -287,7 +288,7 @@ export default function MultiTrackTimeline({
                         {clip.type === 'video' && clip.thumbnail && (
                           <div className="absolute inset-0 opacity-40 flex overflow-hidden pointer-events-none">
                             {Array.from({ length: 6 }).map((_, idx) => (
-                              <img
+                              <LazyImage
                                 key={idx}
                                 src={clip.thumbnail}
                                 alt="frame"

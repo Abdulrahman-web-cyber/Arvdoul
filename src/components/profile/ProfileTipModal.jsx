@@ -11,6 +11,7 @@ import { getMonetizationService } from '../../services/monetizationService.js';
 import { pickDisplayName } from '../../services/profileReadModel.js';
 import { newIdempotencyKey } from '../../utils/IdempotencyKey.js';
 import { toast } from 'sonner';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const PRESET_AMOUNTS = [10, 50, 100, 250, 500, 1000];
 
@@ -159,7 +160,7 @@ export default function ProfileTipModal({
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-purple-500/30 flex-shrink-0 bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
               {recipient?.photoURL ? (
-                <img
+                <LazyImage
                   src={recipient.photoURL}
                   alt={recipient.displayName || 'Recipient'}
                   className="w-full h-full object-cover"

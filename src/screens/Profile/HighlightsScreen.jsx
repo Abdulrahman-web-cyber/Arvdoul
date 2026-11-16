@@ -15,6 +15,7 @@ import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import ErrorState from '../../design-system/ErrorState.jsx';
 import { unknownNumber } from '../../lib/unknownNumber.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const EMOJI_OPTIONS = ['✨', '🔥', '💖', '🎵', '✈️', '📸', '⚡', '🏆', '🌴', '🎨', '🚀', '🌟'];
 
@@ -236,7 +237,7 @@ export default function HighlightsScreen() {
                       'bg-white dark:bg-gray-900'
                     )}>
                       {highlight.coverUrl ? (
-                        <img
+                        <LazyImage
                           src={highlight.coverUrl}
                           alt={highlight.title}
                           className="w-full h-full object-cover"
@@ -420,7 +421,7 @@ export default function HighlightsScreen() {
                         )}
                       >
                         {mediaUrl ? (
-                          <img
+                          <LazyImage
                             src={mediaUrl}
                             alt=""
                             className="w-full h-full object-cover"

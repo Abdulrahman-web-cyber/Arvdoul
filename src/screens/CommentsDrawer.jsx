@@ -25,6 +25,7 @@ import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 // One count formatter for the whole app (unknown -> '—'); a local copy drifted.
 import { formatCount } from '../lib/searchUtils';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
@@ -611,7 +612,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
   return (
     <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 backdrop-blur-sm bg-opacity-90">
       <div className="flex gap-2">
-        <img
+        <LazyImage
           src={getSafeAvatarUrl(currentUser?.photoURL, pickDisplayName([currentUser?.displayName], { fallback: 'You' }), currentUser?.uid)}
           alt=""
           className="w-9 h-9 rounded-full object-cover ring-2 ring-purple-500/30"
@@ -915,7 +916,7 @@ const CommentItem = memo(({
       )}
       <div className="flex gap-2 py-2 group">
         <button onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} className="flex-shrink-0">
-          <img src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
+          <LazyImage src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { pickDisplayName, deriveHandle, resolveAvatarUrl } from '../services/profileReadModel.js';
 import { cn } from '../lib/utils';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const COLLECTIONS = [
   'All',
@@ -391,7 +392,7 @@ export default function SavedScreen() {
                     isSelected ? "ring-4 ring-purple-500 border-purple-500" : isDark ? "bg-gray-900 border-white/10" : "bg-white border-gray-200"
                   )}
                 >
-                  <img
+                  <LazyImage
                     src={item.thumbnail}
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -477,7 +478,7 @@ export default function SavedScreen() {
                   )}
 
                   <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900 shrink-0 relative">
-                    <img
+                    <LazyImage
                       src={item.thumbnail}
                       alt={item.title}
                       className="w-full h-full object-cover"

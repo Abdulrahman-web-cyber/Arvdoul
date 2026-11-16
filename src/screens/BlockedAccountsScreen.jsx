@@ -22,6 +22,7 @@ import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
 import { cn } from '../lib/utils';
+import { LazyImage } from '../components/Shared/LazyImage';
 
 const TABS = [
   { id: 'blocked', label: 'Blocked', icon: ShieldOff, empty: 'You have not blocked anyone.' },
@@ -172,7 +173,7 @@ export default function BlockedAccountsScreen() {
                       onClick={() => navigate(`/profile/${id}`)}
                       className="flex items-center gap-3 min-w-0 flex-1 text-left"
                     >
-                      <img
+                      <LazyImage
                         src={avatar}
                         alt=""
                         className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"

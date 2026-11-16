@@ -4,6 +4,7 @@
 // Covers coins, gifts, boosts, withdrawals, ads, videos, push, and email.
 
 const functions = require('firebase-functions');
+const { logger } = require('./logger');
 const admin = require('firebase-admin');
 admin.initializeApp();
 
@@ -322,7 +323,7 @@ exports.deleteVideo = functions.https.onCall(async (data, context) => {
   if (video.storagePath) {
     const bucket = admin.storage().bucket();
     const file = bucket.file(video.storagePath);
-    await file.delete().catch(console.warn);
+    await file.delete().catch((e) => logger.warn('Temp file cleanup failed', { error: e.message }));
   }
   return { success: true };
 });
@@ -438,7 +439,7 @@ exports.cleanupSoftDeletedVideos = functions.pubsub.schedule('every 24 hours').o
     deleted += snapshot.size;
     if (snapshot.size < 400) break;
   }
-  if (deleted) console.log(`Cleaned up ${deleted} soft-deleted videos.`);
+  if (deleted) logger.info('Cleaned up soft-deleted videos', { count: deleted });
   return null;
 });
 
@@ -466,7 +467,7 @@ exports.cleanupRateLimits = functions.pubsub.schedule('every 24 hours').onRun(as
       if (expired.size < 400) break;
     }
   }
-  console.log(`Cleaned up ${deleted} expired rate limit documents.`);
+  logger.info('Cleaned up expired rate limit documents', { count: deleted });
   return null;
 });
 

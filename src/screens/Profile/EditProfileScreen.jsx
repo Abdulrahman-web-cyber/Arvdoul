@@ -62,6 +62,7 @@ import ProfileLocationModal from '../../components/profile/ProfileLocationModal'
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
 
@@ -675,7 +676,7 @@ export default function EditProfileScreen() {
             <div className="relative group shrink-0">
               <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue shadow-[0_8px_24px_rgba(139,30,243,0.35)]">
                 <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-[#03071B] dark:ring-[#03071B] relative">
-                  <img
+                  <LazyImage
                     src={avatarPreview}
                     alt={formData.displayName || "Avatar"}
                     className="w-full h-full object-cover"

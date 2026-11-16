@@ -9,6 +9,7 @@ import { getEventService } from '../../services/eventService';
 import { getStorageService } from '../../services/storageService';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const toDateInput = (value) => {
   const d = value?.toDate?.() || (value ? new Date(value) : null);
@@ -346,7 +347,7 @@ const CreateEventScreen = () => {
                 >
                   {formData.coverPreview ? (
                     <>
-                      <img
+                      <LazyImage
                         src={formData.coverPreview}
                         alt="Cover preview"
                         className="w-full h-full object-cover"

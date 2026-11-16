@@ -5,6 +5,7 @@
 // Sharded rate limiting, cursor recovery, and stale-task cleanup.
 
 const functions = require('firebase-functions');
+const { logger } = require('./logger');
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
@@ -203,7 +204,7 @@ exports.fanoutPostOnCreate = functions.firestore
         followerCount = await readUserCounter(authorId, 'followerCount');
       } catch (counterErr) {
         followerCount = Number.MAX_SAFE_INTEGER;
-        console.warn('Fan-out follower-count resolution failed; using pull model', { authorId, error: counterErr.message });
+        logger.warn('Fan-out follower-count resolution failed; using pull model', { authorId, error: counterErr.message });
       }
 
       if (followerCount > FANOUT_THRESHOLD) {
@@ -602,7 +603,7 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
       latencyMs: Date.now() - startTime,
     };
   } catch (error) {
-    console.error('getPersonalizedFeed error:', error);
+    logger.error('getPersonalizedFeed failed', { error: error.message });
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
@@ -682,7 +683,7 @@ exports.getPersonalizedFeedML = functions.https.onCall(async (data, context) => 
     return { feed, nextCursor, personalized: true, generatedAt: new Date().toISOString() };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    console.error('getPersonalizedFeedML error:', error);
+    logger.error('getPersonalizedFeedML failed', { error: error.message });
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
@@ -758,7 +759,7 @@ exports.getFollowingFeed = functions.https.onCall(async (data, context) => {
       generatedAt: new Date().toISOString(),
     };
   } catch (error) {
-    console.error('getFollowingFeed error:', error);
+    logger.error('getFollowingFeed failed', { error: error.message });
     throw new functions.https.HttpsError('internal', error.message);
   }
 });

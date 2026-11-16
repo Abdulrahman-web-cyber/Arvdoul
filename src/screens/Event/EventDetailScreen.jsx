@@ -12,6 +12,7 @@ import { copyToClipboard } from '../../utils/shareUtils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { resolveActorName } from '../../services/profileReadModel.js';
 import { format, isPast, isFuture, isToday } from "date-fns";
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 const EventDetailScreen = () => {
   const confirm = useConfirm();
@@ -300,7 +301,7 @@ const EventDetailScreen = () => {
       {/* Hero */}
       <div className="relative h-64 md:h-80 bg-gray-900">
         {event.coverImage ? (
-          <img 
+          <LazyImage 
             src={event.coverImage} 
             alt={event.title}
             className="w-full h-full object-cover"
@@ -541,7 +542,7 @@ const EventDetailScreen = () => {
                               className="cursor-pointer w-full"
                               onClick={() => navigate(`/profile/${attendee.id}`)}
                             >
-                              <img
+                              <LazyImage
                                 src={getSafeAvatarUrl(attendee.photoURL, attendee.displayName || attendee.username || '', attendee.id)}
                                 alt=""
                                 className="w-16 h-16 mx-auto rounded-full object-cover mb-2 bg-gray-200 dark:bg-gray-600"

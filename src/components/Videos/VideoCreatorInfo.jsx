@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { BadgeCheck, Clock, UserPlus } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import PropTypes from 'prop-types';
+import { LazyImage } from '../../components/Shared/LazyImage';
 
 /**
  * VideoCreatorInfo - Creator profile card with avatar, name, description
@@ -32,7 +33,7 @@ const VideoCreatorInfo = memo(({
           onClick={onProfileClick}
           className="relative"
         >
-          <img
+          <LazyImage
             src={creator.avatar || '/assets/default-profile.png'}
             alt={creator.name || ''}
             className="w-12 h-12 rounded-full border-2 border-white object-cover"

@@ -380,6 +380,8 @@ jobs:
           src/__tests__/storyExpiryGuard.test.js
           src/__tests__/serviceLoggingHygieneGuard.test.js
           src/__tests__/nativeDialogGuard.test.js
+          src/__tests__/imageLoadingGuard.test.js
+          src/__tests__/functionsLoggingGuard.test.js
           src/__tests__/reportRoutingParity.test.js
           src/__tests__/monetizationIdempotencyGuard.test.js
           src/__tests__/transactionOrderGuard.test.js
