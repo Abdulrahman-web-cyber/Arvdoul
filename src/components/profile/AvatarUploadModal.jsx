@@ -240,7 +240,7 @@ const AvatarUploadModal = memo(({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full py-3 px-4 rounded-2xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:opacity-95 shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 rounded-2xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-95 shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2"
                   >
                     <Upload className="w-4 h-4" />
                     <span>Select from Device</span>

@@ -305,7 +305,7 @@ class GlobalErrorBoundaryBase extends Component {
               onClick={this.handleRecover}
               disabled={this.state.isRecovering}
               className={`w-full py-3 rounded-xl font-semibold text-white
-              bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600
+              bg-arvdoul-gradient
               ${this.getGlow("purple")} transition hover:scale-[1.02]
               disabled:opacity-60 disabled:cursor-not-allowed`}
             >

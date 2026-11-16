@@ -4,7 +4,7 @@
 // provider) so the design-token drift guard can import the values directly.
 // Surfaces derive from the design tokens; the brand violet is `tokens.color.brand.violet`.
 
-import { tokens } from '../design-system/tokens.js';
+import { tokens, brandRgba } from '../design-system/tokens.js';
 
 const { color: TOKEN_COLOR, shadow: TOKEN_SHADOW } = tokens;
 
@@ -28,7 +28,7 @@ export const LIGHT_THEME = {
     },
     shadow: {
       ambient: '0 20px 60px rgba(0,0,0,0.08)',
-      glow: '0 0 40px rgba(139,30,243,0.12)',
+      glow: `0 0 40px ${brandRgba(0.12)}`,
       directional: TOKEN_SHADOW.md,
       card: '0 25px 80px rgba(0,0,0,0.08)',
     },
@@ -65,9 +65,9 @@ export const DARK_THEME = {
     },
     shadow: {
       ambient: '0 20px 60px rgba(0,0,0,0.4)',
-      glow: '0 0 40px rgba(139,30,243,0.25)',
+      glow: `0 0 40px ${brandRgba(0.25)}`,
       directional: TOKEN_SHADOW.lg,
-      card: '0 25px 80px rgba(139,30,243,0.45)',
+      card: `0 25px 80px ${brandRgba(0.45)}`,
     },
     success: '#34D399',
     warning: '#FBBF24',

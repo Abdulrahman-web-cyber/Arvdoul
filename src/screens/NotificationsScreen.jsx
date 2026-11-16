@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2, UserCheck } from "lucide-react";
 import notificationsService from '../services/notificationsService';
+import { pickDisplayName, resolveActorName } from '../services/profileReadModel';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import Button from '../design-system/Button.jsx';
@@ -66,6 +67,9 @@ export default function NotificationsScreen() {
   const [networkTab, setNetworkTab] = useState('requests');
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
+  // Real per-pair follow state for the follower rows (the list read returns bare
+  // profiles, so a pending follow-back request was invisible).
+  const [followStates, setFollowStates] = useState({});
   const [requests, setRequests] = useState([]);
   const [followRequests, setFollowRequests] = useState([]);
   const [pendingFollowRequestAction, setPendingFollowRequestAction] = useState(null);
@@ -112,6 +116,7 @@ export default function NotificationsScreen() {
         setRecommended([]);
         setFollowers([]);
         setFollowing([]);
+        setFollowStates({});
         setRequests([]);
         setFollowRequests([]);
         return;
@@ -127,8 +132,29 @@ export default function NotificationsScreen() {
       ]);
       const recResult = await svc.getFriendRecommendations(user.uid, 6).catch(() => ({ success: false, recommendations: [] }));
       setRecommended(recResult.recommendations || []);
-      setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
-      setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
+      const followerList = f.status === 'fulfilled' ? f.value.followers || [] : [];
+      const followingList = g.status === 'fulfilled' ? g.value.following || [] : [];
+      setFollowers(followerList);
+      setFollowing(followingList);
+      // The list read returns bare profiles with no viewer→row edge, so a
+      // follower the viewer already follows (or has a pending request to) was
+      // indistinguishable from one they do not. Resolve the real per-pair state
+      // in one bounded batched read.
+      const stateIds = [...new Set(
+        [...followerList, ...followingList].map((u) => u?.id || u?.uid).filter(Boolean)
+      )];
+      if (stateIds.length) {
+        try {
+          const states = await svc.getFollowStates(user.uid, stateIds);
+          const asObject = {};
+          states.forEach((v, k) => { asObject[k] = v; });
+          setFollowStates(asObject);
+        } catch (e) {
+          console.warn('[Notifications] follow-state hydration failed', e?.message);
+        }
+      } else {
+        setFollowStates({});
+      }
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
       // Private-account follow requests arrive as `follow_request` notifications
       // but only a friend/follow request *document* can be approved. Load the
@@ -230,19 +256,25 @@ export default function NotificationsScreen() {
       const svc = getUserService();
       await svc.sendFriendRequest(user.uid, targetId);
       setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
-      toast.success(`Friend request sent to ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+      toast.success(`Friend request sent to ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! ✨`);
     } catch {
       try {
         const { getUserService } = await import('../services/userService.js');
         const svc = getUserService();
-        await svc.followUser(user.uid, targetId);
-        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
-        toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+        const result = await svc.followUser(user.uid, targetId);
+        if (result?.requested || result?.requestStatus === 'pending') {
+          // Private target: a pending request, not a follow.
+          setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
+          toast.success('Follow request sent');
+        } else {
+          setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
+          toast.success(`Now following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! ✨`);
+        }
       } catch {
         // Both the friend request and the follow failed — do not claim a
         // connection that was never made.
         setNetworkActionState((prev) => ({ ...prev, [targetId]: 'idle' }));
-        toast.error(`Could not connect with ${targetUser.displayName || targetUser.username || 'user'}`);
+        toast.error(`Could not connect with ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
       }
     }
   };
@@ -257,14 +289,38 @@ export default function NotificationsScreen() {
       if (isCurrentlyFollowing) {
         await svc.unfollowUser(user.uid, targetId);
         setFollowing((prev) => prev.filter((u) => (u.id || u.uid) !== targetId));
-        toast.info(`Unfollowed ${targetUser.displayName || targetUser.username || 'user'}`);
+        setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: null } }));
+        toast.info(`Unfollowed ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
       } else {
-        await svc.followUser(user.uid, targetId);
-        setFollowing((prev) => [...prev, targetUser]);
-        toast.success(`Following ${targetUser.displayName || targetUser.username || 'user'}! 🎉`);
+        const result = await svc.followUser(user.uid, targetId);
+        if (result?.requested || result?.requestStatus === 'pending') {
+          // A private target records a pending request — no edge, no "following".
+          setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: 'pending' } }));
+          toast.success('Follow request sent');
+        } else {
+          setFollowing((prev) => [...prev, targetUser]);
+          setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: true, requestStatus: null } }));
+          toast.success(`Following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! 🎉`);
+        }
       }
     } catch {
       toast.error('Action failed. Please try again.');
+    } finally {
+      setNetworkActionState((prev) => ({ ...prev, [targetId]: null }));
+    }
+  };
+
+  // Withdraw a pending follow request to a private account.
+  const handleCancelFollowRequest = async (targetId) => {
+    if (!targetId || !user?.uid) return;
+    setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      await getUserService().cancelFollowRequest(user.uid, targetId);
+      setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: null } }));
+      toast.info('Follow request withdrawn');
+    } catch {
+      toast.error('Could not withdraw the request. Please try again.');
     } finally {
       setNetworkActionState((prev) => ({ ...prev, [targetId]: null }));
     }
@@ -313,11 +369,29 @@ export default function NotificationsScreen() {
           : type === 'coin_gift' ? 'Coins'
             : SYSTEM_NOTIFICATION_TYPES.has(type) ? 'System'
               : 'All';
+      // Bucket into the groups the list actually renders (Now/Today/Yesterday/
+      // Earlier). The old value was a raw `toLocaleDateString()` for anything
+      // older than an hour, which matched no rendered group key, so every
+      // notification past the one-hour window silently disappeared from the
+      // list; a missing timestamp fell into a never-rendered 'Recent' group.
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startOfYesterday = new Date(startOfToday);
+      startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+      const timeGroup = !createdAtMs
+        ? 'Earlier'
+        : Date.now() - createdAtMs < 3600000
+          ? 'Now'
+          : createdAtMs >= startOfToday.getTime()
+            ? 'Today'
+            : createdAtMs >= startOfYesterday.getTime()
+              ? 'Yesterday'
+              : 'Earlier';
       return {
         id: fn.id || `fn-${idx}`,
         category,
         type,
-        timeGroup: createdAt && createdAtMs ? (Date.now() - createdAtMs < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
+        timeGroup,
         user: {
           id: fn.senderId || null,
           name: fn.senderName || fn.title || '',
@@ -514,8 +588,10 @@ export default function NotificationsScreen() {
   const groupedNotifications = useMemo(() => {
     const groups = { Now: [], Today: [], Yesterday: [], Earlier: [] };
     filteredNotifications.forEach((n) => {
-      const g = n.timeGroup || 'Recent';
-      if (!groups[g]) groups[g] = [];
+      // `timeGroup` is always one of the rendered keys (set in
+      // formatNotification); an unexpected value must not silently drop the
+      // item, so it falls back to the always-rendered 'Earlier' bucket.
+      const g = groups[n.timeGroup] ? n.timeGroup : 'Earlier';
       groups[g].push(n);
     });
     return groups;
@@ -781,8 +857,8 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {requests.map((req) => {
                     const reqUser = req.sender || req.user || req;
-                    const reqName = reqUser.displayName || reqUser.username || reqUser.name || 'User';
                     const reqId = req.id || req.requestId;
+                    const reqName = resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || reqId);
                     return (
                       <div
                         key={reqId}
@@ -848,7 +924,7 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {followRequests.map((req) => {
                     const reqUser = req.fromUser || req.sender || {};
-                    const reqName = reqUser.displayName || reqUser.username || reqUser.name || 'User';
+                    const reqName = resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || req.id);
                     const reqAvatar = reqUser.photoURL || reqUser.avatar || null;
                     const busy = pendingFollowRequestAction === req.id;
                     return (
@@ -915,7 +991,7 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {followers.map((fUser) => {
-                    const fName = fUser.displayName || fUser.username || 'Follower';
+                    const fName = resolveActorName([fUser.displayName, fUser.username], fUser.id || fUser.uid);
                     return (
                       <div
                         key={fUser.id || fUser.uid}
@@ -947,30 +1023,47 @@ export default function NotificationsScreen() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {(() => {
+                            const fId = fUser.id || fUser.uid;
+                            const state = followStates[fId] || { isFollowing: false, requestStatus: null };
+                            const rowStatus = networkActionState[fId];
+                            const isRequested = state.requestStatus === 'pending';
+                            return (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const isAlreadyFollowing = following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid));
-                              handleToggleFollow(fUser, isAlreadyFollowing);
+                              if (isRequested) {
+                                handleCancelFollowRequest(fId);
+                              } else {
+                                handleToggleFollow(fUser, state.isFollowing);
+                              }
                             }}
-                            disabled={networkActionState[fUser.id || fUser.uid] === 'loading'}
+                            disabled={rowStatus === 'loading'}
                             className={cn(
                               "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1",
-                              following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid))
+                              state.isFollowing
                                 ? isDark
                                   ? "bg-white/10 text-white/80 hover:bg-white/15"
                                   : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                                : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
+                                : isRequested
+                                  ? isDark
+                                    ? "bg-white/10 text-white/70 border border-white/15"
+                                    : "bg-slate-100 text-slate-600 border border-slate-300"
+                                  : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
                             )}
                           >
-                            {networkActionState[fUser.id || fUser.uid] === 'loading' ? (
+                            {rowStatus === 'loading' ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid)) ? (
+                            ) : isRequested ? (
+                              'Requested'
+                            ) : state.isFollowing ? (
                               'Following'
                             ) : (
                               'Follow Back'
                             )}
                           </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -987,8 +1080,8 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {following.map((gUser) => {
-                    const gName = gUser.displayName || gUser.username || 'User';
                     const gId = gUser.id || gUser.uid;
+                    const gName = resolveActorName([gUser.displayName, gUser.username], gId);
                     return (
                       <div
                         key={gId}
@@ -1054,8 +1147,8 @@ export default function NotificationsScreen() {
             ) : (
                   <div className="space-y-2.5">
                     {recommended.map((rUser) => {
-                      const rName = rUser.displayName || rUser.username || 'Suggested';
                       const rId = rUser.id || rUser.uid;
+                      const rName = resolveActorName([rUser.displayName, rUser.username], rId);
                       const actionStatus = networkActionState[rId];
                       return (
                         <div

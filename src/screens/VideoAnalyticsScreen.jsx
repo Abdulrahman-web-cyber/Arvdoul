@@ -419,7 +419,7 @@ const VideosTab = ({ videos }) => {
                 </span>
               </div>
               <div className="text-green-400 text-sm font-medium">
-                {video.earnings == null ? '—' : `$${video.earnings.toFixed(2)}`}
+                {video.earnings == null ? '—' : formatCoinsAsUsd(video.earnings)}
               </div>
             </div>
 
@@ -571,7 +571,7 @@ const RevenueTab = ({ revenue }) => {
           const withdrawals = historyItems.filter(
             (tx) => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')
           );
-          if (withdrawals.length > 0) lastPayoutCoins = Number(withdrawals[0].amount) || 0;
+          if (withdrawals.length > 0) lastPayoutCoins = unknownNumber(withdrawals[0].amount);
         }
 
         setPayout({ loading: false, settings, pendingCoins, lastPayoutCoins });
@@ -585,8 +585,9 @@ const RevenueTab = ({ revenue }) => {
 
   const formatUsd = formatCoinsAsUsd;
 
-  const accountStatus = payout.settings?.accountStatus || 'unconfigured';
-  const accountConnected = ['verified', 'active', 'enabled'].includes(accountStatus);
+  // The server record uses `status: 'onboarding' | 'ready'` (ready = Stripe
+  // `payouts_enabled`); reading the old `accountStatus` always missed.
+  const accountConnected = payout.settings?.status === 'ready';
 
   const revenueItems = [
     { label: 'Subscriptions', value: revenue.subscriptions, icon: Users },

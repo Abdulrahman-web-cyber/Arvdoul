@@ -10,7 +10,7 @@ import { Power, ChevronDown } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';
 import { EQ_PRESET_NAMES, getPresetBands, EQ_RANGES } from '../audioPresets';
-import { tokens } from '../../../design-system/tokens.js';
+import { brandHexRgba, tokens } from '../../../design-system/tokens.js';
 
 const { minFreq, maxFreq, minGain, maxGain } = EQ_RANGES;
 
@@ -102,9 +102,9 @@ export default function EqualizerModule({
 
     // Gradient fill under the curve.
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, 'rgba(139, 30, 243, 0.25)');
-    gradient.addColorStop(0.5, 'rgba(68, 49, 247, 0.12)');
-    gradient.addColorStop(1, 'rgba(5, 91, 251, 0)');
+    gradient.addColorStop(0, brandHexRgba(tokens.color.brand.violet, 0.25));
+    gradient.addColorStop(0.5, brandHexRgba(tokens.color.brand.indigo, 0.12));
+    gradient.addColorStop(1, brandHexRgba(tokens.color.brand.blue, 0));
 
     ctx.beginPath();
     ctx.moveTo(0, gainToY(0, height));

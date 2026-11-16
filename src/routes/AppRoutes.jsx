@@ -6,6 +6,8 @@ import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
 import SplashScreen from "../screens/SplashScreen.jsx";
+import logger from "../utils/Logger.js";
+import metricsService from "../services/metricsService.js";
 
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
@@ -200,7 +202,22 @@ export default function AppRoutes() {
       {/* ========== PUBLIC ROUTES (No Layout) ========== */}
       <Route path="/" element={
         <PublicRoute>
-          <SplashScreen />
+          <SplashScreen
+            onMetrics={(m) => {
+              if (typeof m.msToReady === "number") {
+                metricsService.recordHistogram("splash_ms_to_ready", m.msToReady);
+              }
+              if (typeof m.msToHandoff === "number") {
+                metricsService.recordHistogram("splash_ms_to_handoff", m.msToHandoff);
+              }
+            }}
+            onRenderError={(error, info) =>
+              logger.error("Splash render error", {
+                error: error?.message,
+                componentStack: info?.componentStack,
+              })
+            }
+          />
         </PublicRoute>
       } />
       
@@ -948,22 +965,8 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* Thumbnail Designer & Image Studio Routes */}
+      {/* Thumbnail Designer route */}
       <Route path="/thumbnail-designer" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ThumbnailDesignerScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
-      <Route path="/image-studio" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ThumbnailDesignerScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
-      <Route path="/image-editor" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <ThumbnailDesignerScreen />

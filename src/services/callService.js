@@ -11,6 +11,7 @@
 // plane (who the peer is, the call doc, and the ICE candidate subcollection).
 
 import { logger } from '../utils/Logger.js';
+import { pickDisplayName } from './profileReadModel.js';
 
 const CALL_STATUS = { RINGING: 'ringing', ACTIVE: 'active', ENDED: 'ended' };
 
@@ -37,14 +38,15 @@ class CallService {
     const peerId = participants.find((p) => p !== selfUid);
     if (!peerId) throw new Error('No peer in conversation');
 
-    let peer = { id: peerId, name: 'User', avatar: null };
+    // An unresolved peer keeps an honest uid-prefix label; never a generic 'User'.
+    let peer = { id: peerId, name: `user ${peerId.slice(0, 6)}`, avatar: null };
     try {
       const { getUserService } = await import('./userService.js');
       const profile = await getUserService().getUserProfile(peerId);
       if (profile) {
         peer = {
           id: peerId,
-          name: profile.displayName || profile.username || 'User',
+          name: pickDisplayName([profile.displayName, profile.username], { fallback: `user ${peerId.slice(0, 6)}` }),
           avatar: profile.photoURL || null,
         };
       }

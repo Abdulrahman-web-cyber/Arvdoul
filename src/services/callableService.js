@@ -50,6 +50,8 @@ export const FUNCTIONS = {
   CHECK_IN_EVENT_ATTENDEE: 'checkInEventAttendee',
   PROMOTE_EVENT_WAITLIST: 'promoteEventWaitlist',
   SUBMIT_EVENT_FEEDBACK: 'submitEventFeedback',
+  GET_EVENT_ATTENDEES: 'getEventAttendees',
+  GET_USER_EVENT_REGISTRATIONS: 'getUserEventRegistrations',
   // Collaboration projects (server-authoritative; see functions/collaboration.js)
   CREATE_COLLAB_PROJECT: 'createCollaborationProject',
   UPDATE_COLLAB_PROJECT: 'updateCollaborationProject',
@@ -125,6 +127,7 @@ export const FUNCTIONS = {
   CREATE_MUX_UPLOAD: 'createMuxUpload',
   LIKE_VIDEO: 'likeVideo',
   SHARE_VIDEO: 'shareVideo',
+  TOGGLE_VIDEO_SAVE: 'toggleVideoSave',
   RECORD_VIDEO_VIEW: 'recordVideoView',
   PAY_PER_VIEW: 'payPerView',
   SEND_TIP: 'sendTip',

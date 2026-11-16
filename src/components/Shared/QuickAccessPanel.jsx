@@ -7,6 +7,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { cn } from "../../lib/utils";
+import { BRAND_GRADIENT } from "../../design-system/tokens.js";
 import { useAppStore } from "../../store/appStore";
 import { FaCoins, FaCrown, FaStar, FaBullhorn } from "react-icons/fa";
 import { MdAdsClick } from "react-icons/md";
@@ -15,6 +16,7 @@ import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 import achievementService from "../../services/achievementService";
 import { formatCount } from "../../lib/searchUtils";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
+import { pickDisplayName } from "../../services/profileReadModel.js";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -567,7 +569,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           label: "AI Studio Pro",
           icon: Sparkles,
           action: () => navigate(NAVIGATION_PATHS.aiStudio),
-          color: "from-purple-600 via-pink-600 to-indigo-600",
+          color: "from-purple-600 to-indigo-600",
           description: "Viral hooks & AI scriptwriter",
           badge: "AI Pro",
           sparkling: true
@@ -773,10 +775,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 >
                   <div className="relative w-16 h-16 sm:w-20 sm:h-20">
                     {/* Animated gradient border */}
-                    <div className={cn(
-                      "absolute inset-0 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-full",
-                      "animate-spin-slow opacity-70"
-                    )} style={{ animationDuration: '8s' }} />
+                    <div
+                      className="absolute inset-0 rounded-full animate-spin-slow opacity-70"
+                      style={{ background: BRAND_GRADIENT, animationDuration: '8s' }}
+                    />
 
                     {/* Profile image */}
                     <img
@@ -817,7 +819,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                         themeColors.text
                       )}
                     >
-                      {currentUser?.displayName || "User"}
+                      {pickDisplayName([currentUser?.displayName, currentUser?.username], { fallback: currentUser?.uid ? `user ${String(currentUser.uid).slice(0, 6)}` : '—' })}
                     </h3>
 
                     {/* Unique Username with Verification Badge */}
@@ -1072,8 +1074,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             "border border-gray-300/50 dark:border-gray-700/50",
             "focus:outline-none focus:ring-2",
             theme === "dark"
-              ? "focus:ring-purple-500"
-              : "focus:ring-blue-500"
+              ? "focus:ring-arvdoul-purple"
+              : "focus:ring-arvdoul-purple"
           )}
         />
         {searchQuery && (
@@ -1851,11 +1853,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             {/* Professional Drag Handle */}
             <div className="pt-3 sm:pt-4 pb-1 sm:pb-2 px-4 sm:px-6">
               <div className="flex justify-center items-center mb-1 sm:mb-2">
-                <div className={cn(
-                  "w-16 sm:w-20 h-1 sm:h-1.5 rounded-full",
-                  "bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500",
-                  "shadow-lg"
-                )} />
+                <div
+                  className="w-16 sm:w-20 h-1 sm:h-1.5 rounded-full shadow-lg"
+                  style={{ background: BRAND_GRADIENT }}
+                />
               </div>
 
               {/* Panel Header */}

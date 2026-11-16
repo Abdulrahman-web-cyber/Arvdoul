@@ -80,7 +80,7 @@ describe('shared levelConfig - citizenship tiers', () => {
 describe('shared levelConfig - gated unlocks', () => {
   test('each gate has a matching perk at the same level', () => {
     const perkLevels = getPerksForLevel(MAX_LEVEL).map((p) => p.minLevel);
-    for (const gate of ['advancedEditor', 'liveStreaming', 'withdrawals', 'customBadge']) {
+    for (const gate of ['liveStreaming', 'withdrawals']) {
       expect(perkLevels).toContain(LEVEL_GATES[gate]);
     }
   });

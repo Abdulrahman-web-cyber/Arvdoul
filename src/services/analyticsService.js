@@ -8,6 +8,7 @@ import { countersManager } from '../utils/CountersManager.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { metricsService } from './metricsService.js';
 import { unknownNumber } from '../lib/unknownNumber.js';
+import { PRIVATE_PROFILE_COLLECTION } from '../config/profileContracts.js';
 
 // ---------------------------------------------------------------------------
 // Interaction-event sink.
@@ -367,7 +368,14 @@ class UltimateAnalyticsService {
       try {
         analytics.ranking = await this.getCreatorRanking(userId);
       } catch (rankErr) {
-        analytics.ranking = { rank: null, totalCreators: 0, percentile: null };
+        // A failed ranking read is *unknown*, not a measured "0 creators".
+        // `getCreatorRanking`'s own catch already returns an unavailable shape;
+        // this path previously fabricated a different one carrying a
+        // `totalCreators` of 0 (a measured population of zero, for a read that
+        // merely failed) with keys no consumer reads. Keep one honest shape:
+        // the ranking is unavailable.
+        logger.warn('Creator ranking unavailable', { error: rankErr?.message, userId });
+        analytics.ranking = { position: null, percentile: null, label: null, total: null };
       }
 
       this.cache.set(cacheKey, analytics);
@@ -455,8 +463,11 @@ class UltimateAnalyticsService {
    */
   async _readLiveCoinBalance(userId) {
     try {
+      // The balance lives on users_private/{uid} (N324). This runs on the
+      // owner's own dashboard, so the owner-scoped read succeeds; a non-owner
+      // would be denied and render the balance as unknown, never as 0.
       const { doc, getDoc } = await import('firebase/firestore');
-      const uSnap = await getDoc(doc(this.firestore, 'users', userId));
+      const uSnap = await getDoc(doc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId));
       if (!uSnap.exists()) return null;
       const raw = uSnap.data().coins ?? uSnap.data().coinBalance;
       return typeof raw === 'number' ? raw : null;

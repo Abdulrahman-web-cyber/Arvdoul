@@ -8,6 +8,8 @@ import { ArrowLeft, Calendar, MapPin, Clock, Share2, Ticket, Video, Globe, Setti
 import { getEventService } from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { resolveActorName } from '../../services/profileReadModel.js';
 import { format, isPast, isFuture, isToday } from "date-fns";
 
 const EventDetailScreen = () => {
@@ -27,6 +29,8 @@ const EventDetailScreen = () => {
   const [stats, setStats] = useState(null);
   const [myRating, setMyRating] = useState(0);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [attendeeRoster, setAttendeeRoster] = useState(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
 
   // Load event
   const loadEvent = useCallback(async () => {
@@ -85,6 +89,31 @@ const EventDetailScreen = () => {
 
     return () => unsubscribe();
   }, [eventId, eventService]);
+
+  // The attendee roster is served by the `getEventAttendees` callable so each
+  // row carries the real displayName/username/avatar (the event document stores
+  // no attendee identity). Refreshed whenever the event document changes so a
+  // check-in or a new registration is reflected.
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    const loadRoster = async () => {
+      setRosterLoading(true);
+      try {
+        const roster = await eventService.getEventAttendees(eventId);
+        if (!cancelled) setAttendeeRoster(roster);
+      } catch (err) {
+        if (!cancelled) {
+          setAttendeeRoster([]);
+          console.warn('Could not load attendee roster:', err?.message);
+        }
+      } finally {
+        if (!cancelled) setRosterLoading(false);
+      }
+    };
+    loadRoster();
+    return () => { cancelled = true; };
+  }, [eventId, eventService, event?.updatedAt]);
 
   // Handle registration
   const handleRegister = useCallback(async () => {
@@ -487,46 +516,58 @@ const EventDetailScreen = () => {
                       Attendees
                     </h2>
                     
-                    {event.attendees && Object.keys(event.attendees).length > 0 ? (
+                    {rosterLoading ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {Object.entries(event.attendees)
-                          .filter(([_, data]) => data.status !== 'waitlisted')
-                          .slice(0, 16)
-                          .map(([userId, data]) => (
-                            <div
-                              key={userId}
-                              className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center"
+                        {[0, 1, 2, 3].map((i) => (
+                          <div key={i} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center animate-pulse">
+                            <div className="w-16 h-16 mx-auto rounded-full bg-gray-200 dark:bg-gray-600 mb-2" />
+                            <div className="h-4 w-20 mx-auto rounded bg-gray-200 dark:bg-gray-600" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : attendeeRoster && attendeeRoster.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {attendeeRoster.slice(0, 16).map((attendee) => (
+                          <div
+                            key={attendee.id}
+                            className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center"
+                          >
+                            <button
+                              type="button"
+                              aria-label={`View ${resolveActorName([attendee.displayName, attendee.username], attendee.id)} profile`}
+                              className="cursor-pointer w-full"
+                              onClick={() => navigate(`/profile/${attendee.id}`)}
                             >
+                              <img
+                                src={getSafeAvatarUrl(attendee.photoURL, attendee.displayName || attendee.username || '', attendee.id)}
+                                alt=""
+                                className="w-16 h-16 mx-auto rounded-full object-cover mb-2 bg-gray-200 dark:bg-gray-600"
+                              />
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {resolveActorName([attendee.displayName, attendee.username], attendee.id)}
+                              </p>
+                            </button>
+                            {attendee.status === 'checked_in' ? (
+                              <span className="text-xs text-green-600 flex items-center justify-center gap-1 mt-1">
+                                <Check className="w-3 h-3" />
+                                Checked In
+                              </span>
+                            ) : isOrganizer ? (
                               <button
                                 type="button"
-                                aria-label="View attendee profile"
-                                className="cursor-pointer w-full"
-                                onClick={() => navigate(`/profile/${userId}`)}
+                                onClick={() => handleCheckIn(attendee.id)}
+                                className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                               >
-                                <div className="w-16 h-16 mx-auto rounded-full bg-gray-200 mb-2">
-                                  <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full" />
-                                </div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                  {data.displayName || 'User'}
-                                </p>
+                                Check in
                               </button>
-                              {data.status === 'checked_in' ? (
-                                <span className="text-xs text-green-600 flex items-center justify-center gap-1 mt-1">
-                                  <Check className="w-3 h-3" />
-                                  Checked In
-                                </span>
-                              ) : isOrganizer ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCheckIn(userId)}
-                                  className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                                >
-                                  Check in
-                                </button>
-                              ) : null}
-                            </div>
-                          ))}
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
+                    ) : attendeeRoster && attendeeRoster.length === 0 && Object.keys(event.attendees || {}).length > 0 ? (
+                      <p className="text-gray-500 italic">
+                        The attendee list is only visible to the organizer and to attendees.
+                      </p>
                     ) : (
                       <p className="text-gray-500 italic">No attendees yet</p>
                     )}

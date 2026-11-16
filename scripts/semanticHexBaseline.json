@@ -10,6 +10,5 @@
   "src/screens/SignupStep2VerifyContact.jsx": 2,
   "src/screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx": 5,
   "src/screens/VideoEditor/components/ToolPanels.jsx": 4,
-  "src/services/userService.js": 4,
   "src/utils/avatarUtils.js": 1
 }

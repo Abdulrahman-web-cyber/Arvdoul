@@ -50,7 +50,7 @@ export default function MediaDrawer({
             }`}
           >
             <Video className="w-3.5 h-3.5" />
-            <span>4K Videos ({STOCK_VIDEOS.length})</span>
+            <span>Stock Videos ({STOCK_VIDEOS.length})</span>
           </button>
 
           <button

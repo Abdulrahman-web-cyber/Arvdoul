@@ -639,7 +639,7 @@ export default function CreateText() {
           >
             <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Insert Link</h3>
-              <input type="url" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://example.com" className="w-full p-3 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500" autoFocus />
+              <input type="url" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://example.com" className="w-full p-3 rounded-xl border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-arvdoul-purple" autoFocus />
               <div className="flex gap-2 mt-4">
                 <button onClick={insertLink} className="flex-1 py-2.5 rounded-xl text-white font-medium" style={{ background: DNA_GRADIENT_STYLE, boxShadow: DNA_SHADOW }}>Insert</button>
                 <button onClick={() => setShowLinkModal(false)} className="flex-1 py-2.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Cancel</button>

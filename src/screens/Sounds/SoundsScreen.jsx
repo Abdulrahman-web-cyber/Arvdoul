@@ -183,7 +183,7 @@ export default function SoundsScreen() {
             placeholder="Search sounds, artists, genres or BPM..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-11 pr-4 py-3 rounded-2xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+            className={`w-full pl-11 pr-4 py-3 rounded-2xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
               isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200'
             }`}
           />
@@ -272,7 +272,7 @@ export default function SoundsScreen() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 truncate">{snd.artist || 'Unknown artist'} • {snd.genre || 'Audio'}</p>
+                    <p className="text-xs text-gray-400 truncate">{snd.artist || '—'} • {snd.genre || 'Audio'}</p>
                     <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
                       <span>⏱️ {snd.duration || '—'}</span>
                       {snd.bpm != null && <span>⚡️ {snd.bpm} BPM</span>}
@@ -330,7 +330,7 @@ export default function SoundsScreen() {
               )}
               <div className="min-w-0">
                 <h4 className="font-bold text-xs text-white truncate">{currentSound.title}</h4>
-                <p className="text-[11px] text-gray-400 truncate">{currentSound.artist || 'Unknown artist'}</p>
+                <p className="text-[11px] text-gray-400 truncate">{currentSound.artist || '—'}</p>
               </div>
             </div>
 
@@ -406,7 +406,7 @@ export default function SoundsScreen() {
                     placeholder="e.g. Midnight Horizon Beat (Prod. by Me)"
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'
                     }`}
                   />

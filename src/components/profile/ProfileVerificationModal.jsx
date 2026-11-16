@@ -16,8 +16,9 @@ import { X, BadgeCheck, ShieldCheck, CheckCircle2, Clock, Sparkles, AlertCircle,
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';
+import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
-import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
+import { LEVEL_GATES, XP_RULES } from '../../shared/levelConfig.cjs';
 
 const CATEGORIES = [
   'Content Creator / Artist',
@@ -129,7 +130,7 @@ export const ProfileVerificationModal = memo(({
     try {
       const userService = getUserService();
       const res = await userService.submitVerificationApplication(userId, {
-        applicantName: profile.displayName || 'Creator',
+        applicantName: pickDisplayName([profile.displayName, profile.name], { fallback: null }) || `user ${String(userId).slice(0, 6)}`,
         username: profile.username || '',
         category,
         reason: statement.trim(),
@@ -212,10 +213,10 @@ export const ProfileVerificationModal = memo(({
 
               <div>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                  {profile.displayName || 'Verified Member'}
+                  {pickDisplayName([profile.displayName, profile.name], { fallback: null }) || `user ${String(userId || '').slice(0, 6)}`}
                 </h3>
                 <p className="text-xs font-semibold text-purple-600 dark:text-purple-400">
-                  @{profile.username || 'user'} • Authentic Verified Identity
+                  @{pickHandle([profile.username, profile.handle]) || '—'} • Reviewed Creator Identity
                 </p>
               </div>
 
@@ -225,10 +226,10 @@ export const ProfileVerificationModal = memo(({
               )}>
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  <span>Civic Credential Verified</span>
+                  <span>Creator Verification Approved</span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  This badge confirms that Arvdoul has established the authentic identity of this public entity or creator. It signifies active adherence to civic guidelines, platform reputation, and verified provenance.
+                  This badge confirms that Arvdoul reviewed this creator's verification application and approved it against the platform's creator requirements. It reflects platform review of the applicant's stated public identity, not a government-issued identity document.
                 </p>
               </div>
 
@@ -268,7 +269,7 @@ export const ProfileVerificationModal = memo(({
                     isDark ? "bg-white/[0.03] border-white/10" : "bg-slate-50 border-slate-200"
                   )}>
                     <div className="text-[11px] text-slate-400 font-semibold">Submitted Category</div>
-                    <div className="font-bold">{pendingApplication.category || 'Creator'}</div>
+                    <div className="font-bold">{pendingApplication.category || '—'}</div>
                     {pendingApplication.reason && (
                       <>
                         <div className="text-[11px] text-slate-400 font-semibold pt-1">Statement</div>
@@ -326,7 +327,7 @@ export const ProfileVerificationModal = memo(({
 
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
                       <div className="font-bold text-slate-700 dark:text-slate-300">How to level up:</div>
-                      <p>Share posts (+10 XP), receive likes and comments, stream (+1 XP/min), and build community trust.</p>
+                      <p>Share posts (+{XP_RULES.post_created.xp} XP), receive likes and comments, stream (+{XP_RULES.live_minute.xp} XP/min), and build community trust.</p>
                     </div>
                   </div>
 

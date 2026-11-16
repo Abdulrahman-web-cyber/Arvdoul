@@ -3,12 +3,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles } from "lucide-react";
-import { useAuth } from '../context/AuthContext';
 import { Loader2, AlertTriangle } from 'lucide-react';
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [post, setPost] = useState(null);
@@ -19,6 +17,7 @@ export default function PostAnalyticsScreen() {
     shares: null,
     saves: null,
     engagementRate: null,
+    trendingScore: null,
   });
 
   useEffect(() => {
@@ -42,7 +41,21 @@ export default function PostAnalyticsScreen() {
           // Reading non-existent top-level `views`/`likes` rendered a measured
           // "0" for every post. An absent stat stays null and renders '—'.
           const stat = (value) => (typeof value === 'number' ? value : null);
-          const views = stat(postDoc.stats?.views ?? postDoc.viewsCount ?? postDoc.views);
+          // Views are a sharded counter (`recordPostView` writes `counter_shards`,
+          // never `stats.views`), so reading `stats.views` showed the seeded `0`
+          // as a real total. Resolve the true sum through CountersManager, falling
+          // back to any legacy `stats.views` only when no shard exists yet (N437).
+          let views = null;
+          try {
+            const { countersManager } = await import('../utils/CountersManager.js');
+            views = await countersManager.get({
+              docPath: `posts/${postId}`,
+              field: 'views',
+              fallback: stat(postDoc.stats?.views) ?? 0,
+            });
+          } catch {
+            views = stat(postDoc.stats?.views);
+          }
           const likes = stat(postDoc.stats?.likes ?? postDoc.likesCount);
           const comments = stat(postDoc.stats?.comments ?? postDoc.commentsCount);
           const shares = stat(postDoc.stats?.shares ?? postDoc.sharesCount);
@@ -55,7 +68,13 @@ export default function PostAnalyticsScreen() {
             ? ((totalEngagements / views) * 100).toFixed(1)
             : null;
 
-          setMetrics({ views, likes, comments, shares, saves, engagementRate });
+          // The scheduler (`functions/feed.js#processScoreUpdates`) writes a real
+          // `trendingScore` on every public published post. Show it when present;
+          // an absent score stays null (rendered "Unavailable") rather than a
+          // "High/Medium/Normal" bucket invented from the view count.
+          const trendingScore = stat(postDoc.trendingScore);
+
+          setMetrics({ views, likes, comments, shares, saves, engagementRate, trendingScore });
         }
       } catch (err) {
         console.warn('Failed to load post analytics:', err);
@@ -123,7 +142,7 @@ export default function PostAnalyticsScreen() {
                 {post.content || post.text || post.caption || 'No text content'}
               </p>
               <div className="mt-2 text-xs text-gray-500 flex items-center gap-4">
-                <span>Created: {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : 'Recent'}</span>
+                <span>Created: {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : '—'}</span>
               </div>
             </div>
           </div>
@@ -193,10 +212,10 @@ export default function PostAnalyticsScreen() {
             <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Sparkles className="w-4 h-4 text-purple-500" />
-                <span className="text-sm font-medium">Virality Score</span>
+                <span className="text-sm font-medium">Trending Score</span>
               </div>
               <span className="font-bold text-sm">
-                {metrics.views == null ? 'Unavailable' : metrics.views > 1000 ? 'High' : metrics.views > 100 ? 'Medium' : 'Normal'}
+                {metrics.trendingScore == null ? 'Unavailable' : metrics.trendingScore.toFixed(2)}
               </span>
             </div>
           </div>

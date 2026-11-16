@@ -11,6 +11,7 @@ import { MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2, Pin, Heart
 import commentService from '../services/commentService.js';
 import notificationsService from '../services/notificationsService.js';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../utils/avatarUtils.js';
+import { pickDisplayName, resolveActorName } from '../services/profileReadModel.js';
 import userService from '../services/userService.js';
 import storageService from '../services/storageService.js';
 import { triggerHaptic } from '../utils/haptics';
@@ -610,7 +611,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
     <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900 backdrop-blur-sm bg-opacity-90">
       <div className="flex gap-2">
         <img
-          src={getSafeAvatarUrl(currentUser?.photoURL, currentUser?.displayName || 'User', currentUser?.uid)}
+          src={getSafeAvatarUrl(currentUser?.photoURL, pickDisplayName([currentUser?.displayName], { fallback: 'You' }), currentUser?.uid)}
           alt=""
           className="w-9 h-9 rounded-full object-cover ring-2 ring-purple-500/30"
         />
@@ -623,7 +624,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
               value={content}
               onChange={handleChange}
               placeholder={placeholder}
-              className="w-full p-2 pr-20 rounded-2xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white resize-none text-sm focus:ring-2 focus:ring-purple-500/50 transition-shadow"
+              className="w-full p-2 pr-20 rounded-2xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white resize-none text-sm focus:ring-2 focus:ring-arvdoul-purple/50 transition-shadow"
               rows={2}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit('text'); } }}
             />
@@ -685,7 +686,7 @@ const SearchBar = ({ onSearch, onClose }) => {
           placeholder="Search comments..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="flex-1 p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-purple-500/50"
+          className="flex-1 p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-arvdoul-purple/50"
           autoFocus
         />
         <div className="flex gap-2">
@@ -846,12 +847,17 @@ const CommentItem = memo(({
   }, [childrenIds, byId, blockedUserIds, comment]);
 
   const timeAgo = useMemo(() => {
-    if (!comment?.createdAt) return 'just now';
+    // No createdAt means the comment's age is unknown; return '' so the header
+    // omits it rather than claiming the comment was posted "just now".
+    if (!comment?.createdAt) return '';
     try {
       const date = comment.createdAt?.toDate?.() || new Date(comment.createdAt);
+      if (Number.isNaN(date.getTime())) return '';
       return formatDistanceToNow(date, { addSuffix: true, locale: enUS });
-    } catch { return 'just now'; }
+    } catch { return ''; }
   }, [comment?.createdAt]);
+
+  const commentDisplayName = resolveActorName([comment?.userName], comment?.userId);
 
   const avatarUrl = useMemo(() => {
     if (!comment) return '';
@@ -908,19 +914,19 @@ const CommentItem = memo(({
       )}
       <div className="flex gap-2 py-2 group">
         <button onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} className="flex-shrink-0">
-          <img src={getSafeAvatarUrl(avatarUrl, comment.userName || 'User', comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
+          <img src={getSafeAvatarUrl(avatarUrl, commentDisplayName, comment.userId)} alt="" className="w-9 h-9 rounded-full object-cover ring-1 ring-purple-300/50 dark:ring-purple-500/30" onError={(e) => { e.target.src = generateDefaultAvatarSvg(comment.userId, comment.userName); }} />
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-bold text-sm dark:text-white truncate">{comment.userName || 'User'}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>
+            <span className="font-bold text-sm dark:text-white truncate">{commentDisplayName}</span>
+            {timeAgo && <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>}
             {comment.isEdited && (
               <button onClick={() => onToggleHistory(comment)} className="text-[10px] text-purple-400 underline hover:text-purple-600 transition-colors">edited</button>
             )}
           </div>
           {isEditing ? (
             <div className="mt-1 space-y-2">
-              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500/50" rows={2} autoFocus />
+              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple/50" rows={2} autoFocus />
               <div className="flex gap-2">
                 <button onClick={handleSaveEdit} className="px-3 py-1 rounded-full bg-purple-600 text-white text-xs hover:bg-purple-700 transition-colors">Save</button>
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1 rounded-full border dark:border-gray-700 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
@@ -1125,6 +1131,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         limit: COMMENTS_PAGE_SIZE,
         sortBy: ranking,
         startAfter: reset ? null : postState.nextCursor,
+        viewerId: currentUser?.uid,
       });
       if (!mountedRef.current) return;
       if (result.success) {
@@ -1184,11 +1191,11 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
           }
         }
       }
-    }, { parentId: null, limit: COMMENTS_PAGE_SIZE });
+    }, { parentId: null, limit: COMMENTS_PAGE_SIZE, viewerId: currentUser?.uid });
     return () => {
       if (typeof unsubscribeRef.current === 'function') unsubscribeRef.current();
     };
-  }, [isOpen, postId, prependRoot, addReply, updateComment]);
+  }, [isOpen, postId, prependRoot, addReply, updateComment, currentUser?.uid]);
 
   // ── Offline queue ───────────────────────────────────
   useEffect(() => {
@@ -1221,6 +1228,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
         limit: COMMENTS_PAGE_SIZE,
         sortBy: ranking,
         startAfter: postState.nextCursor,
+        viewerId: currentUser?.uid,
       });
       if (!mountedRef.current) return;
       if (result.success) appendComments(postId, result.comments, result.hasMore, result.nextCursor);
@@ -1356,6 +1364,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       const result = await commentService.getReplies(commentId, {
         limit: REPLIES_PAGE_SIZE,
         startAfter,
+        viewerId: currentUser?.uid,
       });
       if (!mountedRef.current) return;
       if (result.success) {
@@ -1683,7 +1692,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 <select
                   value={ranking}
                   onChange={(e) => setRanking(e.target.value)}
-                  className="text-xs bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1 border-0 dark:text-white focus:ring-2 focus:ring-purple-500/50"
+                  className="text-xs bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1 border-0 dark:text-white focus:ring-2 focus:ring-arvdoul-purple/50"
                 >
                   <option value="best">Best</option>
                   <option value="newest">Newest</option>
@@ -1791,7 +1800,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             {replyTarget && (
               <div className="border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm p-2">
                 <div className="flex justify-between items-center mb-1 px-2">
-                  <span className="text-xs text-purple-400">Replying to @{replyTarget.userName || 'user'}</span>
+                  <span className="text-xs text-purple-400">Replying to @{resolveActorName([replyTarget.userName], replyTarget.userId)}</span>
                   <button onClick={() => setReplyTarget(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
                     <X className="w-3 h-3" />
                   </button>
@@ -1799,7 +1808,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 <CommentComposer
                   onSubmit={(content, _, type, blob) => handleSubmitComment(content, replyTarget.id, type, blob)}
                   loading={false}
-                  placeholder={`Reply to ${replyTarget.userName || 'user'}...`}
+                  placeholder={`Reply to ${resolveActorName([replyTarget.userName], replyTarget.userId)}...`}
                   onTyping={handleTyping}
                   currentUser={currentUser}
                   draftKey={`reply_${replyTarget.id}`}
@@ -1824,7 +1833,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                   <select
                     value={reportReason}
                     onChange={(e) => setReportReason(e.target.value)}
-                    className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500/50"
+                    className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800 focus:ring-2 focus:ring-arvdoul-purple/50"
                   >
                     <option value="">Select reason...</option>
                     <option value="spam">Spam</option>

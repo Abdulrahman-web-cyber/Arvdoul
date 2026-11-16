@@ -333,7 +333,10 @@ export default function SponsoredPostCard({
               <span className="text-[11px] font-mono text-white/80 bg-black/60 backdrop-blur px-2 py-0.5 rounded-md">
                 arvdoul.com/sponsor
               </span>
-              <div className="flex items-center gap-1.5 text-xs font-bold text-white bg-purple-600/90 backdrop-blur px-3 py-1 rounded-lg group-hover:bg-purple-600 transition">
+              <div
+                className="flex items-center gap-1.5 text-xs font-bold text-white backdrop-blur px-3 py-1 rounded-lg group-hover:opacity-90 transition"
+                style={{ background: BRAND_GRADIENT }}
+              >
                 <span>{ad.ctaText || 'Learn More'}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </div>

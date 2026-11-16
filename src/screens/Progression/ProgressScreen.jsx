@@ -154,7 +154,7 @@ export default function ProgressScreen() {
               }`}
             >
               <div
-                className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-700 rounded-full"
+                className="h-full bg-arvdoul-gradient transition-all duration-700 rounded-full"
                 style={{ width: `${unknownNumber(levelInfo?.progress) ?? 0}%` }}
                 role="progressbar"
                 aria-valuenow={unknownNumber(levelInfo?.progress) ?? 0}
@@ -213,7 +213,7 @@ export default function ProgressScreen() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {upcomingPerks.map((perk) => (
               <div
-                key={perk.minLevel}
+                key={`${perk.minLevel}-${perk.title}`}
                 className={`p-4 rounded-xl border flex items-start space-x-3.5 ${
                   isDark ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200'
                 }`}
@@ -261,7 +261,7 @@ export default function ProgressScreen() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {unlockedPerks.map((perk) => (
               <div
-                key={perk.minLevel}
+                key={`${perk.minLevel}-${perk.title}`}
                 className={`p-4 rounded-xl border flex items-start space-x-3.5 ${
                   isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-white border-gray-200'
                 }`}

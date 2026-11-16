@@ -10,7 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { tokens } from '../../design-system/tokens.js';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Type, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Italic, Underline, Strikethrough, Search, ChevronDown, ChevronUp, RotateCw, Copy, Layers, Sparkles, Plus } from "lucide-react";
+import { Type, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Italic, Underline, Strikethrough, Search, ChevronDown, ChevronUp, RotateCw, Sparkles, Plus } from "lucide-react";
 
 /**
  * Popular Google Fonts for quick access
@@ -70,7 +70,6 @@ const IconButton = memo(({
   disabled = false,
   size = 'md',
 }) => {
-    const { isDark } = useTheme();
   const sizeClasses = {
     sm: 'w-7 h-7',
     md: 'w-8 h-8',
@@ -180,10 +179,8 @@ Section.propTypes = {
 const FontSelector = memo(({
   fontFamily,
   onChange,
-  fontSize,
-  onSizeChange,
 }) => {
-    const { isDark } = useTheme();
+  const { isDark } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -277,10 +274,6 @@ const TextTool = memo(({
   updateSelectedText,
   handleDeleteText,
   handleQuickAddText,
-  textLayers = [],
-  onSelectLayer,
-  onDuplicateLayer,
-  onDeleteLayer,
 }) => {
     const { isDark } = useTheme();
   const [quickText, setQuickText] = useState("");
@@ -288,7 +281,6 @@ const TextTool = memo(({
     text: true,
     style: true,
     effects: false,
-    layers: false,
   });
 
   // Toggle section
@@ -725,67 +717,12 @@ const TextTool = memo(({
       )}
 
       {/* No Selection State */}
-      {!selectedText && textLayers.length === 0 && (
+      {!selectedText && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <Type className="w-12 h-12 text-white/20 mb-3" />
           <p className="text-sm text-white/50">No text selected</p>
           <p className="text-xs text-white/30 mt-1">Add text or select existing text to edit</p>
         </div>
-      )}
-
-      {/* Text Layers List */}
-      {textLayers.length > 0 && (
-        <Section
-          title="Text Layers"
-          icon={Layers}
-          expanded={expandedSections.layers}
-          onToggle={() => toggleSection('layers')}
-          badge={textLayers.length}
-        >
-          <div className="space-y-2">
-            {textLayers.map((layer) => (
-              <div
-                key={layer.id}
-                onClick={() => onSelectLayer?.(layer.id)}
-                className={`
-                  flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors
-                  ${selectedText?.id === layer.id
-                    ? 'bg-purple-500/20 border border-purple-500/30'
-                    : 'bg-white/5 hover:bg-white/10 border border-transparent'
-                  }
-                `}
-              >
-                <Type className={`w-4 h-4 text-white/60 flex-shrink-0`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{layer.text}</p>
-                  <p className="text-[10px] text-white/40">{layer.fontFamily} • {layer.fontSize}px</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicateLayer?.(layer.id);
-                    }}
-                    className={`p-1.5 rounded ${isDark ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
-                    aria-label="Duplicate layer"
-                  >
-                    <Copy className={`w-3.5 h-3.5 ${isDark ? 'text-white/60' : 'text-gray-500'}`} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteLayer?.(layer.id);
-                    }}
-                    className="p-1.5 rounded hover:bg-red-500/20"
-                    aria-label="Delete layer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
       )}
     </div>
   );
@@ -802,14 +739,6 @@ TextTool.propTypes = {
   handleDeleteText: PropTypes.func,
   /** Function to add new text */
   handleQuickAddText: PropTypes.func,
-  /** Array of all text layers */
-  textLayers: PropTypes.arrayOf(PropTypes.object),
-  /** Function to select a layer by ID */
-  onSelectLayer: PropTypes.func,
-  /** Function to duplicate a layer */
-  onDuplicateLayer: PropTypes.func,
-  /** Function to delete a layer */
-  onDeleteLayer: PropTypes.func,
 };
 
 export default TextTool;

@@ -1,6 +1,7 @@
 // src/screens/SubscriptionScreen.jsx
 
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { brandCanvasBackground } from '../design-system/tokens.js';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -11,33 +12,38 @@ import { getSubscriptionStatus, createSubscription, cancelSubscription } from '.
 import { SUBSCRIPTION_TIERS } from '../shared/levelConfig.cjs';
 
 // Ids, prices and monthly coin grants come from the shared config — the same
-// table `functions/monetization.js#createSubscription` validates against. Only
-// the marketing copy (name, description, feature bullets, accent colour) is
-// presentation. A hardcoded price or tier id here drifts from the server: the
-// previous table advertised a higher top-tier price, an `enterprise` id, and a
-// 10k-coin grant, while the server charges less for `premium`, grants half that
-// and rejects an unknown tier id outright.
+// table `functions/monetization.js#createSubscription` validates against. A
+// hardcoded price or tier id here drifts from the server: the previous table
+// advertised a higher top-tier price, an `enterprise` id, and a 10k-coin grant,
+// while the server charges less for `premium`, grants half that and rejects an
+// unknown tier id outright.
+//
+// Only the name/description/accent colour is presentation. The feature bullets
+// list ONLY what the server actually grants: the monthly coin credit
+// (`creditSubscriptionCoins`). Nothing in the codebase reads a subscription to
+// gate ads, support priority, badges, analytics, discounts or branding, so
+// advertising those would be a fabricated capability (N422).
 const TIER_PRESENTATION = {
   basic: {
     name: 'Basic',
     description: 'For casual users who want an enhanced experience',
     popular: false,
     color: 'from-blue-500 to-cyan-500',
-    features: ['Ad-free browsing', 'Priority support', 'Enhanced privacy controls', 'Custom profile themes'],
+    features: [],
   },
   pro: {
     name: 'Pro',
     description: 'For content creators who want to grow their audience',
     popular: true,
     color: 'from-purple-500 to-pink-500',
-    features: ['Everything in Basic', 'Creator badge', 'Advanced analytics', 'Boost discounts', 'Early access to features'],
+    features: [],
   },
   premium: {
     name: 'Premium',
     description: 'For professional creators and businesses',
     popular: false,
     color: 'from-orange-500 to-red-500',
-    features: ['Everything in Pro', 'Priority payouts', 'Dedicated support', 'Custom branding'],
+    features: [],
   },
 };
 
@@ -123,9 +129,7 @@ export default function SubscriptionScreen() {
   }, []);
 
   const backgroundStyle = useMemo(() => ({
-    background: isDark
-      ? 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.1) 0%, transparent 50%), #03071B'
-      : 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.05) 0%, transparent 50%), #F6F8FC',
+    background: brandCanvasBackground(isDark),
   }), [isDark]);
 
   return (

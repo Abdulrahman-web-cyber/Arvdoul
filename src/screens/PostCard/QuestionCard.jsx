@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { unknownNumber } from '../../lib/unknownNumber.js';
 import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Send, MessageCircle, X, Save, ChevronDown, ChevronUp, Lock, Sparkles, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { getReputationBand } from '../../services/levelSystemService.js';
+import { resolveActorName } from '../../services/profileReadModel.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -23,13 +25,12 @@ function formatRelativeTime(date) {
   return `${days}d ago`;
 }
 
-// Helper: get reputation level badge
+// Helper: get reputation badge from the canonical 0-100 reputation bands.
+// A local threshold table (100/500/1000/5000) once diverged from the canonical
+// 0-100 scale, so the badge could never fire below 100 and mislabelled above it.
 function getReputationLevel(reputation) {
-  if (reputation >= 5000) return { label: 'Legend', color: '#fbbf24' };
-  if (reputation >= 1000) return { label: 'Master', color: '#a855f7' };
-  if (reputation >= 500) return { label: 'Expert', color: '#22c55e' };
-  if (reputation >= 100) return { label: 'Skilled', color: '#3b82f6' };
-  return null;
+  if (reputation == null) return null;
+  return getReputationBand(reputation);
 }
 
 // Vote delta calculator (prevents desync)
@@ -133,9 +134,9 @@ const AnswerItem = React.memo(({
     }
   };
 
-  const reputationLevel = getReputationLevel(unknownNumber(answer.userReputation) ?? 0);
+  const reputationLevel = getReputationLevel(unknownNumber(answer.userReputation));
   const timeAgo = formatRelativeTime(answer.createdAt);
-  const safeUserName = answer.userName || 'Anonymous';
+  const safeUserName = resolveActorName([answer.userName], answer.userId);
   const safeUserPhoto = answer.userPhoto || '/assets/default-profile.png';
 
   return (
@@ -159,7 +160,7 @@ const AnswerItem = React.memo(({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold" style={{ color: tokens.text }}>{safeUserName}</span>
             {reputationLevel && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${reputationLevel.color}20`, color: reputationLevel.color }}>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${tokens.gold}20`, color: tokens.gold }}>
                 {reputationLevel.label}
               </span>
             )}
@@ -336,7 +337,7 @@ const QuestionCard = React.memo(({
   const buttonGlow = `0 0 8px rgba(236, 72, 153, 0.4)`;
   const cardShadow = tokens.shadowDirectional || '0 8px 24px -6px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.1)';
 
-  const reputationLevel = getReputationLevel(unknownNumber(userReputation) ?? 0);
+  const reputationLevel = getReputationLevel(unknownNumber(userReputation));
 
   // Guard after hooks
   if (!question) {
@@ -417,7 +418,7 @@ const QuestionCard = React.memo(({
             {unknownNumber(userReputation) ?? '—'}
           </span>
           {reputationLevel && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${reputationLevel.color}20`, color: reputationLevel.color }}>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${tokens.gold}20`, color: tokens.gold }}>
               {reputationLevel.label}
             </span>
           )}

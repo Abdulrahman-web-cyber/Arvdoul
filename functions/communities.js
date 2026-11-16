@@ -439,17 +439,19 @@ exports.communityModerate = functions.https.onCall(async (data, context) => {
 //  createCommunityPost — authoritative membership + content-approval gate
 //
 //  The post document itself is client-creatable (the `posts` rule pins
-//  authorId/authorIsPrivate), but the community's derived counters
-//  (`stats.postCount`/`activityScore`) live on the now server-only community
-//  document, and `status: 'pending'` must be decided by the community's
-//  content-approval setting, not by the caller. Both are resolved here.
+//  authorId/authorIsPrivate), but `status: 'pending'` must be decided by the
+//  community's content-approval setting, not by the caller, so it is resolved
+//  here. The community's derived counters (`stats.postCount`/`activityScore`)
+//  are NOT written here — `functions/communityPostCounters.js#onCommunityPostWrite`
+//  is their single writer (a net-delta trigger), so a delete/unpublish also
+//  decrements them (N451).
 // ----------------------------------------------------------------------
 exports.createCommunityPost = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'createCommunityPost', 60, 60000);
 
   const { communityId, post } = data || {};
-  const { ref, data: community } = await loadCommunity(communityId);
+  const { data: community } = await loadCommunity(communityId);
   const membership = community.members?.[uid];
   if (!membership) throw httpError('permission-denied', 'Must be a member to post.');
   if (community.moderation?.bannedUsers?.includes(uid)) {
@@ -490,11 +492,6 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
     isDeleted: false,
   };
   await postRef.set(newPost);
-  await ref.update({
-    'stats.postCount': FieldValue.increment(1),
-    'stats.activityScore': FieldValue.increment(10),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
 
   return { success: true, post: { ...newPost, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } };
 });

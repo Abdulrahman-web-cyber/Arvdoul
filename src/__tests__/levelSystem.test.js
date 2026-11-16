@@ -54,8 +54,8 @@ describe('level curve (pure math)', () => {
     expect(getPerksForLevel(4).some((p) => p.title === 'Live Streaming')).toBe(false);
     expect(getPerksForLevel(5).some((p) => p.title === 'Live Streaming')).toBe(true);
     expect(getPerksForLevel(10).some((p) => p.title === 'Creator Withdrawals')).toBe(true);
-    expect(getPerksForLevel(19).some((p) => p.title === 'Builder Identity')).toBe(false);
-    expect(getPerksForLevel(20).some((p) => p.title === 'Builder Identity')).toBe(true);
+    expect(getPerksForLevel(19).some((p) => p.title === 'Builder Rank')).toBe(false);
+    expect(getPerksForLevel(20).some((p) => p.title === 'Builder Rank')).toBe(true);
   });
 
   test('lifetime rewards accumulate coin rewards', () => {

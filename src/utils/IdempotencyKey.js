@@ -97,4 +97,5 @@ class IdempotencyStore {
 
 export { IdempotencyStore };
 export const idempotencyStore = new IdempotencyStore();
+export const newIdempotencyKey = randomId;
 export default idempotencyStore;

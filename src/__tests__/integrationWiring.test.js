@@ -29,8 +29,19 @@ describe('video feed wiring', () => {
 
   test('VideoFeed resolves the viewer follow state and passes it down', () => {
     const src = read('src/components/Videos/VideoFeed.jsx');
-    expect(src).toContain('getFollowing');
-    expect(src).toMatch(/followedByViewer=\{followingIds\.has/);
+    // Canonical batched per-pair edge read, never a scan of the viewer's graph.
+    expect(src).toContain('getFollowStates');
+    // The resolved state (follow + pending request) is passed to the card; a
+    // private target's pending request must not render as a plain "Follow".
+    expect(src).toMatch(/followedByViewer=\{Boolean\(followStates\.get/);
+    expect(src).toMatch(/requestPending=\{followStates\.get/);
+  });
+
+  test('VideoCard renders a pending follow request distinctly', () => {
+    const src = read('src/components/Videos/VideoCard.jsx');
+    expect(src).toContain('requestPending');
+    expect(src).toMatch(/isRequested \? 'Requested' : 'Follow'/);
+    expect(src).toContain('cancelFollowRequest');
   });
 
   test('VideoCard accepts followedByViewer instead of hardcoding false', () => {
@@ -99,8 +110,13 @@ describe('search reindex completeness', () => {
     expect(reindex).toContain('buildUserRecord');
     expect(reindex).toContain('buildPostRecord');
     expect(reindex).toContain('buildVideoRecord');
-    expect(reindex).toMatch(/collection\('posts'\)/);
-    expect(reindex).toMatch(/collection\('videos'\)/);
+    // Each collection is walked by the shared paginating helper (N488), which
+    // owns the `db.collection(...)` access.
+    expect(reindex).toMatch(/reindexCollection\('posts'/);
+    expect(reindex).toMatch(/reindexCollection\('videos'/);
+    const helper = src.slice(src.indexOf('async function reindexCollection'), src.indexOf('exports.batchReindex'));
+    expect(helper).toMatch(/firestore\.collection\(collectionName\)/);
+    expect(helper).toMatch(/startAfter\(cursor\)/);
   });
 });
 
@@ -309,6 +325,21 @@ describe('post-embedded Q&A is wired end-to-end', () => {
     const callables = read('src/services/callableService.js');
     expect(callables).toContain("ADD_ANSWER: 'addAnswer'");
     expect(callables).toContain("ACCEPT_ANSWER: 'acceptAnswer'");
+  });
+
+  test('addAnswer honours the client idempotency key so a retry cannot double-post', () => {
+    // QuestionCard already generates a per-submit `idempotencyKey`; the callable
+    // must read it (it was ignored, so a dropped response + retry appended a
+    // second answer). The dedupe doc is replayed inside the same transaction.
+    const mod = read('functions/questions.js');
+    const body = mod.slice(mod.indexOf('exports.addAnswer ='), mod.indexOf('exports.editAnswer ='));
+    expect(body).toContain('idempotencyKey');
+    expect(body).toContain("collection('answer_idempotency')");
+    expect(body).toContain('dedupeSnap.exists');
+    // The client must actually forward the key.
+    const svc = read('src/services/firestoreService.js');
+    const svcBody = svc.slice(svc.indexOf('async addAnswer('), svc.indexOf('async editAnswer('));
+    expect(svcBody).toContain('idempotencyKey');
   });
 
   test('answer_votes is server-write and self-read only', () => {

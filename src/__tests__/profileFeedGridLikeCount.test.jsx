@@ -2,10 +2,11 @@
  * The profile feed grid's like count must not double-count a post that arrived
  * already liked by the viewer. The server increments `posts/{id}.likes` in the
  * same transaction that writes the viewer's `liked_posts/{id}` marker, so the
- * reported count already includes the viewer's own like. The grid used to add a
- * flat `+1` whenever the local like overlay was true — and the overlay is now
- * seeded from the server's `isLiked`, so every pre-liked post rendered one too
- * many likes. This pins the baseline-delta behaviour.
+ * reported count already includes the viewer's own like. The grid's viewer-like
+ * state is resolved from that real subcollection (`getLikedPostIds`, one bounded
+ * batch read) — a post-level `isLiked`/`likedByMe`/`hasLiked` flag is never
+ * written, so seeding from it always read false. This pins the baseline-delta
+ * behaviour against the real server like set.
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -43,17 +44,20 @@ import ProfileFeedGrid from '../components/profile/ProfileFeedGrid';
 let firestoreService;
 let likeSpy;
 let unlikeSpy;
+let likedIds;
 
 beforeAll(async () => {
   ({ firestoreService } = await import('../services/firestoreService.js'));
 });
 
 beforeEach(() => {
+  likedIds = new Set();
   likeSpy = jest.spyOn(firestoreService, 'likePost').mockResolvedValue({ success: true });
   unlikeSpy = jest.spyOn(firestoreService, 'unlikePost').mockResolvedValue({ success: true });
   jest.spyOn(firestoreService, 'savePost').mockResolvedValue({ success: true });
   jest.spyOn(firestoreService, 'unsavePost').mockResolvedValue({ success: true });
   jest.spyOn(firestoreService, 'sharePost').mockResolvedValue({ success: true });
+  jest.spyOn(firestoreService, 'getLikedPostIds').mockImplementation(async () => new Set(likedIds));
 });
 
 afterEach(() => {
@@ -71,17 +75,19 @@ const likesFor = (id) => document.querySelector(`[data-testid="like-count-${id}"
 
 describe('ProfileFeedGrid like count is server-authoritative', () => {
   test('a post already liked by the viewer is not double-counted', async () => {
-    renderGrid([{ id: 'p1', type: 'photo', likes: 10, isLiked: true, media: ['x.jpg'] }]);
-    await waitFor(() => expect(likesFor('p1')).toBe('10'));
+    likedIds = new Set(['p1']);
+    renderGrid([{ id: 'p1', type: 'photo', likes: 10, media: ['x.jpg'] }]);
+    await waitFor(() => expect(screen.getByTestId('like-button-p1')).toHaveAttribute('aria-pressed', 'true'));
+    expect(likesFor('p1')).toBe('10');
   });
 
   test('a post not liked by the viewer shows the raw server count', async () => {
-    renderGrid([{ id: 'p2', type: 'photo', likes: 10, isLiked: false, media: ['x.jpg'] }]);
+    renderGrid([{ id: 'p2', type: 'photo', likes: 10, media: ['x.jpg'] }]);
     await waitFor(() => expect(likesFor('p2')).toBe('10'));
   });
 
   test('liking a post this session moves the count by exactly one', async () => {
-    renderGrid([{ id: 'p3', type: 'photo', likes: 10, isLiked: false, media: ['x.jpg'] }]);
+    renderGrid([{ id: 'p3', type: 'photo', likes: 10, media: ['x.jpg'] }]);
     await waitFor(() => expect(likesFor('p3')).toBe('10'));
     fireEvent.click(screen.getByTestId('like-button-p3'));
     await waitFor(() => expect(likesFor('p3')).toBe('11'));
@@ -89,10 +95,12 @@ describe('ProfileFeedGrid like count is server-authoritative', () => {
   });
 
   test('unliking a pre-liked post moves the count by exactly one', async () => {
-    renderGrid([{ id: 'p4', type: 'photo', likes: 10, isLiked: true, media: ['x.jpg'] }]);
-    await waitFor(() => expect(likesFor('p4')).toBe('10'));
+    likedIds = new Set(['p4']);
+    renderGrid([{ id: 'p4', type: 'photo', likes: 10, media: ['x.jpg'] }]);
+    await waitFor(() => expect(screen.getByTestId('like-button-p4')).toHaveAttribute('aria-pressed', 'true'));
+    expect(likesFor('p4')).toBe('10');
     fireEvent.click(screen.getByTestId('like-button-p4'));
+    await waitFor(() => expect(unlikeSpy).toHaveBeenCalledWith('p4', 'viewer'));
     await waitFor(() => expect(likesFor('p4')).toBe('9'));
-    expect(unlikeSpy).toHaveBeenCalledWith('p4', 'viewer');
   });
 });

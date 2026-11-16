@@ -154,9 +154,12 @@ class PassportService {
       issueDate,
     });
 
-    const sanitizedUsername = (profile.username || 'CITIZEN').toUpperCase().replace(/[^A-Z0-9]/g, '<');
-    const mrtdLine1 = `P<ARV${sanitizedUsername.padEnd(20, '<')}`.slice(0, 44);
-    const mrtdLine2 = `${citizenId.replace(/[^A-Z0-9]/g, '<')}5ARV0001014M9912316<<<<<<<<<<<<<<02`.slice(0, 44);
+    // The "MRZ" is a stylised identity strip, not an ICAO 9303 machine-readable
+    // zone: the platform holds no passport number, sex or birth-date data, so
+    // the check digits/expiry tail a real MRZ requires are not synthesized.
+    const sanitizedUsername = (profile.username || '').toUpperCase().replace(/[^A-Z0-9]/g, '<');
+    const identityLine1 = `ARVDOUL<${sanitizedUsername.padEnd(20, '<')}`.slice(0, 44);
+    const identityLine2 = citizenId.replace(/[^A-Z0-9]/g, '<').slice(0, 44);
 
     return {
       userId: targetUserId,
@@ -182,6 +185,10 @@ class PassportService {
       capabilities,
       isVerified,
       isCreator,
+      // The account's real status (active / suspended / deleted / …). The
+      // passport must report this, never a hardcoded "Active Citizen". Absent
+      // status stays null so the UI renders "—" instead of assuming active.
+      accountStatus: (profile.accountStatus || profile.accountState || null),
       // The creator suite is gated by the `creatorInfo` scope.
       creatorTier: capabilities.canViewCreatorInfo || isOwner ? (projected.creatorTier || null) : null,
       royalEligibility: {
@@ -191,7 +198,7 @@ class PassportService {
       },
       visaStamps,
       nationalMotto: 'Veritas, Civitas, Concordia',
-      mrtdLines: [mrtdLine1, mrtdLine2],
+      identityLines: [identityLine1, identityLine2],
     };
   }
 
@@ -220,7 +227,7 @@ class PassportService {
         title: 'Genesis Citizen',
         ministry: 'Ministry of State Registry',
         category: 'Founding',
-        issuedAt: issueDate || 'Genesis Era',
+        issuedAt: issueDate,
         verified: true,
         sealType: 'gold',
         icon: '🏛️',
@@ -228,18 +235,26 @@ class PassportService {
       });
     }
 
-    // 2. Sovereign Border Clearance
+    // 2. Sovereign Border Clearance — issued only for a real, non-fabricated
+    // security credential. There is no cryptographic peer-clearance system, so
+    // the stamp is not unconditionally "verified"; it is earned by a verified
+    // identity or a resolved (non-placeholder) account, and its copy makes no
+    // cryptographic claim the platform cannot back (N408).
+    const hasIdentityCredential = isVerified === true
+      || (isCreator === true && Boolean(profile.username));
     stamps.push({
       id: 'stamp_border',
       code: 'ARV-SBC-PASS',
       title: 'Border Clearance',
       ministry: 'Sovereign Border Agency',
       category: 'Security',
-      issuedAt: 'Perpetual',
-      verified: true,
+      issuedAt: hasIdentityCredential ? issueDate : null,
+      verified: hasIdentityCredential,
       sealType: 'emerald',
       icon: '🛡️',
-      description: 'Permanent right of passage and cryptographic peer clearance across Arvdoul.',
+      description: hasIdentityCredential
+        ? 'Recognised for a verified account with established standing across Arvdoul.'
+        : 'Requires a verified identity or established creator standing.',
     });
 
     // 3. Civic Vanguard Stamp (Level 10+ or 7+ day streak)
@@ -251,7 +266,7 @@ class PassportService {
       title: 'Civic Vanguard',
       ministry: 'Chancellery of Civic Merit',
       category: 'Civic',
-      issuedAt: hasVanguard ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasVanguard ? issueDate : null,
       verified: hasVanguard,
       sealType: 'indigo',
       icon: '⚔️',
@@ -268,7 +283,7 @@ class PassportService {
       title: 'Creative Laureate',
       ministry: 'Guild of Sovereign Media',
       category: 'Creative',
-      issuedAt: hasCreative ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasCreative ? issueDate : null,
       verified: hasCreative,
       sealType: 'amber',
       icon: '🎨',
@@ -285,7 +300,7 @@ class PassportService {
       title: 'Diplomatic Envoy',
       ministry: 'Diplomatic Mission Corps',
       category: 'Diplomatic',
-      issuedAt: hasDiplomatic ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasDiplomatic ? issueDate : null,
       verified: hasDiplomatic,
       sealType: 'ruby',
       icon: '📜',
@@ -303,7 +318,7 @@ class PassportService {
       title: 'Honors Legion',
       ministry: 'High Council of Honors',
       category: 'Prestige',
-      issuedAt: hasHonors ? (issueDate || 'Epoch I') : null,
+      issuedAt: hasHonors ? issueDate : null,
       verified: hasHonors,
       sealType: 'gold',
       icon: '👑',

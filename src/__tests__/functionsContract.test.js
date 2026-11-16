@@ -98,7 +98,13 @@ describe('Cloud Functions deploy contract', () => {
     // deployed standalone.
     // xpAward.js is the shared XP-award routine required by levelSystem.js,
     // monetization.js and polls.js (no exports.* of its own).
-    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js']);
+    // coinBalance.js is the shared balance accessor (N324), required by the
+    // money-path modules, never deployed standalone.
+    // notificationWriter.js is the trusted server-side in-app notification
+    // writer (N382), required by the functions that prove the event.
+    // userMetrics.js computes the real engagement metrics (N432) that
+    // evaluateAchievements scores, required by levelSystem.js.
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js', 'coinBalance.js', 'notificationWriter.js', 'userMetrics.js']);
     const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.

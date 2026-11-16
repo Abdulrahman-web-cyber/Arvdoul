@@ -319,7 +319,9 @@ class EnterpriseFirestoreService {
         status: status,
         isDeleted: false,
         monetization: postData.monetization || null,
-        boostData: postData.boostData || null,
+        // boostData is server-owned (set only by the `boostPost` callable after
+        // it debits coins); a create must never seed it (firestore.rules pins
+        // `boostData == null` on create).
         scheduledTime: scheduledTime || null,
         publishedAt: (!isScheduled && status === 'published') ? serverTimestamp() : null,
         expiresAt: expiresAt || null,
@@ -400,7 +402,10 @@ class EnterpriseFirestoreService {
       const postSnap = await getDoc(postRef);
       if (!postSnap.exists()) return { success: false, error: 'Post not found', code: 'not-found' };
       const postData = { id: postSnap.id, ...postSnap.data() };
-      await countersManager.apply({ data: postData, docPath: `posts/${postId}`, fields: ['likes', 'saves', 'shares', 'gifts', 'giftValue'] });
+      // `comments` is sharded-incremented (docPath `posts/{id}`) by
+      // commentService/firestoreService; omitting it here left the post-detail
+      // view rendering the seeded `0` while the feed showed the real count.
+      await countersManager.apply({ data: postData, docPath: `posts/${postId}`, fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'] });
       this.cache.set(postId, { ...postData, _cachedAt: Date.now() });
       return { success: true, post: postData, cached: false };
     } catch (error) {
@@ -467,11 +472,14 @@ class EnterpriseFirestoreService {
       
       const q = query(postsRef, ...conditions);
       const snap = await getDocs(q);
-      const posts = await Promise.all(snap.docs.map(async (doc) => {
-        const data = { id: doc.id, ...doc.data() };
-        await countersManager.apply({ data, docPath: `posts/${doc.id}`, fields: ['likes', 'saves', 'shares', 'gifts', 'giftValue'] });
-        return data;
-      }));
+      const posts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      // Batched shard overlay (one `getAll` per field-chunk) — `comments` is
+      // sharded-incremented too, so it must be in the field set (see getPost).
+      await countersManager.applyAll({
+        items: posts,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'],
+      });
       const hasMore = snap.docs.length === (options.limit || 10);
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
       
@@ -629,7 +637,9 @@ class EnterpriseFirestoreService {
     }
     const snap = await getDocs(q);
     const savedEntries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const posts = savedEntries.map(entry => entry.snapshot);
+    // Keep the save timestamp alongside the snapshot: it was dropped, so the
+    // saved-items screen could never show when a post was saved.
+    const posts = savedEntries.map(entry => ({ ...(entry.snapshot || {}), savedAt: entry.savedAt || null }));
     const hasMore = snap.docs.length === (options.limit || 20);
     const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
     return { success: true, posts, hasMore, nextCursor };
@@ -897,7 +907,6 @@ class EnterpriseFirestoreService {
           postId, userId: uid, type: 'repost', sharedAt: serverTimestamp(),
         });
       } catch (e) { logger.warn('Repost share-counter update failed:', e?.message); }
-      try { await this.updateUserPostCount(uid, 1); } catch (e) { logger.warn('updateUserPostCount failed (repost)', { uid, error: e?.message }); }
       try {
         const { levelSystemService } = await import('./levelSystemService.js');
         levelSystemService
@@ -997,6 +1006,69 @@ class EnterpriseFirestoreService {
     const reactionDocRef = this.firestoreMethods.doc(this.firestore, 'posts', postId, CONFIG.REACTIONS_SUBCOLLECTION, userId);
     const snap = await this.firestoreMethods.getDoc(reactionDocRef);
     return { success: true, reaction: snap.exists() ? snap.data().type : null };
+  }
+
+  /**
+   * The viewer's own state for one post — liked, saved, and reaction. These
+   * live in per-user subcollection docs (`posts/{id}/likes|saves|reactions/{uid}`)
+   * that the post document itself never carries, so a card reading only the
+   * post doc can never know the viewer already liked/saved/reacted (the like
+   * only survived on the device-local registry, so it vanished on any other
+   * device or after a storage clear). Three point reads of the viewer's own
+   * docs, issued in parallel; a denied/absent read resolves to the negative.
+   */
+  async getPostViewerState(postId, userId) {
+    if (!postId || !userId) return { liked: false, saved: false, reaction: null };
+    await this.ensureInitialized();
+    const { doc, getDoc } = this.firestoreMethods;
+    const read = async (subcollection) => {
+      try {
+        const snap = await getDoc(doc(this.firestore, 'posts', postId, subcollection, userId));
+        return snap.exists() ? snap.data() : null;
+      } catch {
+        return null;
+      }
+    };
+    const [like, save, reaction] = await Promise.all([
+      read('likes'),
+      read('saves'),
+      read(CONFIG.REACTIONS_SUBCOLLECTION),
+    ]);
+    return {
+      liked: Boolean(like),
+      saved: Boolean(save),
+      reaction: reaction?.type || null,
+    };
+  }
+
+  /**
+   * Batch form of the `liked` half of `getPostViewerState` for a list of posts
+   * (a profile grid). The viewer's likes live in their own
+   * `users/{uid}/liked_posts` subcollection (the doc id IS the post id), which
+   * the rules authorise on the path's owner alone — so a bounded
+   * `documentId() in` read resolves the whole grid in one chunked query
+   * instead of one point read per post. Returns a `Set` of liked post ids.
+   */
+  async getLikedPostIds(userId, postIds) {
+    const ids = [...new Set((postIds || []).filter(Boolean))];
+    if (!userId || ids.length === 0) return new Set();
+    await this.ensureInitialized();
+    const { collection, query, where, documentId, limit: fLimit, getDocs } = this.firestoreMethods;
+    const liked = new Set();
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      try {
+        const snap = await getDocs(query(
+          collection(this.firestore, 'users', userId, 'liked_posts'),
+          where(documentId(), 'in', chunk),
+          fLimit(chunk.length)
+        ));
+        snap.forEach((d) => liked.add(d.id));
+      } catch {
+        // A denied/absent read leaves those ids unresolved (treated as not liked).
+      }
+    }
+    return liked;
   }
 
   async incrementCommentCount(postId, delta = 1) {
@@ -1233,19 +1305,6 @@ class EnterpriseFirestoreService {
     return await this.firebaseApp.getAuthInstance();
   }
 
-  async updateUserPostCount(userId, delta = 1) {
-    try {
-      await this.ensureInitialized();
-      const { doc, updateDoc, increment, serverTimestamp } = this.firestoreMethods;
-      const userRef = doc(this.firestore, 'users', userId);
-      await updateDoc(userRef, { postCount: increment(delta), updatedAt: serverTimestamp() });
-    } catch (error) {
-      // Denormalised post count; the authoritative list is posts/{id}. Log so a
-      // rules/quota failure is diagnosable rather than silently drifting.
-      logger.warn('updateUserPostCount failed; denormalised count may drift', { userId, delta, error: error?.message });
-    }
-  }
-
   invalidateCache(key) { this.cache.delete(key); }
   invalidateCachePattern(pattern) { this.cache.deletePattern(pattern); }
 
@@ -1299,6 +1358,8 @@ const firestoreService = {
   addReaction: (pid, uid, reactionType) => getFirestoreService().addReaction(pid, uid, reactionType),
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
+  getPostViewerState: (pid, uid) => getFirestoreService().getPostViewerState(pid, uid),
+  getLikedPostIds: (uid, ids) => getFirestoreService().getLikedPostIds(uid, ids),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
   getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
   addAnswer: (pid, answer, key) => getFirestoreService().addAnswer(pid, answer, key),

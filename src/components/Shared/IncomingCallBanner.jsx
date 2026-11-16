@@ -63,7 +63,7 @@ export default function IncomingCallBanner() {
       .getUserProfile(incoming.callerId)
       .then((profile) => {
         if (cancelled || !profile) return;
-        const name = profile.displayName || profile.username || 'Someone';
+        const name = profile.displayName || profile.username || `user ${String(incoming.callerId).slice(0, 6)}`;
         setCaller({
           name,
           avatar: getSafeAvatarUrl(profile.photoURL, name, incoming.callerId),

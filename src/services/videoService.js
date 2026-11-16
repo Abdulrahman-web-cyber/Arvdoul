@@ -1,7 +1,7 @@
 // src/services/videoService.js
 
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, startAfter, serverTimestamp, runTransaction, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, startAfter, serverTimestamp, runTransaction, onSnapshot, documentId } from "firebase/firestore";
 import { openDB } from 'idb';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
@@ -10,6 +10,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { pickDisplayName, deriveHandle } from './profileReadModel.js';
 import { featureFlagService } from './featureFlagService.js';
+import { newIdempotencyKey } from '../utils/IdempotencyKey.js';
 
 const VIDEO_CONFIG = {
   UPLOAD: {
@@ -228,6 +229,8 @@ class LRUCache {
 }
 
 const pendingRequests = new Map();
+// Firestore `in`/`documentId() in` queries accept at most 30 values.
+const IN_CHUNK = 30;
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of pendingRequests.entries()) {
@@ -366,6 +369,7 @@ class UltimateVideoService {
         this.fns.getMuxPlaybackUrl = cf(FUNCTIONS.GET_MUX_PLAYBACK_URL);
         this.fns.likeVideo = cf(FUNCTIONS.LIKE_VIDEO);
         this.fns.shareVideo = cf(FUNCTIONS.SHARE_VIDEO);
+        this.fns.toggleVideoSave = cf(FUNCTIONS.TOGGLE_VIDEO_SAVE);
         this.fns.recordVideoView = cf(FUNCTIONS.RECORD_VIDEO_VIEW);
         this.fns.payPerView = cf(FUNCTIONS.PAY_PER_VIEW);
         this.fns.sendTip = cf(FUNCTIONS.SEND_TIP);
@@ -448,7 +452,11 @@ class UltimateVideoService {
       fileSize: file.size,
       muxPlaybackId: playbackId,
       thumbnails: [],
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, averageWatchTime: 0, totalWatchTime: 0 },
+      // `avgWatchTime` is deliberately NOT seeded: no writer ever computes it
+      // (the server writes `stats.totalWatchTime`, not an average), so a seeded
+      // `0` would present an unwritten value as a measured average. `views`/
+      // `likes`/`comments`/`shares`/`saves` ARE maintained by server writers.
+      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0 },
       monetization: metadata.monetization || { type: 'none' },
       rankingScore: 0,
       viralScore: 0,
@@ -729,8 +737,6 @@ class UltimateVideoService {
         shares: item.stats?.shares ?? item.shares ?? null,
         saves: item.stats?.saves ?? item.saves ?? null,
         views: item.stats?.views ?? item.views ?? null,
-        isLiked: item.isLiked || false,
-        isSaved: item.isSaved || false,
       };
     };
 
@@ -748,7 +754,8 @@ class UltimateVideoService {
           .map(formatVideoItem)
           .filter(v => v && v.videoUrl);
         if (matchingVideos.length > 0) {
-          return { success: true, feed: matchingVideos, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
+          const hydrated = await this._hydrateViewerVideoState(matchingVideos, safeUserId);
+          return { success: true, feed: hydrated, hasMore: feedResult.hasMore, nextCursor: feedResult.nextCursor };
         }
       }
     } catch (e) {
@@ -800,7 +807,7 @@ class UltimateVideoService {
         rawVideos = rawVideos.filter((v) => !hiddenAuthors.has(v.authorId || v.userId || v.creatorId));
       }
 
-      const formatted = rawVideos.map(formatVideoItem);
+      const formatted = await this._hydrateViewerVideoState(rawVideos.map(formatVideoItem), safeUserId);
       const nextCursor = formatted.length ? formatted[formatted.length - 1].id : null;
       return { success: true, feed: formatted, hasMore: formatted.length >= limit, nextCursor };
     } catch (err) {
@@ -884,7 +891,7 @@ class UltimateVideoService {
     if (amount < VIDEO_CONFIG.MONETIZATION.TIPS.MIN_AMOUNT || amount > VIDEO_CONFIG.MONETIZATION.TIPS.MAX_AMOUNT) {
       throw new VideoError('invalid-tip', `Tip amount must be between ${VIDEO_CONFIG.MONETIZATION.TIPS.MIN_AMOUNT} and ${VIDEO_CONFIG.MONETIZATION.TIPS.MAX_AMOUNT}`);
     }
-    const res = await this.fns.sendTip({ videoId, amount, message });
+    const res = await this.fns.sendTip({ videoId, amount, message, idempotencyKey: newIdempotencyKey() });
     return res.data;
   }
 
@@ -904,29 +911,6 @@ class UltimateVideoService {
       watermarked: true,
     });
     return { success: true, url: data.url, watermarked: true };
-  }
-
-  async getVideoAnalytics(videoId) {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw new VideoError('unauthenticated', 'Login required');
-    const video = await this.getVideo(videoId);
-    if (!video.success) throw new VideoError('not-found', 'Video not found');
-    if (video.video.userId !== currentUser.uid && !currentUser.isAdmin) {
-      throw new VideoError('permission-denied', 'Not authorized');
-    }
-    const statsRef = collection(this.firestore, 'videos', videoId, 'stats');
-    const q = query(statsRef, orderBy('timestamp', 'desc'), limit(30));
-    const snap = await getDocs(q);
-    const dailyStats = snap.docs.map(d => ({ date: d.id, ...d.data() }));
-    return {
-      videoId,
-      totalViews: video.video.stats.views,
-      totalLikes: video.video.stats.likes,
-      totalShares: video.video.stats.shares,
-      averageWatchTime: video.video.stats.averageWatchTime,
-      dailyStats,
-    };
   }
 
   async getAudioLibrary(options = {}) {
@@ -1016,6 +1000,16 @@ class UltimateVideoService {
           createdAt: data.createdAt || null,
         },
       });
+      // The `saved_videos` snapshot is private to the viewer; the public
+      // `videos/{id}.stats.saves` aggregate is server-owned (`stats` is excluded
+      // from the client video update rule), so it is maintained by the callable
+      // (N436). Best-effort: a save already persisted locally must not fail just
+      // because the counter call failed.
+      try {
+        await this.fns.toggleVideoSave({ videoId, save: true });
+      } catch (err) {
+        logger.warn('[videoService] save counter update failed', err?.message);
+      }
     }
     this.cache.invalidateVideo(videoId);
     return { success: true, alreadySaved };
@@ -1026,6 +1020,11 @@ class UltimateVideoService {
     if (!userId) throw new Error('userId is required to unsave a video');
     const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
     await deleteDoc(savedRef);
+    try {
+      await this.fns.toggleVideoSave({ videoId, save: false });
+    } catch (err) {
+      logger.warn('[videoService] save counter update failed', err?.message);
+    }
     this.cache.invalidateVideo(videoId);
     return { success: true };
   }
@@ -1034,7 +1033,7 @@ class UltimateVideoService {
    * Viewer-specific like/save state for one video. The public video document
    * only carries aggregate counters; whether *this* viewer liked or saved it
    * lives in the `likes` subcollection and the viewer's `saved_videos`, so a
-   * detail screen must resolve it separately (the feed does this server-side).
+   * detail screen must resolve it separately (see `_hydrateViewerVideoState`).
    * Returns { liked: false, saved: false } for anonymous viewers.
    */
   async getViewerVideoState(videoId, userId) {
@@ -1045,6 +1044,50 @@ class UltimateVideoService {
       getDoc(doc(this.firestore, 'users', userId, 'saved_videos', videoId)),
     ]);
     return { liked: likeSnap.exists(), saved: savedSnap.exists() };
+  }
+
+  /**
+   * Resolve the viewer's like/save state for a page of videos. A `videos/{id}`
+   * document carries only aggregate counters — no writer sets a per-viewer
+   * `isLiked`/`isSaved` flag on it — so a feed that read those rendered an
+   * unliked heart for a video the viewer had liked (and a second tap re-liked
+   * it server-side, which toggles it back off).
+   *
+   * The saved half is one bounded `documentId() in` read over the viewer's own
+   * `users/{uid}/saved_videos` (chunked at 30); the like half is one point read
+   * per video because each like doc lives under a different `videos/{id}` parent
+   * and cannot be batched across parents.
+   */
+  async _hydrateViewerVideoState(videos, userId) {
+    if (!userId || !Array.isArray(videos) || videos.length === 0) return videos;
+    const ids = videos.map((v) => v?.id).filter(Boolean);
+    if (ids.length === 0) return videos;
+
+    const savedIds = new Set();
+    try {
+      const col = collection(this.firestore, 'users', userId, 'saved_videos');
+      for (let i = 0; i < ids.length; i += IN_CHUNK) {
+        const chunk = ids.slice(i, i + IN_CHUNK);
+        const snap = await getDocs(query(col, where(documentId(), 'in', chunk), limit(chunk.length)));
+        snap.forEach((d) => savedIds.add(d.id));
+      }
+    } catch {
+      // A denied/absent read leaves the saved state unresolved (treated unsaved).
+    }
+
+    const likedIds = new Set();
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const snap = await getDoc(doc(this.firestore, 'videos', id, 'likes', userId));
+        if (snap.exists()) likedIds.add(id);
+      } catch {
+        // Denied/absent resolves to not liked.
+      }
+    }));
+
+    return videos.map((v) => (v?.id
+      ? { ...v, isLiked: likedIds.has(v.id), isSaved: savedIds.has(v.id) }
+      : v));
   }
 
   async getSavedVideos(userId, { limit: max = 50 } = {}) {
@@ -1096,22 +1139,30 @@ class UltimateVideoService {
   async _checkDailyUploadLimitSharded(userId) {
     const today = new Date().toISOString().split('T')[0];
     const shards = VIDEO_CONFIG.UPLOAD.COUNTER_SHARDS;
-    const shardIndex = Math.floor(Math.random() * shards);
-    const shardId = `upload_${userId}_${today}_shard_${shardIndex}`;
-    const shardRef = doc(this.firestore, 'daily_upload_counters', shardId);
 
     const userRef = doc(this.firestore, 'users', userId);
     const userSnap = await getDoc(userRef);
     const tier = userSnap.exists() ? (userSnap.data().subscription?.tier || 'free') : 'free';
     const dailyLimit = VIDEO_CONFIG.UPLOAD.DAILY_LIMIT_PER_USER[tier] || 5;
 
+    const shardRefs = Array.from({ length: shards }, (_, i) =>
+      doc(this.firestore, 'daily_upload_counters', `upload_${userId}_${today}_shard_${i}`));
+
+    // The shards are a SUM of today's uploads. The previous version read ONE
+    // random shard and compared that single value to the daily limit, so the
+    // per-tier cap was never enforced — a user could upload up to `shards ×
+    // dailyLimit` (and probabilistically more) before a random shard happened
+    // to hit the limit. Read every shard and compare the real total.
     let success = false;
     try {
       await runTransaction(this.firestore, async (tx) => {
-        const snap = await tx.get(shardRef);
-        const current = snap.exists() ? snap.data().count : 0;
-        if (current >= dailyLimit) throw new Error('LIMIT_EXCEEDED');
-        tx.set(shardRef, { userId, date: today, shard: shardIndex, count: current + 1, updatedAt: serverTimestamp() }, { merge: true });
+        const snaps = await tx.getAll(...shardRefs);
+        const total = snaps.reduce((sum, s) => sum + (s.exists() ? (s.data().count || 0) : 0), 0);
+        if (total >= dailyLimit) throw new Error('LIMIT_EXCEEDED');
+        const shardIndex = Math.floor(Math.random() * shards);
+        const shardSnap = snaps[shardIndex];
+        const current = shardSnap.exists() ? (shardSnap.data().count || 0) : 0;
+        tx.set(shardRefs[shardIndex], { userId, date: today, shard: shardIndex, count: current + 1, updatedAt: serverTimestamp() }, { merge: true });
         success = true;
       });
     } catch (err) {
@@ -1209,7 +1260,6 @@ const videoService = {
   purchaseVideoAccess: (vid) => getVideoService().purchaseVideoAccess(vid),
   sendTip: (vid, amt, msg) => getVideoService().sendTip(vid, amt, msg),
   setVideoChapters: (vid, uid, ch) => getVideoService().setVideoChapters(vid, uid, ch),
-  getVideoAnalytics: (vid) => getVideoService().getVideoAnalytics(vid),
   getAudioLibrary: (o) => getVideoService().getAudioLibrary(o),
   applyEffect: (vid, e) => getVideoService().applyEffect(vid, e),
   createDuet: (orig, file, meta) => getVideoService().createDuet(orig, file, meta),

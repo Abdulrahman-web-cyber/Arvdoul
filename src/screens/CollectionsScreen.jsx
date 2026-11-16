@@ -49,7 +49,7 @@ export default function CollectionsScreen() {
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
-            : 'Recently',
+            : null,
         }));
         setCollections(mapped);
       } catch (err) {
@@ -95,7 +95,7 @@ export default function CollectionsScreen() {
           cover: c.coverUrl || '/assets/default-profile.png',
           lastUpdated: c.updatedAt
             ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
-            : 'Recently',
+            : null,
         })));
       }
     } catch (err) {
@@ -224,7 +224,7 @@ export default function CollectionsScreen() {
                 <p className="text-xs text-gray-300 line-clamp-1">{c.description}</p>
                 <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 font-semibold">
                   <span>{c.itemCount === null ? '— items' : `${c.itemCount} items`}</span>
-                  <span>Updated {c.lastUpdated}</span>
+                  <span>Updated {c.lastUpdated || '—'}</span>
                 </div>
               </div>
             </div>
@@ -289,7 +289,7 @@ export default function CollectionsScreen() {
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="e.g. 3D Spatial Shaders, Audio Loops"
                     className={cn(
-                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-purple-500",
+                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple",
                       isDark ? "bg-white/5 border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"
                     )}
                   />
@@ -305,7 +305,7 @@ export default function CollectionsScreen() {
                     onChange={(e) => setNewDesc(e.target.value)}
                     placeholder="Short summary of folder contents..."
                     className={cn(
-                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-purple-500",
+                      "w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple",
                       isDark ? "bg-white/5 border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"
                     )}
                   />

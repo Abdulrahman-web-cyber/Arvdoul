@@ -177,7 +177,7 @@ export default function TrimSubPanel({
                 type="checkbox"
                 checked={isRippleEdit}
                 onChange={onToggleRippleEdit}
-                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-black/50 border-white/20"
+                className="w-4 h-4 rounded text-purple-600 focus:ring-arvdoul-purple bg-black/50 border-white/20"
               />
               <span className="font-semibold">Ripple Edit</span>
             </label>

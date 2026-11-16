@@ -64,13 +64,12 @@ const STORAGE_CONFIG = {
     TIMEOUT: 30000 // 30 seconds
   },
 
-  // Compliance Settings
+  // Compliance Settings. Only the audit-trail switch is read (by
+  // sendToAuditTrail); the former DATA_RETENTION_POLICY / BACKUP_ENABLED /
+  // MULTI_REGION keys were never read and described storage guarantees this
+  // project does not configure, so they were removed rather than advertised.
   COMPLIANCE: {
-    GDPR_DELETE_RETENTION: 30, // Days
     AUDIT_LOG_ENABLED: true,
-    DATA_RETENTION_POLICY: true,
-    BACKUP_ENABLED: true,
-    MULTI_REGION: true
   },
 
   // Storage Structure

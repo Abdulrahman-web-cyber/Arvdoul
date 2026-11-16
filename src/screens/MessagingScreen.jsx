@@ -16,9 +16,11 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import ErrorState from '../design-system/ErrorState.jsx';
-import { Search, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
+import { Search, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight, Image as ImageIcon, Video, Music, Mic, Paperclip } from "lucide-react";
 
 // Pinned Conversations data matching the exact screenshot
 // Master Conversation List matching the screenshots
@@ -30,6 +32,19 @@ const FILTER_TABS = [
   { id: 'channels', label: 'Channels', icon: Radio },
   { id: 'archived', label: 'Archived', icon: Archive },
 ];
+
+// Human label for a non-text last-message `type` shown on the inbox row.
+const ATTACHMENT_LABEL = {
+  image: 'Photo',
+  video: 'Video',
+  audio: 'Audio',
+  voice: 'Voice',
+  file: 'File',
+  gif: 'GIF',
+  location: 'Location',
+  contact: 'Contact',
+  poll: 'Poll',
+};
 
 export default function MessagingScreen() {
   const navigate = useNavigate();
@@ -78,15 +93,29 @@ export default function MessagingScreen() {
         const mapped = (res.conversations || []).map((c) => {
           const other = (c.participantDetails || []).find((p) => p.id !== user.uid);
           const lastMsg = c.lastMessage || {};
-          const otherName = c.title || other?.displayName || other?.name || 'Conversation';
+          const isGroup = c.type === 'group';
+          const isChannel = c.type === 'channel';
+          // Never assert a fabricated display name: a 1:1 whose counterpart
+          // profile could not be read falls back to the uid prefix (identity,
+          // not an invented label); a group/channel without a name is labelled
+          // by its kind.
+          const otherName = c.title
+            || other?.displayName
+            || (isGroup ? 'Group chat' : isChannel ? 'Channel' : (other?.id ? `user ${String(other.id).slice(0, 6)}` : 'Direct message'));
           return {
             id: c.id,
             name: otherName,
+            type: c.type,
             avatar: getSafeAvatarUrl(other?.photoURL || other?.avatar, otherName, other?.id),
             verified: Boolean(other?.isVerified),
-            preview: typeof lastMsg.text === 'string' ? lastMsg.text : lastMsg.content || '',
+            preview: typeof lastMsg.text === 'string' ? lastMsg.text : '',
+            // Real attachment kind from the last message (last_messages stores
+            // `type`); text/absent render no badge.
+            attachmentType: lastMsg.type && lastMsg.type !== 'text' ? lastMsg.type : null,
             time: c.lastActivity ? new Date(c.lastActivity.toDate ? c.lastActivity.toDate() : c.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-            unread: c.unreadCounts?.[user.uid] || 0,
+            // Real per-conversation unread count from the sharded
+            // `unread_counters` (service `unreadCount`); null renders no badge.
+            unread: Number(c.unreadCount) || 0,
             muted: Boolean(c.mutedBy?.includes(user.uid)),
             pinned: Boolean(c.pinnedBy?.includes(user.uid)),
             // The filter tabs key off `category`, but conversations store their
@@ -224,14 +253,14 @@ export default function MessagingScreen() {
               className="relative cursor-pointer"
               onClick={() => navigate('/profile')}
             >
-              <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]">
+              <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_16px_rgba(168,85,247,0.35)]"
+                style={{ background: BRAND_GRADIENT }}>
                 <img
-                  src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'User', user?.uid)}
+                  src={getSafeAvatarUrl(user?.photoURL, user?.displayName, user?.uid)}
                   alt="My Profile"
                   className={`w-full h-full rounded-full object-cover border-2 ${isDark ? 'border-[#030614]' : 'border-white'}`}
                 />
               </div>
-              <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 ${isDark ? 'border-[#030614]' : 'border-white'}`} />
             </button>
 
             <div>
@@ -369,7 +398,8 @@ export default function MessagingScreen() {
                 >
                   {/* Avatar with Glow Ring and Pin Badge */}
                   <div className="relative mb-2">
-                    <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_12px_rgba(168,85,247,0.3)]">
+                    <div className="w-12 h-12 rounded-full p-[2px] shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                        style={{ background: BRAND_GRADIENT }}>
                       <img
                         src={item.avatar}
                         alt={item.name}
@@ -427,12 +457,12 @@ export default function MessagingScreen() {
                       <img src={req.senderAvatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-purple-600/40 flex items-center justify-center text-sm font-bold text-white shrink-0">
-                        {(req.senderName || '?').charAt(0).toUpperCase()}
+                        {pickDisplayName([req.senderName], { fallback: req.senderId ? String(req.senderId).slice(0, 2).toUpperCase() : '—' }).charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0">
                       <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {req.senderName || 'Unknown user'}
+                        {pickDisplayName([req.senderName], { fallback: req.senderId ? `user ${String(req.senderId).slice(0, 6)}` : '—' })}
                       </p>
                       <p className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
                         wants to message you
@@ -509,9 +539,11 @@ export default function MessagingScreen() {
             >
               {/* Left: Avatar with optional active dot + Text content */}
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                {/* Active status blue dot on the side */}
-                {item.activeDot && (
-                  <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_6px_#3b82f6] shrink-0" />
+                {/* Active status dot — only meaningful for a 1:1 thread, and
+                    only when the counterpart is actually online (real
+                    user_presence). A group row never shows a presence dot. */}
+                {item.type === 'direct' && item.activeDot && (
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_6px_#3b82f6] shrink-0" aria-label="Online" />
                 )}
 
                 {/* Avatar with Glow Ring */}
@@ -542,27 +574,29 @@ export default function MessagingScreen() {
                     isDark ? 'text-gray-400' : 'text-slate-500'
                   }`}>
                     <p className="truncate">{item.preview || 'No messages yet'}</p>
-                    {item.hasAttachment && (
-                      <span className="px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-600 dark:text-purple-300 text-[10px] font-bold border border-purple-500/30">
-                        {item.hasAttachment}
+                    {item.attachmentType && (
+                      <span className="px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-600 dark:text-purple-300 text-[10px] font-bold border border-purple-500/30 capitalize">
+                        {ATTACHMENT_LABEL[item.attachmentType] || item.attachmentType}
                       </span>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Right: Time, Photo Preview, Mute Icon, Unread Badge, Pin */}
+              {/* Right: Time, Attachment Badge, Mute Icon, Unread Badge, Pin */}
               <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
                 <span className={`text-[11px] font-medium ${isDark ? 'text-gray-400' : 'text-slate-400'}`}>{item.time}</span>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Photo thumbnail preview */}
-                  {item.hasPhoto && (
-                    <img
-                      src={item.photoPreview}
-                      alt="Thumbnail"
-                      className="w-10 h-7 rounded-lg object-cover border border-slate-200 dark:border-white/10 shadow-sm"
-                    />
+                  {/* Attachment kind from the real last message */}
+                  {item.attachmentType && (
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-500/10 text-slate-500 dark:text-slate-300">
+                      {item.attachmentType === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
+                      {item.attachmentType === 'video' && <Video className="w-3.5 h-3.5" />}
+                      {item.attachmentType === 'audio' && <Music className="w-3.5 h-3.5" />}
+                      {item.attachmentType === 'voice' && <Mic className="w-3.5 h-3.5" />}
+                      {(item.attachmentType === 'file' || item.attachmentType === 'gif') && <Paperclip className="w-3.5 h-3.5" />}
+                    </span>
                   )}
 
                   {/* Muted icon */}
@@ -599,7 +633,7 @@ export default function MessagingScreen() {
           navigate('/messages/new');
           toast.success('Compose a new message');
         }}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 text-white flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.6)] hover:scale-110 transition-transform active:scale-95"
+        className="fixed right-5 bottom-20 z-40 w-14 h-14 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.6)] hover:scale-110 transition-transform active:scale-95"
         title="Compose New Message"
       >
         <MessageSquare className="w-6 h-6 fill-white/20" />

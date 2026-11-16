@@ -161,6 +161,12 @@ exports.fanoutPostOnCreate = functions.firestore
     const taskData = snap.data();
     const taskRef = snap.ref;
 
+    // `fanout_tasks` is shared with story fan-out (`stories.js`
+    // `processFanoutTask`). Both triggers fire for every created doc; claim only
+    // post tasks so the two handlers cannot cancel each other's work (the loser
+    // would otherwise find status !== 'pending' and mark the task failed).
+    if (!taskData || !taskData.postId) return;
+
     let shouldProcess = false;
     await db.runTransaction(async (t) => {
       const doc = await t.get(taskRef);
@@ -185,8 +191,20 @@ exports.fanoutPostOnCreate = functions.firestore
     }
 
     try {
-      const authorSnap = await db.collection('users').doc(authorId).get();
-      const followerCount = authorSnap.data()?.followerCount || 0;
+      // Read the AUTHORITATIVE follower count: `users/{uid}.followerCount` is
+      // seeded 0 at signup and never updated (every follow increments a sharded
+      // counter — N431), so trusting the raw field made this threshold never
+      // trip and fanned a celebrity's post out to every follower. A count that
+      // cannot be resolved is treated as "large" so the pull model is used
+      // rather than risking an unbounded write storm.
+      let followerCount;
+      try {
+        const { readUserCounter } = require('./userCounters');
+        followerCount = await readUserCounter(authorId, 'followerCount');
+      } catch (counterErr) {
+        followerCount = Number.MAX_SAFE_INTEGER;
+        console.warn('Fan-out follower-count resolution failed; using pull model', { authorId, error: counterErr.message });
+      }
 
       if (followerCount > FANOUT_THRESHOLD) {
         await taskRef.update({
@@ -250,14 +268,20 @@ exports.cleanupAndRetryFanoutTasks = functions.pubsub
   .schedule('every 15 minutes')
   .onRun(async (context) => {
     const cutoff = new Date(Date.now() - STALE_TASK_AGE_MS);
-    const staleSnap = await db.collection('fanout_tasks')
-      .where('status', 'in', ['completed', 'failed'])
-      .where('createdAt', '<', admin.firestore.Timestamp.fromDate(cutoff))
-      .get();
-    if (!staleSnap.empty) {
+    // Drain the whole stale backlog in bounded pages (the old version read every
+    // completed/failed task into one batch, which throws >500 ops and then
+    // silently never cleaned the rest).
+    for (;;) {
+      const staleSnap = await db.collection('fanout_tasks')
+        .where('status', 'in', ['completed', 'failed'])
+        .where('createdAt', '<', admin.firestore.Timestamp.fromDate(cutoff))
+        .limit(400)
+        .get();
+      if (staleSnap.empty) break;
       const batch = db.batch();
       staleSnap.forEach(doc => batch.delete(doc.ref));
       await commitBatchWithRetry(batch);
+      if (staleSnap.size < 400) break;
     }
 
     const retryCutoff = new Date(Date.now() - FAILED_TASK_RETRY_AGE_MS);
@@ -348,10 +372,16 @@ async function processScoreUpdates(trendingOnly = false) {
   for (const doc of postsSnap.docs) {
     const post = doc.data();
     const postId = doc.id;
-    const likes = post.likeCount || 0;
-    const comments = post.commentCount || 0;
-    const shares = post.shareCount || 0;
-    const views = post.viewCount || 0;
+    // Engagement lives under `stats` (written by firestoreService and mirrored
+    // from the sharded counters by `aggregatePostCounters`). The previous
+    // top-level `likeCount`/`commentCount`/`shareCount`/`viewCount` reads are
+    // never written anywhere, so the engagement term was a constant 0 and every
+    // post ranked purely by recency (N433).
+    const stats = post.stats || {};
+    const likes = stats.likes || 0;
+    const comments = stats.comments || 0;
+    const shares = stats.shares || 0;
+    const views = stats.views || 0;
     const engagement = likes + comments * 2 + shares * 3 + views * 0.1;
     const createdAt = post.createdAt ? post.createdAt.toDate() : new Date();
     const ageHours = (now - createdAt) / (1000 * 60 * 60);
@@ -510,7 +540,10 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
 
     posts = posts.map(p => {
       if (p.personalizationScore == null) {
-        const engagement = (p.likes||0) + (p.comments||0)*2 + (p.shares||0)*3;
+        // Engagement lives under `stats`; the top-level aliases are never
+        // written (same defect class as N433/N444).
+        const s = p.stats || {};
+        const engagement = (s.likes || 0) + (s.comments || 0) * 2 + (s.shares || 0) * 3;
         const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime())/3600000 : 0;
         p.personalizationScore = engagement * Math.exp(-ageHours / 48);
       }
@@ -627,7 +660,10 @@ exports.getPersonalizedFeedML = functions.https.onCall(async (data, context) => 
       .map((doc) => {
         const p = { id: doc.id, ...doc.data() };
         if (p.personalizationScore == null) {
-          const engagement = (p.likes || 0) + (p.comments || 0) * 2 + (p.shares || 0) * 3;
+          // Engagement lives under `stats`; the top-level aliases are never
+          // written (same defect class as N433/N444).
+          const s = p.stats || {};
+          const engagement = (s.likes || 0) + (s.comments || 0) * 2 + (s.shares || 0) * 3;
           const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime()) / 3600000 : 0;
           p.personalizationScore = engagement * Math.exp(-ageHours / 48);
         }

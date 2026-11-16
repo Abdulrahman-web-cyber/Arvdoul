@@ -1,40 +1,509 @@
 # Execution checkpoint
 
-_Last updated: this session. Branch `harden/fabrication-and-integrity-sweep` (HEAD `357a695`)._
+_Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
+
+## This session — background-job backlog draining, a wrong-field cleanup query, an unbounded account-deletion scan, and a fan-out trigger collision (N493–N495)
+
+- **N493 (HIGH, closed):** `functions/index.js#cleanupRateLimits` filtered the
+  flat `rate_limits` collection on `expiresAt`, but the shared sharded limiter
+  (`functions/rateLimit.js`) stamps `expireAt` on its parent docs — so those docs
+  were never matched and the collection grew without bound while the job logged
+  "0 cleaned". It and five sibling background jobs
+  (`cleanupSoftDeletedVideos`, `cleanupOldCalls`, `cleanupOldShareEvents`,
+  `recoverStuckWithdrawals`, `cleanupAndRetryFanoutTasks`) each did one
+  unbounded/single-page read into a single batch (throws >500 ops, or silently
+  leaves a backlog); `generateNotificationDigest` only ever digested the first
+  1000 users. Fix: every job bounds its read with `.limit()` and drains with a
+  cursor / re-query loop; `cleanupRateLimits` queries BOTH field names; the
+  digest walks all users with a `__name__` cursor. Guard:
+  `scheduledJobHygieneGuard.test.js` (guards job).
+- **N494 (MEDIUM, closed):** `functions/user.js#deleteUserData` removed the user
+  from recommendations with an unbounded `collectionGroup('users')` read + one
+  batch (throws past 500 ops → half-deleted account). Now bounded pages.
+- **N495 (HIGH, closed):** `feed.js#fanoutPostOnCreate` and
+  `stories.js#processFanoutTask` both listen on `fanout_tasks/{taskId}`. Each
+  claims the task by flipping `status` to `processing`; the loser then ran its
+  `processFanoutTaskInternal` on a non-`pending` doc and marked the task
+  **`failed` — "Missing required fields"** (post tasks have no `storyId`, story
+  tasks no `postId`), cancelling the winner's fan-out. Both retriers collided the
+  same way. Fix: each trigger/retrier claims only the task type it owns. Guard:
+  `fanoutTaskOwnershipGuard.test.js` (guards job).
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite
+**213 suites / 2204 passed (5 skipped), 2209 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision); N432 partially BLOCKED (metrics with no
+defined source). N424–N495 closed.
+
+## This session — unbounded sweeps, notification-counter parity, upload-cap enforcement (N488–N492)
+
+Theme: scheduled jobs that silently covered only a prefix, server-written
+notification rows that never moved the unread counter, a per-tier limit that was
+never actually enforced, an unbounded collection-group read, and dead
+double-count risk.
+
+- **N488 (HIGH, closed):** `functions/search.js#batchReindex` (24h) claimed to
+  rebuild the indices but ran `collection('users').limit(500)` once — a 100k
+  collection left ~99.5k users unindexed. Now walks each collection with a
+  `__name__` cursor (`reindexCollection`). Guard:
+  `reindexCoversWholeCollectionGuard.test.js` (guards job).
+- **N489 (HIGH, closed):** `notifications.js#processBulkNotifications` and
+  `#generateNotificationDigest` wrote `read: false` rows with a bare `set()` that
+  never bumped `notification_counters` (announcements/digests never showed in the
+  Alerts badge); `scheduledPosts.js#notifyAuthorPublished` bumped the counter
+  AFTER an idempotent `create()` whose re-run is a no-op (unread with no row).
+  All server in-app writes now go through `notificationWriter.writeNotification`,
+  and the scheduled-post bump sits after the `ALREADY_EXISTS` early-return. Guard:
+  `notificationCounterParityGuard.test.js` (guards job).
+- **N490 (HIGH, closed):** `videoService._checkDailyUploadLimitSharded` compared
+  ONE random shard's count to the tier limit, but the shards are a SUM — a `free`
+  user (10 shards, limit 5) could upload ~50 videos. Now reads every shard
+  (`tx.getAll`) and compares the real total; the `daily_upload_counters` rule
+  gains an owner-keyed `get` (an absent shard has `resource == null`) with `list`
+  still denied. Guard: `dailyUploadLimitEnforcementGuard.test.js` (guards job).
+- **N491 (MEDIUM, closed):** `functions/comments.js#deleteOldRateLimitShards`
+  (12h) did one unbounded `collectionGroup('shards').get()` (grows without bound →
+  timeout, stale shards survive). Now cursor-paged with batched deletes. Guard:
+  `rateLimitShardCleanupGuard.test.js` (guards job).
+- **N492 (LOW, closed):** dead `messagesService._incrementUnreadCounters`/
+  `_incrementTotalUnread` (no caller — the server `onMessageCreated` trigger owns
+  unread increments) removed to remove a double-count trap.
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite
+**211 suites / 2198 passed (5 skipped), 2204 total** green; the only failure
+(`integrationWiring.test.js`) was an assertion on the pre-N488 inline shape and
+was updated to the paginating helper.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision); N432 partially BLOCKED (metrics with no
+defined source). N424–N492 closed.
+
+## This session — unread-counter integrity: notification + message shards (N485–N487)
+
+Theme: the sharded unread counters (a SUM of 10 shards) lost decrements and
+fabricated "all read" states. Same counter-integrity class as N479/N486.
+
+- **N485 (HIGH, closed):** `functions/notifications.js#markAllNotificationsRead`
+  marked only the first 500 unread notifications, then wrote `0` to every shard
+  counter unconditionally — a user with >500 unread saw the Alerts badge drop to
+  `0` while the rest stayed unread (fabricated "all read"). Now it marks in
+  bounded batches until none remain and rewrites the shards to the REAL remaining
+  unread `count()`; a backlog above the batch ceiling stays honestly counted.
+  Guard: `markAllNotificationsReadGuard.test.js` (guards job).
+- **N486 (HIGH, closed):** the notification unread counter lost decrements —
+  `markNotificationRead`/`deleteNotification` decremented a RANDOM shard with
+  `Math.max(0, current - 1)`, so a decrement on an empty shard was clamped to
+  nothing and the total drifted upward forever (badge over-counts, never hits 0).
+  New shared `decrementUnreadShard(userId)` reads all shards in one transaction
+  and decrements one that actually holds a count (drift-correcting when all are
+  empty). Guard: `notificationUnreadShardDecrementGuard.test.js` (guards job).
+- **N487 (HIGH, closed):** the MESSAGE unread counters
+  (`unread_counters`, `user_unread_totals`) had the same lost-decrement defect,
+  and `messagesService.deleteMessage` was doubly broken: the delete-for-me branch
+  called `_decrementUnreadCounter(cid, uid, 1)` WITHOUT the required transaction
+  (`transaction.get` → `TypeError`), and the delete-for-everyone branch issued
+  `transaction.get()` AFTER its writes — which the Firestore SDK rejects ("all
+  reads before all writes"), so delete-for-everyone always threw. Fix: shard
+  deltas use `FieldValue.increment(±delta)` (exact sum, never a clamped
+  read-modify-write); `_writeShardDelta` takes an optional transaction so the
+  delete-for-me path writes directly; the delete-for-everyone transaction reads
+  `last_messages` BEFORE its writes. Guard:
+  `messageUnreadCounterDecrementGuard.test.js` (guards job) drives the real
+  service with a transaction mock that enforces read-before-write.
+
+Latest verified: **207 suites / 2190 passed (5 skipped), exit 0**;
+`npm run lint` exit 0 (0 errors, 867 warnings); `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision); N432 partially BLOCKED (metrics with no
+defined source). N424–N487 closed.
+
+## This session — counter atomicity / fabricated ranking / comment seeds (N479–N482)
+
+- **N479 (HIGH, closed):** `collectionsService.addToCollection`/`removeFromCollection`
+  maintained `itemCount` with a non-atomic read-modify-write (`getDoc` then
+  `updateDoc((itemCount||0) ± 1)`; remove clamped `Math.max(0, …)`). Concurrent
+  adds lost updates, a duplicate submit double-counted, and a repeated remove
+  decremented again (the clamp hid the drift). Now one `runTransaction` with the
+  atomic `increment(±1)` sentinel; remove only decrements when the item existed
+  (idempotent `alreadyRemoved`). `collectionsCounterAtomicity.test.js` pins
+  concurrent-add, idempotent-remove, non-owner-denied, no-read-modify-write.
+- **N480 (MEDIUM, closed):** `analyticsService.getUserAnalytics` caught a failed
+  ranking read and returned `{ rank: null, totalCreators: 0, percentile: null }`
+  — a fabricated measured population of 0 (and keys the real result never has).
+  Now returns the honest unavailable shape
+  `{ position: null, percentile: null, label: null, total: null }` and logs.
+- **N481 (MEDIUM, closed):** `commentService.addComment` seeded
+  `viewCount`/`shareCount`/`sentimentScore` as `0` (no writer, no reader —
+  comments are not search-indexed) and `reports: 0` (superseded by the
+  server-written `reportCount`, read by `AdminContentManagementScreen`). All
+  four removed.
+- **N482 (MEDIUM, closed):** `collectionsService.shareCollection` + the
+  `sharedWith` array were a dead control — nothing called the method, the
+  `collections` rules grant a read only to the `userId` owner (so a "shared"
+  user could never read it), and the UI renders only the owner's own
+  collections. Method, seed and both `sharedWith` auth branches removed, plus
+  the write-only `coverPostId` parameter/field (no caller ever passed it and no
+  reader consumes it).
+
+- **N483 (MEDIUM, closed):** `counter_shards` granted `allow read: if isSignedIn()`
+  (which also grants `list`) — no client queries the collection
+  (`CountersManager` uses `getAll` on computed doc refs), so the listable grant
+  exposed the whole engagement map. Split to `allow get`/`allow list: if false`.
+  `readScopePrivacyRules.test.js` (N483) pins it.
+- **N484 (LOW, closed):** `commentService.editComment` wrote `_editCount` /
+  `_lastEditedAt` that nothing reads (non-atomic `(n||0)+1`, and a client
+  `new Date()` on a server-owned surface). Both removed; `isEdited` + the
+  `history` subcollection are the real edit signals.
+
+Latest verified: **204 suites / 2179 passed (5 skipped), exit 0**;
+`npx eslint --quiet src functions` exit 0 (0 errors, 867 warnings); `npm run build` green.
+`readScopePrivacyRules.test.js` 16/16 against the local Firestore emulator.
+
+## This session — read-scope / fabrication / dead-control batches (N472–N477)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) dead controls.
+
+- **N472 (HIGH, closed):** `usernames/{name}` and `previous_usernames/{name}`
+  granted `allow read: if isSignedIn()`, which also grants `list` — so any
+  signed-in client could enumerate the entire claimed-handle registry (and the
+  old-handle rename history) over the REST API. Every client path is a point
+  read (`getDoc` for share/QR resolution, the availability check). Fix: both
+  blocks now grant `allow get: if isSignedIn(); allow list: if false;`.
+  `readScopePrivacyRules.test.js` pins it.
+- **N473 (MEDIUM, closed):** `OfflineQueue.getPending` sorted `createdAt` (an
+  ISO string) by subtraction → `NaN`, so the "newest first" ordering of the
+  offline conflict UI never held. Fixed to parse to `Date`.
+- **N474 (MEDIUM, closed):** `messagesService.deleteMessage` called
+  `msg.createdAt.toDate()` unguarded; a legacy/offline ISO-string value threw a
+  `TypeError` that aborted the delete transaction. Guarded.
+- **N475 (MEDIUM, closed):** `storyService.createStory` seeded
+  `stats.viewerCount: 0` and `stats.likes: 0` — no writer maintains either
+  (reactions live in `reaction_shards`; viewers in the owner-only list), so the
+  seed presented an unmeasured metric as a measured zero. Both seeds removed.
+- **N476 (MEDIUM, closed):** `commentService.getCommentStats` returned
+  `averageLikes: 0`, `averageReplies: 0`, `topCommenters: []` with no writer.
+  Now `null` (unknown).
+- **N477 (MEDIUM, closed):** `functions/questions.js#addAnswer` ignored the
+  client `idempotencyKey` — a retry appended a duplicate answer and
+  double-awarded XP. Now records an in-transaction `answer_idempotency` dedupe
+  doc (TTL) and replays the stored `answerId` on a repeat.
+
+Latest verified: **203 suites / 2173 passed (5 skipped), exit 0**;
+`npx eslint --quiet src functions` exit 0 (0 errors); `npm run build` green.
+Committed as `fix(N472-N475)` and `fix(N476-N477)`.
+
+## This session — dead RTDB presence (N458) + story shard read leak (N459)
+
+Theme (1) read-authorization leaks + (2) fabrication/integrity + (3) dead controls.
+
+- **N458 (MEDIUM, closed):** the 1:1 chat header's "Online / Last seen" line read
+  the Realtime-Database `status/{uid}` path, which **no writer anywhere populates**
+  (`messagesService.setUserOnline` had zero callers), so the line could never
+  render real presence — a dead control. The `messagingStore` `presence` /
+  `presenceSubscription` slice and `setPresence` action had no reader/caller
+  either. Fix: `ChatScreen` now reads the counterpart through
+  `socialGraphService.getPresenceMap([uid])` — the single sanctioned, scope-gated
+  reader (N321) — and renders the honest `isOnline`/`lastActive` (a denied/failed
+  read leaves it blank, never a fabricated "Online"). Removed the writer-less
+  `setUserOnline`/`subscribeToUserPresence` methods, the `PRESENCE`/`LAST_SEEN`
+  RTDB path constants, the facade exports, the `presence_update` event branch and
+  the dead store slice (typing stays — it has a real writer). Guards:
+  `chatPresenceWiring.test.js` (new, guards job) + `subscriptionLifecycleGuard.test.js`.
+- **N459 (MEDIUM, closed):** a creator's raw story view/reaction totals
+  (`stories/{id}/view_shards`, `/reaction_shards`) were readable by **every
+  signed-in user** (`allow read: if isSignedIn();`). The shard sums are rolled up
+  server-side and the only client reader is the creator's own insights panel
+  (`storyService.getStoryInsights`/`subscribeToInsights`, gated on
+  `story.userId == uid`); the sibling `analytics_shards` was already
+  creator-scoped. Fix: both reads scoped to
+  `isSignedIn() && (vibeData().userId == uid() || isAdmin())`.
+  `livePresenceAndHealthPrivacyRules.test.js` (guards job) pins the boundary.
+
+Latest verified: **203 suites / 2169 passed (5 skipped), exit 0**; `npx eslint
+--quiet` exit 0 (0 errors); `npm run build` green.
+
+## This session — messaging inbox + Vibes fabrication/dead-control sweep (N452–N457)
+
+Theme (2) fabrication/integrity + (3) dead-control sweep across the messaging
+inbox and the Vibes grid.
+
+- **N452 (HIGH, closed):** the inbox online dot read `presenceOnline` — a field
+  **no writer ever set** (`users/{uid}` has no `isOnline`; presence moved to the
+  scope-gated `user_presence/{uid}` at N321, and the RTDB `status/` path is dead),
+  so every dot rendered "offline" forever; the header also painted a hardcoded
+  green dot claiming the *viewer* was online. Fix: `socialGraphService.getPresenceMap(ids)`
+  is the one sanctioned presence reader (per-doc, scope-gated; a denied/failed
+  read is omitted → renders offline, never a fabricated online);
+  `getUserConversations` hydrates only 1:1 counterparts and sets the real
+  `presenceOnline`; the row dot is direct-only and the header dot is gone.
+- **N453 (HIGH, closed):** every inbox row showed "No messages yet" because the
+  preview read `c.lastMessage`, a field no writer sets. `sendMessage` writes
+  `last_messages/{cid}` (participant-only per rules). Fix:
+  `messagesService._fetchLastMessages(ids)` reads it in bounded `documentId() in`
+  chunks; the dead `hasAttachment`/`hasPhoto`/`photoPreview` props were replaced
+  by a real `attachmentType` badge from the stored message `type`.
+- **N454 (HIGH, closed):** every inbox unread badge rendered 0 because the screen
+  read `c.unreadCounts[uid]`, a field no writer sets (the server maintains sharded
+  `unread_counters/unread_{cid}_{uid}/shards/{n}`). Fix:
+  `messagesService._fetchUnreadCounts(userId, ids)` sums the shards (one bounded
+  `getDocs` per conversation); `unreadCount` is attached and absent → `null`
+  (no badge, not a fabricated 0); the row badge and roll-up read it.
+- **N455 (HIGH, closed):** the Vibes grid showed the raw uid as the creator name
+  (story docs carry no `authorName`/`authorPhoto`) and asserted
+  `verified: false` / `category: 'Following'` for everyone. Fix: `StoriesScreen`
+  hydrates the real creators in one batched `hydrateProfiles` + `getEdgeSet` read;
+  honest name (`resolveActorName`), handle, avatar (`getSafeAvatarUrl`), real
+  `verified`, and Friends/Following/Discover from the real edge.
+- **N456 (MEDIUM, closed):** the Close Friends and Live category tabs (and their
+  badges) had no backing model — `isCloseFriend`/`isLive` were hardcoded `false`.
+  Removed until the model exists.
+- **N457 (LOW, closed):** the multi-story dots fabricated "3" for a single-item
+  group (`itemsCount || 3`) and the media badge keyed on a `badgeType` no writer
+  emits (`'photo'`/`'music'`/… vs the real `image`/`video`/`audio`/…). Fix: dots
+  only when `itemsCount > 1`; badge reflects the real story `type`.
+
+New guard suites (guards CI job): `inboxPreviewPresenceWiring.test.js`,
+`vibesCreatorIdentityWiring.test.js`.
+
+Latest verified: **202 suites / 2160 passed (5 skipped), exit 0**; the 29-suite
+guards subset green (668 passed); `npx eslint --quiet` exit 0 (0 errors);
+`npm run build` green.
+
+## This session — feed ranking, money-path idempotency, comment block gate (N444–N448)
+
+- **N444 (MEDIUM, closed):** `feedService._calculateFallbackScore` read top-level
+  `likeCount`/`commentCount`/`shareCount`/`viewCount` — **no writer sets those** (engagement
+  lives in sharded `counter_shards`; `posts/{id}.stats.*` is seeded `0`). Every post scored
+  identically, so the fallback feed collapsed to pure recency. Fix: `_fetchOptimizedSources`
+  overlays the shard sums (`_overlayFeedCounters` → `countersManager.applyAll`, one bounded
+  `getAll` per field-chunk) before scoring; the scorer reads `post.stats.*`. Locked by
+  `feedRankingFieldSourceGuard.test.js` (guards job).
+- **N445 (LOW, closed):** the `p.avgWatchTime` ranking branch (×`WATCH_TIME_WEIGHT`) was dead
+  — no post writer sets an average watch time. Removed with the constant.
+- **N446 (LOW, closed):** `videoService.getVideoAnalytics` was dead code reading a
+  `videos/{id}/stats` subcollection no writer populates; removed with its facade export, and
+  the upload `stats` seed now writes the canonical `avgWatchTime` (was `averageWatchTime`).
+- **N447 (HIGH, closed):** `videoService.sendTip` derived its server idempotency key from
+  `Date.now()`, so a client/SDK retry of a committed-but-unacknowledged tip double-charged the
+  sender. Fix: the client builds one stable key per tip intent (`newIdempotencyKey`) and passes
+  it; the server uses the caller key and falls back to `crypto.randomUUID()` only for direct
+  API callers. `ProfileTipModal` had the same `Date.now()` key (now one stable key per send +
+  a re-entrancy guard). `purchaseMarketplaceItem` had the same class — it now prefers a caller
+  key/`orderId` and falls back to `uuidv4()`, never `Date.now()`.
+  `moneyPathIdempotencyKeyGuard.test.js` (guards job) pins all of it.
+- **N448 (HIGH, closed):** the comment read paths never applied the block/mute graph, so a
+  blocked/muted author's comments still rendered under a post (and in `PostCard`'s preview, and
+  via the live subscription). Fix: `getCommentsByPost` (Firestore + local-cache merge),
+  `getReplies` and `subscribeToPostComments` resolve the viewer and drop hidden authors;
+  `CommentsDrawer` and `VideoComments` pass `viewerId`. `commentBlockFiltering.test.js`
+  (guards job) drives the real service and pins all three surfaces.
+
+Latest verified: **199 suites / 2134 passed (5 skipped), exit 0**; `npm run lint` exit 0
+(0 errors); `npm run build` green (with the Firestore emulator live on 127.0.0.1:8080).
+
+## This session — video/reel viewer-state reality (N354–N355)
+
+- **N354 (MEDIUM, closed):** `videoService.formatVideoItem` seeded `isLiked`/`isSaved`
+  from `item.isLiked`/`item.isSaved` — fields **no writer ever sets** on a `videos/{id}`
+  document (`uploadVideo` writes only the content/author fields). `ReelsScreen` mapped
+  those straight into the reel, so every reel rendered an unliked heart for a viewer who
+  had liked it, and because `likeVideo` **toggles** server-side the next tap *unliked* it
+  (the heart flipped back on, appearing to do nothing); same for save. `VideoDetailScreen`
+  also read a dead `data.likedBy?.includes(uid)`. Fix: new
+  `videoService._hydrateViewerVideoState(videos, uid)` resolves the real state — one
+  bounded `documentId() in` read per 30 videos against `users/{uid}/saved_videos`, plus one
+  point read per video against `videos/{id}/likes/{uid}` (a like doc cannot be batched
+  across its per-video parent). `getVideoFeed` hydrates both branches; the dead format
+  fields and the dead detail read are gone. Locked by `viewerLikeStateRealityGuard.test.js`
+  (guards job).
+- **N355 (MEDIUM, closed):** `ReelsScreen` and `VideoFeed` hydrated the per-creator
+  `isFollowing`/`followedByViewer` badge with `getFollowing(uid, { limit: 200 })` — a
+  graph-wide list whose cost grows with how many accounts the viewer follows — to answer
+  "does the viewer follow these N creators?". Fix: both use
+  `userService.getFollowStates(viewerId, creatorIds)` → `socialGraphService.getEdgeSet`
+  (the canonical batched per-pair read, chunked `documentId() in` on the actor field).
+  `integrationWiring.test.js` asserts the canonical method.
+
+Latest verified: **169 suites / 1855 passed (5 skipped), exit 0**; `npm run lint` exit 0
+(0 errors); `npm run build` green. `firebaseCostGuard` stayed green (the new saved-videos
+read is explicitly `limit`-bounded).
+
+## This session — viewer like-state reality (N352–N353)
+
+- **N352 (MEDIUM, closed):** `PostCard`/`PostOptionsDrawer` seeded the viewer's
+  `liked`/`saved`/`reaction` from `post.isLiked`/`post.liked`/`post.likedBy`/
+  `post.savedBy`/`post.userReaction` — **none of which any writer ever sets** on a
+  `posts/{id}` document. Fix: `firestoreService.getPostViewerState(postId, uid)`
+  reads the viewer's own `posts/{id}/likes|saves|reactions/{uid}` docs in parallel.
+- **N353 (MEDIUM, closed):** `ProfileFeedGrid` seeded `likedPosts`/`likeBaseline`
+  from `post.isLiked`/`likedByMe`/`hasLiked` (also never written), so re-liking a
+  pre-liked post double-counted. Fix: `firestoreService.getLikedPostIds(uid, ids)`
+  resolves the real set in one bounded `documentId() in` read per 30 ids against
+  `users/{uid}/liked_posts`.
+
+Latest verified: **168 suites / 1851 passed (5 skipped), exit 0**; `npm run lint` exit 0
+(0 errors); `npm run build` green (with the Firestore emulator live).
+
+## This session — PostCard follow-state reality (N351)
+
+- **N351 (MEDIUM, closed):** the `PostCard` follow button initialised
+  `engagement.followState = 'none'` and only the button's own optimistic dispatch changed
+  it, so a viewer who already followed the author still saw **Follow**; and tapping Follow
+  on a **private** account called `followUser` (which returns `{requested:true}` and creates
+  no edge) then optimistically showed **Following** for a follow that was only pending. Fix:
+  a `getFollowStatus` hydration effect seeds `following`/`requested`; `handleFollow`
+  reconciles the pending result into a `requested` state; the button renders **Requested**
+  and gains an `aria-label`. Locked by `postCardFieldRealityGuard.test.js` (guards job).
+
+Latest verified: **168 suites / 1848 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (with the Firestore emulator live).
+
+## This session — PostCard field reality + ad disclosure (N350)
+
+- **N350 (MEDIUM, closed):** `PostCard` rendered two more fields no writer sets —
+  `post.momentum` ('trending'/'exploding') and `post.communityNotes` (no community-notes
+  collection exists; the scheduler writes `trendingScore`/`personalizationScore`) — so the
+  momentum badges and community-notes block were permanently dead. Separately, the feed
+  inserts ad cards shaped `{ type: 'ad', isAd: true, cta, link }` (`feedService
+  ._getAdOptimized`, `feed.ads` defaults **true**) but the card only checked
+  `post.isSponsored`/`post.adCampaignId`: **every feed ad rendered with no sponsored label
+  and no CTA.** Fix: dead reads removed (with unused `Sparkles`/`Shield` imports); the card
+  treats `type === 'ad'`/`isAd === true` as sponsored and reads the ad card's `cta`/`link`;
+  `postCardFieldRealityGuard.test.js` (guards job) locks all of it.
+
+Latest verified: **168 suites / 1847 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (with the Firestore emulator live).
+
+## This session — dead author-standing reads (N349)
+
+- **N349 (MEDIUM, closed):** `PostCard` computed `isCreator = (post.authorLevel || 0) >= 5`
+  and `isPremium = (post.authorLevel || 0) >= 8`, and read `post.isVerified` for the
+  verified check. **No writer ever puts `authorLevel` or `isVerified` on a `posts/{id}`
+  document** — standing lives on `users/{uid}` (the create path writes `authorId`,
+  `authorName`, `authorIsPrivate`, `authorPhoto` only). Every read was therefore
+  permanently falsy: the creator/premium avatar rings, the verified badge, the creator
+  zap, and the creator-gated **Send gift** button never rendered on any feed card.
+  - Fix: new `src/hooks/useAuthorStanding.js` hydrates the distinct author uids in one
+    bounded batch (`socialGraphService.hydrateProfiles`, 30 ids per `documentId() in`
+    read, viewer-projected, resolved ids not re-read) and returns an entry only for a
+    profile that actually resolved. `PostCard`/`PostDetails` consume a resolved
+    `authorStanding` prop; a caller without one renders **no** badge (never fabricated).
+    `HomeScreen` feeds it the page's posts; `PostDetails` its single post.
+  - Guard: `postAuthorStandingGuard.test.js` (guards job) fails on any `authorLevel`
+    read or a post-document standing read.
+
+Latest verified: **167 suites / 1843 passed (5 skipped), exit 0**; `npm run lint` exit 0;
+`npm run build` green (all with the Firestore emulator live).
+
+## This session — money/fabrication + post-author-field sweep (N344–N348)
+
+- **N348 (HIGH, closed):** `functions/monetization.js` read the post author from
+  `postSnap.data().userId`, which does not exist — posts denormalise the author
+  as `authorId` (firestoreService postDoc, the communities writer, and the
+  `posts` create rule all agree). Consequences: `sendGift` threw "Post has no
+  author" on **every** gift (gifting was dead), and `boostPost`'s ownership
+  check `data().userId !== uid` rejected the real owner (boosting was dead, and
+  `boosted_posts.userId` was written `undefined`). Both now resolve `authorId`
+  with a `userId` fallback. Guard: `postAuthorFieldConsistency.test.js` (in the
+  `guards` job) fails on a post-author `userId` read in `functions/`, and pins
+  the client writer + rules to `authorId`. A follow-up sweep confirmed
+  `live_streams`/`videos`/`comments`/`questions` genuinely store `userId`, and
+  `admin.js`/`user.js`/`comments.js` reads are correct (no other mismatches).
+- **N344–N347 (closed in commit `f7f3207`):** idempotency-ledger ownership check
+  on `requestWithdrawal`/`watchAd`; fractional-coin withdrawal rejected; money
+  screens no longer double-prefix `$` (`$$5.00`) and format coins via
+  `formatCoinsAsUsd`; `predictPostPerformance` + `CreatePost` no longer render a
+  fabricated per-reach "earnings" figure. Guards: `moneyLedgerOwnershipGuard`,
+  `moneyDisplayFormatGuard`, `predictionNoFabricatedEarnings`.
+- **Emulator now runs locally for real.** `openjdk-21` (`default-jre-headless`)
+  installed via `sudo apt-get`; the Firestore emulator jar was fetched directly
+  (`storage.googleapis.com/firebase-preview-drop/.../cloud-firestore-emulator-v1.19.8.jar`)
+  into `~/.cache/firebase/emulators/` (firebase-tools' own downloader stalled),
+  then run with `java -jar … --host 127.0.0.1 --port 8080`. With
+  `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` the emulator-gated adversarial
+  assertions execute instead of skipping:
+  - rules/graph suites (15 suites): **130 passed, 5 skipped**;
+  - **full suite with the emulator: 166 suites / 1840 passed (5 skipped), exit 0.**
+
+Latest verified: **166 suites / 1840 passed (5 skipped)**; `npm run lint` exit 0;
+`npm run build` green (all with the emulator live).
 
 ## Current state
 
-- Latest verified: **156 suites, 1781 passed, 5 skipped**; `npm run build`
-  green; `npx eslint src/ functions/ --quiet` exit 0 (0 errors).
-- N320 closed this session: the creator dashboard's "Engagement"/"Coins Earned"
-  cards rendered a fabricated measured `0` — `functions/analytics.js`
-  seeds `profile_analytics.totalEngagement`/`coinsEarned` to `0` and no writer
-  ever increments them, and `analyticsService.getUserAnalytics` read the stored
-  value in the doc-exists branch (its `typeof === 'number'` guard passes on the
-  seed), *replacing* the live values the else branch derived. Both figures are
-  now derived live in every branch (`_computeRecentEngagement` from recent
-  public posts, `_readLiveCoinBalance` from `users/{uid}`); the server seed no
-  longer writes the two never-incremented fields.
-- N319 closed this session: the rogue `ARVDOUL_GRADIENT`
-  (`#9333ea → #c026d3 → #06b6d4`/`#ec4899`) second-brand-gradient family across
-  the post cards / video cards / SplashScreen is migrated onto `BRAND_GRADIENT`
-  (the `audioNeon*` token reads it was gated behind are undefined, so the rogue
-  fallback always fired). `designTokenDriftGuard.test.js` gains a raw-hex guard;
-  `semanticColorRatchetGuard.test.js` (new, shrinking baseline) +
-  `scripts/semanticHexBaseline.json` pin the semantic-palette consolidation.
-  Wired into the hard-failing `guards` CI job.
-- The `guards` CI job (108-suite static list) passes locally; its two emulator
-  steps were run locally against real emulators (Firestore 8 suites / 108 tests,
-  Storage 10 tests) and in CI (green, 0 skips).
+- Latest verified: **167 suites, 1843 passed, 5 skipped**; `npm run build`
+  green; `npm run lint` exit 0 (0 errors).
+- N330 closed this session (money-in integrity): the three Stripe-backed
+  economy callables ran their Stripe network calls **inside** the retryable
+  Firestore transaction callback — `purchaseCoins` re-charged the card each
+  retry, `createSubscription` re-created the price/subscription with no
+  idempotency key (a contention retry could start several paid subscriptions),
+  and it also read `users/{uid}` after writing `subscriptions/{uid}` (a
+  read-after-write that throws). All Stripe calls now run before the
+  transaction; `transactionOrderGuard` gains a hard-zero assertion.
+- N326–N329 closed this session (financial-integrity + payout-contract +
+  dead-route): see the table below. The headline is N326 — a PayPal-selected
+  withdrawal settled as a Stripe payout **from the platform account** with
+  `stripeAccount: undefined`, and the destination came from a client-supplied
+  field. Settlement is now provider-aware and server-authoritative, and a
+  functions test harness (emulator-backed) covers it.
+- N321 closed (prior): live presence (`isOnline`/`lastActive`) sat on the
+  world-signed-in-readable `users/{uid}` doc, so a raw `getDoc` leaked a user's
+  online status / activity timestamp to any authenticated client regardless of
+  the profile's `presence` scope (client-masking-only, the N315 class). Presence
+  moved to a scope-gated `user_presence/{uid}` document (rule mirrors
+  `profileSectionReadable(userId, 'presence', 'FOLLOWERS')`); `userService`
+  writes/reads it, `socialGraphService.hydrateProfiles` hydrates it opt-in with
+  per-doc reads, `AuthContext` no longer fabricates `lastActive`, the dead
+  `appStore.updateUserLastActive` is gone, and `users/{uid}` create/update refuse
+  the two fields. `userPresencePrivacyRules.test.js` (static + emulator
+  adversarial) + idempotent `scripts/migrate-user-presence.mjs`.
+- N322 closed this session: `NEW_USER_DEFAULTS.totalEarned: 0` seeded a
+  lifetime-earnings figure no writer maintains, so the wallet/creator surfaces
+  rendered a fabricated measured "Lifetime Earned: 0" (the N320 class). Removed
+  from `NEW_USER_DEFAULTS`, `createUserProfile`, and the `users/{uid}` create
+  rule (still in the server-authoritative denylist). Absent now renders "—".
+- N323 closed this session: a three-stop "brand mimic" gradient
+  (`from-purple-500 via-pink-500 to-cyan-400` and siblings) stood in for the
+  brand gradient across six modules (`RouteProgressBar`, `VideoTopBar`,
+  `GroupInfoScreen`, `MessagingScreen`, `ProfileQRCodeModal`,
+  `QuickAccessPanel`) plus two `components/Videos/VideoCard` /
+  `components/Ads/SponsoredPostCard` fills — a second brand gradient the hex
+  ratchet could not see. All migrated onto `BRAND_GRADIENT`;
+  `designTokenDriftGuard.test.js` gains a hard-zero `ROGUE_BRAND_MIMIC` guard.
+- The `guards` CI job (static list) passes locally; its emulator steps were run
+  locally against the running Firestore emulator (127.0.0.1:8080).
 - Emulator enabled locally this session (openjdk-21 installed via `sudo apt-get`;
-  Firestore + Storage jars cached under `~/.cache/firebase/emulators/`) — the
-  emulator-backed adversarial suites now actually execute instead of skipping.
-- Commits this session: `883e27e` (N207 honesty + CI emulator wiring),
-  `d7b149c` (N304 dead `events.privacy` removal), `27822ba` (checkpoint docs),
-  `c151bab` (checkpoint header), `8da6a12` (N306 wrong video assertion + CI
-  emulator wiring), plus this commit (N307 dead-control sweep).
+  Firestore + Storage jars cached under `~/.cache/firebase/emulators/`).
+- Commits this session: N321 (presence scope), N322 (totalEarned), N323
+  (brand-mimic gradient), N325 (dead fabricated coin getter). See
+  `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` §8 ledger rows N321–N325;
+  N324 (coins readable on the public `users/{uid}` doc) is confirmed and
+  deferred with a documented migration plan.
 
 ## Completed this session
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N336 | `ring-arvdoul-purple-500` was a dead class (no `-500` shade on the flat `arvdoul-purple`) — 97 focus rings invisible | corrected to `ring-arvdoul-purple`; added a config-aware custom-colour utility assertion to `tailwindUtilities.test.js` |
+| N335 | The screen canvas radial-gradient was copy-pasted in 4 screens with raw brand literals | added `brandRgba`/`brandCanvasBackground` design-system helpers; migrated all 4 |
+| N334 | Keyboard focus rings used the raw Tailwind family (`ring-purple-500`/`ring-indigo-500`/`ring-blue-500`/`ring-violet-*`) — a different colour than the brand violet | standardised 97 rings across 40 files onto `ring-arvdoul-purple-500`; drift-guard assertion; added `designSystemPrimitives.test.jsx` |
+| N333 | A second brand gradient shipped in 24 sites (incl. the design-system `Button` primary) because the guard only banned the pink/rose-middle mimic | migrated onto `bg-arvdoul-gradient`; added `ROGUE_BRAND_MIMIC_NEUTRAL` to the drift guard |
+| N332 | A client could write its own `users/{uid}.lockedCoins`, defeating the withdrawal hold (`getAvailableBalance = coins - lockedCoins`) — filed a second withdrawal against held coins | added `lockedCoins` to `SERVER_AUTHORITATIVE_FIELDS` + both rules denylists; `serverAuthoritativeFieldsRules.test.js` (static + emulator) in `guards` |
+| N331 | `payPerView` nested `transferCoinsInternal` (its own transaction) inside the outer transaction and awaited `enqueuePush` in the callback — an illegal nested transaction, so every pay-per-view purchase threw | separated the steps: transfer (idempotent) first, entitlement + push after commit; guard now bans nested `runTransaction`/`transferCoinsInternal`/`enqueuePush`/`fetch` in callbacks |
+| N330 | `purchaseCoins`/`createSubscription`/`cancelSubscription` ran **Stripe network calls inside the retryable transaction callback** (`createFirestoreTransaction` retries 5×; the SDK re-runs on write-conflict). `purchaseCoins` re-charged the card each retry; `createSubscription` had **no** Stripe idempotency key, so a transient conflict could start multiple paid subscriptions; it also read `users/{uid}` **after** writing `subscriptions/{uid}` (read-after-write → throws, so subscribing failed outright). | all Stripe calls moved BEFORE the transaction; `creditSubscriptionCoins` runs before the sub-doc write so reads precede writes; `cancelSubscription` reads+cancels in Stripe first; both now reject a foreign idempotency key; `transactionOrderGuard.test.js` gains a hard-zero "no `stripe.*` inside a `runTransaction` callback" assertion |
+| N326 | A PayPal-selected withdrawal settled as a Stripe payout **from the platform account** (`settleWithdrawal` always called `stripe.payouts.create` and took the destination from the client-supplied `paymentDetails.stripeAccountId`; the payout UI offered PayPal with no PayPal integration) | settlement now resolves the provider server-side (`resolvePayoutProvider`): PayPal/unknown are terminal (reject + release locked coins), a Stripe method requires `payout_settings.status === 'ready'` and the account id comes from `payout_settings`; `requestWithdrawal` validates the method before locking; `stripeWebhook` handles `account.updated` → `ready`; PayPal control removed from `CoinsScreen`/`CreatorPayoutScreen`/`VideoAnalyticsScreen`; `withdrawalSettlementProvider.test.js` (8 emulator tests) pins it |
+| N327 | `walletService.requestPayout` passed the details object as `paymentMethod`, so every `WalletScreen` withdrawal threw "paymentMethod and paymentDetails required" | signature fixed to `(userId, amount, paymentMethod='stripe_connected', paymentDetails={})`; `WalletScreen` passes `'stripe_connected'` |
+| N328 | `getPayoutSettings()` returned the `{ success, settings }` envelope and screens read `accountStatus`, a field the server never writes (server writes `status`) — a fully-onboarded creator showed "Not connected" forever | service unwraps `data.settings ?? data`; fallback returns honest `status: 'unconfigured'`; `CreatorPayoutScreen`/`VideoAnalyticsScreen` gate on `status === 'ready'`; `noFabricatedData` pin |
+| N329 | `/image-editor` + `/image-studio` were dead routes rendering the same `ThumbnailDesignerScreen` as the reachable `/thumbnail-designer`; nothing linked to them | both aliases + their `TopAppBar`/`MainLayout` path special-cases removed |
+
+**Functions test harness (new).** `jest.config.cjs` still excludes `/functions/` from the auto-run, but a new `firebase-functions` stub (`tests/stubs/firebase-functions.cjs`) + module mapper lets a `src/__tests__` suite `import` a real `functions/` module and exercise it against the Firestore emulator. `withdrawalSettlementProvider.test.js` is the first consumer and is wired into the `guards` CI job (which already runs the Firestore emulator).
+
+## Completed this session (N321–N325, prior)
 
 | # | Item | Evidence |
 | --- | --- | --- |
@@ -196,6 +665,127 @@ CI: the `guards` emulator step now also runs `readScopePrivacyRules`, `counterSh
 
 Latest verified: **155 suites / 1,775 passed (5 skipped)**; `npx eslint src/ functions/ --quiet` exit 0 (0 errors); `npm run build` green. Emulator-backed `readScopePrivacyRules` 13/13, `firestoreRulesCompile` + `firestoreRulesCoverage` + `livePresenceAndHealthPrivacyRules` 70/70 (N313-N318).
 
+## Continuation session (design-token + avatar consolidation)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N337 | The Tailwind `bg-arvdoul-gradient` utility re-declared the brand gradient as a config literal (Tailwind cannot import the ESM token) with nothing pinning the two | `designTokenDriftGuard` asserts the config literal is byte-identical to `tokens.color.brand.gradient` |
+| N338 | `themePalettes.js` declared the brand violet in decimal form (`rgba(139,30,243,..)`) despite the guard requiring palettes to derive from tokens | glows/cards derive from `brandRgba()`; new `brandVioletRgbaRatchetGuard.test.js` (baseline `scripts/brandVioletRgbaBaseline.json`, 73 → 64) wired into `guards` |
+| N339 | `TopAppBar`/`FollowButton` hand-wrote brand-violet glows in decimal (JS string contexts) | migrated to `brandRgba()`; ratchet baseline lowered |
+| N340 | Two deterministic-avatar generators (`avatarUtils.generateDefaultAvatarSvg`, `userService.generateDefaultAvatar`) each carried their OWN palette list with DIFFERENT secondary shades — the same user rendered a different avatar in the feed vs the profile | palette single-sourced in `avatarUtils`; `userService` imports it; `avatarPaletteConsistency.test.js` (guards job) fails on a second list or the old shades; semantic-hex baseline shrinks |
+| N341 | `BottomNav` brand-violet radial/linear gradients hand-wrote the decimal literal | migrated to `brandRgba()`; ratchet baseline lowered |
+| N342 | Eleven more JS-string brand-violet literals survived N339/N341: the six auth/onboarding `--glow-a`/`--rim-1` style vars, `ImageEditor`, `editorConstants`, `OfflineIndicator`, `SearchScreen`, and the `EqualizerModule` canvas gradient (which also hard-coded brand indigo/blue decimals) | all derive from `brandRgba()`; new generic `brandHexRgba(token, alpha)` for the canvas stops; `designTokens.test.js` pins it; ratchet baseline 73 → 38 (residue is Tailwind arbitrary-value classes) |
+| N343 | `ProfileProgression` fabricated a 0-XP bar from a missing XP value (`experience` defaulted to `0` -> `getLevelInfo(0)`) | `experience` defaults to `null`; curve consulted only when `hasExperience`; XP bar gated on `xpInfo`; `noFabricatedData.test.js` pins all three |
+
+**Emulator verification (this session).** `openjdk-21` installed via `sudo apt-get`;
+`npx firebase-tools emulators:exec --only firestore` ran the 12 rules/graph
+adversarial suites for real: **12 suites / 129 tests passed, 0 skipped**.
+`--only storage` ran `storageRulesPathAlignment` for real: **10 tests passed**.
+The emulator-gated assertions execute (not silently skip) with Java present.
+
+Latest verified: **162 suites / 1829 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green.
+
+## Continuation session (viewer-state reality: comments + pending follow requests)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N356 | `VideoComments` hardcoded `isLiked: false`; `commentService.likeComment` toggles (rejects a repeat), so an already-liked comment rendered unliked and the toggle threw + reverted — the like silently no-op'd | `VideoComments` seeds `isLiked` from the comment doc's `likesBy` (viewer uid resolved via `getAuthInstance`); `commentLikeStateRealityGuard.test.js` (guards job) |
+| N357 | A follow against a private account (`follow_requests/{from}_{to}`, `status: 'pending'`, no `follows` edge) was unmodelled: the graph spine returned `requestStatus: null`, `getFollowStates` dropped it, and four follow controls re-offered "Follow" (a second tap filing a duplicate request) with no way to withdraw | `socialGraphService.getRelationship`/`getEdgeSet` read the pending row (actor-equality + other-party `in` + `status == 'pending'`, only when the follow edge is wanted); `userService.getFollowStates` surfaces `requestStatus`; `ReelsScreen`/`SearchScreen`/`VideoCard`(+`VideoFeed`)/`CreatorCarousel` render a distinct Requested state and cancel via `cancelFollowRequest`; `follow_requests` composite index declared; `followRequestStateRealityGuard.test.js` (guards job) |
+
+Latest verified: **1870 tests / 1865 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N358: two more follow surfaces + preview dead controls)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N358 | `PostOptionsDrawer` read `getFollowStatus` but dropped `requestStatus`, so a requested private author's post menu showed **Follow** (second tap = duplicate request) and a `followUser` `{requested:true}` result was optimistically rendered as a completed follow; `ProfilePreviewScreen`'s visitor perspective omitted `requestStatus` from the relationship handed to the capability engine; `ProfileHeroSection` rendered Follow/Message/Call/Gift/More with no handler in preview mode (dead controls) | drawer carries `followRequested` (from `requestStatus === 'pending'`), offers **Cancel request** via `cancelFollowRequest`, and reconciles `res.requested`/`requestStatus === 'pending'` into the requested state; preview passes `requestStatus`; hero disables + "Preview only"-labels the handler-less controls; `followRequestStateRealityGuard.test.js` (extended) and `postCardFieldRealityGuard.test.js` (new drawer test) lock it |
+
+Latest verified: **1872 tests / 1867 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N359: ConnectionsScreen real per-row follow state)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N359 | `ConnectionsScreen` rendered `isFollowing={citizen.isFollowing}` but the spine's projection never attaches that edge, so every row showed **Follow**; the Friends tab called `getMutualFriends` (bare profiles) for others and filtered `getFollowers` on the never-set `f.isFollowing` for the owner, so it was empty for everyone | one bounded `getFollowStates(currentUserId, allIds)` over the union of the three lists stamps real `isFollowing`/`requestStatus`; Friends tab uses canonical `userService.getFriends`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1873 tests / 1868 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N360: NotificationsScreen network follow truthfulness)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N360 | `NotificationsScreen` `handleToggleFollow` appended the user to `following` + toasted "Following" even when `followUser` filed a pending request (private target), and the "Follow Back" button decided follow/unfollow from `following.some(...)` (the viewer's own list) so an already-followed follower showed "Follow Back" and tapping it unfollowed them | load resolves `getFollowStates` over the follower+following union into `followStates`; row renders **Requested** with real withdraw via `cancelFollowRequest`; handler reconciles `result.requested`/`requestStatus === 'pending'`; `followRequestStateRealityGuard.test.js` locks it |
+
+Latest verified: **1874 tests / 1869 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N361: ProfilePublicScreen private-gate label)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N361 | `ProfilePublicScreen`'s "This Account is Private" gate labelled its CTA `{isFollowing ? 'Requested' : 'Follow to View'}`; `isFollowing` is false for a pending request, so a requester still saw "Follow to View" | CTA branches on `requestStatus === 'pending'`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1875 tests / 1870 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N362: ProfilePublicScreen friend-request keying)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N362 | `sendFriendRequest`/`cancelFriendRequest` used the raw `userId` route param (which may be a `@handle`), so the `friend_requests/{fromUid}_{toUid}` document was filed under a handle-keyed id that the accept path could never match | both resolve `friendTargetUid = profileData?.id || profileData?.uid || routeUserId`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1876 tests / 1871 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N363: NotificationsScreen connect fallback)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N363 | `handleConnectUser`'s friend-request fallback called `followUser` and always set `'following'` + toasted "Now following" even for a private target (pending request) | fallback reconciles `result.requested`/`requestStatus === 'pending'` into `'requested'`; `followRequestStateRealityGuard.test.js` pins it |
+
+Latest verified: **1876 tests / 1871 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N364: video viewer follow state)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N364 | `VideoDetailScreen` passed neither `isFollowing` nor `onFollow` to `VideoCreatorInfo`, so the creator card's Follow control was dead and always read "Follow"; a pending private-account request had no state and no cancel | screen resolves `getFollowStatus(uid, video.userId)`, branches pending into a disabled "Requested" with `cancelFollowRequest`, passes `isFollowing`/`requested`/`followBusy`/`onFollow`; `followRequestStateRealityGuard.test.js` pins it; the verified badge's rogue purple→pink gradient migrated to `bg-arvdoul-gradient` |
+
+## Continuation session (N365, N366)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N365 | `CreatorPayoutScreen.sumCredits`/lifetime-withdrawn and `VideoAnalyticsScreen.lastPayoutCoins` coerced an absent ledger `amount` to `0`, understating a measured figure | every sum returns unknown (`null` → "—") when any contributing amount is unknown; `noFabricatedData.test.js` pins `unknownNumber` + absence of `Number(tx.amount) \|\| 0` |
+| N366 | `ProfilePublicScreen` passed `onFriendPress={(friend) => navigate(\`/profile/${friend.id}\`)}` but `ProfileSocialContext` calls the handler with no argument → TypeError on every tap | handler routes to `/profile/:userId/friends`; `profileReadModel.test.js` fails on a `(friend) =>` handler; `VideoFeed`'s `onFollow` no longer fabricates `{ isFollowing: true }` |
+
+Latest verified: **1878 tests / 1873 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+## Continuation session (N367: dead handler-prop wiring sweep)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N367 | Handler props that a component referenced (or wired into an `onClick`) but that **no caller ever passed** and that were never guarded — always-undefined functions: `TimelineToolbar`'s Back/Crop/Settings buttons (`onBack`/`onCrop`/`onOpenSettings`), `TextTool`'s whole "Text Layers" section (`textLayers` + its three layer callbacks), `MessageBubble.onLongPress`, `VideoGiftModal.onSendGift`, `MessageInput.onStartRecording`/`onStopRecording`, `ExportModal.onCompleteExport`, and `ProfileSocialContext`'s `cursor-pointer` shared-communities card calling a never-passed `onCommunityClick` | dead buttons/props removed (`TimelineToolbar`, `TextTool`, `MessageInput`, `ExportModal`, `ToolPanels`, `VideoGiftModal`, `MessageBubble`); `SplashScreen.onRenderError` is now wired in `AppRoutes` to `logger.error`; the communities card is a read-only summary; new hard-failing `deadHandlerPropGuard.test.js` (guards job) fails if a handler is referenced/executed but never passed and never guarded; complementary `deadDataPropGuard.test.js` fails if a data prop is used only as a JSX truthiness gate but no caller passes it |
+
+Latest verified: **1880 tests / 1875 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job. `AppRoutes`
+also wires `SplashScreen.onMetrics` → `metricsService.recordHistogram` (the
+startup timings previously had no sink).
+
 ## Commands to resume
 
 ```
@@ -203,4 +793,203 @@ git status
 NODE_OPTIONS=--experimental-vm-modules npm run test -- --watchAll=false
 npm run build
 npm run lint
+```
+
+## Continuation session (N324: coin balance moved to users_private)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N324 | A user's coin balance (`users/{uid}.coins`) was readable by every signed-in client (`allow read: if isSignedIn()`), because Firestore rules cannot field-mask a readable document — `economicStatus` (default ONLY_ME) was enforced only by the client projection. A financial figure readable by every signed-in user. | Authoritative balance moved to `users_private/{uid}` (owner/admin only). New `functions/coinBalance.js` (`readCoinBalance`/`writeCoinBalance`/`availableFrom`) is the single accessor; `monetization.js`, `withdrawalSettlement.js`, `video.js`, `xpAward.js` repointed; `admin.js` + `monetization.js` coin-supply aggregate sum `users_private`; `privacyMigration.js` backfills `coins`/`lockedCoins`; client `monetizationService.getBalance` / `walletService` / `analyticsService._readLiveCoinBalance` read the private doc; `userService.createUserProfile` seeds the starting balance on the private doc (create-only). Rules: `coins`/`lockedCoins` added to `touchesPrivateProfileFields`, the users create pin/denylist updated, and the `users_private` create pins `coins == 100` and refuses `lockedCoins`. Cross-user `getCoinLeaderboard` (needed a public balance, no screen caller) removed with its test. `coinBalanceBoundary.test.js` (new, guards job) + `profilePiiBoundary.test.js` + `sharedConfigSync.test.js` + `noFabricatedData.test.js` pin the boundary. Legacy accounts keep a `fallbackToPublic` read until `privacyMigration` runs. |
+
+Latest verified: **1889 tests / 1884 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green. Emulator-backed suites skip locally (no
+`FIRESTORE_EMULATOR_HOST`) and run for real in the `guards` CI job.
+
+### Remaining production-only requirement for N324
+
+Run `functions/privacyMigration.js` against production (admin-gated callable /
+scheduled sweep) to copy `coins`/`lockedCoins` into `users_private/{uid}` and
+scrub them from `users/{uid}`. Until it runs, `readCoinBalance(..., { fallbackToPublic: true })`
+keeps reading the legacy public field so no balance is lost.
+
+## Continuation session (N368: event attendee roster)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N368 | `EventDetailScreen`'s attendee tab rendered `data.displayName \|\| 'User'` over a generic gradient blob. `events/{id}.attendees` stores only `{status,ticketTier,registeredAt,checkedInAt}` per uid (no name — `functions/events.js` never writes one), so **every** attendee showed the placeholder "User" and the real identity was unrecoverable. | New `getEventAttendees` callable resolves the roster server-side (bounded `documentId() in` `users` batches, placeholder stripping, `[]` for a non-attendee); `eventService.getEventAttendees` + `FUNCTIONS.GET_EVENT_ATTENDEES`; the screen renders the resolved roster with real avatars (`getSafeAvatarUrl`) plus a skeleton and a permission empty-state; the callerless `subscribeToAttendees` was removed. `eventAttendeeRosterGuard.test.js` (guards job) pins it. |
+
+Latest verified: **1893 tests / 1888 passed (5 skipped)**; `npm run lint` exit 0
+(0 errors); `npm run build` green.
+
+## Continuation session (N266: draft-event read exposure closed)
+
+Java 21 was installed in the workspace (`apt-get install -y default-jre-headless`),
+so the Firestore/Storage emulators now run locally — every emulator-backed rules
+suite is verified for real here, not only in CI.
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N266 | `events/{eventId}` was `allow read: if isSignedIn()`, so any signed-in client could read a `draft`/`cancelled`/`archived` event by id (title, location, coordinates, ticket tiers) even though no discovery list surfaces it. The earlier deferral was blocked because `eventService.getUserRegistrations`'s list query (`where('attendees.<uid>.status','in',…)`) cannot prove the status/organizer predicate (rules are not filters). | Registration list moved server-side: new `getUserEventRegistrations` callable (Admin SDK, minimal projection, bounded `limit(100)`, in-memory sort to avoid an undeclarable per-uid map composite index); `eventService.getUserRegistrations()` delegates to it and `FUNCTIONS.GET_USER_EVENT_REGISTRATIONS` was added. Rule is now `isSignedIn() && (status in ['published','open','live','ended'] || organizerId == uid() || attendees[uid()] != null || isAdmin())`. `readScopePrivacyRules.test.js` updated: static gate assertions + an emulator test proving draft → organizer/attendee succeed and stranger/anonymous fail, published → any signed-in succeeds. |
+
+Latest verified: **1893 tests / 1888 passed (5 skipped)**; emulator rules suites
+(`readScopePrivacyRules`, `firestoreRulesCompile`, `socialGraphEdgeReadRules`,
+`counterShardForgeryGuard`, storage path alignment, +7 more) — **139 tests
+passed** locally against the Firestore/Storage emulators; `npm run lint` exit 0
+(0 errors); `npm run build` green.
+
+## Continuation session (N207 closure + N369 message_dedupe forgery)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N207 | `counter_shards` accepted a client-written absolute `value` for any shard id — a signed-in user could mint any count. The earlier deferral claimed a rule could not distinguish a legitimate `increment(±1)` from an absolute write. **That was wrong:** an emulator probe confirmed `request.resource.data.value` is the *resulting* value and `resource.data.value` the *pre-write* value, so a rule can bound the relative delta. | Rule now requires the single numeric `value` AND bounds the change to `±100` (`value - resource.data.value` in `[-100,100]` on update; `value` in `[-100,100]` on create). One-shot absolute mints (create and update) are denied; every reachable call site increments ±1 and the ±100 headroom covers the batched comment-delete (`amount: -count`). `counterShardForgeryGuard.test.js` now asserts the absolute mint `assertFails` while a legitimate ±1 increment `assertSucceeds`. Residual (documented, not fully closed): the shard id is unbound to the writer, so a client can still grind repeated bounded writes; the full fix is to move every counter mutation server-side and set `allow write: if false`. |
+| N369 | `message_dedupe` was `allow read, write: if isSignedIn()`. The key is `sha256(sender:conversation:type:content:mediaHash)` — its pre-image is public — so any signed-in client could compute a victim's next key, pre-create the record, and suppress that victim's message (`_checkDuplicate` → `messaging/duplicate`). The open read also allowed enumerating recent send keys, and the rule comment overclaimed the key "cannot be forged". | Rule binds each record to its sender: `create, update` must stamp `senderId == uid()`; `read` is `resource == null || resource.data.senderId == uid()`. `messagesService.sendMessage` stamps `senderId` and `_checkDuplicate` treats a `permission-denied` read as "no duplicate of mine". New `messageDedupeGuard.test.js` (static + emulator) is registered in the hard-failing `guards` job. |
+
+Latest verified: full emulator suite **1898 tests / 176 suites** green (incl. the two new guards);
+`npm run lint` exit 0 (0 errors); `npm run build` green.
+
+### Findings status
+
+Closed in this session: **N207**, **N369**. Still open in the ledger: **N175**
+(rankings/trending have no writer — BLOCKED on the ranking formula, a product
+decision; inventing one would itself fabricate standings) and **N270**
+(highlight visibility is a product decision, INFORMATIONAL).
+
+## Continuation session 2 (N370 + N270 re-verification)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N370 | Story shard counters (`stories/{id}/view_shards`, `reaction_shards`, `analytics_shards`) bounded the KEY SET but not the VALUE, so any signed-in client could `setDoc` a shard with `count: 999999`; the sum-on-read (`_getShardedViewCount`/`_getShardedReactionCounts`) then reported a forged count. Same class as N207. `daily_upload_counters` was id-bound (N210) but its `count` was likewise unbounded — a fresh shard could be pre-set to `999999`, defeating the per-tier upload limit. | Rules now pin a bounded relative change using the N207 technique (`fieldDeltaBounded` on update, `fieldCreateBounded` on create; `request.resource.data.<f>` is the resulting value, `resource.data.<f>` the pre-write value; missing pre-write reads as the map's `get(field, null)`): `±100` for story shards, `[1,100]` create + `+0..+100` update for upload counters. New `storyShardForgeryGuard.test.js` (static + emulator adversarial) plus two new adversarial assertions in `firestoreRulesCompile.test.js`; both registered in the hard-failing `guards` job. |
+| N270 | Re-verified: the `highlights` read is `isSignedIn()`, **not** world-readable — the row's title was stale. Cross-user read is intentional (`storyService.getHighlights(userId)` renders any profile's Highlights). `highlightStories` leak only the reference; the underlying `stories/{id}` stays visibility-gated. | Re-classified **NOT_AN_ISSUE / reviewed**. No code change. |
+
+Verified: full emulator suite **1901 tests / 177 suites** green; `npm run lint`
+exit 0 (0 errors); `npm run build` green.
+
+### Findings status
+
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the
+ranking formula, a product decision). N270 re-classified NOT_AN_ISSUE.
+
+## Continuation session 3 (N424–N427 — fabricated-capability audit, level perks + passport + menu)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N424 | `PassportScreen` advertised a biometric credential the platform cannot produce (“BIOMETRIC PASS”, “Biometrics” tab, “Decrypting authenticated citizen credentials…”; `MenuScreen` “Biometric sovereign passport”). No WebAuthn / `navigator.credentials` / biometric capture exists. | Page retitled “CITIZEN IDENTITY”, tab “Identity”, loader reworded, menu copy de-biometricised. |
+| N425 | `LEVEL_PERKS` / `LEVEL_GATES` sold perks and gates with no implementation (Custom Badge, Custom Accent, Enhanced Identity Card, Citizen Council, Priority Cashout Review, Nation Founder Circle, Monarch Halo; dead gates `giftBoost`/`earlyAccessStudio`/`customBadge`/`citizenCouncil`/`founderCircle`). Settings cosmetic tracker listed them; `PerksRewardsScreen` claimed “verified gift earnings, coin milestone bonuses, civic governance rights”. | Perk table reduced to honours-able benefits; five dead gates removed from both `levelConfig.cjs` copies (synced via `scripts/sync-shared-config.mjs`); Settings tracker lists only Top Creator Standing + Crest Radiance; PerksRewards copy corrected. |
+| N426 | Digital Passport hardcoded “Active Citizen” regardless of account state; `passportService` never surfaced `accountStatus`. | Payload now exposes the real `accountStatus` (null when absent); screen renders it, “—” when unknown. |
+| N427 | Menu hub overclaimed “4K” editor + “4K UHD” badge, “24/7 ticket support”, “royalty payouts”. | Copy corrected to “Multi-track video editor”, “support tickets”, “creator payouts”. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **185 suites / 2052 passed / 5 skipped / 2057 total** green; `functions/levelConfig.cjs` byte-identical to `src/shared/levelConfig.cjs`. New guards in `noFabricatedData.test.js` (N424–N427) plus updated `levelConfig.test.js`, `levelSystem.test.js`, `settingsScreen.test.jsx`.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N424–N427 closed.
+
+## Continuation session 4 (N430 — royal-standing object/string mismatch + royal-benefit overclaim)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N430 | `setActiveTitle` (`functions/levelSystem.js`) stores `activeTitle` as an **object** (`{ id, name, icon, domain }`), but `ProfileHeroSection` and `EditProfileScreen` compared `profile.activeTitle === 'duke' / 'king'` — a string compare against an object, always false. Every legitimately-granted royal title was therefore invisible (no Royal Family badge, no heraldic editor section). `ProfileHeroSection`'s fallback string compare over `activeTitle`/`titles` shared the defect. Separately the `ProfileSystemRoadmapModal` Duke/King privilege lists promised a “Royal Crown Profile Badge with ambient violet profile aura”, a “Golden Monarch Crown & Radiant Halo Frame on avatar across all screens” and “Royal Standing recorded in your citizenship standing” — none of which the platform renders (the crest aura is a level-unlocked ring, there is no golden halo cosmetic, and standing lives in the passport). | `profileReadModel` gained `resolveActiveTitleId` (object *and* string shapes) and `resolveRoyalFlag` (canonical flags → active-title id → denormalized `titles` array); `ProfileHeroSection`/`EditProfileScreen` consume them; the roadmap lists only rendered benefits (Royal Family badge, title on profile, standing in the passport). |
+
+Verified: `npx eslint src functions` exit 0 (0 errors, warnings only); full jest suite **185 suites / 2056 passed / 5 skipped / 2061 total** green; `npm run build` green. New `profileReadModel.test.js` cases (`resolveActiveTitleId`, `resolveRoyalFlag`) and a `noFabricatedData.test.js` (N430) guard pin both the read-model resolution and the corrected roadmap copy.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N270 is NOT_AN_ISSUE. N424–N430 closed.
+
+## Continuation session 5 (N431 — stale `followerCount`/`followingCount` on the server)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N431 | `users/{uid}.followerCount`/`followingCount` are seeded `0` at signup (`NEW_USER_DEFAULTS`) and **never written again** — every follow/unfollow increments a sharded `counter_shards` doc (`CountersManager` inside `userService.followUser`/`unfollowUser`/`approveFollowRequest`/`blockUser`). Server readers trusting the raw field saw a fabricated `0`: (1) the fan-out threshold in `functions/feed.js` + `functions/stories.js` (`> 10000`) **never tripped** → a celebrity's post/story fanned out to *every* follower (the unbounded write storm the pull model exists to avoid); (2) `functions/search.js` shipped `followerCount: 0` to the Algolia user index → people-search rendered a fabricated “0 followers”; (3) `socialGraphService.hydrateProfiles`/`getSummary`, `profileReadModel`, `rankingService`, `monetizationService.getUserPopularityPosition` all read the stale raw field (only `userService.getUserProfile` applied the shard overlay). A client could also seed an arbitrary count at signup and write it via profile update (minted standing). | New `functions/userCounters.js`: `readUserCounter` sums shards in one batched `db.getAll` (legacy raw field only when no shard exists) — now used by both fan-out decisions (feed.js fails toward the pull model on an unresolvable count); scheduled `aggregateUserCounters` mirror writes the shard sum back onto `users/{uid}` (only when changed, so the Algolia `onWrite` index does not churn) so every raw reader is truthful. Counts made server-authoritative in `firestore.rules` (`touchesServerAuthoritativeFields` + create rule pins `0`) and `SERVER_AUTHORITATIVE_FIELDS`. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **186 suites / 2063 passed / 5 skipped / 2068 total** green; `npm run build` green. New `followerCounterSourceGuard.test.js` (added to the hard-failing `guards` CI job) pins the module+merge, the byte-identical server/client shard hash + doc-id layout, the batched shard read, the mirror write shape, both fan-out reads, the fail-safe default, the rules denylist/create pin and the contract parity.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision). N270 is NOT_AN_ISSUE. N424–N431 closed.
+
+## Continuation session 6 (N432 — achievements/titles scored against metric fields no writer populates)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N432 | `evaluateAchievements` / `claimTitle` score criteria against `users/{uid}` metric fields (`commentsCount`, `pollVotesCount`, `profilesVisitedCount`, `giftsSentCount`, `hostedLive`, `likesCount`, `friendsCount`, `lifetimeCoinsEarned`, `hasPassport`/`passportCreated`, `isPioneer`, and for titles `contributionScore`/`reputationScore`/`influenceScore`/`creationsCount`/`isFounder`) that **no client or server path ever writes**. The evaluators therefore read a permanent `0` and deny every qualifying user: **14 of 21 achievements and 8 of 15 titles are unearnable** (incl. royal `duke`/`king`, whose `minAchievements`/`reputation`/`contribution`/`influence` dimensions are permanently 0). A fabricated *zero* that denies a real accomplishment — the inverse of the fabricated-standing class. | New `functions/userMetrics.js#computeUserMetrics` aggregates the collections the platform actually writes with bounded aggregation reads (no collection scan): `comments.userId`→`commentsCount`, `poll_votes.userId`→`pollVotesCount`, `profile_views.viewerId`→`profilesVisitedCount`, `gift_transactions.senderId`→`giftsSentCount`, `live_streams.userId`→`hostedLive`, `posts.authorId`→`postsCount` (count) and →`likesCount` (`.aggregate({ sum })` over `stats.likes`). `evaluateAchievements` overlays it (`const stats = { ...userData, ...computed }`) and scores that; an unresolvable metric stays absent (fail-closed). Metrics with no defined source remain BLOCKED in the ledger (reputation/contribution/influence model, `friendsCount`, `lifetimeCoinsEarned`, `hasPassport`, `isPioneer`/`isFounder`). |
+| N433 | `posts/{postId}.stats.{likes,comments,shares,saves}` are seeded `0` and never written again — every like/save/share/comment routes to a sharded `counter_shards` doc. `feed.js#processScoreUpdates` read top-level `likeCount`/`commentCount`/`shareCount`/`viewCount` (fields **no writer populates at all**), so the engagement term was a constant `0` and feed ranking collapsed to pure recency; `search.js#indexPost` shipped the stale `stats.*` (0) to Algolia, so content search sorted by a fabricated score. | New `functions/postCounters.js` mirrors the video counter model: a batched `db.getAll` shard read + a cursor-paged scheduled `aggregatePostCounters` that writes the sums back onto `posts/{postId}.stats` (only when changed, so the Algolia `onWrite` index does not churn). `feed.js` now reads `post.stats.*`. Shard hash + doc-id layout byte-identical to `CountersManager.js`. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **188 suites / 2075 passed / 5 skipped / 2080 total** green; `npm run build` green. New `achievementMetricSourceGuard.test.js` and `postCounterSourceGuard.test.js` (added to the hard-failing `guards` CI job) pin the modules, the overlays, the real writer field names, the bounded aggregation shape and the fail-closed behaviour. `functionsContract.test.js` shared-module allowlist extended for `userMetrics.js` (`postCounters.js` is merged, so it needs no entry).
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N433 closed.
+
+## Continuation session 7 (N434 — community `stats.eventCount` had no writer)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N434 | `communities/{communityId}.stats.eventCount` is seeded `0` at community create (`functions/communities.js#createCommunity`) and **never written again** (`postCount`/`memberCount` have writers; `eventCount` does not), yet `CommunityDetailScreen.jsx` renders it as the community "Events" stat and `communityService.getCommunityStats` reads it. Every community therefore showed a fabricated "Events 0" regardless of member activity — the same counter-with-no-writer class as N431/N433. Events carry a `communityId` (client `eventService.createEvent`), so the count is derivable, but the community document is server-write-only so the derived counter must come from a server trigger. | New `functions/eventCounters.js#onEventWrite` (firestore `events/{eventId}` `onWrite`) applies a **net delta** to the owning community's `stats.eventCount` (`-1` before / `+1` after; a status-only or registration write cancels to zero, so no community is read or written). `COUNTED_EVENT_STATUSES = ['published','open','live','ended']` (draft/cancelled do not count; cancel/delete decrements). One batched `db.getAll` + one `db.batch`; **only counts toward a community the organizer is a member of** (forgery guard). New `communityEventCountSourceGuard.test.js` (guards job) pins the merge, trigger shape, net-delta logic, status set, membership guard and the real UI consumer. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **189 suites / 2081 passed / 5 skipped / 2086 total** green; `npm run build` green. Also created `docs/engineering/implementation-plan-30.md` (the 30-task/sub-task working plan).
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N434 closed.
+
+## Continuation session 8 (N435 — video `stats.comments` had no writer)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N435 | `videos/{id}.stats.comments` is seeded `0` and **never written**. The video comment UI (`VideoComments`) submits with the *video id* as the target, so `commentService.createComment` incremented a sharded `posts/{videoId}` counter — a document that does not exist for a video, read by nobody — and `videos/{id}.stats.comments` stayed a fabricated `0`. That zero feeds `updateVideoRankingScores` (the `comments * 2` ranking term) and the video card's comment count. | New scheduled `functions/video.js#aggregateVideoComments` derives `stats.comments` from the real `comments` collection with a bounded `.count()` (`.where('postId','==',videoId).where('isDeleted','==',false)`, no scan), mirroring `aggregateVideoViews`/`aggregateVideoLikes`, writing only on change. The client no longer increments the phantom post counter for a video comment (`VideoComments` passes `targetType: 'video'`; `createComment` skips the `posts/*` increment). New `videoCommentCounterSourceGuard.test.js` (guards job) pins the mirror, the ranking read, the client guard and the UI tagging. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **190 suites / 2085 passed / 5 skipped / 2090 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N435 closed.
+
+## Continuation session 9 (N436 — video `stats.saves` had no writer)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N436 | `videos/{id}.stats.saves` is seeded `0` and never written. A viewer's save state lives in `users/{uid}/saved_videos/{videoId}`, and the `videos` update rule excludes `stats`, so no client could maintain the aggregate — yet `VideoCard` renders `formatViewCount(video.saves)` and `ReelsScreen` renders `stats.saves.toLocaleString()` as real counts. Permanent fabricated `0`. | New server-authoritative `toggleVideoSave` callable (rate-limited, transactional) is the only writer: it keys on `videos/{id}/saved_by/{uid}` (a save exists iff the doc exists), increments/decrements `stats.saves`, idempotent (no-op when the state already matches). Client `saveVideo`/`unsaveVideo` call it via `FUNCTIONS.TOGGLE_VIDEO_SAVE` (best-effort). New `saved_by` subcollection is server-internal (`allow read, write: if false`). New `videoSaveCounterSourceGuard.test.js` (guards job). |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **191 suites / 2090 passed / 5 skipped / 2095 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N436 closed.
+
+## Continuation session 10 (N437 — post analytics "Views" read a seeded zero)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N437 | `PostAnalyticsScreen` rendered `posts/{id}.stats.views` as the real view total, but post views are a sharded `counter_shards` counter (`recordPostView` → `incrementShardedCounter`); nothing writes `stats.views`, so it stays the create-time `0`. Every post's analytics showed a measured `0` views and a `0%` engagement rate. | The screen now resolves views via `CountersManager.get({ docPath: 'posts/{id}', field: 'views', fallback: stats.views })` (the shard layout `recordPostView` writes). `postCounterSourceGuard.test.js` pins the sharded read and forbids presenting the raw seeded field. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **191 suites / 2092 passed / 5 skipped / 2097 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N437 closed.
+
+## Continuation session 11 (N438 — `users/{uid}.postCount` had no server writer and was not server-authoritative)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N438 | `users/{uid}.postCount` is seeded `0` at signup, but the only writer was a best-effort *client* increment inside `firestoreService.repostPost` — so a normal post never moved the count (only a repost did), while `ProfileMetricsGrid` ("Posts"), `QuickAccessPanel`, `AuthContext` and `socialGraphService.hydrateProfiles` rendered it as a real total. Unlike `followerCount`/`followingCount` (N431) it was absent from `SERVER_AUTHORITATIVE_FIELDS` and the rules denylist, so any signed-in owner could `updateDoc` it to an arbitrary number (minted standing). Same counter-with-no-writer class as N431/N433/N434/N435/N436. | `postCount` added to `SERVER_AUTHORITATIVE_FIELDS` (`src/config/profileContracts.js`) and `touchesServerAuthoritativeFields()` (`firestore.rules`; the signup `create` still pins it to `0`). New `functions/userCounters.js#onPostWrite` document trigger is the only writer: net delta per author (`isDeleted === false` before → `-1`, after → `+1`, zero deltas skipped) via `FieldValue.increment`, touching only users that still exist. Cursor-paged `reconcileUserPostCounts` job (bounded `count()` over `posts where authorId == uid`, no scan) corrects legacy drift. The client `updateUserPostCount` writer and its repost call site were deleted. New `postAuthorCountSourceGuard.test.js` (guards job) pins the trigger, the reconcile job, the rules/contract parity and the absence of the client writer. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **192 suites / 2101 passed / 5 skipped / 2106 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N438 closed.
+
+## Continuation session 12 (N439 — comment reaction counts written to shards but never summed on read)
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N439 | `commentService.likeComment`/`dislikeComment`/`removeLikeDislike` increment a sharded `counter_shards` counter for `comments/{id}` (fields `likes`/`dislikes`) and never write the numeric fields on the comment doc (they stay the create-time `0`). No reader resolved the shard sum, so `CommentsDrawer` (`formatCount(comment.likes)` ~953 + "Best" sort ~265) and `VideoComments` (`comment.likes ?? '—'` ~464 + sort ~244) showed a fabricated `0` likes on every comment, and `subscribeToPostComments` replaced an optimistic like count with that seeded `0`. `likesBy` is capped at `REACTION_ARRAY_CAP` (200), so it is not a substitute. Same shard-written/raw-read class as N431/N433/N437. | New `CountersManager.applyAll` overlays the shard sum onto a batch of items in bounded `getAll` chunks (legacy fallback when no shard exists, like `apply`). `commentService._overlayReactionCounts` applies it in `getCommentsByPost`, `getComment`, `getReplies`, and the `subscribeToPostComments` snapshot callback (before the nested build). New `commentReactionCounterSourceGuard.test.js` (guards job) pins the call sites + the batched read and behaviourally tests sum/fallback/batching. **N443 (same session):** `messagesService.getConversation` had no block gate, so a blocked direct thread stayed openable by `/chat/:id` despite the N245 inbox filter; gated both the fresh and cache-first paths via `_isDirectBlocked` (groups/channels unaffected, fails open). New `messagingThreadBlockGate.test.js` in the guards job. **N442 (same session):** story `personalizeFeed` ranked on `stats.likes`/`stats.shares` (never written; reactions live in the `stats.reactions` map) — now sums `stats.reactions`; new `storyRankingFieldSourceGuard.test.js` added to the guards job. **N441 (same session):** `functions/postCounters.js#aggregatePostCounters` never mirrored the `views` shard (`POST_COUNTER_FIELDS` omitted it), so `feed.js#processScoreUpdates` read `stats.views || 0` as a constant 0 and the view-weighted ranking term contributed nothing; `views` added to `POST_COUNTER_FIELDS` and the guard now cross-checks every `incrementShardedCounter('posts/{id}', …)` field. **N440 (same session):** `firestoreService.getPost`/`getPostsByUser` overlaid a *subset* of the sharded post counters (`comments` omitted), so the post-detail view rendered the seeded `0` comment count while the feed showed the real one; both now overlay the full set `['likes','comments','saves','shares','gifts','giftValue']` and `getPostsByUser` uses the batched `applyAll`. `postCounterSourceGuard.test.js` now fails if any `posts/` overlay omits a sharded field. **Sibling facet:** the drawer's reply expander reads a derived `comment.repliesCount` that no read path populated, so a comment with pre-existing replies showed no expander until the viewer replied themselves — the overlay now aliases the `replies` shard onto `repliesCount` (never onto the `replies` child array `_buildNestedComments` writes) and `getReplies.total` reads the shard sum, not the page size. |
+
+Also verified this session (no change needed): T2 (full `src` sweep of `?? 0`/`|| 0` — every remaining hit is pre-gated on presence, a non-display accumulator, or an event-handler coordinate), T7 (`deployIntegrity` FUNCTIONS-key + `functionsInventoryGuard` dead-callable ratchet already enforce it), T3 (`live_streams.stats` — all four seeds have real writers + readers; the two `stats.totalViewers` assignments are in-memory read clamps, not writes) and T6 (event lifecycle → community `stats.eventCount` parity: `createEvent` seeds `draft` (uncounted), `publishEvent`→`published` (+1), `deleteEvent`→`cancelled` (−1), all covered by the `onEventWrite` trigger).
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **195 suites / 2119 passed / 5 skipped / 2124 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** only (rankings have no writer — BLOCKED on the ranking formula, a product decision); N432 partially BLOCKED (the metrics with no defined source). N270 is NOT_AN_ISSUE. N424–N439 closed.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 193 suites green
+npm run build                 # green
 ```

@@ -181,7 +181,7 @@ export default function PerksRewardsScreen() {
                 {hasStoredLevel ? `${getRankTitle(currentLevel)} Rank Capabilities` : 'Rank Capabilities'}
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-lg">
-                Your sovereign citizen level unlocks platform creation powers, verified gift earnings, coin milestone bonuses, and civic governance rights.
+                Your citizen level unlocks platform creation powers, virtual gift sending, level-up coin rewards, and civic poll participation.
               </p>
             </div>
 
@@ -333,7 +333,7 @@ export default function PerksRewardsScreen() {
               </h2>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Every level advanced in Arvdoul mints verified platform coins credited directly to your sovereign wallet.
+              Every level advanced in Arvdoul credits platform coins to your wallet, recorded in your transaction history.
             </p>
           </div>
 
@@ -393,7 +393,7 @@ export default function PerksRewardsScreen() {
                 </h2>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Functional gates that unlock real tools: live streaming, creator withdrawals, custom badges, and citizen voting.
+                Functional gates that unlock real tools: live streaming, creator withdrawals, profile highlights, and civic poll participation.
               </p>
             </div>
           </div>
@@ -403,7 +403,7 @@ export default function PerksRewardsScreen() {
               const isUnlocked = currentLevel >= perk.minLevel;
               return (
                 <div
-                  key={perk.minLevel}
+                  key={`${perk.minLevel}-${perk.title}`}
                   className={cn(
                     "p-4 rounded-2xl border transition-all flex items-start gap-3.5",
                     isUnlocked
@@ -465,7 +465,7 @@ export default function PerksRewardsScreen() {
                 Prestige & Sovereign Nobility
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Exceeding Level {MAX_LEVEL} unlocks Roman Numeral Prestige tiers (I through X), sovereign coronation eligibility, and permanent historical citizenship.
+                Exceeding Level {MAX_LEVEL} unlocks Roman Numeral Prestige tiers (I through X), computed from your level.
               </p>
             </div>
           </div>
@@ -504,7 +504,7 @@ export default function PerksRewardsScreen() {
               onClick={() => navigate('/titles')}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer"
             >
-              <span>View All Titles & Audited Provenance</span>
+              <span>View All Titles &amp; Verified Provenance</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

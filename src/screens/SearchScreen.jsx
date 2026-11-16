@@ -19,7 +19,7 @@ import TrendingSection from '../components/search/TrendingSection';
 import CreatorCarousel from '../components/search/CreatorCarousel';
 import SearchFilters from '../components/search/SearchFilters';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
-import { BRAND_GRADIENT, tokens } from '../design-system/tokens.js';
+import { BRAND_GRADIENT, tokens, brandRgba} from '../design-system/tokens.js';
 
 /**
  * ARVDOUL Design Tokens — the brand gradient comes from the design system so
@@ -48,12 +48,14 @@ const CATEGORIES = [
 /**
  * Discovery cards data
  */
-// Real trending discovery: loaded from the feed service (trendingScore-ranked).
+// Discovery shortcuts. These are navigation entries into real search tabs /
+// routes — not a ranking claim: no trending score is computed for them, so the
+// copy describes the destination rather than asserting "most viewed/shared".
 const DISCOVERY_ITEMS = [
-  { id: 'reels', title: 'Trending Reels', subtitle: 'Most viewed this week', key: 'videos' },
-  { id: 'creators', title: 'Top Creators', subtitle: 'Follow the best', key: 'users' },
-  { id: 'posts', title: 'Viral Posts', subtitle: 'Most shared', key: 'posts' },
-  { id: 'communities', title: 'Communities', subtitle: 'Join the conversation', key: 'communities' },
+  { id: 'reels', title: 'Reels', subtitle: 'Short-form video', key: 'videos' },
+  { id: 'creators', title: 'Creators', subtitle: 'Find people to follow', key: 'people' },
+  { id: 'posts', title: 'Posts', subtitle: 'Browse public posts', key: 'posts' },
+  { id: 'communities', title: 'Communities', subtitle: 'Join a community', key: 'communities' },
 ];
 
 /**
@@ -128,6 +130,43 @@ const SearchScreen = memo(() => {
       window.removeEventListener('arvdoul:toggle_search_filters', handleToggleFilters);
     };
   }, [updateQuery, search, query]);
+
+  // Resolve the viewer's real follow state for the trending creators. The
+  // search index does not carry a per-viewer `isFollowing` flag, so a card that
+  // read `creator.isFollowing` always showed "Follow" for a creator the viewer
+  // already followed (and tapping it then called followUser again). Batched
+  // per-pair edge read, never a scan of the viewer's follow graph.
+  const trendingCreatorIds = Array.isArray(trending?.creators)
+    ? trending.creators.map((c) => c.id || c.uid).filter(Boolean).join(',')
+    : '';
+  useEffect(() => {
+    if (!user?.uid || !trendingCreatorIds) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = trendingCreatorIds.split(',');
+        const states = await getUserService().getFollowStates(user.uid, ids);
+        if (cancelled) return;
+        setTrending((prev) => {
+          if (!prev || !Array.isArray(prev.creators)) return prev;
+          return {
+            ...prev,
+            creators: prev.creators.map((c) => {
+              const state = states.get(c.id || c.uid);
+              return {
+                ...c,
+                isFollowing: Boolean(state?.isFollowing),
+                requestStatus: state?.requestStatus ?? null,
+              };
+            }),
+          };
+        });
+      } catch (err) {
+        console.warn('[SearchScreen] follow-state hydration failed', err?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid, trendingCreatorIds, setTrending]);
 
   // Handle search submission
   const handleSearch = useCallback((searchQuery = query) => {
@@ -223,20 +262,38 @@ const SearchScreen = memo(() => {
     const creators = Array.isArray(trending?.creators) ? trending.creators : [];
     const target = creators.find((c) => (c.id || c.uid) === creatorId);
     const wasFollowing = Boolean(target?.isFollowing);
-    const applyState = (following) => {
+    const wasRequested = Boolean(target?.requestStatus === 'pending');
+    const applyState = (following, requestStatus = null) => {
       if (!trending || !Array.isArray(trending.creators)) return;
       setTrending({
         ...trending,
-        creators: trending.creators.map((c) => ((c.id || c.uid) === creatorId ? { ...c, isFollowing: following } : c)),
+        creators: trending.creators.map((c) => ((c.id || c.uid) === creatorId
+          ? { ...c, isFollowing: following, requestStatus }
+          : c)),
       });
     };
-    applyState(!wasFollowing);
+    // Optimistic: a private target becomes a *pending request*, not a follow.
+    applyState(!wasFollowing && !wasRequested, null);
     try {
-      if (wasFollowing) await getUserService().unfollowUser(user.uid, creatorId);
-      else await getUserService().followUser(user.uid, creatorId);
-      toast.success(wasFollowing ? 'Unfollowed' : 'Following 🎉');
+      if (wasFollowing || wasRequested) {
+        if (wasRequested) await getUserService().cancelFollowRequest(user.uid, creatorId);
+        else await getUserService().unfollowUser(user.uid, creatorId);
+        applyState(false, null);
+        toast.success(wasRequested ? 'Request withdrawn' : 'Unfollowed');
+      } else {
+        const res = await getUserService().followUser(user.uid, creatorId);
+        // A private account yields `{requested:true}` and creates no edge; show
+        // "Requested" rather than claiming a completed follow.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          applyState(false, 'pending');
+          toast.success('Follow request sent');
+        } else {
+          applyState(true, null);
+          toast.success('Following 🎉');
+        }
+      }
     } catch (err) {
-      applyState(wasFollowing);
+      applyState(wasFollowing, wasRequested ? 'pending' : null);
       toast.error(err?.message || 'Could not update follow');
     }
   }, [user?.uid, trending, setTrending]);
@@ -277,7 +334,7 @@ const SearchScreen = memo(() => {
         )}
 
         {/* For You Section */}
-        <ForYouSection isDark={isDark} />
+        <ForYouSection isDark={isDark} onSelect={handleCategoryClick} />
 
         {/* Explore Categories */}
         <ExploreCategories
@@ -541,7 +598,7 @@ RecentSearches.displayName = 'RecentSearches';
 /**
  * For You Section
  */
-const ForYouSection = memo(({ isDark }) => (
+const ForYouSection = memo(({ isDark, onSelect }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -558,19 +615,22 @@ const ForYouSection = memo(({ isDark }) => (
     </div>
     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
       {DISCOVERY_ITEMS.map((item, index) => (
-        <motion.div
+        <motion.button
           key={item.id}
+          type="button"
+          onClick={() => onSelect?.(item.key)}
+          aria-label={`${item.title} — ${item.subtitle}`}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: index * 0.1 }}
           whileHover={{ scale: 1.05, y: -5 }}
           whileTap={{ scale: 0.98 }}
           className={cn(
-            'flex-shrink-0 w-[180px] h-[150px] rounded-2xl overflow-hidden',
+            'flex-shrink-0 w-[180px] h-[150px] rounded-2xl overflow-hidden text-left',
             'cursor-pointer relative group'
           )}
           style={{
-            boxShadow: '0 10px 40px rgba(139, 30, 243, 0.3)',
+            boxShadow: `0 10px 40px ${brandRgba(0.3)}`,
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10" />
@@ -590,7 +650,7 @@ const ForYouSection = memo(({ isDark }) => (
           </div>
           {/* Gradient overlay on hover */}
           <div className="absolute inset-0 bg-gradient-to-t from-arvdoul-purple/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
-        </motion.div>
+        </motion.button>
       ))}
     </div>
   </motion.div>

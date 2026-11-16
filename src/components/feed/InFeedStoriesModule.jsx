@@ -24,33 +24,26 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
       try {
         const feedData = await storyService.getStoriesFeed?.(user.uid, { cacheFirst: true, limit: 10 });
         if (isMounted && feedData?.groups?.length > 0) {
-          const { getUserService } = await import('../../services/userService.js');
-          const realList = await Promise.all(
-            feedData.groups.map(async (g) => {
-              const first = g.stories?.[0] || {};
-              let name = 'Creator';
-              let avatar = null;
-              try {
-                const p = await getUserService().getUserProfile(g.userId);
-                if (p) {
-                  name = p.displayName || p.username || name;
-                  avatar = p.photoURL;
-                }
-              } catch (e) {
-                console.warn('In-feed story author profile read failed', e?.message);
-              }
-              return {
-                id: g.userId,
-                name,
-                username: name.toLowerCase().replace(/\s+/g, '_'),
-                avatar: getSafeAvatarUrl(avatar, name, g.userId),
-                hasUnseen: g.stories?.some(s => !s.seen),
-                isLive: !!first.isLive,
-                preview: first.mediaUrl || first.thumbnailUrl || avatar,
-                title: first.caption || 'New Story'
-              };
-            })
-          );
+          // One batched profile read for every creator in the strip instead of
+          // a `getUserProfile` per group (an N+1 whose cost grew with the
+          // viewer's story feed). `hydrateProfiles` reads `users` in bounded
+          // `documentId() in` chunks and rejects placeholder names/avatars.
+          const { getSocialGraphService } = await import('../../services/socialGraphService.js');
+          const creatorIds = [...new Set(feedData.groups.map((g) => g.userId).filter(Boolean))];
+          const profiles = await getSocialGraphService()
+            .hydrateProfiles(creatorIds, { viewerId: user.uid })
+            .catch(() => []);
+          const byId = new Map(profiles.map((p) => [p.id, p]));
+          const realList = feedData.groups.map((g) => {
+            const p = byId.get(g.userId) || null;
+            const name = p?.displayName || p?.name || 'Creator';
+            return {
+              id: g.userId,
+              name,
+              avatar: getSafeAvatarUrl(p?.photoURL, name, g.userId),
+              hasUnseen: g.stories?.some((s) => !s.seen),
+            };
+          });
           if (isMounted) setCreators(realList);
         }
       } catch (err) {
@@ -141,11 +134,9 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
           >
             <div className={cn(
               "relative w-14 h-14 rounded-full p-[2.5px] transition-all duration-300",
-              creator.isLive
-                ? "bg-gradient-to-tr from-red-500 via-pink-500 to-amber-500 animate-pulse shadow-md shadow-red-500/30"
-                : creator.hasUnseen
-                  ? "bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-400 shadow-sm shadow-purple-500/30 group-hover:scale-105"
-                  : isDark ? "bg-slate-800" : "bg-slate-300"
+              creator.hasUnseen
+                ? "bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-400 shadow-sm shadow-purple-500/30 group-hover:scale-105"
+                : isDark ? "bg-slate-800" : "bg-slate-300"
             )}>
               <div className="w-full h-full rounded-full overflow-hidden p-[2px] bg-white dark:bg-[#0f1424]">
                 <img
@@ -154,12 +145,6 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
                   className="w-full h-full rounded-full object-cover group-hover:scale-110 transition-transform duration-300"
                 />
               </div>
-
-              {creator.isLive && (
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1 py-[1px] rounded bg-red-600 text-white text-[8px] font-black uppercase tracking-wider shadow">
-                  LIVE
-                </div>
-              )}
             </div>
 
             <span className={cn(

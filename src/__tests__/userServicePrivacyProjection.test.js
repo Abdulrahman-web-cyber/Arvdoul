@@ -103,6 +103,14 @@ async function serviceWith(docData) {
   svc.initialized = true;
   svc.cache.clear();
   docs.set(`users/${TARGET}`, docData);
+  // Live presence is its own scope-gated doc (N321); mirror the real schema by
+  // seeding user_presence from the legacy isOnline/lastActive shorthand.
+  if (docData.isOnline !== undefined || docData.lastActive !== undefined) {
+    docs.set(`user_presence/${TARGET}`, {
+      isOnline: docData.isOnline,
+      lastActive: docData.lastActive,
+    });
+  }
   return svc;
 }
 

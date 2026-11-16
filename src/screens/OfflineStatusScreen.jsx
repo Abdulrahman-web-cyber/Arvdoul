@@ -4,7 +4,7 @@ import { subscribeSyncStatus, syncQueue } from '../offline/syncEngine.js';
 
 const formatTime = (ts) => {
   if (!ts) return 'Never';
-  try { return new Date(ts).toLocaleTimeString(); } catch { return 'Unknown'; }
+  try { return new Date(ts).toLocaleTimeString(); } catch { return '—'; }
 };
 
 export default function OfflineStatusScreen() {
@@ -51,7 +51,7 @@ export default function OfflineStatusScreen() {
             onClick={() => syncQueue().catch((e) => {
               console.warn('Manual sync drain failed', e?.message);
             })}
-            className="mt-4 w-full rounded-xl bg-white/10 hover:bg-white/20 transition px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="mt-4 w-full rounded-xl bg-white/10 hover:bg-white/20 transition px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
           >
             Sync now
           </button>

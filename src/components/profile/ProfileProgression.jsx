@@ -21,7 +21,7 @@ import {
 
 const ProfileProgression = memo(({
   level = null,
-  experience = 0,
+  experience = null,
   streak = 0,
   reputation = null,
   showLevel = true,
@@ -41,14 +41,21 @@ const ProfileProgression = memo(({
   const hasReputation = reputation !== null && reputation !== undefined && Number.isFinite(Number(reputation));
   const safeReputation = hasReputation ? Number(reputation) : null;
 
+  // XP is only known when the profile actually carries an `experience` value.
+  // A level without XP is a real state (the level is stored, the XP counter is
+  // not), and rendering the XP bar off a `0` default would report a fabricated
+  // measured "0 XP earned / 100 XP to Level N" (AUDIT noFabricatedData). The
+  // curve is consulted only once a real XP value exists.
+  const hasExperience = experience !== null && experience !== undefined && Number.isFinite(Number(experience));
+
   const xpInfo = useMemo(() => {
-    if (!hasLevel) return null;
+    if (!hasLevel || !hasExperience) return null;
     try {
-      return getLevelInfo(experience || 0);
+      return getLevelInfo(Number(experience));
     } catch {
       return null;
     }
-  }, [hasLevel, experience]);
+  }, [hasLevel, hasExperience, experience]);
 
   const rankTitle = useMemo(() => {
     if (!hasLevel) return null;
@@ -191,40 +198,43 @@ const ProfileProgression = memo(({
         </button>
       </div>
 
-      {/* Center: XP Progress Bar */}
-      <div className="mt-3.5 space-y-1.5">
-        <div className="flex items-center justify-between text-xs font-semibold">
-          <span className="text-slate-500 dark:text-slate-400">
-            {isMaxLevel ? 'Maximum Level Reached' : `${xpIntoLevel.toLocaleString()} XP earned`}
-          </span>
-          <span className="text-slate-700 dark:text-slate-300 font-mono">
-            {isMaxLevel ? 'Apex Citizen' : `${xpToNext.toLocaleString()} XP to Level ${effectiveLevel + 1}`}
-          </span>
-        </div>
-
-        <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative">
-          <div
-            className="h-full rounded-full transition-all duration-700 relative"
-            style={{
-              width: `${Math.min(100, Math.max(4, progress))}%`,
-              background: `linear-gradient(90deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%)`
-            }}
-          >
-            <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
-          </div>
-        </div>
-
-        {/* Milestone perks preview */}
-        {nextReward > 0 && !isMaxLevel && (
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
-            <span className="inline-flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Next Level Reward: +{nextReward} Coins grant</span>
+      {/* Center: XP Progress Bar — only when the profile carries a real XP
+          value; a level without XP renders no fabricated "0 XP" bar. */}
+      {xpInfo && (
+        <div className="mt-3.5 space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-semibold">
+            <span className="text-slate-500 dark:text-slate-400">
+              {isMaxLevel ? 'Maximum Level Reached' : `${xpIntoLevel.toLocaleString()} XP earned`}
             </span>
-            <span className="text-indigo-500 font-medium">{Math.round(progress)}% Complete</span>
+            <span className="text-slate-700 dark:text-slate-300 font-mono">
+              {isMaxLevel ? 'Apex Citizen' : `${xpToNext.toLocaleString()} XP to Level ${effectiveLevel + 1}`}
+            </span>
           </div>
-        )}
-      </div>
+
+          <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative">
+            <div
+              className="h-full rounded-full transition-all duration-700 relative"
+              style={{
+                width: `${Math.min(100, Math.max(4, progress))}%`,
+                background: `linear-gradient(90deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%)`
+              }}
+            >
+              <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
+            </div>
+          </div>
+
+          {/* Milestone perks preview */}
+          {nextReward > 0 && !isMaxLevel && (
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+              <span className="inline-flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>Next Level Reward: +{nextReward} Coins grant</span>
+              </span>
+              <span className="text-indigo-500 font-medium">{Math.round(progress)}% Complete</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });

@@ -187,20 +187,24 @@ class SocialGraphService {
    * other party with `in`. Chunked to 30 for the `in` cap. Returns the set of
    * `${actorId}_${otherId}` keys.
    */
-  async _actorScopedIds(viewerId, otherIds, { collection: collectionName, actorField, otherField }) {
+  async _actorScopedIds(viewerId, otherIds, { collection: collectionName, actorField, otherField, equals = null }) {
     const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
     const found = new Set();
     const unique = [...new Set(otherIds)].filter(Boolean);
     for (const chunk of this._chunk(unique, IN_CHUNK)) {
       if (chunk.length === 0) continue;
-      const snap = await getDocs(
-        query(
-          collection(this.firestore, collectionName),
-          where(actorField, '==', viewerId),
-          where(otherField, 'in', chunk),
-          fLimit(chunk.length)
-        )
-      );
+      const constraints = [
+        collection(this.firestore, collectionName),
+        where(actorField, '==', viewerId),
+        where(otherField, 'in', chunk),
+      ];
+      for (const [field, value] of Object.entries(equals || {})) {
+        constraints.push(where(field, '==', value));
+      }
+      // Keep the cap inline in the `query(...)` argument list: the Firebase cost
+      // analyzer reads the call site textually, so a hoisted limit reads as an
+      // unbounded collection read.
+      const snap = await getDocs(query(...constraints, fLimit(chunk.length)));
       snap.forEach((d) => {
         const data = d.data() || {};
         const other = data[otherField];
@@ -228,13 +232,22 @@ class SocialGraphService {
 
     try {
       await this._ensureInitialized();
-      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut] = await Promise.all([
+      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
         this._existingIds(EDGE_COLLECTIONS.follow, [`${viewerId}_${targetId}`]),
         this._existingIds(EDGE_COLLECTIONS.follow, [`${targetId}_${viewerId}`]),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.in),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.mute.out),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.restrict.out),
+        // A follow against a private target files `follow_requests/{from}_{to}`
+        // with `status: 'pending'` and no follow edge; the capability engine
+        // needs that state to render Requested rather than an open Follow.
+        this._actorScopedIds(viewerId, [targetId], {
+          collection: 'follow_requests',
+          actorField: 'fromUserId',
+          otherField: 'toUserId',
+          equals: { status: 'pending' },
+        }),
       ]);
       const isFollowing = followOut.has(`${viewerId}_${targetId}`);
       const isFollower = followIn.has(`${targetId}_${viewerId}`);
@@ -250,7 +263,7 @@ class SocialGraphService {
         isBlocked: isBlocking || isBlockedBy,
         isMuted: muteOut.has(`${viewerId}_${targetId}`),
         isRestricted: restrictOut.has(`${viewerId}_${targetId}`),
-        requestStatus: null,
+        requestStatus: pendingOut.has(`${viewerId}_${targetId}`) ? 'pending' : null,
       };
       this._writeCache(this.edgeCache, cacheKey, edge);
       return edge;
@@ -294,6 +307,20 @@ class SocialGraphService {
       const muteOut = include.includes('mute') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.mute.out) : new Set();
       const restrictOut = include.includes('restrict') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.restrict.out) : new Set();
 
+      // A follow against a private target creates a `follow_requests/{from}_{to}`
+      // row (status `pending`) and NO follow edge. A surface that only reads the
+      // edge shows "Follow" for a target the viewer already requested, and a
+      // second tap files a duplicate request. Actor-equality + other-party `in`
+      // is the shape the rule proves (`fromUserId == uid()`). Read only when the
+      // caller asked for the follow edge (it is a follow-relationship concept).
+      const pendingOut = include.includes('follow')
+        ? await this._actorScopedIds(viewerId, others, {
+            collection: 'follow_requests',
+            actorField: 'fromUserId',
+            otherField: 'toUserId',
+          })
+        : new Set();
+
       for (const t of others) {
         const isFollowing = followOut.has(`${viewerId}_${t}`);
         const isFollower = followIn.has(`${t}_${viewerId}`);
@@ -309,7 +336,7 @@ class SocialGraphService {
           isBlocked: isBlocking || isBlockedBy,
           isMuted: muteOut.has(`${viewerId}_${t}`),
           isRestricted: restrictOut.has(`${viewerId}_${t}`),
-          requestStatus: null,
+          requestStatus: pendingOut.has(`${viewerId}_${t}`) ? 'pending' : null,
         });
       }
     } catch (err) {
@@ -363,7 +390,8 @@ class SocialGraphService {
 
   _normalizeProfile(raw) {
     if (!raw) return null;
-    const displayName = pickDisplayName([raw.displayName, raw.name], { fallback: 'Creator' });
+    const displayName = pickDisplayName([raw.displayName, raw.name], { fallback: null })
+      || `user ${String(raw.id || raw.uid || '').slice(0, 6)}`;
     const username = pickHandle([raw.username, raw.handle]) || '';
     const lastActive = raw.lastActive?.toDate ? raw.lastActive.toDate() : (raw.lastActive ? new Date(raw.lastActive) : null);
     const isRecent = Boolean(lastActive && Date.now() - lastActive.getTime() < 5 * 60 * 1000);
@@ -407,7 +435,7 @@ class SocialGraphService {
    * Batched profile hydration. One `documentId() in` read per 30 ids — never one
    * profile fetch per follower.
    */
-  async hydrateProfiles(userIds, { viewerId = null, edges = null } = {}) {
+  async hydrateProfiles(userIds, { viewerId = null, edges = null, withPresence = false } = {}) {
     const ids = [...new Set((userIds || []).filter(Boolean))].slice(0, MAX_HYDRATE_IDS);
     if (ids.length === 0) return [];
     await this._ensureInitialized();
@@ -425,11 +453,61 @@ class SocialGraphService {
       snap.forEach((d) => byId.set(d.id, { id: d.id, uid: d.id, ...d.data() }));
     }
 
+    // Presence lives in its own scope-gated doc (`user_presence/{uid}`), which
+    // the rules authorize per viewer. A batch `documentId() in` read cannot
+    // prove a per-document `get()` condition, so presence is hydrated with
+    // bounded per-doc reads and only for callers that render it (opt-in).
+    if (withPresence) {
+      const presence = await this._fetchPresenceMap(ids);
+      for (const [id, p] of presence) {
+        const raw = byId.get(id);
+        if (raw) { raw.isOnline = p.isOnline; raw.lastActive = p.lastActive; }
+      }
+    }
+
     const edgeMap = edges || (viewerId ? await this.getEdgeSet(viewerId, ids) : new Map());
     return ids
       .map((id) => byId.get(id))
       .filter(Boolean)
       .map((raw) => this.projectProfile(raw, viewerId, edgeMap.get(raw.id)));
+  }
+
+  /**
+   * Per-document presence for a bounded id list. A denied (scope) or failed
+   * read is omitted, so the projection renders the target offline — never a
+   * fabricated "online". Honest online = flag set AND activity within 5 min.
+   */
+  async _fetchPresenceMap(ids) {
+    const map = new Map();
+    if (!ids.length) return map;
+    const { doc, getDoc } = await import('firebase/firestore');
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const snap = await getDoc(doc(this.firestore, 'user_presence', id));
+        if (!snap.exists()) return;
+        const d = snap.data();
+        const la = d.lastActive?.toDate ? d.lastActive.toDate() : (d.lastActive ? new Date(d.lastActive) : null);
+        const recent = Boolean(la && Date.now() - la.getTime() < 5 * 60 * 1000);
+        map.set(id, { isOnline: Boolean(d.isOnline && recent), lastActive: la });
+      } catch (e) {
+        logger.debug('[SocialGraph] presence read skipped', { id, error: e?.message });
+      }
+    }));
+    return map;
+  }
+
+  /**
+   * Public presence map for a bounded id list: `Map<uid, { isOnline, lastActive }>`.
+   * This is the only sanctioned way for a surface (the inbox) to render an
+   * online dot, so presence is read from the one scope-gated `user_presence`
+   * doc the rules authorize — never re-derived from a different collection
+   * (the messaging RTDB `status/` path is dead; N452).
+   */
+  async getPresenceMap(userIds) {
+    const ids = [...new Set((userIds || []).filter(Boolean))].slice(0, MAX_HYDRATE_IDS);
+    if (!ids.length) return new Map();
+    await this._ensureInitialized();
+    return this._fetchPresenceMap(ids);
   }
 
   /** List a relationship kind with hydrated, viewer-projected profiles. */
@@ -443,7 +521,8 @@ class SocialGraphService {
     const isSafetyList = SAFETY_EDGE_KINDS.has(kind);
     const hidden = viewerId && !isSafetyList ? await this.getHiddenAuthorIds(viewerId) : null;
     const visibleIds = hidden ? ids.filter((id) => id !== viewerId && !hidden.has(id)) : ids;
-    const connections = await this.hydrateProfiles(visibleIds, { viewerId });
+    // The connections screen renders an online dot, so hydrate presence too.
+    const connections = await this.hydrateProfiles(visibleIds, { viewerId, withPresence: true });
     return { success: true, connections, hasMore, nextCursor, count: connections.length };
   }
 

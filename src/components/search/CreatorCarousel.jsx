@@ -133,6 +133,9 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
     onClick?.(creator);
   }, [onClick, creator]);
 
+  const isRequested = creator.requestStatus === 'pending';
+  const followLabel = creator.isFollowing ? 'Following' : (isRequested ? 'Requested' : 'Follow');
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -194,15 +197,18 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleFollow}
+          aria-label={`${followLabel} ${creator.displayName || creator.name || 'creator'}`}
           className={cn(
             'w-full py-2.5 rounded-full font-semibold text-sm',
-            'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue',
             'text-white shadow-lg',
             'hover:shadow-xl transition-shadow duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50'
+            'focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50',
+            creator.isFollowing || isRequested
+              ? 'bg-white/10 border border-white/20'
+              : 'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue'
           )}
         >
-          {creator.isFollowing ? 'Following' : 'Follow'}
+          {followLabel}
         </motion.button>
       </div>
     </motion.div>

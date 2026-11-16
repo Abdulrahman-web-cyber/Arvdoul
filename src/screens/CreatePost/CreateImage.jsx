@@ -677,21 +677,21 @@ const HeroPreview = React.memo(({
         <div className="absolute bottom-32 left-1/2 -translate-x-1/2 flex gap-2 bg-black/40 backdrop-blur-sm rounded-full px-2 py-1.5 border border-white/10 z-10">
           <button
             onClick={(e) => { e.stopPropagation(); onEdit?.(item); }}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition focus:ring-2 focus:ring-purple-500"
+            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition focus:ring-2 focus:ring-arvdoul-purple"
             aria-label="Edit image"
           >
             <Icons.Edit3 className="w-5 h-5" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition focus:ring-2 focus:ring-purple-500"
+            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition focus:ring-2 focus:ring-arvdoul-purple"
             aria-label="Delete image"
           >
             <Icons.Trash2 className="w-5 h-5" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onExpand?.(); }}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition focus:ring-2 focus:ring-purple-500"
+            className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full transition focus:ring-2 focus:ring-arvdoul-purple"
             aria-label="Fullscreen"
           >
             <Icons.Maximize2 className="w-5 h-5" />
@@ -785,7 +785,7 @@ const Thumbnail = React.memo(({
 
       <button
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="absolute top-2 right-2 bg-black/80 hover:bg-red-500/80 text-white w-6 h-6 rounded-full flex items-center justify-center transition border border-white/10 shadow-lg focus:ring-2 focus:ring-purple-500"
+        className="absolute top-2 right-2 bg-black/80 hover:bg-red-500/80 text-white w-6 h-6 rounded-full flex items-center justify-center transition border border-white/10 shadow-lg focus:ring-2 focus:ring-arvdoul-purple"
         aria-label="Remove image"
       >
         <Icons.X className="w-3.5 h-3.5" />
@@ -855,7 +855,7 @@ const Filmstrip = React.memo(({
           {items.length < MAX_IMAGES && (
             <button
               onClick={onAddImage}
-              className="flex-shrink-0 w-24 h-24 xs:w-16 xs:h-16 rounded-2xl border-2 border-dashed border-purple-400/40 hover:border-purple-500 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 bg-black/10 focus:ring-2 focus:ring-purple-500"
+              className="flex-shrink-0 w-24 h-24 xs:w-16 xs:h-16 rounded-2xl border-2 border-dashed border-purple-400/40 hover:border-purple-500 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 bg-black/10 focus:ring-2 focus:ring-arvdoul-purple"
               aria-label="Add image"
             >
               <Icons.Plus className="w-6 h-6 text-purple-400" />
@@ -911,7 +911,7 @@ const EmptyState = React.memo(({ onUpload }) => (
     </div>
     <button
       onClick={onUpload}
-      className="px-10 py-3.5 rounded-full text-white font-semibold flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 focus:ring-2 focus:ring-purple-500"
+      className="px-10 py-3.5 rounded-full text-white font-semibold flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 focus:ring-2 focus:ring-arvdoul-purple"
       style={{ background: DNA_GRADIENT }}
     >
       <Icons.Upload className="w-5 h-5" /> Browse images
@@ -985,7 +985,7 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
                 <button
                   type="button"
                   onClick={() => insertToken('#')}
-                  className="hover:text-purple-500 transition focus:ring-2 focus:ring-purple-500 rounded"
+                  className="hover:text-purple-500 transition focus:ring-2 focus:ring-arvdoul-purple rounded"
                   aria-label="Insert hashtag"
                 >
                   <Icons.Hash className="w-4 h-4" />
@@ -993,7 +993,7 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
                 <button
                   type="button"
                   onClick={() => insertToken('@')}
-                  className="hover:text-purple-500 transition focus:ring-2 focus:ring-purple-500 rounded"
+                  className="hover:text-purple-500 transition focus:ring-2 focus:ring-arvdoul-purple rounded"
                   aria-label="Mention user"
                 >
                   <Icons.AtSign className="w-4 h-4" />
@@ -1222,7 +1222,7 @@ const FullscreenViewer = React.memo(({
           >
             <button
               onClick={(e) => { e.stopPropagation(); onClose(); }}
-              className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition backdrop-blur-sm focus:ring-2 focus:ring-purple-500"
+              className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition backdrop-blur-sm focus:ring-2 focus:ring-arvdoul-purple"
               aria-label="Close fullscreen"
             >
               <Icons.X className="w-6 h-6" />
@@ -1231,14 +1231,14 @@ const FullscreenViewer = React.memo(({
               <span className="text-white/80 text-sm font-medium">{currentIndex + 1} / {total}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit?.(item); }}
-                className="p-2.5 bg-purple-500/30 hover:bg-purple-500/50 text-white rounded-full transition backdrop-blur-sm focus:ring-2 focus:ring-purple-500"
+                className="p-2.5 bg-purple-500/30 hover:bg-purple-500/50 text-white rounded-full transition backdrop-blur-sm focus:ring-2 focus:ring-arvdoul-purple"
                 aria-label="Edit image"
               >
                 <Icons.Edit3 className="w-5 h-5" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(); onClose(); }}
-                className="p-2.5 bg-red-500/30 hover:bg-red-500/50 text-white rounded-full transition backdrop-blur-sm focus:ring-2 focus:ring-purple-500"
+                className="p-2.5 bg-red-500/30 hover:bg-red-500/50 text-white rounded-full transition backdrop-blur-sm focus:ring-2 focus:ring-arvdoul-purple"
                 aria-label="Delete image"
               >
                 <Icons.Trash2 className="w-5 h-5" />
@@ -1252,7 +1252,7 @@ const FullscreenViewer = React.memo(({
           >
             <button
               onClick={(e) => { e.stopPropagation(); const idx = currentIndex - 1; if (idx >= 0) { onSelect(items[idx].id); setScale(1); setPosition({ x: 0, y: 0 }); } }}
-              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition backdrop-blur-sm disabled:opacity-30 focus:ring-2 focus:ring-purple-500"
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition backdrop-blur-sm disabled:opacity-30 focus:ring-2 focus:ring-arvdoul-purple"
               disabled={currentIndex === 0}
               aria-label="Previous image"
             >
@@ -1261,7 +1261,7 @@ const FullscreenViewer = React.memo(({
             <span className="text-white/60 text-xs font-medium">Swipe to dismiss</span>
             <button
               onClick={(e) => { e.stopPropagation(); const idx = currentIndex + 1; if (idx < total) { onSelect(items[idx].id); setScale(1); setPosition({ x: 0, y: 0 }); } }}
-              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition backdrop-blur-sm disabled:opacity-30 focus:ring-2 focus:ring-purple-500"
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition backdrop-blur-sm disabled:opacity-30 focus:ring-2 focus:ring-arvdoul-purple"
               disabled={currentIndex === total - 1}
               aria-label="Next image"
             >
@@ -1770,7 +1770,7 @@ export default function CreateImage() {
             <button
               onClick={manualSave}
               disabled={saving || !allUploadsComplete}
-              className="px-3 py-1.5 text-xs bg-white/20 hover:bg-white/30 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-purple-500"
+              className="px-3 py-1.5 text-xs bg-white/20 hover:bg-white/30 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-arvdoul-purple"
               title={!allUploadsComplete ? "Waiting for uploads to complete" : ""}
             >
               {saving ? <LoadingSpinner size="xs" /> : "Save Draft"}
@@ -1836,7 +1836,7 @@ export default function CreateImage() {
                   <button
                     key={m.id}
                     onClick={() => retryUpload(m.id)}
-                    className="px-3 py-1.5 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-full transition flex items-center gap-1.5 focus:ring-2 focus:ring-purple-500"
+                    className="px-3 py-1.5 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-full transition flex items-center gap-1.5 focus:ring-2 focus:ring-arvdoul-purple"
                   >
                     <Icons.RefreshCw className="w-3 h-3" />
                     Retry {m.name}

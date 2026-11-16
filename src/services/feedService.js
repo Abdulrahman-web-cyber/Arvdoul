@@ -42,7 +42,6 @@ const FEED_CONFIG = {
     EXPERIMENT_GROUPS: ['control', 'weight_tuning', 'exploration_boost', 'ml_personalized'],
     SESSION_BOOST_TTL_MS: 5 * 60 * 1000,
     MAX_BOOST_FACTOR: 2.0,
-    WATCH_TIME_WEIGHT: 0.3,
     BOOST_COOLDOWN_MS: 10 * 1000,
     MAX_BOOSTS_PER_MINUTE: 5,
     FALLBACK_SCORE_WEIGHTS: {
@@ -84,6 +83,14 @@ const FEED_CONFIG = {
     AD_PREFETCH_DELAY: 2000,
     SPONSORED_AUCTION_ENABLED: true,
     SPONSORED_BID_FACTOR: 0.001,
+    // Paid self-promotion (`boostPost` debits coins and writes `boosted_posts`).
+    // An active boost must raise the post's ranking score for every viewer —
+    // otherwise the paid feature silently no-ops. `BOOST_COLLECTION` is read by
+    // the *viewer's* feed (public read), not the boosted author's own read of
+    // their posts. A modest factor keeps a paid post competitive, not dominant.
+    BOOSTED_COLLECTION: 'boosted_posts',
+    BOOST_RANKING_FACTOR: 1.5,
+    BOOST_FETCH_LIMIT: 30,
   },
   PERFORMANCE: {
     REQUEST_TIMEOUT: 8000,
@@ -583,7 +590,12 @@ class UltimateFeedService {
         logger.warn('Local optimistic-post merge failed', { error: e?.message });
       }
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
-      return posts.slice(0, limit);
+      const page = posts.slice(0, limit);
+      // Same shard overlay the ranked path applies: `posts/{id}.stats.*` is
+      // seeded 0 and never written, so without this the degraded feed renders
+      // fabricated zeros for likes/comments/shares (N444 class). Best-effort.
+      await this._overlayFeedCounters({ fallback: page });
+      return page;
     } catch (error) {
       logger.warn('Latest feed source failed', { userId, error: error?.message });
       return [];
@@ -738,6 +750,64 @@ class UltimateFeedService {
     }
   }
 
+  /**
+   * Active paid promotions (`boostPost` writes `boosted_posts/{postId}` after
+   * debiting coins). Bounded, index-backed (composite `expiresAt` + `__name__`),
+   * and best-effort: a denied read (private/blocked author) is simply dropped so
+   * one bad row cannot fail the whole feed. Each returned post is tagged
+   * `isBoosted` for the ranking multiplier in `_scoreAndRankPostsOptimized`.
+   */
+  async _getBoostedPosts(userId, options) {
+    if (this.offlineMode) return [];
+    const limit = options?.limit || FEED_CONFIG.MONETISATION.BOOST_FETCH_LIMIT;
+    try {
+      const { collection, query, where, orderBy, limit: fLimit, getDocs, doc, getDoc } = this.firestoreMethods;
+      const snap = await getDocs(query(
+        collection(this.firestore, FEED_CONFIG.MONETISATION.BOOSTED_COLLECTION),
+        where('expiresAt', '>', Date.now()),
+        orderBy('expiresAt', 'asc'),
+        fLimit(Math.min(limit, FEED_CONFIG.MONETISATION.BOOST_FETCH_LIMIT)),
+      ));
+      if (snap.empty) return [];
+
+      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
+      const results = await Promise.all(snap.docs.map(async (boostDoc) => {
+        const boost = boostDoc.data();
+        if (!boost.postId || hiddenAuthors.has(boost.userId)) return null;
+        try {
+          const postSnap = await getDoc(doc(this.firestore, 'posts', boost.postId));
+          if (!postSnap.exists()) return null;
+          const data = postSnap.data();
+          if (data.isDeleted === true) return null;
+          if (data.status && data.status !== 'published') return null;
+          if (data.authorIsPrivate === true) return null;
+          if (data.visibility && data.visibility !== 'public') return null;
+          if (hiddenAuthors.has(data.authorId)) return null;
+          return {
+            id: postSnap.id,
+            ...data,
+            _source: 'boosted',
+            _score: 0.5,
+            isBoosted: true,
+            boostExpiresAt: boost.expiresAt,
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+          };
+        } catch (e) {
+          return null; // denied / missing → drop this one, keep the rest
+        }
+      }));
+
+      const posts = results.filter(Boolean);
+      await Promise.all(posts.map(p => countersManager.apply({
+        data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
+      }).catch(() => p)));
+      return posts;
+    } catch (error) {
+      logger.warn('Boosted posts source failed', { userId, error: error?.message });
+      return [];
+    }
+  }
+
   async _getLatestFeed(userId, options) {
     if (this.offlineMode) return { success: true, feed: [], nextCursor: null };
     try {
@@ -777,6 +847,10 @@ class UltimateFeedService {
         });
       });
       const nextCursor = posts.length > 0 ? { postId: posts[posts.length - 1].id } : null;
+      // `posts/{id}.stats.*` is seeded 0 and never written (every mutation
+      // increments a sharded `counter_shards` doc), so overlay the sums before
+      // returning — otherwise the latest tab renders fabricated zeros (N444).
+      await this._overlayFeedCounters({ latest: posts });
       const result = { success: true, feed: posts, nextCursor };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
@@ -1043,11 +1117,47 @@ class UltimateFeedService {
       }
     }
 
+    // Paid promotions must actually reach viewers: read the active boosts and
+    // splice those posts into the ranking pool (best-effort; a denied read for
+    // a private/blocked author is dropped inside the helper).
+    addSource('boosted', this._getBoostedPosts(userId, { limit: pageLimit }));
+
     const timedPromises = sourcePromises.map(p =>
       Promise.race([p, new Promise(resolve => setTimeout(() => resolve(), FEED_CONFIG.PERFORMANCE.REQUEST_TIMEOUT))])
     );
     await Promise.allSettled(timedPromises);
+    await this._overlayFeedCounters(sources);
     return sources;
+  }
+
+  /**
+   * Overlay the sharded post counters onto every fetched feed post *before*
+   * scoring. `posts/{id}.stats.{likes,comments,shares,saves,views}` are seeded
+   * `0` at create and never written — every mutation routes its increment to a
+   * sharded `counter_shards` document (`CountersManager`, inside
+   * `firestoreService.toggleLike`/`toggleSave`/`sharePost` and
+   * `commentService.createComment`). Without this overlay the fallback ranker
+   * read a constant 0 (every post scored identically, so the feed collapsed to
+   * pure recency) and the card rendered fabricated zeros. The sponsored/boosted
+   * sources already overlay themselves; this covers the rest in one batched
+   * `getAll` per chunk. Best-effort: a shard read failure leaves the raw value.
+   */
+  async _overlayFeedCounters(sources) {
+    const items = [];
+    Object.values(sources).forEach((posts) => {
+      if (Array.isArray(posts)) posts.forEach((p) => { if (p && p.id) items.push(p); });
+    });
+    if (items.length === 0) return;
+    try {
+      await countersManager.applyAll({
+        items,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'shares', 'saves', 'views'],
+        scope: 'stats',
+      });
+    } catch (error) {
+      logger.warn('Feed counter overlay failed; ranking may be stale', { error: error?.message });
+    }
   }
 
   _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds) {
@@ -1079,10 +1189,12 @@ class UltimateFeedService {
       let finalScore = baseScore * weight;
 
       if (p.toxicityScore !== undefined) finalScore *= (1 - (p.toxicityScore || 0));
-      if (p.avgWatchTime !== undefined) {
-        const watchBoost = 1 + (p.avgWatchTime / 60) * FEED_CONFIG.ALGORITHM.WATCH_TIME_WEIGHT;
-        finalScore *= Math.min(2.0, watchBoost);
-      }
+      // Average watch time is not tracked on posts (or mirrored for videos — the
+      // server writes `stats.totalWatchTime`, not an average), so no writer ever
+      // sets `avgWatchTime`; the boost was dead code. The engagement term below
+      // already carries views, so watch time is intentionally not re-weighted.
+      // A paid, still-active promotion raises the post's rank for every viewer.
+      if (p.isBoosted) finalScore *= FEED_CONFIG.MONETISATION.BOOST_RANKING_FACTOR;
 
       const randomBoost = (this._hashString(p.id + sessionSeed) % 100) / 100;
       if (randomBoost < FEED_CONFIG.RANDOMNESS.EXPLORATION_BOOST) {
@@ -1100,10 +1212,15 @@ class UltimateFeedService {
 
   _calculateFallbackScore(post) {
     const w = FEED_CONFIG.ALGORITHM.FALLBACK_SCORE_WEIGHTS;
-    const likes = post.likeCount || post.likes || 0;
-    const comments = post.commentCount || post.comments || 0;
-    const shares = post.shareCount || post.shares || 0;
-    const views = post.viewCount || post.views || 0;
+    // The canonical engagement counters are `posts/{id}.stats.*`, overlaid from
+    // the shards by `_overlayFeedCounters`. The previous top-level
+    // `likeCount`/`viewCount`/… aliases have no writer anywhere, so the
+    // engagement term was a constant 0 and every post scored identically (pure
+    // recency). Keep the aliases only as a legacy fallback for un-overlaid rows.
+    const likes = post.stats?.likes ?? post.likeCount ?? post.likes ?? 0;
+    const comments = post.stats?.comments ?? post.commentCount ?? post.comments ?? 0;
+    const shares = post.stats?.shares ?? post.shareCount ?? post.shares ?? 0;
+    const views = post.stats?.views ?? post.viewCount ?? post.views ?? 0;
     const ageHours = post.createdAt ? (Date.now() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60) : 24;
     const recencyScore = Math.exp(-ageHours / 24);
     const engagementScore = (

@@ -10,6 +10,20 @@ import {
 import { RESOLUTION_PRESETS } from '../constants';
 import { useTheme } from '../../../context/ThemeContext';
 
+// Relative save label derived from a real stored timestamp. A missing or
+// unparseable timestamp is unknown ("—"), never a fabricated "Just now".
+function formatSavedAt(iso) {
+  if (!iso) return '—';
+  const ms = new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return '—';
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function EditorHeader({
   projectName,
   onProjectNameChange,
@@ -180,7 +194,7 @@ export default function EditorHeader({
                           <FolderOpen className="w-3 h-3 text-cyan-400 shrink-0" />
                           <span className="truncate">{p.name || 'Untitled'}</span>
                         </div>
-                        <span className="text-[10px] text-gray-500 shrink-0">{p.updatedAtText || 'Just now'}</span>
+                        <span className="text-[10px] text-gray-500 shrink-0">{formatSavedAt(p.updatedAt)}</span>
                       </button>
                     ))}
                   </div>
@@ -279,7 +293,7 @@ export default function EditorHeader({
         <button
           id="editor-export-btn"
           onClick={onExportClick}
-          className="relative group flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-200 active:scale-95 border border-white/20"
+          className="relative group flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-full bg-arvdoul-gradient hover:opacity-95 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-200 active:scale-95 border border-white/20"
         >
           <Upload className="w-4 h-4 stroke-[2.5]" />
           <span>Export</span>

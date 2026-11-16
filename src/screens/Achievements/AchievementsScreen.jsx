@@ -156,7 +156,7 @@ export default function AchievementsScreen() {
                 {stats.percentage}% Completed
               </h2>
               <p className="text-xs text-gray-500 mt-1">
-                Audited proof of civic, creative, and economic contributions to Arvdoul.
+                Verified record of civic, creative, and economic contributions to Arvdoul.
               </p>
             </div>
 
@@ -349,7 +349,7 @@ export default function AchievementsScreen() {
                 <span className="font-semibold text-indigo-400">{inspectingItem.points} pts</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Audit Status</span>
+                <span className="text-gray-500">Status</span>
                 <span className={inspectingItem.unlocked ? 'text-emerald-400 font-medium' : 'text-gray-400'}>
                   {inspectingItem.unlocked ? 'Verified & Granted' : 'In Progress'}
                 </span>

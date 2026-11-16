@@ -68,11 +68,15 @@ const VideoComments = memo(({
     const loadComments = async () => {
       setLoading(true);
       try {
+        const { getAuthInstance } = await import('../../firebase/firebase.js');
+        const auth = await getAuthInstance();
+        const viewerUid = auth?.currentUser?.uid || null;
         const { getCommentService } = await import('../../services/commentService.js');
         const res = await getCommentService().getCommentsByPost(video.id, {
           nested: true,
           limit: 50,
           cacheFirst: false,
+          viewerId: viewerUid,
         });
         const mapComment = (c) => ({
           id: c.id,
@@ -80,7 +84,7 @@ const VideoComments = memo(({
             id: c.userId,
             // Never invent a handle: `deriveHandle` returns null for a
             // placeholder/absent value, and the render gates on it.
-            name: pickDisplayName([c.userName], { fallback: 'User' }),
+            name: pickDisplayName([c.userName], { fallback: null }) || `user ${String(c.userId || '').slice(0, 6)}`,
             username: deriveHandle(c.userUsername),
             avatar: c.userAvatar || null,
             isVerified: !!c.isVerified,
@@ -88,7 +92,11 @@ const VideoComments = memo(({
           },
           text: c.content || c.text || '',
           likes: typeof c.likes === 'number' ? c.likes : null,
-          isLiked: false,
+          // The comment doc carries `likesBy` (the ids that liked it); a card
+          // that hardcoded `false` showed an unliked heart for a comment the
+          // viewer had liked, and the toggle then re-called `likeComment`
+          // (which throws "already liked"), so the like appeared to no-op.
+          isLiked: Array.isArray(c.likesBy) && !!viewerUid && c.likesBy.includes(viewerUid),
           createdAt: c.createdAt instanceof Date
             ? c.createdAt.toISOString()
             : new Date(c.createdAt).toISOString(),
@@ -134,13 +142,13 @@ const VideoComments = memo(({
             replyTo.id,
             uid,
             textToSend,
-            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
+            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL, targetType: 'video' }
           )
         : await getCommentService().createComment(
             video.id,
             uid,
             textToSend,
-            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
+            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL, targetType: 'video' }
           );
 
       if (res?.offlineQueued) {
@@ -373,7 +381,7 @@ const VideoComments = memo(({
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   placeholder={replyTo ? `Reply to ${replyToLabel}...` : "Add a comment..."}
-                  className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/10 transition-all"
+                  className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple border border-white/10 transition-all"
                   maxLength={500}
                 />
                 {newComment.length > 0 && (
@@ -386,7 +394,7 @@ const VideoComments = memo(({
                 whileTap={{ scale: 0.9 }}
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
-                className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shadow-purple-500/20"
+                className="w-10 h-10 rounded-full bg-arvdoul-gradient flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shadow-purple-500/20"
                 aria-label="Send comment"
               >
                 <Send className="w-4 h-4 translate-x-0.5" />

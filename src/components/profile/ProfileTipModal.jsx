@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Heart, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getMonetizationService } from '../../services/monetizationService.js';
+import { pickDisplayName } from '../../services/profileReadModel.js';
+import { newIdempotencyKey } from '../../utils/IdempotencyKey.js';
 import { toast } from 'sonner';
 
 const PRESET_AMOUNTS = [10, 50, 100, 250, 500, 1000];
@@ -28,6 +30,10 @@ export default function ProfileTipModal({
   const [success, setSuccess] = useState(false);
 
   const recipientId = recipient?.id || recipient?.uid;
+  // Names are metadata on the transaction record; an unknown party stays
+  // undefined rather than being recorded as a fabricated 'Creator'/'Supporter'.
+  const recipientName = pickDisplayName([recipient?.displayName, recipient?.username], { fallback: null });
+  const senderName = pickDisplayName([currentUser?.displayName, currentUser?.username], { fallback: null });
   const currentUserId = currentUser?.uid || currentUser?.id;
 
   // Fetch current user's balance
@@ -67,6 +73,7 @@ export default function ProfileTipModal({
   };
 
   const handleSendTip = async () => {
+    if (submitting) return;
     if (!currentUserId) {
       toast.error('Please sign in to send a tip');
       return;
@@ -87,7 +94,10 @@ export default function ProfileTipModal({
     setSubmitting(true);
     try {
       const monetization = getMonetizationService();
-      const idempotencyKey = `tip_${currentUserId}_${recipientId}_${Date.now()}`;
+      // A tip is a per-intent money action: one stable key for this send, so a
+      // retry of the same intent debits once. `Date.now()` would mint a new key
+      // on every attempt and double-charge.
+      const idempotencyKey = newIdempotencyKey();
       
       await monetization.transferCoins(
         currentUserId,
@@ -96,8 +106,8 @@ export default function ProfileTipModal({
         'creator_tip',
         {
           note: note.trim() || undefined,
-          recipientName: recipient.displayName || recipient.username || 'Creator',
-          senderName: currentUser.displayName || currentUser.username || 'Supporter',
+          recipientName: recipientName ?? undefined,
+          senderName: senderName ?? undefined,
         },
         idempotencyKey
       );
@@ -160,7 +170,7 @@ export default function ProfileTipModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                Tip {recipient?.displayName || recipient?.username || 'Creator'}
+                Tip{recipientName ? ` ${recipientName}` : ''}
                 <Sparkles className="w-4 h-4 text-amber-500" />
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -230,7 +240,7 @@ export default function ProfileTipModal({
                     placeholder="Enter amount..."
                     value={customAmount}
                     onChange={handleCustomChange}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
                   />
                 </div>
               </div>
@@ -246,7 +256,7 @@ export default function ProfileTipModal({
                   placeholder="Keep up the inspiring work! 🚀"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
                 />
               </div>
 
@@ -284,7 +294,7 @@ export default function ProfileTipModal({
                     'flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-sm text-white transition-all shadow-md',
                     submitting || hasInsufficientBalance || effectiveAmount <= 0
                       ? 'bg-purple-400 dark:bg-purple-700 cursor-not-allowed opacity-60'
-                      : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-purple-500/20'
+                      : 'bg-arvdoul-gradient hover:opacity-95 shadow-purple-500/20'
                   )}
                 >
                   {submitting ? (

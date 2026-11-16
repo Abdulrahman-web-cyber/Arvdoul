@@ -79,3 +79,22 @@ describe('push-token lifecycle is complete', () => {
     expect(body.indexOf('removePushToken')).toBeLessThan(body.indexOf('authService.signOut()'));
   });
 });
+
+describe('N387 — every notification lands in a rendered time group', () => {
+  const screen = read('src/screens/NotificationsScreen.jsx');
+  test('timeGroup is always one of Now/Today/Yesterday/Earlier', () => {
+    // The old value was a raw `toLocaleDateString()` for anything older than an
+    // hour, which matched no rendered group key, so every notification past the
+    // one-hour window silently vanished from the list.
+    expect(screen).not.toMatch(/timeGroup:.*toLocaleDateString\(\)/);
+    expect(screen).toMatch(/const timeGroup = !createdAtMs/);
+    for (const key of ['Now', 'Today', 'Yesterday', 'Earlier']) {
+      expect(screen).toContain(`'${key}'`);
+    }
+  });
+
+  test('the grouping never falls back to a non-rendered group key', () => {
+    expect(screen).not.toMatch(/timeGroup \|\| 'Recent'/);
+    expect(screen).toMatch(/groups\[n\.timeGroup\] \? n\.timeGroup : 'Earlier'/);
+  });
+});

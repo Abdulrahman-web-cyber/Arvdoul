@@ -54,6 +54,12 @@ export const PRIVATE_PROFILE_FIELDS = [
   'stripeCustomerId',
   'stripeAccountId',
   'stripeSubscriptionId',
+  // Financial figures (N324). `users/{uid}` is world-signed-in readable, so a
+  // balance there let any signed-in user read anyone's wallet regardless of the
+  // owner's `economicStatus` scope. The authoritative balance now lives on
+  // `users_private/{uid}` (owner/admin only), written by `functions/coinBalance.js`.
+  'coins',
+  'lockedCoins',
 ];
 
 export const PRIVATE_PROFILE_COLLECTION = 'users_private';
@@ -102,6 +108,16 @@ export const SERVER_AUTHORITATIVE_FIELDS = [
   'experienceToNextLevel',
   'level',
   'levelBand',
+  // Follower/following counts are maintained by the sharded counters and
+  // mirrored onto the document by `functions/userCounters.js` (N431); a client
+  // write would let an owner mint standing they do not have.
+  'followerCount',
+  'followingCount',
+  // The published-post count is maintained by the server-side
+  // `functions/userCounters.js#onPostWrite` trigger (net delta per post
+  // create/publish/delete) and reconciled by `reconcileUserPostCounts`; a
+  // client write would let an owner mint a post count they do not have (N438).
+  'postCount',
   'activeDays',
   'activeDaysCount',
   'activeStreak',
@@ -124,13 +140,24 @@ export const SERVER_AUTHORITATIVE_FIELDS = [
   'monetizationEligible',
   'coins',
   'coinBalance',
+  // `lockedCoins` is the server's withdrawal hold. It is written only by
+  // `functions/monetization.js requestWithdrawal` (and released by
+  // `withdrawalSettlement`). It is server-authoritative because
+  // `getAvailableBalance = coins - lockedCoins`: a client that could lower it
+  // would raise its own spendable balance and could request two withdrawals
+  // against one balance (the second would settle from the same coins).
+  'lockedCoins',
   'earnings',
   'totalEarned',
   'isVerified',
   'accountStatus',
   'roles',
   'role',
-  'policyStanding'
+  'policyStanding',
+  // Live presence is scope-gated in user_presence/{uid} (N321); it is not a
+  // client-writable field on users/{uid}.
+  'isOnline',
+  'lastActive',
 ];
 
 /**

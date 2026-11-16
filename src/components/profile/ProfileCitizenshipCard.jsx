@@ -99,7 +99,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
           "text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase",
           isDark ? "border-amber-500/30 bg-amber-500/10 text-amber-300" : "border-amber-600/30 bg-amber-50 text-amber-900"
         )}>
-          {passport.citizenTier?.tier || 'Resident'}
+          {passport.citizenTier?.tier || '—'}
         </span>
       </div>
 

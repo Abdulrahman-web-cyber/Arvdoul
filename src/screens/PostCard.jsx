@@ -16,7 +16,8 @@ import * as monetizationService from '../services/monetizationService';
 import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, Sparkles, BarChart3, Coins, Send, AlertTriangle, Shield, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
+import { resolveActorName } from '../services/profileReadModel.js';
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, BarChart3, Coins, Send, AlertTriangle, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
 // Sub‑cards
@@ -265,7 +266,12 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
         import('../services/postService.js'),
       ]);
       const post = await postService.getPost(postId);
-      if (post?.boostData?.isBoosted) {
+      // Mirror the server's rule: only a *still-active* boost blocks a new one,
+      // so an expired promotion stays re-purchasable.
+      const expiresAt = post?.boostData?.boostExpiresAt;
+      const boostActive = post?.boostData?.isBoosted === true &&
+        (typeof expiresAt !== 'number' || expiresAt > Date.now());
+      if (boostActive) {
         toast.info('This post is already promoted');
         onClose();
         return;
@@ -501,7 +507,7 @@ const engagementReducer = (state, action) => {
   }
 };
 
-function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, navigate, onRetry, isVisible = true }) {
+function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, navigate, onRetry, isVisible = true, authorStanding = null }) {
   const { theme } = useTheme();
   const tokens = useMemo(() => getDesignTokens(theme), [theme]);
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -512,8 +518,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // sub-cards are not re-rendered by a fresh prop identity.
   const handleAnalytics = trackAnalyticsEvent;
 
-  // Sponsored / ad detection
-  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined;
+  // Sponsored / ad detection. The feed inserts ad cards shaped
+  // `{ type: 'ad', isAd: true, ... }` (feedService `_getAdOptimized`), and a
+  // post-embedded sponsor is flagged by `isSponsored`/`adCampaignId`. A card
+  // that is not identified as sponsored must never render a sponsored label
+  // (FTC-style ad disclosure depends on it), so cover all three signals.
+  const isAd = post.type === 'ad' || post.isAd === true;
+  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined || isAd;
   const [adDetails, setAdDetails] = useState(null);
   useEffect(() => {
     if (isSponsored && post.adCampaignId && monetizationService.getAd) {
@@ -526,24 +537,32 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [isSponsored, post.adCampaignId, currentUser?.uid]);
 
   // Memoized post data
-  const likedBySet = useMemo(() => new Set(post.likedBy || []), [post.likedBy]);
-  const isCreator = (post.authorLevel || 0) >= 5;
-  const isPremium = (post.authorLevel || 0) >= 8;
+  // Author standing (verified / creator / premium) lives on the author's
+  // `users/{uid}` profile, never on the post document. The card previously read
+  // an author-level field and a post-level verified flag that no writer ever
+  // set, so these were permanently false. The feed (HomeScreen) resolves the
+  // standing and passes it down; a caller without it renders no badge rather
+  // than inventing one.
+  const isVerified = Boolean(authorStanding?.isVerified);
+  const isCreator = Boolean(authorStanding?.isCreator);
+  const isPremium = Boolean(authorStanding?.isPremium);
   const hasMedia = !!(post.media && post.media.length > 0);
 
   const isInitiallyLiked = useMemo(() => {
-    if (post.isLiked || post.liked) return true;
-    const uid = currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') : null);
-    if (uid && likedBySet.has(uid)) return true;
+    const uid = currentUser?.uid;
     if (uid && readLocalLikes(uid)[post.id]) return true;
     return false;
-  }, [post.id, post.isLiked, post.liked, likedBySet, currentUser?.uid]);
+  }, [post.id, currentUser?.uid]);
 
-  // Engagement state with reducer
+  // Engagement state with reducer. `liked`/`saved`/`reaction` are per-viewer and
+  // are NOT fields on the post document (no writer sets `post.isLiked`,
+  // `post.likedBy`, `post.savedBy` or `post.userReaction`); they are hydrated
+  // from the viewer's own subcollection docs below. Seeding from those absent
+  // post fields always produced the negative.
   const [engagement, dispatch] = useReducer(engagementReducer, {
     liked: isInitiallyLiked,
-    reaction: post.userReaction || null,
-    saved: post.savedBy?.includes(currentUser?.uid) || false,
+    reaction: null,
+    saved: false,
     followState: 'none',
     likeCount: post.stats?.likes ?? null,
     commentCount: post.stats?.comments ?? null,
@@ -552,6 +571,46 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   });
   const engagementRef = useRef(engagement);
   useEffect(() => { engagementRef.current = engagement; }, [engagement]);
+
+  // Hydrate the real follow state so the button reflects an existing edge or an
+  // outstanding private-account request instead of always rendering "Follow"
+  // (a user who already followed the author saw a follow button, and a second
+  // tap looked like a silent no-op).
+  useEffect(() => {
+    const uid = currentUser?.uid;
+    if (!uid || !post.authorId || uid === post.authorId) return undefined;
+    let cancelled = false;
+    userService.getFollowStatus(uid, post.authorId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
+        else if (res?.requestStatus === 'pending') dispatch({ type: 'SET_FOLLOW_STATE', payload: 'requested' });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser?.uid, post.authorId]);
+
+  // Hydrate the viewer's real like/save/reaction state from their own
+  // subcollection docs. The post document carries none of these, so without
+  // this read the heart/bookmark only reflected an in-session or device-local
+  // action. The local like registry is the offline source of truth and wins
+  // until the server read resolves.
+  useEffect(() => {
+    const uid = currentUser?.uid;
+    if (!uid || !post.id) return undefined;
+    let cancelled = false;
+    firestoreService.getPostViewerState?.(post.id, uid)
+      .then((state) => {
+        if (cancelled || !state) return;
+        if (state.liked || readLocalLikes(uid)[post.id]) {
+          dispatch({ type: 'SET_LIKED', payload: true });
+        }
+        if (state.saved) dispatch({ type: 'SET_SAVED', payload: true });
+        if (state.reaction) dispatch({ type: 'SET_REACTION', payload: state.reaction });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser?.uid, post.id]);
 
   // Rollback snapshot helper
   const takeSnapshot = useCallback(() => ({ ...engagementRef.current }), []);
@@ -582,17 +641,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const debounceReactionRef = useRef(null);
   const likeLockRef = useRef(false);
   const isAuthor = currentUser?.uid === post.authorId;
-
-  // Follow status
-  useEffect(() => {
-    if (!isAuthor && currentUser?.uid) {
-      userService.getFollowStatus(currentUser.uid, post.authorId).then(res => {
-        if (res.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
-      }).catch((e) => {
-        console.warn('Follow-state read failed', e?.message);
-      });
-    }
-  }, [currentUser?.uid, post.authorId, isAuthor]);
 
   // Real coin balance (ledger) whenever the gift picker opens.
   useEffect(() => {
@@ -931,14 +979,19 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const handleFollow = useCallback(async () => {
     if (!currentUser) return toast.error('Sign in');
     const snapshot = takeSnapshot();
-    const newFollowState = snapshot.followState === 'following' ? 'none' : 'following';
-    dispatch({ type: 'SET_FOLLOW_STATE', payload: newFollowState });
+    const isFollowing = snapshot.followState === 'following';
+    dispatch({ type: 'SET_FOLLOW_STATE', payload: isFollowing ? 'none' : 'following' });
     triggerHaptic('medium');
     try {
-      if (newFollowState === 'following') {
-        await userService.followUser(currentUser.uid, post.authorId);
-      } else {
+      if (isFollowing) {
         await userService.unfollowUser(currentUser.uid, post.authorId);
+      } else {
+        const res = await userService.followUser(currentUser.uid, post.authorId);
+        // A follow against a private account is a pending request, not an edge:
+        // show "Requested" so a tap does not look like it silently failed.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          dispatch({ type: 'SET_FOLLOW_STATE', payload: 'requested' });
+        }
       }
     } catch (err) {
       rollbackTo(snapshot);
@@ -1009,7 +1062,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [handleReaction, closeReactionsPicker]);
 
   const postedDateTime = useMemo(() => {
-    try { return formatDistanceToNow(post.createdAt?.toDate?.() || new Date(post.createdAt), { addSuffix: true }); } catch { return 'just now'; }
+    // A post without a parseable createdAt has no posting time; return null so
+    // the header omits it rather than claiming it was posted "just now".
+    const date = post.createdAt?.toDate?.() || (post.createdAt ? new Date(post.createdAt) : null);
+    if (!date || Number.isNaN(date.getTime())) return null;
+    try { return formatDistanceToNow(date, { addSuffix: true }); } catch { return null; }
   }, [post.createdAt]);
 
   // Determine post type
@@ -1026,8 +1083,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   if (!post.id) return null;
 
   const actionBarGradient = tokens.actionBarBg;
-  const ctaText = adDetails?.cta || (post.ctaText || 'Learn More');
-  const ctaLink = adDetails?.link || post.ctaLink;
+  const ctaText = adDetails?.cta || post.cta || post.ctaText || 'Learn More';
+  const ctaLink = adDetails?.link || post.link || post.ctaLink;
 
   return (
     <motion.div
@@ -1051,23 +1108,21 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-gradient-to-r from-purple-400 to-pink-600' : 'bg-transparent'}`} />
           <img src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
           {isPremium && <Crown className="absolute -top-1 -right-1 w-3 h-3 text-yellow-400" />}
-          {post.isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
+          {isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 flex-wrap">
             <span className="font-semibold text-sm" style={{ color: tokens.text }}>{post.authorName}</span>
-            {post.isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
+            {isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
             {isCreator && <Zap className="w-3 h-3 text-amber-400" />}
-            {post.momentum === 'trending' && <TrendingUp className="w-3 h-3 text-green-400" title="Trending" />}
-            {post.momentum === 'exploding' && <Sparkles className="w-3 h-3 text-yellow-400" title="Exploding" />}
             {isSponsored && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-300">Sponsored</span>
             )}
           </div>
           <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: tokens.textSecondary }}>
             {post.authorUsername && <span>@{post.authorUsername}</span>}
-            {post.authorUsername && <span>·</span>}
-            <span>{postedDateTime}</span>
+            {post.authorUsername && postedDateTime && <span>·</span>}
+            {postedDateTime && <span>{postedDateTime}</span>}
             {post.visibility === 'public' && <Globe className="w-3 h-3" />}
             {post.visibility === 'followers' && <Users className="w-3 h-3" />}
           </div>
@@ -1083,14 +1138,15 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <motion.button
               onClick={handleFollow}
               whileTap={{ scale: 0.96 }}
-              className="px-2 py-0.5 rounded-full text-xs font-semibold text-white shadow-md transition-all"
+              className="px-2 py-0.5 rounded-full text-xs font-semibold shadow-md transition-all"
               style={{
-                background: engagement.followState === 'following' ? (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)') : tokens.neonPurple,
-                boxShadow: engagement.followState === 'following' ? 'none' : `0 0 6px rgba(236,72,153,0.4), 0 0 8px rgba(147,51,234,0.2)`,
-                color: engagement.followState === 'following' ? (theme === 'dark' ? '#fff' : '#333') : '#fff',
+                background: engagement.followState === 'none' ? tokens.neonPurple : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'),
+                boxShadow: engagement.followState === 'none' ? `0 0 6px rgba(236,72,153,0.4), 0 0 8px rgba(147,51,234,0.2)` : 'none',
+                color: engagement.followState === 'none' ? '#fff' : (theme === 'dark' ? '#fff' : '#333'),
               }}
+              aria-label={engagement.followState === 'following' ? `Unfollow ${post.authorName}` : engagement.followState === 'requested' ? `Follow request pending for ${post.authorName}` : `Follow ${post.authorName}`}
             >
-              {engagement.followState === 'following' ? 'Following' : 'Follow'}
+              {engagement.followState === 'following' ? 'Following' : engagement.followState === 'requested' ? 'Requested' : 'Follow'}
             </motion.button>
           )}
           <button onClick={() => onOpenOptions?.(post)} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Post options">
@@ -1120,14 +1176,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         </div>
       )}
 
-      {/* COMMUNITY NOTES */}
-      {post.communityNotes?.length > 0 && (
-        <div className="mx-3 mb-1 p-1.5 bg-blue-500/10 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex items-start gap-2">
-          <Shield className="w-3 h-3 flex-shrink-0 mt-0.5" />
-          <span>{post.communityNotes[0].text}</span>
-        </div>
-      )}
-
       {/* REPOST CONTEXT */}
       {isRepost && (
         <div className="px-3 pt-1 flex items-center gap-1.5 text-xs" style={{ color: tokens.textSecondary }}>
@@ -1143,8 +1191,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isRepost && (
         <div className="mx-3 my-2 rounded-2xl border p-3" style={{ borderColor: tokens.border }}>
           <div className="flex items-center gap-2 mb-1">
-            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || 'Original author'} className="w-6 h-6 rounded-full object-cover" />
-            <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || 'Original author'}</span>
+            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || ''} className="w-6 h-6 rounded-full object-cover" />
+            <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || resolveActorName([], post.originalAuthorId)}</span>
           </div>
           {post.originalContent && (
             <p className="text-sm whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.originalContent}</p>
@@ -1173,7 +1221,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
-      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={post.isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
+      {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}

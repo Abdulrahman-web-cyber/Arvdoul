@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { XP_RULES } from '../shared/levelConfig.cjs';
+import { XP_RULES, NEW_USER_DEFAULTS } from '../shared/levelConfig.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
@@ -320,6 +320,9 @@ describe('ConflictResolutionScreen - real queued operations only', () => {
     const src = fs.readFileSync(path.join(root, 'src/utils/OfflineQueue.js'), 'utf8');
     expect(src).toContain('async getPending(');
     expect(src).toContain('async remove(id)');
+    // `createdAt` is an ISO string, so a `(b.createdAt - a.createdAt)`
+    // comparator is NaN (a no-op) and "newest first" never held.
+    expect(src).toContain('new Date(b.createdAt || 0) - new Date(a.createdAt || 0)');
   });
 });
 
@@ -424,8 +427,13 @@ describe('Badge system - real stats map', () => {
 describe('Payouts - honest account state', () => {
   test('getPayoutSettings never claims an active account when unconfigured', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
-    expect(src).toContain("accountStatus: 'unconfigured'");
+    // The server record uses `status: 'onboarding' | 'ready'`; the fallback must
+    // report an honest `unconfigured` status, never a fabricated active account.
+    expect(src).toContain("status: 'unconfigured'");
     expect(src).not.toContain("return { enabled: true, accountStatus: 'active', currency: 'USD' }");
+    // It must unwrap the callable's `{ success, settings }` envelope; reading
+    // `accountStatus` off the envelope silently missed every account.
+    expect(src).toContain('data.settings ?? data');
   });
 
   test('CreatorPayoutScreen has no simulated Stripe timer', () => {
@@ -629,6 +637,15 @@ describe('appStore - identity mirror only, no duplicate economy', () => {
     expect(src).toContain('clearUserData');
   });
 
+  test('userService has no fabricated coin-balance getter', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/userService.js'), 'utf8');
+    // `getCoinBalance` returned `profile?.coins || 0`, presenting an absent
+    // balance as a measured 0, and had no caller anywhere (dead). The real
+    // balance reads go through `walletService` (which returns null when
+    // unknown, rendered as "—").
+    expect(src).not.toContain('getCoinBalance');
+  });
+
   test('QuickAccessPanel never fabricates a 1250-coin balance', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
     // The balance header showed a fake 1250 when the real balance was unknown;
@@ -762,8 +779,11 @@ describe('Shared rate limiter + admin secrets', () => {
   test('sendNotification is spam-hardened', () => {
     const src = fs.readFileSync(path.join(root, 'functions/notifications.js'), 'utf8');
     expect(src).toContain("checkRateLimit(senderId, 'sendNotification'");
-    expect(src).toContain('Cannot send self-notifications');
     expect(src).toContain('Too many notifications to this recipient');
+    // Type allowlist: a client cannot mint a trusted system/financial notice.
+    expect(src).toContain('CLIENT_SOCIAL_NOTIFICATION_TYPES');
+    expect(src).toContain('CLIENT_SELF_NOTIFICATION_TYPES');
+    expect(src).toContain('cannot be sent by a client');
   });
 
   test('callables got rate limits', () => {
@@ -1297,6 +1317,16 @@ describe('Vibes master-spec: cost control (spec §57/58)', () => {
     expect(src).toContain("'stats.completions': completions");
     expect(src).toContain("'stats.completionRate'");
   });
+
+  test('story create seeds only counters a real writer maintains', () => {
+    // `viewerCount` and `likes` had no writer (story reactions live in
+    // `reaction_shards` -> `stats.reactions`; viewers are the owner-only
+    // `viewers` list), so a seeded `0` advertised an unmeasured metric as a
+    // measured zero. Only server-aggregated counters may be seeded.
+    const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(src).not.toMatch(/stats:\s*\{[^}]*viewerCount: 0/);
+    expect(src).not.toMatch(/stats:\s*\{[^}]*\blikes: 0/);
+  });
 });
 
 describe('Vibes scoring v2 (spec §37/38/39)', () => {
@@ -1512,7 +1542,7 @@ describe('Monetization - canonical level curve (no duplicated drift)', () => {
     // The import must carry the canonical LEVELS table (aliased) plus the
     // shared helpers it actually uses; do not re-import symbols that are dead.
     expect(src).toMatch(
-      /import \{ LEVELS as CANONICAL_LEVELS,[^}]*?GIFT_CATALOG,[^}]*?getLevelInfo \} from ['"]\.\.\/shared\/levelConfig\.cjs['"];/
+      /import \{ LEVELS as CANONICAL_LEVELS,[^}]*?GIFT_CATALOG,[^}]*?getLevelInfo[^}]*?\} from ['"]\.\.\/shared\/levelConfig\.cjs['"];/
     );
     expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
     expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
@@ -1630,12 +1660,12 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
     // whenever the real display name/handle was missing, and AboutScreen printed
     // 'Citizen' as a rank. All three now use the read model (or an em-dash).
     const bar = fs.readFileSync(path.join(root, 'src/components/Shared/TopAppBar.jsx'), 'utf8');
-    expect(bar).toContain('pickDisplayName');
+    expect(bar).toContain('resolveActorName');
     expect(bar).not.toContain("effectiveUser?.displayName || 'Citizen'");
     expect(bar).not.toContain("|| 'citizen'");
 
     const conn = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
-    expect(conn).toContain('pickDisplayName');
+    expect(conn).toContain('resolveActorName');
     expect(conn).not.toContain("citizen.displayName || 'Citizen'");
     expect(conn).not.toContain("citizen.username || 'citizen'");
 
@@ -2531,7 +2561,7 @@ describe('Wallet availability mirrors the server hold (lockedCoins)', () => {
 
   test('walletService derives availableCoins from lockedCoins, not a partial status sum', () => {
     const s = read('src/services/walletService.js');
-    expect(s).toContain('const lockedCoins = Number(userData.lockedCoins || 0)');
+    expect(s).toContain('const lockedCoins = Number(balanceData.lockedCoins || 0)');
     // Availability mirrors the server hold; an unknown balance stays null
     // rather than advertising 0 spendable coins.
     expect(s).toContain('const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);');
@@ -2608,6 +2638,7 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
       'src/screens/LoginScreen.jsx',
       'src/screens/ForgotPassword.jsx',
       'src/screens/VerifyEmailScreen.jsx',
+      'src/screens/ResetPassword.jsx',
     ]) {
       const s = read(file);
       expect(s).not.toMatch(/[Ee]nd-to-end encrypted/i);
@@ -2824,7 +2855,9 @@ describe('MenuScreen and RankingsScreen use the read model, not a Citizen stub',
     const s = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
     expect(s).not.toContain('activeUser?.displayName || "Citizen"');
     expect(s).not.toContain('activeUser?.username || "citizen"');
-    expect(s).toContain('pickDisplayName(');
+    // The name resolves through the read model to a real uid prefix, never a
+    // generic "Member"/"Citizen" word.
+    expect(s).toContain('resolveActorName(');
     expect(s).toContain('pickHandle(');
     // A missing balance must not claim an empty wallet.
     expect(s).not.toContain("typeof activeUser?.coins === 'number' ? activeUser.coins : 0");
@@ -2952,12 +2985,13 @@ describe('Story insights and coin leaderboard never fabricate 0 (N299)', () => {
     expect(s).toContain('backTaps: unknownNumber(story.stats?.backTaps),');
   });
 
-  test('monetizationService coin leaderboard leaves an unwritten balance unknown', () => {
+  test('the cross-user coin leaderboard is removed (N324)', () => {
+    // A leaderboard ordered by `coins` across `users/{uid}` can only run if the
+    // balance is world-readable; the balance now lives on users_private/{uid},
+    // so the cross-user ranking was removed with it (it had no screen caller).
     const s = read('src/services/monetizationService.js');
-    expect(s).not.toContain('coins: doc.data().coins || 0,');
-    expect(s).not.toContain('position: this.getPositionTitle(doc.data().coins || 0),');
-    expect(s).toContain('const coins = unknownNumber(doc.data().coins);');
-    expect(s).toContain('position: coins === null ? null : this.getPositionTitle(coins),');
+    expect(s).not.toContain('getCoinLeaderboard');
+    expect(s).not.toContain("orderBy('coins'");
   });
 });
 
@@ -3109,8 +3143,9 @@ describe('Profile/progression surfaces render unknown counts, not 0 (N155)', () 
 
   test('walletService leaves an unknown balance null instead of 0', () => {
     const s = read('src/services/walletService.js');
+    // The balance is read from users_private/{uid} (N324), never the public doc.
     expect(s).not.toContain("Number(userData.coins || userData.coinBalance || 0)");
-    expect(s).toContain('const rawCoins = userData.coins ?? userData.coinBalance ?? null;');
+    expect(s).toContain('const rawCoins = balanceData.coins ?? balanceData.coinBalance ?? null;');
   });
 
   test('PostOptionsDrawer does not derive a creator score from follower count', () => {
@@ -3283,6 +3318,12 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).not.toContain('postDoc.viewsCount || postDoc.views || 0');
     expect(s).not.toContain('postDoc.likesCount || postDoc.likes?.length || 0');
     expect(s).toContain('postDoc.stats?.views');
+    // The "Virality Score" was a High/Medium/Normal bucket invented from the
+    // view count; it now renders the server's real `trendingScore` (or
+    // "Unavailable"), never a fabricated label.
+    expect(s).not.toContain('Virality Score');
+    expect(s).not.toMatch(/> 1000 \? 'High'/);
+    expect(s).toContain('metrics.trendingScore');
   });
 
   test('PostCard analytics panel and comment preview do not fabricate a 0', () => {
@@ -3391,6 +3432,10 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
     expect(s).toContain("earnings.gifts == null ? '—'");
     expect(s).toContain("earnings.ads == null ? '—'");
     expect(s).toContain("lifetimeWithdrawnCoins == null ? '—'");
+    // A ledger row whose amount is absent is unknown; summing it as 0
+    // understated the figure while still rendering it as measured.
+    expect(s).not.toContain('Number(tx.amount) || 0');
+    expect(s).toContain('const amount = unknownNumber(tx.amount);');
   });
 
   test('AdminVerificationScreen treats an absent strike count as unknown, not 0', () => {
@@ -3484,7 +3529,7 @@ describe('Author identity is never fabricated across write + hydrate paths', () 
     const src = read('src/services/commentService.js');
     expect(src).not.toContain('`User_${userId.slice(0, 8)}`');
     expect(src).not.toContain('`user_${userId.slice(0, 8)}`');
-    expect(src).toContain('pickDisplayName([options.userName])');
+    expect(src).toContain('resolveActorName([options.userName], userId)');
     expect(src).toContain("deriveHandle(options.userUsername) || ''");
   });
 
@@ -3664,6 +3709,16 @@ describe('Creator ranking never fabricates a percentile from an unmaintained fie
     expect(svc).toContain("typeof userScore === 'number' && userScore > 0");
     expect(svc).not.toContain("label: 'New Creator'");
     expect(svc).toContain("label: null,");
+  });
+
+  test('N480 — a failed ranking read is unknown, never a measured totalCreators of 0', () => {
+    // `getUserAnalytics` caught a ranking failure and returned
+    // `{ rank: null, totalCreators: 0, percentile: null }` — a fabricated
+    // measured population of 0 (and keys the real result never has). The
+    // honest shape reports the ranking as unavailable.
+    const svc = read('src/services/analyticsService.js');
+    expect(svc).not.toContain('totalCreators: 0');
+    expect(svc).toContain('{ position: null, percentile: null, label: null, total: null }');
   });
 
   test('the dashboard does not default an absent rank to "New Creator"', () => {
@@ -3859,7 +3914,10 @@ describe('N184 — no fabricated counts sweep (round 4)', () => {
     expect(src).not.toContain('getReputationLevel(userReputation)');
     expect(src).not.toContain("typeof userReputation === 'number' ? userReputation : '—'");
     expect(src).toContain('unknownNumber(question?.bounty)');
-    expect(src).toContain('unknownNumber(userReputation) ?? 0');
+    expect(src).toContain('unknownNumber(userReputation)');
+    // N384: an absent reputation must not be coerced to a fabricated 0 that
+    // then renders a "Unestablished" badge for an unmeasured score.
+    expect(src).not.toContain('unknownNumber(userReputation) ?? 0');
   });
 });
 
@@ -3904,5 +3962,1031 @@ describe('N314 — liveService never reports a peak-viewer metric no writer main
     const src = read('src/services/liveService.js');
     expect(src).not.toMatch(/peakViewers,/);
     expect(src).not.toMatch(/peakViewers\s*:/);
+  });
+});
+
+describe('N320 — lifetime earnings are never a fabricated measured zero', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('NEW_USER_DEFAULTS does not seed totalEarned', () => {
+    // No server path increments a lifetime-earnings counter, so a seeded 0
+    // renders as a *measured* "0 earned" on the wallet/creator surfaces. Absent
+    // must mean unknown, not zero.
+    expect(NEW_USER_DEFAULTS.totalEarned).toBeUndefined();
+    const cfg = read('src/shared/levelConfig.cjs');
+    expect(cfg).not.toMatch(/^\s*totalEarned:\s*0,/m);
+  });
+
+  test('the users create rule does not pin totalEarned (so it stays unknown)', () => {
+    const rules = read('firestore.rules');
+    const start = rules.indexOf("allow create: if isOwner(userId)");
+    const block = rules.slice(start, rules.indexOf(']);', rules.indexOf('contributionScore', start)));
+    expect(block).not.toContain("get('totalEarned', null)");
+  });
+
+  test('createUserProfile does not seed totalEarned on a new account', () => {
+    const src = read('src/services/userService.js');
+    expect(src).not.toMatch(/totalEarned:\s*NEW_USER_DEFAULTS\.totalEarned/);
+  });
+
+  test('the wallet and creator surfaces render absent earnings as unknown, not 0', () => {
+    // QuickAccessPanel already guards `!= null`; WalletScreen renders "—" for a
+    // null total. Guard both so a future refactor cannot default to 0.
+    const qap = read('src/components/Shared/QuickAccessPanel.jsx');
+    expect(qap).toContain('userStats.totalEarned != null');
+    const wallet = read('src/screens/Economy/WalletScreen.jsx');
+    expect(wallet).toContain("wallet?.totalEarned == null ? '—'");
+  });
+});
+
+describe('N343 — ProfileProgression never fabricates a "0 XP" bar from a missing XP value', () => {
+  const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileProgression.jsx'), 'utf8');
+  test('the experience prop does not default to a fabricated 0', () => {
+    // `experience = 0` made `getLevelInfo(0)` render "0 XP earned / 100 XP to
+    // Level N" for a profile that stores a level but no XP — a fabricated
+    // measured zero, the exact class the component doc claims to avoid.
+    expect(src).not.toMatch(/experience\s*=\s*0\b/);
+    expect(src).toMatch(/experience\s*=\s*null\b/);
+  });
+  test('the XP curve is consulted only when a real XP value exists', () => {
+    expect(src).not.toMatch(/getLevelInfo\(\s*experience\s*\|\|\s*0\s*\)/);
+    expect(src).toContain('getLevelInfo(Number(experience))');
+    expect(src).toContain('hasExperience');
+  });
+  test('the XP bar is gated on the resolved XP info, not the level alone', () => {
+    expect(src).toContain('{xpInfo && (');
+  });
+});
+
+describe('N384 — QuestionCard reputation badge uses the canonical 0-100 bands', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/PostCard/QuestionCard.jsx'), 'utf8');
+
+  test('no local reputation threshold table diverging from REPUTATION_BANDS', () => {
+    // A local table (100/500/1000/5000) once used a scale the canonical
+    // 0-100 reputation model can never reach, so the badge never fired below
+    // 100 and mislabelled a 100 as "Skilled".
+    expect(src).not.toMatch(/reputation\s*>=\s*5000/);
+    expect(src).not.toMatch(/reputation\s*>=\s*1000/);
+    expect(src).not.toMatch(/label:\s*'Legend'/);
+  });
+
+  test('the badge is derived from the canonical getReputationBand', () => {
+    expect(src).toContain('getReputationBand');
+    expect(src).toContain("from '../../services/levelSystemService.js'");
+  });
+
+  test('an absent reputation does not coerce to a fabricated 0', () => {
+    expect(src).not.toMatch(/getReputationLevel\(unknownNumber\([^)]*\)\s*\?\?\s*0\)/);
+  });
+});
+
+describe('N385 — no placeholder date word in place of an absent timestamp', () => {
+  test('CreatorPayoutScreen renders "—", not "Recent", for an absent createdAt', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/CreatorPayoutScreen.jsx'), 'utf8');
+    expect(src).not.toMatch(/:\s*'Recent'\s*}/);
+    expect(src).toContain("? tx.createdAt.toDate().toLocaleDateString() : '—'");
+  });
+});
+
+describe('N386 — video project "Recent Projects" shows a real relative save time', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('a saved project stores a real timestamp, not a display string', () => {
+    const src = read('src/screens/VideoEditor/VideoEditorScreen.jsx');
+    expect(src).not.toMatch(/updatedAtText\s*:/);
+    expect(src).toMatch(/updatedAt:\s*new Date\(\)\.toISOString\(\)/);
+  });
+
+  test('the header derives the label from the timestamp and never defaults to "Just now"', () => {
+    const src = read('src/screens/VideoEditor/components/EditorHeader.jsx');
+    // A stored "Just now" string claimed a project saved days ago was just saved.
+    expect(src).not.toMatch(/updatedAtText/);
+    expect(src).not.toMatch(/formatSavedAt\([^)]*\)\s*\|\|\s*'Just now'/);
+    expect(src).toContain('formatSavedAt(p.updatedAt)');
+  });
+});
+
+describe('N388 — ProfileHeroSection creator pill uses the canonical identity badge', () => {
+  const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileHeroSection.jsx'), 'utf8');
+
+  test('the pill label is derived, not the literal "Top Creator"', () => {
+    // 'Top Creator' is reserved for creators at LEVEL_GATES.verifiedPriority;
+    // the literal claimed that standing for every creator regardless of level.
+    expect(src).toMatch(/getIdentityBadge/);
+    expect(src).toMatch(/creatorBadgeLabel/);
+    expect(src).not.toMatch(/>\s*Top Creator\s*</);
+  });
+});
+
+describe('N389 — saved items / collections show a real date, not "Recently"', () => {
+  const saved = fs.readFileSync(path.join(root, 'src/screens/SavedScreen.jsx'), 'utf8');
+  const collections = fs.readFileSync(path.join(root, 'src/screens/CollectionsScreen.jsx'), 'utf8');
+  const svc = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+
+  test('an absent save timestamp renders "—", never "Recently"', () => {
+    expect(saved).not.toMatch(/savedAt:\s*[^,]*\|\|\s*'Recently'/);
+    expect(saved).toContain("formatSavedDate(p.savedAt)");
+    expect(saved).toContain("formatSavedDate(v.savedAt)");
+    expect(saved).toMatch(/item\.savedAt \|\| '—'/);
+  });
+
+  test('collections fall back to "—" for a missing updatedAt', () => {
+    expect(collections).not.toMatch(/:\s*'Recently'/);
+    expect(collections).toMatch(/c\.lastUpdated \|\| '—'/);
+  });
+
+  test('getSavedPosts preserves the real savedAt timestamp', () => {
+    expect(svc).toMatch(/savedAt:\s*entry\.savedAt \|\| null/);
+  });
+});
+
+describe('N390 — Marketplace does not render a zero-star rating as if measured', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+
+  test('a product with no reviews shows "No reviews yet", not a bare 0 rating', () => {
+    expect(src).toMatch(/prod\.rating > 0/);
+    expect(src).toMatch(/No reviews yet/);
+    // The unconditional `{prod.rating} ({prod.reviewsCount})` rendered "0 (0)".
+    expect(src).not.toMatch(/<Star className="w-3\.5 h-3\.5 fill-yellow-400" \/> \{prod\.rating\} \(\{prod\.reviewsCount\}\)/);
+  });
+
+  test('"N sold" is only shown once a sale has happened', () => {
+    expect(src).toMatch(/prod\.salesCount > 0/);
+  });
+});
+
+describe('N391 — PassportScreen renders "—" instead of a fabricated civic identity', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Citizenship/PassportScreen.jsx'), 'utf8');
+
+  test('a missing citizen tier / rank / name is not laundered into a concrete standing', () => {
+    // The screen defaulted a missing tier to 'Resident'/'Platform Resident',
+    // the holder name to 'Citizen Holder', the handle to 'State Resident' and
+    // the rank to 'Arrival' — asserting standing the profile may not have.
+    expect(src).not.toMatch(/citizenTier\?\.tier \|\| '(Resident|Platform Resident)'/);
+    expect(src).not.toMatch(/displayName \|\| 'Citizen Holder'/);
+    expect(src).not.toMatch(/'State Resident'/);
+    expect(src).not.toMatch(/rankTitle \|\| 'Arrival'/);
+    expect(src).toMatch(/citizenTier\?\.tier \|\| '—'/);
+    expect(src).toMatch(/rankTitle \|\| '—'/);
+  });
+});
+
+describe('N392 — missing timestamps are omitted, not claimed as "just now"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PostCard omits the posted-at label when createdAt is absent', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).not.toMatch(/catch \{ return 'just now'; \}/);
+    expect(s).toMatch(/postedDateTime && <span>\{postedDateTime\}<\/span>/);
+  });
+
+  test('CommentsDrawer renders no age rather than "just now" for a timeless comment', () => {
+    const s = read('src/screens/CommentsDrawer.jsx');
+    expect(s).not.toMatch(/if \(!comment\?\.createdAt\) return 'just now'/);
+    expect(s).toMatch(/\{timeAgo && <span/);
+  });
+
+  test('ProjectDetailScreen returns null for an absent timestamp', () => {
+    const s = read('src/screens/Collaboration/ProjectDetailScreen.jsx');
+    expect(s).not.toMatch(/if \(!value\) return 'just now'/);
+    expect(s).toMatch(/if \(!value\) return null;/);
+  });
+});
+
+describe('N393 — community member lists use the read model, not synthetic "Citizen_xxxxx" names', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Community/CommunitySettingsScreen.jsx'), 'utf8');
+
+  test('a member without a display name is "Member", never `Citizen_<id>`', () => {
+    expect(src).not.toMatch(/Citizen_\$\{/);
+    expect(src).toMatch(/resolveActorName\(\[info\?\.displayName, info\?\.name\], id\)/);
+  });
+});
+
+describe('N394 — event countdown, post stats/ranking and author placeholders are not fabricated', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('EventCard shows no "TBD" placeholder for an unknown date', () => {
+    const s = read('src/screens/PostCard/EventCard.jsx');
+    expect(s).not.toMatch(/text: 'TBD'/);
+    expect(s).not.toMatch(/format\(startDate, 'MMM d'\) : 'TBD'/);
+  });
+
+  test('HomeScreen.hydratePost leaves an absent createdAt/stats/ranking absent', () => {
+    const s = read('src/screens/HomeScreen.jsx');
+    expect(s).not.toContain("post.createdAt || new Date()");
+    expect(s).not.toContain('stats: post.stats || { likes: 0, comments: 0, shares: 0 }');
+    expect(s).toMatch(/rankingMetadata: post\.rankingMetadata \?\? null/);
+  });
+
+  test('QuestionCard and PollsScreen fall back to "Member", never "Anonymous"', () => {
+    const q = read('src/screens/PostCard/QuestionCard.jsx');
+    expect(q).not.toContain("answer.userName || 'Anonymous'");
+    expect(q).toContain("resolveActorName([answer.userName], answer.userId)");
+    const p = read('src/screens/Polls/PollsScreen.jsx');
+    expect(p).not.toContain("poll.creator?.name || 'Anonymous'");
+  });
+});
+
+describe('N395 — named-user surfaces resolve identity through the read model', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('NotificationsScreen never labels a person "User"/"Follower"/"Suggested"', () => {
+    const s = read('src/screens/NotificationsScreen.jsx');
+    expect(s).not.toContain("|| 'User'");
+    expect(s).not.toContain("|| 'Follower'");
+    expect(s).not.toContain("|| 'Suggested'");
+    expect(s).not.toContain("|| 'user'");
+    expect(s).toContain("resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || reqId)");
+  });
+
+  test('AdminUserManagementScreen falls back to "Member", never "User"', () => {
+    const s = read('src/screens/Admin/AdminUserManagementScreen.jsx');
+    expect(s).not.toContain("u.displayName || 'User'");
+    expect(s).toContain("resolveActorName([u.displayName, u.username], u.id || u.uid)");
+  });
+
+  test('LoginScreen welcome toast omits the name when it is unknown', () => {
+    const s = read('src/screens/LoginScreen.jsx');
+    expect(s).not.toContain("userInfo?.displayName || 'User'");
+    expect(s).toContain("pickDisplayName([userInfo?.displayName, userInfo?.name, userInfo?.username], { fallback: null })");
+  });
+
+  test('CommentsDrawer never labels a commenter or the viewer "User"', () => {
+    const s = read('src/screens/CommentsDrawer.jsx');
+    expect(s).not.toContain("comment.userName || 'User'");
+    expect(s).toContain("resolveActorName([comment?.userName], comment?.userId)");
+  });
+});
+
+describe('N396 — discovery shortcuts claim no ranking they do not compute', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('SearchScreen discovery cards are navigation, not fabricated trend claims', () => {
+    const s = read('src/screens/SearchScreen.jsx');
+    expect(s).not.toContain("'Trending Reels'");
+    expect(s).not.toContain("'Most viewed this week'");
+    expect(s).not.toContain("'Viral Posts'");
+    expect(s).not.toContain("'Most shared'");
+    expect(s).not.toContain("'Top Creators'");
+    // Cards are real controls wired to a handler.
+    expect(s).toContain('onClick={() => onSelect?.(item.key)}');
+    expect(s).toContain('<ForYouSection isDark={isDark} onSelect={handleCategoryClick} />');
+  });
+});
+
+describe('N397 — TitlesScreen renders the granted title or nothing', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Titles/TitlesScreen.jsx'), 'utf8');
+
+  test('a profile with no granted title is not shown as "Resident"/"Citizen Resident"', () => {
+    // The screen defaulted the active title to the Level-1 'Resident' standing
+    // and the civic badge to 'Citizen Resident'/'Verified Sovereign' — asserting
+    // a rank the platform had not granted.
+    expect(src).not.toMatch(/\|\| 'Resident'/);
+    expect(src).not.toContain("'Citizen Resident'");
+    expect(src).not.toContain("'Verified Sovereign'");
+    expect(src).toContain("const activeTitleObj = profile?.primaryTitle");
+    expect(src).toContain("{profile?.isVerified ? 'Verified' : 'Unverified'}");
+  });
+});
+
+describe('N398 — profile surfaces render real identity or a neutral blank', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileCitizenshipCard does not assert a "Resident" tier when unknown', () => {
+    const s = read('src/components/profile/ProfileCitizenshipCard.jsx');
+    expect(s).not.toContain("{passport.citizenTier?.tier || 'Resident'}");
+    expect(s).toContain("{passport.citizenTier?.tier || '—'}");
+  });
+
+  test('ProfileFeaturedSection resolves the creator name through the read model', () => {
+    const s = read('src/components/profile/ProfileFeaturedSection.jsx');
+    expect(s).not.toContain("profile?.displayName || 'Creator'");
+    expect(s).toContain("pickDisplayName([profile?.displayName, profile?.name], { fallback: '—' })");
+  });
+
+  test('ProfileQRCodeModal resolves handle + name without "user"/"Creator"', () => {
+    const s = read('src/components/profile/ProfileQRCodeModal.jsx');
+    expect(s).not.toContain("profile?.username || 'user'");
+    expect(s).not.toContain("profile?.displayName || profile?.name || 'Creator'");
+    expect(s).toContain("pickHandle([profile?.username, profile?.handle]) || ''");
+  });
+
+  test('ProfileAvatar accessible name carries no invented identity label', () => {
+    const s = read('src/components/profile/ProfileAvatar.jsx');
+    expect(s).not.toContain("name || 'User'");
+    expect(s).not.toContain("name || 'Member'");
+    expect(s).toContain("aria-label={name ? `${name}'s avatar");
+  });
+
+  test('ProfileTipModal records real party names, never "Creator"/"Supporter"', () => {
+    const s = read('src/components/profile/ProfileTipModal.jsx');
+    expect(s).not.toContain("recipient.displayName || recipient.username || 'Creator'");
+    expect(s).not.toContain("currentUser.displayName || currentUser.username || 'Supporter'");
+    expect(s).toContain("pickDisplayName([recipient?.displayName, recipient?.username], { fallback: null })");
+  });
+});
+
+describe('N399 — poll options and event host never fabricate a label', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PollCard does not label a malformed option "Option"', () => {
+    const s = read('src/screens/PostCard/PollCard.jsx');
+    expect(s).not.toContain("text: opt.text ?? 'Option'");
+    expect(s).toContain("text: opt.text ?? '—'");
+  });
+
+  test('EventCard does not render "Unknown host" for a missing host', () => {
+    const s = read('src/screens/PostCard/EventCard.jsx');
+    expect(s).not.toContain("'Unknown host'");
+    expect(s).toContain("{hostDisplay || '—'}");
+  });
+});
+
+describe('N400 — marketplace seller + review count are real or absent', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+
+  test('a seller with no name is not labelled "Seller"', () => {
+    expect(src).not.toContain("prod.creator?.name || 'Seller'");
+    expect(src).not.toContain("selectedProduct.creator?.name || 'Seller'");
+    expect(src).toContain("pickDisplayName([prod.creator?.name, prod.creator?.displayName, prod.creator?.username], { fallback: '—' })");
+  });
+
+  test('an unknown review count is omitted, not claimed as 0', () => {
+    expect(src).not.toContain("unknownNumber(prod.reviewsCount) ?? 0");
+    expect(src).toContain("unknownNumber(prod.reviewsCount) != null");
+  });
+});
+
+describe('N401 — messaging/call identity is real or a uid prefix', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('messagesService stores senderName only when real', () => {
+    const s = read('src/services/messagesService.js');
+    expect(s).not.toContain("senderName: sender.displayName || 'User'");
+    expect(s).toContain("senderName: pickDisplayName([sender.displayName, sender.username], { fallback: null })");
+  });
+
+  test('callService never labels an unresolved peer "User"', () => {
+    const s = read('src/services/callService.js');
+    expect(s).not.toContain("name: 'User'");
+    expect(s).not.toContain("profile.displayName || profile.username || 'User'");
+    expect(s).toContain("pickDisplayName([profile.displayName, profile.username]");
+  });
+
+  test('ChatScreen resolves sender labels, never a generic "User"', () => {
+    const s = read('src/screens/ChatScreen.jsx');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).toContain('resolveSenderLabel');
+  });
+
+  test('MessagingScreen request rows resolve a real name or uid prefix', () => {
+    const s = read('src/screens/MessagingScreen.jsx');
+    expect(s).not.toContain("req.senderName || 'Unknown user'");
+    expect(s).toContain("pickDisplayName([req.senderName]");
+  });
+
+  test('MessageBubble fallback initial is neutral, not "U"', () => {
+    const s = read('src/components/messaging/MessageBubble.jsx');
+    expect(s).not.toContain("(senderName?.[0] || 'U')");
+    expect(s).toContain("(senderName?.[0] || '?')");
+  });
+});
+
+describe('N402 — auth identity and remaining surfaces never assert a generic "User"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('AuthContext derives the session name from real data or the uid prefix', () => {
+    const s = read('src/context/AuthContext.jsx');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).toContain('const resolvedDisplayName = userProfile?.displayName || user.displayName || user.email?.split(\'@\')[0] || uidLabel;');
+  });
+
+  test('authService never seeds "User" as a display name', () => {
+    const s = read('src/services/authService.js');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).toContain('`user ${String(user.uid).slice(0, 6)}`');
+  });
+
+  test('ProfileHeroSection resolves name/handle without ' + "'User'/'user'", () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(s).not.toMatch(/\|\| 'User'/);
+    expect(s).not.toContain("deriveHandle(displayName) || 'user'");
+    expect(s).toContain('pickDisplayName([profile?.displayName, profile?.name]');
+  });
+
+  test('QuickAccessPanel / GiftScreen / CommunityDetail resolve member identity', () => {
+    expect(read('src/components/Shared/QuickAccessPanel.jsx')).not.toContain('currentUser?.displayName || "User"');
+    expect(read('src/screens/GiftScreen.jsx')).not.toContain("recipient?.name || 'User'");
+    expect(read('src/screens/Community/CommunityDetailScreen.jsx')).not.toContain("member.displayName || 'User'");
+  });
+});
+
+describe('N403 — remaining identity placeholders are resolved or neutral', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('messagingStore optimistic sender is null when unknown', () => {
+    expect(read('src/store/messagingStore.js')).not.toContain("senderName: displayName || 'Unknown'");
+  });
+
+  test('RankingsScreen a11y label resolves the entrant, never "Unknown"', () => {
+    const s = read('src/screens/Rankings/RankingsScreen.jsx');
+    expect(s).not.toContain("|| item.community?.name || 'Unknown'");
+    expect(s).toContain('pickDisplayName([item.user?.displayName, item.user?.username, item.community?.name]');
+  });
+
+  test('EditProfile / ProfileMy avatar fallbacks are not "Citizen"', () => {
+    expect(read('src/screens/Profile/EditProfileScreen.jsx')).not.toContain("formData.displayName || 'Citizen'");
+    expect(read('src/screens/Profile/ProfileMyScreen.jsx')).not.toContain("deriveHandle(currentUser?.email) || 'Citizen'");
+  });
+
+  test('CommunitySettings does not assert a "Guest" role', () => {
+    expect(read('src/screens/Community/CommunitySettingsScreen.jsx')).not.toContain("myRole || 'Guest'");
+  });
+
+  test('GroupInfo resolves the added member name through the read model', () => {
+    const s = read('src/screens/GroupInfoScreen.jsx');
+    expect(s).not.toContain("targetUser.displayName || 'Member'");
+    expect(s).toContain("resolveActorName([targetUser.displayName, targetUser.username], targetUser.id || targetUser.uid)");
+  });
+});
+
+describe('N404 — monetization stats do not fabricate a balance/level for an unknown uid', () => {
+  test('getMonetizationStats returns null (unknown), never balance 0 / level 1', () => {
+    const s = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(s).not.toContain("return { balance: 0, level: { level: 1, progress: 0 }, totalTransactions: 0 };");
+    expect(s).toContain('return { balance: null, level: null, totalTransactions: null };');
+  });
+});
+
+describe('N405 — identity derivation never invents a civic/creator name', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('deriveProfileIdentity defaults to no fabricated display name', () => {
+    const s = read('src/services/profileReadModel.js');
+    expect(s).not.toContain("displayFallback = 'Citizen'");
+    expect(s).toContain('const displayName = resolvedDisplayName || (resolvedId ? `user ${String(resolvedId).slice(0, 6)}` : \'—\');');
+  });
+
+  test('public/preview screens pass a null display fallback', () => {
+    expect(read('src/screens/Profile/ProfilePublicScreen.jsx')).not.toContain("displayFallback: 'Creator'");
+    expect(read('src/screens/Profile/ProfilePreviewScreen.jsx')).not.toContain("displayFallback: 'Arvdoul Citizen'");
+  });
+
+  test('userService derives name/handle from the uid prefix, never Member/Creator/creator', () => {
+    const s = read('src/services/userService.js');
+    expect(s).not.toContain("(isSelfUser ? 'Member' : 'Creator')");
+    expect(s).not.toContain(": 'creator')");
+    expect(s).toContain('`user ${String(userId).slice(0, 6)}`');
+  });
+});
+
+describe('N407 — notification/actor labels never say "Someone"/"Unknown"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('resolveActorName falls back to a uid prefix, never a generic word', () => {
+    const s = read('src/services/profileReadModel.js');
+    expect(s).toContain('export function resolveActorName');
+    expect(s).toContain("return userId ? `user ${String(userId).slice(0, 6)}` : '—';");
+  });
+
+  test('client services/screens derive actor labels from real data or the uid prefix', () => {
+    for (const rel of [
+      'src/services/userService.js',
+      'src/services/storyService.js',
+      'src/services/messagesService.js',
+      'src/services/commentService.js',
+      'src/services/notificationsService.js',
+      'src/components/Shared/IncomingCallBanner.jsx',
+      'src/screens/ChatScreen.jsx',
+    ]) {
+      expect(read(rel)).not.toContain("'Someone'");
+    }
+  });
+
+  test('cloud functions do not fabricate a "Someone"/"Unknown" actor', () => {
+    for (const rel of [
+      'functions/comments.js',
+      'functions/notifications.js',
+      'functions/monetization.js',
+    ]) {
+      const s = read(rel);
+      expect(s).not.toContain("'Someone'");
+      expect(s).not.toContain("'Unknown'");
+    }
+  });
+});
+
+describe('N408 — no unbacked cryptographic / audit claims in the UI', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the passport border stamp is earned, not unconditionally verified', () => {
+    const s = read('src/services/passportService.js');
+    expect(s).not.toContain('Permanent right of passage and cryptographic peer clearance');
+    expect(s).toContain('const hasIdentityCredential = isVerified === true');
+    expect(s).toContain('issuedAt: hasIdentityCredential ? issueDate : null');
+  });
+
+  test('no screen claims cryptographic stamping/attestation', () => {
+    for (const rel of [
+      'src/screens/Citizenship/PassportScreen.jsx',
+      'src/screens/Titles/TitlesScreen.jsx',
+      'src/screens/Achievements/AchievementsScreen.jsx',
+    ]) {
+      expect(read(rel).toLowerCase()).not.toContain('cryptograph');
+    }
+  });
+});
+
+describe('N409 — graph/comment/feed surfaces never assert a generic "Creator"/"User"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('socialGraphService resolves an absent name to the uid prefix, not "Creator"', () => {
+    const s = read('src/services/socialGraphService.js');
+    expect(s).not.toContain("pickDisplayName([raw.displayName, raw.name], { fallback: 'Creator' })");
+    expect(s).toContain('`user ${String(raw.id || raw.uid || \'\').slice(0, 6)}`');
+  });
+
+  test('VideoComments and ProfileFeedGrid never fabricate an author name', () => {
+    const v = read('src/components/Videos/VideoComments.jsx');
+    expect(v).not.toContain("pickDisplayName([c.userName], { fallback: 'User' })");
+    const p = read('src/components/profile/ProfileFeedGrid.jsx');
+    expect(p).not.toContain("item.authorName], { fallback: 'Creator' })");
+  });
+});
+
+describe('N410 — verification/reward surfaces do not overstate what the platform verifies', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileVerificationModal describes a reviewed creator badge, not identity "establishment"', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain('established the authentic identity');
+    expect(s).not.toContain("'Verified Member'");
+    expect(s).toContain('reviewed this creator');
+  });
+
+  test('Titles/Achievements do not label a locked item "Audited"', () => {
+    const t = read('src/screens/Titles/TitlesScreen.jsx');
+    expect(t).not.toContain("'Granted' : 'Audited'");
+    const a = read('src/screens/Achievements/AchievementsScreen.jsx');
+    expect(a).not.toContain('Audit Status');
+  });
+
+  test('OfflineStatusScreen renders an unknown time as a dash, not "Unknown"', () => {
+    const s = read('src/screens/OfflineStatusScreen.jsx');
+    expect(s).not.toMatch(/catch \{ return 'Unknown'; \}/);
+  });
+});
+
+describe('N411 — the passport identity strip is not a fabricated machine-readable zone', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('passportService exposes identityLines, not an ICAO-9303 mrtdLines', () => {
+    const s = read('src/services/passportService.js');
+    expect(s).not.toContain('mrtdLine2');
+    expect(s).not.toContain('5ARV0001014M9912316');
+    expect(s).toContain('identityLines: [identityLine1, identityLine2]');
+  });
+
+  test('PassportScreen renders identityLines and no hardcoded MRZ tail', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(s).not.toContain('mrtdLines');
+    expect(s).not.toContain('5ARV0001014M9912316');
+    expect(s).toContain('passport.identityLines?.[0]');
+  });
+});
+
+describe('N412 — the menu footer does not assert an unverifiable version/production status', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
+
+  test('no "v3.0.0 Pro • 100% Production Ready" claim', () => {
+    expect(src).not.toContain('Production Ready');
+    expect(src).not.toContain('v3.0.0');
+  });
+});
+
+describe('N413 — profile/reel surfaces do not label an unknown author as "Creator"', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ReelsScreen resolves an unknown reel author to a uid prefix, not "Creator"', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).not.toContain("currentReel.creator.name || 'Creator'");
+    expect(s).toContain("currentReel.creator.id ? `user ${String(currentReel.creator.id).slice(0, 6)}`");
+  });
+
+  test('ProfilePublicScreen social-context name comes from the read model', () => {
+    const s = read('src/screens/Profile/ProfilePublicScreen.jsx');
+    expect(s).not.toContain("effectiveProfile?.displayName || 'Creator'");
+  });
+
+  test('ProfileVerificationModal submits a resolved applicant name, not a generic "Creator"', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain("applicantName: profile.displayName || 'Creator'");
+  });
+
+  test('avatar/video-creator surfaces do not label an unknown person "Member"/"Creator"', () => {
+    const avatar = read('src/components/profile/ProfileAvatar.jsx');
+    expect(avatar).not.toContain("'Member'");
+    const info = read('src/components/Videos/VideoCreatorInfo.jsx');
+    expect(info).not.toContain("creator.name || 'Creator'");
+    const modal = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(modal).not.toContain("pendingApplication.category || 'Creator'");
+  });
+});
+
+describe('N414 — username generator and identity copy do not assert unverified uniqueness', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('EditProfileScreen re-checks availability instead of claiming "guaranteed unique"', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).not.toContain('title="Generate a guaranteed unique username via userService"');
+    expect(s).not.toContain("setFormData(prev => ({ ...prev, username: uniqueUser }));\n      setUsernameAvailability('available');");
+    expect(s).toContain('const res = await userService.checkUsernameAvailability(uniqueUser);');
+  });
+
+  test('QR scanner / QR modal drop the "100% reliable"/"100% unique" claims', () => {
+    expect(read('src/components/profile/ProfileQRScannerModal.jsx')).not.toContain('100% reliable');
+    expect(read('src/components/profile/ProfileQRCodeModal.jsx')).not.toContain('100% unique global identity code');
+  });
+
+  test('userService does not describe a random-suffixed handle as "guaranteed"', () => {
+    expect(read('src/services/userService.js')).not.toContain('// Guaranteed fallback');
+  });
+});
+
+describe('N415 — no residual fabricated identity defaults in read model / verification', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('resolveAvatarUrl does not pass a literal "User" name', () => {
+    const s = read('src/services/profileReadModel.js');
+    expect(s).not.toContain("getSafeAvatarUrl(photoURL, displayName || 'User'");
+  });
+
+  test('verification applications do not persist "Applicant"/"Creator"', () => {
+    const s = read('src/services/userService.js');
+    expect(s).not.toContain("applicationData.applicantName || applicationData.displayName || 'Applicant'");
+    expect(s).not.toContain("applicationData.category || 'Creator'");
+  });
+});
+
+describe('N416 — no fabricated person/era labels on list, event, sound and passport surfaces', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('sound lists show a neutral placeholder, never an invented "Unknown artist"', () => {
+    const s = read('src/screens/Sounds/SoundsScreen.jsx');
+    expect(s).not.toContain("'Unknown artist'");
+  });
+
+  test('reposts resolve the original author from real data, never "Original author"', () => {
+    const s = read('src/screens/PostCard.jsx');
+    expect(s).not.toContain("'Original author'");
+    expect(s).toContain('resolveActorName');
+  });
+
+  test('event roster resolves attendee names, never an invented "Attendee"', () => {
+    const s = read('src/screens/Event/EventDetailScreen.jsx');
+    expect(s).not.toContain("'Attendee'");
+    expect(s).not.toContain("'attendee'");
+    expect(s).toContain('resolveActorName');
+  });
+
+  test('passport never mints a CITIZEN handle or Genesis/Epoch issuance date', () => {
+    const svc = read('src/services/passportService.js');
+    expect(svc).not.toContain("'CITIZEN'");
+    expect(svc).not.toContain("'Genesis Era'");
+    expect(svc).not.toContain("'Epoch I'");
+    const screen = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(screen).not.toContain("'CITIZEN'");
+    expect(screen).not.toContain("'Genesis Era'");
+    expect(screen).not.toContain("'Perpetual'");
+    expect(screen).not.toContain("'Registered'");
+  });
+
+describe('N417 — no generic person-word fallback ("Member"/"Creator") on named-user surfaces', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const files = [
+    'src/screens/NotificationsScreen.jsx',
+    'src/screens/Admin/AdminUserManagementScreen.jsx',
+    'src/screens/PostCard/QuestionCard.jsx',
+    'src/screens/BlockedAccountsScreen.jsx',
+    'src/screens/Rankings/RankingsScreen.jsx',
+    'src/screens/Polls/PollsScreen.jsx',
+    'src/screens/GroupInfoScreen.jsx',
+    'src/screens/Profile/ConnectionsScreen.jsx',
+    'src/screens/StoriesScreen.jsx',
+    'src/screens/Community/CommunityDetailScreen.jsx',
+    'src/screens/Community/CommunitySettingsScreen.jsx',
+    'src/components/Shared/TopAppBar.jsx',
+    'src/screens/Menu/MenuScreen.jsx',
+    'src/screens/CommentsDrawer.jsx',
+    'src/store/profileStore.js',
+  ];
+
+  test('no surface falls back to a fabricated "Member" person label', () => {
+    for (const f of files) {
+      expect(read(f)).not.toContain("fallback: 'Member'");
+    }
+  });
+
+  test('each surface resolves an absent name through resolveActorName (a real uid prefix)', () => {
+    for (const f of files) {
+      expect(read(f)).toContain('resolveActorName');
+    }
+  });
+
+  test('the post-prediction panel reports a labeled window, never a fabricated "best time"', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    expect(s).not.toContain('state.insights.bestTime');
+    expect(s).not.toContain('Best time:');
+    expect(s).toContain('suggestedWindow');
+    const fn = read('functions/moderation.js');
+    const start = fn.indexOf('exports.predictPostPerformance');
+    const body = fn.slice(start, start + 4000);
+    expect(body).not.toMatch(/Tuesday 18:00|Saturday 10:00/);
+  });
+});
+
+describe('N418 — the menu never asserts an unbacked version/number claim on a launcher badge', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/Menu/MenuScreen.jsx'), 'utf8');
+
+  test('no "AI 3.0" model-version claim', () => {
+    expect(src).not.toContain('AI 3.0');
+  });
+
+  test('no "Top 100" leaderboard-size claim', () => {
+    expect(src).not.toContain('Top 100');
+  });
+});
+
+describe('N419 — the composer draft preview and social-context card assert no fabricated engagement or name', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the draft preview does not render a measured "0" like/comment count', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    expect(s).not.toContain('{/* Mock interaction footer */}');
+    expect(s).toContain('Preview — engagement appears after publishing');
+    expect(s).not.toContain('<span>Just now</span>');
+  });
+
+  test('ProfileSocialContext/ProfileMutualFriends do not default the target to "Creator"', () => {
+    const ctx = read('src/components/profile/ProfileSocialContext.jsx');
+    expect(ctx).not.toContain("targetName = 'Creator'");
+    expect(ctx).toContain("targetName || 'this profile'");
+    const mutual = read('src/components/profile/ProfileMutualFriends.jsx');
+    expect(mutual).not.toContain("targetName = 'Creator'");
+  });
+});
+});
+
+describe('N420 — level perks and royal copy never advertise financial rates the server does not honour', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const cfg = read('src/shared/levelConfig.cjs');
+
+  test('LEVEL_PERKS makes no XP-multiplier / coin-bonus / fee-rebate claim', () => {
+    // functions/xpAward.js applies `rule.xp` with no level multiplier,
+    // functions/monetization.js credits `pkg.coins` with no store bonus, and
+    // there is no platform withdrawal fee at all (withdrawalSettlement.js), so
+    // none of these can be honoured.
+    expect(cfg).not.toMatch(/\d+x XP Multiplier/);
+    expect(cfg).not.toContain('Coin Store Bonus');
+    expect(cfg).not.toContain('Fee Rebate');
+    expect(cfg).not.toContain('earning multiplier');
+  });
+
+  test('the shared config stays byte-identical in functions/', () => {
+    expect(read('functions/levelConfig.cjs')).toBe(cfg);
+  });
+
+  test('the royal roadmap modal states titles/standing, not veto or broadcast powers', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    expect(s).not.toContain('XP Multiplier');
+    expect(s).not.toContain('Fee Rebate');
+    expect(s).not.toContain('Constitutional Council Veto');
+    expect(s).not.toContain('Global Broadcast Alert');
+    expect(s).not.toContain('Immortalization');
+  });
+
+  test('the video editor canvas reports the real resolution, never a hardcoded 4K', () => {
+    const canvas = read('src/screens/VideoEditor/components/PreviewCanvas.jsx');
+    expect(canvas).not.toMatch(/>\s*4K\s*</);
+    expect(canvas).toContain('resolutionLabel');
+    const drawer = read('src/screens/VideoEditor/components/MediaDrawer.jsx');
+    expect(drawer).not.toContain('4K Videos');
+  });
+});
+
+describe('N421 — service config blocks never assert capabilities the app does not implement', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('notificationsService declares no unimplemented security/compliance/monetization channels', () => {
+    const s = read('src/services/notificationsService.js');
+    // Nothing reads these keys, and none of the claims is true: notifications
+    // are plaintext Firestore docs (no TLS_1.3/AES_256 config the client sets),
+    // there is no email/websocket/desktop delivery channel, and no per-open /
+    // per-click coin reward or ad revenue share exists in functions/.
+    expect(s).not.toContain('TLS_1.3');
+    expect(s).not.toContain('AES_256');
+    expect(s).not.toContain('REVENUE_SHARE');
+    expect(s).not.toContain('SPONSORED_NOTIFICATIONS');
+    expect(s).not.toContain('ENGAGEMENT_REWARDS');
+    expect(s).not.toContain('WEB_SOCKET');
+    expect(s).not.toContain('PROVIDERS: [');
+  });
+});
+
+describe('N422 — subscription tiers advertise only the server-granted coin credit', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('SubscriptionScreen lists no perk the server does not grant', () => {
+    const s = read('src/screens/SubscriptionScreen.jsx');
+    // functions/monetization.js#createSubscription only calls
+    // creditSubscriptionCoins (monthly coins); nothing reads a subscription to
+    // gate ads, support, badges, analytics, discounts or branding.
+    expect(s).not.toContain('Ad-free browsing');
+    expect(s).not.toContain('Priority support');
+    expect(s).not.toContain('Advanced analytics');
+    expect(s).not.toContain('Boost discounts');
+    expect(s).not.toContain('Priority payouts');
+    expect(s).not.toContain('Dedicated support');
+    expect(s).not.toContain('Custom branding');
+    expect(s).toContain('coins monthly');
+  });
+
+  test('CoinsScreen lists no perk the server does not grant', () => {
+    const s = read('src/screens/CoinsScreen.jsx');
+    expect(s).not.toContain('Ad-free browsing');
+    expect(s).not.toContain('Priority support');
+    expect(s).not.toContain('Advanced analytics');
+    expect(s).not.toContain('Boost discounts');
+    expect(s).not.toContain('Top support');
+    expect(s).not.toContain('Early features');
+    expect(s).toContain('coins monthly');
+  });
+
+  test('no server code reads a subscription to grant an entitlement', () => {
+    const mon = read('functions/monetization.js');
+    expect(mon).not.toMatch(/ad.?free/i);
+    expect(mon).not.toMatch(/prioritySupport|priority_support/i);
+  });
+});
+
+describe('N423 — progression copy never claims a ceremony or status the server never grants', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PerksRewardsScreen does not claim coronation or permanent citizenship', () => {
+    const s = read('src/screens/Progression/PerksRewardsScreen.jsx');
+    // getPrestigeInfo() derives a Roman-numeral prestige rank from level alone;
+    // there is no coronation routine and no "permanent historical citizenship"
+    // grant anywhere in functions/, so those claims cannot be honoured.
+    expect(s).not.toContain('sovereign coronation eligibility');
+    expect(s).not.toContain('permanent historical citizenship');
+    expect(s).toContain('Roman Numeral Prestige tiers');
+  });
+});
+
+describe('N424 — the Digital Passport never claims biometric capture it does not perform', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PassportScreen labels the identity page honestly (no "Biometric Pass")', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    // No WebAuthn / navigator.credentials / face-or-fingerprint capture exists
+    // anywhere in src or functions, so a "Biometric" tab and a
+    // "BIOMETRIC PASS" document title advertise a capability the platform has
+    // no code to back.
+    expect(s).not.toMatch(/biometric/i);
+    expect(s).toContain("label: 'Identity'");
+  });
+
+  test('MenuScreen does not advertise a biometric passport', () => {
+    const s = read('src/screens/Menu/MenuScreen.jsx');
+    expect(s).not.toMatch(/biometric/i);
+  });
+});
+
+describe('N425 — level perks and cosmetic-unlock copy only list honours-able benefits', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const cfg = read('src/shared/levelConfig.cjs');
+
+  test('LEVEL_PERKS does not sell perks with no implementation', () => {
+    // Each of these advertised a feature the codebase has no code for:
+    // "Custom Badge" (no badge-colour picker / writer), "Custom Accent"
+    // (no accent writer), "Enhanced Identity Card" (no music-studio or
+    // collections showcase), "Citizen Council" (no proposal/vote system),
+    // "Priority Cashout Review" (withdrawalSettlement has no priority queue),
+    // "Nation Founder Circle" (no platform-wide event/broadcast host), and
+    // "Monarch Halo" (no halo cosmetic exists).
+    expect(cfg).not.toContain('Custom Badge');
+    expect(cfg).not.toContain('Custom Accent');
+    expect(cfg).not.toContain('Enhanced Identity Card');
+    expect(cfg).not.toContain('Citizen Council');
+    expect(cfg).not.toContain('Priority Cashout Review');
+    expect(cfg).not.toContain('Founder Circle');
+    expect(cfg).not.toContain('Monarch Halo');
+    expect(cfg).not.toContain('music studio');
+    expect(cfg).not.toContain('broadcast alert');
+  });
+
+  test('LEVEL_GATES drops the gates that only powered the fabricated copy', () => {
+    // `giftBoost`, `earlyAccessStudio`, `customBadge`, `citizenCouncil` and
+    // `founderCircle` had no reader anywhere except the fabricated copy.
+    expect(cfg).not.toContain('giftBoost');
+    expect(cfg).not.toContain('earlyAccessStudio');
+    expect(cfg).not.toContain('customBadge');
+    expect(cfg).not.toContain('citizenCouncil');
+    expect(cfg).not.toContain('founderCircle');
+  });
+
+  test('MenuScreen does not claim 4K export or a 24/7 human support SLA', () => {
+    const s = read('src/screens/Menu/MenuScreen.jsx');
+    // The editor exports webm via MediaRecorder at the project's selected
+    // resolution — it makes no 4K guarantee; support is a ticket queue, not a
+    // staffed 24/7 desk.
+    expect(s).not.toContain('4K');
+    expect(s).not.toContain('24/7');
+    expect(s).not.toContain('royalty payouts');
+    // The coin store footer promised "Instant delivery • 24/7 support"; coins
+    // are credited only after server-side Stripe verification and support is a
+    // ticket queue, so neither claim holds.
+    const coins = read('src/screens/CoinsScreen.jsx');
+    expect(coins).not.toContain('Instant delivery');
+    expect(coins).not.toContain('24/7');
+    // No "Premium Features / exclusive features" — buying coins unlocks no
+    // capability; the real coin sinks are gifts, boosts, marketplace and polls.
+    expect(coins).not.toContain('Premium Features');
+    expect(coins).not.toContain('exclusive features');
+  });
+
+  test('the Settings cosmetic tracker lists only real unlocks', () => {
+    const s = read('src/screens/SettingsScreen.jsx');
+    expect(s).not.toContain('Custom Badge');
+    expect(s).not.toContain('Custom Profile Accent');
+    expect(s).not.toContain('Monarch Halo');
+    expect(s).toContain('Top Creator Standing');
+    expect(s).toContain('Crest Radiance');
+  });
+});
+
+describe('N426 — the Digital Passport reports the real account status', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('PassportScreen does not hardcode "Active Citizen"', () => {
+    const s = read('src/screens/Citizenship/PassportScreen.jsx');
+    expect(s).not.toContain('Active Citizen');
+    expect(s).toContain('passport.accountStatus');
+  });
+
+  test('passportService exposes the account status and never assumes active', () => {
+    const svc = read('src/services/passportService.js');
+    expect(svc).toContain('accountStatus: (profile.accountStatus || profile.accountState || null)');
+  });
+});
+
+describe('N430 — royal standing resolves the stored title object, not a string', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileHeroSection and EditProfileScreen resolve royal standing via the read model', () => {
+    const hero = read('src/components/profile/ProfileHeroSection.jsx');
+    // `setActiveTitle` writes `activeTitle` as an object; the old raw
+    // `activeTitle === 'duke'` string compare never matched a granted title.
+    expect(hero).toContain('resolveRoyalFlag(profile)');
+    expect(hero).not.toMatch(/\.activeTitle\s*===/);
+    const edit = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(edit).toContain('resolveRoyalFlag(userProfile)');
+    expect(edit).not.toMatch(/\.activeTitle\s*===/);
+  });
+
+  test('the roadmap modal advertises only the royal benefits the platform renders', () => {
+    const m = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    // There is no golden halo frame, no separate crown badge and no ambient
+    // violet aura unlocked by royal standing — the aura is a level-unlocked
+    // crest ring and the title renders as a badge + a passport field.
+    expect(m).not.toContain('Radiant Halo');
+    expect(m).not.toContain('ambient violet profile aura');
+    expect(m).toContain('Royal Family badge');
+  });
+});
+
+describe('N476 — comment stats never report unwritten aggregates as measured', () => {
+  test('getCommentStats returns null (unknown) for aggregates with no writer', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/commentService.js'), 'utf8');
+    // `averageLikes`/`averageReplies`/`topCommenters` had no writer anywhere;
+    // returning `0`/`[]` presented them as measured statistics.
+    expect(src).not.toContain('averageLikes: 0');
+    expect(src).not.toContain('averageReplies: 0');
+    expect(src).not.toContain('topCommenters: []');
+    expect(src).toContain('averageLikes: null');
+    expect(src).toContain('topCommenters: null');
+  });
+
+  test('N481 — the comment create path seeds no counter with no writer', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/commentService.js'), 'utf8');
+    // `viewCount`/`shareCount`/`sentimentScore` had no writer anywhere and no
+    // reader (comments are not search-indexed), and `reports` was superseded by
+    // the server-written `reportCount` (`functions/moderation.js`
+    // `reportContent`, read by AdminContentManagementScreen). Seeding them as
+    // `0` presented unmeasured metrics as measured zeros on every comment doc.
+    expect(src).not.toMatch(/^\s*viewCount: 0,\s*$/m);
+    expect(src).not.toMatch(/^\s*shareCount: 0,\s*$/m);
+    expect(src).not.toMatch(/^\s*sentimentScore: 0,\s*$/m);
+    expect(src).not.toMatch(/^\s*reports: 0,\s*$/m);
   });
 });

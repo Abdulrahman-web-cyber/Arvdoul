@@ -91,7 +91,7 @@ export default function PassportScreen() {
   const [passport, setPassport] = useState(null);
   const [showQR, setShowQR] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const [activePage, setActivePage] = useState('biometric'); // 'biometric' | 'visas' | 'honors' | 'clearance'
+  const [activePage, setActivePage] = useState('identity'); // 'identity' | 'visas' | 'honors' | 'clearance'
   const [selectedStamp, setSelectedStamp] = useState(null);
   const [copiedId, setCopiedId] = useState(false);
 
@@ -157,7 +157,7 @@ export default function PassportScreen() {
           <ArvdoulNationalCrest className="w-16 h-16 text-amber-500/80 animate-pulse mx-auto" />
           <div className="space-y-1">
             <p className="text-xs font-mono uppercase tracking-[0.25em] font-semibold text-amber-400">Arvdoul Sovereign Registry</p>
-            <p className="text-[11px] text-gray-500">Decrypting authenticated citizen credentials...</p>
+            <p className="text-[11px] text-gray-500">Loading authenticated citizen credentials...</p>
           </div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function PassportScreen() {
   }
 
   const pages = [
-    { id: 'biometric', label: 'Biometrics', icon: UserCheck },
+    { id: 'identity', label: 'Identity', icon: UserCheck },
     { id: 'visas', label: 'Visa Stamps', icon: Stamp, badge: passport.visaStamps?.filter(s => s.verified).length },
     { id: 'honors', label: 'Civic Honors', icon: Crown },
     { id: 'clearance', label: 'Border Clearance', icon: QrCode },
@@ -258,9 +258,9 @@ export default function PassportScreen() {
         </div>
 
         {/* ========================================================================= */}
-        {/* PAGE 1: BIOMETRIC IDENTITY DOCUMENT                                       */}
+        {/* PAGE 1: IDENTITY DOCUMENT                                                 */}
         {/* ========================================================================= */}
-        {activePage === 'biometric' && (
+        {activePage === 'identity' && (
           <div className="space-y-4">
             <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden transition-all shadow-2xl ${
               isDark
@@ -281,7 +281,7 @@ export default function PassportScreen() {
                       Arvdoul Sovereign Nation
                     </span>
                     <h2 className="text-sm font-extrabold font-mono tracking-tight text-slate-800 dark:text-slate-200">
-                      PASSEPORT DIPLOMATIQUE / BIOMETRIC PASS
+                      PASSEPORT DIPLOMATIQUE / CITIZEN IDENTITY
                     </h2>
                     <span className="text-[10px] text-slate-400 font-mono">
                       CIVIL REGISTRY CODE • {passport.citizenId}
@@ -293,7 +293,7 @@ export default function PassportScreen() {
                   <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border inline-block ${
                     isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-amber-600/30 bg-amber-50 text-amber-900'
                   }`}>
-                    {passport.citizenTier?.tier || 'Resident'}
+                    {passport.citizenTier?.tier || '—'}
                   </span>
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function PassportScreen() {
                     {passport.photoURL ? (
                       <img
                         src={passport.photoURL}
-                        alt={passport.displayName || 'Citizen'}
+                        alt={passport.displayName || '—'}
                         className="w-28 h-32 rounded-xl object-cover"
                       />
                     ) : (
@@ -318,7 +318,7 @@ export default function PassportScreen() {
                     )}
                   </div>
 
-                  {/* Cryptographic Hologram Shield */}
+                  {/* Verification Shield */}
                   <div className="absolute -bottom-2 -right-2 bg-gradient-to-tr from-amber-600 to-indigo-600 text-white p-1.5 rounded-xl shadow-lg border border-black/40">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
@@ -329,13 +329,13 @@ export default function PassportScreen() {
                   <div>
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Citizen Holder Name</span>
                     <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>{passport.displayName || 'Citizen Holder'}</span>
+                      <span>{passport.displayName || '—'}</span>
                       {passport.isVerified && (
                         <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                       )}
                     </h3>
                     <p className="text-xs text-amber-500 dark:text-amber-400 font-mono">
-                      {passport.username ? `@${passport.username}` : 'State Resident'}
+                      {passport.username ? `@${passport.username}` : '—'}
                     </p>
                   </div>
 
@@ -347,7 +347,7 @@ export default function PassportScreen() {
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Diplomatic Tier</span>
                       <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                         <Crown className="w-3.5 h-3.5" />
-                        {passport.citizenTier?.tier || 'Platform Resident'}
+                        {passport.citizenTier?.tier || '—'}
                       </span>
                     </div>
 
@@ -356,7 +356,7 @@ export default function PassportScreen() {
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Civic Rank</span>
                       <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                        {passport.rankTitle || 'Arrival'}
+                        {passport.rankTitle || '—'}
                       </span>
                     </div>
 
@@ -365,7 +365,9 @@ export default function PassportScreen() {
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">National Status</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                        Active Citizen
+                        {passport.accountStatus
+                          ? String(passport.accountStatus).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                          : '—'}
                       </span>
                     </div>
 
@@ -374,7 +376,7 @@ export default function PassportScreen() {
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Issuance Epoch</span>
                       <span className="font-bold text-slate-800 dark:text-slate-100">
-                        {passport.issueDate || 'Genesis Era'}
+                        {passport.issueDate || '—'}
                       </span>
                     </div>
                   </div>
@@ -388,12 +390,12 @@ export default function PassportScreen() {
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Progression</span>
                   <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">Level {passport.level ?? '—'}</span>
-                  <span className="text-[9px] text-slate-500 block truncate">{passport.rankTitle || 'Registered'}</span>
+                  <span className="text-[9px] text-slate-500 block truncate">{passport.rankTitle || '—'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Active Days</span>
                   <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{passport.activeDaysCount ?? '—'}</span>
-                  <span className="text-[9px] text-slate-500 block">{passport.activeStreak != null ? `${passport.activeStreak}d streak` : 'Perpetual'}</span>
+                  <span className="text-[9px] text-slate-500 block">{passport.activeStreak != null ? `${passport.activeStreak}d streak` : '—'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Verified Visas</span>
@@ -402,12 +404,12 @@ export default function PassportScreen() {
                 </div>
               </div>
 
-              {/* Machine Readable Travel Document (MRTD) Zone */}
+              {/* Citizen identity strip (stylised, not an ICAO 9303 MRZ) */}
               <div className={`mt-6 pt-4 border-t border-amber-500/20 font-mono text-[10px] sm:text-xs leading-relaxed tracking-[0.2em] select-all overflow-x-auto ${
                 isDark ? 'text-amber-400/80' : 'text-slate-800'
               }`}>
-                <p className="whitespace-pre">{passport.mrtdLines?.[0] || `P<ARV${(passport.username || 'CITIZEN').toUpperCase()}<<<<<<<<<<<<<<<<<<<<<<<<<<`}</p>
-                <p className="whitespace-pre">{passport.mrtdLines?.[1] || `${passport.citizenId}5ARV0001014M9912316<<<<<<<<<<<<<<02`}</p>
+                <p className="whitespace-pre">{passport.identityLines?.[0] || `ARVDOUL<${(passport.username || '').toUpperCase()}`}</p>
+                <p className="whitespace-pre">{passport.identityLines?.[1] || passport.citizenId}</p>
               </div>
             </div>
 
@@ -451,7 +453,7 @@ export default function PassportScreen() {
                     <span>Official Arvdoul Visa Stamps & Attestations</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Cryptographically stamped civic clearances and verified milestone seals.
+                    Verified civic clearances and milestone seals.
                   </p>
                 </div>
                 <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-xl border ${
@@ -525,7 +527,7 @@ export default function PassportScreen() {
 
                       <div className="mt-3 pt-2.5 border-t border-current/20 flex items-center justify-between text-[10px] font-mono opacity-70">
                         <span>{stamp.ministry}</span>
-                        <span>{stamp.issuedAt || 'Pending'}</span>
+                        <span>{stamp.issuedAt || (stamp.verified ? '—' : 'Pending')}</span>
                       </div>
                     </div>
                   );
@@ -685,7 +687,7 @@ export default function PassportScreen() {
         )}
 
         {/* ========================================================================= */}
-        {/* PAGE 4: BORDER CLEARANCE & CRYPTOGRAPHIC QR                               */}
+        {/* PAGE 4: BORDER CLEARANCE & PUBLIC PROFILE QR                              */}
         {/* ========================================================================= */}
         {activePage === 'clearance' && (
           <div className="space-y-4">
@@ -699,7 +701,7 @@ export default function PassportScreen() {
                   </span>
                   <h3 className="text-lg font-black mt-1">Instant State Attestation</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Present this cryptographic pass at physical border points or for peer citizen attestation.
+                    Present this QR pass to share your public profile and verified milestones.
                   </p>
                 </div>
 

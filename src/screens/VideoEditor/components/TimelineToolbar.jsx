@@ -2,12 +2,11 @@
 
 import PropTypes from 'prop-types';
 import {
-  ArrowLeft, Undo2, Redo2, Trash2, Scissors, Crop, Copy,
-  Magnet, ZoomIn, ZoomOut, Settings
+  Undo2, Redo2, Trash2, Scissors, Copy,
+  Magnet, ZoomIn, ZoomOut
 } from 'lucide-react';
 
 export default function TimelineToolbar({
-  onBack,
   canUndo,
   canRedo,
   onUndo,
@@ -15,26 +14,16 @@ export default function TimelineToolbar({
   hasSelection,
   onDelete,
   onSplit,
-  onCrop,
   onDuplicate,
   isMagnetOn = true,
   onToggleMagnet,
   zoomLevel = 1,
   onZoomChange,
-  onOpenSettings,
 }) {
   return (
     <div className="flex items-center justify-between px-3 py-2 bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md">
       {/* Left Editing Tools */}
       <div className="flex items-center gap-1 sm:gap-2">
-        <button
-          onClick={onBack}
-          title="Back"
-          className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-
         <button
           onClick={onUndo}
           disabled={!canUndo}
@@ -81,15 +70,6 @@ export default function TimelineToolbar({
           <Scissors className="w-4 h-4" />
         </button>
 
-        {/* Crop / Aspect */}
-        <button
-          onClick={onCrop}
-          title="Crop & Framing"
-          className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors active:scale-95"
-        >
-          <Crop className="w-4 h-4" />
-        </button>
-
         {/* Duplicate Clip */}
         <button
           onClick={onDuplicate}
@@ -103,7 +83,7 @@ export default function TimelineToolbar({
         </button>
       </div>
 
-      {/* Right Tools: Magnet, Zoom Controls, Settings */}
+      {/* Right Tools: Magnet, Zoom Controls */}
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Magnet / Snap */}
         <button
@@ -146,22 +126,12 @@ export default function TimelineToolbar({
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
-
-        {/* Settings */}
-        <button
-          onClick={onOpenSettings}
-          title="Project & Timeline Settings"
-          className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
       </div>
     </div>
   );
 }
 
 TimelineToolbar.propTypes = {
-  onBack: PropTypes.func,
   canUndo: PropTypes.bool,
   canRedo: PropTypes.bool,
   onUndo: PropTypes.func,
@@ -169,11 +139,9 @@ TimelineToolbar.propTypes = {
   hasSelection: PropTypes.bool,
   onDelete: PropTypes.func,
   onSplit: PropTypes.func,
-  onCrop: PropTypes.func,
   onDuplicate: PropTypes.func,
   isMagnetOn: PropTypes.bool,
   onToggleMagnet: PropTypes.func,
   zoomLevel: PropTypes.number,
   onZoomChange: PropTypes.func,
-  onOpenSettings: PropTypes.func,
 };

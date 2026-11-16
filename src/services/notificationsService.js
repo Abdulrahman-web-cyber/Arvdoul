@@ -212,13 +212,6 @@ const NOTIFICATIONS_CONFIG = {
     LIVE_GIFT: 'live_gift',
     POST_MONETIZED: 'post_monetized',
   },
-  CHANNELS: {
-    IN_APP: { ENABLED: true, PRIORITY: 'immediate', PERSISTENCE: 'until_read', SOUND: true, VIBRATION: true },
-    PUSH: { ENABLED: true, PROVIDERS: ['FCM', 'APNS', 'WebPush'], PRIORITY: 'high', TTL: 2419200, BADGE: true },
-    EMAIL: { ENABLED: true, PRIORITY: 'normal', TEMPLATES: 'dynamic', UNSUBSCRIBE: true },
-    WEB_SOCKET: { ENABLED: true, REAL_TIME: true, RECONNECT: true, HEARTBEAT: 30000 },
-    DESKTOP: { ENABLED: true, NATIVE: true, TRAY: true, ACTION_BUTTONS: true }
-  },
   INTELLIGENCE: {
     GROUPING: { ENABLED: true, TIME_WINDOW: 300000, MAX_GROUP_SIZE: 10 },
     RATE_LIMITING: { ENABLED: true, MAX_PER_MINUTE: 10, MAX_PER_HOUR: 50, COOLDOWN_SECONDS: 60 },
@@ -237,15 +230,6 @@ const NOTIFICATIONS_CONFIG = {
     MAX_SUBSCRIPTIONS: 50,
     RETRY_STRATEGY: { MAX_ATTEMPTS: 3, BACKOFF_FACTOR: 2, INITIAL_DELAY: 1000 },
     NOTIFICATION_SHARDS: 10,
-  },
-  SECURITY: {
-    ENCRYPTION: { IN_TRANSIT: 'TLS_1.3', AT_REST: 'AES_256' },
-    COMPLIANCE: { GDPR: true, CCPA: true, DATA_RETENTION: 365 },
-  },
-  MONETIZATION: {
-    PREMIUM_FEATURES: { NO_ADS: true, PRIORITY_DELIVERY: true, ADVANCED_ANALYTICS: true },
-    AD_INTEGRATION: { NATIVE_ADS: true, SPONSORED_NOTIFICATIONS: true, REVENUE_SHARE: 0.3 },
-    ENGAGEMENT_REWARDS: { COINS_PER_NOTIFICATION: 1, BONUS_COINS: { FIRST_OPEN: 5, FIRST_CLICK: 10, SHARE: 15, CONVERSION: 25 } }
   },
   TOKEN: {
     MAX_TOKENS_PER_USER: 10,
@@ -1000,56 +984,6 @@ class UltimateNotificationsService {
     });
   }
 
-  async createMessageNotification(senderId, recipientId, messageId, conversationId, text) {
-    if (senderId === recipientId) return;
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.MESSAGE,
-      recipientId,
-      senderId,
-      title: 'New message',
-      message: text?.slice(0, 50) || '',
-      metadata: { messageId, conversationId },
-      priority: 'high',
-    });
-  }
-
-  async createCoinRewardNotification(userId, amount, reason) {
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.COIN_REWARD,
-      recipientId: userId,
-      senderId: 'system',
-      title: 'Coins Earned!',
-      message: `You earned ${amount} coins for ${reason}`,
-      metadata: { amount, reason },
-      priority: 'normal',
-    });
-  }
-
-  async createRoyaltyPromotionNotification(userId, oldPosition, newPosition) {
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.ROYALTY_PROMOTION,
-      recipientId: userId,
-      senderId: 'system',
-      title: `👑 Royalty Promotion!`,
-      message: `You are now ${newPosition.title} ${newPosition.emoji} of Arvdoul!`,
-      metadata: { oldPosition: oldPosition.title, newPosition: newPosition.title },
-      priority: 'high',
-    });
-  }
-
-  async createGiftNotification(senderId, recipientId, postId, giftType, cost) {
-    if (senderId === recipientId) return;
-    return this.sendNotification({
-      type: NOTIFICATIONS_CONFIG.TYPES.GIFT_RECEIVED,
-      recipientId,
-      senderId,
-      title: 'Gift received! 🎁',
-      message: `You received a ${giftType} gift worth ${cost} coins`,
-      metadata: { postId, giftType, cost },
-      priority: 'normal',
-    });
-  }
-
   async createFriendRequestNotification(fromUserId, toUserId, fromDisplayName) {
     if (fromUserId === toUserId) return;
     return this.sendNotification({
@@ -1057,7 +991,7 @@ class UltimateNotificationsService {
       recipientId: toUserId,
       senderId: fromUserId,
       title: 'New friend request',
-      message: `${fromDisplayName || 'Someone'} sent you a friend request`,
+      message: `${fromDisplayName || `user ${String(fromUserId).slice(0, 6)}`} sent you a friend request`,
       // requestId is the friend_requests doc id, so the recipient's Accept /
       // Decline buttons act on the real request document.
       metadata: { fromUserId, requestId: `${fromUserId}_${toUserId}` },
@@ -1171,10 +1105,6 @@ const notificationsService = {
   createLikeNotification: (pid, liker, owner) => getNotificationsService().createLikeNotification(pid, liker, owner),
   createCommentNotification: (pid, commenter, owner, cid) => getNotificationsService().createCommentNotification(pid, commenter, owner, cid),
   createFollowNotification: (follower, following) => getNotificationsService().createFollowNotification(follower, following),
-  createMessageNotification: (sender, recipient, mid, cid, txt) => getNotificationsService().createMessageNotification(sender, recipient, mid, cid, txt),
-  createCoinRewardNotification: (uid, amount, reason) => getNotificationsService().createCoinRewardNotification(uid, amount, reason),
-  createRoyaltyPromotionNotification: (uid, oldPos, newPos) => getNotificationsService().createRoyaltyPromotionNotification(uid, oldPos, newPos),
-  createGiftNotification: (sender, recipient, pid, giftType, cost) => getNotificationsService().createGiftNotification(sender, recipient, pid, giftType, cost),
   createFriendRequestNotification: (from, to, name) => getNotificationsService().createFriendRequestNotification(from, to, name),
   getService: getNotificationsService,
   getStats: () => getNotificationsService().getStats(),

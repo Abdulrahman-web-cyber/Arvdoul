@@ -10,9 +10,11 @@ import { memo, useState, useEffect, useMemo } from "react";
 import { X, Copy, Check, Share2, Download, QrCode, Sparkles, Loader2, ScanLine, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
+import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
 
 const ProfileQRCodeModal = memo(({
@@ -27,8 +29,8 @@ const ProfileQRCodeModal = memo(({
   const [showScanner, setShowScanner] = useState(false);
 
   const isDark = theme === 'dark';
-  const username = profile?.username || 'user';
-  const displayName = profile?.displayName || profile?.name || 'Creator';
+  const username = pickHandle([profile?.username, profile?.handle]) || '';
+  const displayName = pickDisplayName([profile?.displayName, profile?.name], { fallback: '—' });
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
 
   // Deterministic global identity code from canonical helper
@@ -132,19 +134,20 @@ const ProfileQRCodeModal = memo(({
 
           {/* Modal Title */}
           <div className="text-center mb-4">
-            <div className="w-12 h-12 mx-auto mb-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
+            <div className="w-12 h-12 mx-auto mb-2.5 rounded-2xl bg-arvdoul-gradient flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
               <QrCode className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold">Universal Profile QR</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              100% unique global identity code
+              Scannable link to your profile
             </p>
           </div>
 
           {/* High-Resolution QR Card */}
           <div className="p-4 sm:p-5 rounded-2xl bg-white text-slate-900 shadow-lg flex flex-col items-center justify-center border border-slate-200 mb-4 relative overflow-hidden group">
             {/* Subtle Top Gradient Accent */}
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 via-pink-500 to-cyan-500" />
+            <div className="absolute top-0 inset-x-0 h-1.5"
+              style={{ background: BRAND_GRADIENT }} />
 
             {/* User Identity Header */}
             <div className="flex items-center gap-2.5 mb-3 pt-1">
@@ -234,7 +237,7 @@ const ProfileQRCodeModal = memo(({
 
             <button
               onClick={handleShare}
-              className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white shadow-md shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs bg-arvdoul-gradient hover:opacity-95 text-white shadow-md shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
               title="Share Profile"
             >
               <Share2 className="w-4 h-4" />
@@ -247,7 +250,7 @@ const ProfileQRCodeModal = memo(({
             <button
               type="button"
               onClick={() => setShowScanner(true)}
-              className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-arvdoul-gradient hover:opacity-95 text-white shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
             >
               <ScanLine className="w-4 h-4" />
               <span>Scan Another User's QR Code</span>

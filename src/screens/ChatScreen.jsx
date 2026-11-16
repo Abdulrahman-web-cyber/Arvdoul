@@ -9,7 +9,8 @@
  * messagesService:
  *
  *  - conversation loaded by :conversationId (title, participants, type)
- *  - realtime subscription: new messages, typing indicators, presence
+ *  - realtime subscription: new messages, typing indicators
+ *  - 1:1 counterpart presence read from `user_presence/{uid}` (N458)
  *  - send text (E2EE handled by the service)
  *  - send images/videos/files and VOICE messages (MediaRecorder -> upload ->
  *    send; the recorder bug `ondata` -> `ondataavailable` is fixed)
@@ -32,6 +33,7 @@ import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply } from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
+import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -50,7 +52,11 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
-  const [presence, setPresence] = useState({});
+  // 1:1 counterpart presence, read from the scope-gated `user_presence/{uid}`
+  // via the social-graph spine. The old Realtime-Database `status/` path this
+  // screen subscribed to was never written by any code (N458), so the header's
+  // "Online / Last seen" could never render.
+  const [presence, setPresence] = useState(null);
   const [atBottom, setAtBottom] = useState(true);
   const [newSinceScroll, setNewSinceScroll] = useState(0);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -139,8 +145,6 @@ export default function ChatScreen() {
             setConversation(event.conversation);
           } else if (event.type === 'typing_update') {
             setTypingUsers((prev) => ({ ...prev, ...(event.typing || {}) }));
-          } else if (event.type === 'presence_update') {
-            setPresence((prev) => ({ ...prev, [event.userId]: event.presence }));
           } else if (event.type === 'new_message') {
             // Debounced reload: getMessages decrypts E2EE content server-side.
             if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
@@ -375,27 +379,54 @@ export default function ChatScreen() {
   const typingText = useMemo(() => {
     const names = Object.entries(typingUsers)
       .filter(([, v]) => v === true || v?.isTyping)
-      .map(([id]) => conversation?.participantNames?.[id] || 'Someone');
+      .map(([id]) => conversation?.participantNames?.[id] || `user ${String(id).slice(0, 6)}`);
     if (names.length === 0) return null;
     return names.length === 1 ? `${names[0]} is typing...` : 'Several people are typing...';
   }, [typingUsers, conversation]);
 
-  // Live presence for a 1:1 chat (RTDB `.info/connected` style payload:
-  // { online, lastSeen }). Only meaningful when there is a single other
-  // participant, so a group header keeps showing its member count.
+  // Live presence for a 1:1 chat, read from the scope-gated
+  // `user_presence/{uid}` (N321). `presence` is the counterpart's
+  // `{ isOnline, lastActive }` map entry, or null when unknown/denied.
+  // Only meaningful when there is a single other participant, so a group
+  // header keeps showing its member count.
   const presenceText = useMemo(() => {
     if (otherParticipants.length !== 1) return null;
-    const p = presence[otherParticipants[0]];
+    const p = presence;
     if (!p) return null;
-    if (p.online) return 'Online';
-    if (p.lastSeen) {
-      const mins = Math.floor((Date.now() - Number(p.lastSeen)) / 60000);
+    if (p.isOnline) return 'Online';
+    const la = p.lastActive;
+    if (la) {
+      const when = la?.toDate ? la.toDate() : new Date(la);
+      const mins = Math.floor((Date.now() - when.getTime()) / 60000);
+      if (!Number.isFinite(mins) || mins < 0) return null;
       if (mins < 1) return 'Last seen just now';
       if (mins < 60) return `Last seen ${mins}m ago`;
       return `Last seen ${Math.floor(mins / 60)}h ago`;
     }
     return null;
   }, [presence, otherParticipants]);
+
+  // Fetch the 1:1 counterpart's presence once per conversation. This is the
+  // only place the chat header learns "Online" / "Last seen": a denied or
+  // failed read leaves `presence` null and the header shows the participant
+  // count instead of a fabricated status.
+  useEffect(() => {
+    let cancelled = false;
+    const counterpart = otherParticipants.length === 1 ? otherParticipants[0] : null;
+    setPresence(null);
+    if (!counterpart) return () => { cancelled = true; };
+    (async () => {
+      try {
+        const { getSocialGraphService } = await import('../services/socialGraphService.js');
+        const map = await getSocialGraphService().getPresenceMap([counterpart]);
+        if (!cancelled) setPresence(map.get(counterpart) || null);
+      } catch (err) {
+        if (!cancelled) setPresence(null);
+        console.warn('ChatScreen: counterpart presence read failed', err?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [otherParticipants]);
 
   // Conversation info panel: pinned messages, shared media, search
   const openInfoPanel = useCallback(async () => {
@@ -539,6 +570,19 @@ export default function ChatScreen() {
     }
   }, [uid, conversationId]);
 
+  // A message's sender label is the real participant name, else the uid prefix —
+  // never a generic 'User'. `senderName` on the doc may itself be null (we no
+  // longer write a fabricated one), so fall through to the uid.
+  const resolveSenderLabel = useCallback((msg, isOwn) => {
+    if (isOwn) return 'You';
+    const resolved = pickDisplayName(
+      [conversation?.participantNames?.[msg.senderId], msg.senderName],
+      { fallback: null },
+    );
+    if (resolved) return resolved;
+    return msg.senderId ? `user ${String(msg.senderId).slice(0, 6)}` : '—';
+  }, [conversation]);
+
   // Reply / Edit / Forward / Pin handlers. MessageBubble renders these menu
   // actions unconditionally, so a missing handler was a control that did
   // nothing when tapped.
@@ -546,10 +590,10 @@ export default function ChatScreen() {
     setReplyTo({
       id: msg.id,
       senderId: msg.senderId,
-      senderName: msg.senderId === uid ? 'You' : (conversation?.participantNames?.[msg.senderId] || msg.senderName || 'User'),
+      senderName: resolveSenderLabel(msg, msg.senderId === uid),
       content: msg.content || '',
     });
-  }, [uid, conversation]);
+  }, [uid, conversation, resolveSenderLabel]);
 
   const handleEdit = useCallback(async (msg) => {
     const next = window.prompt('Edit message', msg.content || '');
@@ -785,7 +829,7 @@ export default function ChatScreen() {
               key={`${msg.id}-bubble`}
               message={msg}
               isOwn={isOwn}
-              senderName={conversation?.participantNames?.[msg.senderId] || (isOwn ? 'You' : 'User')}
+              senderName={resolveSenderLabel(msg, isOwn)}
               senderAvatar={conversation?.participantAvatars?.[msg.senderId]}
               onReaction={handleReaction}
               onDelete={async () => {
@@ -961,7 +1005,7 @@ export default function ChatScreen() {
                         )}
                       >
                         <span className="text-gray-400 block mb-0.5">
-                          {m.senderName || 'User'} · {m.createdAt?.toDate ? format(m.createdAt.toDate(), 'p') : ''}
+                          {resolveSenderLabel(m, m.senderId === uid)} · {m.createdAt?.toDate ? format(m.createdAt.toDate(), 'p') : ''}
                         </span>
                         <span className="line-clamp-2">{m.content || '(media message)'}</span>
                       </button>
@@ -1009,7 +1053,7 @@ export default function ChatScreen() {
                           )}
                         >
                           <span className="text-gray-400 block mb-0.5">
-                            {r.senderName || 'User'} · {r.createdAt?.toDate ? format(r.createdAt.toDate(), 'p') : ''}
+                            {resolveSenderLabel(r, r.senderId === uid)} · {r.createdAt?.toDate ? format(r.createdAt.toDate(), 'p') : ''}
                           </span>
                           <span className="line-clamp-2">{r.content || '(media message)'}</span>
                         </button>
@@ -1070,7 +1114,7 @@ export default function ChatScreen() {
               rows={3}
               placeholder="Add details (optional)"
               className={cn(
-                'w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50',
+                'w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50',
                 isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
               )}
             />

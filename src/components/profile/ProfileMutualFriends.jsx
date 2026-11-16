@@ -10,18 +10,19 @@ import ProfileSocialContext from './ProfileSocialContext';
 
 const ProfileMutualFriends = memo(({
   mutualFriends = [],
+  mutualFriendsResolved = false,
   sharedCommunities = [],
   relationship = null,
   isFollowing = false,
-  targetName = 'Creator',
+  targetName = null,
   theme = 'light',
   capabilities = null,
   onFriendPress,
-  onCommunityClick,
 }) => {
   return (
     <ProfileSocialContext
       mutualFriends={mutualFriends}
+      mutualFriendsResolved={mutualFriendsResolved}
       sharedCommunities={sharedCommunities}
       relationship={relationship}
       isFollowing={isFollowing}
@@ -29,7 +30,6 @@ const ProfileMutualFriends = memo(({
       theme={theme}
       capabilities={capabilities}
       onFriendClick={onFriendPress}
-      onCommunityClick={onCommunityClick}
     />
   );
 });

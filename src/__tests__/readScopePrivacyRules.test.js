@@ -57,6 +57,22 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(rb).toMatch(/allow read: if isSignedIn\(\) && \(reactorId == uid\(\) \|\| isAdmin\(\)\)/);
   });
 
+  test('comment like/dislike markers are readable only by their owner/admin', () => {
+    const b = block(rules, 'match /comments/{commentId}');
+    // The marker doc id is the liker's uid; the tallies live on the comment doc,
+    // so a world/signed-in read would expose who liked/disliked each comment.
+    for (const [marker, varName] of [
+      ['match /likes/{likerId}', 'likerId'],
+      ['match /dislikes/{dislikerId}', 'dislikerId'],
+    ]) {
+      const start = b.indexOf(marker);
+      expect(start).toBeGreaterThan(-1);
+      const mb = b.slice(start, start + 300);
+      expect(mb).not.toMatch(/allow read: if isSignedIn\(\);\n/);
+      expect(mb).toMatch(new RegExp(`allow read: if isSignedIn\\(\\) && \\(${varName} == uid\\(\\) \\|\\| isAdmin\\(\\)\\)`));
+    }
+  });
+
   test('comment edit history read is scoped to the comment author/admin', () => {
     const b = block(rules, 'match /comments/{commentId}');
     const start = b.indexOf('match /history/{historyId}');
@@ -86,10 +102,15 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
     expect(b).toMatch(/allow read: if isSignedIn\(\);/);
   });
 
-  test('events read requires sign-in (no privacy field to enforce — N266)', () => {
+  test('events read is status/relationship-gated (N266)', () => {
     const b = block(rules, 'match /events/{eventId}');
     expect(b).not.toMatch(/allow read: if true;/);
-    expect(b).toMatch(/allow read: if isSignedIn\(\);/);
+    // The event document read itself is gated (the nested subcollection read is
+    // a separate rule and still requires sign-in).
+    expect(b).toMatch(/allow read: if isSignedIn\(\) && \(/);
+    expect(b).toMatch(/resource\.data\.status in \['published', 'open', 'live', 'ended'\]/);
+    expect(b).toMatch(/resource\.data\.organizerId == uid\(\)/);
+    expect(b).toMatch(/resource\.data\.attendees\[uid\(\)\] != null/);
     // The former `privacy` field was a dead control (written, never read, never
     // enforced) and is gone; the rule documents that. See N266.
     const start = rules.indexOf('match /events/{eventId}');
@@ -104,17 +125,46 @@ describe('content reads are never world-readable (signed-in at minimum)', () => 
       'match /spaces/{spaceId}',
       'match /sounds/{soundId}',
       'match /marketplace_items/{itemId}',
-      'match /copyright_registry/{workId}',
     ]) {
       const b = block(rules, marker);
       expect(b).not.toMatch(/allow read: if true;/);
       expect(b).toMatch(/allow read: if isSignedIn\(\);/);
     }
+    // `copyright_registry` has no client reader, so the read is scoped to the
+    // registrant (or an admin) rather than any signed-in client.
+    const copyright = block(rules, 'match /copyright_registry/{workId}');
+    expect(copyright).not.toMatch(/allow read: if true;/);
+    expect(copyright).not.toMatch(/allow read: if isSignedIn\(\);/);
+    expect(copyright).toMatch(/allow read: if isSignedIn\(\) &&/);
+    expect(copyright).toMatch(/resource\.data\.registeredBy == uid\(\)/);
   });
 
   test('no `allow read: if true` rule remains anywhere in the ruleset', () => {
     const code = rules.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
     expect(code).not.toMatch(/allow read: if true;/);
+  });
+
+  test('the username registry is point-read only, never listable (N472)', () => {
+    // `allow read` grants `get` AND `list`; the registry is only ever point-read
+    // (share/QR resolution, availability check), so a listable grant let any
+    // signed-in client enumerate every claimed handle over the REST API.
+    for (const marker of ['match /usernames/{username}', 'match /previous_usernames/{username}']) {
+      const b = block(rules, marker);
+      expect(b).toContain('allow get: if isSignedIn();');
+      expect(b).toContain('allow list: if false;');
+      expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
+    }
+  });
+
+  test('counter shards are point-read only, never listable (N483)', () => {
+    // CountersManager resolves a shard with `getAll(...)` on computed doc refs —
+    // no client queries this collection. A bare `allow read` also granted
+    // `list`, exposing the whole platform's engagement map to any signed-in
+    // client.
+    const b = block(rules, 'match /counter_shards/{shardId}');
+    expect(b).toContain('allow get: if isSignedIn();');
+    expect(b).toContain('allow list: if false;');
+    expect(b).not.toMatch(/allow read:\s*if isSignedIn\(\);/);
   });
 
   test('achievements/titles reads honour the section privacy scope', () => {
@@ -197,7 +247,7 @@ describe('read-scope privacy (emulator)', () => {
     }
   });
 
-  test('events are readable by signed-in clients only', async () => {
+  test('a draft event is readable only by its organizer or an attendee (N266)', async () => {
     if (!reachable) return;
     const { assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
     const { doc, setDoc, getDoc } = await import('firebase/firestore');
@@ -206,13 +256,25 @@ describe('read-scope privacy (emulator)', () => {
       await env.clearFirestore();
       await env.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
-        await setDoc(doc(db, 'events/e1'), { organizerId: 'alice' });
+        await setDoc(doc(db, 'events/draft1'), {
+          organizerId: 'alice', status: 'draft', attendees: { bob: { status: 'registered' } },
+        });
+        await setDoc(doc(db, 'events/live1'), { organizerId: 'alice', status: 'published' });
       });
       const anon = env.unauthenticatedContext().firestore();
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
       const stranger = env.authenticatedContext('stranger').firestore();
 
-      await assertFails(getDoc(doc(anon, 'events/e1')));
-      await assertSucceeds(getDoc(doc(stranger, 'events/e1')));
+      // Unauthenticated is denied everywhere.
+      await assertFails(getDoc(doc(anon, 'events/draft1')));
+      await assertFails(getDoc(doc(anon, 'events/live1')));
+      // A published event is readable by any signed-in client.
+      await assertSucceeds(getDoc(doc(stranger, 'events/live1')));
+      // A draft is readable by the organizer and an attendee, but NOT a stranger.
+      await assertSucceeds(getDoc(doc(alice, 'events/draft1')));
+      await assertSucceeds(getDoc(doc(bob, 'events/draft1')));
+      await assertFails(getDoc(doc(stranger, 'events/draft1')));
     } finally {
       await env.cleanup();
     }

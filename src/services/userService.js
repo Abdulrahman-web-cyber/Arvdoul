@@ -11,8 +11,9 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { PROFILE_CONSTRAINTS, validateProfileUpdate, PRIVATE_PROFILE_FIELDS, PRIVATE_PROFILE_COLLECTION, splitProfileFields } from "../config/profileContracts.js";
+import { AVATAR_PALETTES } from '../utils/avatarUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
-import { projectProfileForViewer } from './profileReadModel.js';
+import { projectProfileForViewer, resolveActorName } from './profileReadModel.js';
 import { socialGraphService } from './socialGraphService.js';
 
 const USER_CONFIG = {
@@ -24,16 +25,7 @@ const USER_CONFIG = {
   MUTUAL_FRIENDS_MAX_FOLLOWS: 1000,
   FRIENDS_OF_FRIENDS_MAX_FRIENDS: 200,
   FRIENDS_OF_FRIENDS_MAX_CANDIDATES: 100,
-  AVATAR_PALETTES: [
-    { primary: '#3B82F6', secondary: '#1D4ED8', text: '#FFFFFF' },
-    { primary: '#8B5CF6', secondary: '#7C3AED', text: '#FFFFFF' },
-    { primary: '#10B981', secondary: '#059669', text: '#FFFFFF' },
-    { primary: '#EC4899', secondary: '#DB2777', text: '#FFFFFF' },
-    { primary: '#F97316', secondary: '#EA580C', text: '#FFFFFF' },
-    { primary: '#14B8A6', secondary: '#0D9488', text: '#FFFFFF' },
-    { primary: '#6366F1', secondary: '#4F46E5', text: '#FFFFFF' },
-    { primary: '#EF4444', secondary: '#DC2626', text: '#FFFFFF' }
-  ],
+  AVATAR_PALETTES,
   FRIENDS_PAGE_SIZE: 50,
   DEFAULT_RECOMMENDATIONS_LIMIT: 20,
   CACHE_MAX_ENTRIES: 500,
@@ -353,7 +345,7 @@ class ProfessionalUserService {
       const found = results.find(r => r.available);
       if (found) return found.candidate;
 
-      // Guaranteed fallback
+      // Last-resort fallback (the candidate list was exhausted)
       const basePrefix = validCandidates[0] ? validCandidates[0].slice(0, 10) : 'arv_user';
       return `${basePrefix}_${Date.now().toString(36).slice(-4)}${Math.random().toString(36).substring(2, 4)}`.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
     } catch (error) {
@@ -483,29 +475,47 @@ class ProfessionalUserService {
       logger.warn('Auth instance unavailable while building profile', { userId, error: e?.message });
     }
 
+    // An identity with no stored name, no auth name and no email derives from
+    // the real uid prefix — the old 'Member'/'Creator' literal was a fabricated
+    // name (N405).
     full.displayName = (full.displayName && full.displayName !== 'User')
       ? full.displayName
       : (full.name && full.name !== 'User')
         ? full.name
         : (isSelfUser && authUser?.displayName)
           ? authUser.displayName
-          : (full.email ? full.email.split('@')[0] : (isSelfUser ? 'Member' : 'Creator'));
+          : (full.email ? full.email.split('@')[0] : `user ${String(userId).slice(0, 6)}`);
 
     full.username = (full.username && !full.username.startsWith('user_'))
       ? full.username
       : (isSelfUser && authUser?.email?.split('@')[0])
         ? authUser.email.split('@')[0]
-        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : 'creator')));
+        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : `user_${String(userId).slice(0, 6)}`)));
 
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
 
     // Overlay shard-backed follower/following counts (legacy fallback).
     await countersManager.apply({ data: full, docPath: `users/${userId}`, fields: ['followerCount', 'followingCount'], scope: 'top' });
 
-    // Compute honest presence (Spec §42: only online if valid activity within 5 minutes)
-    const lastActiveDate = full.lastActive?.toDate ? full.lastActive.toDate() : (full.lastActive ? new Date(full.lastActive) : null);
+    // Live presence is scope-gated in `user_presence/{uid}` (the world-readable
+    // users/{uid} doc no longer carries isOnline/lastActive — N321). Read it for
+    // the requester; a denied (scope) or failed read leaves presence offline,
+    // never a fabricated "online". Honest online = flag set AND activity within
+    // 5 minutes (Spec §42).
+    let presenceDoc = null;
+    try {
+      const { doc: fsDoc, getDoc: fsGetDoc } = await import('firebase/firestore');
+      const presenceSnap = await fsGetDoc(fsDoc(this.firestore, 'user_presence', snap.id));
+      if (presenceSnap.exists()) presenceDoc = presenceSnap.data();
+    } catch (e) {
+      logger.debug('presence read skipped (scope denied or offline)', { userId: snap.id, error: e?.message });
+    }
+    const rawLastActive = presenceDoc?.lastActive;
+    const lastActiveDate = rawLastActive?.toDate ? rawLastActive.toDate() : (rawLastActive ? new Date(rawLastActive) : null);
     const isRecent = lastActiveDate && (Date.now() - lastActiveDate.getTime() < 5 * 60 * 1000);
-    const isActuallyOnline = Boolean(full.isOnline && isRecent);
+    const isActuallyOnline = Boolean(presenceDoc?.isOnline && isRecent);
+    full.isOnline = isActuallyOnline;
+    full.lastActive = lastActiveDate ? lastActiveDate.toISOString() : null;
     full.presence = {
       isOnline: isActuallyOnline,
       status: isActuallyOnline ? 'online' : 'offline',
@@ -647,7 +657,8 @@ class ProfessionalUserService {
       followingCount: 0,
       postCount: 0,
       coins: NEW_USER_DEFAULTS.coins,
-      totalEarned: NEW_USER_DEFAULTS.totalEarned,
+      // `totalEarned` is not seeded (no server writer maintains a lifetime
+      // earnings counter — N320 class). Absent renders as unknown, not 0.
       level: NEW_USER_DEFAULTS.level,
       experience: NEW_USER_DEFAULTS.experience,
       experienceToNextLevel: NEW_USER_DEFAULTS.experienceToNextLevel,
@@ -659,8 +670,9 @@ class ProfessionalUserService {
       accountStatus: NEW_USER_DEFAULTS.accountStatus,
       isVerified: NEW_USER_DEFAULTS.isVerified,
       isPrivate: false,
-      isOnline: true,
-      lastActive: serverTimestamp(),
+      // Live presence (isOnline/lastActive) lives in `user_presence/{uid}` so the
+      // rules can gate it by the `presence` privacy scope; the world-readable
+      // `users/{uid}` doc must not carry it (N321). Seeded below.
 
       metadata: {
         hasCustomAvatar: !!profileData.photoURL,
@@ -745,7 +757,14 @@ class ProfessionalUserService {
       if (existingPrivate.exists()) {
         transaction.update(privateDoc, safePrivateData);
       } else {
-        transaction.set(privateDoc, { uid: userId, ...safePrivateData });
+        // The starting balance is seeded ONLY when the private doc is created
+        // (N324) — never on an update, or a repeated createUserProfile call
+        // would reset a real balance to the default. The world-readable
+        // users/{uid} never carries a financial figure; the rules pin the
+        // create to NEW_USER_DEFAULTS.coins.
+        const seed = { uid: userId, ...safePrivateData };
+        if (privateFields.coins !== undefined) seed.coins = privateFields.coins;
+        transaction.set(privateDoc, seed);
       }
 
       transaction.set(usernameDoc, {
@@ -753,6 +772,14 @@ class ProfessionalUserService {
         username,
         createdAt: serverTimestamp()
       }, { merge: true });
+
+      // Presence is scope-gated (user_presence/{uid}), not on the world-readable
+      // users/{uid} doc. Written here so a brand-new account is online at signup.
+      transaction.set(doc(this.firestore, 'user_presence', userId), {
+        isOnline: true,
+        lastActive: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
     });
 
     // Non‑critical side document (outside transaction). The `notifications` /
@@ -858,8 +885,10 @@ class ProfessionalUserService {
     const userRef = doc(this.firestore, 'users', userId);
     const updatePayload = {
       ...sanitizedUpdates,
-      updatedAt: serverTimestamp(),
-      lastActive: serverTimestamp()
+      updatedAt: serverTimestamp()
+      // `lastActive` is intentionally NOT written here — presence lives in
+      // `user_presence/{uid}` (see updateLastActive) so the `presence` scope can
+      // be enforced by the rules (N321).
     };
     // A null `locationCoordinates` is an explicit clear (privacy switched to
     // hidden/country_only) — delete the field rather than storing null.
@@ -943,9 +972,9 @@ class ProfessionalUserService {
 
     const docData = {
       userId,
-      applicantName: applicationData.applicantName || applicationData.displayName || 'Applicant',
+      applicantName: applicationData.applicantName || applicationData.displayName || null,
       username: applicationData.username || '',
-      category: applicationData.category || 'Creator',
+      category: applicationData.category || null,
       reason: applicationData.reason || '',
       portfolioLink: applicationData.portfolioLink || applicationData.website || '',
       // An unknown follower count stays null so the review queue shows
@@ -997,11 +1026,6 @@ class ProfessionalUserService {
     const profile = await this.getUserProfile(userId);
     if (!profile) return false;
     return profile.isProfileComplete === true || !!(profile.displayName?.trim() && profile.username?.trim());
-  }
-
-  async getCoinBalance(userId) {
-    const profile = await this.getUserProfile(userId);
-    return profile?.coins || 0;
   }
 
   async addCoins(userId, amount, reason = 'reward') {
@@ -1085,7 +1109,7 @@ class ProfessionalUserService {
           recipientId: followingId,
           senderId: followerId,
           title: 'New follow request',
-          message: `${requester?.displayName || 'Someone'} requested to follow you`,
+          message: `${resolveActorName([requester?.displayName, requester?.username], followerId)} requested to follow you`,
           metadata: { fromUserId: followerId, requestId: `${followerId}_${followingId}` },
           priority: 'normal',
         });
@@ -1283,7 +1307,7 @@ class ProfessionalUserService {
           recipientId: requesterId,
           senderId: ownerId,
           title: 'Follow request accepted',
-          message: `${owner?.displayName || 'Someone'} accepted your follow request`,
+          message: `${resolveActorName([owner?.displayName, owner?.username], ownerId)} accepted your follow request`,
           metadata: { userId: ownerId },
         });
       } catch (e) {
@@ -1403,12 +1427,13 @@ class ProfessionalUserService {
           isFollowing: Boolean(edge.isFollowing),
           isFollower: Boolean(edge.isFollower),
           isMutualFriend: Boolean(edge.isMutualFriend),
+          requestStatus: edge.requestStatus ?? null,
         });
       }
     } catch (err) {
       logger.warn('[UserService] getFollowStates failed', { viewerId, error: err?.message });
       for (const id of targets) {
-        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
+        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false, requestStatus: null });
       }
     }
 
@@ -1587,7 +1612,7 @@ class ProfessionalUserService {
       if (snap.exists() && snap.data().status === 'pending') return { success: true, alreadyRequested: true };
       // Re-sending after decline/cancel is allowed (status resets to pending).
       transaction.set(requestRef, {
-        fromUserId, toUserId, fromUserDisplayName: fromUser?.displayName || 'Someone',
+        fromUserId, toUserId, fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
         fromUserPhotoURL: fromUser?.photoURL || null, status: 'pending',
         createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
@@ -1601,7 +1626,7 @@ class ProfessionalUserService {
         await getNotificationsService().createFriendRequestNotification(
           fromUserId,
           toUserId,
-          fromUser?.displayName || 'Someone'
+          resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId)
         );
       } catch (e) {
         logger.warn('Friend-request notification failed', { fromUserId, toUserId, error: e?.message });
@@ -1677,7 +1702,7 @@ class ProfessionalUserService {
         await notif.sendNotification({
           type: 'friend_accepted', recipientId: requesterId, senderId: userId,
           title: 'Friend request accepted',
-          message: `${accepter?.displayName || 'Someone'} accepted your request`,
+          message: `${resolveActorName([accepter?.displayName, accepter?.username], userId)} accepted your request`,
           metadata: { friendId: userId }
         });
       } catch (e) {
@@ -2026,8 +2051,14 @@ class ProfessionalUserService {
   async updateLastActive(userId) {
     try {
       await this._ensureInitialized();
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      await updateDoc(doc(this.firestore, 'users', userId), { isOnline: true, lastActive: serverTimestamp() });
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      // Presence is its own scope-gated document (user_presence/{uid}); the
+      // world-readable users/{uid} doc must not carry isOnline/lastActive (N321).
+      await setDoc(
+        doc(this.firestore, 'user_presence', userId),
+        { isOnline: true, lastActive: serverTimestamp(), updatedAt: serverTimestamp() },
+        { merge: true }
+      );
       try {
         const { callFunction, FUNCTIONS } = await import('./callableService.js');
         await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
@@ -2131,7 +2162,6 @@ export const checkUsernameAvailability = (name, exclude) => getUserService().che
 export const generateUniqueUsername = (base, exclude) => getUserService().generateUniqueUsername(base, exclude);
 
 // Economy
-export const getCoinBalance = (uid) => getUserService().getCoinBalance(uid);
 export const addCoins = (uid, amount, reason) => getUserService().addCoins(uid, amount, reason);
 
 // Social
@@ -2207,7 +2237,6 @@ const userServiceExport = Object.assign(getUserService, {
   resetToDefaultAvatar,
   checkUsernameAvailability,
   generateUniqueUsername,
-  getCoinBalance,
   addCoins,
   followUser,
   unfollowUser,

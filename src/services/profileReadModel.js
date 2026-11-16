@@ -67,9 +67,23 @@ export function pickDisplayName(candidates, { fallback = 'Creator', rejectPlaceh
   return fallback;
 }
 
+/**
+ * Resolve a *notification/actor* label from a real name, else a uid prefix.
+ * An unresolvable actor must never be rendered as a generic word like
+ * "Someone"/"Anonymous" (a fabricated identity); the uid prefix is real and
+ * still lets the recipient identify the account (N407).
+ */
+export function resolveActorName(candidates, userId) {
+  const name = pickDisplayName(candidates, { fallback: null });
+  if (name) return name;
+  return userId ? `user ${String(userId).slice(0, 6)}` : '—';
+}
+
 /** Avatar with a real photo, else a deterministic SVG; never a broken URL. */
 export function resolveAvatarUrl(photoURL, displayName, userId) {
-  return getSafeAvatarUrl(photoURL, displayName || 'User', userId || '');
+  // Do NOT substitute a literal 'User' — the generator derives initials from
+  // the uid when no real name is known, so we never mint an identity label.
+  return getSafeAvatarUrl(photoURL, displayName || '', userId || '');
 }
 
 /** First numeric candidate (0 counts), else 0. */
@@ -156,7 +170,9 @@ export function deriveProfileIdentity(profile = {}, opts = {}) {
     handleFallbacks = [],
     handleFallback = 'citizen',
     displayCandidates = [],
-    displayFallback = 'Citizen',
+    // No fabricated civic label: an identity with no real name resolves to the
+    // uid prefix below, never the literal 'Citizen'/'Creator' (N405).
+    displayFallback = null,
     followerCandidates = [],
     followingCandidates = [],
     postCandidates = [],
@@ -176,7 +192,8 @@ export function deriveProfileIdentity(profile = {}, opts = {}) {
   }
   if (!handle) handle = handleFallback;
 
-  const displayName = pickDisplayName(displayCandidates, { fallback: displayFallback });
+  const resolvedDisplayName = pickDisplayName(displayCandidates, { fallback: displayFallback });
+  const displayName = resolvedDisplayName || (resolvedId ? `user ${String(resolvedId).slice(0, 6)}` : '—');
   const level = resolveLevelValue(...levelCandidates);
 
   const identity = {
@@ -233,6 +250,9 @@ export const CREATOR_INFO_FIELDS = Object.freeze([
 export const ECONOMIC_FIELDS = Object.freeze([
   'coins',
   'coinBalance',
+  // The withdrawal hold (N324). It never belongs on the public doc, but a
+  // pre-migration document may still carry it — mask it like any money field.
+  'lockedCoins',
   'balance',
   'earnings',
   'totalEarned',
@@ -271,6 +291,49 @@ export const ACHIEVEMENT_FIELDS = Object.freeze(['achievements', 'achievementsCo
 
 /** Title fields gated by their own `titles` scope. */
 export const TITLE_FIELDS = Object.freeze(['titles', 'activeTitle', 'primaryTitle']);
+
+/** Royal / noble title ids (a title *name* is never matched — only its id). */
+export const ROYAL_TITLE_IDS = Object.freeze(['king', 'queen', 'duke', 'duchess', 'sovereign']);
+
+/**
+ * The id of the active title, resolved from either the object shape the server
+ * writes (`activeTitle: { id, name, icon, domain }` from `setActiveTitle`) or a
+ * bare string (a legacy or hand-written value). Returns null when neither is a
+ * usable id. A raw `profile.activeTitle === 'duke'` comparison silently missed
+ * every real title, because the stored value is an object.
+ */
+export function resolveActiveTitleId(profile = {}) {
+  const active = profile?.activeTitle;
+  if (active && typeof active === 'object') {
+    const id = normalizeString(active.id);
+    if (id !== null) return id.toLowerCase();
+    const name = normalizeString(active.name);
+    return name !== null ? name.toLowerCase() : null;
+  }
+  const asString = normalizeString(active);
+  return asString !== null ? asString.toLowerCase() : null;
+}
+
+/**
+ * True when the profile holds a royal/noble title. Reads the canonical flag
+ * fields first, then the active title id (object or string) — never a raw
+ * `activeTitle === 'duke'` string compare against the stored object.
+ */
+export function resolveRoyalFlag(profile = {}) {
+  if (!profile) return false;
+  if (profile.isRoyal || profile.isRoyalFamily || profile.isDucal) return true;
+  const id = resolveActiveTitleId(profile);
+  if (id !== null && ROYAL_TITLE_IDS.includes(id)) return true;
+  // A denormalized `titles` array may hold ids/objects (or bare strings).
+  if (Array.isArray(profile.titles)) {
+    return profile.titles.some((t) => {
+      const candidate = t && typeof t === 'object' ? (t.id ?? t.titleId ?? t.name) : t;
+      const cleaned = normalizeString(candidate);
+      return cleaned !== null && ROYAL_TITLE_IDS.includes(cleaned.toLowerCase());
+    });
+  }
+  return false;
+}
 
 /**
  * Apply the capability decision exactly once. The view layer must consume the
@@ -382,6 +445,8 @@ export default {
   readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
+  resolveActiveTitleId,
+  resolveRoyalFlag,
   deriveProfileIdentity,
   projectProfileForViewer,
 };

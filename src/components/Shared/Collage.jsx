@@ -291,7 +291,7 @@ export default function Collage({
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-600/30">
+            <div className="w-10 h-10 rounded-2xl bg-arvdoul-gradient flex items-center justify-center text-white shadow-lg shadow-purple-600/30">
               <Grid className="w-5 h-5" />
             </div>
             <div>
@@ -564,7 +564,7 @@ export default function Collage({
             <button
               onClick={() => handleExport(true)}
               disabled={selectedImages.length < 2 || isExporting}
-              className="px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-purple-600/30 active:scale-95 transition disabled:opacity-40 flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-full bg-arvdoul-gradient hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-purple-600/30 active:scale-95 transition disabled:opacity-40 flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Add to Post</span>

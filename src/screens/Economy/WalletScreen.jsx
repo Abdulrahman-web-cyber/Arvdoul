@@ -142,9 +142,7 @@ export default function WalletScreen() {
 
     setWithdrawing(true);
     try {
-      await walletService.requestPayout(user.uid, amount, {
-        payoutMethod: 'stripe_connected',
-      });
+      await walletService.requestPayout(user.uid, amount, 'stripe_connected');
       toast.success('Withdrawal request submitted for compliance audit.');
       setWithdrawAmount('');
       await loadWallet();
@@ -261,7 +259,7 @@ export default function WalletScreen() {
                 {fmtCoins(wallet?.totalEarned)} Coins
               </span>
               <span className="text-[10px] text-gray-500 block">
-                {wallet?.totalEarned == null ? '—' : `$${formatCoinsAsUsd(wallet.totalEarned)} USD`}
+                {wallet?.totalEarned == null ? '—' : `${formatCoinsAsUsd(wallet.totalEarned)} USD`}
               </span>
             </div>
             <div>

@@ -253,7 +253,9 @@ class OfflineQueue {
       all = this._memory.filter((o) => o.status === 'pending');
     }
     if (ownerUid) all = all.filter((o) => o.ownerUid === ownerUid);
-    all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    // `createdAt` is an ISO string; subtracting strings yields NaN, so the
+    // previous comparator was a no-op and "newest first" never held.
+    all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     return all;
   }
 

@@ -327,7 +327,7 @@ export default function CreateStory() {
         <div className="hidden lg:flex flex-col justify-between h-[820px] w-72 py-4">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-pink-500 flex items-center justify-center shadow-arvdoul-glow font-black text-xl text-white">
+              <div className="w-10 h-10 rounded-2xl bg-arvdoul-gradient flex items-center justify-center shadow-arvdoul-glow font-black text-xl text-white">
                 A
               </div>
               <div>
@@ -773,7 +773,7 @@ export default function CreateStory() {
 
               {/* Shutter Button (Glowing Halo) */}
               <div className="relative flex items-center justify-center">
-                <div className="absolute w-24 h-24 rounded-full bg-gradient-to-tr from-violet-600 via-indigo-600 to-pink-500 opacity-60 blur-md animate-pulse" />
+                <div className="absolute w-24 h-24 rounded-full bg-arvdoul-gradient opacity-60 blur-md animate-pulse" />
                 <button
                   onClick={handleShutterTap}
                   onMouseDown={handleShutterMouseDown}
@@ -865,7 +865,7 @@ export default function CreateStory() {
                 <button
                   onClick={handlePublishStory}
                   disabled={publishing}
-                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-pink-500 text-white font-extrabold text-sm shadow-arvdoul-glow flex items-center justify-center gap-2 active:scale-98 transition-transform disabled:opacity-50"
+                  className="w-full py-3 rounded-2xl bg-arvdoul-gradient text-white font-extrabold text-sm shadow-arvdoul-glow flex items-center justify-center gap-2 active:scale-98 transition-transform disabled:opacity-50"
                 >
                   {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   {publishing ? 'Sharing Story...' : 'Share to Your Story 🌟'}

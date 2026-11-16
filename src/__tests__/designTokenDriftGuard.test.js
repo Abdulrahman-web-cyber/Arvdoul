@@ -42,6 +42,24 @@ const CANONICAL_LITERAL = /linear-gradient\(\s*135deg\s*,\s*#8B1EF3\s+0%\s*,\s*#
 // `#8B1EF3 → #4431F7 → #055BFB`; a `from-purple-600 via-pink-600` triple is a
 // second brand gradient and must not be introduced.
 const ROGUE_GRADIENT = /from-purple-600\s+via-pink-600\s+to-cyan-500/;
+// The general "brand mimic" family: a three-stop purple/violet/fuchsia →
+// pink/fuchsia/rose → cyan/blue/indigo ramp. It is a second brand gradient by
+// construction — a change to the canonical `#8B1EF3 → #4431F7 → #055BFB` would
+// silently miss every site. The remaining brand *fills* (`from-purple-600
+// to-indigo-600`, solid `bg-purple-600`, dark surfaces, story ring pairs) are
+// the deliberate Arvdoul palette and are allowed; only the 3-stop mimic is
+// banned. `N319`/`N323` migrated every occurrence onto `BRAND_GRADIENT`.
+const ROGUE_BRAND_MIMIC =
+  /from-(?:purple|violet|fuchsia)-\d+\s+via-(?:pink|fuchsia|rose)-\d+\s+to-(?:cyan|blue|indigo)-\d+/;
+// The SAME brand-mimic shape with a NEUTRAL middle stop: purple/violet/fuchsia →
+// indigo/blue/violet → cyan/blue/indigo/teal. The ROGUE_BRAND_MIMIC above only
+// caught the pink/rose-middle family, so 14 sites — including the design-system
+// `Button` primary itself (`from-violet-600 via-indigo-600 to-cyan-500`) — kept
+// shipping a second, near-identical brand gradient whose stops would never move
+// when the canonical `#8B1EF3 → #4431F7 → #055BFB` changes. All 14 are now
+// `bg-arvdoul-gradient`; this pins the whole shape out.
+const ROGUE_BRAND_MIMIC_NEUTRAL =
+  /from-(?:purple|violet|fuchsia|indigo)-\d+\s+via-(?:indigo|blue|violet|purple)-\d+\s+to-(?:cyan|blue|indigo|teal)-\d+/;
 // The SAME rogue gradient in raw-hex form: Tailwind purple-600 → fuchsia-600 →
 // cyan-500, plus the pink-500 / rose variants the post cards used as a
 // "neon purple" stand-in for the brand gradient. `#9333ea`/`#c026d3` were
@@ -80,6 +98,37 @@ describe('brand gradient — design system is the single source of truth (N104)'
     expect(offenders).toEqual([]);
   });
 
+  test('no 3-stop purple→pink→cyan brand mimic remains (N323)', () => {
+    const offenders = [];
+    for (const file of files) {
+      if (ROGUE_BRAND_MIMIC.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('no 3-stop purple→indigo→cyan brand mimic remains (N333)', () => {
+    const offenders = [];
+    for (const file of files) {
+      if (ROGUE_BRAND_MIMIC_NEUTRAL.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('keyboard focus rings use the brand token, not the raw Tailwind brand family (N334)', () => {
+    // 97 focus rings across 40 files used `focus:ring-purple-500` /
+    // `ring-indigo-500` / `ring-blue-500` / `ring-violet-*`. The violet and
+    // purple-500 are NOT the brand violet (`#8B1EF3` is `arvdoul-purple`), so
+    // the app's focus affordance rendered a different colour than its brand.
+    // Standardised on `ring-arvdoul-purple-500`. Semantic rings (emerald/amber/
+    // red on success/warn/error controls) are intentionally exempt.
+    const offenders = [];
+    const FAMILY = /focus(?:-visible)?:ring-(?:purple|indigo|blue|violet|fuchsia)-\d+/;
+    for (const file of files) {
+      if (FAMILY.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
   test('the rogue gradient never reappears in raw-hex form (#9333ea / #c026d3)', () => {
     const offenders = [];
     for (const file of files) {
@@ -111,5 +160,17 @@ describe('brand gradient — design system is the single source of truth (N104)'
     expect(BRAND_GRADIENT).toBe(tokens.color.brand.gradient);
     expect(css).toContain(`--arv-brand-gradient: ${tokens.color.brand.gradient};`);
     expect(json.colors.brand.gradient).toBe(tokens.color.brand.gradient);
+  });
+
+  test('tailwind.config.js bg-arvdoul-gradient agrees with the token', () => {
+    // The Tailwind `bg-arvdoul-gradient` utility re-declares the brand gradient
+    // as a literal (Tailwind config cannot import the ESM token at build time).
+    // Nothing pinned the two together, so a change to the token would leave the
+    // utility — used by every migrated CTA — rendering the OLD gradient. Assert
+    // the config literal is byte-identical to the token.
+    const config = readFileSync(path.join(root, 'tailwind.config.js'), 'utf8');
+    const m = config.match(/'arvdoul-gradient':\s*'([^']+)'/);
+    expect(m).not.toBeNull();
+    expect(m[1]).toBe(tokens.color.brand.gradient);
   });
 });

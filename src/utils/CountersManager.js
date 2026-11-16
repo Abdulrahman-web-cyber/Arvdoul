@@ -150,6 +150,81 @@ class CountersManager {
   invalidate({ docPath, field }) {
     cacheManager.delete('counters', `${docPath}:${field}`);
   }
+
+  /**
+   * Overlay shard-backed counters onto a batch of documents from one
+   * collection in as few `getAll` calls as possible (chunks of `chunkSize`
+   * documents, each chunk one batched read of docs × shards refs) instead of
+   * one `get` per document. Falls back to each document's legacy value when no
+   * shards exist, exactly like `apply`. Used by list surfaces (comments) where
+   * per-item reads would multiply. Mutates each item in place.
+   * @param {Object} opts
+   * @param {Array} opts.items
+   * @param {string} opts.collection - e.g. 'comments'
+   * @param {string} [opts.idField='id']
+   * @param {string[]} opts.fields
+   * @param {string} [opts.scope='top'] - 'stats' writes item.stats[field]
+   * @param {number} [opts.chunkSize]
+   * @param {Object} [opts.fieldAliases] - shard field → target field on the item
+   *   (e.g. `{ replies: 'repliesCount' }`, because the drawer's reply count is a
+   *   derived field, not the `replies` array `_buildNestedComments` writes).
+   * @returns {Promise<Array>} the same items array
+   */
+  async applyAll({ items, collection, idField = 'id', fields, scope = 'top', chunkSize, fieldAliases = {} }) {
+    if (!Array.isArray(items) || items.length === 0 || !Array.isArray(fields) || fields.length === 0) {
+      return items;
+    }
+    const { firestore, m } = await this._ensure();
+
+    // Keep each batched read to ~400 refs (Firestore getAll is happiest well
+    // under 500) regardless of how many fields/shards are in play.
+    const refsPerItem = fields.length * this.shards;
+    const effectiveChunk = chunkSize || Math.max(1, Math.floor(400 / refsPerItem));
+
+    for (let start = 0; start < items.length; start += effectiveChunk) {
+      const chunk = items.slice(start, start + effectiveChunk);
+      const refs = [];
+      const meta = [];
+      chunk.forEach((item, localIdx) => {
+        const id = item && item[idField];
+        if (!id) return;
+        fields.forEach((field) => {
+          for (let s = 0; s < this.shards; s++) {
+            refs.push(this._shardRef(firestore, `${collection}/${id}`, field, s));
+            meta.push({ localIdx, field });
+          }
+        });
+      });
+      if (refs.length === 0) continue;
+
+      const snaps = await m.getAll(...refs);
+      const sums = new Map();
+      snaps.forEach((snap, k) => {
+        if (!snap.exists()) return;
+        const { localIdx, field } = meta[k];
+        const key = `${localIdx}\u0000${field}`;
+        sums.set(key, (sums.get(key) || 0) + (snap.data().value || 0));
+      });
+
+      chunk.forEach((item, localIdx) => {
+        fields.forEach((field) => {
+          const key = `${localIdx}\u0000${field}`;
+          const rawLegacy = scope === 'stats' ? (item.stats && item.stats[field]) : item[field];
+          // Coerce: a non-numeric legacy (e.g. `replies` after a nested build
+          // turned it into an array) is not a count and falls back to 0.
+          const legacy = Number.isFinite(Number(rawLegacy)) ? Number(rawLegacy) : 0;
+          const value = sums.has(key) ? sums.get(key) : legacy;
+          if (scope === 'stats') {
+            item.stats = item.stats || {};
+            item.stats[field] = value;
+          } else {
+            item[fieldAliases[field] || field] = value;
+          }
+        });
+      });
+    }
+    return items;
+  }
 }
 
 export { CountersManager };

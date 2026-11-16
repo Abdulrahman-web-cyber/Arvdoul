@@ -38,9 +38,9 @@ const ProfileFeedGrid = memo(({
   const [likeBaseline, setLikeBaseline] = useState({});
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const audioElRef = useRef(null);
-  // Ids the viewer has toggled this session. The server flag in `posts` is a
-  // snapshot that can lag (or simply not change on a mocked/local write), so it
-  // must never clobber a like the viewer just made.
+  // Ids the viewer has toggled this session. The server snapshot can lag (or a
+  // mocked/local write may not change it), so it must never clobber a like the
+  // viewer just made.
   const touchedLikesRef = useRef(new Set());
 
   // Seed like/save state from the real posts (and the viewer's own liked/saved
@@ -50,17 +50,33 @@ const ProfileFeedGrid = memo(({
   // arrays are new identities every render (default `[]` props included) and an
   // identity-keyed effect would re-run forever and revert session likes.
   const seedSignature = useMemo(() => {
-    const likeSig = (posts || []).map((p) => `${p?.id}:${p?.isLiked || p?.likedByMe || p?.hasLiked ? 1 : 0}`).join(',');
+    const likeSig = (posts || []).map((p) => `${p?.id}`).join(',');
     const savedSig = (savedPosts || []).map((p) => p?.id).join(',');
     return `${likeSig}|${savedSig}`;
   }, [posts, savedPosts]);
+
+  // The viewer's real like state for the visible posts. No writer ever sets a
+  // post-level `isLiked`/`likedByMe`/`hasLiked` flag, so the truth is the
+  // viewer's own `users/{uid}/liked_posts` subcollection — resolved in one
+  // bounded `documentId() in` read for the whole grid.
+  const [serverLikedIds, setServerLikedIds] = useState(() => new Set());
+  useEffect(() => {
+    const ids = [...new Set([...(posts || []), ...(savedPosts || [])].map((p) => p?.id).filter(Boolean))];
+    if (!currentUserId || ids.length === 0) { setServerLikedIds(new Set()); return undefined; }
+    let cancelled = false;
+    import('../../services/firestoreService.js')
+      .then(({ firestoreService }) => firestoreService.getLikedPostIds?.(currentUserId, ids))
+      .then((set) => { if (!cancelled && set) setServerLikedIds(set); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUserId, seedSignature]);
 
   useEffect(() => {
     const liked = {};
     const baseline = {};
     for (const post of [...(posts || []), ...(savedPosts || [])]) {
       if (!post || !post.id) continue;
-      const serverLiked = Boolean(post.isLiked || post.likedByMe || post.hasLiked);
+      const serverLiked = serverLikedIds.has(post.id);
       baseline[post.id] = serverLiked;
       if (serverLiked && !touchedLikesRef.current.has(post.id)) liked[post.id] = true;
     }
@@ -93,7 +109,7 @@ const ProfileFeedGrid = memo(({
       }
       return changed ? next : prev;
     });
-  }, [seedSignature]);
+  }, [seedSignature, serverLikedIds]);
 
 
   const handleQuickLike = useCallback(async (e, post) => {
@@ -875,7 +891,8 @@ const ProfileFeedGrid = memo(({
         const isVid = item.type === 'video' || item.type === 'reel';
         const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
         const isLiked = Boolean(likedPosts[item.id]);
-        const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: 'Creator' });
+        const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: null })
+          || `user ${String(profile?.id || profile?.uid || item.authorId || '').slice(0, 6)}`;
         const authorAvatar = resolveAvatarUrl(profile?.photoURL || item.authorAvatar, authorName, profile?.id || profile?.uid || item.authorId);
         const handle = profile?.username ? `@${profile.username}` : '';
 

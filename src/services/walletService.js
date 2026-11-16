@@ -7,6 +7,7 @@ import { getFirestoreInstance } from '../firebase/firebase.js';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { logger } from '../utils/Logger.js';
 import monetizationService from './monetizationService.js';
+import { PRIVATE_PROFILE_COLLECTION } from '../config/profileContracts.js';
 
 class WalletService {
   /**
@@ -20,10 +21,20 @@ class WalletService {
       const userSnap = await getDoc(doc(db, 'users', userId));
       const userData = userSnap.exists() ? userSnap.data() : {};
 
+      // The balance and withdrawal hold live on users_private/{uid} (owner/admin
+      // readable) — never the world-readable users/{uid} (N324).
+      let balanceData = {};
+      try {
+        const privateSnap = await getDoc(doc(db, PRIVATE_PROFILE_COLLECTION, userId));
+        if (privateSnap.exists()) balanceData = privateSnap.data();
+      } catch (e) {
+        logger.warn('Private balance read failed; wallet balance unknown', { userId, error: e?.message });
+      }
+
       // An absent balance field is *unknown*, not 0: the wallet card would
       // otherwise claim an empty ledger it never read. A present field of 0
       // stays a real 0.
-      const rawCoins = userData.coins ?? userData.coinBalance ?? null;
+      const rawCoins = balanceData.coins ?? balanceData.coinBalance ?? null;
       const coins = rawCoins == null ? null : Number(rawCoins);
       const rawEarned = userData.totalEarned ?? userData.lifetimeCoinsEarned ?? null;
       const totalEarned = rawEarned == null ? null : Number(rawEarned);
@@ -36,7 +47,7 @@ class WalletService {
       // rows: the previous query only counted ['pending','processing'] and so
       // ignored `pending_review`, letting the wallet advertise more spendable
       // coins than the server would actually allow. The query is now display-only.
-      const lockedCoins = Number(userData.lockedCoins || 0);
+      const lockedCoins = Number(balanceData.lockedCoins || 0);
       const availableCoins = coins == null ? null : Math.max(0, coins - lockedCoins);
 
       // Fetch pending withdrawals for the itemised breakdown only.
@@ -123,8 +134,8 @@ class WalletService {
   /**
    * Submit withdrawal request via monetization engine.
    */
-  async requestPayout(userId, amountCoins, details = {}) {
-    return monetizationService.requestWithdrawal(userId, amountCoins, details);
+  async requestPayout(userId, amountCoins, paymentMethod = 'stripe_connected', paymentDetails = {}) {
+    return monetizationService.requestWithdrawal(userId, amountCoins, paymentMethod, paymentDetails);
   }
 }
 

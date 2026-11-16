@@ -1090,6 +1090,15 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_mallory_2026-11-08_shard_0'), {
         userId: 'alice', date: '2026-11-08', shard: 0, count: 0,
       }));
+      // N370: the VALUE is bounded too — a fresh shard may not start above the
+      // per-shard window, so the limit cannot be pre-saturated in one write.
+      await assertFails(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_2'), {
+        userId: 'alice', date: '2026-11-08', shard: 2, count: 999999,
+      }));
+      // …and an update may only step the count by a small delta.
+      await assertFails(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 999999,
+      }, { merge: true }));
     } finally {
       await env.cleanup();
     }

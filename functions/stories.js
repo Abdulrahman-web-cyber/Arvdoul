@@ -167,11 +167,13 @@ async function processFanoutTaskInternal(taskRef, taskId, taskData) {
     return;
   }
 
-  // Hybrid decision
+  // Hybrid decision. The count must be the AUTHORITATIVE one: the raw
+  // `users/{uid}.followerCount` is seeded 0 and never updated (follows increment
+  // a sharded counter — N431), so trusting it never tripped the celebrity gate.
   let followerCount = 0;
   try {
-    const userDoc = await db.collection('users').doc(ownerId).get();
-    followerCount = userDoc.data()?.followerCount || 0;
+    const { readUserCounter } = require('./userCounters');
+    followerCount = await readUserCounter(ownerId, 'followerCount');
   } catch (err) {
     log('error', 'Failed to fetch follower count', { ownerId, error: err.message });
     await taskRef.update({
@@ -260,6 +262,13 @@ exports.processFanoutTask = functions.firestore
     const taskId = context.params.taskId;
     const taskData = snap.data();
     if (!taskData || taskData.status !== 'pending') return;
+    // The SAME `fanout_tasks/{taskId}` collection is written by two producers:
+    // posts (`feed.js` `fanoutPostOnCreate`, carrying `postId`) and stories
+    // (`{ storyId }`). Both triggers fire for every created doc, and both used
+    // to claim it unconditionally — so the loser's `processFanoutTaskInternal`
+    // found status !== 'pending' and marked the task `failed` with "Missing
+    // required fields", cancelling the winner's fan-out. Claim only story tasks.
+    if (!taskData.storyId) return;
     await processFanoutTaskInternal(snap.ref, taskId, taskData);
   });
 
@@ -689,6 +698,10 @@ exports.retryFailedFanoutTasks = functions.pubsub
 
     for (const doc of failedSnap.docs) {
       const data = doc.data();
+      // Only story tasks (post tasks carry `postId` and are retried by
+      // `feed.js#cleanupAndRetryFanoutTasks`). Without this guard the story
+      // retrier would mark every failed POST task as "Missing required fields".
+      if (!data.storyId) continue;
       await doc.ref.update({
         status: 'pending',
         retries: (data.retries || 0) + 1,
@@ -834,7 +847,13 @@ exports.personalizeFeed = functions.https.onCall(async (data, context) => {
 
   const scored = merged.map(s => {
     const stats = s.stats || {};
-    const engagement = (stats.likes||0)*1.5 + (stats.comments||0)*2.5 + (stats.shares||0)*4 + (stats.views||0)*0.2;
+    // Read the fields `aggregateStoryStats` actually writes. The previous
+    // per-reaction `likes`/`shares` stat reads are never populated (reactions
+    // are stored as the per-emoji `stats.reactions` map), so those terms were a
+    // constant 0 and story ranking ignored reactions and shares entirely (N442).
+    const reactions = Object.values(stats.reactions || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    const engagement = reactions * 2.5 + (stats.comments || 0) * 2.5
+      + (stats.replies || 0) * 2 + (stats.shares || 0) * 4 + (stats.views || 0) * 0.2;
     const ageHours = (now - (s.createdAt?.toDate() || now)) / 3600000;
     const decay = Math.exp(-ageHours / 12);
     const randomFactor = 0.95 + Math.random() * 0.1;

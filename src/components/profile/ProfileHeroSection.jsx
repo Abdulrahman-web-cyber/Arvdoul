@@ -19,7 +19,7 @@ import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Sha
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickHandle, deriveHandle } from '../../services/profileReadModel.js';
+import { pickHandle, deriveHandle, pickDisplayName, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
@@ -27,6 +27,7 @@ import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
+const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
 
 // Format joined date nicely. Returns null when the timestamp is absent or
 // unparseable so the caller renders nothing rather than a fabricated date.
@@ -294,12 +295,13 @@ export const ProfileHeroSection = memo(({
     setShowRoadmapModal(true);
   }, []);
 
-  const profileUid = profile?.id || profile?.uid || 'user';
+  const profileUid = profile?.id || profile?.uid || null;
 
   // The call route keys off a conversation id, not a user id: resolve (or
   // create) the direct conversation first so the signaling doc has the
   // `participants` array the rules require.
   const handleStartCall = useCallback(async () => {
+    if (!profileUid) return;
     try {
       const { getMessagingService } = await import('../../services/messagesService.js');
       const { conversation } = await getMessagingService().createConversation([profileUid]);
@@ -309,14 +311,23 @@ export const ProfileHeroSection = memo(({
     }
   }, [profileUid, navigate]);
 
-  const displayName = profile?.displayName || profile?.name || 'User';
-  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || 'user';
+  const displayName = pickDisplayName([profile?.displayName, profile?.name], { fallback: profileUid ? `user ${String(profileUid).slice(0, 6)}` : '—' });
+  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || null;
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
 
   // Status flags strictly derived from profile without fabricated defaults
   const isVerified = Boolean(profile?.isVerified === true);
   const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
+
+  // The creator pill label comes from the canonical identity badge: "Top
+  // Creator" is reserved for creators at/above LEVEL_GATES.verifiedPriority,
+  // everyone else is "Creator". The literal 'Top Creator' claimed the higher
+  // standing for any creator regardless of level.
+  const creatorBadgeLabel = useMemo(
+    () => getIdentityBadge(profile?.level, { isCreator })?.label || null,
+    [profile?.level, isCreator],
+  );
 
   const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
   // The verification gate threshold lives in the shared level config; the
@@ -338,9 +349,10 @@ export const ProfileHeroSection = memo(({
 
   // Royal status determination per shared level system
   const isRoyal = useMemo(() => {
-    if (profile?.isRoyal || profile?.royalFamily) return true;
-    if (profile?.activeTitle && ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(profile.activeTitle).toLowerCase())) return true;
-    if (Array.isArray(profile?.titles) && profile.titles.some(t => ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(t).toLowerCase()))) return true;
+    // The canonical flags and the active-title *object* the server writes
+    // (`activeTitle: { id, name, … }`) are resolved by the read model. A raw
+    // `activeTitle === 'duke'` string compare missed every granted title.
+    if (resolveRoyalFlag(profile)) return true;
     // Unknown dimensions stay null; `getRoyalEligibility` clamps internally and
     // fails closed, so an unmeasured profile is denied for the right reason
     // (no data) rather than because it was laundered into a measured 0.
@@ -364,17 +376,18 @@ export const ProfileHeroSection = memo(({
   const isOnline = Boolean(profile?.presence?.status === 'online' || profile?.isOnline === true);
 
   // Copy handle to clipboard
+  const handleLabel = username || displayName;
   const handleCopyHandle = useCallback(async (e) => {
     e?.stopPropagation?.();
     try {
-      await navigator.clipboard.writeText(`@${username}`);
+      await navigator.clipboard.writeText(`@${handleLabel}`);
       setCopiedHandle(true);
-      toast.success(`Copied @${username} to clipboard`);
+      toast.success(`Copied @${handleLabel} to clipboard`);
       setTimeout(() => setCopiedHandle(false), 2000);
     } catch {
-      toast.info(`@${username}`);
+      toast.info(`@${handleLabel}`);
     }
-  }, [username]);
+  }, [handleLabel]);
 
   // Real Bio, Tagline, Location, Website without placeholder stubs
   const bio = (typeof profile?.bio === 'string' && profile.bio.trim()) ? profile.bio.trim() : (typeof profile?.about === 'string' ? profile.about.trim() : '');
@@ -478,7 +491,7 @@ export const ProfileHeroSection = memo(({
               className="group/handle inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer"
               title="Click to copy handle"
             >
-              <span>@{username}</span>
+              <span>@{handleLabel}</span>
               {copiedHandle ? (
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
@@ -527,7 +540,7 @@ export const ProfileHeroSection = memo(({
                 </button>
               ) : null}
 
-              {isCreator && (
+              {isCreator && creatorBadgeLabel && (
                 <span className={cn(
                   "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
                   isDark
@@ -535,7 +548,7 @@ export const ProfileHeroSection = memo(({
                     : "bg-amber-50 text-amber-700 border-amber-200"
                 )}>
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <span>Top Creator</span>
+                  <span>{creatorBadgeLabel}</span>
                 </span>
               )}
 
@@ -809,13 +822,18 @@ export const ProfileHeroSection = memo(({
             </button>
           )}
 
-          {/* Primary Follow Button */}
+          {/* Primary Follow Button. In the owner's "view as public" preview no
+              handler is passed, so the control renders visibly disabled rather
+              than as a button that silently does nothing. */}
           <button
             type="button"
             onClick={onFollowToggle}
-            disabled={followLoading}
+            disabled={followLoading || !onFollowToggle}
+            aria-disabled={followLoading || !onFollowToggle}
+            title={!onFollowToggle ? 'Preview only — this is how your profile looks to others' : undefined}
             className={cn(
               "flex-1 min-w-[140px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer",
+              !onFollowToggle && "opacity-60 cursor-not-allowed",
               isFollowing || requestStatus === 'pending'
                 ? (isDark ? "bg-white/10 hover:bg-white/15 text-slate-200" : "bg-slate-200 hover:bg-slate-300 text-slate-800")
                 : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo hover:brightness-110 shadow-purple-600/30"
@@ -839,12 +857,18 @@ export const ProfileHeroSection = memo(({
             )}
           </button>
 
-          {/* Message Button */}
+          {/* Message Button. In the owner's visitor preview there is no handler
+              and no other party to message, so it renders disabled instead of
+              opening a conversation with yourself. */}
           <button
             type="button"
-            onClick={onOpenMessages ? onOpenMessages : () => navigate(`/messages/new?to=${profileUid}`)}
+            onClick={onOpenMessages}
+            disabled={!onOpenMessages}
+            aria-disabled={!onOpenMessages}
+            title={!onOpenMessages ? 'Preview only' : undefined}
             className={cn(
               "flex-1 min-w-[130px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 cursor-pointer",
+              !onOpenMessages && "opacity-60 cursor-not-allowed",
               capabilities && capabilities.canMessage === false
                 ? (isDark ? "bg-white/5 opacity-60 border-white/5 text-slate-400" : "bg-slate-100 opacity-60 border-slate-200 text-slate-500")
                 : isDark
@@ -856,51 +880,63 @@ export const ProfileHeroSection = memo(({
             <span>Message</span>
           </button>
 
-          {/* Audio Call Button - hidden unless the calls flag is on */}
+          {/* Audio Call Button - hidden unless the calls flag is on. Disabled in
+              the owner's visitor preview (no onOpenMessages) since there is no
+              other party to call. */}
           {callsEnabled && (
           <button
             type="button"
             onClick={handleStartCall}
+            disabled={!onOpenMessages}
+            aria-disabled={!onOpenMessages}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              !onOpenMessages && "opacity-60 cursor-not-allowed",
               isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}
-            title="Audio Call"
+            title={onOpenMessages ? 'Audio Call' : 'Preview only'}
             aria-label="Audio Call"
           >
             <Phone className="w-4 h-4" />
           </button>
           )}
 
-          {/* Gift / Tip Button */}
+          {/* Gift / Tip Button — no handler in the owner's visitor preview, so it
+              renders disabled rather than as a dead control. */}
           <button
             type="button"
             onClick={onOpenTipModal}
+            disabled={!onOpenTipModal}
+            aria-disabled={!onOpenTipModal}
+            title={onOpenTipModal ? 'Send Gift / Tip Coins' : 'Preview only'}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              !onOpenTipModal && "opacity-60 cursor-not-allowed",
               isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}
-            title="Send Gift / Tip Coins"
             aria-label="Send Gift"
           >
             <Gift className="w-4 h-4 text-purple-400" />
           </button>
 
-          {/* More Options Dropdown */}
+          {/* More Options Dropdown — no handler in the owner's visitor preview. */}
           <button
             type="button"
             onClick={onOpenOptions}
+            disabled={!onOpenOptions}
+            aria-disabled={!onOpenOptions}
+            title={onOpenOptions ? 'More Options' : 'Preview only'}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              !onOpenOptions && "opacity-60 cursor-not-allowed",
               isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}
-            title="More Options"
             aria-label="More Options"
           >
             <MoreHorizontal className="w-4 h-4" />

@@ -70,6 +70,11 @@ require('./auth.js');
 require('./pushQueue.js');
 // Server-authoritative profile view analytics (trackProfileView callable).
 merge(require('./analytics.js'));
+// Authoritative post engagement counters (shard reader + scheduled mirror).
+// The scheduled `aggregatePostCounters` writes the sharded like/comment/share/
+// save sums back onto `posts/{postId}.stats` so ranking/search read real values
+// instead of the never-written seeded zeros (N433).
+merge(require('./postCounters.js'));
 // PII boundary backfill: moves legacy contact/verification/Stripe fields off
 // the world-readable users/{uid} doc into users_private/{uid}.
 merge(require('./privacyMigration.js'));
@@ -84,10 +89,31 @@ merge(require('./communities.js'));
 // feedback). The rule only lets the organizer update the event document, so
 // these cross-user mutations must go through callables.
 merge(require('./events.js'));
+// Community `stats.eventCount` trigger (N434): the community document is
+// server-write-only, so the derived "Events" counter must be maintained here
+// (a client cannot write it). Counts published/open/live/ended events only.
+merge(require('./eventCounters.js'));
+// Community `stats.postCount`/`stats.activityScore` trigger (N451): the
+// community document is server-write-only, so the derived "Posts" counter must
+// be maintained here. A net-delta trigger on posts/{postId} counts a live
+// published community post (+1) and decrements on delete/unpublish (-1), plus a
+// reconciliation job for pre-trigger drift. Previously only the create callable
+// incremented the counters and nothing decremented them.
+merge(require('./communityPostCounters.js'));
 // Server-authoritative collaboration projects (team roles, content versions,
 // review/publish). Membership is privilege data; the client never writes the
 // project document or its team/content subcollections.
 merge(require('./collaboration.js'));
+// Scheduled-post publisher: the composer writes `status: 'scheduled'` with a
+// future `scheduledTime`; this scheduled job is the only writer that flips a
+// due post to `published` (otherwise a scheduled post never surfaces anywhere).
+merge(require('./scheduledPosts.js'));
+// Sharded-counter reader + mirror (N431). The scheduled job writes the summed
+// follower/following shards back onto `users/{uid}` so every reader that trusts
+// the raw field (search index, profile hydration, ranking) sees a real number.
+// `readUserCounter` is a plain helper required in-process by the fan-out
+// threshold decisions.
+merge(require('./userCounters.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -388,33 +414,59 @@ exports.cleanupSoftDeletedVideos = functions.pubsub.schedule('every 24 hours').o
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - VIDEO_CONFIG.CLEANUP.SOFT_DELETE_RETENTION_DAYS);
   const videosRef = db.collection('videos');
-  const snapshot = await videosRef
-    .where('isDeleted', '==', true)
-    .where('deletedAt', '<', cutoff)
-    .get();
-  const batch = db.batch();
-  snapshot.forEach((doc) => {
-    batch.delete(doc.ref);
-    const video = doc.data();
-    if (video.storagePath) {
-      const bucket = admin.storage().bucket();
-      const file = bucket.file(video.storagePath);
-      file.delete().catch(console.warn);
-    }
-  });
-  await batch.commit();
+  const bucket = admin.storage().bucket();
+  // Page with a bounded batch: the old version did one unbounded `.get()` and a
+  // single batch delete, which throws (>500 ops) once more than 500 videos have
+  // aged past retention — the cleanup silently failed and the backlog grew.
+  let deleted = 0;
+  for (;;) {
+    const snapshot = await videosRef
+      .where('isDeleted', '==', true)
+      .where('deletedAt', '<', cutoff)
+      .limit(400)
+      .get();
+    if (snapshot.empty) break;
+    const batch = db.batch();
+    snapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+      const video = doc.data();
+      if (video.storagePath) {
+        bucket.file(video.storagePath).delete().catch(() => {});
+      }
+    });
+    await batch.commit();
+    deleted += snapshot.size;
+    if (snapshot.size < 400) break;
+  }
+  if (deleted) console.log(`Cleaned up ${deleted} soft-deleted videos.`);
   return null;
 });
 
 // Cleanup rate limit documents (daily)
+//
+// The flat `rate_limits` collection accumulates one parent doc per
+// (user × action) from the shared sharded limiter (`rateLimit.js`, which stamps
+// `expireAt`) and one doc per window from `messagesService._recordRateLimit`
+// (which stamps `expiresAt`). The old query filtered on `expiresAt` ONLY, so it
+// never matched the shared limiter's docs — the collection grew unbounded. It
+// was also an unbounded `.get()` with a single >500-op batch. Query both field
+// names (single-field indexes are automatic) and page with a bounded batch.
 exports.cleanupRateLimits = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
   const now = admin.firestore.Timestamp.now();
   const rateLimitsRef = db.collection('rate_limits');
-  const expired = await rateLimitsRef.where('expiresAt', '<', now).get();
-  const batch = db.batch();
-  expired.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
-  console.log(`Cleaned up ${expired.size} expired rate limit documents.`);
+  let deleted = 0;
+  for (const field of ['expireAt', 'expiresAt']) {
+    for (;;) {
+      const expired = await rateLimitsRef.where(field, '<', now).limit(400).get();
+      if (expired.empty) break;
+      const batch = db.batch();
+      expired.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += expired.size;
+      if (expired.size < 400) break;
+    }
+  }
+  console.log(`Cleaned up ${deleted} expired rate limit documents.`);
   return null;
 });
 

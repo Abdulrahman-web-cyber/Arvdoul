@@ -11,8 +11,6 @@ import GIFPicker from '../Shared/GIFPicker';
 const MessageInput = React.memo(({
   onSendMessage,
   onSendMedia,
-  onStartRecording,
-  onStopRecording,
   onTyping,
   theme,
   disabled = false,
@@ -113,7 +111,6 @@ const MessageInput = React.memo(({
         recordingTimerRef.current = setInterval(() => {
           setRecordingDuration((prev) => prev + 1);
         }, 1000);
-        onStartRecording?.();
       };
 
       mediaRecorder.onstop = () => {
@@ -140,7 +137,6 @@ const MessageInput = React.memo(({
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-      onStopRecording?.();
     }
   };
 
@@ -271,7 +267,7 @@ const MessageInput = React.memo(({
           placeholder={placeholder}
           disabled={disabled || isRecording}
           className={cn(
-            'flex-1 px-4 py-2 rounded-full resize-none focus:outline-none focus:ring-2 focus:ring-purple-500',
+            'flex-1 px-4 py-2 rounded-full resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple',
             'text-sm placeholder-gray-500 max-h-[120px]',
             theme === 'dark'
               ? 'bg-gray-800 text-white border border-gray-700'

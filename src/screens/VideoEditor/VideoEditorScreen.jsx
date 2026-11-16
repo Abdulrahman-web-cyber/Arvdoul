@@ -655,7 +655,10 @@ export default function VideoEditorScreen() {
       name: projectName,
       resolution: selectedResolution,
       tracks,
-      updatedAtText: 'Just now',
+      // Real save time; the header derives the relative label. A stored
+      // display string ("Just now") went stale on reload and claimed a
+      // project saved days ago was just saved.
+      updatedAt: new Date().toISOString(),
     };
     setSavedProjects((prev) => {
       const next = [snapshot, ...prev].slice(0, 10);
@@ -733,6 +736,7 @@ export default function VideoEditorScreen() {
             onSelectClip={handleSelectClip}
             onUpdateClip={handleUpdateClip}
             aspectRatio={selectedResolution?.aspect || '16:9'}
+            resolutionLabel={selectedResolution?.label || null}
             filterId={filterId}
             adjustments={adjustments}
             activeEffect={activeEffect}

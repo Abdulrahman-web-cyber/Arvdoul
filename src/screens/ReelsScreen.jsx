@@ -193,18 +193,28 @@ const formatDuration = (seconds) => {
   }, [currentReelIndex, reels.length, hasMore, loadMoreReels]);
 
   // Resolve the follow state for the loaded creators (never a local-only fake).
+  // Uses the canonical batched edge read (`getFollowStates` → `getEdgeSet`) so
+  // it never scans the viewer's whole follow graph.
   useEffect(() => {
     if (!user?.uid || reels.length === 0) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await getUserService().getFollowing(user.uid, { limit: 200 });
+        const creatorIds = [...new Set(reels.map((r) => r.creator?.id).filter(Boolean))];
+        if (creatorIds.length === 0) return;
+        const states = await getUserService().getFollowStates(user.uid, creatorIds);
         if (cancelled) return;
-        const followingIds = new Set((res.following || res.friends || []).map((f) => f.uid || f.id));
-        setReels((prev) => prev.map((r) => ({
-          ...r,
-          creator: { ...r.creator, isFollowing: followingIds.has(r.creator.id) },
-        })));
+        setReels((prev) => prev.map((r) => {
+          const state = states.get(r.creator?.id);
+          return {
+            ...r,
+            creator: {
+              ...r.creator,
+              isFollowing: Boolean(state?.isFollowing),
+              requestStatus: state?.requestStatus ?? null,
+            },
+          };
+        }));
       } catch (err) {
         console.warn('Could not resolve follow state:', err);
       }
@@ -301,17 +311,33 @@ const formatDuration = (seconds) => {
     }
     if (!creator?.id || creator.id === user.uid) return;
     const wasFollowing = creator.isFollowing;
-    setReels((prev) => prev.map((r) => (
-      r.creator.id === creator.id ? { ...r, creator: { ...r.creator, isFollowing: !wasFollowing } } : r
+    const wasRequested = creator.requestStatus === 'pending';
+    const applyCreator = (isFollowing, requestStatus = null) => setReels((prev) => prev.map((r) => (
+      r.creator.id === creator.id
+        ? { ...r, creator: { ...r.creator, isFollowing, requestStatus } }
+        : r
     )));
+    // Optimistic: a private target becomes a pending request, not a follow.
+    applyCreator(!wasFollowing && !wasRequested, null);
     try {
-      if (wasFollowing) await getUserService().unfollowUser(user.uid, creator.id);
-      else await getUserService().followUser(user.uid, creator.id);
-      toast.success(wasFollowing ? `Unfollowed @${creator.username}` : `Following @${creator.username} 🎉`);
+      if (wasFollowing || wasRequested) {
+        if (wasRequested) await getUserService().cancelFollowRequest(user.uid, creator.id);
+        else await getUserService().unfollowUser(user.uid, creator.id);
+        applyCreator(false, null);
+        toast.success(wasRequested ? 'Request withdrawn' : `Unfollowed @${creator.username}`);
+      } else {
+        const res = await getUserService().followUser(user.uid, creator.id);
+        // A private account yields `{requested:true}` and creates no edge.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          applyCreator(false, 'pending');
+          toast.success('Follow request sent');
+        } else {
+          applyCreator(true, null);
+          toast.success(`Following @${creator.username} 🎉`);
+        }
+      }
     } catch (err) {
-      setReels((prev) => prev.map((r) => (
-        r.creator.id === creator.id ? { ...r, creator: { ...r.creator, isFollowing: wasFollowing } } : r
-      )));
+      applyCreator(wasFollowing, wasRequested ? 'pending' : null);
       toast.error(err?.message || 'Could not update follow');
     }
   };
@@ -660,14 +686,16 @@ const formatDuration = (seconds) => {
           >
             <img
               src={currentReel.creator.avatar}
-              alt={currentReel.creator.name || 'Creator'}
+              alt={currentReel.creator.name || ''}
               className="w-full h-full rounded-full object-cover border-2 border-black"
             />
           </div>
           {currentReel.creator.id && currentReel.creator.id !== user?.uid && (
             <button
               onClick={() => handleFollow(currentReel.creator)}
-              aria-label={currentReel.creator.isFollowing ? 'Unfollow creator' : 'Follow creator'}
+              aria-label={currentReel.creator.isFollowing
+                ? 'Unfollow creator'
+                : (currentReel.creator.requestStatus === 'pending' ? 'Cancel follow request' : 'Follow creator')}
               className={cn(
                 "absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full text-white text-xs font-black flex items-center justify-center shadow-md border border-black transition-transform active:scale-90",
                 currentReel.creator.isFollowing
@@ -675,7 +703,7 @@ const formatDuration = (seconds) => {
                   : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue"
               )}
             >
-              {currentReel.creator.isFollowing ? '✓' : '+'}
+              {currentReel.creator.isFollowing ? '✓' : (currentReel.creator.requestStatus === 'pending' ? '…' : '+')}
             </button>
           )}
         </div>
@@ -771,7 +799,7 @@ const formatDuration = (seconds) => {
               />
               <div>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold font-display">{currentReel.creator.name || 'Creator'}</span>
+                  <span className="text-xs font-bold font-display">{currentReel.creator.name || (currentReel.creator.id ? `user ${String(currentReel.creator.id).slice(0, 6)}` : '')}</span>
                   {currentReel.creator.verified && <CheckCircle2 className="w-3.5 h-3.5 text-arvdoul-blue fill-arvdoul-blue/20" />}
                 </div>
                 {currentReel.creator.username && (
@@ -790,7 +818,9 @@ const formatDuration = (seconds) => {
                     : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md"
                 )}
               >
-                {currentReel.creator.isFollowing ? 'Following' : 'Follow'}
+                {currentReel.creator.isFollowing
+                  ? 'Following'
+                  : (currentReel.creator.requestStatus === 'pending' ? 'Requested' : 'Follow')}
               </button>
             )}
           </div>

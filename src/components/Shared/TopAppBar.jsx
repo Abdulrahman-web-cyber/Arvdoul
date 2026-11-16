@@ -12,10 +12,10 @@ import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
-import { pickHandle, deriveHandle, pickDisplayName } from "../../services/profileReadModel.js";
+import { pickHandle, deriveHandle, resolveActorName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
-import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -43,7 +43,7 @@ const TOKENS = {
     iconActive: "#FFFFFF",
     iconBg: "rgba(255,255,255,0.08)",
     iconBorder: "rgba(255,255,255,0.12)",
-    iconRing: "rgba(139,30,243,0.5)",
+    iconRing: brandRgba(0.5),
   },
   light: {
     bg: "#F6F8FC",
@@ -61,7 +61,7 @@ const TOKENS = {
     iconActive: tokens.color.brand.indigo,
     iconBg: "rgba(255,255,255,0.6)",
     iconBorder: "rgba(0,0,0,0.08)",
-    iconRing: "rgba(139,30,243,0.3)",
+    iconRing: brandRgba(0.3),
   },
 };
 
@@ -178,9 +178,7 @@ const CircularButton = memo(
         )}
         style={{
           background: active
-            ? isDark
-              ? "rgba(139,30,243,0.25)"
-              : "rgba(139,30,243,0.15)"
+            ? brandRgba(isDark ? 0.25 : 0.15)
             : tokens.iconBg,
           border: `1px solid ${active ? tokens.iconRing : tokens.iconBorder}`,
           boxShadow: isDark
@@ -335,9 +333,9 @@ export const TopAppBar = ({
   const cleanUsername = pickHandle([rawUsername])
     || deriveHandle(effectiveUser?.displayName)
     || null;
-  const userDisplayName = pickDisplayName(
+  const userDisplayName = resolveActorName(
     [effectiveUser?.displayName, effectiveUser?.name],
-    { fallback: 'Member' }
+    effectiveUser?.uid
   );
   const userAvatarUrl = getSafeAvatarUrl(effectiveUser?.photoURL, userDisplayName, effectiveUser?.uid || '');
 
@@ -349,8 +347,7 @@ export const TopAppBar = ({
     if (path.startsWith("/search")) return "search";
     if (
       path.startsWith("/create-post") ||
-      path.startsWith("/create-story") ||
-      path.startsWith("/image-editor")
+      path.startsWith("/create-story")
     )
       return "composer";
     if (path === "/profile" || path === "/profile/me")
@@ -401,7 +398,6 @@ export const TopAppBar = ({
     if (path.startsWith("/creator/onboarding") || path.startsWith("/creator-onboarding")) return "Creator Accreditation";
     if (path.startsWith("/create-post")) return "Create Post";
     if (path.startsWith("/create-story")) return "Create Story";
-    if (path.startsWith("/image-editor") || path.startsWith("/image-studio")) return "Image Studio";
     if (path.startsWith("/video-editor")) return "Video Studio";
     if (path.startsWith("/audio-editor")) return "Audio Studio";
     if (path.startsWith("/thumbnail-designer")) return "Thumbnail Designer";

@@ -409,7 +409,7 @@ const NewConversationScreen = () => {
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="Group name (optional)"
               className={cn(
-                'flex-1 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500',
+                'flex-1 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple',
                 theme === 'dark'
                   ? 'bg-gray-800 text-white border border-gray-700'
                   : 'bg-gray-100 text-gray-900 border border-gray-200'
@@ -435,7 +435,7 @@ const NewConversationScreen = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search users..."
             className={cn(
-              'w-full pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500',
+              'w-full pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-arvdoul-purple',
               theme === 'dark'
                 ? 'bg-gray-800 text-white border border-gray-700'
                 : 'bg-gray-100 text-gray-900 border border-gray-200'

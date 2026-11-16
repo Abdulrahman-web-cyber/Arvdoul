@@ -245,7 +245,7 @@ export default function SpacesScreen() {
 
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 to-red-500 text-white font-bold text-sm shadow-xl shadow-purple-500/25 hover:scale-105 transition-all"
+          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-arvdoul-gradient text-white font-bold text-sm shadow-xl shadow-purple-500/25 hover:scale-105 transition-all"
         >
           <Plus className="w-4 h-4" /> Start a Live Space
         </button>
@@ -569,7 +569,7 @@ export default function SpacesScreen() {
                     placeholder="e.g. Late Night Coding & Chill Beats 🎧"
                     value={newSpaceTitle}
                     onChange={(e) => setNewSpaceTitle(e.target.value)}
-                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-arvdoul-purple outline-none ${
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300'
                     }`}
                   />
@@ -603,7 +603,7 @@ export default function SpacesScreen() {
 
                 <button
                   type="submit"
-                  className="w-full py-4 rounded-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-red-500 text-white shadow-xl shadow-purple-500/25 hover:opacity-95"
+                  className="w-full py-4 rounded-2xl font-bold bg-arvdoul-gradient text-white shadow-xl shadow-purple-500/25 hover:opacity-95"
                 >
                   🚀 Go Live with Voice Space
                 </button>

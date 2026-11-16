@@ -3,6 +3,7 @@
 // Per Constitution v5.0 - Grid of collaboration projects
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { brandCanvasBackground } from '../../design-system/tokens.js';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '@context/ThemeContext';
@@ -98,9 +99,7 @@ export default function ProjectDashboardScreen() {
   }, [projects, searchQuery, statusFilter]);
 
   const backgroundStyle = useMemo(() => ({
-    background: isDark
-      ? 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.1) 0%, transparent 50%), #03071B'
-      : 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.05) 0%, transparent 50%), #F6F8FC',
+    background: brandCanvasBackground(isDark),
   }), [isDark]);
 
   return (

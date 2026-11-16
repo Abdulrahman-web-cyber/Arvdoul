@@ -19,8 +19,88 @@
 const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 const { coinsToUsd } = require('./levelConfig.cjs');
+const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 
 const db = admin.firestore();
+
+// Payout methods the platform can actually settle on. A Stripe Connect payout
+// targets the creator's own connected account; there is no PayPal payout
+// integration. Accepting a `paypal` request and then calling
+// `stripe.payouts.create` without a connected account would send the creator's
+// money from the PLATFORM account to an account that is not theirs.
+const STRIPE_PAYOUT_METHODS = new Set(['stripe', 'stripe_connected', 'stripe_express']);
+
+/**
+ * Resolve a payout provider for a withdrawal, or explain why it cannot settle.
+ *
+ * The connected Stripe account is resolved server-side from `payout_settings`,
+ * NEVER from the client-supplied `paymentDetails` (a client could otherwise
+ * name any account, or a bogus `stripeAccount: 'connected'` string).
+ *
+ * @returns {Promise<{ok: true, accountId: string} | {ok: false, terminal: boolean, reason: string}>}
+ */
+async function resolvePayoutProvider(withdrawalData) {
+  const method = withdrawalData.paymentMethod;
+  if (method === 'paypal') {
+    return {
+      ok: false,
+      terminal: true,
+      reason: 'PayPal payouts are not supported. Connect a Stripe payout account to withdraw.',
+    };
+  }
+  if (!STRIPE_PAYOUT_METHODS.has(method)) {
+    return {
+      ok: false,
+      terminal: true,
+      reason: `Unsupported payout method: ${method || 'none'}.`,
+    };
+  }
+  const snap = await db.collection('payout_settings').doc(withdrawalData.userId).get();
+  const settings = snap.exists ? snap.data() : null;
+  if (!settings || !settings.stripeAccountId || settings.status !== 'ready') {
+    return {
+      ok: false,
+      terminal: false,
+      reason: 'No verified Stripe payout account. Complete payout onboarding before withdrawing.',
+    };
+  }
+  return { ok: true, accountId: settings.stripeAccountId };
+}
+
+/**
+ * Reject a withdrawal and release the creator's locked coins in one
+ * transaction. Idempotent: a request already in a terminal state is left
+ * alone, so a retried approval/rejection cannot double-release.
+ */
+async function rejectAndRelease(withdrawalId, withdrawalData, failureReason) {
+  const withdrawalRef = db.collection('withdrawal_requests').doc(withdrawalId);
+  await db.runTransaction(async (t) => {
+    // Firestore transactions require every read BEFORE the first write. The
+    // previous order updated `lockedCoins` and then ran `t.get(query)`, which
+    // throws ("transactions require all reads before all writes"), so rejecting
+    // a withdrawal failed and the creator's locked coins stayed stranded.
+    const freshSnap = await t.get(withdrawalRef);
+    if (!freshSnap.exists) return;
+    const status = freshSnap.data().status;
+    if (status !== 'pending' && status !== 'pending_review') return;
+    const lockSnapshot = await t.get(
+      db.collection('coin_transactions')
+        .where('metadata.withdrawalId', '==', withdrawalId)
+        .where('type', '==', 'withdrawal_lock')
+    );
+    writeCoinBalance(t, withdrawalData.userId, { lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) });
+    lockSnapshot.forEach((doc) => t.update(doc.ref, {
+      status: 'cancelled',
+      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    }));
+    t.update(withdrawalRef, {
+      status: 'rejected',
+      ...(failureReason ? { failureReason } : {}),
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  return { status: 'rejected', amount: withdrawalData.amount };
+}
 
 /**
  * Approve or reject a pending withdrawal request.
@@ -72,6 +152,25 @@ async function settleWithdrawal(deps, withdrawalId, action) {
       throw new functions.https.HttpsError('failed-precondition', 'Payments are not configured yet.');
     }
 
+    // Resolve the payout provider BEFORE locking, so a request that can never
+    // be paid (PayPal, or a Stripe method with no connected account) fails
+    // without leaving the withdrawal stuck in `processing`. A terminal reason
+    // (no supported provider) rejects and RELEASES the creator's locked coins;
+    // a non-terminal reason (onboarding incomplete) returns the request to
+    // `pending` so it can settle once onboarding finishes.
+    const provider = await resolvePayoutProvider(withdrawalData);
+    if (!provider.ok) {
+      if (provider.terminal) {
+        await rejectAndRelease(withdrawalId, withdrawalData, provider.reason);
+        throw new functions.https.HttpsError('failed-precondition', provider.reason);
+      }
+      await withdrawalRef.update({
+        status: 'pending',
+        processingError: provider.reason,
+      });
+      throw new functions.https.HttpsError('failed-precondition', provider.reason);
+    }
+
     const serverId = `worker-${Math.random().toString(36).substring(7)}`;
     const lockExpiresAt = Date.now() + 5 * 60 * 1000;
     const lockObtained = await runTransaction(async (t) => {
@@ -101,19 +200,18 @@ async function settleWithdrawal(deps, withdrawalId, action) {
     // A failed settlement must also RELEASE the hold: `lockedCoins` is what
     // makes the coins unavailable in the wallet, so leaving it set would strand
     // the creator's balance forever on a withdrawal that never pays out.
-    const userRef = db.collection('users').doc(withdrawalData.userId);
     const preflight = await runTransaction(async (t) => {
       const freshSnap = await t.get(withdrawalRef);
       if (freshSnap.data().status !== 'processing' || freshSnap.data().lockOwner !== serverId) {
         throw new Error('Invalid lock state.');
       }
-      const userSnap = await t.get(userRef);
-      const balance = userSnap.exists ? (userSnap.data().coins || 0) : 0;
-      const locked = userSnap.exists ? (userSnap.data().lockedCoins || 0) : 0;
+      const bal = await readCoinBalance(t, withdrawalData.userId, { fallbackToPublic: true });
+      const balance = bal.coins;
+      const locked = bal.lockedCoins;
       if (locked < withdrawalData.amount || balance < withdrawalData.amount) {
         const releaseAmount = Math.min(withdrawalData.amount, locked);
         if (releaseAmount > 0) {
-          t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount) });
+          writeCoinBalance(t, withdrawalData.userId, { lockedCoins: admin.firestore.FieldValue.increment(-releaseAmount) });
         }
         t.update(withdrawalRef, {
           status: 'failed',
@@ -140,7 +238,7 @@ async function settleWithdrawal(deps, withdrawalId, action) {
     try {
       payout = await stripe.payouts.create(
         { amount: stripeAmount, currency: 'usd', method: 'standard' },
-        { idempotencyKey: stripeIdempotencyKey, stripeAccount: withdrawalData.paymentDetails?.stripeAccountId }
+        { idempotencyKey: stripeIdempotencyKey, stripeAccount: provider.accountId }
       );
     } catch (stripeError) {
       await withdrawalRef.update({
@@ -158,16 +256,16 @@ async function settleWithdrawal(deps, withdrawalId, action) {
         throw new Error('Invalid lock state.');
       }
 
-      const userSnap2 = await t.get(userRef);
-      const currentBalance = userSnap2.data().coins || 0;
-      const currentLocked = userSnap2.data().lockedCoins || 0;
+      const finalBal = await readCoinBalance(t, withdrawalData.userId, { fallbackToPublic: true });
+      const currentBalance = finalBal.coins;
+      const currentLocked = finalBal.lockedCoins;
 
       if (currentLocked < withdrawalData.amount || currentBalance < withdrawalData.amount) {
         t.update(withdrawalRef, { status: 'failed', failureReason: 'Insufficient balance at finalization.' });
         throw new Error('Insufficient balance.');
       }
 
-      t.update(userRef, {
+      writeCoinBalance(t, withdrawalData.userId, {
         coins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
         lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
         lastWithdrawalCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -211,30 +309,7 @@ async function settleWithdrawal(deps, withdrawalId, action) {
   }
 
   // action === 'reject'
-  const userRef = db.collection('users').doc(withdrawalData.userId);
-  await runTransaction(async (t) => {
-    // Firestore transactions require every read BEFORE the first write. The
-    // previous order updated `lockedCoins` and then ran `t.get(query)`, which
-    // throws ("transactions require all reads before all writes"), so rejecting
-    // a withdrawal failed and the creator's locked coins stayed stranded.
-    const freshSnap = await t.get(withdrawalRef);
-    if (freshSnap.data().status !== 'pending' && freshSnap.data().status !== 'pending_review') {
-      throw new Error('Invalid status for rejection.');
-    }
-    const lockSnapshot = await t.get(
-      db.collection('coin_transactions')
-        .where('metadata.withdrawalId', '==', withdrawalId)
-        .where('type', '==', 'withdrawal_lock')
-    );
-    t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) });
-    lockSnapshot.forEach((doc) => t.update(doc.ref, {
-      status: 'cancelled',
-      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-    }));
-    t.update(withdrawalRef, { status: 'rejected', processedAt: admin.firestore.FieldValue.serverTimestamp() });
-  });
-
-  return { status: 'rejected', amount: withdrawalData.amount };
+  return rejectAndRelease(withdrawalId, withdrawalData);
 }
 
-module.exports = { settleWithdrawal };
+module.exports = { settleWithdrawal, STRIPE_PAYOUT_METHODS };

@@ -25,6 +25,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
 const Timestamp = admin.firestore.Timestamp;
 
 const storage = new Storage();
@@ -105,15 +106,16 @@ async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = 
     if (!fromDoc.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
     if (!toDoc.exists) throw new functions.https.HttpsError('not-found', 'Recipient not found.');
 
-    const fromBalance = fromDoc.data().coins || 0;
-    if (fromBalance < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins.');
+    // Balances live on users_private/{uid} (N324), never the world-readable doc.
+    const fromBal = await readCoinBalance(t, fromUid, { fallbackToPublic: true });
+    if (fromBal.coins < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins.');
 
-    const newFromBalance = fromBalance - amount;
-    const toBalance = toDoc.data().coins || 0;
-    const newToBalance = toBalance + amount;
+    const toBal = await readCoinBalance(t, toUid, { fallbackToPublic: true });
+    const newFromBalance = fromBal.coins - amount;
+    const newToBalance = toBal.coins + amount;
 
-    t.update(fromRef, { coins: newFromBalance, updatedAt: FieldValue.serverTimestamp() });
-    t.update(toRef, { coins: newToBalance, updatedAt: FieldValue.serverTimestamp() });
+    writeCoinBalance(t, fromUid, { coins: newFromBalance, updatedAt: FieldValue.serverTimestamp() });
+    writeCoinBalance(t, toUid, { coins: newToBalance, updatedAt: FieldValue.serverTimestamp() });
 
     const txId = idempotencyKey;
     const debitRef = db.collection('coin_transactions').doc(`${txId}_debit`);
@@ -191,7 +193,7 @@ exports.createMuxUpload = onCall({
       muxPlaybackId: null,
       stats: {
         views: 0, likes: 0, comments: 0, shares: 0, saves: 0,
-        avgWatchTime: 0, totalWatchTime: 0, viewerCount: 0,
+        totalWatchTime: 0, viewerCount: 0,
       },
       type: isReel ? 'reel' : 'video',
       music: null,
@@ -460,6 +462,54 @@ exports.shareVideo = onCall(async (data, context) => {
 });
 
 // ======================================================================
+//  5b. toggleVideoSave (authoritative saves counter)
+// ======================================================================
+// `videos/{id}.stats.saves` is seeded `0` at create and was never written: the
+// viewer's save state lives in `users/{uid}/saved_videos/{videoId}`, and the
+// video document update rule excludes `stats`, so no client could maintain the
+// aggregate. The video card and the reels screen render `stats.saves` as a real
+// count, so it was a permanent fabricated `0` (N436). The count is derived from
+// the `saved_videos` collection (a save exists iff the per-user doc exists), and
+// this callable is the only writer of the toggle — `stats` stays server-owned.
+exports.toggleVideoSave = onCall(async (data, context) => {
+  const uid = validateAuth(context);
+  const { videoId, save } = data;
+  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
+
+  await checkRateLimit(uid, 'toggleVideoSave', 30, 60000);
+
+  try {
+    const videoRef = db.collection('videos').doc(videoId);
+    const savedRef = videoRef.collection('saved_by').doc(uid);
+
+    const result = await db.runTransaction(async (t) => {
+      const videoDoc = await t.get(videoRef);
+      if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+      const savedDoc = await t.get(savedRef);
+      const currentlySaved = savedDoc.exists;
+      const shouldSave = typeof save === 'boolean' ? save : !currentlySaved;
+
+      if (shouldSave === currentlySaved) {
+        return { saved: currentlySaved, action: 'noop' };
+      }
+      if (shouldSave) {
+        t.set(savedRef, { userId: uid, createdAt: FieldValue.serverTimestamp() });
+        t.update(videoRef, { 'stats.saves': FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        return { saved: true, action: 'saved' };
+      }
+      t.delete(savedRef);
+      t.update(videoRef, { 'stats.saves': FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
+      return { saved: false, action: 'unsaved' };
+    });
+
+    return { success: true, ...result };
+  } catch (error) {
+    logger.error('toggleVideoSave', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ======================================================================
 //  6. recordVideoView (deduplicated)
 // ======================================================================
 exports.recordVideoView = onCall(async (data, context) => {
@@ -525,29 +575,40 @@ exports.payPerView = onCall(async (data, context) => {
     const videoRef = db.collection('videos').doc(videoId);
     const purchaseRef = db.collection('video_purchases').doc(`${uid}_${videoId}`);
 
-    return await db.runTransaction(async (t) => {
-      const videoDoc = await t.get(videoRef);
-      if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-      const video = videoDoc.data();
-      const price = video.monetization?.price || 0;
-      const ownerId = video.userId;
-      if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot purchase your own video');
+    const videoDoc = await videoRef.get();
+    if (!videoDoc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+    const video = videoDoc.data();
+    const price = video.monetization?.price || 0;
+    const ownerId = video.userId;
+    if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot purchase your own video');
 
-      const purchaseSnap = await t.get(purchaseRef);
-      if (purchaseSnap.exists) throw new functions.https.HttpsError('already-exists', 'You already have access.');
+    const existing = await purchaseRef.get();
+    if (existing.exists) throw new functions.https.HttpsError('already-exists', 'You already have access.');
 
-      if (price <= 0) {
+    if (price <= 0) {
+      // Claim the free entitlement in a small transaction so a concurrent
+      // duplicate cannot write two purchase rows.
+      await db.runTransaction(async (t) => {
+        const snap = await t.get(purchaseRef);
+        if (snap.exists) return;
         t.set(purchaseRef, { userId: uid, videoId, price: 0, grantedAt: FieldValue.serverTimestamp() });
-        return { success: true, free: true };
-      }
-
-      const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', { videoId, idempotencyKey: `ppv_${uid}_${videoId}` });
-      t.set(purchaseRef, { userId: uid, videoId, price, createdAt: FieldValue.serverTimestamp() });
-      await enqueuePush(ownerId, {
-        type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase',
       });
-      return { success: true, ...transferResult };
+      return { success: true, free: true };
+    }
+
+    // Move the coins FIRST, then record the entitlement. `transferCoinsInternal`
+    // opens its OWN transaction (Firestore forbids nesting one inside another)
+    // and is idempotent on `ppv_<uid>_<videoId>`, so a concurrent duplicate
+    // call debits at most once. The previous shape ran that transaction inside
+    // the caller's transaction — illegal, so the purchase threw every time —
+    // and awaited a push enqueue inside the callback, which would have fired
+    // once per SDK retry.
+    const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', { videoId, idempotencyKey: `ppv_${uid}_${videoId}` });
+    await purchaseRef.set({ userId: uid, videoId, price, createdAt: FieldValue.serverTimestamp() }, { merge: true });
+    await enqueuePush(ownerId, {
+      type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase',
     });
+    return { success: true, ...transferResult };
   } catch (error) {
     logger.error('payPerView', error);
     throw error;
@@ -559,7 +620,7 @@ exports.payPerView = onCall(async (data, context) => {
 // ======================================================================
 exports.sendTip = onCall(async (data, context) => {
   const uid = validateAuth(context);
-  const { videoId, amount, message } = data;
+  const { videoId, amount, message, idempotencyKey } = data;
   if (!videoId || !amount || amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'videoId and positive amount required');
 
   await checkRateLimit(uid, 'sendTip', 10, 60000);
@@ -572,7 +633,16 @@ exports.sendTip = onCall(async (data, context) => {
     const ownerId = video.userId;
     if (ownerId === uid) throw new functions.https.HttpsError('invalid-argument', 'Cannot tip yourself');
 
-    const transferResult = await transferCoinsInternal(uid, ownerId, amount, 'tip', { videoId, message: message || '', idempotencyKey: `tip_${uid}_${videoId}_${Date.now()}` });
+    // A tip is a per-intent action: the caller supplies a stable key so an SDK
+    // retry of the same intent debits once, while a genuinely new tip gets a new
+    // key. A `Date.now()` fallback would make the key change on every retry and
+    // double-charge; a fixed key would make a legitimate second tip a silent
+    // no-op. Require the client key and generate a random one only as a last
+    // resort for direct API callers.
+    const key = (typeof idempotencyKey === 'string' && idempotencyKey.length > 0)
+      ? idempotencyKey
+      : `tip_${uid}_${videoId}_${crypto.randomUUID()}`;
+    const transferResult = await transferCoinsInternal(uid, ownerId, amount, 'tip', { videoId, message: message || '', idempotencyKey: key });
     await db.collection('tips').add({ videoId, fromUserId: uid, toUserId: ownerId, amount, message: message || '', createdAt: FieldValue.serverTimestamp() });
     await enqueuePush(ownerId, {
       type: 'tip', senderId: uid, videoId, amount, title: 'You received a tip!',
@@ -638,7 +708,7 @@ async function createRemix(originalVideoId, userId, remixType, metadata) {
     muxPlaybackId: null,
     originalVideoId,
     remixType,
-    stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, avgWatchTime: 0, totalWatchTime: 0, viewerCount: 0 },
+    stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 },
     type: 'video',
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -683,7 +753,7 @@ exports.createLiveStream = onCall(async (data, context) => {
     await videoRef.set({
       userId: uid, title: title || 'Live Stream', description: '', tags: tags || [], visibility: visibility || 'public',
       status: 'live', type: 'live', muxAssetId: null, muxPlaybackId: liveStream.playback_ids[0].id, liveStreamId: liveStream.id,
-      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, avgWatchTime: 0, totalWatchTime: 0, viewerCount: 0 },
+      stats: { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, totalWatchTime: 0, viewerCount: 0 },
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), monetization: { type: 'none' }, isDeleted: false,
     });
     return { success: true, videoId: videoRef.id, streamKey: liveStream.stream_key, playbackId: liveStream.playback_ids[0].id, rtmpUrl: liveStream.rtmp_url || 'rtmps://rtmp-live.mux.com:443/app' };
@@ -1003,6 +1073,31 @@ exports.aggregateVideoLikes = pubsub.schedule('every 5 minutes').onRun(async () 
   }, 'aggregation_cursor_likes');
 });
 
+// Video comments live in the shared `comments` collection keyed by `postId`
+// (the client's `VideoComments` passes the video id as the target), so unlike
+// views/likes there is no per-video shard subcollection to sum. Before this
+// mirror `videos/{id}.stats.comments` was seeded `0` and never written — the
+// client's comment counter targeted `posts/{videoId}` (a document that does
+// not exist for a video), so the count was a fabricated `0` on the video card
+// and in `updateVideoRankingScores` (N435). A bounded `.count()` per video is
+// the authoritative read (no collection scan).
+exports.aggregateVideoComments = pubsub.schedule('every 5 minutes').onRun(async () => {
+  return processBatchWithCursor('videos', async (doc) => {
+    const agg = await db.collection('comments')
+      .where('postId', '==', doc.id)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    const totalComments = agg.data().count || 0;
+    const stored = doc.data().stats?.comments;
+    // Only write when it changed, so a quiet run costs one aggregate read and
+    // no write (the Algolia `onWrite` index does not churn).
+    if (stored !== totalComments) {
+      await doc.ref.update({ 'stats.comments': totalComments, updatedAt: FieldValue.serverTimestamp() });
+    }
+  }, 'aggregation_cursor_comments');
+});
+
 exports.updateVideoRankingScores = pubsub.schedule('every 15 minutes').onRun(async () => {
   return processBatchWithCursor('videos', async (doc) => {
     const data = doc.data();
@@ -1041,11 +1136,26 @@ exports.detectStuckVideos = pubsub.schedule('every 24 hours').onRun(async () => 
 
 exports.cleanupOldShareEvents = pubsub.schedule('every 24 hours').onRun(async () => {
   const cutoff = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-  const oldEvents = await db.collection('share_events').where('createdAt', '<=', cutoff).limit(500).get();
-  const batch = db.batch();
-  oldEvents.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
+  // Drain the whole 30-day backlog: re-query a bounded page until empty. A
+  // single `.limit(500)` read/day fell behind any day with >500 shares, so old
+  // events accumulated forever (the collection has no other reader).
+  let deleted = 0;
+  for (;;) {
+    const oldEvents = await db.collection('share_events').where('createdAt', '<=', cutoff).limit(400).get();
+    if (oldEvents.empty) break;
+    const batch = db.batch();
+    oldEvents.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    deleted += oldEvents.size;
+    if (oldEvents.size < 400) break;
+  }
+  if (deleted) logger.info('share_events cleanup', { deleted });
   return null;
-});// Roadmap: video CDN / adaptive bitrate. Replace direct Storage URLs with CDN
+});// Shared internals exposed for the emulator-backed money-path tests only. A
+// plain object export is ignored by `index.js#merge` (which deploys only
+// functions carrying `__trigger`/`__endpoint`), so nothing here ships.
+module.exports.__test__ = { transferCoinsInternal };
+
+// Roadmap: video CDN / adaptive bitrate. Replace direct Storage URLs with CDN
 // edge URLs (Cloudflare / Mux / AWS CloudFront) and generate HLS/DASH manifests
 // for adaptive bitrate. Tracked work, not shipped behavior.

@@ -13,6 +13,7 @@ const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
 const { checkIsAdmin, getUserEmail } = require('./auth');
 const { writeAudit } = require('./admin');
+const { writeNotification } = require('./notificationWriter');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -43,6 +44,38 @@ async function runTransactionWithRetry(updateFn, maxRetries = 5) {
       await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 200));
     }
   }
+}
+
+const NOTIFICATION_SHARDS = 10;
+
+// Decrement ONE unread notification from the sharded counter.
+//
+// The shards are a SUM (the client adds every `{uid}_shard_{n}.count`), so a
+// decrement must actually reduce that sum by one. The old code picked a RANDOM
+// shard and wrote `Math.max(0, current - 1)`: when the random shard was already
+// 0 the decrement was clamped to nothing, so every such decrement was lost and
+// the badge drifted upward (it over-counted unread notifications for the life
+// of the account). Pick a shard that actually holds a count instead, and
+// decrement the real total when they are all empty (a drift correction, never a
+// silent no-op).
+async function decrementUnreadShard(userId) {
+  await runTransactionWithRetry(async (t) => {
+    const refs = [];
+    for (let i = 0; i < NOTIFICATION_SHARDS; i++) {
+      refs.push(db.collection('notification_counters').doc(`${userId}_shard_${i}`));
+    }
+    const snaps = await t.getAll(...refs);
+    let total = 0;
+    let idx = -1;
+    snaps.forEach((s, i) => {
+      const c = s.exists ? (s.data().count || 0) : 0;
+      total += c;
+      if (idx === -1 && c > 0) idx = i;
+    });
+    if (total <= 0) return; // already zero — nothing to decrement
+    if (idx === -1) idx = 0;
+    t.set(refs[idx], { count: Math.max(0, (snaps[idx].data()?.count || 0) - 1) }, { merge: true });
+  });
 }
 
 // ----------------------------------------------------------------------
@@ -325,21 +358,59 @@ exports.retryAndRecoverPushTasks = functions.pubsub
 // ======================================================================
 // 4. sendNotification (Callable) – main entry point for client
 // ======================================================================
+// Client-issuable notification types. The server previously accepted ANY
+// `notificationData.type` from a signed-in caller, so a client could mint a
+// `security_alert` / `system_alert` / `payment_received` / `withdrawal_approved`
+// / `verification` / `level_up` / `coins_earned` notification — a trusted-
+// looking system or financial record the recipient cannot distinguish from a
+// real one. Those categories are server-only (written by the trusted function
+// that actually performs the action).
+//
+// A client may raise the social types below toward *other* users, and only the
+// self-only types (`welcome`, `system`) toward itself. Everything else is
+// refused, so a caller can neither fabricate a trusted system/financial notice
+// for someone else nor launder one into their own inbox.
+const CLIENT_SOCIAL_NOTIFICATION_TYPES = new Set([
+  'like',
+  'comment',
+  'reply',
+  'mention',
+  'follow',
+  'follow_request',
+  'follow_accepted',
+  'friend_request',
+  'friend_accepted',
+  'message',
+  'group_message',
+  'group_join_request',
+  'event_update',
+  'story_collaboration',
+]);
+const CLIENT_SELF_NOTIFICATION_TYPES = new Set(['welcome', 'system']);
+
 exports.sendNotification = functions.https.onCall(async (data, context) => {
   const senderId = context.auth.uid;
   const { notificationData, options } = data;
   const recipientId = notificationData.recipientId;
   if (!recipientId) throw new functions.https.HttpsError('invalid-argument', 'recipientId required');
 
-  // SPAM HARDENING: per-sender rate limit + no self-notifications + no
-  // notification spam to a recipient beyond a per-recipient daily cap.
+  const type = notificationData.type;
+  const isSelf = recipientId === senderId;
+  const allowed = isSelf
+    ? CLIENT_SELF_NOTIFICATION_TYPES.has(type)
+    : CLIENT_SOCIAL_NOTIFICATION_TYPES.has(type);
+  if (!allowed) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      `Notification type "${type || ''}" cannot be sent by a client`
+    );
+  }
+  if (notificationData.metadata && typeof notificationData.metadata !== 'object') {
+    throw new functions.https.HttpsError('invalid-argument', 'metadata must be an object');
+  }
+
+  // SPAM HARDENING: per-sender rate limit.
   await checkRateLimit(senderId, 'sendNotification', 30, 60000);
-  if (recipientId === senderId && notificationData.type !== 'system') {
-    throw new functions.https.HttpsError('failed-precondition', 'Cannot send self-notifications');
-  }
-  if (notificationData.type === 'welcome' && notificationData.priority !== 'high') {
-    throw new functions.https.HttpsError('invalid-argument', 'welcome notifications are server-issued only');
-  }
 
   // A block is a mutual denial: a user who blocked (or was blocked by) the
   // sender must not receive notifications from them. Without this, a blocked
@@ -393,7 +464,7 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   // fallback must be a real sentence, never the fabricated `"<name> like"` /
   // `"Someone like"` (the type word is not a verb).
   const senderSnap = await db.collection('users').doc(senderId).get();
-  const senderName = senderSnap.exists ? (senderSnap.data().displayName || senderSnap.id) : 'Someone';
+  const senderName = senderSnap.exists ? (senderSnap.data().displayName || senderSnap.id) : `user ${String(senderId).slice(0, 6)}`;
   const message = notificationData.message
     || (senderSnap.exists ? `${senderName} sent you a notification` : 'You have a new notification');
   const payload = {
@@ -417,31 +488,23 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   }
 
   // Store in‑app notification (only when the in-app channel is on)
-  const notificationId = uuidv4();
   if (inAppEnabled) {
-    const notificationDoc = {
-      id: notificationId,
+    // Canonical writer keeps the record and the unread shard in step.
+    const notificationId = await writeNotification(recipientId, {
       type: notificationData.type,
       title: notificationData.title,
       message,
-      read: false,
-      clicked: false,
       senderId,
       senderName,
       metadata: notificationData.metadata || {},
-      createdAt: FieldValue.serverTimestamp(),
-    };
-    await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set(notificationDoc);
+    });
 
-    // Increment unread counter (sharded)
-    const shardCount = 10;
-    const shardIndex = Math.floor(Math.random() * shardCount);
-    const counterRef = db.collection('notification_counters').doc(`${recipientId}_shard_${shardIndex}`);
-    await counterRef.set({ count: FieldValue.increment(1) }, { merge: true });
+    log('INFO', 'Notification created', { pushId, notificationId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
+    return { success: true, pushId, notificationId, pushEnabled, inAppEnabled };
   }
 
-  log('INFO', 'Notification created', { pushId, notificationId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
-  return { success: true, pushId, notificationId, pushEnabled, inAppEnabled };
+  log('INFO', 'Notification created', { pushId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
+  return { success: true, pushId, notificationId: null, pushEnabled, inAppEnabled };
 });
 
 // ======================================================================
@@ -455,15 +518,7 @@ exports.markNotificationRead = functions.https.onCall(async (data, context) => {
   if (!snap.exists) return { success: false };
   if (snap.data().read) return { success: true, alreadyRead: true };
   await notifRef.update({ read: true, readAt: FieldValue.serverTimestamp() });
-  // Decrement unread counter (sharded) with transaction to avoid negative
-  const shardCount = 10;
-  const shardIndex = Math.floor(Math.random() * shardCount);
-  const counterRef = db.collection('notification_counters').doc(`${userId}_shard_${shardIndex}`);
-  await runTransactionWithRetry(async (t) => {
-    const snap = await t.get(counterRef);
-    const current = snap.exists ? snap.data().count : 0;
-    t.set(counterRef, { count: Math.max(0, current - 1) }, { merge: true });
-  });
+  await decrementUnreadShard(userId);
   return { success: true };
 });
 
@@ -472,21 +527,40 @@ exports.markNotificationRead = functions.https.onCall(async (data, context) => {
 // ======================================================================
 exports.markAllNotificationsRead = functions.https.onCall(async (data, context) => {
   const userId = context.auth.uid;
-  const batch = db.batch();
   const notifsRef = db.collection('users').doc(userId).collection('notifications');
-  const q = notifsRef.where('read', '==', false).limit(500);
-  const snapshot = await q.get();
-  snapshot.forEach(doc => batch.update(doc.ref, { read: true, readAt: FieldValue.serverTimestamp() }));
-  await batch.commit();
-  // Reset all shard counters to 0
+
+  // Mark unread notifications in bounded batches until none remain. A single
+  // 500-doc batch that then zeroed every shard counter fabricated "0 unread":
+  // notifications beyond the first 500 stayed unread (the list still showed
+  // them) while the badge claimed the inbox was empty.
+  const PAGE = 500;
+  const MAX_BATCHES = 20;
+  let marked = 0;
+  for (let i = 0; i < MAX_BATCHES; i++) {
+    const snapshot = await notifsRef.where('read', '==', false).limit(PAGE).get();
+    if (snapshot.empty) break;
+    const batch = db.batch();
+    snapshot.forEach(doc => batch.update(doc.ref, { read: true, readAt: FieldValue.serverTimestamp() }));
+    await batch.commit();
+    marked += snapshot.size;
+    if (snapshot.size < PAGE) break;
+  }
+
+  // The shard counters are a sum, so write the REAL remaining unread total
+  // rather than an unconditional 0: only when every unread notification was
+  // marked is that total 0. A backlog larger than the batch ceiling is left
+  // honestly counted, never reported as empty.
+  const remainingSnap = await notifsRef.where('read', '==', false).count().get();
+  const remaining = remainingSnap.data().count;
+
   const shardCount = 10;
   const promises = [];
   for (let i = 0; i < shardCount; i++) {
     const counterRef = db.collection('notification_counters').doc(`${userId}_shard_${i}`);
-    promises.push(counterRef.set({ count: 0 }, { merge: true }));
+    promises.push(counterRef.set({ count: i === 0 ? remaining : 0 }, { merge: true }));
   }
   await Promise.all(promises);
-  return { success: true, markedCount: snapshot.size };
+  return { success: true, markedCount: marked, remaining };
 });
 
 // ======================================================================
@@ -501,14 +575,7 @@ exports.deleteNotification = functions.https.onCall(async (data, context) => {
   const wasUnread = !snap.data().read;
   await notifRef.delete();
   if (wasUnread) {
-    const shardCount = 10;
-    const shardIndex = Math.floor(Math.random() * shardCount);
-    const counterRef = db.collection('notification_counters').doc(`${userId}_shard_${shardIndex}`);
-    await runTransactionWithRetry(async (t) => {
-      const snap = await t.get(counterRef);
-      const current = snap.exists ? snap.data().count : 0;
-      t.set(counterRef, { count: Math.max(0, current - 1) }, { merge: true });
-    });
+    await decrementUnreadShard(userId);
   }
   return { success: true };
 });
@@ -625,15 +692,15 @@ exports.processBulkNotifications = functions.firestore
       const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
       if (prefs && prefs.inApp === false && prefs.push === false) continue;
       const notificationId = uuidv4();
-      await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set({
+      // Route through the canonical writer so the unread shard is bumped too;
+      // a direct `set()` here left every bulk notification counted as read
+      // (the Alerts badge never moved) even though `read: false`.
+      await writeNotification(recipientId, {
         id: notificationId,
         type: template.type || 'system',
         title: template.title || 'Announcement',
         message: template.message || '',
-        read: false,
-        clicked: false,
         metadata: template.metadata || {},
-        createdAt: FieldValue.serverTimestamp(),
       });
       delivered++;
     }
@@ -672,46 +739,59 @@ async function sendDigestEmail(to, subject, html) {
 exports.generateNotificationDigest = functions.pubsub
   .schedule('every 6 hours')
   .onRun(async () => {
-    const usersSnap = await db.collection('users').select().limit(1000).get(); // batch processing
-    for (const userDoc of usersSnap.docs) {
-      const userId = userDoc.id;
-      const prefsSnap = await db.collection('user_settings').doc(userId).get();
-      const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
-      // Opt-out, matching the client default (`digestEnabled: true`). Requiring
-      // an explicit `true` here meant the digest never ran: the Settings screen
-      // never writes the flag, so every user was silently skipped.
-      if (prefs?.digestEnabled === false) continue;
-      const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
-      const notifsRef = db.collection('users').doc(userId).collection('notifications');
-      const q = notifsRef.where('createdAt', '>=', Timestamp.fromDate(cutoff)).orderBy('createdAt', 'desc').limit(20);
-      const snap = await q.get();
-      if (snap.empty) continue;
-      const byType = {};
-      snap.forEach(doc => {
-        const type = doc.data().type;
-        byType[type] = (byType[type] || 0) + 1;
-      });
-      const digestMessage = Object.entries(byType).map(([t, c]) => `${c} ${t}s`).join(', ');
-      // In-app digest record (respects the in-app opt-out).
-      if (prefs.inApp !== false) {
-        const digestId = uuidv4();
-        await db.collection('users').doc(userId).collection('notifications').doc(digestId).set({
-          id: digestId,
-          type: 'digest',
-          title: 'Your digest',
-          message: `You have ${digestMessage}`,
-          read: false,
-          createdAt: FieldValue.serverTimestamp(),
+    // Walk EVERY user with a `__name__` cursor. The previous single
+    // `.limit(1000)` read only ever digested the first 1000 accounts, so every
+    // user beyond that never received a digest at all.
+    const PAGE = 500;
+    let cursor = null;
+    let processed = 0;
+    for (;;) {
+      let usersQuery = db.collection('users').select().orderBy('__name__').limit(PAGE);
+      if (cursor) usersQuery = usersQuery.startAfter(cursor);
+      const usersSnap = await usersQuery.get();
+      if (usersSnap.empty) break;
+      for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const prefsSnap = await db.collection('user_settings').doc(userId).get();
+        const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
+        // Opt-out, matching the client default (`digestEnabled: true`). Requiring
+        // an explicit `true` here meant the digest never ran: the Settings screen
+        // never writes the flag, so every user was silently skipped.
+        if (prefs?.digestEnabled === false) continue;
+        const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+        const notifsRef = db.collection('users').doc(userId).collection('notifications');
+        const q = notifsRef.where('createdAt', '>=', Timestamp.fromDate(cutoff)).orderBy('createdAt', 'desc').limit(20);
+        const snap = await q.get();
+        if (snap.empty) continue;
+        const byType = {};
+        snap.forEach(doc => {
+          const type = doc.data().type;
+          byType[type] = (byType[type] || 0) + 1;
         });
-      }
-      // Email delivery (respects the email opt-out).
-      if (prefs.email !== false) {
-        const to = await getUserEmail(userId);
-        if (to) {
-          await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);
+        const digestMessage = Object.entries(byType).map(([t, c]) => `${c} ${t}s`).join(', ');
+        // In-app digest record (respects the in-app opt-out). Routed through the
+        // canonical writer so it bumps the unread shard; the previous direct
+        // `set()` left the digest uncounted in the Alerts badge.
+        if (prefs.inApp !== false) {
+          await writeNotification(userId, {
+            type: 'digest',
+            title: 'Your digest',
+            message: `You have ${digestMessage}`,
+          });
         }
+        // Email delivery (respects the email opt-out).
+        if (prefs.email !== false) {
+          const to = await getUserEmail(userId);
+          if (to) {
+            await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);
+          }
+        }
+        processed += 1;
       }
+      cursor = usersSnap.docs[usersSnap.docs.length - 1];
+      if (usersSnap.size < PAGE) break;
     }
+    log('INFO', 'Notification digest completed', { processed });
     return null;
   });
 

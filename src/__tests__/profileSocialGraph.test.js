@@ -82,6 +82,7 @@ describe('getFollowStates (relationship single source of truth)', () => {
       isFollowing: true,
       isFollower: false,
       isMutualFriend: false,
+      requestStatus: null,
     });
   });
 
@@ -94,6 +95,7 @@ describe('getFollowStates (relationship single source of truth)', () => {
       isFollowing: false,
       isFollower: true,
       isMutualFriend: false,
+      requestStatus: null,
     });
   });
 
@@ -107,6 +109,7 @@ describe('getFollowStates (relationship single source of truth)', () => {
       isFollowing: true,
       isFollower: true,
       isMutualFriend: true,
+      requestStatus: null,
     });
   });
 
@@ -117,6 +120,7 @@ describe('getFollowStates (relationship single source of truth)', () => {
       isFollowing: false,
       isFollower: false,
       isMutualFriend: false,
+      requestStatus: null,
     });
   });
 

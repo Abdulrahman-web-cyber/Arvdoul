@@ -65,13 +65,17 @@ export default function CoinsScreen() {
   const [subTier, setSubTier] = useState(null); // subscription tier being bought
   const [currentSub, setCurrentSub] = useState(null);
 
-  // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names, perks
-  // and popularity are presentation. The monthly coin line is derived from the
+  // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names and
+  // popularity are presentation. The monthly coin line is derived from the
   // tier's `coinsPerMonth` so it can never disagree with the server grant.
+  // No perk bullet is listed here: the server grants ONLY the monthly coin
+  // credit (functions/monetization.js#creditSubscriptionCoins) — it never reads
+  // a subscription to gate ads, badges, analytics, discounts or support, so
+  // advertising those perks would fabricate a capability (N422).
   const TIER_PRESENTATION = {
-    basic: { name: 'Basic', perks: ['Ad-free browsing', 'Priority support'] },
-    pro: { name: 'Pro', popular: true, perks: ['Creator badge', 'Advanced analytics', 'Boost discounts'] },
-    premium: { name: 'Premium', perks: ['Verified badge', 'Early features', 'Top support'] },
+    basic: { name: 'Basic', perks: [] },
+    pro: { name: 'Pro', popular: true, perks: [] },
+    premium: { name: 'Premium', perks: [] },
   };
   const SUBSCRIPTION_TIERS = Object.entries(SUBSCRIPTION_TIERS_CANONICAL).map(([id, cfg]) => {
     const presentation = TIER_PRESENTATION[id] || { name: id, perks: [] };
@@ -84,10 +88,6 @@ export default function CoinsScreen() {
       price: `$${(cfg.priceUsdCents / 100).toFixed(2)}/mo`,
     };
   });
-
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawEmail, setWithdrawEmail] = useState('');
-  const [withdrawing, setWithdrawing] = useState(false);
 
   const isDark = theme === 'dark';
   const colors = {
@@ -275,33 +275,6 @@ export default function CoinsScreen() {
     }
   };
 
-  const handleWithdraw = async () => {
-    if (!user?.uid || withdrawing) return;
-    const amount = Number(withdrawAmount);
-    if (!amount || amount < MIN_WITHDRAWAL_COINS) {
-      toast.error(`Minimum withdrawal is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins.`);
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail)) {
-      toast.error('Enter a valid PayPal email.');
-      return;
-    }
-    setWithdrawing(true);
-    try {
-      const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
-      const res = await svc.requestWithdrawal(user.uid, amount, 'paypal', { email: withdrawEmail });
-      if (res?.success) {
-        toast.success('Withdrawal request submitted for review.');
-        setWithdrawAmount('');
-        setWithdrawEmail('');
-        await loadBalance();
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Withdrawal request failed.');
-    } finally {
-      setWithdrawing(false);
-    }
-  };
 
   return (
     <div className={cn("min-h-screen pb-24", colors.bg)}>
@@ -505,32 +478,14 @@ export default function CoinsScreen() {
             <Banknote className="w-5 h-5 text-purple-500" /> Withdraw Earnings
           </h2>
           <p className={cn("text-sm mb-4", colors.secondary)}>
-            Request a payout (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins). Requests are reviewed and paid out via the
-            secure payout pipeline.
+            Payouts settle to your connected Stripe account (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins).
+            Connect and manage your payout account from the creator payout screen.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <input
-              type="number"
-              min={MIN_WITHDRAWAL_COINS}
-              placeholder={`Amount (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
-              value={withdrawAmount}
-              onChange={(e) => setWithdrawAmount(e.target.value)}
-              className={cn("px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500", colors.card, colors.border, colors.text)}
-            />
-            <input
-              type="email"
-              placeholder="PayPal email"
-              value={withdrawEmail}
-              onChange={(e) => setWithdrawEmail(e.target.value)}
-              className={cn("px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500", colors.card, colors.border, colors.text)}
-            />
-          </div>
           <button
-            onClick={handleWithdraw}
-            disabled={withdrawing}
-            className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-500 to-violet-500 text-white hover:from-purple-600 hover:to-violet-600 transition-all disabled:opacity-60"
+            onClick={() => navigate('/creator-payout')}
+            className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-500 to-violet-500 text-white hover:from-purple-600 hover:to-violet-600 transition-all"
           >
-            {withdrawing ? 'SUBMITTING…' : 'REQUEST WITHDRAWAL'}
+            GO TO PAYOUTS
           </button>
         </div>
 
@@ -623,8 +578,8 @@ export default function CoinsScreen() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4">
                 <Crown className="w-8 h-8 text-blue-500" />
               </div>
-              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Premium Features</h3>
-              <p className={colors.secondary}>Unlock exclusive features and monetization options</p>
+              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Marketplace &amp; Polls</h3>
+              <p className={colors.secondary}>Buy creator digital goods and back your predictions in community polls</p>
             </div>
           </div>
         </div>
@@ -652,7 +607,7 @@ export default function CoinsScreen() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className={cn("text-sm", colors.secondary)}>Secure payment • Instant delivery • 24/7 support</span>
+              <span className={cn("text-sm", colors.secondary)}>Secure Stripe payment • Coins credited after server verification • Support tickets</span>
             </div>
             <button
               onClick={() => navigate('/create-post')}

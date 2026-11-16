@@ -119,11 +119,55 @@ describe('Firestore transaction read-before-write ordering', () => {
     // single logical write — a double-mint. `storyService.answerQuiz` credited
     // the quiz reward via `monetization.addCoins(...)` inside its transaction;
     // the credit now runs after commit with a deterministic idempotency key.
+    // `transferCoinsInternal` (video.js) is the same class and worse: it opens
+    // its OWN transaction, so calling it inside another is an illegal nested
+    // transaction (`payPerView` did this and threw on every purchase).
     const offenders = [];
     for (const file of files) {
       const src = stripNonCode(fs.readFileSync(file, 'utf8'));
       for (const { body, offset } of transactionCallbacks(src)) {
-        const m = body.search(/\b(?:addCoins|spendCoins|transferCoins|callFunction|httpsCallable)\s*\(/);
+        const m = body.search(/\b(?:addCoins|spendCoins|transferCoins|transferCoinsInternal|callFunction|httpsCallable)\s*\(/);
+        if (m >= 0) {
+          const line = src.slice(0, offset + m).split('\n').length;
+          offenders.push(`${path.relative(root, file)}:${line}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('no runTransaction callback performs side-effectful IO or a nested transaction', () => {
+    // A callback is retried, so an awaited push enqueue / network call inside it
+    // fires once per attempt, and Firestore forbids opening a second transaction
+    // inside a callback. Guard the whole IO + nesting class. (Transaction-aware
+    // helpers — `creditSubscriptionCoins`, `createLedgerEntry`, `rejectAndRelease`
+    // — take `t` and are deliberately not listed.)
+    const offenders = [];
+    for (const file of files) {
+      const src = stripNonCode(fs.readFileSync(file, 'utf8'));
+      for (const { body, offset } of transactionCallbacks(src)) {
+        const m = body.search(/\b(?:enqueuePush|getUserEmail|algolia|fetch|runTransaction|createFirestoreTransaction)\s*\(/);
+        if (m >= 0) {
+          const line = src.slice(0, offset + m).split('\n').length;
+          offenders.push(`${path.relative(root, file)}:${line}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('no runTransaction callback makes a Stripe network call', () => {
+    // A `stripe.*` call inside the retryable `createFirestoreTransaction`
+    // callback runs once per SDK retry and can re-run AFTER the money moved:
+    // `purchaseCoins` re-charged the card, `createSubscription` re-created the
+    // price/subscription (no idempotency key) and `cancelSubscription` re-fired
+    // the cancel, on every Firestore transaction-contention retry. Stripe calls
+    // now run before the transaction; this guard keeps them out.
+    const offenders = [];
+    for (const file of files) {
+      const src = stripNonCode(fs.readFileSync(file, 'utf8'));
+      for (const { body, offset } of transactionCallbacks(src)) {
+        const m = body.search(/\bstripe\s*\.\s*\w+\s*\.\s*\w+\s*\(/);
         if (m >= 0) {
           const line = src.slice(0, offset + m).split('\n').length;
           offenders.push(`${path.relative(root, file)}:${line}`);

@@ -70,6 +70,49 @@ async function promoteNextWaitlisted(ref, event) {
   return uid;
 }
 
+/**
+ * The caller's own event registrations, served server-side.
+ *
+ * The client list query (`where('attendees.<uid>.status','in',[...])`) cannot
+ * prove the `events` read rule's organizer/attendee predicate — rules are not
+ * filters — so the read rule had to stay a bare `isSignedIn()` and any
+ * signed-in client could read a `draft` event by id (N266). Serving the list
+ * here lets the rule gate the read on `organizerId == uid()` / `attendees[uid]`
+ * while the caller's own registrations (including drafts they organized or
+ * registered for) still resolve.
+ */
+exports.getUserEventRegistrations = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getUserEventRegistrations', 30, 60000);
+
+  // No `orderBy` here: the filter is on a per-uid map field
+  // (`attendees.<uid>.status`), whose composite index cannot be pre-declared,
+  // and a filter+orderBy combination would need one. The bounded window is
+  // sorted in memory instead.
+  const snap = await db.collection('events')
+    .where(`attendees.${uid}.status`, 'in', ['registered', 'waitlisted', 'checked_in'])
+    .limit(100)
+    .get();
+
+  const toMillis = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : 0));
+  const events = snap.docs
+    .map((d) => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        title: data.title || null,
+        status: data.status || null,
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
+        coverImage: data.coverImage || null,
+        organizerId: data.organizerId || null,
+        attendeeStatus: data.attendees?.[uid]?.status || null,
+      };
+    })
+    .sort((a, b) => toMillis(a.startDate) - toMillis(b.startDate));
+  return { events };
+});
+
 exports.registerForEvent = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'registerForEvent', 30, 60000);
@@ -156,6 +199,73 @@ exports.promoteEventWaitlist = functions.https.onCall(async (data, context) => {
   if (event.organizerId !== uid) throw httpError('permission-denied', 'Only the organizer can promote the waitlist.');
   const promoted = await promoteNextWaitlisted(ref, event);
   return { success: true, promotedUserId: promoted };
+});
+
+// Placeholder handles/names the client's read model rejects; mirrored here so a
+// roster never surfaces a generated `user_xxxxxx` handle or a "Creator" stand-in.
+const PLACEHOLDER_NAMES = new Set([
+  'user', 'creator', 'unknown', 'anonymous', 'arvdoul user', 'citizen', 'guest', 'null', 'undefined',
+]);
+const cleanString = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const isPlaceholder = (value) => {
+  const cleaned = cleanString(value);
+  return cleaned !== null && (PLACEHOLDER_NAMES.has(cleaned.toLowerCase()) || /^user_[0-9a-f]{4,}$/i.test(cleaned));
+};
+
+/**
+ * The attendee roster for an event, resolved server-side.
+ *
+ * `events/{id}.attendees` stores only `{ status, ticketTier, registeredAt,
+ * checkedInAt }` per uid — no display name — so the client rendered a
+ * fabricated "User" placeholder for every attendee (and lost the real identity
+ * entirely). The roster is served here so the caller gets the real, projected
+ * `displayName`/`username`/`photoURL` from `users/{uid}`, never a stand-in.
+ * Non-attendees receive an empty roster; statuses/counters stay visible to any
+ * signed-in viewer (they are event metadata, not personal data).
+ */
+exports.getEventAttendees = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getEventAttendees', 60, 60000);
+
+  const { eventId, includeWaitlist = false } = data || {};
+  const { data: event } = await requireEvent(eventId);
+
+  const attendees = event.attendees || {};
+  const viewerIsOrganizer = event.organizerId === uid;
+  const viewerIsAttendee = Boolean(attendees[uid]);
+  if (!viewerIsOrganizer && !viewerIsAttendee) {
+    return { attendees: [] };
+  }
+
+  const entries = Object.entries(attendees)
+    .filter(([, a]) => a && (includeWaitlist || a.status !== 'waitlisted'))
+    .slice(0, 200);
+  const uids = entries.map(([id]) => id);
+
+  const profiles = new Map();
+  for (let i = 0; i < uids.length; i += 30) {
+    const chunk = uids.slice(i, i + 30);
+    const snap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
+    snap.forEach((d) => profiles.set(d.id, d.data()));
+  }
+
+  const roster = entries.map(([id, a]) => {
+    const profile = profiles.get(id) || {};
+    const displayName = cleanString(profile.displayName) || cleanString(profile.name);
+    const username = cleanString(profile.username);
+    return {
+      id,
+      status: a.status || null,
+      ticketTier: a.ticketTier || null,
+      checkedInAt: a.checkedInAt || null,
+      displayName: isPlaceholder(displayName) ? null : displayName,
+      username: isPlaceholder(username) ? null : username,
+      photoURL: cleanString(profile.photoURL),
+      isVerified: profile.isVerified === true,
+    };
+  });
+
+  return { attendees: roster };
 });
 
 exports.submitEventFeedback = functions.https.onCall(async (data, context) => {

@@ -183,15 +183,21 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
         ? user.displayName.toLowerCase().replace(/[^a-z0-9_]/g, '')
         : (user.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (userProfile?.username && !isDigitsOnly(userProfile.username) ? userProfile.username : 'member')));
 
+  // An unresolved identity stays the real uid prefix; the literal 'User' was a
+  // fabricated name (N402). Falls back only when there is no profile/auth name
+  // and no email local part to derive from (e.g. a phone-only session).
+  const uidLabel = `user ${String(user.uid || '').slice(0, 6)}`;
+  const resolvedDisplayName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || uidLabel;
+
   const userData = {
     uid: user.uid,
     email: user.email,
     emailVerified: user.emailVerified,
-    displayName: userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
+    displayName: resolvedDisplayName,
     username: cleanDerivedUsername,
     photoURL: getSafeAvatarUrl(
       userProfile?.photoURL || user.photoURL,
-      userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
+      resolvedDisplayName,
       user.uid
     ),
     phoneNumber: userProfile?.phoneNumber || user.phoneNumber,
@@ -222,8 +228,10 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     // functions/levelSystem recordActiveDay); absent stays null (unknown).
     activeDaysCount: userProfile?.activeDaysCount ?? userProfile?.activeDays ?? null,
     activeStreak: userProfile?.activeStreak ?? null,
+    // The signed-in session is by definition online. Live presence of *other*
+    // users is read from the scope-gated user_presence/{uid} (N321); do not
+    // fabricate a `lastActive` timestamp on the session object.
     isOnline: true,
-    lastActive: new Date().toISOString(),
     createdAt: user.metadata?.creationTime || new Date().toISOString(),
     isNewUser: user.isNewUser || false,
     requiresProfileCompletion: !isProfileComplete
@@ -656,7 +664,9 @@ export function AuthProvider({ children }) {
               photoURL: firebaseUser.photoURL || null,
               authProvider: firebaseUser.providerData?.[0]?.providerId || 'phone',
               isProfileComplete: !onboarding,
-              coins: 0,
+              // Unknown until the private doc (owner-readable) is read; a
+              // fabricated 0 would claim a measured empty wallet (N324).
+              coins: null,
               level: null,
               accountStatus: 'active'
             };
@@ -1193,7 +1203,10 @@ export function AuthProvider({ children }) {
       try {
         const result = await userService.createUserProfile(user.uid, {
           ...profileData,
-          emailVerified: user.emailVerified || true,
+          // `user.emailVerified || true` was a constant `true` — it fabricated a
+          // verified email on every profile (and the `|| true` meant a false
+          // Firebase value could never be represented). Carry the real value.
+          emailVerified: Boolean(user.emailVerified),
           authProvider: user.authProvider || 'email',
           isProfileComplete: true
         });

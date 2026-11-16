@@ -7,11 +7,12 @@
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
+import { pickDisplayName } from './profileReadModel.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import {
   collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-  query, where, orderBy, limit, startAfter, serverTimestamp, increment,
+  query, where, orderBy, limit, startAfter, serverTimestamp, increment, documentId,
   arrayUnion, arrayRemove, writeBatch, runTransaction, onSnapshot, getCountFromServer,
   Timestamp
 } from 'firebase/firestore';
@@ -31,18 +32,6 @@ const MESSAGING_CONFIG = {
     VIDEO_QUALITY: '1080p',
     GROUP_MAX_PARTICIPANTS: 250,
     MESSAGE_HISTORY_FOREVER: true,
-  },
-  PREMIUM: {
-    ENABLED: true,
-    VIDEO_MAX_SIZE: 2 * 1024 * 1024 * 1024,
-    FILE_MAX_SIZE: 2 * 1024 * 1024 * 1024,
-    VIDEO_QUALITY: '4k',
-    CLOUD_STORAGE: '100GB',
-    THEMES: true,
-    MESSAGE_EFFECTS: true,
-    ADVANCED_SEARCH: true,
-    PRIORITY_SUPPORT: true,
-    END_TO_END_ENCRYPTION: true,
   },
   MONETIZATION: {
     ADS_ENABLED: true,
@@ -67,10 +56,11 @@ const MESSAGING_CONFIG = {
     RECONNECT_ATTEMPTS: 10,
     OFFLINE_QUEUE_SIZE: 1000,
   },
+  // Only the ephemeral typing indicator lives in the Realtime Database. Live
+  // presence is read from the scope-gated `user_presence/{uid}` Firestore doc
+  // (N321); the old `status/` RTDB path had no writer (N458).
   RTDB_PATHS: {
-    PRESENCE: 'status',
     TYPING: 'typing',
-    LAST_SEEN: 'lastSeen',
   },
   MESSAGE_TYPES: {
     TEXT: 'text',
@@ -131,27 +121,12 @@ const MESSAGING_CONFIG = {
     PROVIDER: 'algolia',
   },
   GROUP_ROLES: ['admin', 'moderator', 'member'],
-  JOIN_APPROVAL: {
-    ENABLED: true,
-    REQUIRED_APPROVERS: 1,
-  },
-  PUSH_NOTIFICATIONS: {
-    ENABLED: true,
-    RETRY_ATTEMPTS: 3,
-    BACKOFF_FACTOR: 2,
-    INITIAL_DELAY_MS: 1000,
-  },
   MESSAGE_TTL_DAYS: 365,
   INVITE_BASE_URL: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_INVITE_BASE_URL) || window.location.origin,
   EDIT_HISTORY_LIMIT: 10,
   THREAD_DEPTH_MAX: 3,
   TEXT_MAX_LENGTH: 5000,
   GIPHY_API_KEY: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GIPHY_API_KEY) || '',
-  STICKER_FALLBACK_PACK: [
-    { id: 'smile', url: '/stickers/smile.png' },
-    { id: 'heart', url: '/stickers/heart.png' },
-    { id: 'thumbsup', url: '/stickers/thumbsup.png' },
-  ],
 };
 
 //  CRYPTO HELPERS (FULL IMPLEMENTATION)
@@ -563,7 +538,7 @@ class UltimateMessagingService {
 
         this.fs = {
           collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-          query, where, orderBy, limit, startAfter, serverTimestamp, increment,
+          query, where, orderBy, limit, startAfter, serverTimestamp, increment, documentId,
           arrayUnion, arrayRemove, writeBatch, runTransaction, onSnapshot, getCountFromServer,
           Timestamp,
         };
@@ -714,40 +689,6 @@ class UltimateMessagingService {
     if (!myKey || !theirKey) throw new Error('Public keys not available');
     const hash = await sha256(myKey + theirKey);
     return hash; // Display as numeric blocks for verification
-  }
-
-  async setUserOnline(userId, isOnline = true) {
-    await this.ensureInitialized();
-    const presenceRef = this.rt.ref(this.rtdb, `${MESSAGING_CONFIG.RTDB_PATHS.PRESENCE}/${userId}`);
-    if (isOnline) {
-      await this.rt.set(presenceRef, { online: true, lastSeen: Date.now() });
-      this.rt.onDisconnect(presenceRef).set({ online: false, lastSeen: Date.now() });
-    } else {
-      await this.rt.set(presenceRef, { online: false, lastSeen: Date.now() });
-    }
-  }
-
-  subscribeToUserPresence(userId, callback) {
-    let unsubscribe = null;
-    let cancelled = false;
-    this.ensureInitialized().then(() => {
-      // Teardown may run before initialization resolves; without this guard the
-      // listener is created after the caller already unsubscribed and leaks.
-      if (cancelled) return;
-      const presenceRef = this.rt.ref(this.rtdb, `${MESSAGING_CONFIG.RTDB_PATHS.PRESENCE}/${userId}`);
-      unsubscribe = this.rt.onValue(presenceRef, snap => callback(snap.val()));
-      this.rtdbListeners.set(`presence_${userId}`, unsubscribe);
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-      // Only drop the map entry if it still points at *this* listener — a second
-      // subscriber to the same uid must not have its listener removed by the
-      // first one's teardown.
-      if (unsubscribe && this.rtdbListeners.get(`presence_${userId}`) === unsubscribe) {
-        this.rtdbListeners.delete(`presence_${userId}`);
-      }
-    };
   }
 
   async sendTypingIndicator(conversationId, userId, isTyping = true) {
@@ -974,6 +915,24 @@ class UltimateMessagingService {
     }
   }
 
+  /** True when a 1:1 conversation is between a blocked pair (either direction).
+   *  Groups/channels are never "direct", so they are never gated by a block.
+   *  One cached spine read (`getRelationship` reports both directions); fails
+   *  open on a graph error so a transient blip cannot lock a user out of their
+   *  own thread — the block is still enforced at the write path. */
+  async _isDirectBlocked(conv, viewerId) {
+    if (conv?.type !== 'direct') return false;
+    const other = (conv.participants || []).find((p) => p !== viewerId);
+    if (!other) return false;
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(viewerId, other);
+      return Boolean(edge.isBlocking || edge.isBlockedBy);
+    } catch {
+      return false;
+    }
+  }
+
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }
   async acceptFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.acceptFriendRequest(uid, reqId); }
   async rejectFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.rejectFriendRequest(uid, reqId); }
@@ -1071,6 +1030,12 @@ class UltimateMessagingService {
 
     const cached = this.conversationsCache.get(conversationId);
     if (cached && options.cacheFirst !== false) {
+      // The block gate below must also cover the cached path: a thread cached
+      // before the block would otherwise stay openable from the cache (N443).
+      if (await this._isDirectBlocked(cached, currentUser.uid)) {
+        this.conversationsCache.delete(conversationId);
+        return { success: false, error: 'Conversation unavailable' };
+      }
       this.metrics.cacheHits++;
       return { success: true, conversation: cached, cached: true };
     }
@@ -1084,6 +1049,16 @@ class UltimateMessagingService {
     if (!conv.participants.includes(currentUser.uid)) throw new Error('Not a participant');
     if (conv.hiddenFor?.includes(currentUser.uid)) {
       return { success: false, error: 'Conversation hidden' };
+    }
+    // A block is terminal for a 1:1 thread (N443). `getUserConversations`
+    // already drops it from the inbox, but the thread stayed openable by a
+    // direct link (`/chat/:conversationId`) and every read/write that routes
+    // through here (getMessages, subscribeToConversation, react/delete/edit).
+    // Gate at this single entry point so the block hides the thread itself, not
+    // just its inbox row. Groups/channels are unaffected (a block must not hide
+    // a whole group for one member).
+    if (await this._isDirectBlocked(conv, currentUser.uid)) {
+      return { success: false, error: 'Conversation unavailable' };
     }
     if (!conv.participantDetails || options.refreshParticipants) {
       conv.participantDetails = await this._getParticipantDetailsBatch(conv.participants);
@@ -1147,10 +1122,48 @@ class UltimateMessagingService {
     conversations.forEach(c => c.participants.forEach(p => allParticipantIds.add(p)));
     const details = await this._getParticipantDetailsBatch([...allParticipantIds]);
 
-    const enriched = conversations.map(c => ({
-      ...c,
-      participantDetails: c.participants.map(pid => details[pid] || null).filter(Boolean),
-    }));
+    // Live presence for the inbox online dot. `users/{uid}` carries no
+    // isOnline/lastActive (N321), and the old `presenceOnline` field the screen
+    // read was never written by anything — so the dot rendered "offline"
+    // forever (N452). Presence is read from the one scope-gated `user_presence`
+    // doc via the social-graph spine. Only 1:1 counterparts are fetched (a group
+    // dot is not meaningful), deduped and capped so the inbox stays bounded.
+    const directCounterparts = [...new Set(
+      conversations
+        .filter(c => c.type === 'direct' && Array.isArray(c.participants))
+        .map(c => c.participants.find(p => p !== userId))
+        .filter(Boolean)
+    )].slice(0, MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE);
+    let presenceMap = new Map();
+    if (directCounterparts.length) {
+      try {
+        const { getSocialGraphService } = await import('./socialGraphService.js');
+        presenceMap = await getSocialGraphService().getPresenceMap(directCounterparts);
+      } catch (err) {
+        logger.warn('[messagesService] inbox presence read failed; dots render offline', { error: err?.message });
+      }
+    }
+
+    const convIds = conversations.map(c => c.id);
+    const [lastMessages, unreadByConv] = await Promise.all([
+      this._fetchLastMessages(convIds),
+      this._fetchUnreadCounts(userId, convIds),
+    ]);
+
+    const enriched = conversations.map(c => {
+      const other = c.type === 'direct' ? (c.participants || []).find(p => p !== userId) : null;
+      return {
+        ...c,
+        participantDetails: c.participants.map(pid => details[pid] || null).filter(Boolean),
+        presenceOnline: Boolean(other && presenceMap.get(other)?.isOnline),
+        // `lastMessage` is the real preview doc; a conversation with no message
+        // yet simply has none (the screen renders an honest "No messages yet").
+        lastMessage: lastMessages.get(c.id) || null,
+        // Real per-conversation unread; absent (unreadable) stays undefined so
+        // the screen renders no badge instead of a fabricated 0.
+        unreadCount: unreadByConv.has(c.id) ? unreadByConv.get(c.id) : null,
+      };
+    });
 
     let finalConversations = enriched;
     if (MESSAGING_CONFIG.MONETIZATION.ADS_ENABLED) {
@@ -1166,7 +1179,7 @@ class UltimateMessagingService {
       success: true,
       conversations: pageConvs,
       total: finalConversations.length,
-      unreadCount: finalConversations.reduce((sum, c) => sum + (c.unreadCounts?.[userId] || 0), 0),
+      unreadCount: pageConvs.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0),
       hasMore,
       nextCursor: hasMore && pageConvs.length ? pageConvs[pageConvs.length - 1].id : null,
     };
@@ -1321,6 +1334,9 @@ class UltimateMessagingService {
       if (MESSAGING_CONFIG.DEDUPLICATION.ENABLED) {
         const dedupeRef = this.fs.doc(this.firestore, 'message_dedupe', idempotencyKey);
         transaction.set(dedupeRef, {
+          // The rules bind a dedupe record to its sender, so an attacker cannot
+          // pre-create a victim's key to suppress their message.
+          senderId: currentUser.uid,
           createdAt: this.fs.serverTimestamp(),
           expiresAt: new Date(Date.now() + MESSAGING_CONFIG.DEDUPLICATION.WINDOW_SECONDS * 1000),
         });
@@ -1374,7 +1390,7 @@ class UltimateMessagingService {
     // callable. Best-effort: a push failure must never fail the send.
     const recipients = conv.conversation.participants.filter(p => p !== currentUser.uid);
     const mentionedIds = message.mentions || [];
-    const senderName = currentUser.displayName || 'Someone';
+    const senderName = pickDisplayName([currentUser.displayName], { fallback: `user ${String(currentUser.uid).slice(0, 6)}` });
     const preview = this._getMessagePreview(message);
     recipients.forEach(async uid => {
       if (!conv.conversation.mutedBy?.includes(uid) && await this._shouldSendPushNotification(uid)) {
@@ -1652,14 +1668,8 @@ class UltimateMessagingService {
     let unsubscribeMessages, unsubscribeConversation, unsubscribeTyping;
     // The async setup below can resolve *after* the caller tears the
     // subscription down (StrictMode double-mount, fast navigation). Without a
-    // torn-down flag the presence listeners registered late are never unsubscribed
-    // — a real RTDB listener leak that survives the component that created it.
+    // torn-down flag the listeners registered late are never unsubscribed.
     let tornDown = false;
-    const presenceUnsubs = [];
-    const releasePresence = () => {
-      for (const unsub of presenceUnsubs) unsub?.();
-      presenceUnsubs.length = 0;
-    };
 
     this.ensureInitialized().then(async () => {
       const conv = await this.getConversation(conversationId, { cacheFirst: true });
@@ -1714,15 +1724,6 @@ class UltimateMessagingService {
       unsubscribeTyping = this.subscribeToTyping(conversationId, userId, (typing) => {
         callback({ type: 'typing_update', typing, conversationId });
       });
-
-      conv.conversation.participants.forEach(pid => {
-        // subscribeToUserPresence owns its own map entry and teardown; we only
-        // keep the returned disposer so a late teardown still releases it.
-        const presenceUnsub = this.subscribeToUserPresence(pid, (presence) => {
-          callback({ type: 'presence_update', userId: pid, presence, conversationId });
-        });
-        presenceUnsubs.push(presenceUnsub);
-      });
     });
 
     return () => {
@@ -1730,7 +1731,6 @@ class UltimateMessagingService {
       unsubscribeMessages?.();
       unsubscribeConversation?.();
       unsubscribeTyping?.();
-      releasePresence();
     };
   }
 
@@ -1819,28 +1819,41 @@ class UltimateMessagingService {
     if (!canDelete && !deleteForEveryone) throw new Error('Cannot delete others’ messages');
 
     if (deleteForEveryone) {
+      const unreadParticipants = conv.conversation.participants.filter(pid => pid !== msg.senderId && !msg.readBy?.includes(pid));
+      const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
       await this.fs.runTransaction(this.firestore, async (transaction) => {
+        // Firestore requires every transaction read to precede every write, so
+        // resolve the `last_messages` repair FIRST. Reading it after the
+        // `transaction.update`/shard writes below made the SDK throw
+        // ("all reads must be executed before all writes"), so delete-for-
+        // everyone always failed and left the counter/`last_messages` stale.
+        const lastSnap = await transaction.get(lastMessageRef);
+        let lastMessagePatch;
+        if (lastSnap.exists() && lastSnap.data().messageId === messageId) {
+          // `msg.createdAt` is a stored value, but a legacy/offline-written doc
+          // may hold an ISO string, so guard the Timestamp conversion.
+          const deletedAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt);
+          const prev = await this._getPreviousMessage(conversationId, conv.conversation, deletedAt);
+          lastMessagePatch = prev
+            ? {
+                messageId: prev.id,
+                text: this._getMessagePreview(prev),
+                senderId: prev.senderId,
+                type: prev.type,
+                timestamp: prev.createdAt,
+                updatedAt: this.fs.serverTimestamp(),
+              }
+            : null;
+        }
+
         transaction.update(msgRef, { isDeleted: true, deletedAt: this.fs.serverTimestamp(), deletedBy: userId });
-        const unreadParticipants = conv.conversation.participants.filter(pid => pid !== msg.senderId && !msg.readBy?.includes(pid));
         for (const pid of unreadParticipants) {
           await this._decrementUnreadCounter(conversationId, pid, 1, transaction);
         }
-        const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
-        const lastSnap = await transaction.get(lastMessageRef);
-        if (lastSnap.exists() && lastSnap.data().messageId === messageId) {
-          const prev = await this._getPreviousMessage(conversationId, conv.conversation, msg.createdAt.toDate());
-          if (prev) {
-            transaction.set(lastMessageRef, {
-              messageId: prev.id,
-              text: this._getMessagePreview(prev),
-              senderId: prev.senderId,
-              type: prev.type,
-              timestamp: prev.createdAt,
-              updatedAt: this.fs.serverTimestamp(),
-            });
-          } else {
-            transaction.delete(lastMessageRef);
-          }
+        if (lastMessagePatch === null && lastSnap.exists() && lastSnap.data().messageId === messageId) {
+          transaction.delete(lastMessageRef);
+        } else if (lastMessagePatch) {
+          transaction.set(lastMessageRef, lastMessagePatch);
         }
       });
     } else {
@@ -2450,7 +2463,10 @@ class UltimateMessagingService {
         }));
       }
     }
-    return MESSAGING_CONFIG.STICKER_FALLBACK_PACK.filter(s => s.id.includes(query.toLowerCase()));
+    // No GIPHY key configured and no bundled sticker pack ships with the app;
+    // return an honest empty result so the UI renders its empty state rather
+    // than pointing at /stickers/*.png assets that do not exist.
+    return [];
   }
 
   async searchGifs(query) {
@@ -2702,6 +2718,70 @@ class UltimateMessagingService {
     return conv.success ? conv.conversation : null;
   }
 
+  /**
+   * Batch-read the `last_messages/{conversationId}` preview docs. `sendMessage`
+   * writes one per conversation (in the same transaction as the message), but
+   * nothing ever READ it back — the inbox previewed `c.lastMessage`, a field no
+   * writer sets, so every row showed "No messages yet" (N453). One
+   * `documentId() in` read per 30 ids; the rules authorize each doc against the
+   * caller's participation in that conversation.
+   */
+  async _fetchLastMessages(conversationIds) {
+    const map = new Map();
+    const ids = [...new Set((conversationIds || []).filter(Boolean))];
+    if (!ids.length) return map;
+    for (let i = 0; i < ids.length; i += MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE) {
+      const chunk = ids.slice(i, i + MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE);
+      try {
+        const snap = await this.fs.getDocs(
+          this.fs.query(
+            this.fs.collection(this.firestore, 'last_messages'),
+            this.fs.where(documentId(), 'in', chunk),
+            this.fs.limit(chunk.length)
+          )
+        );
+        snap.forEach(d => map.set(d.id, d.data()));
+      } catch (err) {
+        logger.warn('[messagesService] last-message preview read failed; previews omitted', { error: err?.message });
+        break;
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Real per-conversation unread counts. The inbox read `c.unreadCounts[uid]`,
+   * a field NO writer ever sets — the server (`functions/messaging.js`
+   * `incrementUnreadForMessage`) and `markConversationAsRead` maintain sharded
+   * `unread_counters/unread_{cid}_{uid}/shards/{n}` docs instead, so every row
+   * badge rendered 0 (N454). One bounded `getDocs` per conversation (limit =
+   * shard count) sums the shards. Conversations we could not read are omitted
+   * from the map so the screen shows no badge rather than a fabricated 0.
+   */
+  async _fetchUnreadCounts(userId, conversationIds) {
+    const map = new Map();
+    if (!userId) return map;
+    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
+    const ids = [...new Set((conversationIds || []).filter(Boolean))]
+      .slice(0, MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE * 2);
+    await Promise.all(ids.map(async (conversationId) => {
+      try {
+        const snap = await this.fs.getDocs(
+          this.fs.query(
+            this.fs.collection(this.firestore, 'unread_counters', `unread_${conversationId}_${userId}`, 'shards'),
+            this.fs.limit(shardCount)
+          )
+        );
+        let total = 0;
+        snap.forEach(d => { total += Number(d.data()?.count) || 0; });
+        map.set(conversationId, total);
+      } catch (err) {
+        logger.debug('[messagesService] unread-count read skipped', { conversationId, error: err?.message });
+      }
+    }));
+    return map;
+  }
+
   async _getParticipantDetailsBatch(userIds) {
     const result = {};
     const uncached = [];
@@ -2778,7 +2858,9 @@ class UltimateMessagingService {
       id,
       conversationId,
       senderId: sender.uid,
-      senderName: sender.displayName || 'User',
+      // Identity is stored only when real; a nameless sender stays null so the
+      // reader can resolve the participant rather than assert a generic 'User'.
+      senderName: pickDisplayName([sender.displayName, sender.username], { fallback: null }),
       senderPhoto: sender.photoURL || null,
       type: validated.type,
       content: encryptedPayload ? null : validated.content,
@@ -2967,61 +3049,25 @@ class UltimateMessagingService {
       return true;
     }
     const dedupeRef = this.fs.doc(this.firestore, 'message_dedupe', idempotencyKey);
-    const snap = await this.fs.getDoc(dedupeRef);
-    return snap.exists();
-  }
-
-  async _incrementUnreadCounters(conversationId, senderId, participantIds) {
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
-    const promises = [];
-
-    for (const userId of participantIds) {
-      if (userId === senderId) continue;
-      const shard = Math.floor(Math.random() * shardCount);
-      const counterId = `unread_${conversationId}_${userId}`;
-      const shardedCounterRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', shard.toString());
-
-      promises.push(
-        this.fs.runTransaction(this.firestore, async (transaction) => {
-          const snap = await transaction.get(shardedCounterRef);
-          const current = snap.exists() ? snap.data().count : 0;
-          transaction.set(shardedCounterRef, {
-            count: current + 1,
-            updatedAt: this.fs.serverTimestamp(),
-          }, { merge: true });
-
-          await this._incrementTotalUnread(userId, 1, transaction);
-        })
-      );
+    try {
+      const snap = await this.fs.getDoc(dedupeRef);
+      return snap.exists();
+    } catch (err) {
+      // A denied read (a record that names another sender, or a rules change)
+      // must not block the send: treat it as "no duplicate of mine".
+      if (err?.code === 'permission-denied') return false;
+      throw err;
     }
-    await Promise.allSettled(promises);
   }
 
   async _decrementUnreadCounter(conversationId, userId, delta, transaction) {
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
+    if (delta <= 0) return;
     const counterId = `unread_${conversationId}_${userId}`;
-    const shard = Math.floor(Math.random() * shardCount);
-    const shardedCounterRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', shard.toString());
-    const snap = await transaction.get(shardedCounterRef);
-    const current = snap.exists() ? snap.data().count : 0;
-    transaction.set(shardedCounterRef, {
-      count: Math.max(0, current - delta),
-      updatedAt: this.fs.serverTimestamp(),
-    }, { merge: true });
+    const shard = Math.floor(Math.random() * MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT);
+    const shardedCounterRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', String(shard));
+    this._writeShardDelta(shardedCounterRef, -delta, transaction);
 
     await this._decrementTotalUnread(userId, delta, transaction);
-  }
-
-  async _incrementTotalUnread(userId, delta, transaction) {
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.TOTAL_SHARD_COUNT;
-    const shard = Math.floor(Math.random() * shardCount);
-    const totalCounterRef = this.fs.doc(this.firestore, 'user_unread_totals', userId, 'shards', shard.toString());
-    const snap = await transaction.get(totalCounterRef);
-    const current = snap.exists() ? snap.data().count : 0;
-    transaction.set(totalCounterRef, {
-      count: current + delta,
-      updatedAt: this.fs.serverTimestamp(),
-    }, { merge: true });
   }
 
   async _decrementTotalUnread(userId, delta, transaction) {
@@ -3029,12 +3075,28 @@ class UltimateMessagingService {
     const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.TOTAL_SHARD_COUNT;
     const shard = Math.floor(Math.random() * shardCount);
     const totalCounterRef = this.fs.doc(this.firestore, 'user_unread_totals', userId, 'shards', shard.toString());
-    const snap = await transaction.get(totalCounterRef);
-    const current = snap.exists() ? snap.data().count : 0;
-    transaction.set(totalCounterRef, {
-      count: Math.max(0, current - delta),
-      updatedAt: this.fs.serverTimestamp(),
-    }, { merge: true });
+    this._writeShardDelta(totalCounterRef, -delta, transaction);
+  }
+
+  /**
+   * Apply a shard delta atomically. The shards of a counter are a SUM (every
+   * reader adds all of them), so the delta must be applied with
+   * `FieldValue.increment` and MUST NOT be clamped per shard: the previous
+   * read-then-`Math.max(0, current - delta)` dropped the decrement whenever the
+   * chosen shard happened to be empty, so the unread badge drifted upward and
+   * never reached zero. `increment` keeps the sum exact even when a single
+   * shard dips negative. `transaction` is optional — a caller with no ambient
+   * transaction writes directly.
+   */
+  _writeShardDelta(ref, delta, transaction) {
+    const payload = { count: this.fs.increment(delta), updatedAt: this.fs.serverTimestamp() };
+    if (transaction) {
+      transaction.set(ref, payload, { merge: true });
+      return Promise.resolve();
+    }
+    return this.fs.setDoc(ref, payload, { merge: true }).catch((err) => {
+      logger.warn('[Messaging] unread shard update failed', { error: err?.message });
+    });
   }
 
   async getTotalUnreadCount(userId) {
@@ -3284,8 +3346,6 @@ function getMessagingService() {
 const messagingService = {
   initialize: () => getMessagingService().ensureInitialized(),
   ensureInitialized: () => getMessagingService().ensureInitialized(),
-  setUserOnline: (uid, online) => getMessagingService().setUserOnline(uid, online),
-  subscribeToUserPresence: (uid, cb) => getMessagingService().subscribeToUserPresence(uid, cb),
   sendTypingIndicator: (cid, uid, typing) => getMessagingService().sendTypingIndicator(cid, uid, typing),
   subscribeToTyping: (cid, uid, cb) => getMessagingService().subscribeToTyping(cid, uid, cb),
   createConversation: (participants, opts) => getMessagingService().createConversation(participants, opts),

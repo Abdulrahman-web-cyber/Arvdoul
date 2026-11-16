@@ -34,7 +34,9 @@ function normaliseOptions(rawOptions) {
     }
     return {
       id: opt.id ?? `opt_${idx}`,
-      text: opt.text ?? 'Option',
+      // A malformed option (no label) renders a neutral blank rather than the
+      // fabricated word 'Option' as if it were the voter's real choice.
+      text: opt.text ?? '—',
       votes: typeof opt.votes === 'number' ? opt.votes : 0,
     };
   });

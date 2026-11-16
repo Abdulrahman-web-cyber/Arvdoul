@@ -151,6 +151,24 @@ describe('getEdgeSet (batch, no N+1)', () => {
     expect(await getSocialGraphService().areFriends('me', 'a')).toBe(true);
     expect(await getSocialGraphService().areFriends('me', 'b')).toBe(false);
   });
+
+  test('surfaces a pending private-account follow request as requestStatus', async () => {
+    // A follow against a private target files `follow_requests/{from}_{to}` with
+    // no follow edge; the batch reader must report `requestStatus: 'pending'`
+    // so the control renders Requested instead of filing a duplicate.
+    store.set('follow_requests/me_p', { fromUserId: 'me', toUserId: 'p', status: 'pending' });
+    seedFollow('me', 'a');
+
+    const map = await getSocialGraphService().getEdgeSet('me', ['a', 'p']);
+    expect(map.get('a')).toMatchObject({ isFollowing: true, requestStatus: null });
+    expect(map.get('p')).toMatchObject({ isFollowing: false, requestStatus: 'pending' });
+  });
+
+  test('does not read follow_requests when the caller excludes the follow edge', async () => {
+    capturedQueries.length = 0;
+    await getSocialGraphService().getEdgeSet('me', ['x', 'y'], { include: ['block'] });
+    expect(capturedQueries.some((q) => q.name === 'follow_requests')).toBe(false);
+  });
 });
 
 describe('listEdges (bounded, index-backed)', () => {

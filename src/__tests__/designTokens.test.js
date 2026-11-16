@@ -101,3 +101,32 @@ describe('design-system components - token hygiene', () => {
     }
   });
 });
+
+describe('design-system helpers - brandRgba / brandCanvasBackground', () => {
+  test('brandRgba derives from the brand violet token, not a literal', async () => {
+    const { brandRgba, BRAND_VIOLET_RGB } = await import('../design-system/tokens.js');
+    // The token is #8B1EF3 = rgb(139, 30, 243).
+    expect(BRAND_VIOLET_RGB).toBe('139, 30, 243');
+    expect(brandRgba(0.1)).toBe('rgba(139, 30, 243, 0.1)');
+  });
+
+  test('brandCanvasBackground returns the canvas + brand glow for both themes', async () => {
+    const { brandCanvasBackground } = await import('../design-system/tokens.js');
+    const dark = brandCanvasBackground(true);
+    const light = brandCanvasBackground(false);
+    expect(dark).toContain(tokens.color.bg.dark);
+    expect(light).toContain(tokens.color.bg.light);
+    expect(dark).toContain('rgba(139, 30, 243, 0.1)');
+    expect(light).toContain('rgba(139, 30, 243, 0.05)');
+    expect(dark).toContain('radial-gradient');
+  });
+
+  test('brandHexRgba derives an rgba() string from any brand token', async () => {
+    const { brandHexRgba } = await import('../design-system/tokens.js');
+    // The whole point of the helper is that the colour comes from the token, so
+    // it must track tokens.color.brand.* rather than re-declare a decimal.
+    expect(brandHexRgba(tokens.color.brand.violet, 0.25)).toBe('rgba(139, 30, 243, 0.25)');
+    expect(brandHexRgba(tokens.color.brand.indigo, 0.12)).toBe('rgba(68, 49, 247, 0.12)');
+    expect(brandHexRgba(tokens.color.brand.blue, 0)).toBe('rgba(5, 91, 251, 0)');
+  });
+});

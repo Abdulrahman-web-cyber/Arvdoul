@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /**
  * RouteProgressBar - Mounts an unobtrusive glowing gradient line at the top of the screen
@@ -34,7 +35,8 @@ export const RouteProgressBar = ({ isAnimating = true }) => {
         animate={{ width: `${progress}%`, opacity: 1 }}
         exit={{ width: '100%', opacity: 0 }}
         transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.35 }}
-        className="h-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 shadow-[0_0_12px_rgba(168,85,247,0.7)]"
+        className="h-full shadow-[0_0_12px_rgba(168,85,247,0.7)]"
+        style={{ background: BRAND_GRADIENT }}
       />
     </div>
   );
@@ -74,7 +76,8 @@ export const TopAppLoadingBanner = ({ isAnimating = true, label = null }) => {
           animate={{ width: `${progress}%`, opacity: 1 }}
           exit={{ width: '100%', opacity: 0 }}
           transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.35 }}
-          className="h-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 shadow-[0_0_12px_rgba(168,85,247,0.7)]"
+          className="h-full shadow-[0_0_12px_rgba(168,85,247,0.7)]"
+        style={{ background: BRAND_GRADIENT }}
         />
       </div>
 

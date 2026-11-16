@@ -56,7 +56,7 @@ import {
   PROFILE_CONSTRAINTS, 
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
-import { isPlaceholderHandle, resolveCreatorFlag } from '../../services/profileReadModel.js';
+import { isPlaceholderHandle, resolveCreatorFlag, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
@@ -114,10 +114,7 @@ export default function EditProfileScreen() {
   const isCreatorAccount = resolveCreatorFlag(userProfile || {}, user || {}, userLevel);
 
   const isRoyalOrNoble = Boolean(
-    userProfile?.isRoyalFamily ||
-    userProfile?.isDucal ||
-    userProfile?.activeTitle === 'duke' ||
-    userProfile?.activeTitle === 'king' ||
+    resolveRoyalFlag(userProfile) ||
     (userLevel != null && userLevel >= LEVEL_GATES.sovereign)
   );
 
@@ -278,8 +275,16 @@ export default function EditProfileScreen() {
         uniqueUser = `${cleanBase}_${suffix}`;
       }
       setFormData(prev => ({ ...prev, username: uniqueUser }));
-      setUsernameAvailability('available');
-      toast.success(`Generated unique handle: @${uniqueUser}`);
+      // `generateUniqueUsername` may fall back to a time/random-suffixed handle
+      // without re-querying availability, so verify before claiming it is free.
+      setUsernameAvailability('checking');
+      try {
+        const res = await userService.checkUsernameAvailability(uniqueUser);
+        setUsernameAvailability(res?.available ? 'available' : 'taken');
+      } catch {
+        setUsernameAvailability('error');
+      }
+      toast.success(`Generated handle: @${uniqueUser}`);
     } catch (e) {
       console.warn('Generate username err:', e);
       toast.error('Could not generate unique username');
@@ -357,7 +362,7 @@ export default function EditProfileScreen() {
 
   const handleRemoveAvatar = useCallback(async () => {
     if (!currentUid) return;
-    const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || 'Citizen', currentUid);
+    const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || null, currentUid);
     setAvatarFile(null);
     setAvatarPreview(defaultAvatar);
     if (userService?.updateUserProfile) {
@@ -807,7 +812,7 @@ export default function EditProfileScreen() {
                         ? "bg-arvdoul-purple/20 hover:bg-arvdoul-purple/30 text-[#B978FF] border border-arvdoul-purple/30" 
                         : "bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-200"
                     )}
-                    title="Generate a guaranteed unique username via userService"
+                    title="Suggest an available username"
                   >
                     <Sparkles className={cn("w-3 h-3", isGeneratingUsername && "animate-spin")} />
                     <span>Auto-Generate</span>
@@ -859,8 +864,8 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                   isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
                 )}
               />
             </div>
@@ -884,8 +889,8 @@ export default function EditProfileScreen() {
                 className={cn(
                   "w-full px-4 py-2.5 rounded-2xl text-sm font-normal outline-none transition-all border resize-none leading-relaxed",
                   isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
                 )}
               />
             </div>
@@ -943,8 +948,8 @@ export default function EditProfileScreen() {
                   className={cn(
                     "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
                     isDark
-                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-arvdoul-purple/20"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-arvdoul-purple/20"
                   )}
                 />
               </div>

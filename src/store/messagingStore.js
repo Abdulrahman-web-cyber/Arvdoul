@@ -20,12 +20,9 @@ export const useMessagingStore = create((set, get) => ({
   messagesError: {}, // { [conversationId]: Error | null }
 
   selectedConversationId: null,
-  typingUsers: {}, // { [conversationId]: { [userId]: { isTyping: boolean, timestamp: number } } }
-  presence: {}, // { [userId]: { online: boolean, lastSeen: Date } }
   drafts: {}, // { [conversationId]: string }
 
   activeSubscriptions: {}, // { [conversationId]: unsubscribe }
-  presenceSubscription: null,
 
   loadConversations: async (userId, options = {}) => {
     const state = get();
@@ -141,7 +138,9 @@ export const useMessagingStore = create((set, get) => ({
       id: optimisticId,
       conversationId,
       senderId: userId,
-      senderName: displayName || 'Unknown',
+      // Optimistic identity only when real; the reader resolves the real
+      // participant rather than showing a fabricated 'Unknown' sender.
+      senderName: displayName || null,
       senderPhoto: photoURL || null,
       type: messageData.type || 'text',
       content: messageData.content || '',
@@ -332,32 +331,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  setTyping: (conversationId, userId, isTyping) => {
-    set(
-      produce((draft) => {
-        if (!draft.typingUsers[conversationId]) {
-          draft.typingUsers[conversationId] = {};
-        }
-        if (isTyping) {
-          draft.typingUsers[conversationId][userId] = {
-            isTyping: true,
-            timestamp: Date.now(),
-          };
-        } else {
-          delete draft.typingUsers[conversationId][userId];
-        }
-      })
-    );
-  },
-
-  setPresence: (userId, presence) => {
-    set(
-      produce((draft) => {
-        draft.presence[userId] = presence;
-      })
-    );
-  },
-
   saveDraft: (conversationId, content) => {
     set(
       produce((draft) => {
@@ -394,7 +367,6 @@ export const useMessagingStore = create((set, get) => ({
         delete draft.messagesHasMore[conversationId];
         delete draft.messagesNextCursor[conversationId];
         delete draft.messagesError[conversationId];
-        delete draft.typingUsers[conversationId];
         delete draft.drafts[conversationId];
       })
     );
@@ -405,10 +377,8 @@ export const useMessagingStore = create((set, get) => ({
     Object.values(state.activeSubscriptions).forEach((unsub) => {
       if (typeof unsub === 'function') unsub();
     });
-    if (state.presenceSubscription) state.presenceSubscription();
     set({
       activeSubscriptions: {},
-      presenceSubscription: null,
     });
   },
 
@@ -428,11 +398,8 @@ export const useMessagingStore = create((set, get) => ({
       unreadCounts: {},
       totalUnreadCount: 0,
       selectedConversationId: null,
-      typingUsers: {},
-      presence: {},
       drafts: {},
       activeSubscriptions: {},
-      presenceSubscription: null,
     });
   },
 }));

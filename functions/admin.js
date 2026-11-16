@@ -503,7 +503,7 @@ exports.getEconomySummary = functions.https.onCall(async (data, context) => {
   let circulatingCoins = null;
   if (canAggregate) {
     try {
-      const agg = await db.collection('users').aggregate({ total: admin.firestore.AggregateField.sum('coins') }).get();
+      const agg = await db.collection('users_private').aggregate({ total: admin.firestore.AggregateField.sum('coins') }).get();
       circulatingCoins = Number(agg.data().total) || 0;
     } catch {
       circulatingCoins = null;

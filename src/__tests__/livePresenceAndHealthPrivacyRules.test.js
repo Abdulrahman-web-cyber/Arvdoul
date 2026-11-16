@@ -153,6 +153,20 @@ describe('live presence and system health are least-privilege', () => {
     expect(block).toMatch(/vibeData\(\)\.userId == uid\(\)/);
   });
 
+  test('story view/reaction shard reads are scoped to the creator (N459)', () => {
+    // One creator's raw story view/reaction totals are private; the only client
+    // reader is the creator's insights panel. A bare signed-in read exposed them
+    // to every user. Same boundary as analytics_shards.
+    const rulesSrc = readFile('firestore.rules');
+    for (const marker of ['match /view_shards/{shardId}', 'match /reaction_shards/{shardId}']) {
+      const start = rulesSrc.indexOf(marker);
+      expect(start).toBeGreaterThan(-1);
+      const block = rulesSrc.slice(start, rulesSrc.indexOf('match /', start + 10));
+      expect(block).not.toMatch(/allow read: if isSignedIn\(\);/);
+      expect(block).toMatch(/allow read: if isSignedIn\(\) && \(vibeData\(\)\.userId == uid\(\) \|\| isAdmin\(\)\)/);
+    }
+  });
+
   test('live_gifts read is scoped to the gift parties', () => {
     const rulesSrc = readFile('firestore.rules');
     const start = rulesSrc.indexOf('match /live_gifts/{giftId}');

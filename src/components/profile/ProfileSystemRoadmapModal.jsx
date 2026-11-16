@@ -326,7 +326,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                       const isUnlocked = currentLevel >= perk.minLevel;
                       return (
                         <div
-                          key={perk.minLevel}
+                          key={`${perk.minLevel}-${perk.title}`}
                           className={cn(
                             "p-3.5 rounded-2xl border transition-all flex items-start justify-between gap-3",
                             isUnlocked
@@ -584,19 +584,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <ul className="text-xs space-y-1.5 text-slate-400">
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>👑 Royal Crown Profile Badge</strong> with ambient violet profile aura.</span>
+                        <span><strong>👑 Royal Family badge</strong> on your profile, opening this standing panel.</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>⚡ 2x XP Multiplier</strong> permanently active on all community contributions & gifts.</span>
+                        <span><strong>⚜️ Duke / Duchess title</strong> presented on your profile across the app.</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>🏛️ Royal Council Vote</strong> on platform-wide constitutional motions.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span><strong>💎 VIP Spaces & Lounges Access</strong> with audience broadcast rights.</span>
+                        <span><strong>Royal standing</strong> recorded in your citizenship passport.</span>
                       </li>
                     </ul>
                   </div>
@@ -650,23 +646,11 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <ul className="text-xs space-y-1.5 text-slate-400">
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>👑 Golden Monarch Crown & Radiant Halo Frame</strong> on avatar across all screens.</span>
+                        <span><strong>👑 King / Queen title</strong> presented on your profile across the app.</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>⚡ 3x XP Multiplier & 20% Fee Rebate</strong> on all creator coin cashouts.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>📜 Constitutional Council Veto</strong> power on platform legislative proposals.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>🛰️ Global Broadcast Alert</strong> capability directly to all network followers.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span><strong>🏛️ Permanent Sovereign Immortalization</strong> in Arvdoul Founding Archives.</span>
+                        <span><strong>⭐ Supreme Sovereign standing</strong> recorded in your citizenship passport.</span>
                       </li>
                     </ul>
                   </div>

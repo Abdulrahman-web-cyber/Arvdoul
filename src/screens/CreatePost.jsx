@@ -41,7 +41,6 @@ import { getStorageService } from "../services/storageService";
 import { getSearchService } from "../services/searchService";
 import { getVideoService } from "../services/videoService";
 import { getStoryService } from "../services/storyService";
-import { getMonetizationService } from "../services/monetizationService";
 import { getNotificationsService } from "../services/notificationsService";
 import { getFeedService } from "../services/feedService";
 import { getUserService } from "../services/userService";
@@ -59,7 +58,7 @@ const VERSIONS_STORE = "draft_versions";
 const TEMPLATES_STORE = "templates";
 
 const INPUT_CLASS =
-  "w-full p-2.5 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-purple-500 focus:outline-none";
+  "w-full p-2.5 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-arvdoul-purple focus:outline-none";
 
 // ── EXACT CUSTOM SVG ICONS (100 % as provided, unique IDs) ─────────────
 const makeIconComponent = (renderSvg) => {
@@ -465,21 +464,6 @@ const VISIBILITY_OPTIONS = [
   { value: "only_me", label: "Only Me" },
 ];
 
-const MONETIZATION_TYPES = [
-  { value: "none", label: "No Monetization" },
-  { value: "subscription", label: "Subscriber Only" },
-  { value: "ppv", label: "Pay‑Per‑View" },
-  { value: "tip_jar", label: "Tip Jar" },
-  { value: "boost", label: "Boost" },
-];
-
-const BOOST_TIERS = [
-  { value: "none", label: "No Boost", budget: 0, duration: 1 },
-  { value: "low", label: "Low Boost", budget: 50, duration: 1 },
-  { value: "medium", label: "Medium Boost", budget: 100, duration: 2 },
-  { value: "high", label: "High Boost", budget: 200, duration: 3 },
-];
-
 const MEDIA_LIMITS = {
   maxImages: 10,
   maxVideos: 1,
@@ -503,31 +487,9 @@ const initialState = {
   contentJSON: null,
   mediaItems: [],
   visibility: "public",
-  customList: [],
   location: null,
-  taggedPeople: [],
-  taggedBrands: [],
-  taggedProducts: [],
-  topics: [],
   hashtags: [],
-  feeling: null,
-  activity: null,
-  monetization: { type: "none" },
-  boost: { type: "none", budget: 0, duration: 1 },
-  subscriptionTier: null,
-  ppvPrice: null,
-  tipJarAmounts: [5, 10, 25],
   scheduledTime: null,
-  expiresAt: null,
-  recurrence: "none",
-  coAuthors: [],
-  collaborationInvites: [],
-  settings: {
-    enableComments: true,
-    enableGifts: true,
-    enableSharing: true,
-    isNSFW: false,
-  },
   typeData: {
     poll: { options: [], allowMultiple: false },
     event: {
@@ -589,42 +551,9 @@ function reducer(state, action) {
       case "REMOVE_MEDIA_ITEM": draft.mediaItems.splice(action.payload, 1); draft.isDirty = true; pushHistory = true; break;
       case "REORDER_MEDIA": { const [removed] = draft.mediaItems.splice(action.payload.from, 1); draft.mediaItems.splice(action.payload.to, 0, removed); draft.isDirty = true; pushHistory = true; break; }
       case "SET_VISIBILITY": draft.visibility = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_CUSTOM_LIST": draft.customList = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LOCATION": draft.location = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "ADD_TAGGED_PERSON": if (!draft.taggedPeople.some(p => p.id === action.payload.id)) { draft.taggedPeople.push(action.payload); draft.isDirty = true; pushHistory = true; } break;
-      case "REMOVE_TAGGED_PERSON": draft.taggedPeople = draft.taggedPeople.filter(p => p.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "ADD_TAGGED_BRAND": if (!draft.taggedBrands.some(b => b.id === action.payload.id)) { draft.taggedBrands.push(action.payload); draft.isDirty = true; pushHistory = true; } break;
-      case "REMOVE_TAGGED_BRAND": draft.taggedBrands = draft.taggedBrands.filter(b => b.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "ADD_TAGGED_PRODUCT": if (!draft.taggedProducts.some(p => p.id === action.payload.id)) { draft.taggedProducts.push(action.payload); draft.isDirty = true; pushHistory = true; } break;
-      case "REMOVE_TAGGED_PRODUCT": draft.taggedProducts = draft.taggedProducts.filter(p => p.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "SET_TOPICS": draft.topics = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_HASHTAGS": draft.hashtags = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_FEELING": draft.feeling = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_ACTIVITY": draft.activity = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_MONETIZATION": draft.monetization = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_BOOST": draft.boost = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_SUBSCRIPTION_TIER": draft.subscriptionTier = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_PPV_PRICE": draft.ppvPrice = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_TIP_JAR_AMOUNTS": draft.tipJarAmounts = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_SCHEDULED_TIME": draft.scheduledTime = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_EXPIRES_AT": draft.expiresAt = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_RECURRENCE": draft.recurrence = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "ADD_CO_AUTHOR": {
-        if (!draft.coAuthors.some(c => c.id === action.payload.id)) {
-          draft.coAuthors.push({ id: action.payload.id, name: action.payload.name, percentage: action.payload.percentage || 0 });
-          draft.isDirty = true; pushHistory = true;
-        }
-        break;
-      }
-      case "REMOVE_CO_AUTHOR": draft.coAuthors = draft.coAuthors.filter(u => u.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "SET_CO_AUTHOR_PERCENTAGE": {
-        const co = draft.coAuthors.find(c => c.id === action.payload.id);
-        if (co) { co.percentage = action.payload.percentage; draft.isDirty = true; pushHistory = true; }
-        break;
-      }
-      case "ADD_COLLABORATION_INVITE": draft.collaborationInvites.push(action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "REMOVE_COLLABORATION_INVITE": draft.collaborationInvites = draft.collaborationInvites.filter(i => i.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "UPDATE_SETTINGS": draft.settings = { ...draft.settings, ...action.payload }; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -632,7 +561,6 @@ function reducer(state, action) {
       case "SET_EVENT_LOCATION": draft.typeData.event.location = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_TITLE": draft.typeData.link.title = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_AUDIO_FILE": draft.typeData.audio.file = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_TYPE_DATA": {
         // Deep-merge per-type data (CreateAudio dispatches the whole audio
         // sub-object). A plain assign would drop sibling keys, so merge one
@@ -660,13 +588,11 @@ function reducer(state, action) {
       case "SET_EVENT_CAPACITY": draft.typeData.event.capacity = action.payload; draft.isDirty = true; break;
       case "SET_LINK_METADATA": draft.typeData.link.metadata = action.payload; break;
       case "SET_LINK_THUMBNAIL": draft.typeData.link.thumbnail = action.payload; draft.isDirty = true; break;
-      case "SET_VIDEO_FILE": draft.typeData.video.file = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_STEP": draft.step = action.payload; break;
       case "SET_LOADING": draft.loading = action.payload; break;
       case "SET_PROGRESS": draft.progress = action.payload; break;
       case "SET_ERROR": draft.error = action.payload; break;
       case "SET_DRAFT_ID": draft.draftId = action.payload; break;
-      case "SET_IS_DRAFT_LOADED": draft.isDraftLoaded = action.payload; break;
       case "SET_IS_DIRTY": draft.isDirty = action.payload; break;
       case "SET_INSIGHTS": draft.insights = action.payload; break;
       case "SET_MODERATION_STATUS": draft.moderationStatus = action.payload; break;
@@ -727,30 +653,6 @@ function CreatePostProvider({ children }) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { setCurrentUser } = useAppStore();
-  // coin balance from the ledger (Firestore users/{uid}.coins via the
-  // monetization service). Never the store's in-memory number — the store is
-  // not synced with the server.
-  const [userCoins, setUserCoins] = useState(null);
-  const [userCoinsError, setUserCoinsError] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    if (!user?.uid) { setUserCoins(null); setUserCoinsError(false); return undefined; }
-    (async () => {
-      try {
-        const { getMonetizationService } = await import('../services/monetizationService.js');
-        const bal = await getMonetizationService().getBalance(user.uid);
-        if (!cancelled) {
-          setUserCoins(typeof bal === 'number' ? bal : null);
-          setUserCoinsError(false);
-        }
-      } catch {
-        // Distinguish "failed" from "still loading" — the panel must not tell
-        // the user their balance is loading when the read failed.
-        if (!cancelled) { setUserCoins(null); setUserCoinsError(true); }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.uid]);
   const isDark = theme === "dark";
   const prefersReducedMotion = useReducedMotion();
 
@@ -782,7 +684,7 @@ function CreatePostProvider({ children }) {
 
   const services = useRef({
     firestore: null, storage: null, search: null, video: null, story: null,
-    monetization: null, notifications: null, feed: null, user: null,
+    notifications: null, feed: null, user: null,
     ai: null, moderation: null, analytics: null,
   });
 
@@ -820,16 +722,16 @@ function CreatePostProvider({ children }) {
       try {
         const servicePromises = [
           getFirestoreService(), getStorageService(), getSearchService(),
-          getVideoService(), getStoryService(), getMonetizationService(),
+          getVideoService(), getStoryService(),
           getNotificationsService(), getFeedService(), getUserService(),
         ];
-        const [fs, st, se, vs, ss, ms, ns, fd, us] = await timedPromise(
+        const [fs, st, se, vs, ss, ns, fd, us] = await timedPromise(
           Promise.all(servicePromises), 15000, "Service initialization"
         );
 
         services.current = {
           firestore: fs, storage: st, search: se, video: vs, story: ss,
-          monetization: ms, notifications: ns, feed: fd, user: us,
+          notifications: ns, feed: fd, user: us,
         };
 
         dbRef.current = await timedPromise(
@@ -1325,7 +1227,7 @@ function CreatePostProvider({ children }) {
       const result = await callFunction(FUNCTIONS.PREDICT_POST_PERFORMANCE, {
         postType: stateRef.current.postType, content: stateRef.current.content,
         mediaCount: stateRef.current.mediaItems.length, scheduledTime: stateRef.current.scheduledTime,
-        visibility: stateRef.current.visibility, boost: stateRef.current.boost,
+        visibility: stateRef.current.visibility,
       });
       dispatch({ type: "SET_INSIGHTS", payload: result });
     } catch (insightsErr) {
@@ -1356,11 +1258,6 @@ function CreatePostProvider({ children }) {
     }, 800);
     return () => clearTimeout(debounceTimerRef.current);
   }, [state.content, state.mediaItems, getPredictions, moderateContent]);
-
-  const searchUsers = useCallback(async (query) => {
-    if (!services.current.search) return [];
-    try { const res = await services.current.search.searchUsers(query, { limit: 10 }); return res.success ? res.users : []; } catch { return []; }
-  }, []);
 
   const publishPost = useCallback(async (overrideState = null, isOfflineReplay = false) => {
     if (publishLockRef.current) return;
@@ -1482,6 +1379,12 @@ function CreatePostProvider({ children }) {
 
       // Generate instant post ID and media references
       const instantPostId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      // A future `scheduledTime` makes the server write `status: 'scheduled'`
+      // (see firestoreService.createPost); the `publishScheduledPosts` job
+      // flips it to `published` when due. A scheduled post must NOT be injected
+      // into the device-local "just published" cache or the feed now — it is
+      // not live yet.
+      const isScheduled = Boolean(current.scheduledTime && new Date(current.scheduledTime) > new Date());
       const instantMedia = (current.mediaItems || []).map((m, idx) => ({
         id: m.id || `media_${idx}`,
         url: m.preview || m.url || "",
@@ -1511,25 +1414,9 @@ function CreatePostProvider({ children }) {
         authorPhoto: userNow.photoURL || userNow.photo || "",
         visibility: communityId ? "community" : (current.visibility || "public"),
         communityId: communityId || null,
-        customList: current.customList || [],
         location: current.location || null,
-        taggedPeople: current.taggedPeople || [],
-        taggedBrands: current.taggedBrands || [],
-        taggedProducts: current.taggedProducts || [],
-        topics: current.topics || [],
         hashtags: current.hashtags || [],
-        feeling: current.feeling || null,
-        activity: current.activity || null,
-        monetization: current.monetization?.type !== "none" ? current.monetization : null,
-        boost: current.boost?.type !== "none" ? current.boost : null,
-        subscriptionTier: current.subscriptionTier || null,
-        ppvPrice: current.ppvPrice || 0,
-        tipJarAmounts: current.tipJarAmounts || [5, 10, 25],
         scheduledTime: current.scheduledTime || null,
-        expiresAt: current.expiresAt || null,
-        recurrence: current.recurrence || "none",
-        settings: current.settings || {},
-        coAuthors: current.coAuthors || [],
         poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null } : null,
         event: effectiveType === "event" ? {
           title: effectiveText,
@@ -1572,14 +1459,19 @@ function CreatePostProvider({ children }) {
         isOptimistic: true,
       };
 
-      // 1. Immediately inject into client cache & emit event
-      try {
-        const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-        const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
-        localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated.slice(0, 50)));
-        window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
-      } catch (cacheErr) {
-        console.warn("Local post caching note:", cacheErr);
+      // 1. Immediately inject into client cache & emit event — but only for an
+      // immediately-published post. A scheduled post is not live yet, so it must
+      // not be written to the device-local "just published" cache (which
+      // `feedService` merges into the feed) or announced to the feed.
+      if (!isScheduled) {
+        try {
+          const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
+          const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
+          localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated.slice(0, 50)));
+          window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
+        } catch (cacheErr) {
+          console.warn("Local post caching note:", cacheErr);
+        }
       }
 
       // 2. Clear draft
@@ -1589,10 +1481,18 @@ function CreatePostProvider({ children }) {
         });
       }
 
-      // 3. Instant UI feedback & Navigation (User never waits!)
-      toast.success("Post published instantly! 🎉");
-      publishLockRef.current = false;
-      navigate(communityId ? `/community/${communityId}` : "/home");
+      // 3. Instant UI feedback & Navigation (User never waits!). The background
+      // write below still runs for both branches — a scheduled post must be
+      // persisted so `publishScheduledPosts` can find and publish it when due.
+      if (isScheduled) {
+        toast.success("Post scheduled! 📅");
+        publishLockRef.current = false;
+        navigate("/profile");
+      } else {
+        toast.success("Post published instantly! 🎉");
+        publishLockRef.current = false;
+        navigate(communityId ? `/community/${communityId}` : "/home");
+      }
 
       // 4. Background Cloud Sync (Non-blocking)
       (async () => {
@@ -1654,18 +1554,6 @@ function CreatePostProvider({ children }) {
             // The optimistic id could not be swapped for the real one; the local
             // cache may keep a ghost entry until the next feed reconciliation.
             console.warn("Post id sync failed:", syncErr);
-          }
-
-          // Monetization coins boost
-          if (current.boost?.type !== "none" && current.boost?.budget > 0) {
-            try {
-              const { getMonetizationService } = await import("../services/monetizationService.js");
-              const monetizationService = services.current.monetization || getMonetizationService();
-              await monetizationService.spendCoins(userNow.uid, current.boost.budget, "post_boost");
-            } catch (boostErr) {
-              console.warn("Post boost spend failed:", boostErr);
-              toast.error("Your post published, but the paid boost could not be applied.");
-            }
           }
 
           // Clear feed cache
@@ -1818,18 +1706,18 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const servicesValue = useMemo(() => ({
-    services: services.current, isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
+    services: services.current, isOffline, offlineQueueItems, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
-    retryOfflineItem, deleteOfflineItem, searchUsers,
+    retryOfflineItem, deleteOfflineItem,
     saveAsTemplate, loadTemplate, loadTemplates, getDraftVersions, loadVersions, restoreVersion,
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
   }), [
-    isOffline, offlineQueueItems, userCoins, userCoinsError, isDark, prefersReducedMotion,
+    isOffline, offlineQueueItems, isDark, prefersReducedMotion,
     saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
     generateAICaption, generateAIHashtags, getPredictions, moderateContent,
-    retryOfflineItem, deleteOfflineItem, searchUsers,
+    retryOfflineItem, deleteOfflineItem,
     saveAsTemplate, loadTemplate, loadTemplates, getDraftVersions, loadVersions, restoreVersion,
     showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
     aiLoading,
@@ -2018,114 +1906,12 @@ export function LocationPanel({ defaultOpen = false }) {
   );
 }
 
-export function TaggingPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { searchUsers } = useCreatePostServices();
-  const [showModal, setShowModal] = useState(false);
-  const [tagType, setTagType] = useState("person");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-
-  const doSearch = async (q) => { setQuery(q); if (q.length < 2) { setResults([]); return; } const users = await searchUsers(q); setResults(users); };
-  const addTag = () => { if (results.length === 0) return; const entity = results[0]; dispatch({ type: `ADD_TAGGED_${tagType.toUpperCase()}`, payload: { id: entity.id, name: entity.displayName || entity.username } }); setShowModal(false); setQuery(""); setResults([]); };
-
-  return (
-    <Panel icon={Icons.AtSign} title="Tagging" defaultOpen={defaultOpen}>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {state.taggedPeople.map(p => <span key={p.id} className="inline-flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-full text-xs">{p.name}<button onClick={() => dispatch({ type: "REMOVE_TAGGED_PERSON", payload: p.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button></span>)}
-        {state.taggedBrands.map(b => <span key={b.id} className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-full text-xs">{b.name}<button onClick={() => dispatch({ type: "REMOVE_TAGGED_BRAND", payload: b.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button></span>)}
-        {state.taggedProducts.map(p => <span key={p.id} className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full text-xs">{p.name}<button onClick={() => dispatch({ type: "REMOVE_TAGGED_PRODUCT", payload: p.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button></span>)}
-      </div>
-      <div className="flex gap-2">
-        {["person", "brand", "product"].map(type => (
-          <button key={type} onClick={() => { setTagType(type); setShowModal(true); }} className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-full capitalize">{type}</button>
-        ))}
-      </div>
-      {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <h4 className="font-bold mb-2">Tag {tagType}</h4>
-          <input type="text" placeholder="Search..." value={query} onChange={e => doSearch(e.target.value)} className={`${INPUT_CLASS} mb-2`} autoFocus />
-          <div className="max-h-40 overflow-y-auto">
-            {results.map(u => (
-              <button key={u.id} onClick={() => { setResults([u]); addTag(); }} className="w-full text-left p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">{u.displayName || u.username}</button>
-            ))}
-            {query && results.length === 0 && <p className="text-sm text-gray-500">No results</p>}
-          </div>
-          <button onClick={() => setShowModal(false)} className="mt-3 w-full py-2 rounded-xl bg-gray-200 dark:bg-gray-700">Cancel</button>
-        </Modal>
-      )}
-    </Panel>
-  );
-}
-
-export function MonetizationPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { userCoins, userCoinsError } = useCreatePostServices();
-  // userCoins is the ledger balance (null while loading / unauthenticated).
-  const insufficient = state.monetization.type === "boost" &&
-    userCoins != null && state.boost.budget > userCoins;
-  return (
-    <Panel icon={Icons.DollarSign} title="Monetization" defaultOpen={defaultOpen}>
-      <select value={state.monetization.type} onChange={e => dispatch({ type: "SET_MONETIZATION", payload: { ...state.monetization, type: e.target.value } })}
-        className={INPUT_CLASS}>
-        {MONETIZATION_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      {state.monetization.type === "boost" && (
-        <div className="space-y-2 mt-2">
-          <select value={state.boost.type} onChange={e => { const tier = BOOST_TIERS.find(t => t.value === e.target.value); dispatch({ type: "SET_BOOST", payload: tier || BOOST_TIERS[0] }); }}
-            className={INPUT_CLASS}>
-            {BOOST_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <input type="number" placeholder="Budget" value={state.boost.budget}
-            onChange={e => dispatch({ type: "SET_BOOST", payload: { ...state.boost, budget: parseInt(e.target.value) || 0 } })}
-            className={INPUT_CLASS} />
-          {insufficient && <p className="text-xs text-red-500">Insufficient coins (you have {userCoins})</p>}
-          {state.monetization.type === "boost" && userCoins == null && (
-            <p className="text-xs text-gray-500">
-              {userCoinsError
-                ? 'Could not load your balance — the server still verifies it on publish.'
-                : 'Balance loading… (server-side check still applies on publish)'}
-            </p>
-          )}
-        </div>
-      )}
-      {state.monetization.type === "subscription" && <input type="text" placeholder="Tier name" value={state.subscriptionTier || ""} onChange={e => dispatch({ type: "SET_SUBSCRIPTION_TIER", payload: e.target.value })} className={`${INPUT_CLASS} mt-2`} />}
-      {state.monetization.type === "ppv" && <input type="number" placeholder="Price in coins" value={state.ppvPrice || ""} onChange={e => dispatch({ type: "SET_PPV_PRICE", payload: parseInt(e.target.value) || 0 })} className={`${INPUT_CLASS} mt-2`} />}
-      {state.monetization.type === "tip_jar" && <input type="text" placeholder="5, 10, 25" value={state.tipJarAmounts.join(", ")} onChange={e => { const amounts = e.target.value.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n)); dispatch({ type: "SET_TIP_JAR_AMOUNTS", payload: amounts }); }} className={`${INPUT_CLASS} mt-2`} />}
-    </Panel>
-  );
-}
-
 export function SchedulingPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
   const [showPicker, setShowPicker] = useState(false);
 
-  const recurrenceDates = useMemo(() => {
-    if (!state.scheduledTime || state.recurrence === "none") return [];
-    const base = new Date(state.scheduledTime);
-    const dates = [base];
-    for (let i = 1; i <= 5; i++) {
-      const next = new Date(base);
-      if (state.recurrence === "daily") next.setDate(base.getDate() + i);
-      else if (state.recurrence === "weekly") next.setDate(base.getDate() + i * 7);
-      else if (state.recurrence === "monthly") next.setMonth(base.getMonth() + i);
-      if (next > new Date()) dates.push(next);
-    }
-    return dates;
-  }, [state.scheduledTime, state.recurrence]);
-
   return (
     <Panel icon={Icons.Clock} title="Scheduling" defaultOpen={defaultOpen}>
-      <div className="flex items-center gap-4 mb-3">
-        <label className="text-sm">Recurrence:</label>
-        <select value={state.recurrence} onChange={e => dispatch({ type: "SET_RECURRENCE", payload: e.target.value })}
-          className={`${INPUT_CLASS} w-auto`}>
-          <option value="none">None</option>
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
-        </select>
-      </div>
       <button onClick={() => setShowPicker(!showPicker)} className="text-sm text-purple-500 hover:underline">
         {showPicker ? "Hide picker" : "Set specific date/time"}
       </button>
@@ -2138,66 +1924,10 @@ export function SchedulingPanel({ defaultOpen = false }) {
             className={INPUT_CLASS} />
         </Suspense>
       )}
-      {recurrenceDates.length > 1 && (
-        <div className="mt-3 p-3 bg-purple-100/10 dark:bg-purple-900/10 rounded-xl border border-purple-500/20">
-          <p className="text-xs font-semibold text-purple-400 mb-2">Upcoming posts:</p>
-          <div className="flex flex-wrap gap-2">
-            {recurrenceDates.map((d, i) => (
-              <span key={i} className="bg-purple-500/10 text-purple-400 text-xs px-2 py-1 rounded-full">
-                {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-export function CoAuthorPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { searchUsers } = useCreatePostServices();
-  const [showModal, setShowModal] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-
-  const doSearch = async (q) => { setQuery(q); if (q.length < 2) { setResults([]); return; } const users = await searchUsers(q); setResults(users); };
-  const addCoAuthor = (user) => { dispatch({ type: "ADD_CO_AUTHOR", payload: { id: user.id, name: user.displayName || user.username, percentage: 0 } }); setShowModal(false); setQuery(""); setResults([]); };
-
-  return (
-    <Panel icon={Icons.Users} title="Co‑Authors" defaultOpen={defaultOpen}>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {state.coAuthors.map(c => (
-          <div key={c.id} className="flex items-center gap-2 bg-purple-100 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs">
-            <span>{c.name}</span>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={c.percentage}
-              onChange={e => dispatch({ type: "SET_CO_AUTHOR_PERCENTAGE", payload: { id: c.id, percentage: parseInt(e.target.value) || 0 } })}
-              className="w-12 bg-white/20 rounded px-1 text-xs text-center"
-              placeholder="%"
-            />
-            <button onClick={() => dispatch({ type: "REMOVE_CO_AUTHOR", payload: c.id })} className="text-red-400"><Icons.X className="w-3 h-3" /></button>
-          </div>
-        ))}
-      </div>
-      <button onClick={() => setShowModal(true)} className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-full">+ Add</button>
-      {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <h4 className="font-bold mb-2">Add Co‑author</h4>
-          <input type="text" placeholder="Search..." value={query} onChange={e => doSearch(e.target.value)} className={`${INPUT_CLASS} mb-2`} autoFocus />
-          <div className="max-h-40 overflow-y-auto">
-            {results.map(u => (
-              <button key={u.id} onClick={() => addCoAuthor(u)} className="w-full text-left p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-                <img src={u.photoURL || "/assets/default-profile.png"} className="w-6 h-6 rounded-full" alt="" /> <span>{u.displayName || u.username}</span>
-              </button>
-            ))}
-            {query && results.length === 0 && <p className="text-sm text-gray-500">No users found</p>}
-          </div>
-          <button onClick={() => setShowModal(false)} className="mt-3 w-full py-2 rounded-xl bg-gray-200 dark:bg-gray-700">Cancel</button>
-        </Modal>
+      {state.scheduledTime && (
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Publishes automatically at {new Date(state.scheduledTime).toLocaleString()}.
+        </p>
       )}
     </Panel>
   );
@@ -2250,12 +1980,23 @@ export function InsightsPanel({ defaultOpen = false }) {
   const content = !state.insights ? (
     <button onClick={getPredictions} className="px-4 py-2 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600">📊 Get Predictions</button>
   ) : (
-    <div className="grid grid-cols-2 gap-2 text-xs">
-      <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
-      <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
-      <div><span className="text-gray-500">Earnings:</span> {state.insights.earnings} coins</div>
-      <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
-      <div className="col-span-2"><span className="text-gray-500">Best time:</span> {state.insights.bestTime}</div>
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
+        <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
+        <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
+        {state.insights.suggestedWindow && (
+          <div className="col-span-2"><span className="text-gray-500">Suggested window:</span> {state.insights.suggestedWindow}</div>
+        )}
+      </div>
+      {Array.isArray(state.insights.factors) && state.insights.factors.length > 0 && (
+        <ul className="text-xs text-gray-500 dark:text-gray-400 list-disc pl-4 space-y-0.5">
+          {state.insights.factors.map((f, i) => <li key={i}>{f}</li>)}
+        </ul>
+      )}
+      <p className="text-[11px] text-gray-400 dark:text-gray-500">
+        Heuristic estimates from your draft — not a guarantee of performance.
+      </p>
     </div>
   );
   return (
@@ -2287,13 +2028,13 @@ export function ModerationStatus({ defaultOpen = false }) {
   );
 }
 
-// ── POST PREVIEW (live mock‑up) ────────────────────────────────────────
+// ── POST PREVIEW (draft render) ────────────────────────────────────────
 function PostPreview() {
   const { state } = useCreatePostState();
   const { user } = useAuth();
   const isDark = useTheme().theme === "dark";
 
-  const authorName = state.coAuthors[0]?.name || pickDisplayName([user?.displayName, user?.username], { fallback: "You" });
+  const authorName = pickDisplayName([user?.displayName, user?.username], { fallback: "You" });
   const authorUsername = deriveHandle(user?.username) || deriveHandle(user?.email) || "";
   const authorPhoto = user?.photoURL || "";
 
@@ -2340,7 +2081,7 @@ function PostPreview() {
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span>Just now</span>
+              <span>Preview</span>
               {state.location && (
                 <>
                   <span>•</span>
@@ -2409,11 +2150,10 @@ function PostPreview() {
         </div>
       )}
 
-      {/* Mock interaction footer */}
+      {/* Draft preview footer: no engagement exists yet, so it is not shown as a
+          measured "0" — the audience scope is the only real signal here. */}
       <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
-        <span className="flex items-center gap-1"><Icons.Heart className="w-4 h-4" /> 0</span>
-        <span className="flex items-center gap-1"><Icons.MessageCircle className="w-4 h-4" /> 0</span>
-        <span className="flex items-center gap-1"><Icons.Share2 className="w-4 h-4" /> Share</span>
+        <span>Preview — engagement appears after publishing</span>
         <span className="flex items-center gap-1 text-purple-500 font-medium">
           <Icons.Eye className="w-4 h-4" /> {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label || "Public"}
         </span>
@@ -2423,7 +2163,7 @@ function PostPreview() {
 }
 
 export function ReviewSummary({ defaultOpen = false }) {
-  const { state } = useCreatePostState();
+  const { state, dispatch } = useCreatePostState();
   const { saveDraft, saveAsTemplate } = useCreatePostServices();
   const isDark = useTheme().theme === "dark";
 
@@ -2480,18 +2220,20 @@ export function ReviewSummary({ defaultOpen = false }) {
             {state.scheduledTime ? new Date(state.scheduledTime).toLocaleDateString() : "Immediately"}
           </span>
         </div>
-        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
-          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Monetization</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
-            {MONETIZATION_TYPES.find(m => m.value === state.monetization.type)?.label || "Free"}
-          </span>
-        </div>
       </div>
 
       {state.error && (
         <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-medium flex items-center gap-2">
           <Icons.AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{state.error}</span>
+          <span className="flex-1">{state.error}</span>
+          <button
+            type="button"
+            aria-label="Dismiss error"
+            onClick={() => dispatch({ type: "CLEAR_ERROR" })}
+            className="p-0.5 rounded hover:bg-red-500/20"
+          >
+            <Icons.X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>
@@ -2946,8 +2688,7 @@ function EnhancedStep3View() {
       <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-gray-100 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 overflow-x-auto scrollbar-hide">
         {[
           { id: 'audience', label: '🎯 Audience & Reach' },
-          { id: 'content', label: '📍 Tags & Location' },
-          { id: 'monetization', label: '💰 Monetization & Boost' },
+          { id: 'content', label: '📍 Location' },
           { id: 'advanced', label: '⚙️ AI & Scheduling' },
         ].map((tab) => (
           <button
@@ -2970,20 +2711,12 @@ function EnhancedStep3View() {
         {activeSection === 'audience' && (
           <div className="space-y-4">
             <VisibilityPanel defaultOpen={true} />
-            <CoAuthorPanel defaultOpen={true} />
           </div>
         )}
 
         {activeSection === 'content' && (
           <div className="space-y-4">
             <LocationPanel defaultOpen={true} />
-            <TaggingPanel defaultOpen={true} />
-          </div>
-        )}
-
-        {activeSection === 'monetization' && (
-          <div className="space-y-4">
-            <MonetizationPanel defaultOpen={true} />
           </div>
         )}
 

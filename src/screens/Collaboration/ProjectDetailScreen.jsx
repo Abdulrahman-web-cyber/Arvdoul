@@ -3,6 +3,7 @@
 // Per Constitution v5.0 - Team, content versions, review workflow
 
 import { useState, useMemo, useEffect } from "react";
+import { brandCanvasBackground } from '../../design-system/tokens.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -15,10 +16,12 @@ import { Dialog } from '../../components/UI/Dialog';
 import { ArrowLeft, Users, Clock, FileText, CheckCircle, XCircle, Share2, MoreVertical, Plus, Eye, Loader2 } from "lucide-react";
 
 const formatRelativeTime = (value) => {
-  if (!value) return 'just now';
+  // No timestamp means the age is unknown; return null so the caller omits it
+  // rather than claiming the item was created "just now"/"recently".
+  if (!value) return null;
   const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
   const diffMs = Date.now() - date.getTime();
-  if (!Number.isFinite(diffMs)) return 'recently';
+  if (!Number.isFinite(diffMs)) return null;
   const mins = Math.round(diffMs / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -44,9 +47,7 @@ export default function ProjectDetailScreen() {
   const isDark = theme === 'dark';
 
   const backgroundStyle = useMemo(() => ({
-    background: isDark
-      ? 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.1) 0%, transparent 50%), #03071B'
-      : 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.05) 0%, transparent 50%), #F6F8FC',
+    background: brandCanvasBackground(isDark),
   }), [isDark]);
 
   const [activeTab, setActiveTab] = useState('content');
@@ -445,7 +446,7 @@ export default function ProjectDetailScreen() {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-white truncate">{meta.title || `Version ${index + 1}`}</h4>
                     <p className="text-xs text-gray-400 capitalize">
-                      {(meta.type || 'video')} • {formatRelativeTime(item.createdAt)}
+                      {(meta.type || 'video')}{formatRelativeTime(item.createdAt) ? ` • ${formatRelativeTime(item.createdAt)}` : ''}
                     </p>
                   </div>
                   <div className={cn("flex items-center gap-2", status.text)}>
@@ -612,7 +613,7 @@ export default function ProjectDetailScreen() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="font-medium text-white truncate">{version.content?.title || 'Untitled version'}</h4>
-                        <p className="text-xs text-gray-400">Submitted {formatRelativeTime(version.submittedAt)}</p>
+                        {formatRelativeTime(version.submittedAt) && (<p className="text-xs text-gray-400">Submitted {formatRelativeTime(version.submittedAt)}</p>)}
                       </div>
                       {canReview && (
                         <div className="flex items-center gap-2">

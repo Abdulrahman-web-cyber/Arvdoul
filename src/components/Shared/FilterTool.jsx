@@ -63,8 +63,6 @@ const FilterThumbnail = memo(({
   isFavorite,
   onSelect,
   onToggleFavorite,
-  previewImage,
-  thumbnailStyle,
 }) => {
     const { isDark } = useTheme();
   return (
@@ -150,8 +148,6 @@ FilterThumbnail.propTypes = {
   isFavorite: PropTypes.bool.isRequired,
   onSelect: PropTypes.func.isRequired,
   onToggleFavorite: PropTypes.func.isRequired,
-  previewImage: PropTypes.string,
-  thumbnailStyle: PropTypes.object,
 };
 
 /**
@@ -164,16 +160,6 @@ const FilterTool = memo(({
   setFilterIntensity,
   favorites: externalFavorites = [],
   setFavorites,
-  previewImage,
-  // Legacy props support
-  brightness,
-  contrast,
-  saturation,
-  setBrightness,
-  setContrast,
-  setSaturation,
-  adjustments = {},
-  setAdjustment,
 }) => {
     const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -238,14 +224,6 @@ const FilterTool = memo(({
   const isFavorite = useCallback((filterId) => {
     return activeFavorites.includes(filterId);
   }, [activeFavorites]);
-
-  // Handle legacy props (backward compatibility)
-  useEffect(() => {
-    // If legacy props are provided, use them
-    if (setAdjustment) {
-      // Already handled through adjustments prop
-    }
-  }, [brightness, contrast, saturation]);
 
   return (
     <div className="w-full space-y-4 text-white">
@@ -320,7 +298,6 @@ const FilterTool = memo(({
                 isFavorite={true}
                 onSelect={() => handleSelect(filterItem)}
                 onToggleFavorite={handleToggleFavorite}
-                previewImage={previewImage}
               />
             ))}
           </div>
@@ -347,7 +324,6 @@ const FilterTool = memo(({
               isFavorite={isFavorite(filterItem.id)}
               onSelect={() => handleSelect(filterItem)}
               onToggleFavorite={handleToggleFavorite}
-              previewImage={previewImage}
             />
           ))}
         </div>
@@ -432,19 +408,6 @@ FilterTool.propTypes = {
   favorites: PropTypes.arrayOf(PropTypes.string),
   /** Function to set favorites (external) */
   setFavorites: PropTypes.func,
-  /** Preview image URL for thumbnails */
-  previewImage: PropTypes.string,
-  // Legacy props support
-  brightness: PropTypes.number,
-  contrast: PropTypes.number,
-  saturation: PropTypes.number,
-  setBrightness: PropTypes.func,
-  setContrast: PropTypes.func,
-  setSaturation: PropTypes.func,
-  /** Object containing all adjustment values */
-  adjustments: PropTypes.objectOf(PropTypes.number),
-  /** Function to update a single adjustment value */
-  setAdjustment: PropTypes.func,
 };
 
 export default FilterTool;

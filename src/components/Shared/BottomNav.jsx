@@ -11,7 +11,7 @@ import { useProfileStore } from "../../store/profileStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
-import { BRAND_GRADIENT, tokens } from "../../design-system/tokens.js";
+import { BRAND_GRADIENT, brandRgba, tokens } from "../../design-system/tokens.js";
 
 /* ==========================================================================
    ARVDOUL BOTTOM NAVIGATION
@@ -526,8 +526,8 @@ const NavigationItem = memo(function NavigationItem({
           className="pointer-events-none absolute left-1/2 top-[13px] h-[38px] w-[62px] -translate-x-1/2 rounded-full"
           style={{
             background: dark
-              ? "radial-gradient(circle,rgba(139,30,243,.14),transparent 72%)"
-              : "radial-gradient(circle,rgba(139,30,243,.09),transparent 72%)",
+              ? `radial-gradient(circle,${brandRgba(0.14)},transparent 72%)`
+              : `radial-gradient(circle,${brandRgba(0.09)},transparent 72%)`,
           }}
         />
       )}
@@ -1249,7 +1249,7 @@ function BottomNav() {
                   style={{
                     background: dark
                       ? "linear-gradient(180deg,transparent,rgba(200,43,255,.15) 46%,rgba(255,255,255,.1),transparent)"
-                      : "linear-gradient(180deg,transparent,rgba(139,30,243,.08) 46%,rgba(255,255,255,.7),transparent)",
+                      : `linear-gradient(180deg,transparent,${brandRgba(0.08)} 46%,rgba(255,255,255,.7),transparent)`,
                   }}
                 />
 

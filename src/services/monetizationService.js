@@ -4,14 +4,13 @@ import { getFirestoreInstance, auth } from '../firebase/firebase.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy, limit as firestoreLimit, addDoc, serverTimestamp } from "firebase/firestore";
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
 import { openDB } from 'idb';
-import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { loadStripe } from '@stripe/stripe-js';
 import { svcLogger } from './ServiceKit.js';
-import { unknownNumber } from '../lib/unknownNumber.js';
+import { PRIVATE_PROFILE_COLLECTION } from '../config/profileContracts.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
-import { LEVELS as CANONICAL_LEVELS, GIFT_CATALOG, getLevelInfo } from "../shared/levelConfig.cjs";
+import { LEVELS as CANONICAL_LEVELS, GIFT_CATALOG, getLevelInfo, MAX_ADS_PER_USER_PER_DAY } from "../shared/levelConfig.cjs";
 
 const log = svcLogger('monetizationService');
 
@@ -39,9 +38,8 @@ function generateIdempotencyKey() {
 const DEFAULT_CONFIG = {
   LEVELS: CANONICAL_LEVELS,
   GIFTS: GIFT_CATALOG.map((g) => ({ type: g.type, value: g.coins })),
-  BOOST_COST_PER_DAY: 10,
   AD_PLACEMENTS: ['home', 'videos', 'stories', 'messages', 'notifications', 'profile', 'feed', 'conversation_list', 'search'],
-  MAX_ADS_PER_USER_PER_DAY: 20,
+  MAX_ADS_PER_USER_PER_DAY: MAX_ADS_PER_USER_PER_DAY,
   AD_CACHE_TTL: 300, // seconds
   POSITION_THRESHOLDS: {
     KING: 1000000,
@@ -409,14 +407,19 @@ class MonetizationService {
   // Returns a number when the balance is known, `null` when it could not be
   // read. Callers already gate on `typeof bal === 'number'`; the previous
   // `return 0` on failure told every screen the wallet was empty.
+  //
+  // The authoritative balance lives on `users_private/{uid}` (owner/admin
+  // readable) — NOT the world-signed-in `users/{uid}` doc, which would leak any
+  // balance to every signed-in user regardless of the owner's `economicStatus`
+  // scope (N324). A cross-viewer read is denied by the rules and returns null.
   async getBalance(userId) {
     if (!userId) return null;
     await this._ensureInitialized();
     try {
-      const userRef = doc(this.db, 'users', userId);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return null;
-      const coins = userSnap.data().coins;
+      const privateRef = doc(this.db, PRIVATE_PROFILE_COLLECTION, userId);
+      const privateSnap = await getDoc(privateRef);
+      if (!privateSnap.exists()) return null;
+      const coins = privateSnap.data().coins;
       return coins == null ? null : Number(coins);
     } catch (e) {
       log.error('Failed to get balance:', e);
@@ -481,7 +484,9 @@ class MonetizationService {
   }
 
   async getMonetizationStats(userId) {
-    if (!userId) return { balance: 0, level: { level: 1, progress: 0 }, totalTransactions: 0 };
+    // No uid means nothing is known: a fabricated `balance: 0` / `level: 1`
+    // would render as a measured empty account. Unknown stays null (N404).
+    if (!userId) return { balance: null, level: null, totalTransactions: null };
     const [balance, levelInfo, history] = await Promise.all([
       this.getBalance(userId),
       this.getUserLevel(userId),
@@ -545,40 +550,6 @@ class MonetizationService {
     if (followers >= thresholds.STAR) return { title: 'Star', emoji: '✨', minFollowers: thresholds.STAR, type: 'popularity' };
     if (followers >= thresholds.RISING) return { title: 'Rising Star', emoji: '🌱', minFollowers: thresholds.RISING, type: 'popularity' };
     return { title: 'Community Member', emoji: '👥', minFollowers: 0, type: 'popularity' };
-  }
-
-  // Cursor-paginated by coins. `cursor` is the `coins` value of the last row
-  // already held; ties at the boundary are acceptable for a leaderboard page.
-  async getCoinLeaderboard(limitCount = 50, cursor = null) {
-    await this._ensureInitialized();
-    try {
-      const pageSize = Math.max(1, Math.min(Number(limitCount) || 50, 200));
-      const usersRef = collection(this.db, 'users');
-      const clauses = [];
-      if (cursor != null) clauses.push(where('coins', '<', Number(cursor)));
-      clauses.push(orderBy('coins', 'desc'), firestoreLimit(pageSize));
-      const snapshot = await getDocs(query(usersRef, ...clauses));
-      const items = snapshot.docs.map((doc) => {
-        // A balance the ledger never wrote is unknown, not a fabricated 0 —
-        // and an unknown balance cannot be ranked into a position title.
-        const coins = unknownNumber(doc.data().coins);
-        return {
-          userId: doc.id,
-          displayName: doc.data().displayName || 'User',
-          photoURL: getSafeAvatarUrl(doc.data().photoURL, doc.data().displayName || 'User', doc.id),
-          coins,
-          position: coins === null ? null : this.getPositionTitle(coins),
-        };
-      });
-      const nextCursor =
-        snapshot.docs.length === pageSize && items.length > 0
-          ? items[items.length - 1].coins
-          : null;
-      return { items, nextCursor };
-    } catch (e) {
-      log.error('Failed to get leaderboard:', e);
-      return { items: [], nextCursor: null };
-    }
   }
 
   getPositionTitle(coins) {
@@ -824,12 +795,17 @@ class MonetizationService {
 
   async getPayoutSettings() {
     await this._ensureInitialized();
+    // The callable returns `{ success, settings }`; the settings document is
+    // the payout account record (`status: 'onboarding' | 'ready'`,
+    // `stripeAccountId`). Unwrap it so callers read the record, not the
+    // envelope — reading `accountStatus` off the envelope always missed.
+    const unwrap = (data) => (data && typeof data === 'object' ? (data.settings ?? data) : null);
     try {
       const result = await retryOperation(() => this.cfGetPayoutSettings());
-      return result.data;
+      return unwrap(result.data);
     } catch (err) {
       const uid = auth?.currentUser?.uid;
-      if (!uid) return { enabled: false, accountStatus: 'unconfigured' };
+      if (!uid) return { status: 'unconfigured' };
       try {
         const snap = await getDoc(doc(this.db, 'payout_settings', uid));
         if (snap.exists()) return snap.data();
@@ -838,7 +814,7 @@ class MonetizationService {
       }
       // Honest unconfigured state — never claim an active payout account
       // that does not exist.
-      return { enabled: false, accountStatus: 'unconfigured', currency: 'USD' };
+      return { status: 'unconfigured', currency: 'USD' };
     }
   }
 
@@ -919,16 +895,14 @@ class MonetizationService {
     if (!giftConfig) {
       throw new Error(`Unknown gift type: ${giftType}`);
     }
-    const cost = giftConfig.value;
 
     try {
       const result = await retryOperation(() =>
         this.cfSendGift({ senderId, postId, giftType, idempotencyKey: key })
       );
-      // Social loop: notify the post author + award gift_received XP
-      // (best-effort, never breaks the gift).
-      this._afterGiftSent(senderId, postId, giftType, cost).catch((e) =>
-        log.warn('Gift follow-up (XP/notification) failed', { senderId, postId, error: e?.message }));
+      // The receiver's in-app `gift_received` notification is written server-side
+      // in `sendGift` (the only place that can prove the gift); a client cannot
+      // mint that trusted type. Nothing further to do here.
       return result.data;
     } catch (err) {
       // Server-authoritative money path: there is deliberately NO
@@ -937,27 +911,6 @@ class MonetizationService {
       // to the caller instead of being papered over.
       log.error('Monetary callable failed (no client fallback):', err);
       throw err;
-    }
-  }
-
-  /**
-   * Best-effort social loop after a gift is sent: notify the post author. The
-   * `gift_received` XP is credited server-side in `sendGift` (which holds the
-   * gift transaction id), so it cannot be minted by a client without a real
-   * gift. Never throws into the gift path.
-   * @private
-   */
-  async _afterGiftSent(senderId, postId, giftType, cost) {
-    try {
-      const { getDoc, doc } = await import('firebase/firestore');
-      const postSnap = await getDoc(doc(this.db, 'posts', postId));
-      const authorId = postSnap.exists() ? (postSnap.data().authorId || postSnap.data().userId) : null;
-      if (!authorId || authorId === senderId) return;
-
-      const { getNotificationsService } = await import('./notificationsService.js');
-      await getNotificationsService().createGiftNotification(senderId, authorId, postId, giftType, cost);
-    } catch (err) {
-      log.debug('[Gift] Post-gift notification skipped:', { error: err.message });
     }
   }
 
@@ -1037,8 +990,6 @@ export const getUserPosition = (userId, gender = 'other') =>
   getMonetizationService().getUserPosition(userId, gender);
 export const getUserPopularityPosition = (userId) =>
   getMonetizationService().getUserPopularityPosition(userId);
-export const getCoinLeaderboard = (limitCount, cursor) =>
-  getMonetizationService().getCoinLeaderboard(limitCount, cursor);
 
 export const addCoins = (userId, amount, reason, metadata, idempotencyKey) =>
   getMonetizationService().addCoins(userId, amount, reason, metadata, idempotencyKey);

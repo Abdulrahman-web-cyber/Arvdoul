@@ -18,6 +18,7 @@ import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import {
   resolveCount,
+  pickDisplayName,
   deriveProfileIdentity,
   projectProfileForViewer,
   OFFLINE_PRESENCE,
@@ -66,6 +67,7 @@ export default function ProfilePublicScreen() {
   const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const storeFollowLoading = useProfileStore((state) => state.followLoading);
   const storeMutualFriends = useProfileStore((state) => state.mutualFriends);
+  const storeMutualFriendsResolved = useProfileStore((state) => state.mutualFriendsResolved);
   const storeHighlights = useProfileStore((state) => state.highlights);
 
   const [localLoading, setLocalLoading] = useState(true);
@@ -194,6 +196,7 @@ export default function ProfilePublicScreen() {
   const profileData = storeProfile;
   const posts = storePosts;
   const mutualFriends = storeMutualFriends;
+  const mutualFriendsResolved = storeMutualFriendsResolved;
   const loading = localLoading || storeLoading;
   const targetUid = storeProfile?.id || storeProfile?.uid || routeUserId;
   const handleLoadMorePosts = useCallback(() => {
@@ -214,7 +217,7 @@ export default function ProfilePublicScreen() {
       return;
     }
 
-    const targetUid = profileData?.id || profileData?.uid || userId;
+    const targetUid = profileData?.id || profileData?.uid || routeUserId;
     if (!targetUid || targetUid === currentUserId) return;
 
     if (requestStatus === 'pending') {
@@ -233,7 +236,7 @@ export default function ProfilePublicScreen() {
       const next = useProfileStore.getState().followStatus;
       setRelationship(prev => prev ? { ...prev, isFollowing: Boolean(next?.isFollowing), requestStatus: next?.requestStatus ?? null } : null);
     }
-  }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, userId, navigate]);
+  }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, routeUserId, navigate]);
 
   // Handle Friend Request Toggle (For Newcomer level 1-2 profiles)
   const handleFriendRequestToggle = useCallback(async () => {
@@ -242,6 +245,12 @@ export default function ProfilePublicScreen() {
       navigate('/login');
       return;
     }
+
+    // The route param may be a `@handle`; friend requests are keyed on the
+    // resolved uid, so using the raw param filed them under the wrong document
+    // id (and the accept/cancel paths then never matched).
+    const friendTargetUid = profileData?.id || profileData?.uid || routeUserId;
+    if (!friendTargetUid || friendTargetUid === currentUser.uid) return;
 
     if (friendshipStatus === 'friends') {
       toast.info(`You and @${profileData?.username || 'user'} are already friends!`);
@@ -262,7 +271,7 @@ export default function ProfilePublicScreen() {
         setFriendshipStatus('friends');
         toast.success(`You and @${profileData?.username || 'user'} are now friends!`);
       } else if (friendshipStatus === 'none') {
-        const res = await userService.sendFriendRequest(currentUser.uid, userId);
+        const res = await userService.sendFriendRequest(currentUser.uid, friendTargetUid);
         setFriendshipStatus('pending');
         if (res?.requestId) setPendingRequestId(res.requestId);
         toast.success(`Friend request sent to @${profileData?.username || 'user'}`);
@@ -273,16 +282,18 @@ export default function ProfilePublicScreen() {
     } finally {
       setFriendRequestLoading(false);
     }
-  }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
+  }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, profileData?.id, profileData?.uid, routeUserId, navigate]);
 
   // Withdraw an outgoing friend request. `cancelFriendRequest` had no caller,
   // so a sent request was a permanent dead-end.
   const handleCancelFriendRequest = useCallback(async () => {
-    if (!currentUser?.uid || !userId) return;
+    if (!currentUser?.uid) return;
+    const friendTargetUid = profileData?.id || profileData?.uid || routeUserId;
+    if (!friendTargetUid) return;
     setFriendRequestLoading(true);
     try {
       const { getUserService } = await import('../../services/userService.js');
-      await getUserService().cancelFriendRequest(currentUser.uid, userId);
+      await getUserService().cancelFriendRequest(currentUser.uid, friendTargetUid);
       setFriendshipStatus('none');
       setPendingRequestId(null);
       toast.success('Friend request withdrawn.');
@@ -291,7 +302,7 @@ export default function ProfilePublicScreen() {
     } finally {
       setFriendRequestLoading(false);
     }
-  }, [currentUser?.uid, userId]);
+  }, [currentUser?.uid, profileData?.id, profileData?.uid, routeUserId]);
 
   // Base profile: real data only, no mock fallbacks and no privacy decisions.
   // Privacy is applied once, from the capability engine, in `effectiveProfile`
@@ -305,7 +316,7 @@ export default function ProfilePublicScreen() {
       handleFallbacks: [profileData.displayName, profileData.email],
       handleFallback: 'creator',
       displayCandidates: [profileData.displayName, profileData.name],
-      displayFallback: 'Creator',
+      displayFallback: null,
       followerCandidates: [profileData.followerCount, profileData.followersCount],
       followingCandidates: [profileData.followingCount],
       postCandidates: [posts?.length, profileData.postCount],
@@ -563,12 +574,17 @@ export default function ProfilePublicScreen() {
           {/* 2. Social Context Bar (Mutual Friends, Shared Communities, Follows You) */}
           <ProfileMutualFriends
             mutualFriends={mutualFriends}
+            mutualFriendsResolved={mutualFriendsResolved}
             relationship={relationship}
             isFollowing={isFollowing}
-            targetName={effectiveProfile?.displayName || 'Creator'}
+            targetName={pickDisplayName([effectiveProfile?.displayName, effectiveProfile?.name], { fallback: null }) || ((effectiveProfile?.id || effectiveProfile?.uid || userId) ? `user ${String(effectiveProfile?.id || effectiveProfile?.uid || userId).slice(0, 6)}` : 'this user')}
             theme={theme}
             capabilities={capabilities}
-            onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+            // The mutual-friends card is a summary, and `ProfileSocialContext`
+            // invokes the handler with no argument — the old
+            // `(friend) => navigate(...friend.id)` dereferenced `undefined` and
+            // threw on every click. Route to the full friends list instead.
+            onFriendPress={() => navigate(`/profile/${effectiveProfile?.id || effectiveProfile?.uid || userId}/friends`)}
           />
 
           {/* 3. 6-Card Civic Metrics Grid */}
@@ -609,7 +625,7 @@ export default function ProfilePublicScreen() {
                   className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
-                  <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
+                  <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
                 </button>
               </div>
             </div>

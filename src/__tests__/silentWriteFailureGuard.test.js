@@ -117,7 +117,6 @@ describe('silent write-failure guard: a swallowed write must be observable', () 
     const pins = [
       ['src/services/feedService.js', 'Interest-vector persist failed'],
       ['src/services/feedService.js', 'Feed session-state persist failed'],
-      ['src/services/firestoreService.js', 'updateUserPostCount failed'],
       ['src/services/messagesService.js', '_recordRateLimit transaction failed'],
       ['src/services/userService.js', 'updateLastActive failed'],
       ['src/services/monetizationService.js', 'monetization_outbox backup write failed'],

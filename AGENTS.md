@@ -31,13 +31,28 @@ as failures.
 - **Profile sharing**: `src/utils/shareUtils.js` (`shareProfile`, `getProfileUrl`,
   `getProfileHandle`, `copyToClipboard`). All share entry points must use it so links resolve
   consistently. Do not rebuild `${origin}/profile/${id}` by hand — use `getProfileUrl`.
+- **Viewer-scoped like/save state lives in the viewer's own documents, never on
+  the shared post/video document.** No writer sets `post.isLiked`/`likedByMe`/
+  `hasLiked`/`savedBy`/`userReaction` or `video.isLiked`/`isSaved` — a
+  `posts/{id}`/`videos/{id}` doc carries only aggregate counters. The truth is
+  `posts/{id}/likes|saves|reactions/{uid}`, `users/{uid}/liked_posts`,
+  `users/{uid}/saved_videos/{videoId}` and `videos/{id}/likes/{uid}`. Read it
+  through `firestoreService.getPostViewerState` / `getLikedPostIds` and
+  `videoService.getViewerVideoState` / `_hydrateViewerVideoState`. Seeding a
+  heart/bookmark from the shared-doc flag always reads false (and a re-like then
+  double-counts, because the server counter already includes the viewer's like);
+  `viewerLikeStateRealityGuard.test.js` and `postCardFieldRealityGuard.test.js`
+  (guards job) fail on a regression.
 - **Profile read model / capabilities**: `src/services/profileCapabilityEngine.js` decides
   access (`resolveCapabilities`); `src/services/profileReadModel.js` owns the derivation every
   profile surface needs — placeholder name/handle rejection (`pickHandle`, `pickDisplayName`,
   `deriveHandle`), avatar fallback (`resolveAvatarUrl`), count/level coercion
   (`resolveCount`, `resolveLevelValue`), the standing-score clamp (`readStandingScore`),
   creator/verified flags (`resolveCreatorFlag`,
-  `resolveVerifiedFlag`) — and applies the capability decision exactly once
+  `resolveVerifiedFlag`), the royal-standing decision (`resolveRoyalFlag` /
+  `resolveActiveTitleId` — the server stores `activeTitle` as an **object**
+  `{id,name,…}`, so a raw `activeTitle === 'duke'` string compare is always
+  false) — and applies the capability decision exactly once
   (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
   `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
   `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
@@ -112,6 +127,16 @@ as failures.
   from `profileStore`) and keep it otherwise; the public shape is backed by the
   `posts(authorId, authorIsPrivate, status, visibility, isDeleted, createdAt)` index.
   Do not re-add a bare `authorIsPrivate == false` gate to the post read rules.
+- **A block hides the direct thread itself, not just its inbox row.**
+  `messagesService.getConversation` (the single thread read entry point —
+  `getMessages`, `subscribeToConversation`, `reactToMessage`, `deleteMessage`,
+  `editMessage` all route through it) gates a `direct` conversation between a
+  blocked pair on both the fresh read **and** the cache-first path, via
+  `_isDirectBlocked` (one cached `getRelationship`). Without it the inbox filter
+  (`getUserConversations`, N245) could be bypassed by opening `/chat/:id`
+  directly. Groups/channels are never gated (a block must not hide a whole group
+  for one member); the gate fails open on a graph error so a blip cannot lock a
+  user out of their own thread (N443, `messagingThreadBlockGate.test.js`).
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
   the `deleteUserData` cloud function. The cloud function name and the client method name are
   intentionally different — do not rename one to match the other.
@@ -146,6 +171,13 @@ as failures.
   index, and cover it in `socialGraphEdgeReadRules.test.js`. Do not "fix" this by
   allowing `get` on a null `resource` in the rules — that turns a point read into an
   edge-existence oracle for arbitrary pairs.
+- **Post author standing**: `authorId`/`authorName`/`authorPhoto`/`authorIsPrivate` are
+  the only author fields on `posts/{uid}`. Standing (verified / creator / premium) lives
+  on `users/{uid}` and is resolved for a page of posts by
+  `src/hooks/useAuthorStanding.js` (batched `socialGraphService.hydrateProfiles`) and
+  passed to `PostCard` as `authorStanding`. Never read `post.authorLevel` or
+  `post.isVerified` — no writer sets them, so the badge/gift gate would be permanently
+  dead. `postAuthorStandingGuard.test.js` (guards job) enforces this.
 - **Avatar field**: `photoURL` is the only stored avatar field on `users/{uid}`.
   `profilePicture` is accepted as an input alias by `validateProfileUpdate` and folded onto
   `photoURL` — never write `profilePicture` to Firestore.
@@ -173,8 +205,14 @@ as failures.
   home/service feed, Sparks video feed, the post `CommentsDrawer`, the `VideoComments`
   sheet (Sparks/Reels/VideoDetail — comments **and** replies), the story/Vibe strip
   (`storyService.getStoriesFeed` + `subscribeToFeed`, matching the fan-out's `ownerId`),
-  search, and friend suggestions. A surface that renders user content without one of these
-  is the recurring N22x bug class.
+  search, and friend suggestions. **The comment thread filters inside `commentService`, not
+  only in the drawer**: `getCommentsByPost` (Firestore + local-cache merge), `getReplies`
+  and `subscribeToPostComments` each resolve the viewer (`options.viewerId` or the live
+  session) and drop hidden authors, so `PostCard`'s preview and the live subscription are
+  covered too — a component-level filter alone left mutes unenforced and the realtime path
+  unguarded. A surface that renders user content without one of these is the recurring
+  N22x bug class (`commentBlockFiltering.test.js`, guards job, pins the three comment
+  paths).
 - **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
   `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
   (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the
@@ -212,6 +250,12 @@ as failures.
   (admin-readable, server-write-only). `AdminAuditLogsScreen` reads that
   collection. `src/utils/AuditLogger.js` is a local IndexedDB queue and is not
   a server-side audit trail.
+- **Scheduled posts**: a future `scheduledTime` makes `firestoreService.createPost`
+  write `status: 'scheduled'`; `functions/scheduledPosts.js#publishScheduledPosts`
+  (pubsub, every 5 min) is the ONLY writer that flips a due post to `published`.
+  Do not add a second publisher, and do not surface a scheduled post (local
+  optimistic cache, feed, notification) before it publishes. The composer must
+  not offer a recurrence model — nothing schedules recurring posts.
 - **Admin gate**: `admins/{uid}` is not client-readable, so admin screens must
   call `fetchAdminStatus()` rather than `getDoc(doc(firestore, 'admins', uid))`
   (which always denies and silently shows the "no access" state).
@@ -250,6 +294,20 @@ Never add a second report collection without adding it to both
 `functions/moderation.js` `REPORT_TARGETS` and `functions/admin.js`
 `REPORT_COLLECTIONS`, and never log an admin action with the client-side
 `AuditLogger` (it writes to a local IndexedDB queue, not to the server trail).
+
+## Paid post boost is a real ranking signal
+`functions/monetization.js#boostPost` debits coins, then writes both
+`posts/{id}.boostData` and `boosted_posts/{postId}`. Both sides must stay wired:
+the **viewer's** feed reads active promotions in
+`feedService._getBoostedPosts` (bounded: `where('expiresAt','>',now)` +
+`orderBy('expiresAt','asc')` + `limit`, then a per-post `get` that drops a
+private/blocked/missing post instead of leaking it) and `_scoreAndRankPostsOptimized`
+multiplies the score by `BOOST_RANKING_FACTOR`. `boostData` is server-owned: the
+`posts` create rule requires `boostData == null` and the author-update carve-out
+forbids it, so a client cannot self-grant a free promotion; `boosted_posts` is
+signed-in read / `write: if false`, with a `(expiresAt, __name__)` composite
+index and a TTL `expireAt`. An expired boost must be re-purchasable.
+`postBoostWiringGuard.test.js` (guards job) fails if any layer regresses.
 
 ## Audio Studio
 `src/screens/AudioEditor/` is a real Web Audio editor: `audioEngine.js` owns the
@@ -325,6 +383,20 @@ is only flagged when the identifier appears nowhere after the destructure; an im
 when *all* importers ignore it), so it stays at zero false positives. Delete the dead
 import/component; do not allowlist it.
 
+`src/__tests__/deadPropsGuard.test.js` is the mirror image (a prop the caller passes that
+the callee never destructures) and `src/__tests__/deadHandlerPropGuard.test.js` is the
+third side (N367): a handler prop a component *references and even wires into an
+`onClick`* but that **no caller ever passes** and that is never guarded, so it is an
+always-undefined function — `TimelineToolbar`'s Back/Crop/Settings buttons,
+`TextTool`'s "Text Layers" section, `MessageBubble.onLongPress`, `VideoGiftModal.onSendGift`.
+Wire the handler (e.g. `SplashScreen.onRenderError` → `logger.error` in `AppRoutes`), make
+the control read-only if it has no destination, or delete it — do not allowlist.
+`src/__tests__/deadDataPropGuard.test.js` is the fourth side: a *data* prop referenced only
+as a JSX truthiness gate (`{items.length > 0 && …}`, `{overlay && …}`) that no caller passes
+and that has no default — the whole block can never render (`TextTool`'s "Text Layers"
+section). Pass the data, delete the dead block, or give it a real default. All four run in
+the hard-failing `guards` job.
+
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus
   `profile.privacy.*` scopes) — not in the settings document.
@@ -377,6 +449,12 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   `MIN_WITHDRAWAL_COINS`. The wallet/payout screens read them and
   `functions/monetization.js` `requestWithdrawal` enforces
   `MIN_WITHDRAWAL_COINS` server-side — never hardcode a payout rate or minimum.
+- `BOOST_DAILY_RATE_COINS` owns the per-day coin price of a paid post
+  promotion. `functions/monetization.js#boostPost` debits it (a
+  `functions.config().app.boost_daily_rate` override is still honoured) and
+  `PostOptionsDrawer`'s BoostModal previews the same value — never hardcode the
+  boost rate in a screen, and do not reintroduce a composer "Boost" monetization
+  type: the only paid promotion path is the post-publish `boostPost` callable.
 - `NEW_USER_DEFAULTS` is the only place the new-account economy/status values
   live (`coins`, `level`, `experience`, `reputation`, `isVerified`, ...).
   `userService.createUserProfile` seeds from it and `firestore.rules` pins the
@@ -387,13 +465,24 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   picker (`src/data/videoData.js` `VIRTUAL_GIFTS`, `GiftScreen`, `PostOptionsDrawer`,
   `liveService.GIFT_TYPES`, `monetizationService.GIFTS`) derives from them, and
   the server prices gifts from `GIFT_VALUES` (`functions/monetization.js`
-  `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug.
-- `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS` and
-  `AD_REWARD_COINS` own store pricing, the monthly subscription grant and the
-  rewarded-ad payout. `functions/monetization.js` (`purchaseCoins`,
-  `createSubscription`) and the store screens (`CoinsScreen`,
-  `Economy/WalletScreen`) all read these tables. Never re-declare a package id,
-  price or coin amount in a screen or a function. IAP (`verifyPurchase`) was
+  `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug —
+  `PostOptionsDrawer` re-declared `{ rose: 5, crown: 50, … }` with a `|| 5`
+  default, so its send-gift toast could advertise a price the server never
+  charges; read `GIFT_VALUES` instead.
+  `giftPriceSingleSourceGuard.test.js` (guards job) fails if a gift price
+  literal reappears outside the canonical config / derived catalog.
+- `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS`,
+  `AD_REWARD_COINS` and `MAX_ADS_PER_USER_PER_DAY` own store pricing, the
+  monthly subscription grant, the rewarded-ad payout and the daily ad budget.
+  `functions/monetization.js` (`purchaseCoins`, `createSubscription`, `watchAd`)
+  and the store screens (`CoinsScreen`, `Economy/WalletScreen`) all read these
+  tables. Never re-declare a package id, price, coin amount or daily cap in a
+  screen or a function — a cap the server does not read is not a cap.
+  `watchAd` must consume the budget server-side (`enforceDailyLimit(uid, 1, 'ad',
+  MAX_ADS_PER_USER_PER_DAY)`) and floor the reward at one unit
+  (`Math.max(1, Math.floor(seconds/30)) * AD_REWARD_COINS`) so a sub-30s claim
+  pays the advertised unit instead of zero (`adRewardBoundGuard.test.js`).
+  IAP (`verifyPurchase`) was
   removed: it checked only that appstore/play *config keys existed* and then
   minted coins without validating the receipt against Apple/Google — a
   fabricated verification. Coin purchases go through the real Stripe-verified
@@ -421,6 +510,126 @@ A missing `level`/`xp` renders as unavailable (null), never as `Level 1` /
 `Citizen`. Do not add `|| 1` level defaults or `() => 'Citizen'` fallbacks in
 profile components — `src/__tests__/noFabricatedData.test.js` guards this.
 
+## Follower/following counts have one source of truth
+`users/{uid}.followerCount`/`followingCount` are seeded `0` at signup and are
+**not** the live count — every follow/unfollow mutation increments a sharded
+`counter_shards` document (client `CountersManager`, inside
+`userService.followUser`/`unfollowUser`/`approveFollowRequest`/`blockUser`). Never
+trust the raw field on the server: `functions/userCounters.js` is the authoritative
+reader (`readUserCounter` sums the shards in one batched `db.getAll`, legacy raw
+field only when no shard exists) and the scheduled `aggregateUserCounters` mirror
+writes the sum back onto `users/{uid}` so every remaining raw reader (search index,
+profile hydration, ranking) reads a real number. Both fan-out threshold decisions
+(`feed.js`, `stories.js`) read through `readUserCounter`, and the count is
+server-authoritative in the rules (`touchesServerAuthoritativeFields` + the create
+rule pins it to `0`) and in `SERVER_AUTHORITATIVE_FIELDS`. The server shard hash +
+doc-id layout must stay byte-identical to `src/utils/CountersManager.js`.
+`src/__tests__/followerCounterSourceGuard.test.js` (guards job) pins all of this.
+Do not add a raw `data().followerCount || 0` read on the server — it always
+returned a fabricated `0` (N431).
+
+## Post count has one source of truth
+`users/{uid}.postCount` is seeded `0` at signup and is **not** a client-writable
+field — it is server-authoritative (`SERVER_AUTHORITATIVE_FIELDS` +
+`touchesServerAuthoritativeFields` in `firestore.rules`; the create rule pins it
+to `0`). `functions/userCounters.js#onPostWrite` is the only writer: a document
+trigger on `posts/{postId}` applies a net delta per author (counted iff
+`isDeleted === false`) via `FieldValue.increment`, so create/publish is `+1` and
+delete/unpublish is `-1`, and a like/comment update cancels to a zero delta (no
+user read or write). The cursor-paged `reconcileUserPostCounts` job (bounded
+`count()` over `posts where authorId == uid`, no scan) corrects legacy drift. Do
+not re-add a client `postCount` increment — the removed one only ever fired on
+*repost*, so a normal post never moved the count and the field could be minted
+(N438). `src/__tests__/postAuthorCountSourceGuard.test.js` (guards job) pins it.
+
+## Comment reaction counts have one source of truth
+`comments/{id}.likes`/`.dislikes` are seeded `0` at create and are **not** the
+live count — `commentService.likeComment`/`dislikeComment`/`removeLikeDislike`
+increment a sharded `counter_shards` counter (docPath `comments/{id}`) and never
+write the numeric fields on the doc. Every read path must overlay the shard sum,
+or the UI renders a fabricated `0` (N439). Use `CountersManager.applyAll`
+(batched, bounded `getAll` chunks) via `commentService._overlayReactionCounts`,
+which is applied in `getCommentsByPost`, `getComment`, `getReplies` **and** the
+`subscribeToPostComments` snapshot callback (the realtime path must overlay too,
+or a live update replaces an optimistic like count with the seeded `0`).
+`likesBy` is not a substitute — it is capped at `REACTION_ARRAY_CAP` (200), so it
+undercounts. The drawer's reply expander reads a derived `repliesCount`, not the
+`replies` child array `_buildNestedComments` writes, so the overlay aliases the
+sharded `replies` counter onto `repliesCount` and never onto `replies`.
+`commentReactionCounterSourceGuard.test.js` (guards job) pins it.
+
+## Achievement/title metrics are computed, never assumed
+`ACHIEVEMENTS_CATALOG` / `TITLES_CATALOG` criteria are scored against metric
+fields on `users/{uid}`. A criterion whose metric has **no writer** reads a
+permanent `0` and denies every qualifying user — a fabricated *zero*, the
+inverse of fabricated standing (N432: 14/21 achievements and 8/15 titles were
+unearnable this way). `functions/userMetrics.js#computeUserMetrics` computes the
+metrics that have a real, cheap source with bounded `.count()` aggregation reads
+(no collection scan) and `evaluateAchievements` overlays them on the stored doc
+(`{ ...userData, ...computed }`) before scoring; an unresolvable metric stays
+absent (fail-closed → unmet, never a fabricated pass). When you add a criterion,
+add its metric to `computeUserMetrics` (or don't add the criterion). Do not
+"satisfy" a criterion by writing a `|| 0` default. `achievementMetricSourceGuard.test.js`
+(guards job) pins the wiring. Metrics with no defined source (the
+reputation/contribution/influence model, `friendsCount`,
+`lifetimeCoinsEarned`, `hasPassport`, `isPioneer`/`isFounder`) stay BLOCKED in the
+N432 ledger row until the product defines them.
+
+## Post engagement counters have one source of truth
+`posts/{postId}.stats.{likes,comments,shares,saves}` are seeded `0` at create and
+are **not** the live count — every like/save/share/comment mutation increments a
+sharded `counter_shards` document (client `CountersManager`, inside
+`firestoreService.toggleLike`/`toggleSave`/`sharePost` and
+`commentService.createComment`/`deleteComment`). `functions/postCounters.js` is
+the authoritative reader (`readPostCounterShards` sums every field for one post in
+a single batched `db.getAll`) and the scheduled `aggregatePostCounters` mirror
+writes the sums back onto `posts/{postId}.stats` so server readers (feed ranking,
+the Algolia post index) read a real number. Never read a top-level
+`post.likeCount`/`commentCount`/`shareCount`/`viewCount` — no writer populates
+them, so the engagement term was a constant `0` and feed ranking collapsed to
+pure recency (N433). The server shard hash + doc-id layout must stay
+byte-identical to `src/utils/CountersManager.js`. `postCounterSourceGuard.test.js`
+(guards job) pins all of this.
+
+**Every post read path must overlay the full sharded field set.** A client reader
+resolves the live values with `countersManager.apply`/`applyAll` (`fields:
+['likes','comments','saves','shares','gifts','giftValue']`, docPath `posts/{id}`).
+Omitting a field leaves the seeded `0` on screen — `getPost` dropped `comments`, so
+the post-detail view showed a fabricated comment count while the feed (which overlays
+the set) was correct (N439). `getPostsByUser` uses the batched `applyAll` rather than
+one `apply` per post. `postCounterSourceGuard.test.js` fails if any `posts/` overlay
+omits a sharded field.
+
+**Post *views* are a sharded counter, not `stats.views`.** `recordPostView`
+(`functions/analytics.js`) increments `counter_shards` for `posts/{id}`; no writer
+sets `posts/{id}.stats.views` inline (it stays the create-time `0` until the
+mirror runs). Any surface that
+shows a post's view total must resolve it through `CountersManager.get({ docPath:
+'posts/{id}', field: 'views' })` (falling back to `stats.views` only when no shard
+exists yet) — reading the raw field shows a fabricated `0` (N437, `PostAnalyticsScreen`).
+Server-side, `functions/postCounters.js#aggregatePostCounters` mirrors the shard sums
+(now including `views`) onto `stats.*` so server readers (`feed.js` ranking) get a real
+number; `views` was missing from `POST_COUNTER_FIELDS`, so the view-weighted engagement
+term was a constant 0 (N441).
+A server-side ranking function must read only fields its own aggregator writes: story
+`personalizeFeed` scored on `stats.likes`/`stats.shares`, which `aggregateStoryStats`
+never writes (reactions live in the `stats.reactions` map) — read `stats.reactions`
+instead (N442, `storyRankingFieldSourceGuard.test.js`).
+The same distinction applies to `videos/{id}.stats.saves`, which is server-owned and
+written only by the `toggleVideoSave` callable keyed on `videos/{id}/saved_by/{uid}`
+(N436, `videoSaveCounterSourceGuard.test.js`).
+
+## Derived counters are written by a server trigger, never seeded and forgotten
+`communities/{communityId}.stats.eventCount` was seeded `0` at community create and
+never written, so the community "Events" card showed a permanent `0` (N434). The
+community document is server-write-only, so a derived counter that a client cannot
+maintain must be maintained by a `functions/*.js` trigger: `functions/eventCounters.js`
+(`onEventWrite` on `events/{eventId}`) applies a **net delta** (`-1` before, `+1` after;
+a write that does not change the counted status cancels to zero) and only counts an
+event toward a community the organizer is a member of. When you seed a `stats.*`
+counter, add the writer in the same change — a seeded counter with no writer is a
+fabricated `0`. `communityEventCountSourceGuard.test.js` (guards job) pins this.
+
 ## No fabricated security claims
 Do not render a "secure"/"encrypted" claim a feature cannot back. Messaging has
 no key provisioning (`generateUserKeys`/`unlockPrivateKey` have no caller and no
@@ -428,6 +637,21 @@ server writes a `publicKey`), so the E2EE path never encrypts and the send gate
 falls back to plaintext — no lock badge or "E2EE protected" label. Likewise
 `feedService` offline-mode write stubs throw instead of resolving a fake
 `{ id: 'dummy' }`. `noFabricatedData.test.js` guards both.
+
+## The notification inbox is a trusted surface
+`sendNotification` is a client callable, so its `type` is allowlisted: a client
+may raise only social types toward *other* users and only `welcome`/`system`
+toward itself (`CLIENT_SOCIAL_NOTIFICATION_TYPES` /
+`CLIENT_SELF_NOTIFICATION_TYPES` in `functions/notifications.js`). A client must
+never be able to mint a system or financial notice (`security_alert`,
+`payment_received`, `withdrawal_approved`, `verification`, `level_up`,
+`coins_earned`, `gift_received`, …) into any inbox — a recipient cannot tell a
+forged record from a real one. Server code that has proved the event writes the
+in-app record through `functions/notificationWriter.js#writeNotification`
+(e.g. `sendGift` writes the receiver's `gift_received` there), keeping the
+sharded unread counter in step. `notificationTypeAllowlistGuard.test.js` fails
+if a `src` service sends an unlisted type or a trusted type becomes
+client-sendable.
 
 ## No fabricated media URLs
 A media write must persist a durable, publicly-resolvable Storage
@@ -514,6 +738,24 @@ has no integrated provider, remove the control and throw an honest "not availabl
 (or render an unavailable state) — never fabricate a success or a URL. Guarded by
 `noFabricatedData.test.js`; the same rule as §11's "no fabricated standing".
 
+**The composer is the recurring offender (N376/N378/N379).** `CreatePost.jsx` had
+four paid controls that wrote nothing (`enableComments`/`enableGifts`/`enableSharing`/
+`isNSFW`), a `Co-Authors` panel and a `Recurrence` picker that persisted values no
+writer/reader/rule consumed, and a `TaggingPanel` whose "brand"/"product" tags were
+just users (its only search is a `users`-index query) plus `topics`/`feeling`/
+`activity`/`customList`/`expiresAt` state that `firestoreService.createPost` never
+persists. A composer control must either reach a persisted, read field or not exist.
+`scheduledPostsGuard.test.js` now also fails if any composer reducer `case "X"` has no
+`dispatch({ type: "X" })` anywhere in the composer tree (`SET_AUDIO_FILE`,
+`SET_VIDEO_FILE`, `SET_IS_DRAFT_LOADED` were unreachable; the error banner's
+`CLEAR_ERROR` was wired up with a dismiss button instead of deleted).
+
+**Scheduled posts publish (N377).** `functions/scheduledPosts.js#publishScheduledPosts`
+(pubsub, merged in `index.js`) is the single writer that flips a due
+`status:'scheduled'` post to `published`; the `(status, scheduledTime)` composite index
+backs its bounded query. Do not add another `scheduled`-status writer, and do not let
+the client optimistically show a scheduled post as published.
+
 ## Reconstruction deliverable
 `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/
 duplication/cost/route/dependency reconstruction and the AUDIT V3 finding-status
@@ -555,6 +797,40 @@ listener without one dies silently on a rules denial or dropped connection
 (stale UI, no log, unhandled rejection). Log through `utils/Logger` or the
 `ServiceKit` child. `src/__tests__/snapshotErrorHandling.test.js` parses each
 call and fails if any is registered with only two arguments.
+
+## Client-writable aggregate counters and idempotency keys must be bound
+
+Two collections accept a client write that must never name another user:
+
+- `counter_shards/{shardId}` (`CountersManager`). A rule CAN see the
+  post-`increment()` value: `request.resource.data.value` is the *resulting*
+  value and `resource.data.value` the pre-write value, so the write is bounded
+  to a relative `±100` change (N207). A one-shot absolute mint — create or
+  update — is denied. Every reachable call site increments by ±1; the ±100
+  headroom covers the batched comment-delete (`amount: -count`). Do not widen
+  the bound or add an absolute `value` write. Residual: the shard id is unbound
+  to the writer, so the full fix is still to move every counter mutation
+  server-side and set `allow write: if false`.
+- `message_dedupe/{key}` (N369). The key is
+  `sha256(sender:conversation:type:content:mediaHash)` — its pre-image is
+  public, so the key alone is not a forgery defence. `create`/`update` must
+  stamp `senderId == uid()` and `read` is owner-scoped (a missing doc stays
+  readable). `messagesService` stamps `senderId` and treats a `permission-denied`
+  read as "no duplicate of mine".
+- `stories/{storyId}/view_shards|reaction_shards|analytics_shards` (N370). The
+  rules bounded the key set but not the value, so a client could `setDoc` a
+  shard with `count: 999999`. They now bound the change to `±100`
+  (`fieldDeltaBounded` on update, `fieldCreateBounded` on create). Do not widen
+  the bound.
+- `daily_upload_counters/{shardId}` (N210 id-bound; N370 value-bound). The id is
+  pinned to the caller (`upload_{uid}_{date}_shard_{n}`) so a client cannot
+  reset another user's limit; the `count` is a `[1,100]` create and a bounded
+  `+0..+100` update, so a fresh shard cannot be pre-set to `999999` to defeat
+  the per-tier upload limit. Keep it a `+1`-per-upload counter.
+
+`counterShardForgeryGuard.test.js`, `storyShardForgeryGuard.test.js` and
+`messageDedupeGuard.test.js` (all in the hard-failing `guards` job) pin these
+shapes; the latter two also run adversarial emulator checks.
 
 ## Timestamps: serverTimestamp() sentinels have no .toDate()
 `_buildMessage` (and every other create path) sets timestamps to

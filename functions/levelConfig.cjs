@@ -67,20 +67,14 @@ const LEVEL_PERKS = [
   { minLevel: 3, icon: '📄', title: 'Shareable Profile Card', description: 'Share your profile and achievement card.' },
   { minLevel: 5, icon: '🔴', title: 'Live Streaming', description: 'Go live to your followers with viewer chat.' },
   { minLevel: 5, icon: '📌', title: 'Highlights', description: 'Pin content and create profile highlights.' },
-  { minLevel: 7, icon: '🎁', title: 'Gift & Tip Boost', description: 'Higher daily gift and tip earning multiplier.' },
+  { minLevel: 7, icon: '🎁', title: 'Gift & Tip Identity', description: 'Send and receive virtual gifts with your identity shown on the gift.' },
   { minLevel: 10, icon: '💸', title: 'Creator Withdrawals', description: 'Withdraw your coin earnings to real money.' },
   { minLevel: 10, icon: '📊', title: 'Basic Personal Analytics', description: 'See your own audience and engagement analytics.' },
-  { minLevel: 12, icon: '🏷️', title: 'Custom Badge', description: 'Personalize your profile badge color.' },
-  { minLevel: 15, icon: '✅', title: 'Verified Priority', description: 'Priority support and verification review.' },
-  { minLevel: 15, icon: '🎨', title: 'Custom Accent', description: 'Custom profile accent and presentation options.' },
-  { minLevel: 20, icon: '🏗️', title: 'Builder Identity', description: 'Builder identity, community creation, and creator application eligibility.' },
-  { minLevel: 20, icon: '🪙', title: '5% Coin Store Bonus', description: 'Receive an automatic +5% bonus coins on all coin pack purchases in the store.' },
-  { minLevel: 25, icon: '📇', title: 'Enhanced Identity Card', description: 'Collections, music studio pro showcases, and an expanded identity portfolio.' },
-  { minLevel: 30, icon: '🏛️', title: 'Citizen Council', description: 'Submit and vote on constitutional governance proposals.' },
-  { minLevel: 40, icon: '💸', title: '10% Cashout Fee Rebate', description: 'Save 10% on platform processing fees when withdrawing coins to real money.' },
-  { minLevel: 50, icon: '💎', title: 'Cornerstone Presentation', description: 'Rare cosmetic categories, aura glows, and Royal Family appointment nomination.' },
-  { minLevel: 75, icon: '🛰️', title: 'Nation Founder Circle', description: 'Host platform-wide global events, audio stages, and broadcast alerts.' },
-  { minLevel: 100, icon: '⭐', title: 'Ascendant Identity', description: 'Monarch halo presentation, 20% cashout fee rebate, and 2x XP multiplier.' },
+  { minLevel: 15, icon: '✅', title: 'Verified Priority', description: 'Top Creator standing and verification review.' },
+  { minLevel: 20, icon: '🏗️', title: 'Builder Rank', description: 'The Builder rank title and community participation standing.' },
+  { minLevel: 20, icon: '🪙', title: 'Coin Store Access', description: 'Buy coin packs from the store (credited at the exact pack value — no bonus).' },
+  { minLevel: 50, icon: '💎', title: 'Crest Radiance', description: 'A radiant crest aura around your avatar, derived from your standing.' },
+  { minLevel: 100, icon: '⭐', title: 'Ascendant Rank', description: 'The permanent Ascendant rank presentation.' },
 ];
 
 /* XP award rules (per unit of the action). `dailyCap` prevents farming. */
@@ -112,19 +106,12 @@ const XP_RULES = Object.freeze({
 const LEVEL_GATES = Object.freeze({
   publicFollowers: 3,
   creatorProfile: 5,
-  advancedEditor: 2,
   liveStreaming: 5,
-  giftBoost: 7,
   withdrawals: 10,
   civicVanguard: 10,
-  customBadge: 12,
   verifiedPriority: 15,
   diplomaticEnvoy: 15,
-  earlyAccessStudio: 20,
-  citizenCouncil: 30,
   sovereign: 50,
-  founderCircle: 75,
-  transcendent: 100,
 });
 
 /**
@@ -947,6 +934,21 @@ const SUBSCRIPTION_TIERS = Object.freeze({
 const AD_REWARD_COINS = 2;
 
 /**
+ * Coins charged per day of a paid post promotion (`boostPost`). The server
+ * debits this rate inside the `boostPost` transaction and the client reads the
+ * same value only to preview the total, so the two can never disagree.
+ */
+const BOOST_DAILY_RATE_COINS = 10;
+
+/**
+ * Maximum rewarded ads a single account may claim per UTC day. Enforced
+ * server-side in `functions/monetization.js#watchAd` (via the `fraud_limits`
+ * `adTotal` daily counter) so a client cannot mint coins by looping the
+ * rewarded-ad callable. The client reads the same value only for display.
+ */
+const MAX_ADS_PER_USER_PER_DAY = 20;
+
+/**
  * Coin -> USD conversion. Integer coins are the only unit that is ever stored or
  * transferred; USD is a display-only projection, so every surface must use this
  * single rounding policy instead of dividing by COINS_PER_DOLLAR by hand.
@@ -970,7 +972,10 @@ const NEW_USER_DEFAULTS = Object.freeze({
   level: 1,
   experience: 0,
   experienceToNextLevel: 100,
-  totalEarned: 0,
+  // `totalEarned` is intentionally NOT seeded: no server path increments a
+  // lifetime-earnings counter yet, so a seeded 0 would render as a *measured*
+  // "0 earned" on the wallet/creator surfaces (the N320 class). The readers
+  // treat an absent value as unknown ("—"), not as zero.
   reputation: 0,
   isVerified: false,
   isCreator: false,
@@ -1014,6 +1019,8 @@ module.exports = {
   COIN_PACKAGES_BY_ID,
   SUBSCRIPTION_TIERS,
   AD_REWARD_COINS,
+  BOOST_DAILY_RATE_COINS,
+  MAX_ADS_PER_USER_PER_DAY,
   coinsToUsd,
   formatCoinsAsUsd,
   getRankTitle,

@@ -452,9 +452,12 @@ class UltimateStoryService {
       linkUrl: storyData.linkUrl || null, // link sticker
       templateId: storyData.templateId || null,
       stats: {
-        views: 0, viewerCount: 0, likes: 0, comments: 0, shares: 0, replies: 0,
+        // Only counters a real writer maintains are seeded. `viewerCount` and
+        // `likes` had no writer (story reactions live in `reaction_shards` ->
+        // `stats.reactions`; viewers are the owner-only `viewers` list), so a
+        // seeded `0` advertised an unmeasured metric as a measured zero.
+        views: 0, comments: 0, shares: 0, replies: 0,
         reactions: STORY_CONFIG.REACTION_TYPES.reduce((acc, r) => ({ ...acc, [r]: 0 }), {}),
-        completionRate: 0, forwardTaps: 0, backTaps: 0,
       },
       createdAt: now,
       updatedAt: now,
@@ -971,7 +974,7 @@ class UltimateStoryService {
       recipientId: collaboratorId,
       senderId: currentUser.uid,
       title: 'Story collaboration invite',
-      message: `${currentUser.displayName || 'Someone'} invited you to collaborate on a story`,
+      message: `${currentUser.displayName || `user ${String(currentUser.uid).slice(0, 6)}`} invited you to collaborate on a story`,
       metadata: { storyId },
     });
     return { success: true };
@@ -1680,14 +1683,12 @@ class UltimateStoryService {
     const lastAdKey = `lastAdImpression_${userId}`;
     const lastAd = localStorage.getItem(lastAdKey);
     if (lastAd && Date.now() - parseInt(lastAd) < STORY_CONFIG.ADS.FREQ_CAP_MINUTES * 60 * 1000) return stories;
-    try {
-      const userDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', userId));
-      const lastServerAd = userDoc.data()?.lastAdImpression;
-      if (lastServerAd && Date.now() - lastServerAd.toDate().getTime() < STORY_CONFIG.ADS.FREQ_CAP_MINUTES * 60 * 1000) return stories;
-    } catch (e) {
-      // Server-side ad frequency cap could not be read; the local cap still applies.
-      logger.warn('Story ad frequency-cap read failed', { userId, error: e?.message });
-    }
+    // The per-user ad frequency cap is enforced locally (`lastAdKey`). The
+    // former server-side cap read `users/{uid}.lastAdImpression`, but NO writer
+    // ever sets that field (the `users/{uid}` write is denied by the rules and
+    // no server path mirrors it), so the read always returned undefined — a
+    // wasted read on every story fetch, plus an unguarded `.toDate()`. Removed
+    // rather than left as a control that can never trip.
 
     let targetingProfile = {};
     try {
@@ -1820,14 +1821,17 @@ class UltimateStoryService {
       const notificationsService = await import('./notificationsService.js');
       const userService = await import('./userService.js');
       const ownerProfile = await userService.getUserProfile(ownerId).catch(() => null);
+      const ownerName = (ownerProfile?.displayName && ownerProfile.displayName !== 'User')
+        ? ownerProfile.displayName
+        : `user ${String(ownerId).slice(0, 6)}`;
       for (const userId of taggedUserIds) {
         await notificationsService.sendNotification({
           type: notificationsService.TYPES.MENTION,
           recipientId: userId,
           senderId: ownerId,
-          senderName: ownerProfile?.displayName || 'Someone',
+          senderName: ownerName,
           title: 'You were tagged in a story',
-          message: `${ownerProfile?.displayName || 'Someone'} tagged you in their story`,
+          message: `${ownerName} tagged you in their story`,
           actionUrl: `/story/${storyId}`,
           metadata: { storyId },
           priority: 'high',

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark, AlertCircle, VolumeX, Pin, Archive, MessageSquareOff, Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle, Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck, EyeOff, ThumbsDown } from "lucide-react";
 import { VIRTUAL_GIFTS } from '../data/videoData';
+import { GIFT_VALUES, BOOST_DAILY_RATE_COINS } from '../shared/levelConfig.cjs';
 import firestoreService from '../services/firestoreService.js';
 import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
@@ -83,7 +84,7 @@ const initialState = {
   pinned: false, pinning: false,
   archived: false, archiving: false,
   commentsEnabled: true, commentsToggling: false,
-  followState: null, followLoading: false,
+  followState: null, followRequested: false, followLoading: false,
   loadingAction: null,
 };
 
@@ -98,6 +99,7 @@ function uiReducer(state, action) {
     case 'SET_COMMENTS_ENABLED': return { ...state, commentsEnabled: action.payload };
     case 'SET_COMMENTS_TOGGLING': return { ...state, commentsToggling: action.payload };
     case 'SET_FOLLOW_STATE': return { ...state, followState: action.payload };
+    case 'SET_FOLLOW_REQUESTED': return { ...state, followRequested: action.payload };
     case 'SET_FOLLOW_LOADING': return { ...state, followLoading: action.payload };
     case 'SET_LOADING_ACTION': return { ...state, loadingAction: action.payload };
     default: return state;
@@ -137,11 +139,15 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   // UI reducer
   const [uiState, dispatchUI] = useReducer(uiReducer, {
     ...initialState,
-    saved: safePost.savedBy?.includes(currentUser?.uid) || false,
+    // `saved` is a per-viewer fact that lives in the viewer's own
+    // `users/{uid}/saved_posts` doc, never on the post; it is hydrated by the
+    // effect below. Seeding from an absent post-level save list always read false.
+    saved: false,
     pinned: !!safePost.pinned,
     archived: safePost.archived === true,
     commentsEnabled: safePost.commentsEnabled !== false,
     followState: null,
+    followRequested: false,
   });
 
   // Modals
@@ -254,15 +260,35 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       try {
         const res = await userService.getFollowStatus(currentUser.uid, ownerId);
         if (!cancelled && mountedRef.current) {
-          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: res.isFollowing });
+          // A private target yields a pending request, not a follow: reconcile
+          // both so the row offers "Cancel request" instead of a no-op Follow.
+          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: Boolean(res?.isFollowing) });
+          dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: res?.requestStatus === 'pending' });
         }
       } catch {
-        if (!cancelled && mountedRef.current) dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
+        if (!cancelled && mountedRef.current) {
+          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
+          dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: false });
+        }
       }
     };
     fetchFollow();
     return () => { cancelled = true; };
   }, [isOpen, currentUser, ownerId, isAuthor]);
+
+  // Saved state – refresh on drawer open from the viewer's own saved_posts doc.
+  useEffect(() => {
+    if (!isOpen || !currentUser?.uid || !safePost.id) return undefined;
+    let cancelled = false;
+    firestoreService.getPostViewerState?.(safePost.id, currentUser.uid)
+      .then((state) => {
+        if (!cancelled && mountedRef.current && state) {
+          dispatchUI({ type: 'SET_SAVED', payload: Boolean(state.saved) });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, currentUser?.uid, safePost.id]);
 
   // Coin balance for modals
   useEffect(() => {
@@ -633,8 +659,11 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   });
 
   const getGiftValue = (giftType) => {
-    const fallback = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
-    return fallback[giftType] || 5;
+    // Read the canonical price table — a local literal (rose 5 / crown 50 / …)
+    // drifts from the server's GIFT_VALUES and can advertise a price the
+    // `sendGift` callable never charges.
+    const value = GIFT_VALUES[giftType];
+    return typeof value === 'number' ? value : null;
   };
 
   const handleSendGift = requireAuth(async (giftType) => {
@@ -645,7 +674,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     try {
       const result = await callWithRetry(() => sendGift(currentUser.uid, post.id, giftType));
       if (!isValidVersion('gift', version) || !mountedRef.current) return;
-      if (result.success) { toast.success(`Sent ${giftType} (${value} coins)`); debouncedAnalytics('post_option_click', { action: 'gift', postId: post.id, giftType, value }); }
+      if (result.success) { toast.success(`Sent ${giftType}${value != null ? ` (${value} coins)` : ''}`); debouncedAnalytics('post_option_click', { action: 'gift', postId: post.id, giftType, value }); }
       else toast.error(result.error || 'Gift failed');
     } catch { toast.error('Gift failed'); }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
@@ -678,6 +707,27 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     const version = getNextVersion('follow');
     dispatchUI({ type: 'SET_FOLLOW_LOADING', payload: true });
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'follow' });
+
+    const wasRequested = uiState.followRequested;
+    // A pending request is withdrawn, not "unfollowed" (there is no edge yet).
+    if (wasRequested) {
+      dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: false });
+      try {
+        await userService.cancelFollowRequest(currentUser.uid, ownerId);
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        toast.success('Follow request withdrawn');
+        debouncedAnalytics('post_option_click', { action: 'cancel_follow_request', postId: post.id });
+      } catch {
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: true });
+        toast.error('Action failed');
+      } finally {
+        dispatchUI({ type: 'SET_FOLLOW_LOADING', payload: false });
+        dispatchUI({ type: 'SET_LOADING_ACTION', payload: null });
+      }
+      return;
+    }
+
     const newState = !uiState.followState;
     dispatchUI({ type: 'SET_FOLLOW_STATE', payload: newState });
     if (!navigator.onLine) {
@@ -688,11 +738,25 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       return;
     }
     try {
-      if (newState) await callWithRetry(() => userService.followUser(currentUser.uid, ownerId));
-      else await callWithRetry(() => userService.unfollowUser(currentUser.uid, ownerId));
-      if (!isValidVersion('follow', version) || !mountedRef.current) return;
-      toast.success(newState ? `Following @${post.authorUsername}` : `Unfollowed @${post.authorUsername}`);
-      debouncedAnalytics('post_option_click', { action: newState ? 'follow' : 'unfollow', postId: post.id });
+      if (newState) {
+        const res = await callWithRetry(() => userService.followUser(currentUser.uid, ownerId));
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        // A private target yields `{requested:true}` and creates no edge; show
+        // "Requested" rather than claiming a completed follow.
+        if (res?.requested || res?.requestStatus === 'pending') {
+          dispatchUI({ type: 'SET_FOLLOW_STATE', payload: false });
+          dispatchUI({ type: 'SET_FOLLOW_REQUESTED', payload: true });
+          toast.success('Follow request sent');
+        } else {
+          toast.success(`Following @${post.authorUsername}`);
+        }
+        debouncedAnalytics('post_option_click', { action: 'follow', postId: post.id });
+      } else {
+        await callWithRetry(() => userService.unfollowUser(currentUser.uid, ownerId));
+        if (!isValidVersion('follow', version) || !mountedRef.current) return;
+        toast.success(`Unfollowed @${post.authorUsername}`);
+        debouncedAnalytics('post_option_click', { action: 'unfollow', postId: post.id });
+      }
     } catch (err) {
       if (!isValidVersion('follow', version) || !mountedRef.current) return;
       dispatchUI({ type: 'SET_FOLLOW_STATE', payload: !newState });
@@ -711,8 +775,15 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
 
   const secondaryRow = useMemo(() => [
     { id: 'copy', icon: Copy, label: 'Copy link', onClick: handleCopyLink, secondary: true },
-    ...(!isAuthor ? [{ id: 'follow', icon: uiState.followState ? UserMinus : UserPlus, label: uiState.followState ? 'Unfollow' : 'Follow', onClick: handleFollowToggle, disabled: uiState.followLoading, primary: true }] : []),
-  ], [isAuthor, uiState.followState, uiState.followLoading, handleCopyLink, handleFollowToggle]);
+    ...(!isAuthor ? [{
+      id: 'follow',
+      icon: uiState.followState ? UserMinus : UserPlus,
+      label: uiState.followState ? 'Unfollow' : (uiState.followRequested ? 'Cancel request' : 'Follow'),
+      onClick: handleFollowToggle,
+      disabled: uiState.followLoading,
+      primary: true,
+    }] : []),
+  ], [isAuthor, uiState.followState, uiState.followRequested, uiState.followLoading, handleCopyLink, handleFollowToggle]);
 
   const tertiaryRow = useMemo(() => [
     ...(!isAuthor ? [{ id: 'tip', icon: Coins, label: 'Tip', onClick: () => openModal('tip'), primary: true }] : []),
@@ -1121,7 +1192,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
                   loading={uiState.loadingAction === 'boost'}
                   coinBalance={coinBalance}
                   theme={theme}
-                  costPerDay={10}
+                  costPerDay={BOOST_DAILY_RATE_COINS}
                 />
               </div>
             )}
@@ -1230,7 +1301,7 @@ const GiftModal = ({ onSelectGift, onCancel, loading, coinBalance, theme }) => {
   );
 };
 
-const BoostModal = ({ onSelectDays, onCancel, loading, coinBalance, theme, costPerDay = 10 }) => {
+const BoostModal = ({ onSelectDays, onCancel, loading, coinBalance, theme, costPerDay = BOOST_DAILY_RATE_COINS }) => {
   const days = [1,3,7,30];
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">

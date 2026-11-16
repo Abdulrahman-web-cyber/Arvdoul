@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService.js';
 import { trackAnalyticsEvent } from '../services/analyticsService';
 import PostCard from './PostCard.jsx';
+import { useAuthorStanding } from '../hooks/useAuthorStanding';
 import { ArrowLeft, Share2 } from 'lucide-react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { triggerHaptic } from '../utils/haptics';
@@ -31,6 +32,7 @@ export default function PostDetails() {
   const dragX = useMotionValue(0);
   const [exitAnimating, setExitAnimating] = useState(false);
   const winWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+  const authorStanding = useAuthorStanding(post ? [post] : []);
 
   const loadPost = useCallback(async () => {
     setLoading(true);
@@ -85,6 +87,7 @@ export default function PostDetails() {
               onOpenComments={() => setShowComments(true)}
               onOpenOptions={() => setShowOptions(true)}
               isVisible
+              authorStanding={authorStanding[post.authorId]}
             />
           </ErrorBoundary>
         </div>

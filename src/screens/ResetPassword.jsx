@@ -48,7 +48,7 @@ const PasswordInput = React.memo(({ value, onChange, error, disabled = false, la
   const darkBg = resolvedTheme === 'dark' ? 'bg-gray-900/80' : 'bg-white/90';
   const borderClass = error
     ? 'border-red-500 ring-1 ring-red-500/50'
-    : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30';
+    : 'border-gray-300 dark:border-gray-700 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/30';
 
   return (
     <div className="space-y-2">
@@ -382,10 +382,10 @@ export default function ResetPasswordScreen() {
 
             <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500">
               <span>🔒</span>
-              <span>End-to-end encrypted</span>
+              <span>Encrypted in transit (TLS)</span>
               <span>•</span>
               <span>🛡️</span>
-              <span>Military-grade security</span>
+              <span>Protected by Firebase Auth</span>
             </div>
           </motion.div>
         </div>

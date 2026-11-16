@@ -505,35 +505,33 @@ exports.predictPostPerformance = functions.https.onCall(async (data, context) =>
     factors.push('An active boost expands distribution.');
   }
 
-  // Scheduled posting: weekday-morning and weekday-evening windows historically
-  // perform best. This is a heuristic derived from the supplied time only.
-  let bestTime = 'Post now';
+  // Scheduled posting: a generic weekday/weekend convention only. Arvdoul has
+  // no measured posting-time dataset, so this is NOT a "best time" derived from
+  // real performance — it is a widely-used scheduling convention, labeled as
+  // such, and it never invents a specific timestamp.
+  let suggestedWindow = null;
   if (scheduledTime) {
     const when = new Date(scheduledTime);
     if (!Number.isNaN(when.getTime())) {
-      const hour = when.getHours();
       const isWeekend = [0, 6].includes(when.getDay());
       reach *= isWeekend ? 0.95 : 1.05;
       factors.push(isWeekend ? 'Weekend posts see slightly lower weekday traffic.' : 'Weekday posting aligns with peak traffic.');
-      bestTime = isWeekend ? 'Saturday 10:00' : 'Tuesday 18:00';
+      suggestedWindow = isWeekend ? 'Weekend' : 'Weekday';
     }
   }
-  if (!scheduledTime) bestTime = 'Tuesday 18:00';
 
-  // Earnings only exist when the author actually enabled monetisation.
-  const monetized = Boolean(data?.monetization && data?.monetization.type && data.monetization.type !== 'none');
-  const earnings = monetized ? Math.round(reach * 0.004 * (engagement / 4)) : 0;
-  if (!monetized) factors.push('Monetisation is off, so predicted earnings are 0.');
-
+  // Reach/engagement/viral score are a deterministic authoring heuristic shown
+  // with the factors that produced them. No coin figure is returned: the
+  // economy model has no per-reach earning rate (only coins-per-USD), so a
+  // predicted "earnings" number would be invented money shown as real.
   const viralScore = Math.min(95, Math.round((engagement * 6) + (reach / 400)));
 
   return {
     success: true,
     reach: Math.round(reach).toLocaleString(),
     engagement: Number(engagement.toFixed(1)),
-    earnings,
     viralScore,
-    bestTime,
+    suggestedWindow,
     factors,
     deterministic: true,
   };

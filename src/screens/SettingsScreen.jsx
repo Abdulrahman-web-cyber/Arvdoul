@@ -48,7 +48,7 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled
         onClick={() => onChange?.(!checked)}
         className={cn(
           'relative w-11 h-6 rounded-full transition-colors shrink-0',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple focus-visible:ring-offset-2',
           checked ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gray-300 dark:bg-gray-700',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
@@ -99,7 +99,7 @@ function OptionPill({ label, active, onClick }) {
       aria-pressed={active}
       className={cn(
         'px-3 py-1.5 rounded-full text-xs font-semibold transition-all min-h-[36px]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
         active
           ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -574,7 +574,7 @@ export default function SettingsScreen() {
             <div className="mt-4 pt-3 border-t border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wider">
-                  Appearance &amp; Cosmetic Unlocks
+                  Standing &amp; Appearance Unlocks
                 </span>
                 <span className="text-[10px] text-gray-400 font-mono">
                   Level {levelInfo.level} of 100
@@ -583,47 +583,28 @@ export default function SettingsScreen() {
               <div className="flex flex-wrap gap-2">
                 {(() => {
                   const gates = LEVEL_GATES;
+                  // Only perks the platform actually honours are listed: the
+                  // "Top Creator" standing label (getIdentityBadge) and the
+                  // crest radiance applied by ProfileHeroSection. There is no
+                  // badge-colour picker or profile-accent control, so those are
+                  // not advertised here.
                   return (
                     <>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= gates.advancedEditor 
-                          ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
-                          : "bg-white/5 border-white/10 text-gray-500"
-                      )}>
-                        <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < gates.advancedEditor && `• Unlocks Lvl ${gates.advancedEditor}`}
-                      </span>
-                      <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= gates.customBadge
-                          ? "bg-amber-500/15 border-amber-500/30 text-amber-300" 
-                          : "bg-white/5 border-white/10 text-gray-500"
-                      )}>
-                        <span>🏷️</span> Custom Badge {levelInfo.level < gates.customBadge && `• Unlocks Lvl ${gates.customBadge}`}
-                      </span>
-                      <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
                         levelInfo.level >= gates.verifiedPriority
-                          ? "bg-blue-500/15 border-blue-500/30 text-blue-300" 
+                          ? "bg-blue-500/15 border-blue-500/30 text-blue-300"
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>🎨</span> Custom Profile Accent {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}
+                        <span>✅</span> Top Creator Standing {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
                         levelInfo.level >= gates.sovereign
-                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" 
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>💎</span> Cornerstone Aura Glow {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}
-                      </span>
-                      <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= gates.transcendent
-                          ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" 
-                          : "bg-white/5 border-white/10 text-gray-500"
-                      )}>
-                        <span>👑</span> Monarch Halo {levelInfo.level < gates.transcendent && `• Unlocks Lvl ${gates.transcendent}`}
+                        <span>💎</span> Crest Radiance {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}
                       </span>
                     </>
                   );
@@ -1052,7 +1033,7 @@ function MfaDialogBody({ loadFailed, factors, enroll, code, onCodeChange, busy, 
             maxLength={6}
             value={code}
             onChange={(e) => onCodeChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 text-gray-900 dark:text-white tracking-[0.4em] text-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+            className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 text-gray-900 dark:text-white tracking-[0.4em] text-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             placeholder="000000"
           />
         </div>

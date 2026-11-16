@@ -72,17 +72,23 @@ const VideoFeed = memo(({
 
   // Resolve the viewer's real follow state for the loaded creators so the
   // follow badge reflects the server, not a hardcoded false (which made every
-  // already-followed creator render as "+ Follow").
-  const [followingIds, setFollowingIds] = useState(() => new Set());
+  // already-followed creator render as "+ Follow"). Batched per-pair edge read
+  // (`getFollowStates` → `getEdgeSet`), never a scan of the viewer's follow graph.
+  const [followStates, setFollowStates] = useState(() => new Map());
   useEffect(() => {
     if (!user?.uid || videos.length === 0) return undefined;
     let cancelled = false;
     (async () => {
       try {
+        const creatorIds = [...new Set(videos.map((v) => v.userId || v.authorId || v.creator?.id).filter(Boolean))];
+        if (creatorIds.length === 0) return;
         const { getUserService } = await import('../../services/userService.js');
-        const res = await getUserService().getFollowing(user.uid, { limit: 200 });
+        const states = await getUserService().getFollowStates(user.uid, creatorIds);
         if (cancelled) return;
-        setFollowingIds(new Set((res.following || res.friends || []).map((f) => f.uid || f.id)));
+        setFollowStates(new Map([...states].map(([id, s]) => [id, {
+          isFollowing: Boolean(s?.isFollowing),
+          requestStatus: s?.requestStatus ?? null,
+        }])));
       } catch (err) {
         console.warn('Could not resolve follow state:', err);
       }
@@ -319,16 +325,22 @@ const VideoFeed = memo(({
                 video={video}
                 isActive={index === currentIndex}
                 autoPlay={autoPlayEnabled && index === currentIndex}
-                followedByViewer={followingIds.has(video.userId || video.authorId || video.creator?.id)}
+                followedByViewer={Boolean(followStates.get(video.userId || video.authorId || video.creator?.id)?.isFollowing)}
+                requestPending={followStates.get(video.userId || video.authorId || video.creator?.id)?.requestStatus === 'pending'}
                 onLike={() => handleLike(video)}
                 onComment={() => handleComment(video)}
                 onShare={() => handleShare(video)}
                 onSave={() => handleSave(video)}
                 onGift={() => handleGift(video)}
                 onReport={() => handleReport(video)}
-                onFollow={() => {
+                onFollow={(_creator, nextState) => {
                   const creatorId = video.userId || video.authorId || video.creator?.id;
-                  if (creatorId) setFollowingIds((prev) => new Set(prev).add(creatorId));
+                  if (!creatorId || !nextState) return;
+                  setFollowStates((prev) => {
+                    const next = new Map(prev);
+                    next.set(creatorId, nextState);
+                    return next;
+                  });
                 }}
               />
             </div>

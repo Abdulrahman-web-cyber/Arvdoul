@@ -18,7 +18,7 @@ const COMMENTS_CONFIG = {
 import { cacheManager } from '../utils/CacheManager.js';
 import { LOCAL_COMMENTS_PREFIX } from '../utils/localContentCache.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
-import { pickDisplayName, deriveHandle } from './profileReadModel.js';
+import { pickDisplayName, deriveHandle, resolveActorName } from './profileReadModel.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { logger } from '../utils/Logger.js';
@@ -121,6 +121,39 @@ class UltimateCommentService {
     return this.firestore;
   }
 
+  /**
+   * The viewer whose block/mute relationships apply to a read. Prefers the
+   * caller-supplied id (screens pass the live session uid) and falls back to
+   * the live Firebase session, so no screen can leak a blocked author's
+   * comments by simply omitting the option.
+   */
+  async _resolveViewerId(explicitViewerId) {
+    if (explicitViewerId) return explicitViewerId;
+    try {
+      const { getAuthInstance } = await import('../firebase/firebase.js');
+      const auth = await getAuthInstance();
+      return auth?.currentUser?.uid || null;
+    } catch (err) {
+      logger.warn('Comment viewer resolution failed; not filtering', { error: err?.message });
+      return null;
+    }
+  }
+
+  /**
+   * Creators whose comments must not surface for the viewer: blocked,
+   * blocked-by and muted. Delegates to the graph spine (bounded, fails open).
+   */
+  async _getHiddenAuthors(viewerId) {
+    if (!viewerId) return new Set();
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      return await getSocialGraphService().getHiddenAuthorIds(viewerId);
+    } catch (err) {
+      logger.warn('Comment hidden-author read failed; not filtering', { error: err?.message });
+      return new Set();
+    }
+  }
+
   async createComment(postId, userId, content, options = {}) {
     const startTime = Date.now();
     const operationId = `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -157,11 +190,11 @@ class UltimateCommentService {
 
       const extracted = this._extractMetadata(content);
 
-      // Identity honesty: a missing name renders the neutral label "Creator"
-      // (never an invented `User_<uid>` person) and a missing handle stays empty
-      // (the UI omits the `@handle`) — never a synthetic `user_<uid>` that reads
-      // as a real account.
-      const commentAuthorName = pickDisplayName([options.userName]);
+      // Identity honesty: a missing name resolves to the real uid prefix
+      // (never a generic word like "Creator"/"Member", which reads as an
+      // invented person) and a missing handle stays empty (the UI omits the
+      // `@handle`) — never a synthetic `user_<uid>` that reads as a real account.
+      const commentAuthorName = resolveActorName([options.userName], userId);
       const commentData = {
         postId,
         userId,
@@ -183,7 +216,6 @@ class UltimateCommentService {
         likes: 0,
         dislikes: 0,
         replies: 0,
-        reports: 0,
         likesBy: [],
         dislikesBy: [],
 
@@ -196,10 +228,6 @@ class UltimateCommentService {
         isLocked: false,
         moderationStatus: 'pending',
         moderationScore: 0,
-
-        viewCount: 0,
-        shareCount: 0,
-        sentimentScore: 0,
 
         createdAt: this.firestoreMethods.serverTimestamp(),
         updatedAt: this.firestoreMethods.serverTimestamp(),
@@ -214,7 +242,15 @@ class UltimateCommentService {
       const docRef = await this.firestoreMethods.addDoc(commentsRef, commentData);
       const commentId = docRef.id;
 
-      await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
+      // The post-comment counter is a sharded counter on `posts/{postId}`. A
+      // video comment is submitted with the video id as the target (the
+      // `comments` doc carries `postId: <videoId>`), so incrementing here would
+      // create a phantom `posts/{videoId}` counter document that no reader ever
+      // sees — `videos/{id}.stats.comments` is maintained server-side by
+      // `aggregateVideoComments` from the `comments` collection instead (N435).
+      if (options.targetType !== 'video') {
+        await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
+      }
 
       if (options.parentId) {
         await countersManager.increment({ docPath: `comments/${options.parentId}`, field: 'replies' });
@@ -302,6 +338,14 @@ class UltimateCommentService {
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
 
+      // Block/mute enforcement: a blocked, blocked-by or muted author's
+      // comments must not surface to the viewer. Every other read surface
+      // (feed, notifications, search, ranking, stories, live, videos) resolves
+      // this through the graph spine; the comment thread previously did not, so
+      // blocking someone still showed their comments under a post.
+      const viewerId = await this._resolveViewerId(options.viewerId);
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
+
       // Callers pass the cursor as `startAfter` (the drawer's name); accept
       // `cursor` too. The paginated query never applied a cursor, so the
       // drawer's "load more" re-fetched page 1 forever and (deduped by id)
@@ -353,6 +397,7 @@ class UltimateCommentService {
         snapshot.forEach(docSnap => {
           const data = docSnap.data();
           if (data.isDeleted || data.isHidden) return;
+          if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
           if (options.parentId === null || options.parentId === undefined) {
             if (data.parentId) return;
           } else if (options.parentId !== 'all') {
@@ -377,6 +422,7 @@ class UltimateCommentService {
           if (Array.isArray(localStored)) {
             localStored.forEach(lc => {
               if (lc && lc.id && !commentMap.has(lc.id)) {
+                if (hiddenAuthors.size > 0 && hiddenAuthors.has(lc.userId)) return;
                 const comment = {
                   ...lc,
                   createdAt: lc.createdAt ? new Date(lc.createdAt) : new Date(),
@@ -391,6 +437,8 @@ class UltimateCommentService {
           logger.warn('Local comment cache read failed', { error: e?.message });
         }
       }
+
+      await this._overlayReactionCounts(comments);
 
       let processedComments = comments;
       if (options.nested === true && options.parentId === null) {
@@ -462,6 +510,7 @@ class UltimateCommentService {
         createdAt: commentData.createdAt?.toDate?.() || new Date(),
         updatedAt: commentData.updatedAt?.toDate?.() || new Date()
       };
+      await this._overlayReactionCounts([comment]);
 
       this.cache.set(cacheKey, { comment, timestamp: Date.now() });
 
@@ -512,9 +561,7 @@ class UltimateCommentService {
       await this.firestoreMethods.updateDoc(commentRef, {
         ...updates,
         updatedAt: this.firestoreMethods.serverTimestamp(),
-        lastActivityAt: this.firestoreMethods.serverTimestamp(),
-        _lastEditedAt: new Date().toISOString(),
-        _editCount: (comment.comment._editCount || 0) + 1
+        lastActivityAt: this.firestoreMethods.serverTimestamp()
       });
 
       this._invalidateCommentCache(commentId);
@@ -882,7 +929,7 @@ class UltimateCommentService {
           commentId: result.commentId,
           parentCommentId,
           replyAuthorId: userId,
-          replyAuthorName: pickDisplayName([options.userName]),
+          replyAuthorName: resolveActorName([options.userName], userId),
           postId: parentComment.comment.postId,
           content: content.substring(0, 100)
         }).catch((e) => logger.warn('Reply notification failed', { parentCommentId, error: e?.message }));
@@ -899,6 +946,9 @@ class UltimateCommentService {
   async getReplies(commentId, options = {}) {
     try {
       await this._ensureInitialized();
+
+      const viewerId = await this._resolveViewerId(options.viewerId);
+      const hiddenAuthors = await this._getHiddenAuthors(viewerId);
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
       const conditions = [
@@ -929,6 +979,7 @@ class UltimateCommentService {
       const replies = [];
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
+        if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
         replies.push({
           id: docSnap.id,
           ...data,
@@ -936,14 +987,22 @@ class UltimateCommentService {
           updatedAt: data.updatedAt?.toDate?.() || new Date()
         });
       });
+      await this._overlayReactionCounts(replies);
 
       const hasMore = snapshot.size === pageSize;
       const nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
+      // `snapshot.size` is only this page; the sharded `replies` counter is the
+      // exact total (the drawer uses it for the expander label).
+      const total = await countersManager.get({
+        docPath: `comments/${commentId}`,
+        field: 'replies',
+        fallback: snapshot.size,
+      });
 
       return {
         success: true,
         replies,
-        total: snapshot.size,
+        total,
         parentCommentId: commentId,
         hasMore,
         nextCursor
@@ -961,6 +1020,13 @@ class UltimateCommentService {
     const setupSubscription = async () => {
       try {
         await this._ensureInitialized();
+
+        // Block/mute enforcement for the live thread: resolve the viewer's
+        // hidden-author set once for the subscription and drop those authors
+        // from every snapshot (the component-level filter only knew about
+        // blocks, and never about mutes).
+        const viewerId = await this._resolveViewerId(options.viewerId);
+        const hiddenAuthors = await this._getHiddenAuthors(viewerId);
 
         const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
         const conditions = [
@@ -980,10 +1046,11 @@ class UltimateCommentService {
 
         const q = this.firestoreMethods.query(commentsRef, ...conditions);
 
-        const unsubscribe = this.firestoreMethods.onSnapshot(q, (snapshot) => {
+        const unsubscribe = this.firestoreMethods.onSnapshot(q, async (snapshot) => {
           const comments = [];
           snapshot.forEach(docSnap => {
             const data = docSnap.data();
+            if (hiddenAuthors.size > 0 && hiddenAuthors.has(data.userId)) return;
             comments.push({
               id: docSnap.id,
               ...data,
@@ -991,6 +1058,10 @@ class UltimateCommentService {
               updatedAt: data.updatedAt?.toDate?.() || new Date()
             });
           });
+          // The numeric reaction fields on the doc are never written (the counts
+          // live in shards), so overlay the real sums before emitting — otherwise
+          // the live update replaces an optimistic like count with the seeded 0.
+          await this._overlayReactionCounts(comments);
 
           let processedComments = comments;
           if (options.nested === true) {
@@ -1132,6 +1203,38 @@ class UltimateCommentService {
     };
   }
 
+  // Comment reaction counts are sharded counters: `likeComment`/`dislikeComment`/
+  // `removeLikeDislike` increment `counter_shards` for `comments/{id}` (fields
+  // `likes`/`dislikes`) and never write the numeric fields on the comment doc —
+  // which stay at their create-time `0`. Every read path must therefore overlay
+  // the shard sum (falling back to the raw field only when no shard exists), or
+  // the UI renders a fabricated `0` likes on every comment (N439). `likesBy` is
+  // NOT a substitute: it is capped at `REACTION_ARRAY_CAP`, so it undercounts
+  // high-reaction comments.
+  async _overlayReactionCounts(comments) {
+    if (!Array.isArray(comments) || comments.length === 0) return comments;
+    // The drawer's reply expander reads a derived `repliesCount` field, which no
+    // read path ever populated — so a comment with pre-existing replies showed
+    // no expander until the viewer replied themselves. Initialize it from the
+    // doc and overlay the sharded `replies` count (`_buildNestedComments` later
+    // overwrites `replies` with the child array, so the alias must be distinct).
+    for (const c of comments) {
+      if (c && c.repliesCount === undefined) c.repliesCount = 0;
+    }
+    try {
+      await countersManager.applyAll({
+        items: comments,
+        collection: 'comments',
+        fields: ['likes', 'dislikes', 'replies'],
+        scope: 'top',
+        fieldAliases: { replies: 'repliesCount' },
+      });
+    } catch (error) {
+      logger.warn('Comment reaction-count overlay failed', { error: error?.message });
+    }
+    return comments;
+  }
+
   _buildNestedComments(comments) {
     const commentMap = new Map();
     const rootComments = [];
@@ -1270,7 +1373,7 @@ class UltimateCommentService {
               recipientId: docSnap.id,
               senderId: context.userId,
               title: 'You were mentioned in a comment',
-              message: `${context.userName || 'Someone'} mentioned you in a comment`,
+              message: `${pickDisplayName([context.userName], { fallback: `user ${String(context.userId).slice(0, 6)}` })} mentioned you in a comment`,
               data: {
                 commentId: context.commentId,
                 postId: context.postId,
@@ -1509,13 +1612,17 @@ class UltimateCommentService {
 
       const snapshot = await this.firestoreMethods.getCountFromServer(q);
 
+      // Only the server-side count is measured here. `averageLikes`,
+      // `averageReplies` and `topCommenters` had no writer anywhere in the
+      // codebase, so returning `0`/`[]` presented unwritten values as measured
+      // statistics. Return them as `null` (unknown) instead.
       return {
         success: true,
         stats: {
           totalComments: snapshot.data().count,
-          averageLikes: 0,
-          averageReplies: 0,
-          topCommenters: []
+          averageLikes: null,
+          averageReplies: null,
+          topCommenters: null,
         }
       };
 

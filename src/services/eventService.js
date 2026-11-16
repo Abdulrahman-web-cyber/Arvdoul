@@ -223,22 +223,19 @@ class EventService {
   }
 
   /**
-   * Get user's registrations
-   * @param {string} userId - User ID
-   * @returns {Promise<Array>} List of events
+   * The caller's own event registrations, served server-side.
+   *
+   * The old client list query (`where('attendees.<uid>.status','in',[...])`)
+   * could not prove the `events` read rule's organizer/attendee predicate, so
+   * the read rule had to stay a bare `isSignedIn()` and any signed-in client
+   * could read a `draft` event by id (N266). The callable reads with the Admin
+   * SDK, so the rule can gate the client read without breaking this list.
+   * @returns {Promise<Array<Object>>} The caller's registered events
    */
-  async getUserRegistrations(userId) {
+  async getUserRegistrations() {
     await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'events'),
-      where(`attendees.${userId}.status`, 'in', ['registered', 'waitlisted', 'checked_in']),
-      orderBy('startDate', 'asc'),
-      limit(MAX_EVENT_READ)
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const result = await callFunction(FUNCTIONS.GET_USER_EVENT_REGISTRATIONS, {});
+    return Array.isArray(result?.events) ? result.events : [];
   }
 
   /**
@@ -421,6 +418,28 @@ class EventService {
   }
 
   /**
+   * The attendee roster, resolved server-side.
+   *
+   * `events/{id}.attendees` stores only `{ status, ticketTier, ... }` per uid —
+   * no display name — so the client cannot render the real attendee identity
+   * from the event document (it showed a fabricated "User"). The `getEventAttendees`
+   * callable hydrates the real, projected `displayName`/`username`/`photoURL`
+   * from `users/{uid}` and returns `[]` for a non-attendee.
+   * @param {string} eventId - Event ID
+   * @param {{ includeWaitlist?: boolean }} [options]
+   * @returns {Promise<Array<Object>>} Roster rows
+   */
+  async getEventAttendees(eventId, options = {}) {
+    await this.initialize();
+    if (!eventId) return [];
+    const result = await callFunction(FUNCTIONS.GET_EVENT_ATTENDEES, {
+      eventId,
+      includeWaitlist: options.includeWaitlist === true,
+    });
+    return Array.isArray(result?.attendees) ? result.attendees : [];
+  }
+
+  /**
    * Notify all attendees
    * @param {string} eventId - Event ID
    * @param {string} title - Notification title
@@ -467,21 +486,6 @@ class EventService {
     return onSnapshot(doc(this.db, 'events', eventId), (doc) => {
       if (doc.exists) {
         callback({ id: doc.id, ...doc.data() });
-      }
-    }, (err) => logger.warn('[eventService] subscription error', err));
-  }
-
-  /**
-   * Subscribe to event attendees
-   * @param {string} eventId - Event ID
-   * @param {Function} callback - Update callback
-   * @returns {Function} Unsubscribe function
-   */
-  subscribeToAttendees(eventId, callback) {
-    return onSnapshot(doc(this.db, 'events', eventId), (doc) => {
-      if (doc.exists) {
-        const attendees = doc.data().attendees || {};
-        callback(Object.entries(attendees).map(([id, data]) => ({ id, ...data })));
       }
     }, (err) => logger.warn('[eventService] subscription error', err));
   }

@@ -20,7 +20,9 @@ const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
 const { getUserIdFromContext, getUserEmail } = require('./auth');
-const { settleWithdrawal } = require('./withdrawalSettlement');
+const { settleWithdrawal, STRIPE_PAYOUT_METHODS } = require('./withdrawalSettlement');
+const { readCoinBalance, writeCoinBalance, availableFrom } = require('./coinBalance');
+const { writeNotification } = require('./notificationWriter');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -32,6 +34,11 @@ const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_t
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
 const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
+// Per-day coin price of a paid post promotion. Canonical value lives in
+// `levelConfig.cjs` (shared with the client preview); the config override stays
+// available for an operator to change the rate without a code deploy.
+const BOOST_DAILY_RATE = functions.config().app?.boost_daily_rate ||
+  require('./levelConfig.cjs').BOOST_DAILY_RATE_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
 // ----------------------------------------------------------------------
@@ -180,9 +187,9 @@ const checkMutualTransfer = async (senderUid, receiverUid, amount) => {
 // ----------------------------------------------------------------------
 // WALLET LOCKING HELPERS
 // ----------------------------------------------------------------------
-const getAvailableBalance = (userData) => {
-  return (userData.coins || 0) - (userData.lockedCoins || 0);
-};
+// Balance reads/writes now resolve `users_private/{uid}` (N324): `coins` and
+// `lockedCoins` must never sit on the world-readable `users/{uid}` doc.
+const getAvailableBalance = (privateData) => availableFrom(privateData);
 
 // ----------------------------------------------------------------------
 // ENVIRONMENT & STRIPE
@@ -279,9 +286,9 @@ exports.addCoins = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const oldBalance = userSnap.data().coins || 0;
+      const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + amount;
-      t.update(userRef, { coins: newBalance });
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       const txData = {
@@ -342,12 +349,12 @@ exports.spendCoins = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const data = userSnap.data();
-      const available = getAvailableBalance(data);
+      const { coins: dataCoins, lockedCoins: dataLocked } = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: dataCoins, lockedCoins: dataLocked });
       if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins (some may be locked).');
 
-      const newBalance = (data.coins || 0) - amount;
-      t.update(userRef, { coins: newBalance });
+      const newBalance = dataCoins - amount;
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       t.set(txRef, {
@@ -427,16 +434,16 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
         if (!spaceSnap.exists) spaceRef = null;
       }
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available balance.');
 
-      const receiverData = receiverSnap.data();
-      const senderNewBalance = (senderData.coins || 0) - amount;
-      const receiverNewBalance = (receiverData.coins || 0) + amount;
+      const receiverBal = await readCoinBalance(t, toUserId, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - amount;
+      const receiverNewBalance = receiverBal.coins + amount;
 
-      t.update(senderRef, { coins: senderNewBalance });
-      t.update(receiverRef, { coins: receiverNewBalance });
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, toUserId, { coins: receiverNewBalance });
 
       const senderTxRef = admin.firestore().collection('coin_transactions').doc();
       const receiverTxRef = admin.firestore().collection('coin_transactions').doc();
@@ -511,14 +518,18 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
       const senderSnap = await t.get(senderRef);
       if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < giftValue) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
 
       const postRef = admin.firestore().collection('posts').doc(postId);
       const postSnap = await t.get(postRef);
       if (!postSnap.exists) throw new functions.https.HttpsError('not-found', 'Post not found.');
-      const authorUid = postSnap.data().userId;
+      // Posts denormalise the author as `authorId` (firestoreService postDoc and
+      // the communities writer). Reading `userId` returned undefined, so every
+      // gift failed with 'Post has no author'.
+      const postData = postSnap.data();
+      const authorUid = postData.authorId || postData.userId;
       if (!authorUid) throw new functions.https.HttpsError('internal', 'Post has no author.');
 
       if (senderUid === authorUid && GIFT_SELF_SEND_FLAG) {
@@ -527,14 +538,13 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
 
       await checkMutualTransfer(senderUid, authorUid, giftValue);
 
-      const authorRef = admin.firestore().collection('users').doc(authorUid);
-      const authorSnap = (authorUid !== senderUid) ? await t.get(authorRef) : senderSnap;
+      const authorBal = (authorUid !== senderUid) ? await readCoinBalance(t, authorUid, { fallbackToPublic: true }) : senderBal;
 
-      const senderNewBalance = (senderData.coins || 0) - giftValue;
-      const authorNewBalance = (authorSnap.data().coins || 0) + giftValue;
+      const senderNewBalance = senderBal.coins - giftValue;
+      const authorNewBalance = authorBal.coins + giftValue;
 
-      t.update(senderRef, { coins: senderNewBalance });
-      if (authorUid !== senderUid) t.update(authorRef, { coins: authorNewBalance });
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      if (authorUid !== senderUid) writeCoinBalance(t, authorUid, { coins: authorNewBalance });
 
       t.update(postRef, {
         'stats.gifts': admin.firestore.FieldValue.increment(1),
@@ -582,6 +592,21 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
 
     logEvent('gift_sent', { sender: senderUid, postId, giftType, value: giftValue });
 
+    // In-app notification for the receiver — written server-side (the gift is
+    // proved here, and `gift_received` is a trusted type a client may not mint).
+    if (result && result.receiverId && result.receiverId !== senderUid) {
+      const receiverSnap = await admin.firestore().collection('users').doc(senderUid).get();
+      const senderName = receiverSnap.exists ? (receiverSnap.data().displayName || senderUid) : `user ${String(senderUid).slice(0, 6)}`;
+      await writeNotification(result.receiverId, {
+        type: 'gift_received',
+        title: 'Gift received! 🎁',
+        message: `You received a ${giftType} gift worth ${giftValue} coins`,
+        senderId: senderUid,
+        senderName,
+        metadata: { postId, giftType, cost: giftValue },
+      }).catch((err) => console.warn('Gift notification failed:', err.message));
+    }
+
     // Gift XP: the sender's own action, plus the recipient's `gift_received`.
     // Both are awarded here (the gift transaction id is the idempotency key) so
     // a client cannot mint recipient XP without a real gift — the bare
@@ -605,7 +630,7 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('invalid-argument', 'postId and days (1‑30) required.');
     }
 
-    const boostDailyRate = functions.config().app?.boost_daily_rate || 10;
+    const boostDailyRate = BOOST_DAILY_RATE;
     const totalCost = boostDailyRate * days;
     if (totalCost > MAX_COIN_OPERATION) throw new functions.https.HttpsError('invalid-argument', `Boost cost exceeds maximum allowed.`);
 
@@ -626,18 +651,28 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const userData = userSnap.data();
-      const available = getAvailableBalance(userData);
+      const boostBal = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: boostBal.coins, lockedCoins: boostBal.lockedCoins });
       if (available < totalCost) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
 
       const postRef = admin.firestore().collection('posts').doc(postId);
       const postSnap = await t.get(postRef);
       if (!postSnap.exists) throw new functions.https.HttpsError('not-found', 'Post does not exist.');
-      if (postSnap.data().userId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the post owner can boost.');
-      if (postSnap.data().boostData?.isBoosted) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
+      // Posts store the author as `authorId`; `userId` is undefined, so this
+      // ownership check rejected the real owner ("Only the post owner can
+      // boost") and boosting could never succeed.
+      const boostPostData = postSnap.data();
+      const postAuthorId = boostPostData.authorId || boostPostData.userId;
+      if (postAuthorId !== uid) throw new functions.https.HttpsError('permission-denied', 'Only the post owner can boost.');
+      // Only an *active* boost blocks a new one; an expired promotion must be
+      // re-purchasable (the old check blocked the post forever).
+      const priorExpiresAt = boostPostData.boostData?.boostExpiresAt;
+      const boostStillActive = boostPostData.boostData?.isBoosted === true &&
+        (typeof priorExpiresAt !== 'number' || priorExpiresAt > Date.now());
+      if (boostStillActive) throw new functions.https.HttpsError('failed-precondition', 'Post is already boosted.');
 
-      const newBalance = (userData.coins || 0) - totalCost;
-      t.update(userRef, { coins: newBalance });
+      const newBalance = boostBal.coins - totalCost;
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       t.set(txRef, {
@@ -658,8 +693,11 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
 
       const boostedRef = admin.firestore().collection('boosted_posts').doc(postId);
       t.set(boostedRef, {
-        postId, userId: postSnap.data().userId, boostedBy: uid,
+        postId, userId: postAuthorId, boostedBy: uid,
         expiresAt: boostExpiresAt,
+        // TTL: drop the ranking signal once the promotion lapses so an expired
+        // boost cannot keep surfacing the post (and the feed read stays small).
+        expireAt: new Date(boostExpiresAt),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -687,13 +725,25 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
     const { amount, paymentMethod, paymentDetails, idempotencyKey } = data;
-    if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION * 5) {
-      throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION * 5}.`);
+    // Coins are an integer unit; a fractional amount would flow into
+    // lockedCoins, the ledger and the USD payout. Reject it at the boundary.
+    if (!amount || typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0 || amount > MAX_COIN_OPERATION * 5) {
+      throw new functions.https.HttpsError('invalid-argument', `amount must be a whole number between 1 and ${MAX_COIN_OPERATION * 5}.`);
     }
     if (amount < MIN_WITHDRAWAL_COINS) {
       throw new functions.https.HttpsError('invalid-argument', `Minimum withdrawal is ${MIN_WITHDRAWAL_COINS} coins.`);
     }
     if (!paymentMethod || !paymentDetails) throw new functions.https.HttpsError('invalid-argument', 'paymentMethod and paymentDetails required.');
+    // Reject an unpayable method at request time, before any coins are locked.
+    // PayPal has no settlement integration and any other non-Stripe method
+    // cannot be paid out; queueing such a request would lock the creator's
+    // coins behind a payout that can never be sent.
+    if (!STRIPE_PAYOUT_METHODS.has(paymentMethod)) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        `Unsupported payout method "${paymentMethod}". Withdrawals settle to a connected Stripe payout account.`
+      );
+    }
 
     const configuredMinLevel = Number(functions.config().app?.withdrawal_min_level) || LEVEL_GATES.withdrawals;
     const userRef = admin.firestore().collection('users').doc(uid);
@@ -712,7 +762,12 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('failed-precondition', `Minimum level ${configuredMinLevel} required.`);
     }
 
-    const available = getAvailableBalance(userData);
+    const privateSnap = await admin.firestore().collection('users_private').doc(uid).get();
+    const privateData = privateSnap.exists ? privateSnap.data() : {};
+    // Legacy fallback (pre-migration accounts) so a balance is not under-read.
+    const available = availableFrom(
+      privateData.coins === undefined ? { ...privateData, coins: userData.coins, lockedCoins: privateData.lockedCoins ?? userData.lockedCoins } : privateData
+    );
     if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins (some may be locked).');
 
     const lastWithdrawalCompletedAt = userData.lastWithdrawalCompletedAt?.toMillis() || 0;
@@ -742,14 +797,18 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     // same coins (double lock, and a second withdrawal row for one intent).
     const resultData = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
 
-      const freshSnap = await t.get(userRef);
-      const freshData = freshSnap.data();
-      const freshAvailable = getAvailableBalance(freshData);
+      const freshBal = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const freshAvailable = getAvailableBalance({ coins: freshBal.coins, lockedCoins: freshBal.lockedCoins });
       if (freshAvailable < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient coins at lock time.');
 
-      t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(amount) });
+      writeCoinBalance(t, uid, { lockedCoins: admin.firestore.FieldValue.increment(amount) });
       t.set(withdrawalRef, {
         userId: uid, amount, paymentMethod, paymentDetails,
         status: requiresReview ? 'pending_review' : 'pending',
@@ -762,7 +821,7 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
         userId: uid, type: 'withdrawal_lock', amount, reason: 'withdrawal_request',
         metadata: { withdrawalId: withdrawalRef.id },
         idempotencyKey: key,
-        balanceAfter: freshData.coins || 0,
+        balanceAfter: freshBal.coins,
         createdAt: serverTS(),
         expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       });
@@ -1059,6 +1118,28 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
       break;
     }
 
+    case 'account.updated': {
+      // Stripe Connect onboarding completion. The creator's payout account is
+      // only usable once Stripe reports `payouts_enabled`; `settleWithdrawal`
+      // requires `payout_settings.status === 'ready'`, so this is what flips a
+      // freshly-onboarded account from `onboarding` to `ready`. Without it the
+      // status never changed and every withdrawal stalled as unpayable.
+      const account = event.data.object;
+      const accountId = account.id;
+      const settingsQuery = await db.collection('payout_settings')
+        .where('stripeAccountId', '==', accountId).limit(1).get();
+      if (!settingsQuery.empty) {
+        await settingsQuery.docs[0].ref.set({
+          status: account.payouts_enabled ? 'ready' : 'onboarding',
+          payoutsEnabled: !!account.payouts_enabled,
+          chargesEnabled: !!account.charges_enabled,
+          requirementsDue: account.requirements?.currently_due || [],
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      break;
+    }
+
     case 'customer.subscription.deleted': {
       const subscription = event.data.object;
       // Resolve the uid-keyed doc (see the invoice case above).
@@ -1100,7 +1181,7 @@ exports.auditCoins = functions.pubsub.schedule('every 24 hours').onRun(async (co
       return null;
     }
 
-    const agg = await admin.firestore().collection('users')
+    const agg = await admin.firestore().collection('users_private')
       .aggregate({ total: admin.firestore.AggregateField.sum('coins') })
       .get();
     const balanceTotal = Number(agg.data().total) || 0;
@@ -1129,23 +1210,34 @@ exports.auditCoins = functions.pubsub.schedule('every 24 hours').onRun(async (co
 exports.recoverStuckWithdrawals = functions.pubsub.schedule('every 5 minutes').onRun(async (context) => {
   try {
     const now = new Date();
-    const staleDocs = await admin.firestore().collection('withdrawal_requests')
-      .where('status', '==', 'processing')
-      .where('lockExpiresAt', '<', now)
-      .get();
+    // Drain the whole stuck backlog in bounded pages so a large backlog is
+    // released without an unbounded read or a >500-op batch (the old version
+    // read every matching doc into a single batch, which throws once more than
+    // 500 locks are stuck).
+    let reset = 0;
+    for (;;) {
+      const staleDocs = await admin.firestore().collection('withdrawal_requests')
+        .where('status', '==', 'processing')
+        .where('lockExpiresAt', '<', now)
+        .limit(400)
+        .get();
+      if (staleDocs.empty) break;
 
-    const batch = admin.firestore().batch();
-    staleDocs.forEach(doc => {
-      batch.update(doc.ref, {
-        status: 'pending',
-        processingError: 'Lock expired – automatically reset',
-        lockOwner: admin.firestore.FieldValue.delete(),
-        lockExpiresAt: admin.firestore.FieldValue.delete(),
+      const batch = admin.firestore().batch();
+      staleDocs.forEach(doc => {
+        batch.update(doc.ref, {
+          status: 'pending',
+          processingError: 'Lock expired – automatically reset',
+          lockOwner: admin.firestore.FieldValue.delete(),
+          lockExpiresAt: admin.firestore.FieldValue.delete(),
+        });
       });
-    });
-    await batch.commit();
-    if (staleDocs.size > 0) {
-      console.log(`Reset ${staleDocs.size} stuck withdrawal locks.`);
+      await batch.commit();
+      reset += staleDocs.size;
+      if (staleDocs.size < 400) break;
+    }
+    if (reset > 0) {
+      console.log(`Reset ${reset} stuck withdrawal locks.`);
     }
     return null;
   } catch (err) {
@@ -1164,6 +1256,7 @@ const COIN_PACKAGES = require('./levelConfig.cjs').COIN_PACKAGES_BY_ID;
 const SUBSCRIPTION_TIERS = require('./levelConfig.cjs').SUBSCRIPTION_TIERS;
 
 const AD_REWARD_PER_30S = require('./levelConfig.cjs').AD_REWARD_COINS;
+const MAX_ADS_PER_USER_PER_DAY = require('./levelConfig.cjs').MAX_ADS_PER_USER_PER_DAY;
 const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
 
 /**
@@ -1177,9 +1270,9 @@ async function creditSubscriptionCoins(t, { userId, tier, coinsPerMonth, idempot
   const userRef = admin.firestore().collection('users').doc(userId);
   const userSnap = await t.get(userRef);
   if (!userSnap.exists) return null;
-  const oldBalance = userSnap.data().coins || 0;
+  const { coins: oldBalance } = await readCoinBalance(t, userId, { fallbackToPublic: true });
   const newBalance = oldBalance + coinsPerMonth;
-  t.update(userRef, { coins: newBalance });
+  writeCoinBalance(t, userId, { coins: newBalance });
 
   const txRef = admin.firestore().collection('coin_transactions').doc();
   t.set(txRef, {
@@ -1231,6 +1324,35 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
+    // Charge the card BEFORE opening the transaction. A Stripe network call
+    // inside the `createFirestoreTransaction` callback runs on every SDK retry
+    // (up to 5x) and the callback can be retried after the charge already
+    // settled, so the old shape re-charged on each attempt (masked only by
+    // Stripe's idempotency key) and re-ran the whole money path on a
+    // transaction-contention retry. Idempotency is now owned by the ledger row
+    // inside the transaction; the charge itself is keyed by `pi_${key}`.
+    const customer = await getOrCreateStripeCustomer(uid);
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: pkg.priceUsdCents,
+      currency: 'usd',
+      payment_method: paymentMethodId,
+      customer: customer.id,
+      confirm: true,
+      off_session: true,
+      metadata: { userId: uid, packageId },
+    }, { idempotencyKey: `pi_${key}` });
+
+    // Only credit coins for a charge that actually settled. `confirm: true`
+    // with a card that needs 3DS returns `requires_action` (it does not
+    // throw), and an async method returns `processing` — crediting either
+    // would mint coins the user never paid for.
+    if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        `Payment not completed (status: ${paymentIntent?.status || 'unknown'}). Please complete authentication and try again.`
+      );
+    }
+
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
       if (ledgerSnap.exists) {
@@ -1240,36 +1362,13 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
         return ledgerSnap.data().result;
       }
 
-      // Real revenue path: charge the card (payment method validated above).
-      const customer = await getOrCreateStripeCustomer(uid);
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: pkg.priceUsdCents,
-        currency: 'usd',
-        payment_method: paymentMethodId,
-        customer: customer.id,
-        confirm: true,
-        off_session: true,
-        metadata: { userId: uid, packageId },
-      }, { idempotencyKey: `pi_${key}` });
-
-      // Only credit coins for a charge that actually settled. `confirm: true`
-      // with a card that needs 3DS returns `requires_action` (it does not
-      // throw), and an async method returns `processing` — crediting either
-      // would mint coins the user never paid for.
-      if (!paymentIntent || paymentIntent.status !== 'succeeded') {
-        throw new functions.https.HttpsError(
-          'failed-precondition',
-          `Payment not completed (status: ${paymentIntent?.status || 'unknown'}). Please complete authentication and try again.`
-        );
-      }
-
       const userRef = admin.firestore().collection('users').doc(uid);
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const oldBalance = userSnap.data().coins || 0;
+      const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + pkg.coins;
-      t.update(userRef, { coins: newBalance });
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const txRef = admin.firestore().collection('coin_transactions').doc();
       t.set(txRef, {
@@ -1335,51 +1434,62 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
+    // All Stripe network calls run BEFORE the transaction. A call inside the
+    // retryable `createFirestoreTransaction` callback would re-create the
+    // price/subscription on every retry (Stripe idempotency keys are not
+    // supplied here), so a transient Firestore conflict could start multiple
+    // subscriptions and charge the card repeatedly.
+    const price = await stripe.prices.create({
+      unit_amount: tierCfg.priceUsdCents,
+      currency: 'usd',
+      recurring: { interval: 'month' },
+      product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
+    });
+    const customer = await getOrCreateStripeCustomer(uid);
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
+    await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: paymentMethodId } });
+    // `error_if_incomplete` charges the first invoice off-session and THROWS
+    // if the card cannot be charged (declined, needs 3DS). The previous
+    // `default_incomplete` created the subscription with an unpaid invoice,
+    // so the code below still marked it `active` and credited the first
+    // month's coins to a subscriber who had paid nothing.
+    const sub = await stripe.subscriptions.create({
+      customer: customer.id,
+      items: [{ price: price.id }],
+      payment_behavior: 'error_if_incomplete',
+      metadata: { userId: uid, tier },
+    });
+    if (!sub || (sub.status !== 'active' && sub.status !== 'trialing')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        `Subscription not active (status: ${sub?.status || 'unknown'}). Please complete payment and try again.`
+      );
+    }
+    const stripeSubscriptionId = sub.id;
+
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
-
-      // Real recurring subscription: create a monthly price from the tier
-      // config, attach the payment method, and set the default invoice to
-      // auto-charge it.
-      const price = await stripe.prices.create({
-        unit_amount: tierCfg.priceUsdCents,
-        currency: 'usd',
-        recurring: { interval: 'month' },
-        product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
-      });
-      const customer = await getOrCreateStripeCustomer(uid);
-      await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
-      await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: paymentMethodId } });
-      // `error_if_incomplete` charges the first invoice off-session and THROWS
-      // if the card cannot be charged (declined, needs 3DS). The previous
-      // `default_incomplete` created the subscription with an unpaid invoice,
-      // so the code below still marked it `active` and credited the first
-      // month's coins to a subscriber who had paid nothing.
-      const sub = await stripe.subscriptions.create({
-        customer: customer.id,
-        items: [{ price: price.id }],
-        payment_behavior: 'error_if_incomplete',
-        metadata: { userId: uid, tier },
-      });
-      if (!sub || (sub.status !== 'active' && sub.status !== 'trialing')) {
-        throw new functions.https.HttpsError(
-          'failed-precondition',
-          `Subscription not active (status: ${sub?.status || 'unknown'}). Please complete payment and try again.`
-        );
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
       }
-      const stripeSubscriptionId = sub.id;
 
       const subRef = admin.firestore().collection('subscriptions').doc(uid);
+
+      // Credit first month coins FIRST (same double-entry path as purchases).
+      // `creditSubscriptionCoins` reads `users/{uid}`; a `t.set()` before that
+      // read would violate Firestore's read-before-write rule and throw, so the
+      // read must precede the subscription-doc write.
+      await creditSubscriptionCoins(t, {
+        userId: uid, tier, coinsPerMonth: tierCfg.coinsPerMonth, idempotencyKey: `${key}_first`,
+      });
+
       t.set(subRef, {
         userId: uid, tier, status: 'active', coinsPerMonth: tierCfg.coinsPerMonth,
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         stripeSubscriptionId, createdAt: serverTS(), updatedAt: serverTS(),
-      });
-
-      // Credit first month coins (same double-entry path as purchases).
-      await creditSubscriptionCoins(t, {
-        userId: uid, tier, coinsPerMonth: tierCfg.coinsPerMonth, idempotencyKey: `${key}_first`,
       });
 
       const resultData = { success: true, tier, stripeSubscriptionId };
@@ -1401,21 +1511,31 @@ exports.cancelSubscription = functions.https.onCall(async (data, context) => {
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
+    // Read the subscription + cancel in Stripe BEFORE the transaction. A Stripe
+    // call inside the retryable callback would fire once per retry.
+    const subRef = admin.firestore().collection('subscriptions').doc(uid);
+    const subSnap = await subRef.get();
+    if (!subSnap.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
+    const stripeSubscriptionId = subSnap.data().stripeSubscriptionId;
+    if (stripeSubscriptionId && stripe) {
+      try {
+        await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: true });
+      } catch (stripeErr) {
+        // Non-fatal: still mark locally; Stripe webhook reconciles.
+        logEvent('stripe_cancel_failed', { uid, error: stripeErr.message });
+      }
+    }
+
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
-      const subRef = admin.firestore().collection('subscriptions').doc(uid);
-      const subSnap = await t.get(subRef);
-      if (!subSnap.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
-
-      if (subSnap.data().stripeSubscriptionId && stripe) {
-        try {
-          await stripe.subscriptions.update(subSnap.data().stripeSubscriptionId, { cancel_at_period_end: true });
-        } catch (stripeErr) {
-          // Non-fatal: still mark locally; Stripe webhook reconciles.
-          logEvent('stripe_cancel_failed', { uid, error: stripeErr.message });
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
         }
+        return ledgerSnap.data().result;
       }
+      const freshSub = await t.get(subRef);
+      if (!freshSub.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
       t.update(subRef, { status: 'canceled', cancelAtPeriodEnd: true, canceledAt: serverTS(), updatedAt: serverTS() });
 
       const resultData = { success: true, message: 'Subscription will end at the current period.' };
@@ -1537,29 +1657,45 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'Ad campaign not found or inactive.');
     }
 
+    // Daily cap, applied only once the campaign is proven real so an invalid
+    // adId cannot burn the caller's budget. The per-minute rate limit alone
+    // lets an account claim 20 ads/min all day, each minting coins; this
+    // consumes the shared daily ad budget (the same lever the client shows).
+    await enforceDailyLimit(uid, 1, 'ad', MAX_ADS_PER_USER_PER_DAY);
+
     // Clamp the client-supplied watch time so a forged duration cannot inflate
-    // the reward beyond a real rewarded-ad session.
+    // the reward beyond a real rewarded-ad session, then floor the reward at
+    // one full reward. The advertised rate is "AD_REWARD_PER_30S coins per 30s"
+    // (CoinsScreen / SponsoredPostCard render the same 30s unit), so a
+    // sub-30s claim must still pay exactly one unit — the old
+    // `Math.max(REWARD, floor(s/30)*REWARD)` paid the floor of a shorter
+    // window, i.e. zero, contradicting the displayed "+N coins per 30s".
     const MAX_AD_WATCH_SECONDS = 120;
     const watchedSeconds = Math.min(Number(watchDurationSeconds), MAX_AD_WATCH_SECONDS);
-    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchedSeconds / 30) * AD_REWARD_PER_30S);
+    const reward = Math.max(1, Math.floor(watchedSeconds / 30)) * AD_REWARD_PER_30S;
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
-      if (ledgerSnap.exists) return ledgerSnap.data().result;
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
 
       const userRef = admin.firestore().collection('users').doc(uid);
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
 
-      const oldBalance = userSnap.data().coins || 0;
+      const { coins: oldBalance } = await readCoinBalance(t, uid, { fallbackToPublic: true });
       const newBalance = oldBalance + reward;
-      t.update(userRef, { coins: newBalance });
+      writeCoinBalance(t, uid, { coins: newBalance });
 
       const impRef = admin.firestore().collection('ad_impressions').doc();
       t.set(impRef, {
-        userId: uid, adId, placement, watchDurationSeconds, reward,
+        userId: uid, adId, placement, watchDurationSeconds: watchedSeconds, reward,
         createdAt: serverTS(), expireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       });
       const txRef = admin.firestore().collection('coin_transactions').doc();
@@ -1636,11 +1772,17 @@ exports.processVideoEvent = functions.https.onCall(async (data, context) => {
 exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
-    const { productId, orderId } = data || {};
+    const { productId, orderId, idempotencyKey } = data || {};
     if (!productId) throw new functions.https.HttpsError('invalid-argument', 'productId required.');
     await checkRateLimit(uid, 'marketplacePurchase', 10, 60000);
 
-    const key = generateIdempotencyKey(orderId || `mp-${uid}-${productId}-${Date.now()}`);
+    // The idempotency key must be stable across retries of the SAME purchase
+    // intent or a network retry double-debits and double-decrements stock.
+    // Prefer the caller-supplied key (or a client-generated orderId); only fall
+    // back to a random key for direct API callers, never `Date.now()`.
+    const key = generateIdempotencyKey(
+      idempotencyKey || orderId || `mp-${uid}-${productId}-${uuidv4()}`
+    );
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
     const result = await createFirestoreTransaction(async (t) => {
@@ -1671,7 +1813,8 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
       const userRef = db.collection('users').doc(uid);
       const userSnap = await t.get(userRef);
       if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
-      const available = getAvailableBalance(userSnap.data());
+      const buyerBal = await readCoinBalance(t, uid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: buyerBal.coins, lockedCoins: buyerBal.lockedCoins });
       if (available < price) {
         throw new functions.https.HttpsError('failed-precondition', `Insufficient Arvdoul Coins. You need ${price} coins, but have ${available}.`);
       }
@@ -1685,10 +1828,11 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
       //    total supply is unchanged. The old path debited the buyer and
       //    burned the coins from system/coin_supply, so every purchase
       //    destroyed value and the seller was never paid.
-      const newBalance = (userSnap.data().coins || 0) - price;
-      const sellerNewBalance = (sellerSnap.data().coins || 0) + price;
-      t.update(userRef, { coins: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      t.update(sellerRef, { coins: sellerNewBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      const sellerBal = await readCoinBalance(t, sellerId, { fallbackToPublic: true });
+      const newBalance = buyerBal.coins - price;
+      const sellerNewBalance = sellerBal.coins + price;
+      writeCoinBalance(t, uid, { coins: newBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      writeCoinBalance(t, sellerId, { coins: sellerNewBalance, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
       const txRef = db.collection('coin_transactions').doc();
       t.set(txRef, {
@@ -1829,8 +1973,8 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'Cannot gift your own stream.');
       }
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < giftValue) {
         throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
       }
@@ -1839,10 +1983,11 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
       const recipientSnap = await t.get(recipientRef);
       if (!recipientSnap.exists) throw new functions.https.HttpsError('not-found', 'Streamer not found.');
 
-      const senderNewBalance = (senderData.coins || 0) - giftValue;
-      const recipientNewBalance = (recipientSnap.data().coins || 0) + giftValue;
-      t.update(senderRef, { coins: senderNewBalance });
-      t.update(recipientRef, { coins: recipientNewBalance });
+      const recipientBal = await readCoinBalance(t, recipientUid, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - giftValue;
+      const recipientNewBalance = recipientBal.coins + giftValue;
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, recipientUid, { coins: recipientNewBalance });
 
       t.update(streamRef, {
         'stats.totalGifts': admin.firestore.FieldValue.increment(1),
@@ -1964,8 +2109,8 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'Cannot tip your own stream.');
       }
 
-      const senderData = senderSnap.data();
-      const available = getAvailableBalance(senderData);
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
       if (available < amount) {
         throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
       }
@@ -1974,10 +2119,11 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
       const recipientSnap = await t.get(recipientRef);
       if (!recipientSnap.exists) throw new functions.https.HttpsError('not-found', 'Streamer not found.');
 
-      const senderNewBalance = (senderData.coins || 0) - amount;
-      const recipientNewBalance = (recipientSnap.data().coins || 0) + amount;
-      t.update(senderRef, { coins: senderNewBalance });
-      t.update(recipientRef, { coins: recipientNewBalance });
+      const recipientBal = await readCoinBalance(t, recipientUid, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - amount;
+      const recipientNewBalance = recipientBal.coins + amount;
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, recipientUid, { coins: recipientNewBalance });
 
       t.update(streamRef, {
         'stats.totalTips': admin.firestore.FieldValue.increment(1),

@@ -130,7 +130,12 @@ class MarketplaceService {
     // receipt for a purchase that never happened.
     try {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
-      const result = (await callFunction(FUNCTIONS.PURCHASE_MARKETPLACE_ITEM, { productId })) || {};
+      const { newIdempotencyKey } = await import('../utils/IdempotencyKey.js');
+      // Stable key for this purchase intent: a transport-level retry of the
+      // same call reuses it, so the server debits once. (A fresh click is a new
+      // intent and gets a new key.)
+      const idempotencyKey = newIdempotencyKey();
+      const result = (await callFunction(FUNCTIONS.PURCHASE_MARKETPLACE_ITEM, { productId, idempotencyKey })) || {};
       if (!result.success || !result.order) {
         throw new Error('Purchase did not complete: the server returned no order.');
       }
@@ -170,9 +175,13 @@ class MarketplaceService {
       },
       priceCoins: Math.max(0, Number(productData.priceCoins) || 0),
       priceUsd: productData.priceUsd != null ? Number(productData.priceUsd) : null,
-      rating: 0,
-      reviewsCount: 0,
-      salesCount: 0,
+      // `rating`/`reviewsCount`/`salesCount` are NOT seeded. No writer ever sets
+      // a rating or a review count (there is no review pipeline), and the only
+      // sales writer (`functions/monetization.js#purchaseMarketplaceItem`)
+      // increments `salesCount` on an existing doc. Seeding them to `0` made
+      // every listing present an unwritten `0` as a measured rating/review count;
+      // `MarketplaceScreen` already renders "No reviews yet" when `rating` is
+      // absent, and `salesCount` is shown only when it is a positive number.
       image: productData.image || null,
       description: productData.description || '',
       includes: productData.includes ? productData.includes.split('\n') : [],

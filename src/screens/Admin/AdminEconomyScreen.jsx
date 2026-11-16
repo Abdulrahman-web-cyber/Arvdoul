@@ -26,7 +26,7 @@ import { unknownNumber } from '../../lib/unknownNumber.js';
 // as an explicit unavailable state, never a confident "$0.00".
 const asUsd = (value) => {
   const n = unknownNumber(value);
-  return n === null ? '—' : `$${formatCoinsAsUsd(n)}`;
+  return n === null ? '—' : formatCoinsAsUsd(n);
 };
 const asCoins = (value) => {
   const n = unknownNumber(value);
@@ -551,7 +551,7 @@ const AdminEconomyScreen = () => {
                   placeholder="Search tx ID, user, or type..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
                 />
               </div>
             </div>

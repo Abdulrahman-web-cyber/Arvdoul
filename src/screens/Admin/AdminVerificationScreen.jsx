@@ -141,7 +141,7 @@ const AdminVerificationScreen = () => {
               placeholder="Search creator name or handle..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
             />
           </div>
           <div className="text-xs text-gray-500 font-medium">

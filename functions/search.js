@@ -62,6 +62,8 @@ function log(severity, message, data = {}) {
 // ----------------------------------------------------------------------
 //  RETRY HELPER – exponential backoff with jitter, max 3 attempts
 // ----------------------------------------------------------------------
+const PAGE = 500;
+
 async function saveOrDeleteWithRetry(operation, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -249,41 +251,48 @@ exports.indexVideo = functions.firestore
 // ----------------------------------------------------------------------
 //  4. batchReindex – scheduled function to rebuild indices (every 24h)
 // ----------------------------------------------------------------------
+//
+// Walk the WHOLE collection with a cursor. The previous version issued a single
+// `.limit(500)` read per collection, so "reindex" only ever rebuilt the first
+// 500 users/posts/videos — every document beyond that kept whatever Algolia had
+// (stale or missing) while the log claimed the reindex "completed". A rebuild
+// that silently covers a prefix is not a rebuild.
+async function reindexCollection(collectionName, index, buildRecord, shouldIndex) {
+  if (!index) return 0;
+  const firestore = admin.firestore();
+  let cursor = null;
+  let scanned = 0;
+  let indexed = 0;
+  for (;;) {
+    let q = firestore.collection(collectionName).orderBy('__name__').limit(PAGE);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    if (snap.empty) break;
+    scanned += snap.size;
+    const records = snap.docs
+      .filter((doc) => (shouldIndex ? shouldIndex(doc.data()) : true))
+      .map((doc) => buildRecord(doc.id, doc.data()));
+    if (records.length) {
+      await saveOrDeleteWithRetry(() => index.saveObjects(records));
+      indexed += records.length;
+    }
+    cursor = snap.docs[snap.docs.length - 1];
+    if (snap.size < PAGE) break;
+  }
+  return { scanned, indexed };
+}
+
 exports.batchReindex = functions.pubsub
   .schedule('every 24 hours')
   .onRun(async (context) => {
     if (!client) return;
 
     log('info', 'Starting scheduled reindex');
-    const firestore = admin.firestore();
-    const PAGE = 500;
 
-    const usersSnap = await firestore.collection('users').limit(PAGE).get();
-    const userRecords = usersSnap.docs.map((doc) => buildUserRecord(doc.id, doc.data()));
-    if (userRecords.length) {
-      await saveOrDeleteWithRetry(() => userIndex.saveObjects(userRecords));
-    }
+    const users = await reindexCollection('users', userIndex, buildUserRecord);
+    const posts = await reindexCollection('posts', postIndex, buildPostRecord, isPostIndexable);
+    const videos = await reindexCollection('videos', videoIndex, buildVideoRecord, isVideoIndexable);
 
-    const postsSnap = await firestore.collection('posts').limit(PAGE).get();
-    const postRecords = postsSnap.docs
-      .filter((doc) => isPostIndexable(doc.data()))
-      .map((doc) => buildPostRecord(doc.id, doc.data()));
-    if (postRecords.length) {
-      await saveOrDeleteWithRetry(() => postIndex.saveObjects(postRecords));
-    }
-
-    const videosSnap = await firestore.collection('videos').limit(PAGE).get();
-    const videoRecords = videosSnap.docs
-      .filter((doc) => isVideoIndexable(doc.data()))
-      .map((doc) => buildVideoRecord(doc.id, doc.data()));
-    if (videoRecords.length) {
-      await saveOrDeleteWithRetry(() => videoIndex.saveObjects(videoRecords));
-    }
-
-    log('info', 'Reindex completed', {
-      users: userRecords.length,
-      posts: postRecords.length,
-      videos: videoRecords.length,
-    });
+    log('info', 'Reindex completed', { users, posts, videos });
     return null;
   });

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext";
 import { useTheme } from "@context/ThemeContext";
 import { getOnboardingSession, clearOnboardingRequired } from "../utils/profileCompletion.js";
-import { tokens } from "../design-system/tokens.js";
+import { brandRgba, tokens } from "../design-system/tokens.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Design system (shared with Signup, Login and OTP screens)
@@ -62,7 +62,7 @@ const THEMES = {
 
     "--line": "rgba(165,178,255,0.23)",
     "--dot": "rgba(165,178,255,0.11)",
-    "--glow-a": "rgba(139,30,243,0.15)",
+    "--glow-a": brandRgba(0.15),
     "--glow-b": "rgba(5,91,251,0.13)",
     "--glow-c": "rgba(68,49,247,0.07)",
 
@@ -117,7 +117,7 @@ const THEMES = {
 
     "--line": "rgba(61,76,147,0.18)",
     "--dot": "rgba(68,49,247,0.10)",
-    "--glow-a": "rgba(139,30,243,0.07)",
+    "--glow-a": brandRgba(0.07),
     "--glow-b": "rgba(5,91,251,0.07)",
     "--glow-c": "rgba(68,49,247,0.035)",
 
@@ -127,7 +127,7 @@ const THEMES = {
       "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
 
     "--focus-outline": tokens.color.brand.indigo,
-    "--rim-1": "rgba(139,30,243,0.34)",
+    "--rim-1": brandRgba(0.34),
     "--rim-2": "rgba(5,91,251,0.30)",
     "--spec": "rgba(255,255,255,0.67)",
     "--field-inset":

@@ -2,8 +2,9 @@
 //
 // users/{uid} is readable by every signed-in user (feeds, search, follower
 // lists) and Firestore rules cannot field-mask a readable document. Contact
-// details, verification flags and Stripe identifiers therefore live on
-// users_private/{uid}, which only the owner and admins may read.
+// details, verification flags, Stripe identifiers AND the coin balance
+// (`coins`/`lockedCoins`, N324) therefore live on users_private/{uid}, which
+// only the owner and admins may read.
 //
 // Accounts created before the split still carry those fields on the public
 // document. This module backfills them into users_private and scrubs them from
@@ -30,6 +31,9 @@ const PRIVATE_FIELDS = [
   'stripeCustomerId',
   'stripeAccountId',
   'stripeSubscriptionId',
+  // Financial figures (N324): the authoritative balance, not world-readable.
+  'coins',
+  'lockedCoins',
 ];
 
 const USERS = 'users';

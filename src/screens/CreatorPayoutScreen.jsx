@@ -21,9 +21,16 @@ const AD_REASONS = ['ad_reward', 'ad_share', 'ad_revenue'];
 const OTHER_EARNING_REASONS = ['poll_vote_reward', 'level_up_reward', 'subscription', 'purchase', 'bonus', 'reward'];
 
 function sumCredits(items, reasons) {
-  return items
-    .filter((tx) => reasons.includes(tx.reason))
-    .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0);
+  const matched = items.filter((tx) => reasons.includes(tx.reason));
+  // An amount the ledger did not carry is unknown; summing it as 0 understated
+  // the earnings and rendered a measured figure. Return unknown instead.
+  let total = 0;
+  for (const tx of matched) {
+    const amount = unknownNumber(tx.amount);
+    if (amount == null) return null;
+    total += amount;
+  }
+  return total;
 }
 
 export default function CreatorPayoutScreen() {
@@ -38,13 +45,12 @@ export default function CreatorPayoutScreen() {
   const [earnings, setEarnings] = useState({ gifts: null, ads: null, other: null });
   const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(null);
   const [stripeConnected, setStripeConnected] = useState(false);
+  const [payoutAccountId, setPayoutAccountId] = useState(null);
   const [connectingStripe, setConnectingStripe] = useState(false);
 
   // Request payout state
   const [requestModal, setRequestModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [paypalEmail, setPaypalEmail] = useState('');
-  const [payoutMethod, setPayoutMethod] = useState('stripe'); // 'stripe' | 'paypal'
   const [submitting, setSubmitting] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -85,20 +91,31 @@ export default function CreatorPayoutScreen() {
         });
       }
       // A failed spend-ledger read leaves lifetime withdrawals unknown ("—"),
-      // never a fabricated "$0.00 withdrawn".
+      // never a fabricated "$0.00 withdrawn". A withdrawal row whose amount is
+      // absent is unknown too — summing it as 0 understated the total.
       if (spendRes.status === 'fulfilled' && Array.isArray(spendRes.value)) {
-        setLifetimeWithdrawnCoins(spendRes.value
-          .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
-          .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
+        const withdrawals = spendRes.value.filter(
+          (tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal'
+        );
+        let total = 0;
+        for (const tx of withdrawals) {
+          const amount = unknownNumber(tx.amount);
+          if (amount == null) { total = null; break; }
+          total += amount;
+        }
+        setLifetimeWithdrawnCoins(total);
       }
       // payout account status (never simulated).
       try {
         const settings = await monSvc.getPayoutSettings();
-        const status = settings?.accountStatus || 'unconfigured';
-        setStripeConnected(status === 'verified' || status === 'active' || status === 'enabled');
+        // The server marks a payout account `ready` (Stripe `payouts_enabled`)
+        // once onboarding completes; anything else is not yet payable.
+        setStripeConnected(settings?.status === 'ready');
+        setPayoutAccountId(settings?.stripeAccountId || null);
       } catch (err) {
         console.warn('Failed to load payout settings:', err);
         setStripeConnected(false);
+        setPayoutAccountId(null);
       }
     } catch (err) {
       console.warn('Failed to load creator payout data:', err);
@@ -120,19 +137,31 @@ export default function CreatorPayoutScreen() {
     try {
       // Stripe Express onboarding via the Cloud Function
       // (functions/monetization.js createPayoutAccount). No timers, no
-      // simulated success — the account is only "connected" when the
-      // server actually created it.
+      // simulated success — the account is only "connected" once the server
+      // reports `payouts_enabled`, so we re-read the real status afterwards
+      // rather than trusting the creation response (which is returned before
+      // onboarding and is not proof of a payable account).
       const returnUrl = `${window.location.origin}/creator-payout`;
       const result = await getMonetizationService().createPayoutAccount('US', returnUrl);
       if (result?.onboardingUrl) {
         // Real Stripe-hosted onboarding — send the creator there.
         window.open(result.onboardingUrl, '_blank', 'noopener');
         toast.info('Complete onboarding in the Stripe window that just opened.');
-      } else if (result?.success || result?.status === 'verified' || result?.accountId) {
-        setStripeConnected(true);
-        toast.success('Payout account connected');
-      } else {
+      } else if (!result?.success && !result?.accountId) {
         toast.error(result?.message || 'Could not create the payout account. Is the Cloud Function deployed?');
+        return;
+      } else {
+        toast.info('Onboarding link unavailable — reload once onboarding completes.');
+      }
+      // Re-read the authoritative status; only `ready` means payable.
+      try {
+        const settings = await getMonetizationService().getPayoutSettings();
+        const connected = settings?.status === 'ready';
+        setStripeConnected(connected);
+        setPayoutAccountId(settings?.stripeAccountId || null);
+        if (connected) toast.success('Payout account connected');
+      } catch {
+        // Status stays as previously loaded; the reload will reconcile.
       }
     } catch (err) {
       toast.error(err?.message || 'Failed to connect payout account. The Stripe Connect Cloud Function must be deployed.');
@@ -156,8 +185,8 @@ export default function CreatorPayoutScreen() {
       toast.error('Withdrawal amount exceeds your current balance.');
       return;
     }
-    if (payoutMethod === 'paypal' && !paypalEmail.includes('@')) {
-      toast.error('Please provide a valid PayPal email address.');
+    if (!stripeConnected || !payoutAccountId) {
+      toast.error('Connect a Stripe payout account before requesting a payout.');
       return;
     }
 
@@ -167,11 +196,11 @@ export default function CreatorPayoutScreen() {
       const res = await monSvc.requestWithdrawal(
         user.uid,
         amount,
-        payoutMethod,
-        payoutMethod === 'paypal' ? { email: paypalEmail } : { stripeAccount: 'connected' }
+        'stripe',
+        { stripeAccountId: payoutAccountId }
       );
       if (res?.success) {
-        toast.success('Payout request submitted! Funds will arrive within 2-3 business days.');
+        toast.success('Payout request submitted. Stripe processes the transfer after review — timing depends on your bank and region.');
         setRequestModal(false);
         setWithdrawAmount('');
         loadData();
@@ -233,7 +262,7 @@ export default function CreatorPayoutScreen() {
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Earnings Card */}
-        <div className="relative overflow-hidden rounded-arvdoul-xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-800 p-6 text-white shadow-arvdoul-glow">
+        <div className="relative overflow-hidden rounded-arvdoul-xl bg-arvdoul-gradient p-6 text-white shadow-arvdoul-glow">
           <div className="absolute -right-8 -bottom-8 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
@@ -384,7 +413,7 @@ export default function CreatorPayoutScreen() {
                     <div>
                       <p className="text-sm font-semibold capitalize">{tx.reason || 'Creator Withdrawal'}</p>
                       <p className="text-xs text-arvdoul-text-secondary">
-                        {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                        {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString() : '—'}
                       </p>
                     </div>
                   </div>
@@ -436,54 +465,14 @@ export default function CreatorPayoutScreen() {
             >
               <h2 className="text-lg font-bold font-display mb-1">Request Creator Payout</h2>
               <p className="text-xs text-arvdoul-text-secondary mb-4">
-                Withdraw coins directly to your connected bank or PayPal account.
+                Withdraw coins to your connected Stripe payout account. PayPal is not supported.
               </p>
 
               <form onSubmit={handleRequestPayout} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold block mb-1.5">Payout Method</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPayoutMethod('stripe')}
-                      className={cn(
-                        "py-2.5 rounded-arvdoul-sm text-xs font-bold border transition-colors",
-                        payoutMethod === 'stripe'
-                          ? "border-arvdoul-purple bg-arvdoul-purple/10 text-arvdoul-purple"
-                          : "border-arvdoul-border bg-white/5 text-arvdoul-text-secondary"
-                      )}
-                    >
-                      Stripe Direct
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPayoutMethod('paypal')}
-                      className={cn(
-                        "py-2.5 rounded-arvdoul-sm text-xs font-bold border transition-colors",
-                        payoutMethod === 'paypal'
-                          ? "border-arvdoul-purple bg-arvdoul-purple/10 text-arvdoul-purple"
-                          : "border-arvdoul-border bg-white/5 text-arvdoul-text-secondary"
-                      )}
-                    >
-                      PayPal
-                    </button>
-                  </div>
-                </div>
-
-                {payoutMethod === 'paypal' && (
-                  <div>
-                    <label className="text-xs font-semibold block mb-1.5">PayPal Email</label>
-                    <input
-                      type="email"
-                      required
-                      value={paypalEmail}
-                      onChange={(e) => setPaypalEmail(e.target.value)}
-                      placeholder="your-paypal@email.com"
-                      className={cn(
-                        "w-full px-3.5 py-2.5 rounded-arvdoul-sm text-xs border outline-none",
-                        isDark ? "bg-black/30 border-arvdoul-border text-white" : "bg-slate-50 border-slate-300"
-                      )}
-                    />
+                {!stripeConnected && (
+                  <div className="flex items-start gap-2 rounded-arvdoul-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-400">
+                    <CreditCard className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>Connect a Stripe payout account before you can withdraw.</span>
                   </div>
                 )}
 

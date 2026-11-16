@@ -13,7 +13,6 @@ const MessageBubble = React.memo(({
   isOwn,
   senderName,
   senderAvatar,
-  onLongPress,
   onReaction,
   onReply,
   onForward,
@@ -67,7 +66,6 @@ const MessageBubble = React.memo(({
   const handleTouchStart = () => {
     longPressTimerRef.current = setTimeout(() => {
       setShowMenu(true);
-      onLongPress?.(message);
     }, 500);
   };
 
@@ -131,7 +129,7 @@ const MessageBubble = React.memo(({
             />
           ) : (
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 text-[10px] text-white flex items-center justify-center font-bold">
-              {(senderName?.[0] || 'U').toUpperCase()}
+              {(senderName?.[0] || '?').toUpperCase()}
             </div>
           )}
         </div>
@@ -143,7 +141,6 @@ const MessageBubble = React.memo(({
         onContextMenu={(e) => {
           e.preventDefault();
           setShowMenu(true);
-          onLongPress?.(message);
         }}
       >
         {/* Sender name (for group chats, first message of the group) */}
@@ -213,7 +210,7 @@ const MessageBubble = React.memo(({
             className={cn(
               'px-4 py-2.5 rounded-2xl break-words shadow-sm transition-all relative overflow-hidden',
               isOwn
-                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white rounded-br-sm shadow-[0_2px_12px_rgba(147,51,234,0.25)]'
+                ? 'bg-arvdoul-gradient text-white rounded-br-sm shadow-[0_2px_12px_rgba(147,51,234,0.25)]'
                 : (theme === 'dark'
                   ? 'bg-[#12182b] text-white border border-white/10 rounded-bl-sm'
                   : 'bg-white text-slate-900 border border-slate-200 shadow-sm rounded-bl-sm'),

@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { brandRgba } from '../../design-system/tokens.js';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff, RefreshCw, CheckCircle2 } from "lucide-react";
@@ -101,12 +102,12 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
               ? 'rgba(239, 68, 68, 0.35)'
               : showOnlinePill
               ? 'rgba(16, 185, 129, 0.35)'
-              : 'rgba(139, 30, 243, 0.35)',
+              : brandRgba(0.35),
             boxShadow: !isOnline
               ? '0 10px 30px rgba(239, 68, 68, 0.25)'
               : showOnlinePill
               ? '0 10px 30px rgba(16, 185, 129, 0.25)'
-              : '0 10px 30px rgba(139, 30, 243, 0.25)',
+              : `0 10px 30px ${brandRgba(0.25)}`,
             color: !isOnline ? '#FECACA' : showOnlinePill ? '#A7F3D0' : '#E9D5FF',
           }}
         >
