@@ -876,3 +876,29 @@ takes over only on a `SKIP_WAITING` message; the banner reloads on the resulting
 `src/design-system/*.jsx` state primitives must use lucide icons, not emoji
 glyphs (`ErrorState` shipped `⚠️`, `PermissionDenied` shipped `🔒`).
 `sharedStatePrimitivesGuard.test.js` fails if an emoji returns.
+
+## Accessibility is enforced by AST guards
+Three hard-failing `guards`-job suites keep the a11y floor from eroding, all
+parsing `src/**/*.jsx`:
+- `a11yInteractiveGuard.test.js` — clickable non-button elements need a role +
+  keyboard handler, `<img>` needs `alt`, `<iframe>` needs `title`, and the app
+  shell keeps a `#main-content` skip link (WCAG 2.4.1).
+- `iconButtonA11yGuard.test.js` — an icon-only `<button>` needs
+  `aria-label`/`aria-labelledby`/`title`.
+- `formControlA11yGuard.test.js` — every `input`/`textarea`/`select` needs a
+  programmatic name (`aria-label`/`aria-labelledby`/`title`, a wrapping
+  `<label>`, or a matching `htmlFor`). A `placeholder` is **not** accepted.
+  It parses with `@babel/parser` + a local walker only — `@babel/traverse` is a
+  transitive dep, not a declared one, so do not import it in a test.
+
+Motion is handled centrally: `tokens.css` collapses animation/transition under
+`prefers-reduced-motion`, plus a `.arvdoul-reduce-motion` class for the manual
+"Reduce animations" setting. Do not hand-roll per-component motion opt-outs.
+
+## Full-bleed sizing uses 100%, never unbounded 100vw
+`html, body, #root` and full-screen shells size with `width: 100%`, not `100vw`
+(`100vw` includes the desktop scrollbar and forces a masked horizontal scroll).
+The app shell height is `h-[100dvh]` so the fixed bottom nav stays reachable
+while a mobile URL bar is showing. `uiFoundationGuard.test.js` fails on
+`w-screen` / unbounded `100vw`; a bounded `calc(100vw - Npx)` is allowed.
+
