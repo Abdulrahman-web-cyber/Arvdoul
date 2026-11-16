@@ -902,3 +902,22 @@ The app shell height is `h-[100dvh]` so the fixed bottom nav stays reachable
 while a mobile URL bar is showing. `uiFoundationGuard.test.js` fails on
 `w-screen` / unbounded `100vw`; a bounded `calc(100vw - Npx)` is allowed.
 
+## Config and shipped assets are guarded too
+Two deploy-time drift classes that no build error catches:
+- `envTemplateCoverage.test.js` (guards job) — `.env.example` must list exactly
+  the `VITE_*` variables the code reads (no read-but-undocumented, no
+  documented-but-unread), the Stripe publishable key has one canonical name
+  (`VITE_STRIPE_PUBLISHABLE_KEY`; `VITE_STRIPE_PUBLIC_KEY` is banned), and every
+  Vite env file (`.env`, `.env.local`, `.env.*.local`, …) is git-ignored so a
+  `git add -A` cannot commit a secret. Do not add a variable to `.env.example`
+  that nothing reads — it advertises a control that does not exist.
+- `publicAssetIntegrity.test.js` (guards job) — every image's magic bytes match
+  its extension (an `icon.png` that is really a JPEG breaks strict MIME hosts),
+  no sibling entries differ only by case, no whitespace in a shipped filename,
+  every `manifest.json` icon exists with the size it declares, and every
+  service-worker `PRECACHE_URLS` entry resolves under `public/`.
+
+`firebase-applet-config.json` is the one committed source of the public Firebase
+web config; `src/firebase/firebase.js` overlays `VITE_FIREBASE_*` on top. Do not
+duplicate the apiKey literal elsewhere.
+
