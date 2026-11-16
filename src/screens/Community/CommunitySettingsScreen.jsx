@@ -4,6 +4,7 @@
 // Adheres strictly to zero-pill discipline, WCAG AA, and service-layer boundary.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useConfirm } from '../../components/Shared/ConfirmProvider.jsx';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ const TABS = [
 ];
 
 export default function CommunitySettingsScreen() {
+  const confirm = useConfirm();
   const { communityId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -176,7 +178,8 @@ export default function CommunitySettingsScreen() {
   // Kick member from community
   const handleKickMember = async (targetUserId) => {
     if (!user?.uid || !canManage) return;
-    if (!window.confirm('Are you sure you want to remove this member from the community?')) return;
+    const ok = await confirm({ title: 'Remove member?', description: 'They will lose access to this community.', confirmText: 'Remove', tone: 'danger' });
+    if (!ok) return;
     setActionLoading(true);
     try {
       await communityService.leaveCommunity(communityId, targetUserId);

@@ -1,6 +1,7 @@
 // src/screens/Admin/AdminAccessScreen.jsx
 
 import { useState, useEffect, useCallback } from "react";
+import { useConfirm } from '../../components/Shared/ConfirmProvider.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import {
   fetchAdminStatus,
@@ -13,6 +14,7 @@ import { Shield, Key, UserCheck, UserX, AlertCircle, RefreshCw, CheckCircle2 } f
 import { toast } from 'sonner';
 
 export default function AdminAccessScreen() {
+  const confirm = useConfirm();
   const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,7 +86,8 @@ export default function AdminAccessScreen() {
   };
 
   const handleRevoke = async (uidToRevoke) => {
-    if (!window.confirm(`Are you sure you want to revoke admin access for ${uidToRevoke}?`)) return;
+    const ok = await confirm({ title: 'Revoke admin access?', description: `${uidToRevoke} will immediately lose all administrative privileges.`, confirmText: 'Revoke', tone: 'danger' });
+    if (!ok) return;
     try {
       await revokeAdmin(uidToRevoke);
       toast.success(`Admin access revoked for ${uidToRevoke}`);

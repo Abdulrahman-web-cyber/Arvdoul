@@ -1,6 +1,7 @@
 // src/screens/GroupInfoScreen.jsx
 
 import { useState, useEffect, useCallback } from "react";
+import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -14,6 +15,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Plus, UserMinus, Shield, Edit2, Trash2, Link as LinkIcon, Loader2, CheckCircle2, Search, X } from "lucide-react";
 
 export default function GroupInfoScreen() {
+  const confirm = useConfirm();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -169,7 +171,8 @@ export default function GroupInfoScreen() {
       return;
     }
     const memberName = participantDetails[participantId]?.displayName || 'this member';
-    if (!window.confirm(`Remove ${memberName} from the group?`)) return;
+    const ok = await confirm({ title: 'Remove member?', description: `${memberName} will be removed from this group.`, confirmText: 'Remove', tone: 'danger' });
+    if (!ok) return;
 
     try {
       setSaving(true);
@@ -186,7 +189,8 @@ export default function GroupInfoScreen() {
 
   // Leave group
   const handleLeaveGroup = async () => {
-    if (!window.confirm('Leave this group? You will no longer receive its messages.')) return;
+    const ok = await confirm({ title: 'Leave group?', description: 'You will no longer receive its messages.', confirmText: 'Leave', tone: 'danger' });
+    if (!ok) return;
     try {
       setSaving(true);
       const svc = getMessagingService();

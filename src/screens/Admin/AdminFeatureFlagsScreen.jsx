@@ -1,6 +1,7 @@
 // src/screens/Admin/AdminFeatureFlagsScreen.jsx
 
 import { useState, useEffect, useCallback } from "react";
+import { useConfirm } from '../../components/Shared/ConfirmProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, RotateCcw, Zap, MonitorSmartphone } from 'lucide-react';
@@ -9,6 +10,7 @@ import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 
 const AdminFeatureFlagsScreen = () => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [flags, setFlags] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -65,7 +67,8 @@ const AdminFeatureFlagsScreen = () => {
 
   // Clears every platform override, one audited call per flag.
   const handleResetAll = async () => {
-    if (!window.confirm('Emergency Action: reset ALL platform feature flag overrides to the baseline configuration?')) {
+    const ok = await confirm({ title: 'Reset all platform flags?', description: 'This emergency action resets ALL platform feature flag overrides to the baseline configuration.', confirmText: 'Reset all', tone: 'danger' });
+    if (!ok) {
       return;
     }
     const overridden = Object.keys(DEFAULT_FLAGS).filter(

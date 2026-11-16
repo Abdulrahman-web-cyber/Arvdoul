@@ -1065,7 +1065,7 @@ class UltimateNotificationsService {
     if (this.offlineQueue) this.offlineQueue.destroy();
     for (const unsub of this.realtimeSubscriptions.values()) {
       try { unsub(); } catch (e) {
-        console.warn('Notification listener unsubscribe failed', e?.message);
+        logger.warn('Notification listener unsubscribe failed', { error: e?.message });
       }
     }
     this.realtimeSubscriptions.clear();

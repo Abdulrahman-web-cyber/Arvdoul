@@ -23,6 +23,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePrompt } from '../components/Shared/ConfirmProvider.jsx';
 import { useTheme } from '../context/ThemeContext';
 import { getMessagingService, MESSAGING_CONFIG } from '../services/messagesService.js';
 import MessageInput from '../components/messaging/MessageInput.jsx';
@@ -39,6 +40,7 @@ import { format, isSameDay } from "date-fns";
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 export default function ChatScreen() {
+  const prompt = usePrompt();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -596,7 +598,7 @@ export default function ChatScreen() {
   }, [uid, conversation, resolveSenderLabel]);
 
   const handleEdit = useCallback(async (msg) => {
-    const next = window.prompt('Edit message', msg.content || '');
+    const next = await prompt({ title: 'Edit message', defaultValue: msg.content || '', confirmText: 'Save' });
     if (next == null) return;
     const trimmed = next.trim();
     if (!trimmed || trimmed === msg.content) return;

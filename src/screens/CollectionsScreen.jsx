@@ -14,12 +14,14 @@ import ErrorState from '../design-system/ErrorState.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import { cn } from '../lib/utils';
 import { unknownNumber } from '../lib/unknownNumber.js';
+import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
 
 export default function CollectionsScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
   const { user } = useAuth();
+  const confirm = useConfirm();
 
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,8 @@ export default function CollectionsScreen() {
 
   // Delete Collection
   const handleDeleteCollection = async (id, title) => {
-    if (!window.confirm(`Delete folder "${title}"?`)) return;
+    const ok = await confirm({ title: 'Delete folder?', description: `"${title}" will be permanently removed.`, confirmText: 'Delete', tone: 'danger' });
+    if (!ok) return;
     try {
       const { default: collectionsService } = await import('../services/collectionsService.js');
       await collectionsService.deleteCollection(user?.uid, id);

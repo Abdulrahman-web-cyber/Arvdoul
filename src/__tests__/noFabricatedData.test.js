@@ -1642,6 +1642,16 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
     expect(src).toContain('unknownNumber(profileData.likesReceived ?? profileData.likesCount)');
   });
 
+  test('N501 — socialGraphService.getSummary does not fabricate a measured friendCount of 0', () => {
+    // `friendCount` has no writer anywhere (friendships resolve live via
+    // `areFriends`), so `resolveCount` (fallback 0) fabricated a "0 friends"
+    // summary. `followerCount`/`followingCount` DO have real server writers
+    // (`functions/userCounters.js`), so they legitimately keep `resolveCount`.
+    const src = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
+    expect(src).not.toContain('friendCount: resolveCount(');
+    expect(src).toContain('friendCount: unknownNumber(data.friendCount)');
+  });
+
   test('citizenship surfaces render an em-dash, not a fabricated tier/rank', () => {
     // The citizenship card and roadmap modal defaulted a missing rank/tier to a
     // concrete standing ('Arrival' / 'Citizen'), which is the same class of

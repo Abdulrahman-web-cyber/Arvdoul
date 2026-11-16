@@ -1,6 +1,7 @@
 // src/screens/CommentsDrawer.jsx
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { Virtuoso } from 'react-virtuoso';
 import { toast } from 'sonner';
@@ -1026,6 +1027,7 @@ const CommentItem = memo(({
 export default function CommentsDrawer({ isOpen, onClose, post, currentUser, theme }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const confirm = useConfirm();
   const isDark = theme === 'dark';
   const postId = post?.id;
   const deepLinkedCommentId = searchParams.get('commentId');
@@ -1458,7 +1460,8 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       toast.error('You can only delete your own comments');
       return;
     }
-    if (!window.confirm('Delete this comment?')) return;
+    const ok = await confirm({ title: 'Delete this comment?', description: 'This comment and its replies will be permanently removed.', confirmText: 'Delete', tone: 'danger' });
+    if (!ok) return;
     triggerHaptic('light');
     deleteCommentStore(postId, commentId);
     try {

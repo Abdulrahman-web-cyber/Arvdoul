@@ -1576,7 +1576,7 @@ class UltimateMessagingService {
       }
     } catch (err) {
       // Reactions are best-effort enrichment; message list still loads.
-      console.warn('[Messaging] Reaction merge failed:', err.message);
+      logger.warn('[Messaging] Reaction merge failed', { error: err?.message });
     }
 
     // Enforce the message TTL in-memory (there is no server-side cleanup

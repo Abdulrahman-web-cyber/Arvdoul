@@ -20,6 +20,7 @@ import { logger } from '../utils/Logger.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { projectProfileForViewer, pickDisplayName, pickHandle, resolveCount } from './profileReadModel.js';
+import { unknownNumber } from '../lib/unknownNumber';
 
 /** Relationship edge kinds returned per target. */
 export const EDGE_FLAGS = Object.freeze({
@@ -658,7 +659,10 @@ class SocialGraphService {
       userId,
       followerCount: resolveCount(data.followerCount, data.followersCount),
       followingCount: resolveCount(data.followingCount),
-      friendCount: resolveCount(data.friendCount),
+      // `friendCount` has no writer anywhere (friendships are resolved live via
+      // `areFriends`), so `resolveCount` (fallback 0) would fabricate a measured
+      // "0 friends". `ProfileMetricsGrid` renders an absent value as '—'.
+      friendCount: unknownNumber(data.friendCount),
       edge,
     };
   }

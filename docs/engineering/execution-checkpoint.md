@@ -1051,3 +1051,27 @@ npm run lint                  # exit 0
 NODE_OPTIONS=--experimental-vm-modules npx jest   # 193 suites green
 npm run build                 # green
 ```
+
+## Continuation session 13 (N501–N503 — fabrication + UX-dialog hardening wave)
+
+Branch `harden/n319-n320-analytics-live`. Prior session closed N499/N500 (commits `0b007a8`, `4b96c05`). This session's 30-task list: T1/T2 were **non-issues** (all 11 `target="_blank"` already carry `rel="noopener noreferrer"`; all 3 `dangerouslySetInnerHTML` go through DOMPurify allowlists). T3 was a **false positive** (all 4 `<img>` already have `alt` on the next JSX line — the earlier scan's single-line heuristic missed them). T4–T10 verified no-fabrication (all `Math.random` hits are animation entropy / username / idempotency-key / a Fisher–Yates shuffle — no fabricated metrics; `callableAuthGate` + `deployIntegrity` + `snapshotErrorHandling` guards already green; `feature_flags`/`admins` function reads are bounded config reads).
+
+| # | Item | Evidence |
+| --- | --- | --- |
+| N501 | `socialGraphService.getSummary` returned `resolveCount(data.friendCount)` (fallback `0`) though `friendCount` has no writer anywhere (friendships resolve live via `areFriends`) — a measured "0 friends" that contradicted the consumer `ProfileMetricsGrid` (which treats absent as `—`). | `friendCount` now resolves via `unknownNumber(data.friendCount)`. `followerCount`/`followingCount` keep `resolveCount` (real server writers in `functions/userCounters.js`). `noFabricatedData.test.js` (N501 case). |
+| N502 | 5 raw `console.*` calls in `src/services` (callableService ×2, messagesService, notificationsService, storyService) bypassed the `utils/Logger` policy. | All routed through `logger.error`/`logger.warn`. New `serviceLoggingHygieneGuard.test.js` walks `src/services/**` and fails on any `console.*`; added to the hard-failing `guards` CI job. |
+| N503 | 15 blocking native dialogs (`window.confirm` ×11, `window.prompt` ×4) across 13 screens — main-thread freeze, unstyleable, inaccessible. | New `src/components/Shared/ConfirmProvider.jsx` (`useConfirm`/`usePrompt`, fail-closed) backed by the accessible `Dialog`; mounted under `AuthProvider` in `AppBootstrap`. All 15 sites converted. New `nativeDialogGuard.test.js`; added to the `guards` CI job. |
+
+Verified: `npx eslint src functions --quiet` exit 0; full jest suite **215 suites / 2212 passed / 5 skipped / 2217 total** green; `npm run build` green.
+
+### Findings status
+Open in the ledger: **N175** (rankings — BLOCKED on the ranking formula); N432 partially BLOCKED. N424–N503 closed. T1–T10 of the 30-task list resolved (fixes for T5–T10 = N501–N503); T11+ continue next session.
+
+### Resume commands
+```
+cd /workspace/project/Arvdoul
+git log --oneline -3          # expect HEAD on harden/n319-n320-analytics-live
+npm run lint                  # exit 0
+NODE_OPTIONS=--experimental-vm-modules npx jest   # 215 suites green
+npm run build                 # green
+```

@@ -1,6 +1,7 @@
 // src/screens/SubscriptionScreen.jsx
 
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { useConfirm } from '../components/Shared/ConfirmProvider.jsx';
 import { brandCanvasBackground } from '../design-system/tokens.js';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -62,6 +63,7 @@ const TIERS = Object.entries(SUBSCRIPTION_TIERS).map(([id, cfg]) => {
 });
 
 export default function SubscriptionScreen() {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { theme } = useTheme();
   const { user } = useAuth();
@@ -108,7 +110,8 @@ export default function SubscriptionScreen() {
 
   const handleCancel = useCallback(async () => {
     if (!user) return;
-    if (!window.confirm('Cancel your subscription? You will keep access until the end of the billing period.')) return;
+    const ok = await confirm({ title: 'Cancel subscription?', description: 'You will keep access until the end of the billing period.', confirmText: 'Cancel subscription', tone: 'danger' });
+    if (!ok) return;
     
     setLoading('cancel');
     try {
