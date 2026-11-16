@@ -22,25 +22,22 @@
  * visible label ("User UID", "Category", "Brightness", …) sat adjacent to the
  * control but was never associated with it.
  *
- * Parsing uses @babel/parser (already a repo dependency) rather than regex so
- * multi-line JSX attributes and expression values are handled correctly.
+ * Parsing uses @babel/parser (a declared devDependency) and a small local AST
+ * walker — no @babel/traverse, which is only a transitive dependency here.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
-import traverseModule from '@babel/traverse';
-
-const traverse = traverseModule.default || traverseModule;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-function walk(dir, out = []) {
+function walkFiles(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out);
+    if (entry.isDirectory()) walkFiles(full, out);
     else if (/\.jsx$/.test(entry.name)) out.push(full);
   }
   return out;
@@ -50,41 +47,63 @@ function walk(dir, out = []) {
 // pickers triggered by a visible button, etc.).
 const EXEMPT_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'file']);
 
+const SKIP_KEYS = new Set(['loc', 'start', 'end', 'range', 'leadingComments', 'trailingComments', 'innerComments']);
+
+/** Depth-first walk carrying the ancestor node stack. */
+function walk(node, ancestors, visit) {
+  if (Array.isArray(node)) {
+    for (const child of node) walk(child, ancestors, visit);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  if (typeof node.type === 'string') visit(node, ancestors);
+  ancestors.push(node);
+  for (const key of Object.keys(node)) {
+    if (SKIP_KEYS.has(key)) continue;
+    const value = node[key];
+    if (value && typeof value === 'object') walk(value, ancestors, visit);
+  }
+  ancestors.pop();
+}
+
+function jsxAttr(node, name) {
+  return node.attributes.find((a) => a.type === 'JSXAttribute' && a.name?.name === name);
+}
+
+function staticString(attr) {
+  return attr?.value?.type === 'StringLiteral' ? attr.value.value : undefined;
+}
+
 function collectFile(src, rel) {
   const ast = parse(src, { sourceType: 'module', plugins: ['jsx'] });
+
   const htmlForIds = new Set();
-  traverse(ast, {
-    JSXAttribute(p) {
-      const name = p.node.name?.name;
-      if (name === 'htmlFor' && typeof p.node.value?.value === 'string') {
-        htmlForIds.add(p.node.value.value);
-      }
-    },
+  walk(ast, [], (node) => {
+    if (node.type === 'JSXOpeningElement' && node.name?.name === 'label') {
+      const id = staticString(jsxAttr(node, 'htmlFor'));
+      if (id) htmlForIds.add(id);
+    }
   });
 
   const offenders = [];
-  traverse(ast, {
-    JSXOpeningElement(p) {
-      const tag = p.node.name?.name;
-      if (!['input', 'textarea', 'select'].includes(tag)) return;
-      const attrs = p.node.attributes.filter((a) => a.type === 'JSXAttribute');
-      const get = (k) => attrs.find((a) => a.name?.name === k);
-      const has = (k) => !!get(k);
-      const type = get('type')?.value?.value;
-      if (EXEMPT_TYPES.has(type)) return;
-      if (has('aria-label') || has('aria-labelledby') || has('title')) return;
+  walk(ast, [], (node, ancestors) => {
+    if (node.type !== 'JSXOpeningElement') return;
+    const tag = node.name?.name;
+    if (!['input', 'textarea', 'select'].includes(tag)) return;
 
-      const id = get('id')?.value?.value;
-      if (typeof id === 'string' && htmlForIds.has(id)) return;
+    const type = staticString(jsxAttr(node, 'type'));
+    if (EXEMPT_TYPES.has(type)) return;
+    if (jsxAttr(node, 'aria-label') || jsxAttr(node, 'aria-labelledby') || jsxAttr(node, 'title')) return;
 
-      let anc = p.parentPath;
-      while (anc) {
-        if (anc.node?.type === 'JSXElement' && anc.node.openingElement?.name?.name === 'label') return;
-        anc = anc.parentPath;
-      }
+    const id = staticString(jsxAttr(node, 'id'));
+    if (id && htmlForIds.has(id)) return;
 
-      offenders.push(`${rel}:${p.node.loc.start.line}`);
-    },
+    const wrapped = ancestors.some(
+      (a) => a.type === 'JSXElement' && a.openingElement?.name?.name === 'label',
+    );
+    if (wrapped) return;
+
+    offenders.push(`${rel}:${node.loc.start.line}`);
   });
   return offenders;
 }
@@ -92,7 +111,7 @@ function collectFile(src, rel) {
 describe('N512 — every form control has a programmatic accessible name', () => {
   test('no input/textarea/select lacks a name', () => {
     const offenders = [];
-    for (const full of walk(path.join(root, 'src'))) {
+    for (const full of walkFiles(path.join(root, 'src'))) {
       const rel = path.relative(root, full);
       offenders.push(...collectFile(fs.readFileSync(full, 'utf8'), rel));
     }

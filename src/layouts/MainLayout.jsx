@@ -67,7 +67,10 @@ export default function MainLayout({ children }) {
       className={cn(
         // The viewport-width utility overflows by the scrollbar width on
         // desktop and caused a horizontal scrollbar; `w-full` fills the shell.
-        "flex flex-col h-screen w-full overflow-hidden"
+        // `h-[100dvh]` tracks the *dynamic* viewport so the fixed bottom nav and
+        // the shell bottom stay reachable while a mobile URL bar is showing
+        // (a plain `h-screen`/100vh measures the tall viewport and clips them).
+        "flex flex-col h-[100dvh] w-full overflow-hidden"
       )}
       // Canvas comes from the design-system helper (base colour + brand glow),
       // replacing the raw-hex gradients that bypassed the tokens.
