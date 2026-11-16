@@ -22,7 +22,7 @@ const SIZES = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-2xl',
-  fullscreen: 'max-w-none w-[100vw] h-[100dvh] rounded-none',
+  fullscreen: 'max-w-none w-full h-[100dvh] rounded-none',
 };
 
 const FOCUSABLE =

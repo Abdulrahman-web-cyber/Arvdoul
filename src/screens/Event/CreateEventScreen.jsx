@@ -385,7 +385,7 @@ const CreateEventScreen = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Event Title <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input aria-label="Give your event a name"
                   type="text"
                   value={formData.title}
                   onChange={(e) => handleChange('title', e.target.value)}
@@ -399,7 +399,7 @@ const CreateEventScreen = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Description
                 </label>
-                <textarea
+                <textarea aria-label="Tell people about your event..."
                   value={formData.description}
                   onChange={(e) => handleChange('description', e.target.value)}
                   placeholder="Tell people about your event..."
@@ -447,7 +447,7 @@ const CreateEventScreen = () => {
                 </label>
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
+                  <input aria-label="Location"
                     type="text"
                     value={formData.location}
                     onChange={(e) => handleChange('location', e.target.value)}
@@ -464,7 +464,7 @@ const CreateEventScreen = () => {
                 </label>
                 <div className="relative">
                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
+                  <input aria-label="0 = unlimited"
                     type="number"
                     value={formData.capacity || ''}
                     onChange={(e) => handleChange('capacity', parseInt(e.target.value) || 0)}
@@ -498,7 +498,7 @@ const CreateEventScreen = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="relative">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
+                    <input aria-label="Start Date & Time <span className=text-red-500>*</span>"
                       type="date"
                       value={formData.startDate}
                       onChange={(e) => handleChange('startDate', e.target.value)}
@@ -507,7 +507,7 @@ const CreateEventScreen = () => {
                     />
                   </div>
                   <div className="relative">
-                    <input
+                    <input aria-label="Start Date & Time <span className=text-red-500>*</span>"
                       type="time"
                       value={formData.startTime}
                       onChange={(e) => handleChange('startTime', e.target.value)}
@@ -525,7 +525,7 @@ const CreateEventScreen = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="relative">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
+                    <input aria-label="End Date & Time (Optional)"
                       type="date"
                       value={formData.endDate}
                       onChange={(e) => handleChange('endDate', e.target.value)}
@@ -534,7 +534,7 @@ const CreateEventScreen = () => {
                     />
                   </div>
                   <div className="relative">
-                    <input
+                    <input aria-label="End Date & Time (Optional)"
                       type="time"
                       value={formData.endTime}
                       onChange={(e) => handleChange('endTime', e.target.value)}
@@ -613,7 +613,7 @@ const CreateEventScreen = () => {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="col-span-2">
                         <label className="block text-xs text-gray-500 mb-1">Name</label>
-                        <input
+                        <input aria-label="Name"
                           type="text"
                           value={tier.name}
                           onChange={(e) => updateTicketTier(index, 'name', e.target.value)}
@@ -625,7 +625,7 @@ const CreateEventScreen = () => {
                         <label className="block text-xs text-gray-500 mb-1">Price</label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
-                          <input
+                          <input aria-label="Price"
                             type="number"
                             value={tier.price}
                             onChange={(e) => updateTicketTier(index, 'price', parseFloat(e.target.value) || 0)}
@@ -639,7 +639,7 @@ const CreateEventScreen = () => {
                     </div>
                     <div className="mt-3">
                       <label className="block text-xs text-gray-500 mb-1">Quantity Available</label>
-                      <input
+                      <input aria-label="Quantity Available"
                         type="number"
                         value={tier.quantity}
                         onChange={(e) => updateTicketTier(index, 'quantity', parseInt(e.target.value) || 0)}

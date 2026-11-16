@@ -375,7 +375,7 @@ const VideoComments = memo(({
                 ✦
               </div>
               <div className="flex-1 relative flex items-center">
-                <input
+                <input aria-label="Add a comment"
                   ref={inputRef}
                   type="text"
                   value={newComment}

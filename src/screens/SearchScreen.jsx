@@ -383,7 +383,7 @@ const SearchScreen = memo(() => {
         <div className="relative flex items-center gap-2">
           <div className="relative flex-1 flex items-center">
             <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
+            <input aria-label="Search people, tags, videos, and posts..."
               type="text"
               value={query}
               onChange={(e) => {

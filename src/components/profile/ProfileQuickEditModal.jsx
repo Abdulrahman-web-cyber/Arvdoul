@@ -178,7 +178,7 @@ export const ProfileQuickEditModal = memo(({
                 {displayName.length}/{PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
               </span>
             </div>
-            <input
+            <input aria-label="Display Name"
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
@@ -205,7 +205,7 @@ export const ProfileQuickEditModal = memo(({
                 {bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
               </span>
             </div>
-            <textarea
+            <textarea aria-label="Bio"
               rows={4}
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, PROFILE_CONSTRAINTS.BIO.MAX_LENGTH))}
@@ -231,7 +231,7 @@ export const ProfileQuickEditModal = memo(({
                 {tagline.length}/{PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH}
               </span>
             </div>
-            <input
+            <input aria-label="Tagline / Status"
               type="text"
               value={tagline}
               onChange={(e) => setTagline(e.target.value.slice(0, PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH))}
@@ -251,7 +251,7 @@ export const ProfileQuickEditModal = memo(({
                 <span>Website / Link</span>
               </label>
             </div>
-            <input
+            <input aria-label="Website / Link"
               type="text"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}

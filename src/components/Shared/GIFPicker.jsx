@@ -180,7 +180,7 @@ export default function GIFPicker({ onSelect, onClose }) {
       {/* Header with Search */}
       <div className="flex items-center gap-2 px-3.5 py-3 border-b border-gray-800 bg-gray-950/60">
         <Search className="w-4 h-4 text-purple-400 shrink-0" />
-        <input
+        <input aria-label="Search GIFs &amp; reactions…"
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}

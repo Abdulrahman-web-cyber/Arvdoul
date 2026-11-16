@@ -726,7 +726,7 @@ export default function StoriesScreen() {
               )}
             >
               <Search className="w-4 h-4 text-slate-400" />
-              <input
+              <input aria-label="Search friends, stories, or moments..."
                 type="text"
                 placeholder="Search friends, stories, or moments..."
                 value={searchQuery}
@@ -1233,7 +1233,7 @@ export default function StoriesScreen() {
               {/* Reply Input Form */}
               <form onSubmit={handleSendReply} className="flex items-center gap-2">
                 <div className="flex-1 relative flex items-center">
-                  <input
+                  <input aria-label="Send a reply"
                     type="text"
                     placeholder={`Send reply to ${currentStory.user.name}...`}
                     value={replyText}

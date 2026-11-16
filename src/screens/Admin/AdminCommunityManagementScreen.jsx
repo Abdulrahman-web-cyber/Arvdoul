@@ -132,7 +132,7 @@ const AdminCommunityManagementScreen = () => {
         <div className="flex items-center justify-between gap-4">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
+            <input aria-label="Search community name, slug, or creator..."
               type="text"
               placeholder="Search community name, slug, or creator..."
               value={searchQuery}

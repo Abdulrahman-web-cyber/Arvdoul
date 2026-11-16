@@ -826,7 +826,7 @@ export default function EditProfileScreen() {
                 <span className="absolute left-3.5 font-mono text-sm font-bold text-arvdoul-purple dark:text-[#B978FF] select-none pointer-events-none">
                   @
                 </span>
-                <input
+                <input aria-label="isDark"
                   type="text"
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
@@ -856,7 +856,7 @@ export default function EditProfileScreen() {
                   {formData.displayName.length}/{PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
                 </span>
               </div>
-              <input
+              <input aria-label="Display Name"
                 type="text"
                 value={formData.displayName}
                 onChange={(e) => handleInputChange('displayName', e.target.value)}
@@ -881,7 +881,7 @@ export default function EditProfileScreen() {
                   {formData.bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
                 </span>
               </div>
-              <textarea
+              <textarea aria-label="Introduce yourself to the Arvdoul community..."
                 value={formData.bio}
                 onChange={(e) => handleInputChange('bio', e.target.value)}
                 placeholder="Introduce yourself to the Arvdoul community..."
@@ -921,7 +921,7 @@ export default function EditProfileScreen() {
                     </button>
                   ))}
                 </div>
-                <input
+                <input aria-label="e.g. they/them"
                   type="text"
                   value={formData.pronouns}
                   onChange={(e) => handleInputChange('pronouns', e.target.value)}
@@ -940,7 +940,7 @@ export default function EditProfileScreen() {
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
                   Profession / Role
                 </label>
-                <input
+                <input aria-label="e.g. Creator, Builder, Artist"
                   type="text"
                   value={formData.profession}
                   onChange={(e) => handleInputChange('profession', e.target.value)}
@@ -996,7 +996,7 @@ export default function EditProfileScreen() {
               </label>
 
               <div className="relative flex items-center">
-                <input
+                <input aria-label="Location"
                   type="text"
                   value={formData.location}
                   onChange={(e) => handleInputChange('location', e.target.value)}
@@ -1018,7 +1018,7 @@ export default function EditProfileScreen() {
                 <Globe className="w-4 h-4 text-cyan-400" />
                 <span>Website</span>
               </label>
-              <input
+              <input aria-label="Website"
                 type="text"
                 value={formData.website}
                 onChange={(e) => handleInputChange('website', e.target.value)}
@@ -1088,7 +1088,7 @@ export default function EditProfileScreen() {
                     isDark ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-200"
                   )}
                 >
-                  <select
+                  <select aria-label=") : ("
                     value={link.platform || 'website'}
                     onChange={(e) => handleUpdateLink(idx, 'platform', e.target.value)}
                     className={cn(
@@ -1103,7 +1103,7 @@ export default function EditProfileScreen() {
                     ))}
                   </select>
 
-                  <input
+                  <input aria-label="Link Title (e.g. My Portfolio)"
                     type="text"
                     value={link.title || ''}
                     onChange={(e) => handleUpdateLink(idx, 'title', e.target.value)}
@@ -1116,7 +1116,7 @@ export default function EditProfileScreen() {
                     )}
                   />
 
-                  <input
+                  <input aria-label="https://..."
                     type="text"
                     value={link.url || ''}
                     onChange={(e) => handleUpdateLink(idx, 'url', e.target.value)}
@@ -1194,7 +1194,7 @@ export default function EditProfileScreen() {
                   <Palette className="w-4 h-4 text-amber-400" />
                   <span>Primary Creator Discipline</span>
                 </label>
-                <select
+                <select aria-label="Primary Creator Discipline"
                   value={formData.creatorCategory}
                   onChange={(e) => handleInputChange('creatorCategory', e.target.value)}
                   className={cn(
@@ -1217,7 +1217,7 @@ export default function EditProfileScreen() {
                   <Mail className="w-4 h-4 text-amber-400" />
                   <span>Business / Inquiries Contact</span>
                 </label>
-                <input
+                <input aria-label="Business / Inquiries Contact"
                   type="email"
                   value={formData.inquiriesEmail}
                   onChange={(e) => handleInputChange('inquiriesEmail', e.target.value)}
@@ -1239,7 +1239,7 @@ export default function EditProfileScreen() {
                 <HeartHandshake className="w-4 h-4 text-rose-400" />
                 <span>Patronage Tip Note</span>
               </label>
-              <input
+              <input aria-label="Patronage Tip Note"
                 type="text"
                 value={formData.tipMessage}
                 onChange={(e) => handleInputChange('tipMessage', e.target.value)}
@@ -1260,7 +1260,7 @@ export default function EditProfileScreen() {
                 <div className="text-xs sm:text-sm font-semibold">Creator Suite Visibility</div>
                 <div className="text-[11px] text-slate-400">Who can see your discipline, business contact and patronage note</div>
               </div>
-              <select
+              <select aria-label="Creator Suite Visibility"
                 value={formData.privacy.creatorInfo || VISIBILITY_SCOPES.EVERYONE}
                 onChange={(e) => handlePrivacyChange('creatorInfo', e.target.value)}
                 className={cn(
@@ -1309,7 +1309,7 @@ export default function EditProfileScreen() {
               <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
                 House Creed / Heraldic Motto
               </label>
-              <input
+              <input aria-label="e.g. In Aetere Dignitas · Building with honor across Arvdoul"
                 type="text"
                 value={formData.heraldicMotto}
                 onChange={(e) => handleInputChange('heraldicMotto', e.target.value)}
@@ -1442,7 +1442,7 @@ export default function EditProfileScreen() {
                 <div className="text-xs sm:text-sm font-semibold">Default Starting Tab</div>
                 <div className="text-[11px] text-slate-400">The tab visitors see first when opening your profile</div>
               </div>
-              <select
+              <select aria-label="Default Starting Tab"
                 value={formData.defaultTab}
                 onChange={(e) => handleInputChange('defaultTab', e.target.value)}
                 className={cn(
@@ -1520,7 +1520,7 @@ export default function EditProfileScreen() {
                   <div className="text-xs sm:text-sm font-semibold">Profile Discovery</div>
                   <div className="text-[11px] text-slate-400">Who can view your profile info</div>
                 </div>
-                <select
+                <select aria-label="Who can view your profile info"
                   value={formData.privacy.profileInfo}
                   onChange={(e) => handlePrivacyChange('profileInfo', e.target.value)}
                   className={cn(
@@ -1540,7 +1540,7 @@ export default function EditProfileScreen() {
                   <div className="text-xs sm:text-sm font-semibold">Live Presence</div>
                   <div className="text-[11px] text-slate-400">Who can see when you are online</div>
                 </div>
-                <select
+                <select aria-label="Who can see when you are online"
                   value={formData.privacy.presence}
                   onChange={(e) => handlePrivacyChange('presence', e.target.value)}
                   className={cn(
@@ -1561,7 +1561,7 @@ export default function EditProfileScreen() {
                   <div className="text-xs sm:text-sm font-semibold">Social Graph</div>
                   <div className="text-[11px] text-slate-400">Who can view your followers/following lists</div>
                 </div>
-                <select
+                <select aria-label="Social Graph"
                   value={formData.privacy.followersList}
                   onChange={(e) => {
                     handlePrivacyChange('followersList', e.target.value);
@@ -1584,7 +1584,7 @@ export default function EditProfileScreen() {
                   <div className="text-xs sm:text-sm font-semibold">Civic Standing & Badges</div>
                   <div className="text-[11px] text-slate-400">Who can view your badges and achievements</div>
                 </div>
-                <select
+                <select aria-label="Civic Standing &amp; Badges"
                   value={formData.privacy.activity}
                   onChange={(e) => {
                     handlePrivacyChange('activity', e.target.value);
@@ -1622,7 +1622,7 @@ export default function EditProfileScreen() {
                     </div>
                   </div>
 
-                  <select
+                  <select aria-label="Large Coin Treasury Card Display"
                     value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
                     onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
                     className={cn(

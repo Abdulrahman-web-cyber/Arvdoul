@@ -621,7 +621,7 @@ const CommentComposer = memo(({ onSubmit, loading, placeholder = "Write a commen
           {isRecording ? (
             <VoiceRecorder onRecordingComplete={handleVoiceComplete} onCancel={handleVoiceCancel} />
           ) : (
-            <textarea
+            <textarea aria-label=") : ("
               ref={inputRef}
               value={content}
               onChange={handleChange}
@@ -683,7 +683,7 @@ const SearchBar = ({ onSearch, onClose }) => {
   return (
     <div className="p-3 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm">
       <div className="flex flex-col sm:flex-row gap-2 mb-2">
-        <input
+        <input aria-label="Search comments..."
           type="text"
           placeholder="Search comments..."
           value={query}
@@ -699,14 +699,14 @@ const SearchBar = ({ onSearch, onClose }) => {
         </div>
       </div>
       <div className="flex flex-wrap gap-2 text-xs">
-        <input
+        <input aria-label="Filter by user"
           type="text"
           placeholder="Filter by user"
           value={filterUser}
           onChange={(e) => setFilterUser(e.target.value)}
           className="flex-1 p-1 rounded border dark:border-gray-700 dark:bg-gray-900"
         />
-        <select
+        <select aria-label="Date range"
           value={dateRange}
           onChange={(e) => setDateRange(e.target.value)}
           className="p-1 rounded border dark:border-gray-700 dark:bg-gray-900"
@@ -928,7 +928,7 @@ const CommentItem = memo(({
           </div>
           {isEditing ? (
             <div className="mt-1 space-y-2">
-              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple/50" rows={2} autoFocus />
+              <textarea aria-label="edited" value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-arvdoul-purple/50" rows={2} autoFocus />
               <div className="flex gap-2">
                 <button onClick={handleSaveEdit} className="px-3 py-1 rounded-full bg-purple-600 text-white text-xs hover:bg-purple-700 transition-colors">Save</button>
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1 rounded-full border dark:border-gray-700 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
@@ -1693,7 +1693,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
                 >
                   <Search className="w-5 h-5" />
                 </button>
-                <select
+                <select aria-label="Comments"
                   value={ranking}
                   onChange={(e) => setRanking(e.target.value)}
                   className="text-xs bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-1 border-0 dark:text-white focus:ring-2 focus:ring-arvdoul-purple/50"
@@ -1835,7 +1835,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xl">
                 <div className={`p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 ${isDark ? 'bg-gray-900' : 'bg-white'} border border-gray-200 dark:border-gray-700`}>
                   <h3 className="text-lg font-bold mb-4">Report comment</h3>
-                  <select
+                  <select aria-label="Report comment"
                     value={reportReason}
                     onChange={(e) => setReportReason(e.target.value)}
                     className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800 focus:ring-2 focus:ring-arvdoul-purple/50"

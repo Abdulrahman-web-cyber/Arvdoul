@@ -220,7 +220,7 @@ const FontSelector = memo(({
             <div className={`p-2 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                <input
+                <input aria-label="Search fonts..."
                   type="text"
                   placeholder="Search fonts..."
                   value={searchQuery}
@@ -417,7 +417,7 @@ const TextTool = memo(({
                 <span className="text-xs text-white/50">{selectedText.fontSize || 48}px</span>
               </div>
               <div className="flex items-center gap-2">
-                <input
+                <input aria-label="Size"
                   type="range"
                   min={8}
                   max={300}
@@ -494,7 +494,7 @@ const TextTool = memo(({
             <div className="space-y-2">
               <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Color</label>
               <div className="flex items-center gap-2 flex-wrap">
-                <input
+                <input aria-label="Color"
                   type="color"
                   value={selectedText.color || '#FFFFFF'}
                   onChange={(e) => handleUpdate({ color: e.target.value }, true)}
@@ -521,7 +521,7 @@ const TextTool = memo(({
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Opacity</label>
                 <span className="text-xs text-white/50">{selectedText.opacity ?? 100}%</span>
               </div>
-              <input
+              <input aria-label="Opacity"
                 type="range"
                 min={0}
                 max={100}
@@ -537,7 +537,7 @@ const TextTool = memo(({
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Letter Spacing</label>
                 <span className="text-xs text-white/50">{selectedText.letterSpacing ?? 0}px</span>
               </div>
-              <input
+              <input aria-label="Letter Spacing"
                 type="range"
                 min={-10}
                 max={20}
@@ -553,7 +553,7 @@ const TextTool = memo(({
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Line Height</label>
                 <span className="text-xs text-white/50">{(selectedText.lineHeight ?? 1.2).toFixed(1)}</span>
               </div>
-              <input
+              <input aria-label="Line Height"
                 type="range"
                 min={0.5}
                 max={3}
@@ -574,7 +574,7 @@ const TextTool = memo(({
               </div>
               <div className="flex items-center gap-2">
                 <RotateCw className="w-4 h-4 text-white/40" />
-                <input
+                <input aria-label="Rotation"
                   type="range"
                   min={-180}
                   max={180}
@@ -618,7 +618,7 @@ const TextTool = memo(({
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-[10px] text-white/40">X</label>
-                      <input
+                      <input aria-label="Shadow X offset"
                         type="number"
                         value={selectedText.shadowX ?? 2}
                         onChange={(e) => handleUpdate({ shadowX: Number(e.target.value) })}
@@ -627,7 +627,7 @@ const TextTool = memo(({
                     </div>
                     <div>
                       <label className="text-[10px] text-white/40">Y</label>
-                      <input
+                      <input aria-label="Shadow Y offset"
                         type="number"
                         value={selectedText.shadowY ?? 2}
                         onChange={(e) => handleUpdate({ shadowY: Number(e.target.value) })}
@@ -636,7 +636,7 @@ const TextTool = memo(({
                     </div>
                     <div>
                       <label className="text-[10px] text-white/40">Blur</label>
-                      <input
+                      <input aria-label="Blur"
                         type="number"
                         value={selectedText.shadowBlur ?? 4}
                         onChange={(e) => handleUpdate({ shadowBlur: Number(e.target.value) })}
@@ -646,7 +646,7 @@ const TextTool = memo(({
                   </div>
                   <div>
                     <label className="text-[10px] text-white/40">Shadow Color</label>
-                    <input
+                    <input aria-label="Shadow Color"
                       type="color"
                       value={selectedText.shadowColor?.replace(/rgba?\([^)]+\)/, '#000000') || '#000000'}
                       onChange={(e) => handleUpdate({ shadowColor: e.target.value }, true)}
@@ -680,7 +680,7 @@ const TextTool = memo(({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-white/40">Width</label>
-                    <input
+                    <input aria-label="Width"
                       type="number"
                       min={1}
                       max={20}
@@ -691,7 +691,7 @@ const TextTool = memo(({
                   </div>
                   <div>
                     <label className="text-[10px] text-white/40">Color</label>
-                    <input
+                    <input aria-label="Color"
                       type="color"
                       value={selectedText.strokeColor || '#000000'}
                       onChange={(e) => handleUpdate({ strokeColor: e.target.value }, true)}

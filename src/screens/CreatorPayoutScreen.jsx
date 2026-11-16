@@ -480,7 +480,7 @@ export default function CreatorPayoutScreen() {
                   <label className="text-xs font-semibold block mb-1.5">
                     Amount to Withdraw (Coins)
                   </label>
-                  <input
+                  <input aria-label="Amount to Withdraw (Coins)"
                     type="number"
                     min={MIN_WITHDRAWAL_COINS}
                     max={balance ?? undefined}

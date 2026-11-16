@@ -192,7 +192,7 @@ export default function AchievementsScreen() {
               isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
             }`}>
               <Search className="w-4 h-4 text-gray-400 mr-2" />
-              <input
+              <input aria-label="Search achievements..."
                 type="text"
                 placeholder="Search achievements..."
                 value={searchQuery}

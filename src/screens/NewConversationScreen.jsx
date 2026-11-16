@@ -404,7 +404,7 @@ const NewConversationScreen = () => {
               className="hidden"
               onChange={handleGroupPhotoSelect}
             />
-            <input
+            <input aria-label="Group name (optional)"
               type="text"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
@@ -430,7 +430,7 @@ const NewConversationScreen = () => {
             'absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5',
             theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
           )} />
-          <input
+          <input aria-label="Search users..."
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

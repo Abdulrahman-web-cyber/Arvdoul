@@ -495,7 +495,7 @@ export default function Collage({
                   <span className="text-gray-400 font-medium">Border Spacing</span>
                   <span className="font-mono text-purple-400">{spacing}px</span>
                 </div>
-                <input
+                <input aria-label="Border Spacing"
                   type="range"
                   min="0"
                   max="24"
@@ -510,7 +510,7 @@ export default function Collage({
                   <span className="text-gray-400 font-medium">Corner Roundness</span>
                   <span className="font-mono text-purple-400">{radius}px</span>
                 </div>
-                <input
+                <input aria-label="Corner Roundness"
                   type="range"
                   min="0"
                   max="32"

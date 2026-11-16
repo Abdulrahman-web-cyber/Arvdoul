@@ -108,7 +108,7 @@ export default function TimelineToolbar({
         </button>
 
         {/* Zoom Slider */}
-        <input
+        <input aria-label=": text-gray-400 hover:text-white hover:bg-white/10"
           type="range"
           min="0.5"
           max="3"

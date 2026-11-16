@@ -102,3 +102,43 @@ describe('UI foundation - app shell canvas', () => {
     expect(layout).toContain('w-full');
   });
 });
+
+describe('UI foundation - viewport-width overflow (N513)', () => {
+  // `100vw` includes the classic desktop scrollbar, so any full-bleed element
+  // sized with it overflows the viewport by ~15px and forces a horizontal
+  // scroll (masked, but still a layout defect). The shell already uses `w-full`;
+  // the remaining offenders are component-level. The global html/body/#root rule
+  // must use `100%` too.
+  function walk(dir, out = []) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, out);
+      else if (/\.(jsx|css)$/.test(entry.name)) out.push(full);
+    }
+    return out;
+  }
+
+  test('no component sizes itself with an unbounded viewport width', () => {
+    // `w-screen` (Tailwind) and a bare `100vw` / `100vw !important` size an
+    // element to the full viewport INCLUDING the scrollbar. A bounded
+    // `calc(100vw - Npx)` is fine (used for popovers that must fit a narrow
+    // phone), so only the unbounded forms are flagged.
+    const offenders = [];
+    for (const full of walk(path.join(root, 'src'))) {
+      const src = fs.readFileSync(full, 'utf8');
+      if (/w-screen|w-\[100vw\]|(?:width|maxWidth|max-width)\s*:?\s*['"]?100vw/.test(src)) {
+        offenders.push(path.relative(root, full));
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('the global root width is a percentage, not 100vw', () => {
+    const css = read('src/styles/tailwind.css');
+    const root = css.match(/html,\s*body,\s*#root\s*\{[^}]*\}/);
+    expect(root).toBeTruthy();
+    expect(root[0]).toContain('width: 100%');
+    expect(root[0]).not.toContain('100vw');
+  });
+});

@@ -39,7 +39,11 @@ body {
 
 /* CRITICAL MOBILE FIXES */
 html, body, #root {
-  width: 100vw !important;
+  /* A percentage width, not the viewport unit: the viewport unit includes the
+   * desktop scrollbar, which forced a horizontal overflow that the
+   * `overflow-x: hidden` below then had to mask. A percentage tracks the
+   * containing block exactly. */
+  width: 100% !important;
   min-height: 100vh !important;
   min-height: -webkit-fill-available !important;
   overflow-x: hidden !important;

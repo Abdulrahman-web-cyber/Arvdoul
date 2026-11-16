@@ -645,7 +645,7 @@ const formatDuration = (seconds) => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/search')}
-            aria-label="Search"
+            aria-label="For You"
             className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
           >
             <Search className="w-4 h-4 text-white" />

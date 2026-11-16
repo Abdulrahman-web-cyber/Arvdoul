@@ -376,7 +376,7 @@ export const ProfileVerificationModal = memo(({
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       Creator Category
                     </label>
-                    <select
+                    <select aria-label="Creator Category"
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
                       className={cn(
@@ -399,7 +399,7 @@ export const ProfileVerificationModal = memo(({
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       Portfolio or Notable Work Link
                     </label>
-                    <input
+                    <input aria-label="https://yourportfolio.com or social link"
                       type="url"
                       value={portfolioLink}
                       onChange={(e) => setPortfolioLink(e.target.value)}
@@ -423,7 +423,7 @@ export const ProfileVerificationModal = memo(({
                         {statement.length}/500
                       </span>
                     </div>
-                    <textarea
+                    <textarea aria-label="Describe your public creative work, brand, or contribution to the community..."
                       rows={3}
                       value={statement}
                       onChange={(e) => setStatement(e.target.value.slice(0, 500))}

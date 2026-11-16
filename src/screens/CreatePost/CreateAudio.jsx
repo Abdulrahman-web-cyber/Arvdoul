@@ -296,7 +296,7 @@ export default function CreateAudio() {
 
             <div className="flex-1 min-w-0 space-y-2">
               <div className="flex items-center justify-between">
-                <input
+                <input aria-label="Track title..."
                   type="text"
                   value={trackTitle}
                   onChange={(e) => setTrackTitle(e.target.value)}
@@ -312,7 +312,7 @@ export default function CreateAudio() {
                 </button>
               </div>
 
-              <input
+              <input aria-label="Artist or creator name..."
                 type="text"
                 value={artistName}
                 onChange={(e) => setArtistName(e.target.value)}
@@ -386,7 +386,7 @@ export default function CreateAudio() {
           "rounded-2xl border p-3 focus-within:ring-2 focus-within:ring-purple-500 transition-all",
           isDark ? "bg-[#060B24] border-white/10" : "bg-white border-gray-200"
         )}>
-          <textarea
+          <textarea aria-label="Caption &amp; Notes"
             value={state.content}
             onChange={(e) => dispatch({ type: "SET_CONTENT", payload: e.target.value })}
             placeholder="Tell your listeners about this track, chords, inspiration, or gear used..."

@@ -288,7 +288,7 @@ export default function PollsScreen() {
               <form onSubmit={handleCreatePollSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Poll Question</label>
-                  <input
+                  <input aria-label="Poll Question"
                     type="text"
                     required
                     placeholder="e.g. Which camera sensor is best for 2026?"
@@ -302,7 +302,7 @@ export default function PollsScreen() {
 
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Category</label>
-                  <select
+                  <select aria-label="Category"
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
                     className={`w-full p-3 rounded-xl text-xs border ${
@@ -318,7 +318,7 @@ export default function PollsScreen() {
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Options</label>
                   {optionsList.map((opt, idx) => (
-                    <input
+                    <input aria-label="Options"
                       key={idx}
                       type="text"
                       placeholder={`Option ${idx + 1}`}

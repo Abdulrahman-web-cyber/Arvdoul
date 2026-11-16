@@ -363,7 +363,7 @@ export default function HighlightsScreen() {
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block">
                 Highlight Name
               </label>
-              <input
+              <input aria-label="e.g. Travel, Moments, Projects"
                 type="text"
                 value={highlightName}
                 onChange={(e) => setHighlightName(e.target.value)}
@@ -511,7 +511,7 @@ export default function HighlightsScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm p-5 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl space-y-4">
             <h3 className="font-bold text-base text-gray-900 dark:text-white">Edit Highlight Title</h3>
-            <input
+            <input aria-label="Edit Highlight Title"
               type="text"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}

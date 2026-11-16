@@ -225,7 +225,7 @@ export default function TrimSubPanel({
               <span className="font-semibold">Speed</span>
               <span className="font-mono text-purple-400 font-bold">{speed.toFixed(2)}x</span>
             </div>
-            <input
+            <input aria-label="Speed"
               type="range"
               min="0.25"
               max="4.0"

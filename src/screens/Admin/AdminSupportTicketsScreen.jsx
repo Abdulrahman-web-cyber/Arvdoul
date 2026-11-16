@@ -136,7 +136,7 @@ const AdminSupportTicketsScreen = () => {
         <div className="flex items-center justify-between gap-4">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
+            <input aria-label="Search user, subject, or email..."
               type="text"
               placeholder="Search user, subject, or email..."
               value={searchQuery}
@@ -284,7 +284,7 @@ const AdminSupportTicketsScreen = () => {
                 </button>
               </div>
 
-              <textarea
+              <textarea aria-label="Insert AI Suggestion"
                 rows={3}
                 value={replyMessage}
                 onChange={e => setReplyMessage(e.target.value)}

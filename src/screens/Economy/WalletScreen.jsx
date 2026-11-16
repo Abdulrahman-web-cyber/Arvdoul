@@ -321,7 +321,7 @@ export default function WalletScreen() {
               }
               return (
                 <form onSubmit={handleWithdrawal} className="mt-4 flex items-center space-x-2">
-                  <input
+                  <input aria-label="return ("
                     type="number"
                     min={MIN_WITHDRAWAL_COINS}
                     step="100"

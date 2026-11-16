@@ -477,7 +477,7 @@ const VideoBottomSheet = memo(({
                 </div>
 
                 <div className="flex items-center gap-2 mb-4">
-                  <input
+                  <input aria-label="New collection name"
                     type="text"
                     value={newCollectionName}
                     onChange={(e) => setNewCollectionName(e.target.value)}

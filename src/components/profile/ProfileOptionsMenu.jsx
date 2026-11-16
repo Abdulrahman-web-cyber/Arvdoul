@@ -451,7 +451,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               Why are you reporting @{profile?.username || profile?.displayName || 'this user'}?
             </p>
             <form onSubmit={handleSubmitReport} className="space-y-3">
-              <textarea
+              <textarea aria-label="Spam, harassment, inappropriate content, impersonation..."
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 placeholder="Spam, harassment, inappropriate content, impersonation..."

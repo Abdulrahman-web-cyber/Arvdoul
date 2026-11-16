@@ -143,7 +143,7 @@ export default function ProjectDashboardScreen() {
             "bg-arvdoul-surface border border-arvdoul-border"
           )}>
             <Search className="w-5 h-5 text-arvdoul-text-secondary" />
-            <input
+            <input aria-label="Search projects..."
               type="text"
               placeholder="Search projects..."
               value={searchQuery}

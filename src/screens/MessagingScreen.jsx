@@ -323,7 +323,7 @@ export default function MessagingScreen() {
               : 'bg-white border-slate-200 focus-within:border-purple-500/50 shadow-sm'
           }`}>
             <Search className={`w-4 h-4 shrink-0 ${isDark ? 'text-gray-400' : 'text-slate-400'}`} />
-            <input
+            <input aria-label="Search messages, people, groups..."
               id="message-search-input"
               type="text"
               value={searchQuery}

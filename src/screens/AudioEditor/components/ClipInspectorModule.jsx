@@ -175,7 +175,7 @@ export default function ClipInspectorModule({
               <span className="text-gray-400">Volume</span>
               <span className="font-mono font-bold">{clipVolume} dB</span>
             </div>
-            <input
+            <input aria-label="Volume"
               type="range"
               min="-24"
               max="6"
@@ -192,7 +192,7 @@ export default function ClipInspectorModule({
                 {clipPan === 0 ? 'Center' : clipPan > 0 ? `R ${clipPan}` : `L ${Math.abs(clipPan)}`}
               </span>
             </div>
-            <input
+            <input aria-label="Pan"
               type="range"
               min="-50"
               max="50"

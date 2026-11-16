@@ -1062,7 +1062,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     >
       <form onSubmit={handleSearch} className="relative">
         <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-        <input
+        <input aria-label="Search features, navigate..."
           ref={searchInputRef}
           type="text"
           value={searchQuery}
@@ -1831,7 +1831,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               height: panelHeight,
               maxHeight: "100vh",
               touchAction: "none",
-              maxWidth: "100vw"
+              maxWidth: "100%"
             }}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}

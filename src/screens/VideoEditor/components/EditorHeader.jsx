@@ -111,7 +111,7 @@ export default function EditorHeader({
 
         <div className="flex items-center gap-1">
           {isEditingTitle ? (
-            <input
+            <input aria-label="ARVDOUL"
               type="text"
               value={tempTitle}
               autoFocus

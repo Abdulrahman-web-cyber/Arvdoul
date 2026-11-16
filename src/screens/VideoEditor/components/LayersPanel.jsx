@@ -228,7 +228,7 @@ export default function LayersPanel({
           <span className="font-semibold">Opacity</span>
           <span className="font-mono text-purple-400 font-bold">{Math.round(opacity)}%</span>
         </div>
-        <input
+        <input aria-label="Opacity"
           type="range"
           min="0"
           max="100"

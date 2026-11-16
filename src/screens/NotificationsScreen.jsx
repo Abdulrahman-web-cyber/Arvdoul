@@ -729,7 +729,7 @@ export default function NotificationsScreen() {
                 isDark ? "bg-white/5 border-white/10" : "bg-slate-100 border-slate-200"
               )}>
                 <Search className="w-4 h-4 text-arvdoul-text-secondary" />
-                <input
+                <input aria-label="Search in notifications..."
                   type="text"
                   placeholder="Search in notifications..."
                   value={searchQuery}

@@ -363,7 +363,7 @@ export default function PreviewCanvas({
                 <Volume2 className="w-4 h-4" />
               )}
             </button>
-            <input
+            <input aria-label=") : ("
               type="range"
               min="0"
               max="1"

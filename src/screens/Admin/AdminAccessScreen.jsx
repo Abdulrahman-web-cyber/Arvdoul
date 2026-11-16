@@ -168,7 +168,7 @@ export default function AdminAccessScreen() {
               <form onSubmit={handleGrant} className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">User UID</label>
-                  <input
+                  <input aria-label="User UID"
                     type="text"
                     required
                     value={targetUid}
@@ -179,7 +179,7 @@ export default function AdminAccessScreen() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Reason (optional)</label>
-                  <input
+                  <input aria-label="Reason (optional)"
                     type="text"
                     value={grantReason}
                     onChange={(e) => setGrantReason(e.target.value)}

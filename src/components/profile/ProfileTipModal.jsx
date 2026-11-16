@@ -235,7 +235,7 @@ export default function ProfileTipModal({
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-amber-400">
                     <Coins className="w-4 h-4" />
                   </div>
-                  <input
+                  <input aria-label="Enter amount..."
                     type="text"
                     inputMode="numeric"
                     placeholder="Enter amount..."
@@ -251,7 +251,7 @@ export default function ProfileTipModal({
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
                   Optional Note (Public or Creator-Only)
                 </label>
-                <input
+                <input aria-label="Keep up the inspiring work! 🚀"
                   type="text"
                   maxLength={120}
                   placeholder="Keep up the inspiring work! 🚀"

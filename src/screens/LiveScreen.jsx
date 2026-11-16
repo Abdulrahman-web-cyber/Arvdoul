@@ -334,7 +334,7 @@ export default function LiveScreen() {
                 <button onClick={() => setShowGifts(!showGifts)} aria-label="Gifts" className="p-2.5 rounded-full bg-white/10 hover:bg-white/20">
                   <Gift className="w-5 h-5 text-amber-400" />
                 </button>
-                <input
+                <input aria-label="No comments yet — say hello!"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
@@ -436,7 +436,7 @@ export default function LiveScreen() {
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Radio className="w-5 h-5 text-red-500" /> Go Live
               </h2>
-              <input
+              <input aria-label="Stream title…"
                 autoFocus
                 value={liveTitle}
                 onChange={(e) => setLiveTitle(e.target.value)}

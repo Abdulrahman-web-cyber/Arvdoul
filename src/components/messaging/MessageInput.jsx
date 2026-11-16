@@ -255,7 +255,7 @@ const MessageInput = React.memo(({
         </button>
 
         {/* Text input */}
-        <textarea
+        <textarea aria-label="Message"
           ref={textInputRef}
           value={text}
           onChange={(e) => handleTypingChange(e.target.value)}
