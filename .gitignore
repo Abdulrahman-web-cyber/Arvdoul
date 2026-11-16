@@ -64,6 +64,15 @@ node_modules/
 
 # dotenv environment variables file
 .env
+# Vite loads every one of these; only `.env.example` is committed. `.env.local`
+# and `.env.*.local` are the documented place for local overrides/secrets, so
+# they must never be tracked.
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+.env.test
 
 # dataconnect generated files
 .dataconnect

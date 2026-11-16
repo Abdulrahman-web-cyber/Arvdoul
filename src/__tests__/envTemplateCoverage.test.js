@@ -84,4 +84,21 @@ describe('env template coverage', () => {
     expect(offenders).toEqual([]);
     expect(used.has('VITE_STRIPE_PUBLISHABLE_KEY')).toBe(true);
   });
+
+  test('every Vite env file (except .env.example) is git-ignored', () => {
+    const gitignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
+    const patterns = new Set(
+      gitignore
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith('#'))
+    );
+    // `.env.local` is where a developer puts real secrets; a missing ignore rule
+    // means the next `git add -A` commits them.
+    for (const required of ['.env', '.env.local', '.env.*.local']) {
+      expect(patterns.has(required)).toBe(true);
+    }
+    // The template itself must remain tracked.
+    expect(patterns.has('.env.example')).toBe(false);
+  });
 });
