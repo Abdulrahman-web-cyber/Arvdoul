@@ -1633,6 +1633,15 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
     expect(src).not.toContain('effectiveProfile.level || 1');
   });
 
+  test('N500 — ProfilePublicScreen does not coerce a missing likes count to a measured 0', () => {
+    // `likesReceived`/`likesCount` have no writer anywhere, so `resolveCount`
+    // (fallback 0) made every public profile claim a measured "0 likes". The
+    // metric grid renders unknown as '—'; the screen must keep it unknown.
+    const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ProfilePublicScreen.jsx'), 'utf8');
+    expect(src).not.toContain('likesReceived: resolveCount(');
+    expect(src).toContain('unknownNumber(profileData.likesReceived ?? profileData.likesCount)');
+  });
+
   test('citizenship surfaces render an em-dash, not a fabricated tier/rank', () => {
     // The citizenship card and roadmap modal defaulted a missing rank/tier to a
     // concrete standing ('Arrival' / 'Citizen'), which is the same class of

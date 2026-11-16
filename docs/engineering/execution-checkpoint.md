@@ -2,9 +2,9 @@
 
 _Last updated: this session. Branch `harden/n319-n320-analytics-live`, base `origin/main` (PR #46 merged)._
 
-## This session — highlight content-copy read leak (N499, reopens N270)
+## This session — highlight content-copy read leak (N499) + public-profile likes fabrication (N500)
 
-Theme (1) read-authorization leaks.
+Theme (1) read-authorization leaks + (2) fabrication/integrity sweep.
 
 - **N499 (HIGH, closed):** `highlights/{id}` and `highlights/{id}/highlightStories`
   were readable by every signed-in user, but `storyService.addToHighlight` writes
@@ -22,9 +22,17 @@ Theme (1) read-authorization leaks.
   client reader (`storyService.getHighlightStories`) resolves the parent by id and
   never queries the subcollection, so no composite index is needed. Guard:
   `readScopePrivacyRules.test.js` (two new N499 cases).
+- **N500 (MEDIUM, closed):** `ProfilePublicScreen` built the profile with
+  `resolveCount(profileData.likesReceived, profileData.likesCount)` (fallback
+  `0`) while neither field has a writer anywhere in `src`/`functions` — so every
+  public profile rendered a measured "0 Likes". The grid consumer
+  (`ProfileMetricsGrid`) already renders unknown as `—`; the screen fabricated the
+  `0` first. Fixed to `unknownNumber(profileData.likesReceived ??
+  profileData.likesCount)`; dead `resolveCount` import dropped. Guard:
+  `noFabricatedData.test.js` (N500 case).
 
-Verified: `npx eslint src/__tests__/readScopePrivacyRules.test.js --quiet` exit 0;
-full jest suite **213 suites / 2207 passed (5 skipped), 2212 total** green.
+Verified: `npx eslint src --quiet` exit 0; `npm run build` exit 0; full jest suite
+**213 suites / 2208 passed (5 skipped), 2213 total** green.
 
 ## This session — read-scope leaks, fabricated measured zeros, server-owned field seeds (N496–N498)
 
