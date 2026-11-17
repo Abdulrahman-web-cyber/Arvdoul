@@ -45,7 +45,9 @@ import {
   HeartHandshake,
   ShieldCheck,
   Flame,
-  LayoutGrid
+  LayoutGrid,
+  Palette,
+  ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -61,7 +63,7 @@ import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { BRAND_GRADIENT, tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 
 const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
@@ -499,7 +501,7 @@ export default function EditProfileScreen() {
       "min-h-screen pb-32 transition-colors duration-200 relative",
       isDark 
         ? "bg-[#03071B] text-white selection:bg-arvdoul-purple/30" 
-        : "bg-[#f0f4fa] text-slate-900 selection:bg-arvdoul-purple/20"
+        : "bg-[#F6F8FC] text-slate-900 selection:bg-arvdoul-purple/20"
     )}>
       {/* Top Ambient Optical Hairline Highlight */}
       <span
@@ -534,17 +536,30 @@ export default function EditProfileScreen() {
           : "bg-white/90 border-slate-200/90 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
       )}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-            <span className="font-mono text-purple-400 font-bold">@{formData.username || 'citizen'}</span>
-            <span>·</span>
-            <span className="text-emerald-500 font-semibold">{completeness.score}% complete</span>
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <button
+              type="button"
+              onClick={handleCancel}
+              aria-label="Go back"
+              className={cn(
+                "p-1.5 rounded-xl border transition-colors cursor-pointer mr-1",
+                isDark
+                  ? "border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.06]"
+                  : "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              )}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span className="font-mono text-arvdoul-purple dark:text-[#B978FF] font-bold">@{formData.username || 'citizen'}</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">{completeness.score}% complete</span>
             {isCreatorAccount && (
-              <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
                 Creator
               </span>
             )}
             {isRoyalOrNoble && (
-              <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                 Heraldic
               </span>
             )}
@@ -639,7 +654,7 @@ export default function EditProfileScreen() {
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${completeness.score}%`,
-                background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`
+                background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, ${tokens.color.brand.cyan} 100%)`
               }}
             />
           </div>
@@ -651,8 +666,8 @@ export default function EditProfileScreen() {
                 className={cn(
                   "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border",
                   chk.completed
-                    ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-500 dark:text-emerald-400"
-                    : "bg-slate-500/10 border-slate-500/20 text-slate-400"
+                    ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400"
+                    : "bg-slate-500/10 border-slate-500/20 text-slate-500 dark:text-slate-400"
                 )}
               >
                 {chk.completed ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <AlertCircle className="w-3 h-3 text-slate-400" />}
@@ -667,27 +682,32 @@ export default function EditProfileScreen() {
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 relative overflow-hidden",
           isDark
-            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
-            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+            ? "bg-[#080F2E]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+            : "bg-white border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
         )}>
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             
             {/* Circular Avatar Preview with Arvdoul Radiant Aura */}
             <div className="relative group shrink-0">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue shadow-[0_8px_24px_rgba(139,30,243,0.35)]">
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-[#03071B] dark:ring-[#03071B] relative">
+              <div
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue"
+                style={{ boxShadow: `0 8px 24px ${brandRgba(0.35)}` }}
+              >
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-white dark:ring-[#080F2E] relative">
                   <LazyImage
                     src={avatarPreview}
                     alt={formData.displayName || "Avatar"}
                     className="w-full h-full object-cover"
                   />
-                  <div 
+                  <button
+                    type="button"
                     onClick={() => setShowAvatarModal(true)}
-                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
+                    aria-label="Change profile photo"
+                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
                   >
                     <Camera className="w-4 h-4 text-purple-200" />
                     <span>Change</span>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -826,7 +846,7 @@ export default function EditProfileScreen() {
                 <span className="absolute left-3.5 font-mono text-sm font-bold text-arvdoul-purple dark:text-[#B978FF] select-none pointer-events-none">
                   @
                 </span>
-                <input aria-label="isDark"
+                <input aria-label="Unique Username"
                   type="text"
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
@@ -1088,7 +1108,7 @@ export default function EditProfileScreen() {
                     isDark ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-200"
                   )}
                 >
-                  <select aria-label=") : ("
+                  <select aria-label="Link Platform"
                     value={link.platform || 'website'}
                     onChange={(e) => handleUpdateLink(idx, 'platform', e.target.value)}
                     className={cn(

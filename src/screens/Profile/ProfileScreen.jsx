@@ -35,13 +35,18 @@ export default function ProfileScreen() {
   const currentUsername = (rawUsername || rawEmail.split('@')[0] || '').toLowerCase().trim();
 
   // Evaluate if current viewer is owner of this profile route
-  const isOwner = !rawUserId || 
-    rawUserId === currentUserId || 
-    (lowerUserId && currentUserId && lowerUserId === currentUserId.toLowerCase()) || 
-    lowerUserId === 'me' || 
-    (currentUsername && lowerUserId === currentUsername) ||
-    (storeProfile && (storeProfile.id === currentUserId || storeProfile.uid === currentUserId) && 
-      (lowerUserId === storeProfile.username?.toLowerCase() || rawUserId === storeProfile.id));
+  const isOwner = Boolean(
+    currentUserId && (
+      !rawUserId ||
+      rawUserId === currentUserId ||
+      (lowerUserId && lowerUserId === currentUserId.toLowerCase()) ||
+      lowerUserId === 'me' ||
+      (currentUsername && lowerUserId === currentUsername) ||
+      (storeProfile &&
+        (storeProfile.id === currentUserId || storeProfile.uid === currentUserId) &&
+        (lowerUserId === storeProfile.username?.toLowerCase() || rawUserId === storeProfile.id))
+    )
+  );
 
   // Ensure target profile is loaded into useProfileStore if viewing a distinct user
   useEffect(() => {
@@ -54,7 +59,7 @@ export default function ProfileScreen() {
 
     const isAlreadyLoaded = isOwner
       ? (currentStoreId === currentUserId)
-      : (currentStoreId === rawUserId || currentStoreUsername === lowerUserId);
+      : (currentStoreId === rawUserId || (lowerUserId && currentStoreUsername === lowerUserId));
 
     if (!isAlreadyLoaded) {
       loadProfile(targetUid, currentUserId);

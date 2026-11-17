@@ -29,7 +29,7 @@ export const ProfileViewAsBanner = memo(({
     >
       <div className={cn(
         "relative rounded-2xl p-3 sm:p-4 border backdrop-blur-2xl shadow-2xl transition-all",
-        "bg-[#080d1a]/95 text-white border-amber-500/40 shadow-black/60",
+        "bg-[#080F2E]/95 text-white border-amber-500/40 shadow-black/60",
         "flex flex-col sm:flex-row items-center justify-between gap-3"
       )}>
         {/* Glow accent hairline */}
@@ -41,15 +41,14 @@ export const ProfileViewAsBanner = memo(({
         {/* Perspective Status Indicator */}
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative shrink-0 w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center">
-            <Eye className="w-5 h-5 animate-pulse" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-[#080d1a] animate-ping" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-[#080d1a]" />
+            <Eye className="w-5 h-5" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-[#080F2E]" />
           </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono uppercase tracking-widest font-black text-amber-400">
-                View As Active
+              <span className="text-[11px] font-semibold tracking-wide text-amber-400">
+                Viewing As
               </span>
               <span className="text-slate-500">·</span>
               <span className="text-xs font-bold text-white truncate">
@@ -57,7 +56,7 @@ export const ProfileViewAsBanner = memo(({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 leading-tight truncate">
-              Previewing exact profile & privacy boundaries
+              Previewing exact profile &amp; privacy boundaries
             </p>
           </div>
         </div>
@@ -93,7 +92,7 @@ export const ProfileViewAsBanner = memo(({
           <button
             type="button"
             onClick={onExit}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-600/90 hover:bg-rose-500 text-white shadow-md active:scale-95 transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600/90 hover:bg-rose-500 text-white shadow-md active:scale-95 transition-all cursor-pointer shrink-0"
             title="Exit View As and return to Owner View"
           >
             <X className="w-3.5 h-3.5" />

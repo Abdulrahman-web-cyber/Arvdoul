@@ -237,6 +237,24 @@ const ProfileFeedGrid = memo(({
     });
   }, [playingAudioId]);
 
+  // Pause audio when leaving the audio tab or unmounting the grid
+  useEffect(() => {
+    if (activeTab !== 'audio' && audioElRef.current) {
+      audioElRef.current.pause();
+      setPlayingAudioId(null);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const audioEl = audioElRef.current;
+    return () => {
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.src = '';
+      }
+    };
+  }, []);
+
   // Shown under every paginated grid (posts/reels/videos/photos/audio/tagged).
   // Without it the profile feed silently truncated at the first page.
   const paginationFooter = (onLoadMore && (hasMore || loadingMore)) ? (
@@ -379,11 +397,21 @@ const ProfileFeedGrid = memo(({
       Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video')
     );
   } else if (activeTab === 'photos') {
-    displayItems = displayItems.filter(p => 
-      p.type === 'image' || 
-      p.type === 'photo' || 
-      Boolean(p.mediaURL || p.imageUrl || p.photoURL || p.coverImage)
-    );
+    displayItems = displayItems.filter(p => {
+      const isVideoOrAudio =
+        p.type === 'video' ||
+        p.type === 'reel' ||
+        p.type === 'audio' ||
+        p.type === 'track' ||
+        p.type === 'music' ||
+        Boolean(p.videoURL || p.videoUrl || p.audioURL || p.audioUrl || p.soundUrl || p.mediaType === 'video' || p.mediaType === 'audio');
+      if (isVideoOrAudio) return false;
+      return (
+        p.type === 'image' ||
+        p.type === 'photo' ||
+        Boolean(p.mediaURL || p.imageUrl || p.photoURL || p.coverImage)
+      );
+    });
   } else if (activeTab === 'stories') {
     displayItems = displayItems.filter(p => 
       p.type === 'story' || 
@@ -409,6 +437,34 @@ const ProfileFeedGrid = memo(({
   } else if (activeTab === 'posts') {
     // Standard posts: exclude dedicated audio tracks to keep categories sharp
     displayItems = displayItems.filter(p => p.type !== 'audio' && p.type !== 'track');
+  }
+
+  // Loading skeleton before empty state so initial load never flashes "No Posts Yet"
+  if (loading && displayItems.length === 0) {
+    return (
+      <div
+        aria-label="Loading profile content"
+        className={cn(
+          "grid gap-2.5 sm:gap-3.5 w-full animate-pulse",
+          activeTab === 'reels'
+            ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+            : activeTab === 'audio'
+            ? "grid-cols-1 md:grid-cols-2"
+            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"
+        )}
+      >
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+          <div
+            key={n}
+            className={cn(
+              "rounded-2xl border",
+              activeTab === 'reels' ? "aspect-[9/16]" : activeTab === 'audio' ? "h-36" : "aspect-square",
+              isDark ? "bg-white/[0.05] border-white/[0.08]" : "bg-slate-200/70 border-slate-200"
+            )}
+          />
+        ))}
+      </div>
+    );
   }
 
   // Empty state handling with tailored actions
@@ -536,11 +592,20 @@ const ProfileFeedGrid = memo(({
           return (
             <div
               key={item.id || idx}
+              role="button"
+              tabIndex={0}
               onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  if (onPostClick) onPostClick(item);
+                  else navigate(`/post/${item.id}`);
+                }
+              }}
               className={cn(
                 "rounded-2xl p-4 border transition-all duration-200 cursor-pointer group flex flex-col justify-between gap-3 shadow-sm",
                 isDark 
-                  ? "bg-[#0B0F19] border-slate-800 hover:border-indigo-500/50 hover:bg-[#0E1426]" 
+                  ? "bg-[#080F2E]/90 border-white/[0.08] hover:border-indigo-500/50 hover:bg-[#0E1426]" 
                   : "bg-white border-slate-200 hover:border-indigo-400 hover:shadow-md"
               )}
             >
@@ -687,7 +752,16 @@ const ProfileFeedGrid = memo(({
           return (
             <div
               key={item.id || idx}
+              role="button"
+              tabIndex={0}
               onClick={() => onPostClick?.(item) || (isReel ? navigate(`/reels?reelId=${item.id}`) : navigate(`/post/${item.id}`))}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  if (onPostClick) onPostClick(item);
+                  else navigate(isReel ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+                }
+              }}
               className={cn(
                 "group relative rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-sm bg-slate-900 transition-all hover:scale-[1.02]",
                 isReel ? "aspect-[9/16]" : "aspect-square"
@@ -716,7 +790,7 @@ const ProfileFeedGrid = memo(({
               {isVid && (
                 <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold">
                   {isReel ? <Film className="w-3 h-3" /> : <Play className="w-3 h-3 fill-white" />}
-                  <span>{item.duration || '1:15'}</span>
+                  <span>{item.duration || (isReel ? 'Reel' : 'Video')}</span>
                 </div>
               )}
 
@@ -779,10 +853,19 @@ const ProfileFeedGrid = memo(({
           return (
             <div
               key={item.id || idx}
+              role="button"
+              tabIndex={0}
               onClick={() => onPostClick?.(item) || (item.type === 'reel' ? navigate(`/reels?reelId=${item.id}`) : navigate(`/post/${item.id}`))}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  if (onPostClick) onPostClick(item);
+                  else navigate(item.type === 'reel' ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+                }
+              }}
               className={cn(
                 "break-inside-avoid rounded-2xl overflow-hidden cursor-pointer border transition-all duration-200 hover:shadow-lg group",
-                isDark ? "bg-[#0B0F19] border-slate-800 hover:border-slate-700" : "bg-white border-slate-200 hover:border-slate-300"
+                isDark ? "bg-[#080F2E]/90 border-white/[0.08] hover:border-white/20" : "bg-white border-slate-200 hover:border-slate-300"
               )}
             >
               {mediaUrl && (
@@ -900,10 +983,19 @@ const ProfileFeedGrid = memo(({
         return (
           <div
             key={item.id || idx}
+            role="button"
+            tabIndex={0}
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
+            onKeyDown={(e) => {
+              if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                if (onPostClick) onPostClick(item);
+                else navigate(`/post/${item.id}`);
+              }
+            }}
             className={cn(
               "rounded-2xl border transition-all duration-200 overflow-hidden cursor-pointer",
-              isDark ? "bg-[#0B0F19] border-slate-800 hover:border-slate-700" : "bg-white border-slate-200 hover:border-slate-300"
+              isDark ? "bg-[#080F2E]/90 border-white/[0.08] hover:border-white/20" : "bg-white border-slate-200 hover:border-slate-300"
             )}
           >
             {/* Header: Author Info */}
@@ -975,6 +1067,9 @@ const ProfileFeedGrid = memo(({
               <div className="flex items-center gap-5">
                 <button
                   type="button"
+                  data-testid={`like-button-${item.id}`}
+                  aria-pressed={isLiked}
+                  aria-label={isLiked ? "Unlike post" : "Like post"}
                   onClick={(e) => handleQuickLike(e, item)}
                   className={cn(
                     "flex items-center gap-1.5 text-xs font-semibold hover:text-rose-500 transition-colors",
@@ -982,7 +1077,7 @@ const ProfileFeedGrid = memo(({
                   )}
                 >
                   <Heart className={cn("w-4 h-4", isLiked && "fill-rose-500")} />
-                  <span>{likeCount(item)}</span>
+                  <span data-testid={`like-count-${item.id}`}>{likeCount(item)}</span>
                 </button>
 
                 <div className="flex items-center gap-1.5 text-xs font-semibold">

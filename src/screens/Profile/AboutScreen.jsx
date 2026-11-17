@@ -5,15 +5,16 @@
  * @component
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
-import { Edit3, Shield, Sparkles, Mail, HeartHandshake, Palette } from "lucide-react";
+import { ArrowLeft, Edit3, Shield, Sparkles, Mail, HeartHandshake, Palette, RefreshCw } from "lucide-react";
 import ProfileAbout from '../../components/profile/ProfileAbout';
+import { Skeleton } from '../../components/UI/Skeleton';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine.js';
@@ -36,24 +37,62 @@ export default function AboutScreen() {
 
   const { user: authUser } = useAuth();
   const storeUser = useAppStore((state) => state.currentUser);
-  const { profile: storeProfile, loadProfile } = useProfileStore();
+  const { profile: storeProfile, loading: storeLoading, error: storeError, loadProfile } = useProfileStore();
+  const [relationship, setRelationship] = useState(null);
 
   const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
-  const targetId = userId || currentUserId;
-  const isActualOwner = Boolean(currentUserId && targetId && currentUserId === targetId);
+  const cleanParam = userId ? String(userId).replace(/^@/, '').trim() : '';
+  const targetId = (!cleanParam || cleanParam.toLowerCase() === 'me') ? currentUserId : cleanParam;
+
+  const isActualOwner = Boolean(
+    currentUserId &&
+    targetId && (
+      currentUserId === targetId ||
+      (storeProfile &&
+        (storeProfile.uid === currentUserId || storeProfile.id === currentUserId) &&
+        (storeProfile.username?.toLowerCase() === targetId.toLowerCase() || storeProfile.id === targetId))
+    )
+  );
 
   useEffect(() => {
-    if (targetId && (!storeProfile || (storeProfile.id !== targetId && storeProfile.uid !== targetId))) {
+    if (!targetId) return;
+    const matchesStore = storeProfile && (
+      storeProfile.id === targetId ||
+      storeProfile.uid === targetId ||
+      storeProfile.username?.toLowerCase() === targetId.toLowerCase()
+    );
+    if (!matchesStore) {
       loadProfile(targetId, currentUserId);
     }
   }, [targetId, currentUserId, storeProfile, loadProfile]);
 
+  useEffect(() => {
+    let mounted = true;
+    const resolvedUid = storeProfile?.uid || storeProfile?.id || targetId;
+    if (!currentUserId || !resolvedUid || isActualOwner) {
+      setRelationship(null);
+      return;
+    }
+
+    import('../../services/userService.js')
+      .then(({ getUserService }) => getUserService().getRelationshipState(currentUserId, resolvedUid))
+      .then((rel) => {
+        if (mounted) setRelationship(rel);
+      })
+      .catch(() => {
+        if (mounted) setRelationship(null);
+      });
+
+    return () => { mounted = false; };
+  }, [currentUserId, targetId, storeProfile?.uid, storeProfile?.id, isActualOwner]);
+
   const effectiveProfile = useMemo(() => {
     const base = (isActualOwner ? (storeProfile || authUser || storeUser || getStoredUser()) : storeProfile) || {};
     const fallbackHandle = isActualOwner ? deriveHandle(authUser?.email) : null;
+    const resolvedId = base.id || base.uid || targetId;
     return {
       ...base,
-      id: base.id || base.uid || targetId,
+      id: resolvedId,
       uid: base.uid || base.id || targetId,
       displayName: pickDisplayName([base.displayName, base.name], { fallback: null }) || (targetId ? `user ${String(targetId).slice(0, 6)}` : '—'),
       username: pickHandle([base.username]) || fallbackHandle || 'citizen',
@@ -70,8 +109,8 @@ export default function AboutScreen() {
   const capabilities = useMemo(() => resolveCapabilities({
     viewer: currentUserId ? { uid: currentUserId } : null,
     target: effectiveProfile,
-    relationship: { isOwner: isActualOwner },
-  }), [currentUserId, effectiveProfile, isActualOwner]);
+    relationship: isActualOwner ? { isOwner: true } : (relationship || { isOwner: false }),
+  }), [currentUserId, effectiveProfile, isActualOwner, relationship]);
 
   const displayedProfile = useMemo(
     () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isActualOwner }),
@@ -103,120 +142,181 @@ export default function AboutScreen() {
   return (
     <div className={cn(
       'min-h-screen pb-24 transition-colors',
-      isDark
-        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white'
-        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-slate-900'
+      isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
     )}>
-      {/* Content */}
-      <div className="max-w-3xl mx-auto px-4 py-4 sm:py-5 space-y-4">
-        {isActualOwner && (
-          <div className="flex justify-end">
+      {/* Top Bar */}
+      <header className={cn(
+        'sticky top-0 z-30 border-b backdrop-blur-xl transition-colors',
+        isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-white/90 border-slate-200'
+      )}>
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
-              onClick={handleEdit}
+              type="button"
+              onClick={() => navigate(-1)}
               className={cn(
-                'px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer',
-                'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:brightness-110 active:scale-95'
+                'p-2 rounded-xl transition-colors cursor-pointer shrink-0',
+                isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
               )}
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-bold truncate">
+                About {displayedProfile?.displayName || 'Profile'}
+              </h1>
+              {displayedProfile?.username && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  @{displayedProfile.username}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {isActualOwner && (
+            <button
+              type="button"
+              onClick={handleEdit}
+              className="px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer bg-arvdoul-gradient text-white hover:opacity-95 active:scale-95 shrink-0 whitespace-nowrap"
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit Profile Details</span>
+              <span>Edit Profile</span>
             </button>
-          </div>
-        )}
-        {/* Profile Card & Info — projected, so a narrowed profileInfo scope hides the card */}
-        <ProfileAbout
-          profile={displayedProfile}
-          isOwner={isActualOwner}
-          onEdit={handleEdit}
-        />
-
-        {/* Creator Suite — gated by the `creatorInfo` scope (was a dead control:
-            the fields were saved and validated but rendered nowhere, and the
-            business contact was world-readable in users/{uid}). The projection
-            blanks the fields, so this only renders when the scope allows them. */}
-        {displayedProfile?.canViewCreatorInfo === true && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
-          <div className={cn(
-            'p-5 rounded-2xl border space-y-4 shadow-sm',
-            isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
-          )}>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Creator Suite</h3>
-            </div>
-            <div className="space-y-2.5">
-              {displayedProfile?.creatorCategory && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Palette className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                  <span className="text-slate-500 dark:text-slate-400">Discipline:</span>
-                  <span className="text-slate-900 dark:text-white font-medium">{displayedProfile.creatorCategory}</span>
-                </div>
-              )}
-              {displayedProfile?.inquiriesEmail && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                  <span className="text-slate-500 dark:text-slate-400">Business contact:</span>
-                  <a href={`mailto:${displayedProfile.inquiriesEmail}`} className="text-indigo-500 hover:underline truncate">
-                    {displayedProfile.inquiriesEmail}
-                  </a>
-                </div>
-              )}
-              {displayedProfile?.tipMessage && (
-                <div className="flex items-start gap-3 text-sm">
-                  <HeartHandshake className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                  <span className="text-slate-600 dark:text-slate-300 italic">{displayedProfile.tipMessage}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Citizenship & Standing Strip */}
-        <div className={cn(
-          "p-5 rounded-2xl border space-y-4 shadow-sm transition-all",
-          isDark ? "bg-[#0B0F19] border-slate-800" : "bg-white border-slate-200"
-        )}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold">
-                <Shield className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Citizen Standing & Privileges
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {displayedProfile?.level != null ? (
-                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || '—'}</span> · Level {displayedProfile.level}</>
-                  ) : (
-                    <span>Standing unavailable</span>
-                  )}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/progress')}
-              className="text-xs font-bold text-indigo-500 hover:underline cursor-pointer"
-            >
-              View System
-            </button>
-          </div>
-
-          {perks.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-slate-200 dark:border-white/10">
-              {perks.slice(0, 4).map((perk, i) => (
-                <div key={i} className="flex items-start gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-white/5">
-                  <span className="text-sm mt-0.5">{perk.icon || '⚡'}</span>
-                  <div>
-                    <p className="text-xs font-bold text-slate-800 dark:text-white">{perk.title}</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{perk.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
         </div>
+      </header>
+
+      {/* Content */}
+      <div className="max-w-3xl mx-auto px-4 py-4 sm:py-6 space-y-4">
+        {storeError && (
+          <div className={cn(
+            "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
+            isDark
+              ? "bg-red-500/10 border-red-500/25 text-red-300"
+              : "bg-red-50 border-red-200 text-red-700"
+          )}>
+            <span className="truncate">{storeError}</span>
+            <button
+              type="button"
+              onClick={() => targetId && loadProfile(targetId, currentUserId)}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer",
+                isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
+              )}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
+        )}
+
+        {storeLoading && !storeProfile ? (
+          <div className={cn(
+            'p-5 rounded-2xl border space-y-3',
+            isDark ? 'bg-[#080F2E] border-white/10' : 'bg-white border-slate-200'
+          )}>
+            <Skeleton className="h-6 w-40 rounded-lg" />
+            <Skeleton className="h-4 w-full rounded-md" />
+            <Skeleton className="h-4 w-3/4 rounded-md" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+          </div>
+        ) : (
+          <>
+            {/* Profile Card & Info — projected, so a narrowed profileInfo scope hides the card */}
+            <ProfileAbout
+              profile={displayedProfile}
+              isOwner={isActualOwner}
+              onEdit={handleEdit}
+            />
+
+            {/* Creator Suite — gated by the `creatorInfo` scope */}
+            {displayedProfile?.canViewCreatorInfo === true && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
+              <div className={cn(
+                'p-5 rounded-2xl border space-y-4',
+                isDark ? 'bg-[#080F2E] border-white/10' : 'bg-white border-slate-200'
+              )}>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Creator Suite</h2>
+                </div>
+                <div className="space-y-2.5">
+                  {displayedProfile?.creatorCategory && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Palette className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      <span className="text-slate-500 dark:text-slate-400">Discipline:</span>
+                      <span className="text-slate-900 dark:text-white font-medium">{displayedProfile.creatorCategory}</span>
+                    </div>
+                  )}
+                  {displayedProfile?.inquiriesEmail && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Mail className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      <span className="text-slate-500 dark:text-slate-400">Business contact:</span>
+                      <a href={`mailto:${displayedProfile.inquiriesEmail}`} className="text-purple-600 dark:text-purple-400 hover:underline truncate">
+                        {displayedProfile.inquiriesEmail}
+                      </a>
+                    </div>
+                  )}
+                  {displayedProfile?.tipMessage && (
+                    <div className="flex items-start gap-3 text-sm">
+                      <HeartHandshake className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-slate-600 dark:text-slate-300 italic">{displayedProfile.tipMessage}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Citizenship & Standing Strip */}
+            <div className={cn(
+              "p-5 rounded-2xl border space-y-4 transition-all",
+              isDark ? "bg-[#080F2E] border-white/10" : "bg-white border-slate-200"
+            )}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold shrink-0">
+                    <Shield className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Citizen Standing & Privileges
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {displayedProfile?.level != null ? (
+                        <>Rank: <span className="font-semibold text-purple-600 dark:text-purple-400">{rankTitle || '—'}</span> · <span className="tabular-nums">Level {displayedProfile.level}</span></>
+                      ) : (
+                        <span>Standing unavailable</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/progress')}
+                  className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  View System
+                </button>
+              </div>
+
+              {perks.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 border-t border-slate-200 dark:border-white/10">
+                  {perks.slice(0, 4).map((perk, i) => (
+                    <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/70 dark:border-white/8">
+                      <span className="text-sm mt-0.5">{perk.icon || '⚡'}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 dark:text-white">{perk.title}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{perk.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

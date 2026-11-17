@@ -69,7 +69,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
     <div className={cn(
       "rounded-3xl border relative overflow-hidden transition-all shadow-xl",
       isDark
-        ? "bg-gradient-to-b from-[#090d1e] via-[#050711] to-[#02040a] border-amber-500/30 text-slate-100"
+        ? "bg-gradient-to-b from-[#080F2E] via-[#05091E] to-[#03071B] border-amber-500/30 text-slate-100"
         : "bg-gradient-to-b from-white via-amber-50/20 to-slate-50 border-amber-600/30 text-slate-900",
       className
     )}>
@@ -121,7 +121,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
             isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Civic Level</span>
-            <span className="font-bold text-amber-400 mt-0.5 block">
+            <span className="font-bold text-amber-400 mt-0.5 block tabular-nums">
               Level {passport.level ?? '—'}
             </span>
           </div>
@@ -131,7 +131,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
             isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Active Days</span>
-            <span className="font-bold text-emerald-400 mt-0.5 block">
+            <span className="font-bold text-emerald-400 mt-0.5 block tabular-nums">
               {passport.activeDaysCount ?? '—'}
             </span>
           </div>
@@ -141,7 +141,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
             isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Visa Stamps</span>
-            <span className="font-bold text-purple-400 mt-0.5 block">
+            <span className="font-bold text-purple-400 mt-0.5 block tabular-nums">
               {unlockedStamps.length} Verified
             </span>
           </div>
@@ -155,6 +155,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
               <span>National Visa Seals ({unlockedStamps.length})</span>
             </span>
             <button
+              type="button"
               onClick={() => navigate(isOwner ? '/passport' : `/passport/${userId}`)}
               className="text-[11px] text-amber-500 hover:text-amber-400 flex items-center gap-0.5 font-semibold cursor-pointer"
             >
@@ -186,6 +187,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
         {/* Primary Call to Action: Full Passport Inspection */}
         <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
           <button
+            type="button"
             onClick={() => navigate(isOwner ? '/passport' : `/passport/${userId}`)}
             className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
@@ -195,6 +197,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
           </button>
 
           <button
+            type="button"
             onClick={() => navigate('/progress')}
             className={cn(
               "w-full sm:w-auto py-3 px-4 rounded-2xl border text-xs font-semibold transition-colors cursor-pointer",

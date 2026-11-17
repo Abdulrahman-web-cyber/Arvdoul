@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { Lock, UserPlus, UserX } from 'lucide-react';
+import { Lock, UserPlus, UserX, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -64,6 +64,7 @@ export default function ProfilePublicScreen() {
   const storePostsHasMore = useProfileStore((state) => state.postsHasMore);
   const storePostsCursor = useProfileStore((state) => state.postsCursor);
   const storeLoading = useProfileStore((state) => state.loading);
+  const storeError = useProfileStore((state) => state.error);
   const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const storeFollowLoading = useProfileStore((state) => state.followLoading);
   const storeMutualFriends = useProfileStore((state) => state.mutualFriends);
@@ -100,98 +101,110 @@ export default function ProfilePublicScreen() {
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
 
-  // Load profile and related data using useProfileStore
-  useEffect(() => {
-    let isMounted = true;
+  const loadPublicProfile = useCallback(async (isMountedRef = { current: true }) => {
     const cleanUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
-    if (!cleanUserId) return;
+    if (!cleanUserId) {
+      if (isMountedRef.current) setLocalLoading(false);
+      return;
+    }
 
     setLocalLoading(true);
+    setRelationship(null);
+    setFriendshipStatus('none');
+    setPendingRequestId(null);
+    setFriendRequestLoading(false);
+    setShowTipModal(false);
+    setShowQrModal(false);
+    setShowScannerModal(false);
+    setShowOptionsMenu(false);
+    setShowVerificationModal(false);
 
     const safetyTimer = setTimeout(() => {
-      if (isMounted) setLocalLoading(false);
+      if (isMountedRef.current) setLocalLoading(false);
     }, 6000);
 
-    const loadPublicProfile = async () => {
-      try {
-        // 1. Fetch user profile via store
-        await useProfileStore.getState().loadProfile(cleanUserId, currentUserId);
-        const currentProfile = useProfileStore.getState().profile;
-        const targetUid = currentProfile?.id || currentProfile?.uid || cleanUserId;
+    try {
+      // 1. Fetch user profile via store
+      await useProfileStore.getState().loadProfile(cleanUserId, currentUserId);
+      const currentProfile = useProfileStore.getState().profile;
+      const resolvedUid = currentProfile?.id || currentProfile?.uid || cleanUserId;
 
-        // 2. Load posts & highlights via store
-        await Promise.allSettled([
-          useProfileStore.getState().loadPosts(targetUid, { limit: 30 }),
-          useProfileStore.getState().loadHighlights(targetUid),
-        ]);
+      // 2. Load posts & highlights via store
+      await Promise.allSettled([
+        useProfileStore.getState().loadPosts(resolvedUid, { limit: 30 }),
+        useProfileStore.getState().loadHighlights(resolvedUid),
+      ]);
 
-        // 3. Fetch relationship & follow status
-        if (currentUserId && targetUid !== currentUserId) {
-          const userServiceModule = await import('../../services/userService.js');
-          const userService = userServiceModule.getUserService();
+      // 3. Fetch relationship & follow status
+      if (currentUserId && resolvedUid !== currentUserId) {
+        const userServiceModule = await import('../../services/userService.js');
+        const userService = userServiceModule.getUserService();
 
-          try {
-            const rel = await userService.getRelationshipState(currentUserId, targetUid);
-            if (isMounted) {
-              setRelationship(rel);
-            }
-          } catch (followErr) {
-            console.warn('Relationship state note:', followErr);
+        try {
+          const rel = await userService.getRelationshipState(currentUserId, resolvedUid);
+          if (isMountedRef.current) {
+            setRelationship(rel);
           }
+        } catch (followErr) {
+          console.warn('Relationship state note:', followErr);
+        }
 
-          // 4. Fetch mutual friends and friend request status
-          try {
-            await useProfileStore.getState().loadMutualFriends(currentUserId, targetUid);
+        // 4. Fetch mutual friends and friend request status
+        try {
+          await useProfileStore.getState().loadMutualFriends(currentUserId, resolvedUid);
 
-            const areFriends = await userService.areFriends(currentUserId, targetUid).catch(() => false);
-            if (areFriends) {
-              if (isMounted) setFriendshipStatus('friends');
+          const areFriends = await userService.areFriends(currentUserId, resolvedUid).catch(() => false);
+          if (areFriends) {
+            if (isMountedRef.current) setFriendshipStatus('friends');
+          } else {
+            const sent = await userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }));
+            const sentReq = sent.requests?.find(r => r.toUserId === resolvedUid);
+            if (sentReq) {
+              if (isMountedRef.current) {
+                setFriendshipStatus('pending');
+                setPendingRequestId(sentReq.id);
+              }
             } else {
-              const sent = await userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }));
-              const sentReq = sent.requests?.find(r => r.toUserId === targetUid);
-              if (sentReq) {
-                if (isMounted) {
-                  setFriendshipStatus('pending');
-                  setPendingRequestId(sentReq.id);
+              const received = await userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] }));
+              const recReq = received.requests?.find(r => r.fromUserId === resolvedUid);
+              if (recReq) {
+                if (isMountedRef.current) {
+                  setFriendshipStatus('received');
+                  setPendingRequestId(recReq.id);
                 }
               } else {
-                const received = await userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] }));
-                const recReq = received.requests?.find(r => r.fromUserId === targetUid);
-                if (recReq) {
-                  if (isMounted) {
-                    setFriendshipStatus('received');
-                    setPendingRequestId(recReq.id);
-                  }
-                } else {
-                  if (isMounted) setFriendshipStatus('none');
-                }
+                if (isMountedRef.current) setFriendshipStatus('none');
               }
             }
-          } catch (mutualErr) {
-            console.warn('Mutual friends note:', mutualErr);
           }
-
-          // 5. Track profile view
-          try {
-            const { getAnalyticsService } = await import('../../services/analyticsService.js');
-            getAnalyticsService().trackProfileView(currentUserId, targetUid).catch((e) => {
-              console.warn('[Profile] view not tracked', e?.message);
-            });
-          } catch (e) {
-            console.warn('[Profile] analytics service unavailable for view tracking', e?.message);
-          }
+        } catch (mutualErr) {
+          console.warn('Mutual friends note:', mutualErr);
         }
-      } catch (err) {
-        console.warn('Public profile fetch error:', err);
-      } finally {
-        clearTimeout(safetyTimer);
-        if (isMounted) setLocalLoading(false);
-      }
-    };
 
-    loadPublicProfile();
-    return () => { isMounted = false; };
+        // 5. Track profile view
+        try {
+          const { getAnalyticsService } = await import('../../services/analyticsService.js');
+          getAnalyticsService().trackProfileView(currentUserId, resolvedUid).catch((e) => {
+            console.warn('[Profile] view not tracked', e?.message);
+          });
+        } catch (e) {
+          console.warn('[Profile] analytics service unavailable for view tracking', e?.message);
+        }
+      }
+    } catch (err) {
+      console.warn('Public profile fetch error:', err);
+    } finally {
+      clearTimeout(safetyTimer);
+      if (isMountedRef.current) setLocalLoading(false);
+    }
   }, [userId, currentUserId]);
+
+  // Load profile and related data using useProfileStore
+  useEffect(() => {
+    const isMountedRef = { current: true };
+    loadPublicProfile(isMountedRef);
+    return () => { isMountedRef.current = false; };
+  }, [loadPublicProfile]);
 
   const profileData = storeProfile;
   const posts = storePosts;
@@ -365,19 +378,23 @@ export default function ProfilePublicScreen() {
     [baseProfile, capabilities, isOwner]
   );
 
-  // Honour the owner's chosen default tab ("the tab visitors see first"). The
-  // field was persisted and validated but never read, so every profile opened on
-  // Posts. Apply once per target so a later snapshot cannot override the viewer's
-  // own tab choice.
+  // Reset default-tab tracking cleanly when switching routes
   const appliedDefaultTabFor = React.useRef(null);
+  useEffect(() => {
+    appliedDefaultTabFor.current = null;
+    setActiveTab('posts');
+  }, [routeUserId]);
+
   useEffect(() => {
     const targetKey = effectiveProfile?.id || effectiveProfile?.uid;
     if (!targetKey || appliedDefaultTabFor.current === targetKey) return;
     const preferred = effectiveProfile?.defaultTab;
     if (preferred && PROFILE_TABS.includes(preferred)) {
       setActiveTab(preferred);
-      appliedDefaultTabFor.current = targetKey;
+    } else {
+      setActiveTab('posts');
     }
+    appliedDefaultTabFor.current = targetKey;
   }, [effectiveProfile?.id, effectiveProfile?.uid, effectiveProfile?.defaultTab]);
 
   const handleUnblock = useCallback(async () => {
@@ -427,7 +444,7 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         'min-h-screen pb-20',
-        isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
         <ProfileSkeleton theme={theme} />
       </div>
@@ -500,36 +517,51 @@ export default function ProfilePublicScreen() {
     );
   }
 
-  if (!loading && !effectiveProfile) {
+  if (!loading && (!effectiveProfile || (storeError && !effectiveProfile?.username))) {
     return (
       <div className={cn(
         "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-slate-900"
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
           isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center text-2xl font-bold">
-            ?
+            {storeError ? <ShieldAlert className="w-8 h-8" /> : '?'}
           </div>
-          <h2 className="text-xl font-black">Creator Profile Not Found</h2>
+          <h2 className="text-xl font-black">
+            {storeError ? 'Could Not Load Profile' : 'Creator Profile Not Found'}
+          </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            This account may have been renamed, removed, or is not yet available on Arvdoul.
+            {storeError || 'This account may have been renamed, removed, or is not yet available on Arvdoul.'}
           </p>
           <div className="pt-2 flex justify-center gap-3">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
             >
               Go Back
             </button>
-            <button
-              onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity"
-            >
-              Discover Creators
-            </button>
+            {storeError ? (
+              <button
+                type="button"
+                onClick={() => loadPublicProfile()}
+                className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity inline-flex items-center gap-2 cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Retry</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity cursor-pointer"
+              >
+                Discover Creators
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -541,10 +573,35 @@ export default function ProfilePublicScreen() {
       <div className={cn(
         "min-h-screen pb-24 transition-colors duration-200",
         isDark
-          ? "bg-[#060816] text-white selection:bg-purple-500/30"
-          : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
+          ? "bg-[#03071B] text-white selection:bg-purple-500/30"
+          : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
       )}>
-        {/* Master Container matching Image 2 Hierarchy */}
+        {/* Inline load failure banner when a partial/fallback profile is present */}
+        {storeError && (
+          <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3">
+            <div className={cn(
+              "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
+              isDark
+                ? "bg-red-500/10 border-red-500/25 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            )}>
+              <span className="truncate">{storeError}</span>
+              <button
+                type="button"
+                onClick={() => loadPublicProfile()}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer",
+                  isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
+                )}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Master Container */}
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
           {/* 1. Master Identity Card with Level Badge, Passport & Public Action Buttons */}
           <ProfileHeroSection
@@ -651,8 +708,8 @@ export default function ProfilePublicScreen() {
 
               {/* 5. Story Highlights Carousel */}
               <ProfileHighlightsSection
-                highlights={effectiveProfile?.highlights || []}
-                userId={userId}
+                highlights={storeHighlights}
+                userId={targetUid}
                 isOwner={false}
                 theme={theme}
               />
@@ -700,7 +757,7 @@ export default function ProfilePublicScreen() {
                 posts={posts}
                 activeTab={activeTab}
                 viewMode={viewMode}
-                loading={loading}
+                loading={storePostsLoading}
                 theme={theme}
                 profile={effectiveProfile}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
@@ -720,8 +777,7 @@ export default function ProfilePublicScreen() {
             onClose={() => setShowTipModal(false)}
             recipient={effectiveProfile}
             currentUser={currentUser}
-            onTipSuccess={(amount) => {
-              toast.success(`Successfully gifted ${amount} coins to ${effectiveProfile.displayName}!`);
+            onTipSuccess={() => {
               setShowTipModal(false);
             }}
           />

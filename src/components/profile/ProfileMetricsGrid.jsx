@@ -91,7 +91,7 @@ const ProfileMetricsGrid = memo(({
       label: 'Following',
       value: canShowFollowing ? formatNumber(followingCount) : '—',
       icon: UserCheck,
-      iconColor: 'text-[#00F0FF] dark:text-[#38BDF8]',
+      iconColor: 'text-cyan-600 dark:text-cyan-400',
       iconBg: isDark ? 'bg-cyan-500/10' : 'bg-cyan-50',
       clickable: canShowFollowing && Boolean(onMetricPress),
       trend: null,
@@ -101,7 +101,7 @@ const ProfileMetricsGrid = memo(({
       label: 'Friends',
       value: canShowFriends && friendsCount !== null ? formatNumber(friendsCount) : '—',
       icon: UserPlus,
-      iconColor: 'text-[#3B82F6] dark:text-[#60A5FA]',
+      iconColor: 'text-blue-600 dark:text-blue-400',
       iconBg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
       clickable: canShowFriends && friendsCount !== null && Boolean(onMetricPress),
       trend: null,
@@ -113,7 +113,7 @@ const ProfileMetricsGrid = memo(({
         ? (profileViews === null ? '—' : formatNumber(profileViews))
         : (likesCount === null ? '—' : formatNumber(likesCount)),
       icon: isOwner ? Eye : Heart,
-      iconColor: isOwner ? 'text-[#00F0FF] dark:text-[#38BDF8]' : 'text-pink-500 dark:text-pink-400',
+      iconColor: isOwner ? 'text-cyan-600 dark:text-cyan-400' : 'text-pink-500 dark:text-pink-400',
       iconBg: isDark 
         ? (isOwner ? 'bg-cyan-500/10' : 'bg-pink-500/10')
         : (isOwner ? 'bg-cyan-50' : 'bg-pink-50'),
@@ -137,21 +137,18 @@ const ProfileMetricsGrid = memo(({
       {stats.map((item) => {
         const Icon = item.icon;
         const isClickable = item.clickable;
+        const cardClass = cn(
+          "rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between relative overflow-hidden group select-none text-left",
+          isDark
+            ? "bg-[#080F2E]/90 hover:bg-[#0B1438] border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+            : "bg-white hover:bg-slate-50/70 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]",
+          isClickable && "cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+        );
 
-        return (
-          <div
-            key={item.key}
-            onClick={() => isClickable && onMetricPress?.(item.key)}
-            className={cn(
-              "rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between relative overflow-hidden group select-none",
-              isDark
-                ? "bg-[#0b1021]/80 hover:bg-[#0b1021] border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-                : "bg-white/95 hover:bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]",
-              isClickable && "cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-            )}
-          >
-            {/* Top row: Icon and Trend Pill (if available) */}
-            <div className="flex items-center justify-between mb-2">
+        const content = (
+          <>
+            {/* Top row: Icon and Trend Badge (if available) */}
+            <div className="flex items-center justify-between mb-2 w-full">
               <div className={cn(
                 "w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105",
                 item.iconBg,
@@ -161,7 +158,7 @@ const ProfileMetricsGrid = memo(({
               </div>
 
               {item.trend && (
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 tabular-nums">
                   <span className="text-[8px]">▲</span>
                   <span>{item.trend}</span>
                 </span>
@@ -169,14 +166,30 @@ const ProfileMetricsGrid = memo(({
             </div>
 
             {/* Bottom: Stat Value and Label */}
-            <div>
-              <div className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+            <div className="w-full">
+              <div className="text-lg sm:text-xl font-black tracking-tight tabular-nums text-slate-900 dark:text-white leading-tight">
                 {item.value}
               </div>
               <div className="text-[11px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                 {item.label}
               </div>
             </div>
+          </>
+        );
+
+        return isClickable ? (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onMetricPress?.(item.key)}
+            aria-label={`${item.label}: ${item.value}`}
+            className={cardClass}
+          >
+            {content}
+          </button>
+        ) : (
+          <div key={item.key} className={cardClass}>
+            {content}
           </div>
         );
       })}

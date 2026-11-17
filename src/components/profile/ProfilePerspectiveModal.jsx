@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { Eye, ShieldCheck, UserCheck, Users, X, Check } from "lucide-react";
 import { cn } from '../../lib/utils';
 
@@ -44,6 +44,15 @@ export const ProfilePerspectiveModal = memo(({
   onSelectPerspective,
   theme = 'dark',
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   const isDark = theme === 'dark';
 
@@ -53,9 +62,12 @@ export const ProfilePerspectiveModal = memo(({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="View Profile As"
         className={cn(
           "relative w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border transition-all",
-          isDark ? "bg-[#0d1424] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
+          isDark ? "bg-[#080F2E] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -76,6 +88,7 @@ export const ProfilePerspectiveModal = memo(({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
             aria-label="Close"

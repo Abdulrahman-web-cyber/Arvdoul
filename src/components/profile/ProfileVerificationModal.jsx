@@ -69,6 +69,15 @@ export const ProfileVerificationModal = memo(({
     return () => { active = false; };
   }, [isOpen, isVerified, isOwner, userId]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, submitting, onClose]);
+
   if (!isOpen) return null;
 
   const userLevel = typeof profile?.level === 'number' ? profile.level : null;
@@ -159,12 +168,19 @@ export const ProfileVerificationModal = memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={() => !submitting && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isVerified ? 'Verified Account' : 'Creator Verification'}
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "relative w-full max-w-lg rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]",
-          isDark 
-            ? "bg-[#0b1021] border-white/10 text-white" 
+          isDark
+            ? "bg-[#080F2E] border-white/10 text-white"
             : "bg-white border-slate-200 text-slate-900"
         )}
       >
@@ -202,12 +218,12 @@ export const ProfileVerificationModal = memo(({
           {isVerified ? (
             /* Mode 1: Already Verified */
             <div className="space-y-4 text-center py-4">
-              <div className="relative mx-auto w-20 h-20 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)] flex items-center justify-center">
-                <div className="w-full h-full rounded-full bg-[#0b1021] flex items-center justify-center">
+              <div className="relative mx-auto w-20 h-20 rounded-full p-[3px] bg-gradient-to-tr from-arvdoul-purple to-arvdoul-glow-cyan shadow-arvdoul-glow flex items-center justify-center">
+                <div className={cn("w-full h-full rounded-full flex items-center justify-center", isDark ? "bg-[#080F2E]" : "bg-white")}>
                   <BadgeCheck className="w-10 h-10 fill-arvdoul-purple text-white" />
                 </div>
-                <div className="absolute -top-1 -right-1 text-cyan-400">
-                  <Sparkles className="w-6 h-6 fill-cyan-400" />
+                <div className="absolute -top-1 -right-1 text-arvdoul-glow-cyan">
+                  <Sparkles className="w-6 h-6 fill-arvdoul-glow-cyan" />
                 </div>
               </div>
 
@@ -253,7 +269,7 @@ export const ProfileVerificationModal = memo(({
                 /* Already Pending Application */
                 <div className="space-y-4 text-center py-4">
                   <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
-                    <Clock className="w-8 h-8 animate-pulse" />
+                    <Clock className="w-8 h-8" />
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white">

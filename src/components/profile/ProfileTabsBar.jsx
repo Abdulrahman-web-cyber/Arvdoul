@@ -54,11 +54,15 @@ const ProfileTabsBar = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-1.5 sm:p-2 border backdrop-blur-xl transition-all duration-200 flex items-center justify-between gap-2 shadow-sm overflow-hidden",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
-      {/* Category Tabs Pill Row */}
-      <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5 w-full">
+      {/* Category Tabs Row */}
+      <div
+        role="tablist"
+        aria-label="Profile sections"
+        className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5 flex-1 min-w-0"
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -67,11 +71,13 @@ const ProfileTabsBar = memo(({
             <button
               key={tab.id}
               type="button"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => onTabChange?.(tab.id)}
               className={cn(
                 "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer select-none",
                 isActive
-                  ? "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md shadow-purple-600/25 scale-[1.02]"
+                  ? "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md shadow-purple-600/25"
                   : isDark
                     ? "text-slate-400 hover:text-white hover:bg-white/5 active:scale-95"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 active:scale-95"
@@ -82,7 +88,7 @@ const ProfileTabsBar = memo(({
               {counts[tab.id] > 0 && (
                 <span
                   className={cn(
-                    "ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full",
+                    "ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums",
                     isActive ? "bg-white/25 text-white" : (isDark ? "bg-white/10 text-slate-300" : "bg-slate-200/80 text-slate-600")
                   )}
                 >
@@ -95,9 +101,9 @@ const ProfileTabsBar = memo(({
       </div>
 
       {/* View Mode Toggle (Grid vs Feed) if enabled */}
-      {typeof onViewModeChange === 'function' && activeTab !== 'about' && (
+      {typeof onViewModeChange === 'function' && activeTab !== 'about' && activeTab !== 'citizenship' && activeTab !== 'audio' && (
         <div className={cn(
-          "hidden sm:flex items-center gap-1 p-1 rounded-xl border shrink-0 mr-1",
+          "flex items-center gap-1 p-1 rounded-xl border shrink-0 mr-0.5",
           isDark ? "bg-white/5 border-white/10" : "bg-slate-100 border-slate-200"
         )}>
           <button
@@ -105,10 +111,11 @@ const ProfileTabsBar = memo(({
             onClick={() => onViewModeChange('grid')}
             title="Grid view"
             aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
             className={cn(
               "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
               viewMode === 'grid'
-                ? "bg-purple-600 text-white shadow-sm"
+                ? "bg-arvdoul-purple text-white shadow-sm"
                 : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
             )}
           >
@@ -119,10 +126,11 @@ const ProfileTabsBar = memo(({
             onClick={() => onViewModeChange('feed')}
             title="Feed view"
             aria-label="Feed view"
+            aria-pressed={viewMode === 'feed'}
             className={cn(
               "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
               viewMode === 'feed'
-                ? "bg-purple-600 text-white shadow-sm"
+                ? "bg-arvdoul-purple text-white shadow-sm"
                 : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
             )}
           >

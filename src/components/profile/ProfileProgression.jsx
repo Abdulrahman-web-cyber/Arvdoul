@@ -127,10 +127,10 @@ const ProfileProgression = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-2xl p-4 sm:p-5 border transition-all shadow-sm relative overflow-hidden",
+      "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border transition-all shadow-sm relative overflow-hidden",
       isDark
-        ? "bg-[#0B0F19] border-slate-800 text-white"
-        : "bg-white border-slate-200 text-slate-900",
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white"
+        : "bg-white border-slate-200/90 text-slate-900",
       className
     )}>
       {/* Ambient background aura */}
@@ -202,7 +202,7 @@ const ProfileProgression = memo(({
           value; a level without XP renders no fabricated "0 XP" bar. */}
       {xpInfo && (
         <div className="mt-3.5 space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-semibold">
+          <div className="flex items-center justify-between text-xs font-semibold tabular-nums">
             <span className="text-slate-500 dark:text-slate-400">
               {isMaxLevel ? 'Maximum Level Reached' : `${xpIntoLevel.toLocaleString()} XP earned`}
             </span>
@@ -216,16 +216,14 @@ const ProfileProgression = memo(({
               className="h-full rounded-full transition-all duration-700 relative"
               style={{
                 width: `${Math.min(100, Math.max(4, progress))}%`,
-                background: `linear-gradient(90deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%)`
+                background: 'linear-gradient(90deg, var(--arv-brand-indigo) 0%, var(--arv-brand-violet) 55%, var(--arv-brand-pink) 100%)'
               }}
-            >
-              <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
-            </div>
+            />
           </div>
 
           {/* Milestone perks preview */}
           {nextReward > 0 && !isMaxLevel && (
-            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5 tabular-nums">
               <span className="inline-flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-amber-500" />
                 <span>Next Level Reward: +{nextReward} Coins grant</span>

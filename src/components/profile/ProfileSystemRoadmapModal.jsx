@@ -36,8 +36,8 @@ const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
     { label: `${rule.minAchievements} Achievements`, current: achievements, target: rule.minAchievements },
   ];
   return (
-    <div className="pt-2 border-t border-white/5 space-y-1.5">
-      <div className="text-[11px] font-bold text-slate-400 font-mono">Eligibility Checklist:</div>
+    <div className="pt-2 border-t border-slate-200 dark:border-white/10 space-y-1.5">
+      <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400 font-mono">Eligibility Checklist:</div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
         {rows.map((row) => {
           // An unmeasured dimension is unknown, not a measured 0 — show '—'
@@ -48,8 +48,10 @@ const RoyalEligibilityChecklist = memo(function RoyalEligibilityChecklist({
             <span
               key={row.label}
               className={cn(
-                'p-1.5 rounded border flex items-center justify-between',
-                met ? 'text-emerald-400 border-emerald-500/30' : 'text-slate-400 border-white/5'
+                'p-1.5 rounded border flex items-center justify-between tabular-nums',
+                met
+                  ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/5'
+                  : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10'
               )}
             >
               {row.label} ({known ? row.current : '—'}/{row.target})
@@ -78,6 +80,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
   React.useEffect(() => {
     if (isOpen && initialTab) setActiveTab(initialTab);
   }, [isOpen, initialTab]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   const rawLvl = profile?.level;
   const currentLevel = rawLvl !== null && rawLvl !== undefined && !isNaN(Number(rawLvl)) && Number(rawLvl) > 0 ? Number(rawLvl) : null;
@@ -146,6 +157,9 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
         {/* Modal Window */}
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Arvdoul Progression & Citizenship Roadmap"
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -153,12 +167,17 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
           className={cn(
             "relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10",
             isDark
-              ? "bg-[#0a0f24] border-white/10 text-white"
+              ? "bg-[#080F2E] border-white/10 text-white"
               : "bg-white border-slate-200 text-slate-900"
           )}
         >
           {/* Header */}
-          <div className="p-4 sm:p-6 border-b border-white/10 flex items-start justify-between gap-4 shrink-0 bg-gradient-to-r from-purple-950/30 via-indigo-950/20 to-transparent">
+          <div className={cn(
+            "p-4 sm:p-6 border-b flex items-start justify-between gap-4 shrink-0",
+            isDark
+              ? "border-white/10 bg-gradient-to-r from-purple-950/30 via-indigo-950/20 to-transparent"
+              : "border-slate-200 bg-gradient-to-r from-purple-50/80 via-indigo-50/40 to-transparent"
+          )}>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white shadow-lg shadow-purple-500/25 shrink-0">
                 {activeTab === 'royals' ? (
@@ -170,7 +189,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                 )}
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-widest text-purple-400 block font-mono">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-purple-600 dark:text-purple-400 block font-mono">
                   Arvdoul Institutional Framework
                 </span>
                 <h2 className="text-lg sm:text-xl font-black tracking-tight leading-snug">
@@ -185,14 +204,17 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Segmented Tab Navigation */}
-          <div className="p-3 border-b border-white/5 bg-white/[0.02] flex items-center gap-1.5 shrink-0">
+          <div className={cn(
+            "p-3 border-b flex items-center gap-1.5 shrink-0",
+            isDark ? "border-white/5 bg-white/[0.02]" : "border-slate-200 bg-slate-50"
+          )}>
             <button
               type="button"
               onClick={() => setActiveTab('levels')}
@@ -243,36 +265,36 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
               "p-4 rounded-2xl border text-xs space-y-2",
               isDark ? "bg-gradient-to-r from-purple-950/40 via-cyan-950/30 to-amber-950/40 border-white/10" : "bg-gradient-to-r from-purple-50 via-cyan-50 to-amber-50 border-slate-200"
             )}>
-              <div className="font-extrabold uppercase tracking-wider text-[10px] text-purple-400 font-mono">
+              <div className="font-extrabold uppercase tracking-wider text-[10px] text-purple-600 dark:text-purple-400 font-mono">
                 The Three Pillars of Arvdoul Identity
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 space-y-1">
-                  <div className="font-black text-cyan-400 flex items-center gap-1.5 text-xs">
+                  <div className="font-black text-cyan-700 dark:text-cyan-400 flex items-center gap-1.5 text-xs">
                     <span>🏛️</span>
                     <span>1. Citizen</span>
                   </div>
-                  <p className="text-[11px] text-slate-300 leading-tight">
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">
                     <strong>Who you are:</strong> You belong to Arvdoul. Belonging, membership, and participation.
                   </p>
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
-                  <div className="font-black text-purple-400 flex items-center gap-1.5 text-xs">
+                  <div className="font-black text-purple-700 dark:text-purple-400 flex items-center gap-1.5 text-xs">
                     <span>⚡</span>
                     <span>2. Level</span>
                   </div>
-                  <p className="text-[11px] text-slate-300 leading-tight">
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">
                     <strong>How you grow:</strong> XP from actions, milestones, and unlocked capabilities.
                   </p>
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
-                  <div className="font-black text-amber-400 flex items-center gap-1.5 text-xs">
+                  <div className="font-black text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-xs">
                     <span>👑</span>
                     <span>3. Royal Family</span>
                   </div>
-                  <p className="text-[11px] text-slate-300 leading-tight">
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">
                     <strong>Distinguished status:</strong> Exclusive appointed institution of honor, heritage, and leadership.
                   </p>
                 </div>
@@ -396,7 +418,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                       <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
                         {currentCitizenTier?.tier || '—'}
                       </h3>
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                         Every registered member of Arvdoul is a Citizen. Citizenship represents belonging, identity, membership, and participation in the Arvdoul community.
                       </p>
                     </div>
@@ -407,29 +429,29 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                   </div>
 
                   {/* Requirements Progress Bar */}
-                  <div className="pt-2 border-t border-white/10 space-y-2">
-                    <div className="text-xs font-bold text-slate-300">
-                      Requirement for Full Democratic Citizenship & Official Passport Stamp:
+                  <div className="pt-2 border-t border-slate-200 dark:border-white/10 space-y-2">
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Requirement for Full Democratic Citizenship &amp; Official Passport Stamp:
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className={cn(
                         "p-2.5 rounded-xl border flex items-center justify-between",
                         meetsLevelRequirement
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-white/5 border-white/10 text-slate-400"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                          : isDark ? "bg-white/5 border-white/10 text-slate-400" : "bg-white border-slate-200 text-slate-600"
                       )}>
                         <span>Level {citizenCriteria.minLevel}+ Reached</span>
-                        {meetsLevelRequirement ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                        {meetsLevelRequirement ? <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
                       </div>
 
                       <div className={cn(
-                        "p-2.5 rounded-xl border flex items-center justify-between",
+                        "p-2.5 rounded-xl border flex items-center justify-between tabular-nums",
                         meetsDaysRequirement
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-white/5 border-white/10 text-slate-400"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                          : isDark ? "bg-white/5 border-white/10 text-slate-400" : "bg-white border-slate-200 text-slate-600"
                       )}>
-                        <span>{citizenCriteria.minDays} Active Days ({activeDays}/{citizenCriteria.minDays})</span>
-                        {meetsDaysRequirement ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                        <span>{citizenCriteria.minDays} Active Days ({activeDays ?? '—'}/{citizenCriteria.minDays})</span>
+                        {meetsDaysRequirement ? <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
                       </div>
                     </div>
                   </div>
@@ -530,13 +552,13 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                 )}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 block font-mono">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-amber-600 dark:text-amber-400 block font-mono">
                         Institutional Sovereignty
                       </span>
                       <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                         The Arvdoul Royal Family System
                       </h3>
-                      <p className="text-xs leading-relaxed text-slate-300 max-w-lg">
+                      <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 max-w-lg">
                         Royal titles are not bought—they are mathematically proven and unlocked through multi-dimensional mastery across civic longevity, reputation, ecosystem contribution, influence, and community trust.
                       </p>
                     </div>
@@ -551,8 +573,8 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                 <div className={cn(
                   "p-5 rounded-2xl border space-y-4",
                   dukeEligibility.eligible
-                    ? "bg-purple-950/30 border-purple-500/40"
-                    : "bg-white/[0.02] border-white/10"
+                    ? (isDark ? "bg-purple-950/30 border-purple-500/40" : "bg-purple-50 border-purple-200")
+                    : (isDark ? "bg-white/[0.02] border-white/10" : "bg-slate-50 border-slate-200")
                 )}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -561,7 +583,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                         <h4 className="text-base font-black text-slate-900 dark:text-white">
                           Duke / Duchess of Arvdoul
                         </h4>
-                        <span className="text-[11px] font-mono text-purple-400 font-bold">
+                        <span className="text-[11px] font-mono text-purple-600 dark:text-purple-400 font-bold">
                           Level {ROYAL_ELIGIBILITY.duke.minLevel}+ • Sovereign Noble Standing
                         </span>
                       </div>
@@ -570,8 +592,8 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <span className={cn(
                       "text-xs font-bold px-2.5 py-1 rounded-full border",
                       dukeEligibility.eligible
-                        ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
-                        : "bg-white/5 text-slate-400 border-white/10"
+                        ? "bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40"
+                        : isDark ? "bg-white/5 text-slate-400 border-white/10" : "bg-white text-slate-600 border-slate-200"
                     )}>
                       {dukeEligibility.eligible ? "Eligible / Active" : "In Progress"}
                     </span>
@@ -579,20 +601,20 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                   {/* Duke Benefits */}
                   <div className="space-y-2">
-                    <div className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
                       Exclusive Duke Privileges (Benefits Others Do Not Have):
                     </div>
-                    <ul className="text-xs space-y-1.5 text-slate-400">
+                    <ul className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400">
                       <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" />
                         <span><strong>👑 Royal Family badge</strong> on your profile, opening this standing panel.</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" />
                         <span><strong>⚜️ Duke / Duchess title</strong> presented on your profile across the app.</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" />
                         <span><strong>Royal standing</strong> recorded in your citizenship passport.</span>
                       </li>
                     </ul>
@@ -613,8 +635,8 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                 <div className={cn(
                   "p-5 rounded-2xl border space-y-4",
                   kingEligibility.eligible
-                    ? "bg-amber-950/30 border-amber-500/40"
-                    : "bg-white/[0.02] border-white/10"
+                    ? (isDark ? "bg-amber-950/30 border-amber-500/40" : "bg-amber-50 border-amber-200")
+                    : (isDark ? "bg-white/[0.02] border-white/10" : "bg-slate-50 border-slate-200")
                 )}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -623,7 +645,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                         <h4 className="text-base font-black text-slate-900 dark:text-white">
                           King / Queen of Arvdoul
                         </h4>
-                        <span className="text-[11px] font-mono text-amber-400 font-bold">
+                        <span className="text-[11px] font-mono text-amber-600 dark:text-amber-400 font-bold">
                           Level {ROYAL_ELIGIBILITY.king.minLevel}+ • Supreme Sovereign Monarch
                         </span>
                       </div>
@@ -632,8 +654,8 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <span className={cn(
                       "text-xs font-bold px-2.5 py-1 rounded-full border",
                       kingEligibility.eligible
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                        : "bg-white/5 text-slate-400 border-white/10"
+                        ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                        : isDark ? "bg-white/5 text-slate-400 border-white/10" : "bg-white text-slate-600 border-slate-200"
                     )}>
                       {kingEligibility.eligible ? "Eligible / Monarch" : "In Progress"}
                     </span>
@@ -641,16 +663,16 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
                   {/* King Benefits */}
                   <div className="space-y-2">
-                    <div className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
                       Supreme Sovereign Privileges:
                     </div>
-                    <ul className="text-xs space-y-1.5 text-slate-400">
+                    <ul className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400">
                       <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
                         <span><strong>👑 King / Queen title</strong> presented on your profile across the app.</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
                         <span><strong>⭐ Supreme Sovereign standing</strong> recorded in your citizenship passport.</span>
                       </li>
                     </ul>

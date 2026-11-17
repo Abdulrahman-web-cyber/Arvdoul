@@ -135,6 +135,17 @@ export const useProfileStore = create(
     loadProfile: async (userId, currentUserId, options = {}) => {
       if (!userId) return;
 
+      const prevProfile = get().profile;
+      const prevId = prevProfile?.id || prevProfile?.uid;
+      const prevUsername = prevProfile?.username?.toLowerCase();
+      const normalizedTarget = String(userId).replace(/^@/, '').toLowerCase().trim();
+      const isSwitchingTarget = Boolean(
+        prevProfile &&
+        prevId !== userId &&
+        prevId?.toLowerCase() !== normalizedTarget &&
+        prevUsername !== normalizedTarget
+      );
+
       const requestId = get().requestSeq + 1;
       set((state) => {
         state.requestSeq = requestId;
@@ -143,6 +154,14 @@ export const useProfileStore = create(
         // A new profile load invalidates any prior mutual-friends result.
         state.mutualFriends = [];
         state.mutualFriendsResolved = false;
+        if (isSwitchingTarget) {
+          state.posts = [];
+          state.postsHasMore = true;
+          state.postsCursor = null;
+          state.postsError = null;
+          state.highlights = [];
+          state.followStatus = null;
+        }
       });
       
       try {
@@ -514,11 +533,14 @@ export const useProfileStore = create(
       
       try {
         const storyService = (await import('../services/storyService.js')).getStoryService();
-        const highlights = await storyService.getHighlights(userId);
+        const highlightsRes = await storyService.getHighlights(userId);
+        const highlights = Array.isArray(highlightsRes)
+          ? highlightsRes
+          : (Array.isArray(highlightsRes?.highlights) ? highlightsRes.highlights : []);
         
         if (!get()._isLoadCurrent('highlights', __seq)) return;
         set((state) => {
-          state.highlights = highlights || [];
+          state.highlights = highlights;
           state.highlightsLoading = false;
         });
       } catch (error) {

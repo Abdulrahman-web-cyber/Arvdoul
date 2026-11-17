@@ -50,6 +50,20 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
   const profileUrl = getProfileUrl(profile || { uid: userId });
   const isDark = theme === 'dark';
 
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (showReportDialog) {
+          setShowReportDialog(false);
+        } else {
+          onClose?.();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showReportDialog, onClose]);
+
   const itemCls = cn(
     'w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer active:scale-[0.99]',
     isDark
@@ -181,10 +195,13 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Profile options"
         className={cn(
           "w-full max-w-sm max-sm:rounded-b-none max-sm:rounded-t-[30px] sm:rounded-[28px] overflow-hidden shadow-2xl border transition-all relative z-[10000]",
           isDark
-            ? "bg-[#070D27] border-white/[0.15] text-white shadow-[0_24px_64px_rgba(0,0,0,0.9)]"
+            ? "bg-[#080F2E] border-white/[0.15] text-white shadow-[0_24px_64px_rgba(0,0,0,0.9)]"
             : "bg-white border-slate-200 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.22)]"
         )}
         onClick={(e) => e.stopPropagation()}
@@ -212,6 +229,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close menu"
             className={cn(
@@ -225,7 +243,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
 
         {/* Action List */}
         <div className="p-3 space-y-1 max-h-[75vh] overflow-y-auto">
-          <button className={itemCls} onClick={handleShare}>
+          <button type="button" className={itemCls} onClick={handleShare}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
                 <Share2 className="w-4 h-4" />
@@ -234,7 +252,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
             </div>
           </button>
 
-          <button className={itemCls} onClick={handleCopy}>
+          <button type="button" className={itemCls} onClick={handleCopy}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
                 <Link2 className="w-4 h-4" />
@@ -245,6 +263,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
 
           {!isOwner && (
             <button
+              type="button"
               className={itemCls}
               onClick={() => {
                 onClose?.();
@@ -428,9 +447,12 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
           onClick={(e) => { e.stopPropagation(); setShowReportDialog(false); }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Report Profile"
             className={cn(
               "w-full max-w-sm rounded-[28px] p-6 shadow-2xl border relative",
-              isDark ? "bg-[#070D27] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
+              isDark ? "bg-[#080F2E] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -440,8 +462,9 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 <h3 className="font-bold text-base">Report Profile</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowReportDialog(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-white"
+                className="p-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer"
                 aria-label="Close report dialog"
               >
                 <X className="w-4 h-4" />

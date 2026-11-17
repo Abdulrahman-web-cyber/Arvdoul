@@ -303,21 +303,27 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     <div className={cn(
       "min-h-screen pb-24 transition-colors duration-200",
       isDark
-        ? "bg-[#060816] text-white selection:bg-purple-500/30"
-        : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
+        ? "bg-[#03071B] text-white selection:bg-purple-500/30"
+        : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
     )}>
       {/* Main Container - TopAppBar handles title and back navigation */}
       <div className="max-w-3xl mx-auto px-4 pt-3 sm:pt-4 space-y-4">
         {/* Unified 3-Tab Navigator: Followers | Following | Mutual Friends */}
-        <div className={cn(
-          "p-1 rounded-2xl border backdrop-blur-xl transition-all shadow-sm",
-          isDark ? "bg-white/[0.04] border-white/10" : "bg-white border-slate-200"
-        )}>
+        <div
+          role="tablist"
+          aria-label="Connection lists"
+          className={cn(
+            "p-1 rounded-2xl border backdrop-blur-xl transition-all shadow-sm",
+            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200"
+          )}
+        >
           <div className={cn('grid gap-1', visibleTabs.length === 1 ? 'grid-cols-1' : visibleTabs.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
             {/* Tab 1: Followers */}
             {tabVisible.followers && (
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'followers'}
               onClick={() => {
                 setActiveTab('followers');
                 setSearchQuery('');
@@ -325,14 +331,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               className={cn(
                 "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
                 activeTab === 'followers'
-                  ? (isDark ? "bg-purple-600 text-white shadow" : "bg-purple-600 text-white shadow")
-                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-purple-600 text-white shadow"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               <Users className="w-4 h-4 shrink-0" />
               <span>Followers</span>
               <span className={cn(
-                "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums",
                 activeTab === 'followers'
                   ? "bg-white/20 text-white font-extrabold"
                   : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
@@ -346,6 +352,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             {tabVisible.following && (
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'following'}
               onClick={() => {
                 setActiveTab('following');
                 setSearchQuery('');
@@ -353,14 +361,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               className={cn(
                 "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
                 activeTab === 'following'
-                  ? (isDark ? "bg-purple-600 text-white shadow" : "bg-purple-600 text-white shadow")
-                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-purple-600 text-white shadow"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               <UserCheck className="w-4 h-4 shrink-0" />
               <span>Following</span>
               <span className={cn(
-                "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums",
                 activeTab === 'following'
                   ? "bg-white/20 text-white font-extrabold"
                   : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
@@ -374,6 +382,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             {tabVisible.friends && (
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'friends'}
               onClick={() => {
                 setActiveTab('friends');
                 setSearchQuery('');
@@ -382,15 +392,20 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
                 activeTab === 'friends'
                   ? (isDark ? "bg-amber-500 text-slate-950 font-black shadow" : "bg-amber-600 text-white shadow")
-                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
-              <ShieldCheck className={cn("w-4 h-4 shrink-0", activeTab === 'friends' ? "text-slate-950" : "text-amber-400")} />
+              <ShieldCheck className={cn(
+                "w-4 h-4 shrink-0",
+                activeTab === 'friends'
+                  ? (isDark ? "text-slate-950" : "text-white")
+                  : "text-amber-500 dark:text-amber-400"
+              )} />
               <span>{isOwner ? 'Friends' : 'Mutual'}</span>
               <span className={cn(
-                "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums",
                 activeTab === 'friends'
-                  ? "bg-black/20 text-slate-950 font-extrabold"
+                  ? (isDark ? "bg-black/20 text-slate-950 font-extrabold" : "bg-white/20 text-white font-extrabold")
                   : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
               )}>
                 {friends.length}
@@ -422,6 +437,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
           {!isCreatorOrAdvanced && (
             <button
+              type="button"
               onClick={() => navigate('/perks')}
               className="text-[11px] font-bold underline shrink-0 cursor-pointer hover:opacity-80"
             >
@@ -433,10 +449,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         {/* Search Bar with Instant Reset */}
         <div className={cn(
           "flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border transition-all shadow-sm",
-          isDark ? "bg-white/[0.04] border-white/10 focus-within:border-purple-500/50" : "bg-white border-slate-200 focus-within:border-purple-400"
+          isDark ? "bg-[#080F2E]/90 border-white/[0.08] focus-within:border-purple-500/50" : "bg-white border-slate-200 focus-within:border-purple-400"
         )}>
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input aria-label="View Perks"
+          <input
+            aria-label="Search connections"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -446,8 +463,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           {searchQuery && (
             <button
               type="button"
+              aria-label="Clear search"
               onClick={() => setSearchQuery('')}
-              className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -464,7 +482,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           /* Privacy Protected State */
           <div className={cn(
             "rounded-3xl p-8 sm:p-12 text-center border shadow-xl space-y-4 my-8 backdrop-blur-xl",
-            isDark ? "bg-[#0d1424]/90 border-white/10" : "bg-white border-slate-200"
+            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <div className="w-16 h-16 mx-auto rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center border border-purple-500/20">
               <Lock className="w-8 h-8" />
@@ -524,14 +542,15 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   className={cn(
                     "group p-3.5 sm:p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 shadow-sm",
                     isDark
-                      ? "bg-[#0d1424]/60 hover:bg-[#0d1424] border-white/10 hover:border-purple-500/30"
+                      ? "bg-[#080F2E]/90 hover:bg-[#080F2E] border-white/[0.08] hover:border-purple-500/30"
                       : "bg-white hover:bg-slate-50 border-slate-200/80 hover:border-purple-300"
                   )}
                 >
                   {/* Left: Avatar + Identity */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => navigate(`/profile/${citizenId}`)}
-                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-arvdoul-blue rounded-xl"
                   >
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/20 dark:border-white/10 shadow-sm bg-slate-800">
@@ -546,9 +565,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                       </div>
                       {/* Presence indicator */}
                       {citizen.isOnline || citizen.presence?.status === 'online' ? (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#060816] animate-pulse" title="Online" />
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#03071B]" title="Online" />
                       ) : (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-[#060816]" title="Offline" />
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-[#03071B]" title="Offline" />
                       )}
                     </div>
 
@@ -563,7 +582,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                           </span>
                         )}
                         {citizen.isCreator && (
-                          <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
                             Creator
                           </span>
                         )}
@@ -587,7 +606,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                         </p>
                       )}
                     </div>
-                  </div>
+                  </button>
 
                   {/* Right Actions: Message + Follow Button */}
                   <div className="flex items-center gap-2 shrink-0">

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, Lock } from "lucide-react";
+import { Lock, RefreshCw } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
@@ -52,7 +52,6 @@ const AvatarUploadModal = lazy(() => import('../../components/profile/AvatarUplo
 export default function ProfileMyScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const scrollRef = useRef(null);
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -118,9 +117,9 @@ export default function ProfileMyScreen() {
   const ranking = useAnalyticsStore((state) => state.ranking);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
-  // Auto-generate and ensure a unique username via userService if user document has none
+  // Auto-generate and ensure a unique username via userService if loaded user document has none
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId || loading || !profile) return;
     let cancelled = false;
     const ensureUniqueUser = async () => {
       try {
@@ -141,7 +140,7 @@ export default function ProfileMyScreen() {
     };
     ensureUniqueUser();
     return () => { cancelled = true; };
-  }, [currentUserId, profile?.username, currentUser?.displayName, profile?.displayName]);
+  }, [currentUserId, loading, profile, currentUser?.displayName]);
 
   // Server-authoritative composite profile. The identity/count derivation is
   // the shared `deriveProfileIdentity` (profileReadModel) so the owner screen
@@ -220,18 +219,22 @@ export default function ProfileMyScreen() {
     }
   }, [searchParams, displayedProfile?.defaultTab]);
 
-  // Load user data on mount
+  // Load user profile & content on mount / user switch
   useEffect(() => {
     if (!currentUserId) return;
     const profileStore = useProfileStore.getState();
-    const analyticsStore = useAnalyticsStore.getState();
     profileStore.loadProfile(currentUserId, currentUserId);
     profileStore.loadHighlights(currentUserId);
     profileStore.loadLevel(currentUserId);
     profileStore.loadBalance(currentUserId);
     profileStore.loadPosition(currentUserId);
     profileStore.loadPosts(currentUserId);
-    analyticsStore.loadAnalytics(currentUserId, timeframe);
+  }, [currentUserId]);
+
+  // Load creator analytics separately so switching dashboard timeframe never re-fetches profile/posts
+  useEffect(() => {
+    if (!currentUserId) return;
+    useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe);
   }, [currentUserId, timeframe]);
 
   // Paginate the profile feed. Without this the grid stopped at the first page.
@@ -248,16 +251,18 @@ export default function ProfileMyScreen() {
     }
   }, [currentUserId, savedPosts]);
 
-  // Pull to refresh
-  const pullStartYRef = useRef(null);
+  // Explicit refresh handler for header / error retry
   const handleRefresh = useCallback(async () => {
-    if (!currentUserId) return;
+    if (!currentUserId || isRefreshing) return;
     setIsRefreshing(true);
     try {
       const profileStore = useProfileStore.getState();
       const analyticsStore = useAnalyticsStore.getState();
       await Promise.allSettled([
-        profileStore.loadProfile(currentUserId, currentUserId),
+        profileStore.loadProfile(currentUserId, currentUserId, {
+          viewAs: viewAs === 'owner' ? null : viewAs,
+        }),
+        profileStore.loadHighlights(currentUserId),
         analyticsStore.loadAnalytics(currentUserId, timeframe),
         profileStore.loadPosts(currentUserId),
       ]);
@@ -267,28 +272,7 @@ export default function ProfileMyScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentUserId, timeframe]);
-
-  // Pull-to-refresh: a downward drag from the top of the page triggers
-  // handleRefresh(). Without this the refresh handler (and its pill) was
-  // unreachable — the state could never be set.
-  const PULL_THRESHOLD = 70;
-  const handleTouchStart = useCallback((e) => {
-    const el = scrollRef.current;
-    if (!el || el.scrollTop > 0 || isRefreshing) return;
-    pullStartYRef.current = e.touches?.[0]?.clientY ?? null;
-  }, [isRefreshing]);
-  const handleTouchMove = useCallback((e) => {
-    if (pullStartYRef.current == null) return;
-    const currentY = e.touches?.[0]?.clientY ?? 0;
-    if (currentY - pullStartYRef.current > PULL_THRESHOLD) {
-      pullStartYRef.current = null;
-      handleRefresh();
-    }
-  }, [handleRefresh]);
-  const handleTouchEnd = useCallback(() => {
-    pullStartYRef.current = null;
-  }, []);
+  }, [currentUserId, isRefreshing, timeframe, viewAs]);
 
   // Handle Share
   const handleShare = useCallback(async () => {
@@ -332,7 +316,7 @@ export default function ProfileMyScreen() {
     return (
       <div className={cn(
         'min-h-screen pb-20',
-        isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
         <ProfileSkeleton theme={theme} />
       </div>
@@ -342,31 +326,18 @@ export default function ProfileMyScreen() {
   return (
     <ErrorBoundary>
       <div
-        ref={scrollRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         className={cn(
           "min-h-screen pb-24 transition-colors duration-200",
           isDark
-            ? "bg-[#060816] text-white selection:bg-purple-500/30"
-            : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
+            ? "bg-[#03071B] text-white selection:bg-purple-500/30"
+            : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
         )}
       >
-
-        {/* Top Refreshing Pill */}
-        {isRefreshing && (
-          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg animate-pulse">
-            Refreshing Profile...
-          </div>
-        )}
 
         {/* Load failure banner: the store keeps a fallback profile so the screen
             still renders, but the user must know the data did not load. */}
         {error && (
-          <div className={cn(
-            "w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3"
-          )}>
+          <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3">
             <div className={cn(
               "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
               isDark
@@ -375,21 +346,24 @@ export default function ProfileMyScreen() {
             )}>
               <span className="truncate">{error}</span>
               <button
-                onClick={() => currentUserId && useProfileStore.getState().refreshProfile(currentUserId, currentUserId)}
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0",
+                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer",
                   isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
                 )}
               >
-                Retry
+                <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+                <span>Retry</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Master Container matching Image 1 Hierarchy */}
+        {/* Master Container */}
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
-          {/* 1. Master Identity Card with Level Badge, Passport & 6 Action Buttons */}
+          {/* 1. Master Identity Card with Level Badge, Passport & Action Bar */}
           <ProfileHeroSection
             profile={displayedProfile}
             isOwner={viewAs === 'owner'}
@@ -400,6 +374,8 @@ export default function ProfileMyScreen() {
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowAvatarModal(true)}
             onShare={handleShare}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
             onEditProfile={() => navigate('/profile/edit')}
             onOpenQuickEdit={(field = 'all') => {
               setQuickEditField(field);
@@ -525,20 +501,6 @@ export default function ProfileMyScreen() {
             </>
           )}
         </div>
-
-        {/* Floating Perspective Preview Bar when simulating visitor view */}
-        {viewAs !== 'owner' && (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-full bg-slate-900/90 dark:bg-white/10 text-white backdrop-blur-xl border border-purple-500/30 shadow-2xl text-xs font-semibold animate-in fade-in slide-in-from-bottom-4">
-            <Eye className="w-3.5 h-3.5 text-amber-400" />
-            <span>Simulating <strong>{viewAs.toUpperCase()}</strong> view</span>
-            <button
-              onClick={() => handleViewAsChange('owner')}
-              className="ml-1.5 px-2.5 py-0.5 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] transition cursor-pointer shadow-sm"
-            >
-              Exit Preview
-            </button>
-          </div>
-        )}
 
         {/* Perspective Switcher Modal */}
         <ProfilePerspectiveModal

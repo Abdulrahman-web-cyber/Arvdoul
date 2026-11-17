@@ -78,13 +78,13 @@ const ProfileFeaturedSection = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-500 fill-purple-500" />
+          <Sparkles className="w-4 h-4 text-arvdoul-purple" />
           <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
             Featured by {creatorName}
           </h2>
@@ -103,10 +103,12 @@ const ProfileFeaturedSection = memo(({
       {/* Grid of 4 Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {items.map((item) => (
-          <div
+          <button
             key={item.id}
+            type="button"
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
-            className="group relative aspect-[16/11] rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+            aria-label={`${item.badgeType}: ${item.title}`}
+            className="group relative aspect-[16/11] w-full text-left rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arvdoul-blue"
           >
             <LazyImage
               src={item.cover}
@@ -119,7 +121,7 @@ const ProfileFeaturedSection = memo(({
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" />
 
             {/* Top Badge: Type Indicator */}
-            <div className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
+            <div className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
               {item.type === 'reel' ? (
                 <Play className="w-2.5 h-2.5 fill-white" />
               ) : item.type === 'album' ? (
@@ -136,30 +138,31 @@ const ProfileFeaturedSection = memo(({
                 {item.title}
               </h3>
             </div>
-          </div>
+          </button>
         ))}
 
         {/* 4th Card: More Handpicked */}
         {showCollectionsCard && (
-          <div
+          <button
+            type="button"
             onClick={() => navigate('/collections')}
             className={cn(
-              "group relative aspect-[16/11] rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]",
+              "group relative aspect-[16/11] w-full rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-arvdoul-blue",
               isDark
                 ? "border-white/15 bg-white/[0.02] hover:bg-white/[0.05] text-white"
                 : "border-slate-300 bg-slate-50/70 hover:bg-slate-100 text-slate-800"
             )}
           >
             <div className="w-9 h-9 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-              <Sparkles className="w-4 h-4 fill-purple-500/20" />
+              <Sparkles className="w-4 h-4" />
             </div>
             <div className="text-xs font-bold">
               More
             </div>
-            <div className="text-[10px] text-slate-400 dark:text-slate-500">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">
               Handpicked
             </div>
-          </div>
+          </button>
         )}
       </div>
     </div>

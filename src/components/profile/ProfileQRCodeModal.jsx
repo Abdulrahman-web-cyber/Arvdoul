@@ -74,6 +74,15 @@ const ProfileQRCodeModal = memo(({
     };
   }, [isOpen, profileUrl]);
 
+  useEffect(() => {
+    if (!isOpen || showScanner) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, showScanner, onClose]);
+
   if (!isOpen) return null;
 
   const handleCopy = async () => {
@@ -117,17 +126,27 @@ const ProfileQRCodeModal = memo(({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-        <div className={cn(
-          "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all max-h-[95vh] overflow-y-auto",
-          isDark 
-            ? "bg-[#0c1222] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
-            : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
-        )}>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Universal Profile QR"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all max-h-[95vh] overflow-y-auto",
+            isDark
+              ? "bg-[#080F2E] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
+              : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
+          )}
+        >
           {/* Close Button */}
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white z-10"
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white z-10 cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -211,9 +230,10 @@ const ProfileQRCodeModal = memo(({
           {/* Action Buttons: Copy, Download, Share */}
           <div className="grid grid-cols-3 gap-2">
             <button
+              type="button"
               onClick={handleCopy}
               className={cn(
-                "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
+                "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer",
                 copied
                   ? "bg-emerald-500 text-white border-emerald-500"
                   : (isDark ? "bg-white/5 hover:bg-white/10 border-white/10 text-white" : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800")
@@ -225,9 +245,10 @@ const ProfileQRCodeModal = memo(({
             </button>
 
             <button
+              type="button"
               onClick={handleDownload}
               className={cn(
-                "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
+                "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer",
                 isDark ? "bg-white/5 hover:bg-white/10 border-white/10 text-white" : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
               )}
               title="Save QR Code Image"
@@ -237,8 +258,9 @@ const ProfileQRCodeModal = memo(({
             </button>
 
             <button
+              type="button"
               onClick={handleShare}
-              className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs bg-arvdoul-gradient hover:opacity-95 text-white shadow-md shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-2xl font-bold text-xs bg-arvdoul-gradient hover:opacity-95 text-white shadow-md shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               title="Share Profile"
             >
               <Share2 className="w-4 h-4" />

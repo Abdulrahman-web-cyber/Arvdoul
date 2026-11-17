@@ -15,7 +15,7 @@
 
 import { memo, useMemo, useState, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
-import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, Sparkles, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock, Clock, X } from "lucide-react";
+import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock, Clock, X, RefreshCw } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -24,8 +24,8 @@ import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import { brandRgba } from '../../design-system/tokens.js';
 
-const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
 const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
@@ -120,13 +120,20 @@ export const ProfileLevelProgressCard = memo(({
 
   // If standing is null / unavailable, show honest civic start card
   if (!levelInfo) {
+    const handleOpenCitizenship = () => (onOpenRoadmap ? onOpenRoadmap('citizenship') : navigate?.(passportUrl));
     return (
       <div 
-        onClick={() => onOpenRoadmap ? onOpenRoadmap('citizenship') : navigate?.(passportUrl)}
+        onClick={handleOpenCitizenship}
+        onKeyDown={(e) => {
+          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            handleOpenCitizenship();
+          }
+        }}
         className={cn(
           "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-2.5 cursor-pointer hover:border-purple-500/50",
           isDark
-            ? "bg-[#0b1021]/80 border-white/[0.08] text-white hover:bg-[#0e152e]/90"
+            ? "bg-[#080F2E]/90 border-white/[0.08] text-white hover:bg-[#0e152e]/90"
             : "bg-white/95 border-slate-200/90 text-slate-900 hover:bg-slate-50/90"
         )}
         role="button"
@@ -168,13 +175,21 @@ export const ProfileLevelProgressCard = memo(({
   const levelSpan = isMaxLevel ? null : levelInfo.nextLevelXp - levelInfo.currentLevelXp;
   const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
 
+  const handleOpenLevels = () => (onOpenRoadmap ? onOpenRoadmap('levels') : navigate?.(passportUrl));
+
   return (
     <div 
-      onClick={() => onOpenRoadmap ? onOpenRoadmap('levels') : navigate?.(passportUrl)}
+      onClick={handleOpenLevels}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          handleOpenLevels();
+        }
+      }}
       className={cn(
         "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-3 cursor-pointer hover:border-purple-500/50 group/levelcard",
         isDark
-          ? "bg-[#0b1021]/80 border-white/[0.08] text-white hover:bg-[#0e152e]/90"
+          ? "bg-[#080F2E]/90 border-white/[0.08] text-white hover:bg-[#0e152e]/90"
           : "bg-white/95 border-slate-200/90 text-slate-900 hover:bg-slate-50/90"
       )}
       role="button"
@@ -193,22 +208,25 @@ export const ProfileLevelProgressCard = memo(({
                 strokeWidth="4"
               />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-white text-[11px] font-black">
+            <span className="absolute inset-0 flex items-center justify-center text-white text-[11px] font-black tabular-nums">
               {currentLevel}
             </span>
           </div>
 
-          <div className="text-sm font-black text-slate-900 dark:text-white">
+          <div className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
             Level {currentLevel}
           </div>
         </div>
 
-        {/* Digital Passport Quick Pill */}
+        {/* Digital Passport Quick Action */}
         <button
           type="button"
-          onClick={() => navigate?.(passportUrl)}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate?.(passportUrl);
+          }}
           className={cn(
-            "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer",
+            "flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer",
             isDark
               ? "bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30"
               : "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200"
@@ -227,13 +245,13 @@ export const ProfileLevelProgressCard = memo(({
             className="h-full rounded-full transition-all duration-700"
             style={{
               width: `${progressPercent}%`,
-              background: 'linear-gradient(90deg, var(--arv-brand-violet) 0%, #00F0FF 100%)',
+              background: 'linear-gradient(90deg, var(--arv-brand-violet) 0%, var(--arv-brand-cyan) 100%)',
             }}
           />
         </div>
 
         {/* XP Text */}
-        <div className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 text-right tracking-tight">
+        <div className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 text-right tracking-tight tabular-nums">
           {isMaxLevel
             ? `${currentXp.toLocaleString()} XP · Max Level`
             : `${currentXp.toLocaleString()} / ${levelSpan.toLocaleString()} XP`}
@@ -283,6 +301,8 @@ export const ProfileHeroSection = memo(({
   onOpenTipModal,
   onOpenMessages,
   capabilities,
+  onRefresh,
+  isRefreshing = false,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -338,6 +358,13 @@ export const ProfileHeroSection = memo(({
   const sovereignGate = LevelModule.LEVEL_GATES?.sovereign ?? null;
 
   // Dynamic level appearance & crest aura unlocked at higher levels / royal standing
+  const isDefaultAura = useMemo(() => {
+    const aura = profile?.crestAura;
+    if (aura === 'purple' || aura === 'royal' || aura === 'cyan' || aura === 'emerald' || aura === 'gold') return false;
+    if (sovereignGate !== null && userLevel !== null && userLevel >= sovereignGate) return false;
+    return true;
+  }, [profile?.crestAura, userLevel, sovereignGate]);
+
   const crestAuraRing = useMemo(() => {
     const aura = profile?.crestAura;
     if (aura === 'purple') return 'bg-gradient-to-tr from-purple-500 via-indigo-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.45)]';
@@ -345,8 +372,8 @@ export const ProfileHeroSection = memo(({
     if (aura === 'cyan') return 'bg-gradient-to-tr from-cyan-400 via-teal-500 to-sky-300 shadow-[0_0_25px_rgba(34,211,238,0.45)]';
     if (aura === 'emerald') return 'bg-gradient-to-tr from-emerald-400 via-green-600 to-teal-300 shadow-[0_0_25px_rgba(52,211,153,0.45)]';
     if (aura === 'gold') return 'bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.45)]';
-    return 'bg-gradient-to-tr from-arvdoul-purple via-[#D946EF] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)]';
-  }, [profile?.crestAura, userLevel]);
+    return 'bg-gradient-to-tr from-arvdoul-purple via-arvdoul-glow-magenta to-arvdoul-glow-cyan';
+  }, [profile?.crestAura, userLevel, sovereignGate]);
 
   // Royal status determination per shared level system
   const isRoyal = useMemo(() => {
@@ -401,39 +428,64 @@ export const ProfileHeroSection = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-6 border backdrop-blur-xl transition-all duration-200 shadow-sm space-y-5",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_8px_28px_rgba(0,0,0,0.3)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
-      {/* Optional back affordance; the preview and public screens pass onBack
-          but the hero previously ignored it, so those screens had no back control. */}
-      {onBack && (
-        <button
-          type="button"
-          onClick={onBack}
-          className={cn(
-            "inline-flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer -mb-2",
-            isDark ? "text-slate-300 hover:text-white" : "text-slate-500 hover:text-slate-900"
+      {/* Optional top utility bar: Back navigation & Refresh trigger */}
+      {(onBack || onRefresh) && (
+        <div className="flex items-center justify-between gap-2 -mb-2">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className={cn(
+                "inline-flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer",
+                isDark ? "text-slate-300 hover:text-white" : "text-slate-500 hover:text-slate-900"
+              )}
+              aria-label="Go back"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+          ) : (
+            <span />
           )}
-          aria-label="Go back"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          <span>Back</span>
-        </button>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              aria-label="Refresh profile"
+              title="Refresh profile"
+              className={cn(
+                "p-2 rounded-xl border transition-colors cursor-pointer disabled:opacity-60",
+                isDark
+                  ? "border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.06]"
+                  : "border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              )}
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+            </button>
+          )}
+        </div>
       )}
 
       {/* Main Hero Profile Area (Avatar + Info + Dedicated Level Card) */}
       <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
         {/* Left Sub-row: Avatar + Details */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 min-w-0 flex-1">
-          {/* Avatar Container with Glowing Gradient Ring, Online Dot, & Sparkle Accent */}
+          {/* Avatar Container with Gradient Ring & Presence Dot */}
           <div className="relative shrink-0">
             {/* Glowing Ring */}
-            <div className={cn("w-28 h-28 sm:w-32 sm:h-32 rounded-full p-[3px] relative transition-all duration-300", crestAuraRing)}>
+            <div
+              className={cn("w-28 h-28 sm:w-32 sm:h-32 rounded-full p-[3px] relative transition-all duration-300", crestAuraRing)}
+              style={isDefaultAura ? { boxShadow: `0 0 25px ${brandRgba(0.35)}` } : undefined}
+            >
               {/* Circular Avatar Image */}
               <button
                 type="button"
                 onClick={onAvatarClick}
-                className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0b1021] block relative cursor-pointer group"
+                className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#080F2E] block relative cursor-pointer group"
                 aria-label="Profile Avatar"
               >
                 <LazyImage
@@ -450,16 +502,11 @@ export const ProfileHeroSection = memo(({
                 )}
               </button>
 
-              {/* Sparkle Star on Perimeter */}
-              <div className="absolute -top-1 -right-1 text-cyan-400 animate-pulse pointer-events-none">
-                <Sparkles className="w-5 h-5 fill-cyan-400" />
-              </div>
-
               {/* Live Presence Dot on bottom right */}
               <div 
                 className={cn(
-                  "absolute bottom-1 right-1 w-4 h-4 rounded-full ring-2 ring-white dark:ring-[#0b1021]",
-                  isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                  "absolute bottom-1 right-1 w-4 h-4 rounded-full ring-2 ring-white dark:ring-[#080F2E]",
+                  isOnline ? "bg-emerald-500" : "bg-slate-400"
                 )}
                 title={isOnline ? "Online" : "Offline"}
               />
@@ -602,7 +649,7 @@ export const ProfileHeroSection = memo(({
               ) : isOwner ? (
                 <button
                   type="button"
-                  onClick={() => onOpenQuickEdit ? onOpenQuickEdit('bio') : (onEditProfile || (() => navigate('/profile/edit')))}
+                  onClick={() => (onOpenQuickEdit ? onOpenQuickEdit('bio') : (onEditProfile ? onEditProfile() : navigate('/profile/edit')))}
                   className="text-xs text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
                 >
                   <Edit3 className="w-3 h-3" />

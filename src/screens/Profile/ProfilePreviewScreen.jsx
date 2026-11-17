@@ -6,15 +6,17 @@
  * @component
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
-import { Edit3, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Edit3, ShieldCheck } from "lucide-react";
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
+import ProfileProgression from '../../components/profile/ProfileProgression';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
@@ -50,6 +52,22 @@ export default function ProfilePreviewScreen({
 
   const [activeTab, setActiveTab] = useState('posts');
   const [viewPerspective, setViewPerspective] = useState('owner'); // 'owner' | 'visitor'
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleViewModeChange = useCallback((mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('arvdoul_profile_view_mode', mode);
+    } catch {
+      /* view-mode preference */
+    }
+  }, []);
 
   const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
 
@@ -92,11 +110,6 @@ export default function ProfilePreviewScreen({
   const isOwnerMode = viewPerspective === 'owner';
 
   const capabilities = useMemo(() => {
-    // Owner perspective: the owner sees everything. Visitor perspective: use the
-    // REAL relationship between the signed-in user and this profile so the
-    // preview reflects what a public viewer actually sees. We only have a
-    // genuine relation for the viewer's own profile (self => none); for any
-    // other target the store's follow status is the source.
     const isOwnerView = viewPerspective === 'owner';
     return resolveCapabilities({
       viewer: authUser,
@@ -107,9 +120,6 @@ export default function ProfilePreviewScreen({
             isFollowing: Boolean(storeFollowStatus?.isFollowing),
             isFollower: Boolean(storeFollowStatus?.isFollower),
             isMutualFriend: Boolean(storeFollowStatus?.isMutualFriend),
-            // A pending request to a private account is not a follow; carry it
-            // so the preview does not offer an open "Follow" for a pair that
-            // already has an unanswered request.
             requestStatus: storeFollowStatus?.requestStatus ?? null,
           },
       viewAs: isOwnerView ? null : 'public',
@@ -138,7 +148,7 @@ export default function ProfilePreviewScreen({
     return (
       <div className={cn(
         'min-h-screen pb-20',
-        isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
         <ProfileSkeleton theme={theme} />
       </div>
@@ -146,123 +156,154 @@ export default function ProfilePreviewScreen({
   }
 
   return (
-    <div className={cn(
-      'min-h-screen pb-24 transition-colors',
-      isDark ? 'bg-[#060816] text-white' : 'bg-[#f0f4fa] text-slate-900'
-    )}>
-      {/* Top Bar with Perspective Selector */}
+    <ErrorBoundary>
       <div className={cn(
-        'sticky top-0 z-30 backdrop-blur-xl border-b transition-colors',
-        isDark ? 'bg-[#060816]/90 border-slate-800' : 'bg-white/90 border-slate-200 shadow-sm'
+        'min-h-screen pb-24 transition-colors',
+        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
       )}>
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono uppercase tracking-wider text-purple-400 font-bold">
-              Perspective:
-            </span>
-          </div>
-
-          {/* Perspective Toggle */}
-          <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-white/10 p-1 rounded-xl">
+        {/* Top Bar with Perspective Selector */}
+        <header className={cn(
+          'sticky top-0 z-30 backdrop-blur-xl border-b transition-colors',
+          isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-white/90 border-slate-200'
+        )}>
+          <div className="max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-3">
             <button
-              onClick={() => setViewPerspective('owner')}
+              type="button"
+              onClick={handleBack}
               className={cn(
-                "px-3 py-1 text-xs font-bold rounded-lg transition-all",
-                viewPerspective === 'owner'
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : "text-slate-600 dark:text-slate-300 hover:bg-white/20"
+                'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0',
+                isDark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'
               )}
             >
-              Owner View
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Back</span>
             </button>
+
+            {/* Perspective Toggle */}
+            <div className={cn(
+              'flex items-center gap-1 p-1 rounded-xl border',
+              isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'
+            )}>
+              <button
+                type="button"
+                onClick={() => setViewPerspective('owner')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                  viewPerspective === 'owner'
+                    ? "bg-arvdoul-gradient text-white shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                Owner View
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewPerspective('visitor')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                  viewPerspective === 'visitor'
+                    ? "bg-arvdoul-gradient text-white shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                Visitor View
+              </button>
+            </div>
+
             <button
-              onClick={() => setViewPerspective('visitor')}
-              className={cn(
-                "px-3 py-1 text-xs font-bold rounded-lg transition-all",
-                viewPerspective === 'visitor'
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : "text-slate-600 dark:text-slate-300 hover:bg-white/20"
-              )}
+              type="button"
+              onClick={handleEdit}
+              className="px-3.5 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm bg-arvdoul-gradient text-white hover:opacity-95 cursor-pointer shrink-0 whitespace-nowrap"
             >
-              Visitor View
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Profile</span>
             </button>
           </div>
+        </header>
 
-          <button
-            onClick={handleEdit}
-            className={cn(
-              'px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm',
-              'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-90'
-            )}
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Edit Profile</span>
-          </button>
+        {/* Main Preview Container */}
+        <div className="max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
+          {/* Banner notification for Visitor Mode */}
+          {viewPerspective === 'visitor' && (
+            <div className={cn(
+              "px-4 py-2.5 rounded-2xl border text-xs font-medium flex items-center gap-2",
+              isDark ? "bg-amber-500/10 border-amber-500/25 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-800"
+            )}>
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span>Simulating how your profile appears to the public and potential followers.</span>
+            </div>
+          )}
+
+          {/* 1. Hero Identity Header */}
+          <ProfileHeroSection
+            profile={projectedProfile}
+            isOwner={isOwnerMode}
+            level={projectedProfile?.level ?? null}
+            theme={theme}
+            onBack={handleBack}
+            onEditProfile={handleEdit}
+            capabilities={capabilities}
+          />
+
+          {/* 2. Key Metrics Grid */}
+          <ProfileMetricsGrid
+            isOwner={isOwnerMode}
+            theme={theme}
+            profile={projectedProfile}
+            capabilities={capabilities}
+          />
+
+          {/* 3. Citizen Progression */}
+          <ProfileProgression
+            level={projectedProfile?.level ?? null}
+            experience={projectedProfile?.experience}
+            streak={projectedProfile?.activeStreak}
+            reputation={projectedProfile?.reputation}
+            showLevel={projectedProfile?.showLevel !== false}
+            showReputation={projectedProfile?.showReputation !== false}
+            showStreak={projectedProfile?.showStreak !== false}
+            isOwner={isOwnerMode}
+            theme={theme}
+          />
+
+          {/* 4. Story Highlights / Vibes Carousel */}
+          <ProfileHighlightsSection
+            highlights={storeHighlights}
+            userId={currentUserId}
+            isOwner={isOwnerMode}
+            theme={theme}
+          />
+
+          {/* 5. Tabs Strip */}
+          <ProfileTabsBar
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
+            isOwner={isOwnerMode}
+            theme={theme}
+            counts={{
+              posts: (storePosts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
+              reels: (storePosts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+              audio: (storePosts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+              saved: 0,
+              tagged: (storePosts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+            }}
+          />
+
+          {/* 6. Feed & Tab Content */}
+          <ProfileFeedGrid
+            posts={storePosts || []}
+            savedPosts={[]}
+            activeTab={activeTab}
+            viewMode={viewMode}
+            loading={false}
+            theme={theme}
+            profile={projectedProfile}
+            isOwner={isOwnerMode}
+          />
         </div>
       </div>
-
-      {/* Main Preview Container */}
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
-        {/* Banner notification for Visitor Mode */}
-        {viewPerspective === 'visitor' && (
-          <div className="px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs font-semibold flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>Simulating how your profile appears to the public and potential followers.</span>
-          </div>
-        )}
-
-        {/* 1. Hero Identity Header */}
-        <ProfileHeroSection
-          profile={projectedProfile}
-          isOwner={isOwnerMode}
-          level={projectedProfile?.level ?? null}
-          theme={theme}
-          onBack={handleBack}
-          onEditProfile={handleEdit}
-        />
-
-        {/* 2. Key Metrics Grid */}
-        <ProfileMetricsGrid
-          isOwner={isOwnerMode}
-          theme={theme}
-          profile={projectedProfile}
-          capabilities={capabilities}
-        />
-
-        {/* 3. Story Highlights / Vibes Carousel */}
-        <ProfileHighlightsSection
-          highlights={storeHighlights}
-          userId={currentUserId}
-          isOwner={isOwnerMode}
-          theme={theme}
-        />
-
-        {/* 4. Tabs Strip */}
-        <ProfileTabsBar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          isOwner={isOwnerMode}
-          theme={theme}
-          counts={{
-            posts: (storePosts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
-            reels: (storePosts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-            audio: (storePosts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
-            saved: 0,
-            tagged: (storePosts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
-          }}
-        />
-
-        {/* 5. Feed & Tab Content */}
-        <ProfileFeedGrid
-          posts={storePosts || []}
-          savedPosts={[]}
-          activeTab={activeTab}
-          loading={false}
-          theme={theme}
-          profile={projectedProfile}
-          isOwner={isOwnerMode}
-        />
-      </div>
-    </div>
+    </ErrorBoundary>
   );
 }

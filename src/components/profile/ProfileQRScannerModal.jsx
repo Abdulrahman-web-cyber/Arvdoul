@@ -313,25 +313,48 @@ const ProfileQRScannerModal = memo(({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        stopCamera();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, stopCamera, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-      <div 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in"
+      onClick={() => {
+        stopCamera();
+        onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Scan Profile QR Code"
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all overflow-hidden",
-          isDark 
-            ? "bg-[#0c1222] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
+          isDark
+            ? "bg-[#080F2E] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
             : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
         )}
       >
         {/* Close Button */}
         <button
+          type="button"
           onClick={() => {
             stopCamera();
             onClose();
           }}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white z-10"
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white z-10 cursor-pointer"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
@@ -339,8 +362,8 @@ const ProfileQRScannerModal = memo(({
 
         {/* Modal Header */}
         <div className="text-center mb-4">
-          <div className="w-12 h-12 mx-auto mb-2 rounded-2xl bg-gradient-to-tr from-purple-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
-            <ScanLine className="w-6 h-6 animate-pulse" />
+          <div className="w-12 h-12 mx-auto mb-2 rounded-2xl bg-gradient-to-tr from-arvdoul-purple to-arvdoul-glow-cyan flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
+            <ScanLine className="w-6 h-6" />
           </div>
           <h3 className="text-lg font-bold">Scan Profile QR Code</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -478,9 +501,10 @@ const ProfileQRScannerModal = memo(({
 
         {/* 2. Upload Mode View */}
         {activeMode === 'upload' && (
-          <div 
+          <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full aspect-square rounded-2xl border-2 border-dashed border-purple-500/30 hover:border-purple-500 p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-purple-500/5 mb-4 group"
+            className="w-full aspect-square rounded-2xl border-2 border-dashed border-purple-500/30 hover:border-purple-500 p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-purple-500/5 mb-4 group focus:outline-none focus:ring-2 focus:ring-arvdoul-blue"
           >
             <div className="w-14 h-14 rounded-2xl bg-purple-600/10 text-purple-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
               <Upload className="w-7 h-7" />
@@ -491,7 +515,7 @@ const ProfileQRScannerModal = memo(({
             <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-[200px]">
               Tap to browse photos or screenshots of an Arvdoul QR code
             </span>
-          </div>
+          </button>
         )}
 
         {/* 3. Manual Input Mode */}

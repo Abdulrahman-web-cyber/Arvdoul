@@ -62,23 +62,21 @@ const ProfileAbout = ({
 
   return (
     <div aria-label="Profile component" role="region" className={cn(
-      'p-4 rounded-2xl',
-      'bg-white dark:bg-gray-900',
-      'border border-gray-200 dark:border-gray-800',
-      'space-y-4'
+      'p-5 rounded-2xl sm:rounded-3xl',
+      'bg-white dark:bg-[#080F2E]/90',
+      'border border-slate-200/90 dark:border-white/[0.08]',
+      'space-y-4 shadow-sm'
     )}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-violet-900/30 to-fuchsia-900/30 backdrop-blur-md rounded-xl border border-white/10 p-4 shadow-lg flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+      <div className="pb-3 border-b border-slate-200 dark:border-white/[0.08] flex items-center justify-between">
+        <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
           About
         </h3>
         {resolvedIsOwner && (
           <button
+            type="button"
             onClick={onEdit}
-            className={cn(
-              'text-sm text-purple-600 dark:text-purple-400',
-              'hover:underline'
-            )}
+            className="text-xs sm:text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
           >
             Edit
           </button>
@@ -204,11 +202,10 @@ const ProfileAbout = ({
               <span
                 key={index}
                 className={cn(
-                  'px-2.5 py-1 rounded-full text-sm',
-                  'bg-gradient-to-r from-purple-100 to-blue-100',
-                  'dark:from-purple-900/30 dark:to-blue-900/30',
-                  'text-purple-700 dark:text-purple-300',
-                  'border border-purple-200 dark:border-purple-800'
+                  'px-2.5 py-1 rounded-md text-xs font-medium',
+                  'bg-slate-100 dark:bg-white/[0.05]',
+                  'text-slate-700 dark:text-slate-300',
+                  'border border-slate-200 dark:border-white/10'
                 )}
               >
                 {interest}

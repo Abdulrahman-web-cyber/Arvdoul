@@ -157,23 +157,40 @@ export default function HighlightsScreen() {
     }
   }, [currentUserId]);
   
+  useEffect(() => {
+    if (!showCreate && !editingHighlight) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (editingHighlight && !savingEdit) {
+          setEditingHighlight(null);
+          setEditTitle('');
+        } else if (showCreate && !creating) {
+          setShowCreate(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showCreate, creating, editingHighlight, savingEdit]);
+
   return (
     <div className={cn(
       'min-h-screen pb-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      theme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
     )}>
       {/* Content */}
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         <div className="flex items-center justify-between pb-2">
           <div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">Story Highlights</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Curate your best memories on your profile</p>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Story Highlights</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Curate your best memories on your profile</p>
           </div>
           <button
+            type="button"
             onClick={handleCreateHighlight}
             className={cn(
               'px-4 py-2 rounded-2xl font-bold text-xs',
-              'bg-gradient-to-r from-purple-500 to-blue-500',
+              'bg-arvdoul-gradient',
               'text-white hover:opacity-90 shadow-md transition-opacity',
               'flex items-center gap-1.5 cursor-pointer'
             )}
@@ -205,11 +222,12 @@ export default function HighlightsScreen() {
               No highlights yet
             </p>
             <button
+              type="button"
               onClick={handleCreateHighlight}
               className={cn(
-                'px-4 py-2 rounded-xl font-medium',
-                'bg-purple-500 text-white',
-                'hover:bg-purple-600 transition-colors'
+                'px-4 py-2 rounded-xl font-medium cursor-pointer',
+                'bg-purple-600 text-white',
+                'hover:bg-purple-500 transition-colors'
               )}
             >
               Create Your First Highlight
@@ -220,26 +238,25 @@ export default function HighlightsScreen() {
             {highlights.map((highlight) => (
               <div
                 key={highlight.id}
-                className={cn(
-                  'relative group cursor-pointer'
-                )}
+                className="relative group cursor-pointer"
               >
                 <button
+                  type="button"
                   onClick={() => navigate(`/highlight/${highlight.id}`)}
-                  className="w-full"
+                  className="w-full cursor-pointer text-center"
                 >
                   <div className={cn(
                     'aspect-square rounded-2xl overflow-hidden',
-                    'bg-gradient-to-br from-purple-500 to-blue-500 p-0.5'
+                    'bg-arvdoul-gradient p-0.5'
                   )}>
                     <div className={cn(
                       'w-full h-full rounded-xl overflow-hidden',
-                      'bg-white dark:bg-gray-900'
+                      'bg-white dark:bg-[#080F2E]'
                     )}>
                       {highlight.coverUrl ? (
                         <LazyImage
                           src={highlight.coverUrl}
-                          alt={highlight.title}
+                          alt={highlight.title || 'Highlight cover'}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -249,10 +266,10 @@ export default function HighlightsScreen() {
                       )}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-900 dark:text-white text-center mt-2 truncate">
+                  <p className="text-sm text-slate-900 dark:text-white text-center mt-2 truncate font-medium">
                     {highlight.title}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-center tabular-nums">
                     {unknownNumber(highlight.storyCount) ?? '—'} stories
                   </p>
                 </button>
@@ -260,17 +277,19 @@ export default function HighlightsScreen() {
                 {/* Actions */}
                 <div className={cn(
                   'absolute top-2 right-2',
-                  'opacity-0 group-hover:opacity-100',
+                  'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100',
                   'transition-opacity'
                 )}>
                   <button
+                    type="button"
+                    aria-label="Highlight options"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedHighlight(highlight);
+                      setSelectedHighlight(selectedHighlight?.id === highlight.id ? null : highlight);
                     }}
                     className={cn(
-                      'p-1.5 rounded-full',
-                      'bg-black/50 hover:bg-black/70',
+                      'p-1.5 rounded-full cursor-pointer',
+                      'bg-black/60 hover:bg-black/80',
                       'text-white transition-colors'
                     )}
                   >
@@ -283,14 +302,15 @@ export default function HighlightsScreen() {
                   <div className={cn(
                     'absolute top-10 right-2 z-10',
                     'w-36 py-1 rounded-xl',
-                    'bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl',
-                    'shadow-lg border border-gray-200 dark:border-gray-700'
+                    'bg-white/95 dark:bg-[#080F2E]/95 backdrop-blur-xl',
+                    'shadow-lg border border-slate-200 dark:border-white/10'
                   )}>
                     <button
+                      type="button"
                       onClick={() => handleEditHighlight(highlight)}
                       className={cn(
-                        'w-full px-3 py-2 text-left text-sm',
-                        'hover:bg-gray-100 dark:hover:bg-gray-700',
+                        'w-full px-3 py-2 text-left text-sm cursor-pointer',
+                        'hover:bg-slate-100 dark:hover:bg-white/10',
                         'flex items-center gap-2'
                       )}
                     >
@@ -298,10 +318,11 @@ export default function HighlightsScreen() {
                       Edit
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDeleteHighlight(highlight)}
                       className={cn(
-                        'w-full px-3 py-2 text-left text-sm text-red-500',
-                        'hover:bg-gray-100 dark:hover:bg-gray-700',
+                        'w-full px-3 py-2 text-left text-sm text-red-500 cursor-pointer',
+                        'hover:bg-slate-100 dark:hover:bg-white/10',
                         'flex items-center gap-2'
                       )}
                     >
@@ -317,19 +338,29 @@ export default function HighlightsScreen() {
       </div>
       {/* Create highlight modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="w-full max-w-sm p-6 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+          onClick={() => !creating && setShowCreate(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="New Highlight"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm p-6 rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#080F2E] shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
                   <Sparkles className="w-4 h-4" />
                 </div>
-                <h3 className="font-bold text-base text-gray-900 dark:text-white">New Highlight</h3>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">New Highlight</h3>
               </div>
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() => setShowCreate(false)}
-                className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -360,16 +391,17 @@ export default function HighlightsScreen() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">
                 Highlight Name
               </label>
-              <input aria-label="e.g. Travel, Moments, Projects"
+              <input
+                aria-label="Highlight Name"
                 type="text"
                 value={highlightName}
                 onChange={(e) => setHighlightName(e.target.value)}
                 placeholder="e.g. Travel, Moments, Projects"
                 maxLength={30}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple"
                 autoFocus
               />
             </div>
@@ -377,14 +409,14 @@ export default function HighlightsScreen() {
             {/* Select Stories */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 block">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
                   Select Stories ({selectedStoryIds.length})
                 </label>
                 {selectedStoryIds.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setSelectedStoryIds([])}
-                    className="text-[11px] text-purple-500 hover:underline"
+                    className="text-[11px] text-purple-500 hover:underline cursor-pointer"
                   >
                     Clear selection
                   </button>
@@ -392,11 +424,11 @@ export default function HighlightsScreen() {
               </div>
 
               {loadingStories ? (
-                <div className="flex items-center justify-center py-6 text-gray-400">
+                <div className="flex items-center justify-center py-6 text-slate-400">
                   <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
               ) : userStories.length === 0 ? (
-                <div className="text-center py-3 px-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 text-xs text-gray-400">
+                <div className="text-center py-3 px-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.06] text-xs text-slate-500 dark:text-slate-400">
                   No published or archived stories yet. You can still create this highlight now and add stories anytime.
                 </div>
               ) : (
@@ -414,7 +446,7 @@ export default function HighlightsScreen() {
                           );
                         }}
                         className={cn(
-                          'relative aspect-square rounded-xl overflow-hidden border-2 transition-all',
+                          'relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer',
                           isSelected
                             ? 'border-purple-600 ring-2 ring-purple-400 scale-95'
                             : 'border-transparent hover:opacity-80'
@@ -423,7 +455,7 @@ export default function HighlightsScreen() {
                         {mediaUrl ? (
                           <LazyImage
                             src={mediaUrl}
-                            alt=""
+                            alt={s.content || 'Story preview'}
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -508,15 +540,25 @@ export default function HighlightsScreen() {
 
       {/* Edit highlight modal */}
       {editingHighlight && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm p-5 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl space-y-4">
-            <h3 className="font-bold text-base text-gray-900 dark:text-white">Edit Highlight Title</h3>
-            <input aria-label="Edit Highlight Title"
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => !savingEdit && setEditingHighlight(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit Highlight Title"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm p-5 rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#080F2E] shadow-2xl space-y-4"
+          >
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">Edit Highlight Title</h3>
+            <input
+              aria-label="Edit Highlight Title"
               type="text"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               placeholder="Highlight title..."
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-arvdoul-purple"
               autoFocus
             />
             <div className="flex gap-2 pt-2">

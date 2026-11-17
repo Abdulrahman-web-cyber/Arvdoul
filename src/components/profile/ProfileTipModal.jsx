@@ -134,23 +134,40 @@ export default function ProfileTipModal({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, submitting, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        onClick={() => !submitting && onClose?.()}
+      >
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Tip ${recipientName || 'creator'}`}
+          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl p-6"
+          className="relative w-full max-w-md overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080F2E] border border-slate-200 dark:border-white/10 shadow-2xl p-6"
         >
           {/* Close button */}
           <button
+            type="button"
             onClick={onClose}
             disabled={submitting}
-            className="absolute top-4 right-4 p-1.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />

@@ -62,6 +62,15 @@ const ProfileLocationModal = memo(({
     }
   }, [isOpen, currentLocation, currentPrivacy]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !isSaving) onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isSaving, onClose]);
+
   if (!isOpen) return null;
 
   // Filter popular locations based on search query
@@ -216,19 +225,27 @@ const ProfileLocationModal = memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-      <div 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in"
+      onClick={() => !isSaving && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Profile Location"
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "relative w-full max-w-md rounded-3xl p-6 border shadow-2xl transition-all max-h-[90vh] overflow-y-auto",
-          isDark 
-            ? "bg-[#0c1222] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
+          isDark
+            ? "bg-[#080F2E] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
             : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
         )}
       >
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white"
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
@@ -249,12 +266,13 @@ const ProfileLocationModal = memo(({
 
         {/* 1. GPS Auto-Detect Button */}
         <button
+          type="button"
           onClick={handleDetectGPS}
           disabled={isDetecting}
           className={cn(
-            "w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all mb-4 group text-left",
-            isDark 
-              ? "bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 text-purple-300" 
+            "w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all mb-4 group text-left cursor-pointer",
+            isDark
+              ? "bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 text-purple-300"
               : "bg-purple-50 border-purple-200 hover:bg-purple-100 text-purple-700"
           )}
         >
@@ -269,7 +287,7 @@ const ProfileLocationModal = memo(({
             <div>
               <div className="text-xs font-bold flex items-center gap-1.5">
                 <span>Detect via GPS</span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-500/20 text-purple-400 font-semibold">Auto</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-500 dark:text-purple-400 font-semibold">Auto</span>
               </div>
               <div className="text-[11px] opacity-80">
                 {isDetecting ? 'Determining coordinates...' : 'Use device sensor to fetch your current city'}

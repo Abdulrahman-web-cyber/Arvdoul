@@ -10,7 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import passportService from '../../services/passportService';
 import { shareProfile } from '../../utils/shareUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
-import { ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight, Stamp, Lock, UserCheck, Check } from "lucide-react";
+import { ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight, Stamp, Lock, UserCheck, Check, ArrowLeft } from "lucide-react";
 import { toast } from 'sonner';
 import { ROYAL_ELIGIBILITY } from '../../shared/levelConfig.cjs';
 import { unknownNumber } from '../../lib/unknownNumber';
@@ -131,6 +131,15 @@ export default function PassportScreen() {
     }
   }, [passport?.passportUrl]);
 
+  useEffect(() => {
+    if (!showQR) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setShowQR(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showQR]);
+
   const handleShare = async () => {
     if (!passport) return;
     const res = await shareProfile({
@@ -197,6 +206,16 @@ export default function PassportScreen() {
         {/* Sovereign Credential Header Strip */}
         <div className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Go back"
+              className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                isDark ? 'border-slate-800 hover:bg-slate-900 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+              }`}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
             <ArvdoulNationalCrest className="w-8 h-8 text-amber-500 shrink-0" />
             <div>
               <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-amber-500 dark:text-amber-400 block font-mono">
@@ -208,6 +227,7 @@ export default function PassportScreen() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setShowQR(true)}
               aria-label="QR Pass"
               className={`p-2 rounded-xl border transition-colors cursor-pointer ${
@@ -217,6 +237,7 @@ export default function PassportScreen() {
               <QrCode className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={handleShare}
               aria-label="Share Passport"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
@@ -236,6 +257,7 @@ export default function PassportScreen() {
             const isActive = activePage === p.id;
             return (
               <button
+                type="button"
                 key={p.id}
                 onClick={() => setActivePage(p.id)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -247,8 +269,8 @@ export default function PassportScreen() {
                 <Icon className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">{p.label}</span>
                 {p.badge !== undefined && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono ${
-                    isActive ? 'bg-amber-500/30 text-amber-200' : 'bg-slate-800 text-slate-400'
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono tabular-nums ${
+                    isActive ? 'bg-amber-500/30 text-amber-200' : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-700')
                   }`}>
                     {p.badge}
                   </span>
@@ -491,10 +513,12 @@ export default function PassportScreen() {
                   }[stamp.sealType || 'gold'];
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={stamp.id}
                       onClick={() => setSelectedStamp(stamp)}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative overflow-hidden ${colorStyles} ${
+                      aria-pressed={isSelected}
+                      className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative overflow-hidden ${colorStyles} ${
                         isSelected ? 'ring-2 ring-amber-400 scale-[1.01]' : 'hover:scale-[1.005]'
                       }`}
                     >
@@ -530,7 +554,7 @@ export default function PassportScreen() {
                         <span>{stamp.ministry}</span>
                         <span>{stamp.issuedAt || (stamp.verified ? '—' : 'Pending')}</span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -659,26 +683,28 @@ export default function PassportScreen() {
             {/* Verified Achievements & Titles */}
             <div className="grid grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => navigate('/titles')}
                 className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
                   isDark ? 'bg-slate-900/40 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 <span className="text-xs text-slate-500 block">Civic Titles</span>
-                <span className="text-sm font-bold mt-0.5 block flex items-center justify-between">
+                <span className="text-sm font-bold mt-0.5 flex items-center justify-between">
                   <span>Manage Titles</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                 </span>
               </button>
 
               <button
+                type="button"
                 onClick={() => navigate('/progress')}
                 className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
                   isDark ? 'bg-slate-900/40 border-slate-800 hover:bg-slate-900' : 'bg-white border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 <span className="text-xs text-slate-500 block">State Honors</span>
-                <span className="text-sm font-bold mt-0.5 block flex items-center justify-between">
+                <span className="text-sm font-bold mt-0.5 flex items-center justify-between">
                   <span>XP & Rank Roadmap</span>
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                 </span>
@@ -751,9 +777,12 @@ export default function PassportScreen() {
         <div
           role="dialog"
           aria-modal="true"
+          aria-label="Arvdoul Sovereign QR"
+          onClick={() => setShowQR(false)}
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             className={`max-w-sm w-full p-6 rounded-3xl border text-center shadow-2xl ${
               isDark ? 'bg-[#090d1e] border-amber-500/30 text-slate-100' : 'bg-white border-amber-600/30 text-slate-900'
             }`}

@@ -61,8 +61,8 @@ const ProfilePinnedPosts = memo(({
       <div className={cn(
         "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
         isDark
-          ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-          : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+          ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+          : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
       )}>
         <div className="flex items-center gap-2 mb-2">
           <Pin className="w-4 h-4 text-purple-600 dark:text-purple-400 rotate-45" />
@@ -81,8 +81,8 @@ const ProfilePinnedPosts = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -106,10 +106,12 @@ const ProfilePinnedPosts = memo(({
       {/* Grid of 4 Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {items.map((item) => (
-          <div
+          <button
             key={item.id}
+            type="button"
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
-            className="group relative aspect-[3/4] sm:aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+            aria-label={item.title}
+            className="group relative aspect-[3/4] sm:aspect-[4/3] w-full text-left rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arvdoul-blue"
           >
             <LazyImage
               src={item.image}
@@ -131,11 +133,11 @@ const ProfilePinnedPosts = memo(({
             {/* Bottom Left: Heart + Likes */}
             <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 text-white">
               <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-              <span className="text-xs font-bold text-white drop-shadow-sm">
+              <span className="text-xs font-bold tabular-nums text-white drop-shadow-sm">
                 {item.likes}
               </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

@@ -12,7 +12,7 @@
  * @component
  */
 
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { 
   BarChart2, 
@@ -24,6 +24,7 @@ import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 import { unknownNumber } from '../../lib/unknownNumber.js';
+import { tokens } from '../../design-system/tokens.js';
 
 // Clean SVG Sparklines matching image curves. `data === null` means the trend
 // is genuinely unknown (fewer than two daily points), so we render an explicit
@@ -83,6 +84,10 @@ const ProfileCreatorDashboard = memo(({
   const isDark = theme === 'dark';
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
+  useEffect(() => {
+    setSelectedTimeframe(timeframe);
+  }, [timeframe]);
+
   const explicitLevel = Number(userLevel);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
   const effectiveLevel = hasLevel ? explicitLevel : null;
@@ -92,18 +97,12 @@ const ProfileCreatorDashboard = memo(({
 
   // If user is not yet level 5 creator, show unlock card
   if (!isEligibleCreator) {
-    const requiredLevel = LEVEL_GATES.creatorProfile;
-    const progressPercent = hasLevel
-      ? Math.min(100, Math.max(10, Math.round((effectiveLevel / requiredLevel) * 100)))
-      : 0;
-    const remainingLevels = hasLevel ? Math.max(0, requiredLevel - effectiveLevel) : null;
-
     return (
       <div className={cn(
         "w-full rounded-2xl sm:rounded-3xl p-5 sm:p-6 border backdrop-blur-xl transition-all shadow-sm relative overflow-hidden",
         isDark
-          ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-          : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+          ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+          : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
       )}>
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-2 max-w-lg">
@@ -196,8 +195,8 @@ const ProfileCreatorDashboard = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -225,7 +224,7 @@ const ProfileCreatorDashboard = memo(({
           </button>
 
           <div className="relative">
-            <select aria-label="Full Insights"
+            <select aria-label="Analytics timeframe"
               value={selectedTimeframe}
               onChange={handleSelectTimeframe}
               className={cn(
@@ -256,11 +255,11 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Profile Views
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
+            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
               {views === null ? '—' : views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views}
             </div>
             <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
               vTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : vTrend.isNeutral ? "text-slate-400" : "text-rose-500"
             )}>
               <span>{vTrend.text}</span>
@@ -280,18 +279,18 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Reach
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
+            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
               {reach === null ? '—' : reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach}
             </div>
             <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
               rTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : rTrend.isNeutral ? "text-slate-400" : "text-rose-500"
             )}>
               <span>{rTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#00F0FF" data={reachSeries} />
+            <Sparkline color={tokens.color.brand.cyan} data={reachSeries} />
           </div>
         </div>
 
@@ -304,18 +303,18 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Engagement
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
+            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
               {engagement === null ? '—' : engagement >= 1000 ? `${(engagement / 1000).toFixed(1)}K` : engagement}
             </div>
             <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
               eTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : eTrend.isNeutral ? "text-slate-400" : "text-rose-500"
             )}>
               <span>{eTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#D946EF" data={engagementSeries} />
+            <Sparkline color={tokens.color.brand.pink} data={engagementSeries} />
           </div>
         </div>
 
@@ -328,18 +327,18 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Coins Earned
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
+            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
               {coins === null ? '—' : coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins}
             </div>
             <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
               cTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : cTrend.isNeutral ? "text-slate-400" : "text-rose-500"
             )}>
               <span>{cTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#F59E0B" data={coinsSeries} />
+            <Sparkline color={tokens.color.semantic.warning} data={coinsSeries} />
           </div>
         </div>
 
@@ -356,8 +355,8 @@ const ProfileCreatorDashboard = memo(({
         onClick={() => navigate('/rankings')}
         >
           {/* Circular Crown Icon */}
-          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple to-[#D946EF] flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
-            <div className="w-full h-full rounded-full bg-white dark:bg-[#0b1021] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple to-arvdoul-glow-magenta flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
+            <div className="w-full h-full rounded-full bg-white dark:bg-[#080F2E] flex items-center justify-center">
               <Crown className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
           </div>

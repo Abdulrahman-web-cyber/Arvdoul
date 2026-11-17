@@ -7,7 +7,7 @@
  * - Accessible keyboard & modal dialog UX
  */
 
-import { memo, useState, useCallback, useRef } from "react";
+import { memo, useState, useCallback, useRef, useEffect } from "react";
 import Cropper from 'react-easy-crop';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, ZoomIn, ZoomOut, Check, Trash2, Camera, RefreshCw } from 'lucide-react';
@@ -99,6 +99,15 @@ const AvatarUploadModal = memo(({
     onClose();
   }, [onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !isProcessing) handleClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isProcessing, handleClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -109,12 +118,15 @@ const AvatarUploadModal = memo(({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={handleClose}
+          onClick={() => !isProcessing && handleClose()}
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         />
 
         {/* Modal Window */}
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile Photo"
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -122,7 +134,7 @@ const AvatarUploadModal = memo(({
           className={cn(
             'relative w-full max-w-md rounded-3xl p-6 shadow-2xl z-10 overflow-hidden',
             isDark
-              ? 'bg-[#0d1424] border border-white/10 text-white'
+              ? 'bg-[#080F2E] border border-white/10 text-white'
               : 'bg-white border border-slate-200 text-slate-900'
           )}
         >
@@ -131,15 +143,16 @@ const AvatarUploadModal = memo(({
             <div>
               <h3 className="text-lg font-bold">Profile Photo</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Crop & position your avatar (1:1 circular)
+                Crop &amp; position your avatar (1:1 circular)
               </p>
             </div>
             <button
+              type="button"
               onClick={handleClose}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
               aria-label="Close modal"
             >
-              <X className="w-5 h-5 text-slate-500" />
+              <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
             </button>
           </div>
 

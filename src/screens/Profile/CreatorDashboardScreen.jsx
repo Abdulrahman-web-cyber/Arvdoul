@@ -12,7 +12,7 @@ import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
 import { getStoredUid } from '../../utils/security';
 import { cn } from '../../lib/utils';
-import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight, ArrowLeft } from "lucide-react";
 import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
 
 /**
@@ -95,54 +95,75 @@ export default function CreatorDashboardScreen() {
   return (
     <div className={cn(
       'min-h-screen pb-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      theme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
     )}>
-      {/* Top Sub-Toolbar: Actions & Timeframe */}
+      {/* Top Sub-Toolbar: Back, Timeframe & Actions */}
       <div className={cn(
         'sticky top-0 z-20 backdrop-blur-xl border-b transition-colors',
-        theme === 'dark' ? 'bg-gray-900/90 border-gray-800' : 'bg-white/90 border-gray-200 shadow-sm'
+        theme === 'dark' ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200 shadow-sm'
       )}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          {/* Timeframe Selector */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
-            {['7d', '30d', '90d', '365d'].map((tf) => (
-              <button
-                key={tf}
-                onClick={() => handleTimeframeChange(tf)}
-                className={cn(
-                  'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
-                  timeframe === tf
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                )}
-              >
-                {tf}
-              </button>
-            ))}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Go back"
+              className={cn(
+                'w-9 h-9 rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0',
+                theme === 'dark'
+                  ? 'border-white/10 bg-white/[0.05] text-slate-300 hover:text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+              )}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+
+            {/* Timeframe Selector */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+              {['7d', '30d', '90d', '365d'].map((tf) => (
+                <button
+                  key={tf}
+                  type="button"
+                  onClick={() => handleTimeframeChange(tf)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer tabular-nums',
+                    timeframe === tf
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10'
+                  )}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={handleRefresh}
               disabled={loading}
+              aria-label="Refresh Analytics"
               title="Refresh Analytics"
               className={cn(
                 'p-2 rounded-xl transition-colors cursor-pointer',
-                'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700',
+                'bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10',
                 loading && 'opacity-50'
               )}
             >
-              <RefreshCw className={cn('w-4 h-4 text-gray-600 dark:text-gray-300', loading && 'animate-spin')} />
+              <RefreshCw className={cn('w-4 h-4 text-slate-600 dark:text-slate-300', loading && 'animate-spin')} />
             </button>
             <button
+              type="button"
               onClick={handleExport}
+              aria-label="Export Analytics JSON"
               title="Export Analytics JSON"
               className={cn(
                 'p-2 rounded-xl transition-colors cursor-pointer',
-                'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                'bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10'
               )}
             >
-              <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              <Download className="w-4 h-4 text-slate-600 dark:text-slate-300" />
             </button>
           </div>
         </div>
@@ -151,18 +172,19 @@ export default function CreatorDashboardScreen() {
       {/* Content */}
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {loading && !analytics ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-20" role="status" aria-label="Loading creator analytics">
             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
           </div>
         ) : error ? (
           <div className="text-center py-20">
             <p className="text-red-500 mb-4">{error}</p>
             <button
+              type="button"
               onClick={handleRefresh}
               className={cn(
-                'px-4 py-2 rounded-xl font-medium',
-                'bg-purple-500 text-white',
-                'hover:bg-purple-600'
+                'px-4 py-2 rounded-xl font-medium cursor-pointer',
+                'bg-purple-600 text-white',
+                'hover:bg-purple-500'
               )}
             >
               Try Again
@@ -209,17 +231,17 @@ export default function CreatorDashboardScreen() {
                   <div
                     key={metric.key}
                     className={cn(
-                      'p-4 rounded-xl',
-                      'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-                      'border border-gray-200/60 dark:border-gray-800/60'
+                      'p-4 rounded-2xl',
+                      'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+                      'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
                     )}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <Icon className={cn('w-5 h-5', metric.color)} />
                       {hasChange && (
                         <span className={cn(
-                          'flex items-center gap-0.5 text-xs font-medium',
-                          isPositive ? 'text-green-600' : 'text-red-600'
+                          'flex items-center gap-0.5 text-xs font-medium tabular-nums',
+                          isPositive ? 'text-green-600 dark:text-emerald-400' : 'text-red-600 dark:text-rose-400'
                         )}>
                           {isPositive ? (
                             <TrendingUp className="w-3 h-3" />
@@ -230,10 +252,10 @@ export default function CreatorDashboardScreen() {
                         </span>
                       )}
                     </div>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
                       {formatNumber(metric.value)}
                     </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                       {metric.label}
                     </p>
                   </div>
@@ -290,34 +312,34 @@ export default function CreatorDashboardScreen() {
             
             {/* Daily Stats Chart */}
             <div className={cn(
-              'p-4 rounded-2xl',
-              'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-              'border border-gray-200/60 dark:border-gray-800/60'
+              'p-4 sm:p-5 rounded-2xl',
+              'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+              'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
             )}>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-4">
                 Daily Performance
               </h3>
               {dailyStats.length > 0 ? (
                 <div className="space-y-3">
                   {dailyStats.slice(-7).reverse().map((stat, index) => (
                     <div key={stat.date || index} className="flex items-center gap-3">
-                      <div className="w-16 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="w-16 text-xs text-slate-500 dark:text-slate-400">
                         {new Date(stat.date).toLocaleDateString('en-US', { weekday: 'short' })}
                       </div>
-                      <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div className="flex-1 h-6 bg-slate-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                          className="h-full bg-arvdoul-gradient rounded-full"
                           style={{ width: `${Math.min((stat.views / Math.max(...dailyStats.map(s => s.views || 1))) * 100, 100)}%` }}
                         />
                       </div>
-                      <div className="w-16 text-xs text-right text-gray-500 dark:text-gray-400">
+                      <div className="w-16 text-xs text-right text-slate-500 dark:text-slate-400 tabular-nums">
                         {formatNumber(stat.views)}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+                <p className="text-slate-500 dark:text-slate-400 text-center py-8 text-sm">
                   No data available for this period
                 </p>
               )}
@@ -329,15 +351,15 @@ export default function CreatorDashboardScreen() {
             {typeof analytics?.growthRate === 'number' && (
               <div className={cn(
                 'p-4 rounded-2xl',
-                'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-                'border border-gray-200/60 dark:border-gray-800/60'
+                'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+                'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
               )}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Growth Rate</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Growth Rate</p>
                     <p className={cn(
-                      'text-2xl font-bold',
-                      analytics.growthRate >= 0 ? 'text-green-600' : 'text-red-600'
+                      'text-2xl font-bold tabular-nums',
+                      analytics.growthRate >= 0 ? 'text-green-600 dark:text-emerald-400' : 'text-red-600 dark:text-rose-400'
                     )}>
                       {analytics.growthRate >= 0 ? '+' : ''}{analytics.growthRate.toFixed(1)}%
                     </p>
@@ -363,13 +385,13 @@ export default function CreatorDashboardScreen() {
                 value renders unknown. */}
             <div className={cn(
               'p-4 rounded-2xl',
-              'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-              'border border-gray-200/60 dark:border-gray-800/60'
+              'bg-white dark:bg-[#080F2E]/90 backdrop-blur-xl',
+              'border border-slate-200/80 dark:border-white/[0.08] shadow-sm'
             )}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Active Days</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Active Days</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
                     {typeof activeDaysCount === 'number' ? `${activeDaysCount} days` : '—'}
                   </p>
                 </div>

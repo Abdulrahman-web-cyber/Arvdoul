@@ -89,13 +89,13 @@ const ProfileHighlightsSection = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border transition-all duration-200 backdrop-blur-xl shadow-sm",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3.5">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-500 fill-purple-500" />
+          <Sparkles className="w-4 h-4 text-arvdoul-purple" />
           <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
             Highlights
           </h2>
@@ -122,7 +122,7 @@ const ProfileHighlightsSection = memo(({
             aria-label="Create new highlight"
           >
             <div className={cn(
-              "w-16 h-16 sm:w-18 sm:h-18 rounded-full border-2 border-dashed flex items-center justify-center transition-all duration-200 group-hover:scale-105 active:scale-95",
+              "w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full border-2 border-dashed flex items-center justify-center transition-all duration-200 group-hover:scale-105 active:scale-95",
               isDark
                 ? "border-white/20 bg-white/[0.03] group-hover:border-purple-400 text-slate-300 group-hover:text-purple-300"
                 : "border-slate-300 bg-slate-50 group-hover:border-purple-500 text-slate-600 group-hover:text-purple-600"
@@ -145,8 +145,8 @@ const ProfileHighlightsSection = memo(({
             aria-label={`Highlight: ${item.title}`}
           >
             {/* Glowing Ring Container */}
-            <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple via-[#D946EF] to-[#00F0FF] shadow-sm group-hover:shadow-[0_0_15px_rgba(139,30,243,0.4)] group-hover:scale-105 active:scale-95 transition-all duration-200">
-              <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0b1021]">
+            <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple via-arvdoul-glow-magenta to-arvdoul-glow-cyan shadow-sm group-hover:shadow-arvdoul-glow group-hover:scale-105 active:scale-95 transition-all duration-200">
+              <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#080F2E]">
                 <LazyImage
                   src={item.cover}
                   alt={item.title}

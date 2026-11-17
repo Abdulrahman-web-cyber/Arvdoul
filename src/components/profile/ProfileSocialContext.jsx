@@ -69,15 +69,16 @@ const ProfileSocialContext = memo(({
     <div className={cn(
       "w-full rounded-2xl sm:rounded-3xl p-3 sm:p-4 border backdrop-blur-xl transition-all shadow-sm grid grid-cols-1 md:grid-cols-3 gap-3",
       isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_8px_24px_rgba(0,0,0,0.3)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_8px_24px_rgba(0,0,0,0.3)]"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
     )}>
       {/* 1. Mutual Friends Card */}
       {showFriends && (
-      <div 
+      <button
+        type="button"
         onClick={() => onFriendClick?.()}
         className={cn(
-          "flex items-center gap-3 p-2.5 rounded-xl sm:rounded-2xl transition-all cursor-pointer group",
+          "flex items-center gap-3 p-2.5 rounded-xl sm:rounded-2xl transition-all cursor-pointer group text-left w-full",
           isDark ? "hover:bg-white/[0.04]" : "hover:bg-slate-50"
         )}
       >
@@ -87,7 +88,7 @@ const ProfileSocialContext = memo(({
             friendsList.map((f, idx) => (
               <div
                 key={f.id || f.uid || idx}
-                className="w-8 h-8 rounded-full ring-2 ring-white dark:ring-[#0b1021] overflow-hidden bg-slate-800"
+                className="w-8 h-8 rounded-full ring-2 ring-white dark:ring-[#080F2E] overflow-hidden bg-slate-800"
                 style={{ zIndex: 10 - idx }}
               >
                 {f.photoURL ? (
@@ -100,14 +101,14 @@ const ProfileSocialContext = memo(({
               </div>
             ))
           ) : (
-            <div className="w-8 h-8 rounded-full ring-2 ring-white dark:ring-[#0b1021] bg-purple-500/10 text-purple-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full ring-2 ring-white dark:ring-[#080F2E] bg-purple-500/10 text-purple-400 flex items-center justify-center">
               <Users className="w-4 h-4" />
             </div>
           )}
         </div>
 
         <div className="min-w-0">
-          <div className="text-xs sm:text-sm font-bold truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+          <div className="text-xs sm:text-sm font-bold truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors tabular-nums">
             {friendsCount > 0 
               ? `${friendsCount} mutual ${friendsCount === 1 ? 'friend' : 'friends'}` 
               : 'No mutual friends'}
@@ -118,7 +119,7 @@ const ProfileSocialContext = memo(({
               : 'Connect through common creators'}
           </div>
         </div>
-      </div>
+      </button>
       )}
 
       {/* 2. Shared Communities Card — a read-only summary. No caller wires a
@@ -188,7 +189,7 @@ const ProfileSocialContext = memo(({
                 : 'Not Connected'}
             </span>
             {(mutualFollow || followsYou) && (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             )}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">

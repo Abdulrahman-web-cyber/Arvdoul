@@ -48,6 +48,15 @@ export const ProfileQuickEditModal = memo(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, profileId]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !isSaving) onClose?.();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isSaving, onClose]);
+
   if (!isOpen) return null;
 
   const validate = () => {
@@ -127,12 +136,19 @@ export const ProfileQuickEditModal = memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={() => !isSaving && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={initialField === 'bio' ? 'Edit Bio' : initialField === 'displayName' ? 'Edit Display Name' : 'Edit Profile Details'}
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "relative w-full max-w-lg rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]",
-          isDark 
-            ? "bg-[#0b1021] border-white/10 text-white" 
+          isDark
+            ? "bg-[#080F2E] border-white/10 text-white"
             : "bg-white border-slate-200 text-slate-900"
         )}
       >
