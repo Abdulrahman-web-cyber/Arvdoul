@@ -399,7 +399,7 @@ async function startServer() {
   } else {
     const distDir = path.resolve(__dirname, 'dist');
     app.use(express.static(distDir));
-    app.get('*', (_req: Request, res: Response) => {
+    app.get('/{*splat}', (_req: Request, res: Response) => {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }
