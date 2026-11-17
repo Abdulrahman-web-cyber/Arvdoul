@@ -473,8 +473,9 @@ const formatDuration = (seconds) => {
             <h2 className="text-xl font-black">Could not load Sparks</h2>
             <p className="text-white/60 text-sm">{feedError}</p>
             <button
+              type="button"
               onClick={() => setFeedNonce((n) => n + 1)}
-              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+              className="px-6 py-2.5 rounded-full bg-arvdoul-gradient font-bold text-sm shadow-lg hover:scale-105 transition-transform"
             >
               Retry
             </button>
@@ -484,19 +485,21 @@ const formatDuration = (seconds) => {
     }
     return (
       <div className="h-full w-full bg-black flex flex-col items-center justify-center text-white p-6 text-center">
-        <Sparkles className="w-16 h-16 text-yellow-400 mb-4 animate-pulse" />
+        <Sparkles className="w-16 h-16 text-yellow-400 mb-4" aria-hidden="true" />
         <h2 className="text-2xl font-black mb-2">No Sparks Yet</h2>
         <p className="text-white/60 text-sm max-w-sm mb-6">
           Be the first creator to ignite a spark with short videos and music!
         </p>
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={() => navigate('/create-post')}
-            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+            className="px-6 py-2.5 rounded-full bg-arvdoul-gradient font-bold text-sm shadow-lg hover:scale-105 transition-transform"
           >
             Create Spark
           </button>
           <button
+            type="button"
             onClick={() => navigate('/videos')}
             className="px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/20 font-bold text-sm transition-colors"
           >
@@ -608,6 +611,7 @@ const formatDuration = (seconds) => {
         {/* Center: Following & For You Tabs */}
         <div className="flex items-center gap-6">
           <button
+            type="button"
             onClick={() => setActiveTab('following')}
             className={cn(
               "text-sm font-bold transition-all relative pb-1",
@@ -620,12 +624,13 @@ const formatDuration = (seconds) => {
             {activeTab === 'following' && (
               <motion.span
                 layoutId="reelTab"
-                className="absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo rounded-full"
+                className="absolute bottom-0 inset-x-0 h-0.5 bg-arvdoul-gradient rounded-full"
               />
             )}
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('forYou')}
             className={cn(
               "text-sm font-bold transition-all relative pb-1",
@@ -638,7 +643,7 @@ const formatDuration = (seconds) => {
             {activeTab === 'forYou' && (
               <motion.span
                 layoutId="reelTab"
-                className="absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo rounded-full shadow-arvdoul-glow"
+                className="absolute bottom-0 inset-x-0 h-0.5 bg-arvdoul-gradient rounded-full shadow-arvdoul-glow"
               />
             )}
           </button>
@@ -647,14 +652,16 @@ const formatDuration = (seconds) => {
         {/* Right: Search & Story Camera Icons */}
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => navigate('/search')}
-            aria-label="For You"
+            aria-label="Search reels"
             className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
           >
             <Search className="w-4 h-4 text-white" />
           </button>
 
           <button
+            type="button"
             onClick={() => navigate('/create-story')}
             aria-label="Create Story"
             className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors relative"
@@ -698,6 +705,7 @@ const formatDuration = (seconds) => {
           </button>
           {currentReel.creator.id && currentReel.creator.id !== user?.uid && (
             <button
+              type="button"
               onClick={() => handleFollow(currentReel.creator)}
               aria-label={currentReel.creator.isFollowing
                 ? 'Unfollow creator'
@@ -706,7 +714,7 @@ const formatDuration = (seconds) => {
                 "absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full text-white text-xs font-black flex items-center justify-center shadow-md border border-black transition-transform active:scale-90",
                 currentReel.creator.isFollowing
                   ? "bg-emerald-500"
-                  : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue"
+                  : "bg-arvdoul-gradient"
               )}
             >
               {currentReel.creator.isFollowing ? '✓' : (currentReel.creator.requestStatus === 'pending' ? '…' : '+')}
@@ -716,6 +724,7 @@ const formatDuration = (seconds) => {
 
         {/* Like Button */}
         <button
+          type="button"
           onClick={handleLike}
           aria-label={currentReel.isLiked ? 'Unlike reel' : 'Like reel'}
           className="flex flex-col items-center gap-1 group active:scale-90 transition-transform"
@@ -726,13 +735,14 @@ const formatDuration = (seconds) => {
           )}>
             <Heart className={cn("w-6 h-6", currentReel.isLiked && "fill-current text-rose-500")} />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">
+          <span className="text-[11px] font-bold drop-shadow tabular-nums">
             {currentReel.stats.likes == null ? '—' : currentReel.stats.likes.toLocaleString()}
           </span>
         </button>
 
         {/* Comments Button */}
         <button
+          type="button"
           onClick={() => setSheetView('comments')}
           aria-label="Comments"
           className="flex flex-col items-center gap-1 group active:scale-90 transition-transform text-white"
@@ -740,11 +750,12 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
             <MessageCircle className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.comments == null ? '—' : currentReel.stats.comments.toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow tabular-nums">{currentReel.stats.comments == null ? '—' : currentReel.stats.comments.toLocaleString()}</span>
         </button>
 
         {/* Share Button */}
         <button
+          type="button"
           onClick={handleShare}
           aria-label="Share reel"
           className="flex flex-col items-center gap-1 group active:scale-90 transition-transform text-white"
@@ -752,11 +763,12 @@ const formatDuration = (seconds) => {
           <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
             <Share2 className="w-6 h-6" />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.shares == null ? '—' : currentReel.stats.shares.toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow tabular-nums">{currentReel.stats.shares == null ? '—' : currentReel.stats.shares.toLocaleString()}</span>
         </button>
 
         {/* Bookmark / Save */}
         <button
+          type="button"
           onClick={handleSave}
           aria-label={currentReel.isSaved ? 'Unsave reel' : 'Save reel'}
           className="flex flex-col items-center gap-1 group active:scale-90 transition-transform"
@@ -767,23 +779,25 @@ const formatDuration = (seconds) => {
           )}>
             <Bookmark className={cn("w-6 h-6", currentReel.isSaved && "fill-current text-amber-400")} />
           </div>
-          <span className="text-[11px] font-bold drop-shadow">{currentReel.stats.saves == null ? '—' : currentReel.stats.saves.toLocaleString()}</span>
+          <span className="text-[11px] font-bold drop-shadow tabular-nums">{currentReel.stats.saves == null ? '—' : currentReel.stats.saves.toLocaleString()}</span>
         </button>
 
         {/* Coin Gift Button */}
         <button
+          type="button"
           onClick={() => setGiftModal(true)}
           aria-label="Send a coin gift"
           className="flex flex-col items-center gap-1 group active:scale-90 transition-transform text-amber-300"
         >
           <div className="w-11 h-11 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/40 flex items-center justify-center shadow-arvdoul-glow">
-            <Gift className="w-6 h-6 text-amber-400 animate-bounce" />
+            <Gift className="w-6 h-6 text-amber-400" />
           </div>
-          <span className="text-[11px] font-black text-amber-400 drop-shadow">{currentReel.stats.gifts == null ? '—' : currentReel.stats.gifts.toLocaleString()}</span>
+          <span className="text-[11px] font-black text-amber-400 drop-shadow tabular-nums">{currentReel.stats.gifts == null ? '—' : currentReel.stats.gifts.toLocaleString()}</span>
         </button>
 
         {/* More Options */}
         <button
+          type="button"
           onClick={() => setSheetView('report')}
           aria-label="More options"
           className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80"
@@ -816,12 +830,13 @@ const formatDuration = (seconds) => {
 
             {currentReel.creator.id && currentReel.creator.id !== user?.uid && (
               <button
+                type="button"
                 onClick={() => handleFollow(currentReel.creator)}
                 className={cn(
                   "px-3.5 py-1 rounded-xl text-xs font-bold transition-all",
                   currentReel.creator.isFollowing
                     ? "bg-white/10 text-white/80"
-                    : "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md"
+                    : "bg-arvdoul-gradient text-white shadow-md"
                 )}
               >
                 {currentReel.creator.isFollowing
@@ -861,27 +876,27 @@ const formatDuration = (seconds) => {
                 <span className="truncate text-[11px] font-medium">{currentReel.music}</span>
               </div>
 
-              {/* Audio Wave Visualizer Box */}
-              <div className="w-6 h-6 rounded-lg bg-arvdoul-purple/30 border border-arvdoul-purple/40 flex items-center justify-center gap-0.5 flex-shrink-0">
-                <span className="w-0.5 h-3 bg-arvdoul-purple rounded-full animate-pulse" />
-                <span className="w-0.5 h-4 bg-arvdoul-glow-magenta rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                <span className="w-0.5 h-2 bg-arvdoul-indigo rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              {/* Audio Track Icon */}
+              <div className="w-6 h-6 rounded-lg bg-arvdoul-purple/30 border border-arvdoul-purple/40 flex items-center justify-center gap-0.5 flex-shrink-0" aria-hidden="true">
+                <span className="w-0.5 h-3 bg-arvdoul-purple rounded-full" />
+                <span className="w-0.5 h-4 bg-arvdoul-glow-magenta rounded-full" />
+                <span className="w-0.5 h-2 bg-arvdoul-indigo rounded-full" />
               </div>
             </div>
           )}
         </div>
 
         {/* Playback progress — driven by the real <video> element time */}
-        <div className="flex items-center gap-3 text-[10px] text-white/80 font-bold px-1">
+        <div className="flex items-center gap-3 text-[10px] text-white/80 font-bold px-1 tabular-nums">
           <span>{formatDuration(playback.currentTime)}</span>
           <div className="flex-1 h-1 rounded-full bg-white/20 relative overflow-hidden">
             <div
               style={{ width: `${playback.progress}%` }}
-              className="h-full bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue rounded-full"
+              className="h-full bg-arvdoul-gradient rounded-full"
             />
           </div>
           <span>{formatDuration(playback.duration || currentReel.duration)}</span>
-          <button onClick={() => setIsMuted(!isMuted)} aria-label={isMuted ? 'Unmute' : 'Mute'}>
+          <button type="button" onClick={() => setIsMuted(!isMuted)} aria-label={isMuted ? 'Unmute' : 'Mute'}>
             {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -968,6 +983,7 @@ const formatDuration = (seconds) => {
               </button>
 
               <button
+                type="button"
                 onClick={() => { setGiftModal(false); setGiftAmount(null); }}
                 className="w-full py-2.5 rounded-xl text-xs font-bold border border-white/10 text-white hover:bg-white/5"
               >

@@ -11,7 +11,7 @@ admin.initializeApp();
 const db = admin.firestore();
 const dns = require('node:dns');
 const { checkRateLimit } = require('./rateLimit');
-const { assertAdmin, getUserEmail } = require('./auth');
+const { assertAdmin, getUserEmail, getRuntimeConfig } = require('./auth');
 
 // ==================== FEATURE MODULES ====================
 // Each module self-registers its https.onCall / trigger exports with
@@ -346,9 +346,9 @@ exports.sendEmailNotification = functions.https.onCall(async (data, context) => 
   // Honest email delivery: real SendGrid call when configured. Without
   // configuration the function reports 'unconfigured' — it NEVER logs a
   // fake success ("would send") as if the email went out.
-  const sendgridKey = functions.config()?.sendgrid?.key;
+  const sendgridKey = getRuntimeConfig('SENDGRID_API_KEY', 'sendgrid.key');
   if (!sendgridKey) {
-    return { success: false, status: 'unconfigured', reason: 'SENDGRID_API_KEY not configured (functions.config().sendgrid.key)' };
+    return { success: false, status: 'unconfigured', reason: 'SENDGRID_API_KEY not configured' };
   }
 
   try {
@@ -356,7 +356,7 @@ exports.sendEmailNotification = functions.https.onCall(async (data, context) => 
     sgMail.setApiKey(sendgridKey);
     await sgMail.send({
       to,
-      from: functions.config()?.sendgrid?.from || 'no-reply@arvdoul.com',
+      from: getRuntimeConfig('SENDGRID_FROM', 'sendgrid.from', 'no-reply@arvdoul.com'),
       subject,
       html: body,
     });

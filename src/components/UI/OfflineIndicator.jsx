@@ -26,6 +26,7 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showOnlinePill, setShowOnlinePill] = useState(false);
   const prevOnlineRef = useRef(isOnline);
+  const onlineTimerRef = useRef(null);
 
   // Single source of truth for sync state: the canonical offline engine emits
   // `arvdoul-sync-status` on every queue change and drain start/end. Polling a
@@ -40,7 +41,8 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
       setIsSyncing(Boolean(status.isSyncing));
       if (!prevOnlineRef.current && currentOnline) {
         setShowOnlinePill(true);
-        setTimeout(() => setShowOnlinePill(false), 3600);
+        if (onlineTimerRef.current) clearTimeout(onlineTimerRef.current);
+        onlineTimerRef.current = setTimeout(() => setShowOnlinePill(false), 3600);
       }
       prevOnlineRef.current = currentOnline;
     };
@@ -51,6 +53,10 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
     const handleOffline = () => {
       setIsOnline(false);
       setShowOnlinePill(false);
+      if (onlineTimerRef.current) {
+        clearTimeout(onlineTimerRef.current);
+        onlineTimerRef.current = null;
+      }
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -59,6 +65,10 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
       unsubscribe?.();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      if (onlineTimerRef.current) {
+        clearTimeout(onlineTimerRef.current);
+        onlineTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -71,7 +81,8 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
         await backgroundSyncService.triggerSync();
       }
       setShowOnlinePill(true);
-      setTimeout(() => setShowOnlinePill(false), 3600);
+      if (onlineTimerRef.current) clearTimeout(onlineTimerRef.current);
+      onlineTimerRef.current = setTimeout(() => setShowOnlinePill(false), 3600);
     } catch (err) {
       console.warn('Manual sync failed:', err);
     } finally {

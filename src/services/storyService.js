@@ -356,17 +356,6 @@ class UltimateStoryService {
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Authentication required');
     await this.rateLimiter.checkLimit(currentUser.uid, 'CREATE_STORY');
 
-    // AI caption if image and no content
-    if (STORY_CONFIG.AI_CAPTION.ENABLED && storyData.type === 'image' && !storyData.content && storyData.mediaFile) {
-      try {
-        const { callFunction, FUNCTIONS } = await import('./callableService.js');
-        const data = await callFunction(FUNCTIONS.GENERATE_CAPTION_FOR_IMAGE, {
-          imageUrl: URL.createObjectURL(storyData.mediaFile),
-        });
-        storyData.content = data.caption;
-      } catch (err) { logger.warn('// AI caption failed', err); }
-    }
-
     const mod = this._moderateContent(storyData);
     if (!mod.passed) throw new Error(`Content violates guidelines: ${mod.reason}`);
 
@@ -380,6 +369,17 @@ class UltimateStoryService {
         file = await this._safeCompressImage(file);
       }
       mediaInfo = await this._uploadStoryMedia(file, currentUser.uid, storyData.type, options.onProgress);
+    }
+
+    // AI caption after upload using reachable HTTPS URL if enabled and no caption supplied
+    if (STORY_CONFIG.AI_CAPTION.ENABLED && storyData.type === 'image' && !storyData.content && mediaInfo?.url) {
+      try {
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        const data = await callFunction(FUNCTIONS.GENERATE_CAPTION_FOR_IMAGE, {
+          imageUrl: mediaInfo.url,
+        });
+        if (data?.caption) storyData.content = data.caption;
+      } catch (err) { logger.warn('// AI caption failed', err); }
     }
 
     const storiesRef = this.fs.collection(this.firestore, 'stories');

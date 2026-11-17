@@ -617,7 +617,7 @@ export default function NotificationsScreen() {
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Activity &amp; Updates</span>
             {unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-500 text-white shadow-sm">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-arvdoul-gradient text-white shadow-sm tabular-nums">
                 {unreadCount} unread
               </span>
             )}
@@ -626,6 +626,7 @@ export default function NotificationsScreen() {
           <div className="flex items-center gap-2">
             {/* Search Icon */}
             <button
+              type="button"
               onClick={() => setShowSearch(!showSearch)}
               aria-label="Search notifications"
               className={cn(
@@ -638,11 +639,12 @@ export default function NotificationsScreen() {
 
             {/* Filter Icon */}
             <button
+              type="button"
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
               aria-label="Filter notifications"
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center transition-all relative cursor-pointer",
-                showFilterDropdown ? "bg-arvdoul-purple text-white shadow-arvdoul-glow" : isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 text-slate-700"
+                showFilterDropdown ? "bg-arvdoul-purple text-white shadow-arvdoul-glow" : isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               )}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -651,6 +653,7 @@ export default function NotificationsScreen() {
 
             {/* Mark All Read */}
             <button
+              type="button"
               onClick={handleMarkAllRead}
               disabled={markingAllRead}
               title="Mark all as read"
@@ -665,6 +668,7 @@ export default function NotificationsScreen() {
 
             {/* Settings */}
             <button
+              type="button"
               onClick={() => navigate('/settings')}
               aria-label="Notification settings"
               className={cn(
@@ -678,37 +682,48 @@ export default function NotificationsScreen() {
         </div>
 
         {/* Main Tab Switcher: Alerts vs Network */}
-        <div className="max-w-xl mx-auto mt-3 flex items-center p-1 bg-white/[0.06] border border-white/10 rounded-full">
+        <div className={cn(
+          "max-w-xl mx-auto mt-3 flex items-center p-1 border rounded-full",
+          isDark ? "bg-white/[0.06] border-white/10" : "bg-slate-200/80 border-slate-200"
+        )}>
           <button
+            type="button"
             onClick={() => setMainTab('alerts')}
             className={cn(
               "flex-1 py-1.5 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5",
               mainTab === 'alerts'
-                ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                : isDark ? "text-white/70 hover:text-white" : "text-gray-600 hover:text-gray-900"
+                ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25"
+                : isDark ? "text-white/70 hover:text-white" : "text-gray-700 hover:text-gray-900"
             )}
           >
             <Bell className="w-3.5 h-3.5" />
             <span>Alerts</span>
             {unreadCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-white/20 text-white">
+              <span className={cn(
+                "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
+                mainTab === 'alerts' ? "bg-white/20 text-white" : "bg-arvdoul-purple/15 text-arvdoul-purple dark:text-violet-300"
+              )}>
                 {unreadCount}
               </span>
             )}
           </button>
           <button
+            type="button"
             onClick={() => setMainTab('network')}
             className={cn(
               "flex-1 py-1.5 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5",
               mainTab === 'network'
-                ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                : isDark ? "text-white/70 hover:text-white" : "text-gray-600 hover:text-gray-900"
+                ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25"
+                : isDark ? "text-white/70 hover:text-white" : "text-gray-700 hover:text-gray-900"
             )}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Network & Friends</span>
+            <span>Network &amp; Friends</span>
             {requests.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400 text-white">
+              <span className={cn(
+                "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
+                mainTab === 'network' ? "bg-white/20 text-white" : "bg-arvdoul-purple text-white"
+              )}>
                 {requests.length}
               </span>
             )}
@@ -738,7 +753,7 @@ export default function NotificationsScreen() {
                   autoFocus
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')}>
+                  <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search">
                     <X className="w-3.5 h-3.5 text-arvdoul-text-secondary" />
                   </button>
                 )}
@@ -754,6 +769,7 @@ export default function NotificationsScreen() {
               const isActive = activeFilter === f.id;
               return (
                 <button
+                  type="button"
                   key={f.id}
                   onClick={() => {
                     if (f.id === 'Friends') {
@@ -766,16 +782,16 @@ export default function NotificationsScreen() {
                   className={cn(
                     "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
                     isActive
-                      ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25 scale-[1.02]"
+                      ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25 scale-[1.02]"
                       : isDark
                         ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                   )}
                 >
                   {f.icon && <f.icon className="w-3.5 h-3.5" />}
                   {f.label}
                   {f.badge && (
-                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400/20 text-violet-300">
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400/20 text-violet-300 tabular-nums">
                       {f.badge}
                     </span>
                   )}
@@ -797,22 +813,23 @@ export default function NotificationsScreen() {
               const isActive = networkTab === nt.id;
               return (
                 <button
+                  type="button"
                   key={nt.id}
                   onClick={() => setNetworkTab(nt.id)}
                   className={cn(
                     "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
                     isActive
-                      ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25 scale-[1.02]"
+                      ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25 scale-[1.02]"
                       : isDark
                         ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                   )}
                 >
                   <span>{nt.label}</span>
                   {nt.count > 0 && (
                     <span className={cn(
-                      "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
-                      isActive ? "bg-white/20 text-white" : "bg-violet-500/20 text-violet-300"
+                      "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold tabular-nums",
+                      isActive ? "bg-white/20 text-white" : "bg-violet-500/20 text-arvdoul-purple dark:text-violet-300"
                     )}>
                       {nt.count}
                     </span>
@@ -821,12 +838,14 @@ export default function NotificationsScreen() {
               );
             })}
             <button
+              type="button"
               onClick={loadNetwork}
               disabled={networkLoading}
               title="Refresh network"
+              aria-label="Refresh network"
               className={cn(
                 "p-2 rounded-full text-xs transition-colors ml-auto flex-shrink-0",
-                isDark ? "text-white/60 hover:text-white bg-white/5" : "text-slate-500 hover:text-slate-800 bg-slate-100"
+                isDark ? "text-white/60 hover:text-white bg-white/5" : "text-slate-600 hover:text-slate-900 bg-slate-100"
               )}
             >
               <RefreshCw className={cn("w-3.5 h-3.5", networkLoading && "animate-spin")} />
@@ -879,7 +898,7 @@ export default function NotificationsScreen() {
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
                               {reqName.charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -892,13 +911,15 @@ export default function NotificationsScreen() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleNetworkRequest(reqId, true)}
                             disabled={pendingNetworkAction === reqId}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95 transition-all"
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-md active:scale-95 transition-all"
                           >
                             Accept
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleNetworkRequest(reqId, false)}
                             disabled={pendingNetworkAction === reqId}
                             className={cn(
@@ -947,7 +968,7 @@ export default function NotificationsScreen() {
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
                               {reqName.charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -960,13 +981,15 @@ export default function NotificationsScreen() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleFollowRequestAction(req, true)}
                             disabled={busy}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
                           >
                             Approve
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleFollowRequestAction(req, false)}
                             disabled={busy}
                             className={cn(
@@ -1012,7 +1035,7 @@ export default function NotificationsScreen() {
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
                               {fName.charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -1031,6 +1054,7 @@ export default function NotificationsScreen() {
                             const isRequested = state.requestStatus === 'pending';
                             return (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               if (isRequested) {
@@ -1050,7 +1074,7 @@ export default function NotificationsScreen() {
                                   ? isDark
                                     ? "bg-white/10 text-white/70 border border-white/15"
                                     : "bg-slate-100 text-slate-600 border border-slate-300"
-                                  : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
+                                  : "bg-arvdoul-gradient text-white shadow-md active:scale-95"
                             )}
                           >
                             {rowStatus === 'loading' ? (
@@ -1102,7 +1126,7 @@ export default function NotificationsScreen() {
                               className="w-11 h-11 rounded-full object-cover border border-white/10"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
                               {gName.charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -1115,6 +1139,7 @@ export default function NotificationsScreen() {
                         </div>
                         <div className="flex items-center gap-2">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleToggleFollow(gUser, true);
@@ -1170,7 +1195,7 @@ export default function NotificationsScreen() {
                                 className="w-11 h-11 rounded-full object-cover border border-white/10"
                               />
                             ) : (
-                              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                              <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
                                 {rName.charAt(0).toUpperCase()}
                               </div>
                             )}
@@ -1182,6 +1207,7 @@ export default function NotificationsScreen() {
                             </div>
                           </div>
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               if (actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following') {
@@ -1195,7 +1221,7 @@ export default function NotificationsScreen() {
                               "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0",
                               actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following'
                                 ? isDark ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700"
-                                : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
+                                : "bg-arvdoul-gradient text-white shadow-md active:scale-95"
                             )}
                           >
                             {actionStatus === 'loading' ? (
@@ -1228,8 +1254,8 @@ export default function NotificationsScreen() {
               : "bg-purple-50/80 border-purple-200"
           )}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-                <Bell className="w-5 h-5 animate-pulse" />
+              <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-arvdoul-purple dark:text-purple-400 shrink-0">
+                <Bell className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-xs font-bold text-gray-900 dark:text-white">
@@ -1253,8 +1279,9 @@ export default function NotificationsScreen() {
               <button
                 type="button"
                 onClick={() => setDismissPushBanner(true)}
-                className="p-1 text-gray-400 hover:text-gray-200"
+                className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                 title="Dismiss"
+                aria-label="Dismiss push notification banner"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1271,6 +1298,7 @@ export default function NotificationsScreen() {
           return (
             <section key={groupKey} className="space-y-2">
               <button
+                type="button"
                 onClick={() => setExpandedSections(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))}
                 className="w-full flex items-center justify-between px-1 py-1 text-xs font-bold text-arvdoul-text-secondary uppercase tracking-wider group"
               >
@@ -1311,32 +1339,32 @@ export default function NotificationsScreen() {
                           />
                           {/* Type icon on bottom right of avatar */}
                           {item.type === 'friend_request' && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
+                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
                               <Users className="w-2.5 h-2.5" />
                             </div>
                           )}
                           {item.type === 'coin_gift' && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
+                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
                               <DollarSign className="w-2.5 h-2.5" />
                             </div>
                           )}
                           {item.type === 'story_reply' && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
+                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
                               <MessageCircle className="w-2.5 h-2.5" />
                             </div>
                           )}
                           {item.type === 'post_like' && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
+                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
                               <Heart className="w-2.5 h-2.5 fill-current" />
                             </div>
                           )}
                           {item.type === 'mention' && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
+                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
                               <AtSign className="w-2.5 h-2.5" />
                             </div>
                           )}
                           {item.type === 'story_view' && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-cyan-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
+                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-cyan-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
                               <Eye className="w-2.5 h-2.5" />
                             </div>
                           )}
@@ -1368,25 +1396,27 @@ export default function NotificationsScreen() {
                           {item.type === 'friend_request' && (
                             <div className="flex items-center gap-1.5">
                               {friendActions[item.id] === 'accepted' ? (
-                                <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
                                   ✓ Friends
                                 </span>
                               ) : friendActions[item.id] === 'declined' ? (
-                                <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 bg-white/5">
+                                <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5">
                                   Declined
                                 </span>
                               ) : (
                                 <>
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleFriendRequest(item.id, 'accepted', item.user, item.requestId);
                                     }}
-                                    className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md hover:from-violet-500 hover:to-indigo-500 active:scale-95 transition-all"
+                                    className="px-4 py-1.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-md hover:opacity-95 active:scale-95 transition-all"
                                   >
                                     Accept
                                   </button>
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleFriendRequest(item.id, 'declined', item.user, item.requestId);
@@ -1406,6 +1436,7 @@ export default function NotificationsScreen() {
                           {/* Mention Comment Quote */}
                           {item.type === 'mention' && item.commentQuote && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate('/messages');
@@ -1439,7 +1470,7 @@ export default function NotificationsScreen() {
                               />
                               {item.type === 'coin_gift' && (
                                 <div className="absolute inset-0 bg-violet-950/40 flex items-center justify-center">
-                                  <Gift className="w-5 h-5 text-amber-300 animate-bounce" />
+                                  <Gift className="w-5 h-5 text-amber-300" />
                                 </div>
                               )}
                             </div>
@@ -1520,7 +1551,7 @@ export default function NotificationsScreen() {
 
           {Number.isFinite(giftModal?.amount) && (
             <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
-              <span className="text-3xl font-black text-amber-400 font-display">
+              <span className="text-3xl font-black text-amber-600 dark:text-amber-400 font-display tabular-nums">
                 +{giftModal.amount}
               </span>
               <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -1531,17 +1562,19 @@ export default function NotificationsScreen() {
 
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setGiftModal(null)}
               className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors min-h-[44px]"
             >
               Close
             </button>
             <button
+              type="button"
               onClick={() => {
                 handleThankCreator(giftModal);
                 setGiftModal(null);
               }}
-              className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg min-h-[44px]"
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-lg min-h-[44px]"
             >
               Send Thank You 💜
             </button>

@@ -205,7 +205,7 @@ const EventCard = React.memo(({
         <div className="absolute top-1 left-1 flex flex-col gap-0.5">
           {isLive && (
             <div className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow">
-              <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+              <div className="w-1.5 h-1.5 bg-white rounded-full" /> LIVE
             </div>
           )}
         </div>
@@ -263,8 +263,8 @@ const EventCard = React.memo(({
           {/* Countdown pill – right aligned, advanced styling */}
           {!isEnded && startDate && (
             <div
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow-md transition-all duration-300 ${
-                urgent ? 'bg-pink-500/30 text-pink-400 animate-pulse' : 'bg-white/10'
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow-md transition-all duration-300 tabular-nums ${
+                urgent ? 'bg-pink-500/30 text-pink-500 dark:text-pink-300' : 'bg-slate-200/80 dark:bg-white/10'
               }`}
               style={{ backdropFilter: 'blur(4px)' }}
             >
@@ -278,7 +278,7 @@ const EventCard = React.memo(({
         <div className="flex flex-wrap items-center justify-between gap-1">
           <div className="flex items-center gap-1.5">
             <span className="text-[9px]" style={{ color: tokens.textSecondary }}>
-              <span className="font-semibold" style={{ color: tokens.text }}>
+              <span className="font-semibold tabular-nums" style={{ color: tokens.text }}>
                 {attendeeCount === null ? '—' : attendeeCount}
               </span>{' '}
               going
@@ -288,6 +288,7 @@ const EventCard = React.memo(({
           {/* RSVP BUTTONS – with loading state + micro animation */}
           <div className="flex gap-1.5">
             <button
+              type="button"
               onClick={() => handleRSVP('going')}
               disabled={isLoading || isEnded}
               aria-pressed={optimisticStatus === 'going'}
@@ -302,6 +303,7 @@ const EventCard = React.memo(({
               Going
             </button>
             <button
+              type="button"
               onClick={() => handleRSVP('interested')}
               disabled={isLoading || isEnded}
               aria-pressed={optimisticStatus === 'interested'}

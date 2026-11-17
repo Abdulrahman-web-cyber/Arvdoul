@@ -172,6 +172,15 @@ class UltimateLiveService {
       await this._ensureInitialized();
       const userLevel = await this._getUserLevel(userId);
       
+      if (userLevel == null) {
+        return {
+          canStart: false,
+          reason: 'Unable to verify your account level right now.',
+          userLevel: null,
+          requiredLevel: LIVE_CONFIG.MIN_LEVEL_TO_START,
+        };
+      }
+
       if (userLevel < LIVE_CONFIG.MIN_LEVEL_TO_START) {
         return {
           canStart: false,
@@ -244,7 +253,7 @@ class UltimateLiveService {
       return {
         canStart: false,
         reason: 'Failed to check live stream eligibility.',
-        userLevel: 1,
+        userLevel: null,
       };
     }
   }

@@ -75,15 +75,24 @@ class CollectionsService {
 
   async deleteCollection(userId, collectionId) {
     await this.ensureInitialized();
-    const { doc, getDoc, writeBatch } = await import('firebase/firestore');
+    const { doc, getDoc, writeBatch, collection, query, limit, getDocs } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'collections', collectionId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return { success: false, error: 'Collection not found.' };
     if (snap.data().userId !== userId) throw new Error('Not authorized.');
+
+    const itemsCol = collection(this.firestore, 'collections', collectionId, 'items');
+    while (true) {
+      const itemsSnap = await getDocs(query(itemsCol, limit(450)));
+      if (itemsSnap.empty || itemsSnap.docs.length === 0) break;
+      const itemsBatch = writeBatch(this.firestore);
+      itemsSnap.docs.forEach((d) => itemsBatch.delete(d.ref));
+      await itemsBatch.commit();
+      if (itemsSnap.docs.length < 450) break;
+    }
+
     const batch = writeBatch(this.firestore);
     batch.delete(ref);
-    const itemsSnap = await getDocsLike(this.firestore, collectionId);
-    itemsSnap.docs.forEach((d) => batch.delete(d.ref));
     await batch.commit();
     this._invalidate(userId);
     auditLogger.log('collections.delete', { userId, meta: { collectionId } });

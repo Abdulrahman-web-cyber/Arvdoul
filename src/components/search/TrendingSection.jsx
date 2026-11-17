@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { TrendingUp, Hash, Users, Eye, MessageCircle, Award } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { cn, formatCount } from '../../lib/searchUtils';
+import { brandRgba } from '../../design-system/tokens.js';
 import ProfileAvatar from '../profile/ProfileAvatar';
 
 /**
@@ -38,7 +39,7 @@ const TrendingSection = memo(({
       <div className="flex items-center gap-3 mb-4">
         <div className={cn(
           'w-10 h-10 rounded-2xl flex items-center justify-center',
-          'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue'
+          'bg-arvdoul-gradient'
         )}>
           <Icon className="w-5 h-5 text-white" />
         </div>
@@ -56,17 +57,19 @@ const TrendingSection = memo(({
         animate={{ opacity: 1 }}
         transition={spring.card}
         className={cn(
-          'rounded-3xl overflow-hidden',
-          'backdrop-blur-2xl bg-white/8 border border-white/12',
-          'shadow-[0_25px_80px_rgba(139,30,243,0.15)]'
+          'rounded-3xl overflow-hidden backdrop-blur-2xl border',
+          isDark
+            ? 'bg-white/[0.06] border-white/12'
+            : 'bg-white border-slate-200 shadow-sm'
         )}
+        style={isDark ? { boxShadow: `0 25px 80px ${brandRgba(0.15)}` } : undefined}
       >
         {loading ? (
           <LoadingSkeleton type={type} isDark={isDark} />
         ) : items.length === 0 ? (
           <EmptyTrend isDark={isDark} type={type} />
         ) : (
-          <div className="divide-y divide-white/10">
+          <div className={cn('divide-y', isDark ? 'divide-white/10' : 'divide-slate-100')}>
             {items.map((item, index) => (
               <TrendingItem
                 key={item.id || index}
@@ -94,6 +97,7 @@ const TrendingItem = memo(({ item, index, type, onClick, isDark }) => {
 
   return (
     <motion.button
+      type="button"
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
@@ -101,18 +105,18 @@ const TrendingItem = memo(({ item, index, type, onClick, isDark }) => {
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-4 p-4',
+        'w-full flex items-center gap-4 p-4 text-left',
         'transition-colors duration-150',
-        'hover:bg-white/5',
+        isDark ? 'hover:bg-white/5' : 'hover:bg-slate-50',
         'focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50'
       )}
     >
       {/* Rank Number */}
       <div className={cn(
         'w-8 h-8 rounded-full flex items-center justify-center',
-        'font-bold text-sm',
+        'font-bold text-sm tabular-nums',
         isTopThree
-          ? 'bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue text-white'
+          ? 'bg-arvdoul-gradient text-white'
           : isDark ? 'bg-white/10 text-gray-400' : 'bg-gray-100 text-gray-500'
       )}>
         {index + 1}
@@ -173,7 +177,7 @@ const CreatorContent = memo(({ item, isDark }) => (
       )}>
         <span>@{item.username}</span>
         <span>•</span>
-        <span>{formatCount(item.followers ?? item.followerCount)} followers</span>
+        <span className="tabular-nums">{formatCount(item.followers ?? item.followerCount)} followers</span>
       </div>
     </div>
   </div>
@@ -187,10 +191,7 @@ CreatorContent.displayName = 'CreatorContent';
 const HashtagContent = memo(({ item, isDark }) => (
   <div className="flex-1 min-w-0">
     <div className="flex items-center gap-2">
-      <Hash className={cn(
-        'w-4 h-4',
-        'bg-gradient-to-r from-arvdoul-purple to-arvdoul-blue bg-clip-text text-transparent'
-      )} />
+      <Hash className="w-4 h-4 text-arvdoul-purple" />
       <span className={cn(
         'font-semibold',
         isDark ? 'text-white' : 'text-gray-900'
@@ -199,7 +200,7 @@ const HashtagContent = memo(({ item, isDark }) => (
       </span>
     </div>
     <div className={cn(
-      'text-xs mt-0.5',
+      'text-xs mt-0.5 tabular-nums',
       isDark ? 'text-gray-400' : 'text-gray-500'
     )}>
       {formatCount(item.count ?? item.postCount)} posts
@@ -221,7 +222,7 @@ const DefaultContent = memo(({ item, type, isDark }) => (
       {item.title || item.name}
     </div>
     <div className={cn(
-      'text-xs mt-0.5 flex items-center gap-2',
+      'text-xs mt-0.5 flex items-center gap-2 tabular-nums',
       isDark ? 'text-gray-400' : 'text-gray-500'
     )}>
       {type === 'videos' && (

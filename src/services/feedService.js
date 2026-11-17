@@ -1590,7 +1590,7 @@ class UltimateFeedService {
         const { collection, query, orderBy, limit, onSnapshot } = this.firestoreMethods;
         const feedRef = collection(this.firestore, 'users', userId, 'feeds');
         const unsub = onSnapshot(query(feedRef, orderBy('createdAt', 'desc'), limit(1)), (snap) => {
-          if (!snap.empty()) {
+          if (!snap.empty) {
             this.getSmartFeed(userId, { ...options, forceRefresh: true, limit: 10 }).then(feed => {
               callback({ type: 'feed_updated', feed: feed.feed, metadata: feed.metadata, subscriptionId });
             });

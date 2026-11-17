@@ -94,27 +94,29 @@ const AdjustTool = memo(({
   );
 
   return (
-    <div className="w-full space-y-4 text-white">
+    <div className={`w-full space-y-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
       {/* Presets Section */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
             Presets
           </span>
-          <Sparkles className="w-4 h-4 text-white/40" />
+          <Sparkles className={`w-4 h-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
         </div>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((preset) => (
             <motion.button
               key={preset.name}
               type="button"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => handlePresetClick(preset)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple ${
                 activePreset === preset.name
-                  ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
+                  ? 'bg-arvdoul-gradient text-white shadow-md'
+                  : isDark
+                    ? 'bg-white/10 text-white/80 hover:bg-white/20'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
               {preset.name}
@@ -130,6 +132,7 @@ const AdjustTool = memo(({
         expanded={expandedSections.light}
         onToggle={() => toggleSection('light')}
         count={2}
+        modified={[brightness, contrast].filter((v) => Number(v) !== 0).length}
       >
         <AdjustmentSlider
           icon={Sun}
@@ -160,6 +163,7 @@ const AdjustTool = memo(({
         expanded={expandedSections.color}
         onToggle={() => toggleSection('color')}
         count={3}
+        modified={[saturation, temperature, hue].filter((v) => Number(v) !== 0).length}
       >
         <AdjustmentSlider
           icon={Droplets}
@@ -201,6 +205,7 @@ const AdjustTool = memo(({
         expanded={expandedSections.effects}
         onToggle={() => toggleSection('effects')}
         count={2}
+        modified={[blur, vignette].filter((v) => Number(v) !== 0).length}
       >
         <AdjustmentSlider
           icon={Focus}
@@ -225,19 +230,23 @@ const AdjustTool = memo(({
       </Section>
 
       {/* Reset Button */}
-      <div className={`flex items-center justify-between pt-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
-        <span className="text-xs text-white/50">
+      <div className={`flex items-center justify-between pt-2 border-t ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
+        <span className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
           {modifiedCount > 0 ? `${modifiedCount} adjustments modified` : 'No changes'}
         </span>
         <motion.button
           type="button"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => {
             resetAdjustments();
             setActivePreset(null);
           }}
-          className={`px-4 py-2 text-xs font-medium rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 text-white/80 transition-colors flex items-center gap-2`}
+          className={`px-4 py-2 text-xs font-medium rounded-xl transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple ${
+            isDark
+              ? 'bg-white/10 hover:bg-white/20 text-white/90'
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+          }`}
         >
           <RotateCcw className="w-3.5 h-3.5" />
           Reset All
@@ -257,6 +266,81 @@ AdjustTool.propTypes = {
   /** Reset all adjustments to their defaults */
   resetAdjustments: PropTypes.func.isRequired,
   /** Push current state to the history stack */
+  pushUndo: PropTypes.func,
+};
+
+/**
+ * Accessible range slider for an individual image adjustment parameter.
+ */
+const AdjustmentSlider = memo(({
+  icon: Icon,
+  label,
+  value,
+  min,
+  max,
+  defaultValue = 0,
+  onChange,
+  onPointerUp,
+  showDegrees = false,
+}) => {
+  const { isDark } = useTheme();
+  const numericValue = Number(value) || 0;
+  const isModified = numericValue !== defaultValue;
+  const formattedValue = `${numericValue > 0 && min < 0 ? '+' : ''}${numericValue}${showDegrees ? '°' : ''}`;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <Icon className={`w-3.5 h-3.5 ${isModified ? 'text-arvdoul-purple' : isDark ? 'text-white/60' : 'text-slate-500'}`} />
+          <span className={`font-medium ${isDark ? 'text-white/90' : 'text-slate-800'}`}>{label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`font-mono text-xs tabular-nums ${isModified ? 'text-arvdoul-purple font-semibold' : isDark ? 'text-white/60' : 'text-slate-500'}`}>
+            {formattedValue}
+          </span>
+          {isModified && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(defaultValue);
+                onPointerUp?.();
+              }}
+              aria-label={`Reset ${label}`}
+              className={`p-0.5 rounded transition-colors ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-400 hover:text-slate-700'}`}
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+      <input
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        value={numericValue}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onPointerUp={onPointerUp}
+        onKeyUp={onPointerUp}
+        className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-arvdoul-purple bg-slate-200 dark:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+      />
+    </div>
+  );
+});
+
+AdjustmentSlider.displayName = 'AdjustmentSlider';
+
+AdjustmentSlider.propTypes = {
+  icon: PropTypes.elementType.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.number.isRequired,
+  min: PropTypes.number.isRequired,
+  max: PropTypes.number.isRequired,
+  defaultValue: PropTypes.number,
+  onChange: PropTypes.func.isRequired,
+  onPointerUp: PropTypes.func,
+  showDegrees: PropTypes.bool,
 };
 
 /**
@@ -271,28 +355,31 @@ const Section = memo(({
   modified,
   children,
 }) => {
-    const { isDark } = useTheme();
+  const { isDark } = useTheme();
   return (
-    <div className={`rounded-2xl ${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} border ${isDark ? 'border-white/10' : 'border-gray-200'} overflow-hidden`}>
+    <div className={`rounded-2xl border overflow-hidden ${isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
       <button
+        type="button"
         onClick={onToggle}
-        className={`w-full flex items-center justify-between p-3 hover:${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} transition-colors`}
+        className={`w-full flex items-center justify-between p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple ${
+          isDark ? 'hover:bg-white/5' : 'hover:bg-slate-100/80'
+        }`}
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-2">
-          <Icon className={`w-4 h-4 text-white/60`} />
-          <span className="text-sm font-medium text-white">{title}</span>
-          <span className="text-xs text-white/40">({count})</span>
+          <Icon className={`w-4 h-4 ${isDark ? 'text-white/60' : 'text-slate-500'}`} />
+          <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{title}</span>
+          <span className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>({count})</span>
           {modified > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-purple-500/30 text-purple-300">
+            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-arvdoul-purple/20 text-arvdoul-purple dark:text-purple-200 tabular-nums">
               {modified}
             </span>
           )}
         </div>
         {expanded ? (
-          <ChevronUp className="w-4 h-4 text-white/40" />
+          <ChevronUp className={`w-4 h-4 ${isDark ? 'text-white/50' : 'text-slate-400'}`} />
         ) : (
-          <ChevronDown className="w-4 h-4 text-white/40" />
+          <ChevronDown className={`w-4 h-4 ${isDark ? 'text-white/50' : 'text-slate-400'}`} />
         )}
       </button>
       <AnimatePresence initial={false}>

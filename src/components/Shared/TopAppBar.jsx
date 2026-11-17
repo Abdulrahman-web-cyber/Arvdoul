@@ -461,49 +461,14 @@ export const TopAppBar = ({
             )}
             style={{ boxShadow: tokens.shadow }}
           >
-            {/* Optical layers */}
+            {/* Subtle glass edge specular highlight */}
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-4 top-0 h-px rounded-full"
+              className="pointer-events-none absolute inset-x-6 top-0 h-px rounded-full"
               style={{
                 background: isDark
-                  ? "linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)"
-                  : "linear-gradient(90deg,transparent,rgba(255,255,255,0.8),transparent)",
-              }}
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-[1px] rounded-[25px] border"
-              style={{
-                borderColor: isDark
-                  ? "rgba(255,255,255,0.05)"
-                  : "rgba(0,0,0,0.03)",
-              }}
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 rounded-[26px]"
-              style={{
-                background:
-                  "linear-gradient(105deg,transparent 20%,rgba(255,255,255,0.02) 45%,rgba(255,255,255,0.05) 50%,rgba(255,255,255,0.02) 55%,transparent 80%)",
-              }}
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 rounded-[26px]"
-              style={{
-                background:
-                  "repeating-linear-gradient(100deg, transparent, transparent 8px, rgba(255,255,255,0.01) 8px, rgba(255,255,255,0.01) 9px)",
-                opacity: 0.4,
-              }}
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-8 bottom-0 h-px rounded-full"
-              style={{
-                background: isDark
-                  ? "linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)"
-                  : "linear-gradient(90deg,transparent,rgba(0,0,0,0.05),transparent)",
+                  ? "linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)"
+                  : "linear-gradient(90deg,transparent,rgba(255,255,255,0.85),transparent)",
               }}
             />
 
@@ -536,8 +501,10 @@ export const TopAppBar = ({
                       />
                       {!isOnline && (
                         <span
-                          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2"
-                          style={{ ringColor: isDark ? "#03071B" : "#F6F8FC" }}
+                          className={cn(
+                            "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2",
+                            isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]"
+                          )}
                         />
                       )}
                     </div>
@@ -657,7 +624,10 @@ export const TopAppBar = ({
                     </div>
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <h2 className="text-base sm:text-lg font-black truncate leading-tight tracking-tight">
+                        <h2
+                          className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                          style={{ color: tokens.textPrimary }}
+                        >
                           Profile
                         </h2>
                         {cleanUsername && (
@@ -667,7 +637,7 @@ export const TopAppBar = ({
                         )}
                       </div>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">
-                        Citizen Dashboard
+                        My Profile
                       </span>
                     </div>
                   </div>
@@ -721,7 +691,7 @@ export const TopAppBar = ({
                       onClick={handleBack}
                     />
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+                      <div className="w-8 h-8 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
                         {contextualTitle.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex flex-col min-w-0">
@@ -731,10 +701,12 @@ export const TopAppBar = ({
                         >
                           {contextualTitle}
                         </span>
-                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>Citizen Profile</span>
-                        </div>
+                        <span
+                          className="text-[11px] font-medium truncate"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          {propSubtitle || (currentMode === "profile_visitor" ? "Profile" : "Details")}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -814,12 +786,14 @@ export const TopAppBar = ({
                     />
                     {searchQuery && (
                       <button
+                        type="button"
+                        aria-label="Clear search"
                         onClick={() => {
                           setSearchQuery("");
                           onSearch?.("");
                           window.dispatchEvent(new CustomEvent("arvdoul:search_query", { detail: "" }));
                         }}
-                        className="absolute right-2.5 p-1 rounded-full"
+                        className="absolute right-2.5 p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                         style={{ color: tokens.iconSecondary }}
                       >
                         <X className="w-3.5 h-3.5" />

@@ -4,6 +4,7 @@ import { memo, useMemo } from "react";
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import LoadingSpinner from '../Shared/LoadingSpinner';
+import { brandRgba } from '../../design-system/tokens.js';
 
 /**
  * @param {Object} props
@@ -57,18 +58,18 @@ const GlassButton = memo(({
   const variantStyles = useMemo(() => {
     const variants = {
       gradient: {
-        base: `bg-arvdoul-gradient text-white font-semibold ${isDark ? 'shadow-[0_8px_32px_rgba(139,30,243,0.4)]' : 'shadow-[0_8px_32px_rgba(139,30,243,0.3)]'}`,
-        hover: 'hover:shadow-[0_12px_40px_rgba(139,30,243,0.5)] hover:brightness-110',
+        base: `bg-arvdoul-gradient text-white font-semibold ${isDark ? 'shadow-lg shadow-purple-900/40' : 'shadow-lg shadow-purple-500/25'}`,
+        hover: 'hover:brightness-110 hover:shadow-xl',
         active: 'active:scale-95',
       },
       glass: {
-        base: `${glass.medium} text-white font-medium ${isDark ? 'text-white' : 'text-gray-900'}`,
-        hover: 'hover:bg-white/15',
+        base: `${glass.medium} font-medium ${isDark ? 'text-white' : 'text-slate-900'}`,
+        hover: isDark ? 'hover:bg-white/15' : 'hover:bg-black/5',
         active: 'active:scale-95',
       },
       outline: {
-        base: `border-2 border-purple-500/50 text-purple-400 font-medium ${isDark ? 'bg-purple-500/10' : 'bg-purple-50'}`,
-        hover: 'hover:bg-purple-500/20 hover:border-purple-400',
+        base: `border-2 font-medium ${isDark ? 'border-purple-500/50 text-purple-300 bg-purple-500/10' : 'border-arvdoul-purple/50 text-arvdoul-purple bg-purple-50'}`,
+        hover: isDark ? 'hover:bg-purple-500/20 hover:border-purple-400' : 'hover:bg-purple-100/80 hover:border-arvdoul-purple',
         active: 'active:scale-95',
       },
       solid: {
@@ -121,30 +122,17 @@ const GlassButton = memo(({
       {...animationProps}
       type={type}
       className={buttonClass}
+      style={
+        variant === 'gradient' && !disabled && !loading
+          ? { boxShadow: `0 8px 28px ${brandRgba(isDark ? 0.38 : 0.25)}` }
+          : undefined
+      }
       onClick={disabled || loading ? undefined : onClick}
       disabled={disabled || loading}
       aria-busy={loading}
       aria-disabled={disabled || loading}
       {...props}
     >
-      {/* Gradient shimmer effect for gradient variant */}
-      {variant === 'gradient' && !disabled && !loading && (
-        <motion.div
-          className="absolute inset-0 rounded-2xl opacity-30"
-          style={{
-            background: 'linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
-          }}
-          animate={{
-            x: ['-100%', '100%'],
-          }}
-          transition={{
-            repeat: Infinity,
-            duration: 2,
-            ease: 'linear',
-          }}
-        />
-      )}
-
       {/* Loading spinner */}
       {loading && (
         <LoadingSpinner 

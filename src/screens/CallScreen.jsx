@@ -68,7 +68,12 @@ export default function CallScreen() {
     setStatus(CALL_STATUS.ENDED);
   }, [user?.uid]);
 
-  useEffect(() => () => { endCall(); }, [endCall]);
+  const endCallRef = useRef(endCall);
+  useEffect(() => {
+    endCallRef.current = endCall;
+  }, [endCall]);
+
+  useEffect(() => () => { endCallRef.current?.(); }, []);
 
   useEffect(() => {
     if (!user?.uid || !conversationId) return;
@@ -209,15 +214,17 @@ export default function CallScreen() {
 
       {/* Controls */}
       <div className="flex items-center justify-center gap-6 py-6">
-        <button onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'} className={cn('p-4 rounded-full transition', muted ? 'bg-red-500' : 'bg-white/10 hover:bg-white/20')}>
+        <button type="button" onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'} className={cn('p-4 rounded-full transition', muted ? 'bg-red-500' : 'bg-white/10 hover:bg-white/20')}>
           {muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
         </button>
-        <button onClick={() => { endCall(); navigate(-1); }} aria-label="End call" className="p-5 rounded-full bg-red-500 hover:bg-red-600">
+        <button type="button" onClick={() => { endCall(); navigate(-1); }} aria-label="End call" className="p-5 rounded-full bg-red-500 hover:bg-red-600">
           <PhoneOff className="w-7 h-7" />
         </button>
-        <button onClick={toggleCamera} aria-label={cameraOff ? 'Camera on' : 'Camera off'} className={cn('p-4 rounded-full transition', cameraOff ? 'bg-red-500' : 'bg-white/10 hover:bg-white/20')}>
-          {cameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
-        </button>
+        {!isAudioCall && (
+          <button type="button" onClick={toggleCamera} aria-label={cameraOff ? 'Camera on' : 'Camera off'} className={cn('p-4 rounded-full transition', cameraOff ? 'bg-red-500' : 'bg-white/10 hover:bg-white/20')}>
+            {cameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+          </button>
+        )}
       </div>
     </div>
   );

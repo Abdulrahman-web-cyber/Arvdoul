@@ -70,6 +70,7 @@ const IconButton = memo(({
   disabled = false,
   size = 'md',
 }) => {
+  const { isDark } = useTheme();
   const sizeClasses = {
     sm: 'w-7 h-7',
     md: 'w-8 h-8',
@@ -78,6 +79,7 @@ const IconButton = memo(({
 
   return (
     <motion.button
+      type="button"
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.9 }}
       onClick={onClick}
@@ -85,8 +87,10 @@ const IconButton = memo(({
       className={`
         ${sizeClasses[size]} rounded-lg flex items-center justify-center transition-all duration-200
         ${isActive
-          ? 'bg-gradient-to-br from-purple-600 to-cyan-500 text-white shadow-lg'
-          : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+          ? 'bg-arvdoul-gradient text-white shadow-lg'
+          : isDark
+            ? 'bg-white/10 text-white/75 hover:bg-white/20 hover:text-white'
+            : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 hover:text-slate-900'
         }
         ${disabled ? 'opacity-30 cursor-not-allowed' : ''}
       `}
@@ -124,23 +128,24 @@ const Section = memo(({
   return (
     <div className={`rounded-2xl ${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} border ${isDark ? 'border-white/10' : 'border-gray-200'} overflow-hidden`}>
       <button
+        type="button"
         onClick={onToggle}
-        className={`w-full flex items-center justify-between p-3 hover:${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} transition-colors`}
+        className={`w-full flex items-center justify-between p-3 transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/[0.04]'}`}
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-2">
-          {Icon && <Icon className={`w-4 h-4 text-white/60`} />}
-          <span className="text-sm font-medium text-white">{title}</span>
+          {Icon && <Icon className={`w-4 h-4 ${isDark ? 'text-white/60' : 'text-slate-500'}`} />}
+          <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{title}</span>
           {badge && (
-            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-purple-500/30 text-purple-300">
+            <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${isDark ? 'bg-purple-500/30 text-purple-300' : 'bg-purple-100 text-arvdoul-purple'}`}>
               {badge}
             </span>
           )}
         </div>
         {expanded ? (
-          <ChevronUp className="w-4 h-4 text-white/40" />
+          <ChevronUp className={`w-4 h-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
         ) : (
-          <ChevronDown className="w-4 h-4 text-white/40" />
+          <ChevronDown className={`w-4 h-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
         )}
       </button>
       <AnimatePresence initial={false}>
@@ -198,13 +203,14 @@ const FontSelector = memo(({
     <div className="relative">
       {/* Selected font display */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} border ${isDark ? 'border-white/10' : 'border-gray-200'} ${isDark ? 'hover:bg-white/15' : 'hover:bg-black/10'} transition-colors`}
+        className={`w-full flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-white/10 border-white/10 hover:bg-white/15' : 'bg-slate-100 border-slate-200 hover:bg-slate-200/70'} border transition-colors`}
       >
-        <span className="text-sm text-white truncate" style={{ fontFamily }}>
+        <span className={`text-sm truncate ${isDark ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily }}>
           {fontFamily}
         </span>
-        <ChevronDown className={`w-4 h-4 text-white/60`} />
+        <ChevronDown className={`w-4 h-4 ${isDark ? 'text-white/60' : 'text-slate-500'}`} />
       </button>
 
       {/* Font dropdown */}
@@ -214,18 +220,18 @@ const FontSelector = memo(({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl bg-gray-900 border border-white/20 shadow-2xl overflow-hidden"
+            className={`absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl border shadow-2xl overflow-hidden ${isDark ? 'bg-gray-900 border-white/20' : 'bg-white border-slate-200'}`}
           >
             {/* Search */}
             <div className={`p-2 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
                 <input aria-label="Search fonts..."
                   type="text"
                   placeholder="Search fonts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white ${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} text-sm outline-none`}
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg text-sm outline-none ${isDark ? 'bg-white/10 text-white placeholder-white/40' : 'bg-slate-100 text-slate-900 placeholder-slate-400'}`}
                 />
               </div>
             </div>
@@ -234,6 +240,7 @@ const FontSelector = memo(({
             <div className="max-h-64 overflow-y-auto">
               {filteredFonts.map((font) => (
                 <button
+                  type="button"
                   key={font}
                   onClick={() => {
                     onChange(font);
@@ -241,8 +248,11 @@ const FontSelector = memo(({
                     setSearchQuery('');
                   }}
                   className={`
-                    w-full px-4 py-2.5 text-left hover:bg-white/10 transition-colors
-                    ${fontFamily === font ? 'bg-purple-500/20 text-purple-300' : 'text-white'}
+                    w-full px-4 py-2.5 text-left transition-colors
+                    ${fontFamily === font
+                      ? isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-50 text-arvdoul-purple font-semibold'
+                      : isDark ? 'text-white hover:bg-white/10' : 'text-slate-800 hover:bg-slate-100'
+                    }
                   `}
                   style={{ fontFamily: font }}
                 >
@@ -345,7 +355,7 @@ const TextTool = memo(({
   }, [selectedText]);
 
   return (
-    <div className="w-full space-y-3 text-white">
+    <div className={`w-full space-y-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>
       {/* Quick Add Section */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
@@ -357,21 +367,22 @@ const TextTool = memo(({
             onKeyDown={(e) => {
               if (e.key === "Enter") onQuickAdd();
             }}
-            className={`flex-1 px-4 py-2.5 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white ${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} border ${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-sm transition-colors`}
+            className={`flex-1 px-4 py-2.5 rounded-xl border focus:border-purple-500 outline-none text-sm transition-colors ${isDark ? 'bg-white/10 text-white placeholder-white/40 border-white/10' : 'bg-slate-100 text-slate-900 placeholder-slate-400 border-slate-200'}`}
             aria-label="Quick text input"
           />
           <motion.button
+            type="button"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={onQuickAdd}
             disabled={!quickText.trim()}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2.5 rounded-xl bg-arvdoul-gradient text-white text-sm font-bold flex items-center gap-2 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             Add
           </motion.button>
         </div>
-        <p className="text-xs text-white/40 text-center">or tap on the canvas to add text</p>
+        <p className={`text-xs text-center ${isDark ? 'text-white/40' : 'text-slate-500'}`}>or tap on the canvas to add text</p>
       </div>
 
       {/* Selected Text Editor */}
@@ -388,7 +399,7 @@ const TextTool = memo(({
               type="text"
               value={selectedText.text || ''}
               onChange={(e) => handleUpdate({ text: e.target.value })}
-              className={`w-full px-4 py-3 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white border ${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-lg`}
+              className={`w-full px-4 py-3 rounded-xl border focus:border-purple-500 outline-none text-lg ${isDark ? 'bg-white/10 text-white border-white/10' : 'bg-slate-100 text-slate-900 border-slate-200'}`}
               aria-label="Edit text content"
               placeholder="Enter text..."
             />
@@ -414,7 +425,7 @@ const TextTool = memo(({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Size</label>
-                <span className="text-xs text-white/50">{selectedText.fontSize || 48}px</span>
+                <span className={`text-xs tabular-nums ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{selectedText.fontSize || 48}px</span>
               </div>
               <div className="flex items-center gap-2">
                 <input aria-label="Size"
@@ -502,11 +513,12 @@ const TextTool = memo(({
                 />
                 {COLOR_PRESETS.slice(0, 8).map((color) => (
                   <button
+                    type="button"
                     key={color}
                     onClick={() => handleUpdate({ color }, true)}
                     className={`
-                      w-7 h-7 rounded-lg transition-transform hover:scale-110
-                      ${selectedText.color === color ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900' : ''}
+                      w-7 h-7 rounded-lg transition-transform hover:scale-110 border border-black/15 dark:border-white/15
+                      ${selectedText.color === color ? `ring-2 ring-arvdoul-purple ring-offset-2 ${isDark ? 'ring-offset-gray-900' : 'ring-offset-white'}` : ''}
                     `}
                     style={{ backgroundColor: color }}
                     aria-label={`Set color to ${color}`}
@@ -519,7 +531,7 @@ const TextTool = memo(({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Opacity</label>
-                <span className="text-xs text-white/50">{selectedText.opacity ?? 100}%</span>
+                <span className={`text-xs tabular-nums ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{selectedText.opacity ?? 100}%</span>
               </div>
               <input aria-label="Opacity"
                 type="range"
@@ -535,7 +547,7 @@ const TextTool = memo(({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Letter Spacing</label>
-                <span className="text-xs text-white/50">{selectedText.letterSpacing ?? 0}px</span>
+                <span className={`text-xs tabular-nums ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{selectedText.letterSpacing ?? 0}px</span>
               </div>
               <input aria-label="Letter Spacing"
                 type="range"
@@ -551,7 +563,7 @@ const TextTool = memo(({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Line Height</label>
-                <span className="text-xs text-white/50">{(selectedText.lineHeight ?? 1.2).toFixed(1)}</span>
+                <span className={`text-xs tabular-nums ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{(selectedText.lineHeight ?? 1.2).toFixed(1)}</span>
               </div>
               <input aria-label="Line Height"
                 type="range"
@@ -568,12 +580,12 @@ const TextTool = memo(({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Rotation</label>
-                <span className="text-xs text-white/50">
+                <span className={`text-xs tabular-nums ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                   {Math.round(((selectedText.rotation || 0) * 180 / Math.PI))}°
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <RotateCw className="w-4 h-4 text-white/40" />
+                <RotateCw className={`w-4 h-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
                 <input aria-label="Rotation"
                   type="range"
                   min={-180}
@@ -601,12 +613,13 @@ const TextTool = memo(({
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Shadow</label>
                 <button
+                  type="button"
                   onClick={() => handleUpdate({ shadowEnabled: !selectedText.shadowEnabled }, true)}
                   className={`
                     px-3 py-1 rounded-lg text-xs font-medium transition-colors
                     ${selectedText.shadowEnabled
-                      ? 'bg-purple-500/30 text-purple-300'
-                      : 'bg-white/10 text-white/60'
+                      ? isDark ? 'bg-purple-500/30 text-purple-300' : 'bg-purple-100 text-arvdoul-purple'
+                      : isDark ? 'bg-white/10 text-white/60' : 'bg-slate-200 text-slate-600'
                     }
                   `}
                 >
@@ -617,35 +630,35 @@ const TextTool = memo(({
                 <>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="text-[10px] text-white/40">X</label>
+                      <label className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>X</label>
                       <input aria-label="Shadow X offset"
                         type="number"
                         value={selectedText.shadowX ?? 2}
                         onChange={(e) => handleUpdate({ shadowX: Number(e.target.value) })}
-                        className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                        className={`w-full px-2 py-1 rounded text-xs ${isDark ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-900 border border-slate-200'}`}
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-white/40">Y</label>
+                      <label className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Y</label>
                       <input aria-label="Shadow Y offset"
                         type="number"
                         value={selectedText.shadowY ?? 2}
                         onChange={(e) => handleUpdate({ shadowY: Number(e.target.value) })}
-                        className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                        className={`w-full px-2 py-1 rounded text-xs ${isDark ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-900 border border-slate-200'}`}
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-white/40">Blur</label>
+                      <label className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Blur</label>
                       <input aria-label="Blur"
                         type="number"
                         value={selectedText.shadowBlur ?? 4}
                         onChange={(e) => handleUpdate({ shadowBlur: Number(e.target.value) })}
-                        className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                        className={`w-full px-2 py-1 rounded text-xs ${isDark ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-900 border border-slate-200'}`}
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/40">Shadow Color</label>
+                    <label className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Shadow Color</label>
                     <input aria-label="Shadow Color"
                       type="color"
                       value={selectedText.shadowColor?.replace(/rgba?\([^)]+\)/, '#000000') || '#000000'}
@@ -662,14 +675,15 @@ const TextTool = memo(({
               <div className="flex items-center justify-between">
                 <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Stroke</label>
                 <button
+                  type="button"
                   onClick={() => handleUpdate({ 
                     strokeWidth: selectedText.strokeWidth > 0 ? 0 : 2 
                   }, true)}
                   className={`
                     px-3 py-1 rounded-lg text-xs font-medium transition-colors
                     ${selectedText.strokeWidth > 0
-                      ? 'bg-purple-500/30 text-purple-300'
-                      : 'bg-white/10 text-white/60'
+                      ? isDark ? 'bg-purple-500/30 text-purple-300' : 'bg-purple-100 text-arvdoul-purple'
+                      : isDark ? 'bg-white/10 text-white/60' : 'bg-slate-200 text-slate-600'
                     }
                   `}
                 >
@@ -679,18 +693,18 @@ const TextTool = memo(({
               {selectedText.strokeWidth > 0 && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-white/40">Width</label>
+                    <label className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Width</label>
                     <input aria-label="Width"
                       type="number"
                       min={1}
                       max={20}
                       value={selectedText.strokeWidth ?? 2}
                       onChange={(e) => handleUpdate({ strokeWidth: Number(e.target.value) })}
-                      className={`w-full px-2 py-1 rounded ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
+                      className={`w-full px-2 py-1 rounded text-xs ${isDark ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-900 border border-slate-200'}`}
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/40">Color</label>
+                    <label className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Color</label>
                     <input aria-label="Color"
                       type="color"
                       value={selectedText.strokeColor || '#000000'}
@@ -705,10 +719,11 @@ const TextTool = memo(({
 
           {/* Delete Button */}
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleDeleteText?.(selectedText.id)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 hover:bg-red-500/25 transition-colors font-medium"
           >
             <Trash2 className="w-4 h-4" />
             Delete Text
@@ -719,9 +734,9 @@ const TextTool = memo(({
       {/* No Selection State */}
       {!selectedText && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
-          <Type className="w-12 h-12 text-white/20 mb-3" />
-          <p className="text-sm text-white/50">No text selected</p>
-          <p className="text-xs text-white/30 mt-1">Add text or select existing text to edit</p>
+          <Type className={`w-12 h-12 mb-3 ${isDark ? 'text-white/20' : 'text-slate-300'}`} />
+          <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-600'}`}>No text selected</p>
+          <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>Add text or select existing text to edit</p>
         </div>
       )}
     </div>

@@ -20,6 +20,11 @@ import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
 import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
+import { getUserService } from '../services/userService.js';
+import { getMonetizationService } from '../services/monetizationService.js';
+import { getAnalyticsService } from '../services/analyticsService.js';
+import { firestoreService } from '../services/firestoreService.js';
+import { getStoryService } from '../services/storyService.js';
 
 /**
  * Whether a profile grid read must use the approved-follower query shape — i.e.
@@ -165,64 +170,66 @@ export const useProfileStore = create(
       });
       
       try {
-        const userService = (await import('../services/userService.js')).getUserService();
-        const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
-        const analyticsService = (await import('../services/analyticsService.js')).getAnalyticsService();
-        
+        const userService = getUserService();
+        const monetizationService = getMonetizationService();
+        const analyticsService = getAnalyticsService();
+
         const isOwner = userId === currentUserId;
-        
+
         // Fetch profile with requester context and viewAs projection
         const profile = await userService.getUserProfile(userId, currentUserId, options);
-        
-        // Fetch follow status if not owner
+        const resolvedUid = profile?.id || profile?.uid || userId;
+
+        // Fetch viewer-scoped follow status, mutual friends, balance, and position in parallel
+        const [followSettled, mutualSettled, balanceSettled, positionSettled] = await Promise.allSettled([
+          (!isOwner && currentUserId)
+            ? userService.getFollowStatus(currentUserId, resolvedUid)
+            : Promise.resolve(null),
+          (!isOwner && currentUserId)
+            ? userService.getMutualFriends(currentUserId, resolvedUid)
+            : Promise.resolve({ mutualFriends: [] }),
+          isOwner
+            ? monetizationService.getBalance(resolvedUid)
+            : Promise.resolve(null),
+          monetizationService.getUserPosition(resolvedUid, profile?.gender),
+        ]);
+
         let followStatus = null;
-        if (!isOwner && currentUserId) {
-          try {
-            followStatus = await userService.getFollowStatus(currentUserId, userId);
-          } catch (e) {
-            console.warn('Could not fetch follow status:', e);
-          }
+        if (followSettled.status === 'fulfilled') {
+          followStatus = followSettled.value;
+        } else {
+          console.warn('Could not fetch follow status:', followSettled.reason);
         }
-        
-        // Fetch mutual friends if not owner
+
         let mutualFriends = [];
         let mutualFriendsResolved = false;
         if (!isOwner && currentUserId) {
-          try {
-            const mutualResult = await userService.getMutualFriends(currentUserId, userId);
-            // userService returns `{ success, mutualFriends }`; reading `.users`
-            // here always produced [] so the social-context bar never rendered.
-            mutualFriends = mutualResult?.mutualFriends?.slice(0, 5) || [];
+          if (mutualSettled.status === 'fulfilled') {
+            mutualFriends = mutualSettled.value?.mutualFriends?.slice(0, 5) || [];
             mutualFriendsResolved = true;
-          } catch (e) {
-            console.warn('Could not fetch mutual friends:', e);
+          } else {
+            console.warn('Could not fetch mutual friends:', mutualSettled.reason);
           }
         } else {
-          // Owner view (or no viewer): there is no mutual set to resolve.
           mutualFriendsResolved = true;
-        }        
-        // Fetch level if not available
-        let level = profile?.level || null;
-        
-        // Fetch balance if owner. `getBalance` returns a number (or null when
-        // unknown); reading `.coins` off it always produced `0`, so the owner
-        // profile showed an empty wallet no matter the real balance.
+        }
+
+        const level = profile?.level || null;
+
         let balance = null;
         if (isOwner) {
-          try {
-            const balanceResult = await monetizationService.getBalance(userId);
-            balance = typeof balanceResult === 'number' ? balanceResult : null;
-          } catch (e) {
-            console.warn('Could not fetch balance:', e);
+          if (balanceSettled.status === 'fulfilled') {
+            balance = typeof balanceSettled.value === 'number' ? balanceSettled.value : null;
+          } else {
+            console.warn('Could not fetch balance:', balanceSettled.reason);
           }
         }
-        
-        // Fetch position
+
         let position = null;
-        try {
-          position = await monetizationService.getUserPosition(userId, profile?.gender);
-        } catch (e) {
-          console.warn('Could not fetch position:', e);
+        if (positionSettled.status === 'fulfilled') {
+          position = positionSettled.value;
+        } else {
+          console.warn('Could not fetch position:', positionSettled.reason);
         }
         
         // Resolve profile with safe fallback guarantee & real auth user linkage.
@@ -423,8 +430,6 @@ export const useProfileStore = create(
       });
       
       try {
-        const firestoreService = (await import('../services/firestoreService.js')).firestoreService;
-        
         const result = await firestoreService.getPostsByUser(userId, {
           limit: options.limit || 12,
           viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
@@ -532,7 +537,7 @@ export const useProfileStore = create(
       });
       
       try {
-        const storyService = (await import('../services/storyService.js')).getStoryService();
+        const storyService = getStoryService();
         const highlightsRes = await storyService.getHighlights(userId);
         const highlights = Array.isArray(highlightsRes)
           ? highlightsRes
@@ -618,11 +623,20 @@ export const useProfileStore = create(
       });
       
       try {
-        const storyService = (await import('../services/storyService.js')).getStoryService();
-        const storiesFeed = await storyService.getStoriesFeed({ userId });
-        
-        const userStories = storiesFeed?.filter(s => s.userId === userId) || [];
-        
+        const storyService = getStoryService();
+        const storiesFeed = await storyService.getStoriesFeed(userId, {});
+        const rawList = Array.isArray(storiesFeed)
+          ? storiesFeed
+          : Array.isArray(storiesFeed?.stories)
+            ? storiesFeed.stories
+            : Array.isArray(storiesFeed?.groups)
+              ? storiesFeed.groups.flatMap((g) => (Array.isArray(g?.stories) ? g.stories : [g]))
+              : [];
+
+        const userStories = rawList.filter(
+          (s) => s && (s.userId === userId || s.authorId === userId || s.uid === userId)
+        );
+
         if (!get()._isLoadCurrent('stories', __seq)) return;
         set((state) => {
           state.stories = userStories;
@@ -766,7 +780,7 @@ export const useProfileStore = create(
       });
       
       try {
-        const userService = (await import('../services/userService.js')).getUserService();
+        const userService = getUserService();
         const result = await userService.getMutualFriends(userId, otherUserId);
         if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {

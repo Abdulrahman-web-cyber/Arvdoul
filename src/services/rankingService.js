@@ -84,7 +84,7 @@ class RankingService {
 
     this.initPromise = (async () => {
       try {
-        this.firestore = getFirestoreInstance();
+        this.firestore = await getFirestoreInstance();
         this.initialized = true;
         logger.info('[RankingService] Initialized successfully');
       } catch (error) {

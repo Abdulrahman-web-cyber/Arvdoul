@@ -91,6 +91,28 @@ async function getUserEmail(uid) {
   }
 }
 
+/**
+ * Read runtime configuration safely: checks process.env[envKey] first, then falls
+ * back to legacy functions.config() without crashing on firebase-functions v7.
+ */
+function getRuntimeConfig(envKey, cfgPath, fallback = undefined) {
+  if (envKey && process.env[envKey] !== undefined && process.env[envKey] !== '') {
+    return process.env[envKey];
+  }
+  if (cfgPath) {
+    try {
+      const cfg = typeof functions.config === 'function' ? functions.config() : null;
+      const val = String(cfgPath)
+        .split('.')
+        .reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), cfg);
+      if (val !== undefined && val !== '') return val;
+    } catch {
+      // functions.config() throws on v7 / isolated runtimes when unconfigured
+    }
+  }
+  return fallback;
+}
+
 module.exports = {
   getUserIdFromContext,
   isAdmin,
@@ -98,4 +120,5 @@ module.exports = {
   checkIsAdmin,
   assertAdmin,
   getUserEmail,
+  getRuntimeConfig,
 };

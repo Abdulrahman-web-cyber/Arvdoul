@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, RotateCcw } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
+import { brandRgba } from '../../design-system/tokens.js';
 
 /**
  * Search Filters Modal Component
@@ -71,17 +72,19 @@ const SearchFilters = memo(({
             transition={spring.bottomSheet}
             className={cn(
               'fixed bottom-0 left-0 right-0 z-50',
-              'rounded-t-[32px] overflow-hidden',
-              'backdrop-blur-2xl bg-white/10 border border-white/15',
-              'shadow-[0_-25px_80px_rgba(139,30,243,0.15)]'
+              'rounded-t-[32px] overflow-hidden backdrop-blur-2xl border',
+              isDark ? 'bg-[#0B1024]/95 border-white/15' : 'bg-white/95 border-slate-200 shadow-2xl'
             )}
-            style={{ maxHeight: '85vh' }}
+            style={{
+              maxHeight: '85vh',
+              boxShadow: isDark ? `0 -25px 80px ${brandRgba(0.15)}` : undefined,
+            }}
           >
             {/* Header */}
             <div className={cn(
               'flex items-center justify-between p-5',
               'border-b',
-              isDark ? 'border-white/10' : 'border-gray-200/50'
+              isDark ? 'border-white/10' : 'border-gray-200/80'
             )}>
               <h2 className={cn(
                 'text-xl font-bold',
@@ -91,26 +94,26 @@ const SearchFilters = memo(({
               </h2>
               <div className="flex items-center gap-3">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleReset}
                   className={cn(
-                    'p-2 rounded-full',
-                    'hover:bg-white/10 transition-colors',
-                    isDark ? 'text-gray-400' : 'text-gray-500'
+                    'p-2 rounded-full transition-colors',
+                    isDark ? 'hover:bg-white/10 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-gray-500 hover:text-gray-900'
                   )}
                   aria-label="Reset filters"
                 >
                   <RotateCcw className="w-5 h-5" />
                 </motion.button>
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={onClose}
                   className={cn(
-                    'p-2 rounded-full',
-                    'hover:bg-white/10 transition-colors',
-                    isDark ? 'text-gray-400' : 'text-gray-500'
+                    'p-2 rounded-full transition-colors',
+                    isDark ? 'hover:bg-white/10 text-gray-400 hover:text-white' : 'hover:bg-slate-100 text-gray-500 hover:text-gray-900'
                   )}
                   aria-label="Close filters"
                 >
@@ -217,28 +220,30 @@ const SearchFilters = memo(({
             <div className={cn(
               'flex gap-3 p-5',
               'border-t',
-              isDark ? 'border-white/10' : 'border-gray-200/50'
+              isDark ? 'border-white/10' : 'border-gray-200/80'
             )}>
               <motion.button
+                type="button"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleReset}
                 className={cn(
-                  'flex-1 py-3.5 rounded-full font-semibold',
-                  'backdrop-blur-md border border-white/20',
-                  isDark ? 'bg-white/10 text-white' : 'bg-white/50 text-gray-900',
-                  'hover:bg-white/15 transition-colors'
+                  'flex-1 py-3.5 rounded-full font-semibold transition-colors border',
+                  isDark
+                    ? 'border-white/20 bg-white/10 text-white hover:bg-white/15'
+                    : 'border-slate-200 bg-slate-100 text-slate-900 hover:bg-slate-200'
                 )}
               >
                 Reset
               </motion.button>
               <motion.button
+                type="button"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleApply}
                 className={cn(
                   'flex-1 py-3.5 rounded-full font-semibold',
-                  'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue',
+                  'bg-arvdoul-gradient',
                   'text-white shadow-lg',
                   'hover:shadow-xl transition-shadow'
                 )}
@@ -277,6 +282,7 @@ FilterSection.displayName = 'FilterSection';
  */
 const FilterChip = memo(({ label, selected, onClick, isDark }) => (
   <motion.button
+    type="button"
     whileHover={{ scale: 1.05 }}
     whileTap={{ scale: 0.95 }}
     onClick={onClick}
@@ -285,10 +291,10 @@ const FilterChip = memo(({ label, selected, onClick, isDark }) => (
       'flex items-center gap-2',
       'transition-all duration-200',
       selected
-        ? 'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue text-white shadow-lg'
+        ? 'bg-arvdoul-gradient text-white shadow-lg'
         : isDark
           ? 'backdrop-blur-xl border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
-          : 'backdrop-blur-xl border border-gray-200 bg-white/50 text-gray-700 hover:bg-white/70'
+          : 'backdrop-blur-xl border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
     )}
   >
     {selected && <Check className="w-4 h-4" />}

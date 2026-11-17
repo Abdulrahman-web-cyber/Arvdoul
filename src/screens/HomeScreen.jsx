@@ -705,9 +705,12 @@ export default function HomeScreen() {
   const [isFilterShelfOpen, setIsFilterShelfOpen] = useState(false);
   const [userCoins, setUserCoins] = useState(() => {
     try {
-      return parseInt(localStorage.getItem(`arvdoul_coins_${user?.uid || 'guest'}`) || '100', 10);
+      const cached = localStorage.getItem(`arvdoul_coins_${user?.uid || 'guest'}`);
+      if (cached === null || cached === '') return null;
+      const parsed = Number(cached);
+      return Number.isFinite(parsed) ? parsed : null;
     } catch {
-      return 100;
+      return null;
     }
   });
   const [isRewardAdOpen, setIsRewardAdOpen] = useState(false);
@@ -715,6 +718,7 @@ export default function HomeScreen() {
   const [isClaimingCoins, setIsClaimingCoins] = useState(false);
   const [rewardAd, setRewardAd] = useState(null);
   const [rewardAdLoading, setRewardAdLoading] = useState(false);
+  const rewardTimerRef = useRef(null);
 
   const FEED_CATEGORIES = useMemo(() => [
     { id: 'foryou', label: '✨ For You', desc: 'Recommended posts tailored to you' },
@@ -728,6 +732,23 @@ export default function HomeScreen() {
   const activeCategoryObj = useMemo(() => {
     return FEED_CATEGORIES.find(c => c.id === activeFeedTab) || FEED_CATEGORIES[0];
   }, [FEED_CATEGORIES, activeFeedTab]);
+
+  // Clear reward countdown timer on modal close or unmount
+  useEffect(() => {
+    if (!isRewardAdOpen && rewardTimerRef.current) {
+      clearInterval(rewardTimerRef.current);
+      rewardTimerRef.current = null;
+    }
+  }, [isRewardAdOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (rewardTimerRef.current) {
+        clearInterval(rewardTimerRef.current);
+        rewardTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Coins balance sync with 5-minute client cache to prevent excessive Firestore billing
   useEffect(() => {
@@ -758,25 +779,39 @@ export default function HomeScreen() {
 
   const handleOpenRewardAd = useCallback(async () => {
     if (!user?.uid) return;
+    if (rewardTimerRef.current) {
+      clearInterval(rewardTimerRef.current);
+      rewardTimerRef.current = null;
+    }
     setIsRewardAdOpen(true);
     setRewardAdLoading(true);
     setAdWatchSeconds(AD_WATCH_SECONDS);
     // Resolve a real campaign before counting down; a rewarded ad that the
     // server cannot match must not be watchable, since the claim would fail.
+    let resolvedAd = null;
     try {
       const ad = await getAd('home', user.uid, {});
-      setRewardAd(ad || null);
-      if (!ad) toast.info('No sponsored ads available right now.');
+      resolvedAd = ad || null;
+      setRewardAd(resolvedAd);
+      if (!resolvedAd) {
+        setAdWatchSeconds(0);
+        toast.info('No sponsored ads available right now.');
+      }
     } catch (err) {
       console.warn('HomeScreen: failed to fetch rewarded ad', err);
       setRewardAd(null);
+      setAdWatchSeconds(0);
     } finally {
       setRewardAdLoading(false);
     }
-    const interval = setInterval(() => {
+    if (!resolvedAd) return;
+    rewardTimerRef.current = setInterval(() => {
       setAdWatchSeconds((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          if (rewardTimerRef.current) {
+            clearInterval(rewardTimerRef.current);
+            rewardTimerRef.current = null;
+          }
           return 0;
         }
         return prev - 1;
@@ -825,7 +860,7 @@ export default function HomeScreen() {
     } finally {
       setIsClaimingCoins(false);
     }
-  }, [user?.uid, isClaimingCoins, adWatchSeconds]);
+  }, [user?.uid, isClaimingCoins, adWatchSeconds, rewardAd?.id]);
 
   const virtuosoRef = useRef(null);
   const scrollerRef = useRef(null);
@@ -1214,6 +1249,14 @@ export default function HomeScreen() {
     loadFeedRef.current?.(true, true);
   }, []);
 
+  const hasFeed = feed.length > 0;
+  const isInitialLoading = !hasFeed && status !== STATUS.SUCCESS && status !== STATUS.ERROR;
+  const showEmptyState = !hasFeed && status === STATUS.SUCCESS && !error;
+  const showErrorState = !hasFeed && !!error && !fallbackMode;
+  const hasPendingRealtime = pendingNewPostIdsRef.current.length > 0;
+  const hasPendingPreload = preloadLockRef.current;
+  const isTrulyIdle = !hasMore && feed.length > 0 && !hasPendingRealtime && !hasPendingPreload && status === STATUS.SUCCESS;
+
   // Native pull-to-refresh on the Virtuoso scroller. `handleRefresh` already
   // guards re-entry (status === REFRESHING) and shows its own toast.
   const { pull, isRefreshing, threshold } = usePullToRefresh({
@@ -1381,17 +1424,7 @@ export default function HomeScreen() {
     );
   }
 
-  // Render gating: the feed list (Virtuoso) is only rendered when we actually have
-  // posts. Every empty-feed state (loading / refreshing / preloading / error / success
-  // with no posts) shows a dedicated state instead of an empty Virtuoso, which would
-  // otherwise paint a completely blank screen.
-  const hasFeed = feed.length > 0;
-  const isInitialLoading = !hasFeed && status !== STATUS.SUCCESS && status !== STATUS.ERROR;
-  const showEmptyState = !hasFeed && status === STATUS.SUCCESS && !error;
-  const showErrorState = !hasFeed && !!error && !fallbackMode;
-  const hasPendingRealtime = pendingNewPostIdsRef.current.length > 0;
-  const hasPendingPreload = preloadLockRef.current;
-  const isTrulyIdle = !hasMore && feed.length > 0 && !hasPendingRealtime && !hasPendingPreload && status === STATUS.SUCCESS;
+  // Derived feed-state booleans are declared above `usePullToRefresh` so hooks read live values without TDZ.
 
   return (
     <VisibilityProvider root={scrollerRootEl}>
@@ -1443,7 +1476,6 @@ export default function HomeScreen() {
           {/* Feed container */}
           <div className="relative flex-1 min-h-0 w-full">
             <PullToRefresh pull={pull} threshold={threshold} isRefreshing={isRefreshing} />
-            {isInitialLoading && <FeedLoadingBanner />}
             {showErrorState ? (
               <div className="min-h-[60vh] flex items-center justify-center px-4">
                 <div className="text-center">
@@ -1538,17 +1570,18 @@ export default function HomeScreen() {
                         <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-white/70 dark:bg-[#0f1424]/70 border border-gray-200/80 dark:border-white/10 backdrop-blur-md shadow-sm">
                           {/* Active Tab Indicator & Arrow Toggle Button */}
                           <button
+                            type="button"
                             onClick={() => {
                               triggerHaptic('light');
                               setIsFilterShelfOpen(prev => !prev);
                             }}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/10 to-pink-600/10 dark:from-purple-500/20 dark:to-pink-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all hover:border-purple-500/50 cursor-pointer"
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-arvdoul-purple/10 dark:bg-arvdoul-purple/20 border border-arvdoul-purple/30 text-arvdoul-purple dark:text-purple-200 font-bold text-xs transition-all hover:border-arvdoul-purple/50 cursor-pointer"
                           >
                             <span className="truncate max-w-[130px]">{activeCategoryObj.label}</span>
                             <motion.span
                               animate={{ rotate: isFilterShelfOpen ? 180 : 0 }}
                               transition={{ duration: 0.2 }}
-                              className="text-purple-600 dark:text-purple-400"
+                              className="text-arvdoul-purple dark:text-purple-300"
                             >
                               <ChevronDown className="w-3.5 h-3.5" />
                             </motion.span>
@@ -1567,7 +1600,7 @@ export default function HomeScreen() {
                               title="Arvdoul Coins Balance"
                             >
                               <Coins className="w-3.5 h-3.5 text-amber-500" />
-                              <span>{userCoins}</span>
+                              <span>{userCoins === null ? '—' : userCoins.toLocaleString()}</span>
                             </button>
 
                             {/* Watch Ad / Claim Reward Button */}

@@ -20,7 +20,7 @@ const { logger } = require('./logger');
 const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
-const { getUserIdFromContext, getUserEmail } = require('./auth');
+const { getUserIdFromContext, getUserEmail, getRuntimeConfig } = require('./auth');
 const { settleWithdrawal, STRIPE_PAYOUT_METHODS } = require('./withdrawalSettlement');
 const { readCoinBalance, writeCoinBalance, availableFrom } = require('./coinBalance');
 const { writeNotification } = require('./notificationWriter');
@@ -28,17 +28,17 @@ const { writeNotification } = require('./notificationWriter');
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
 // ----------------------------------------------------------------------
-const MAX_COIN_OPERATION = functions.config().monetization?.max_coin_operation || 10000;
-const WITHDRAWAL_COOLDOWN_MS = (functions.config().monetization?.withdrawal_cooldown_hours || 24) * 3600000;
-const MAX_DAILY_WITHDRAWAL_REQUESTS = functions.config().monetization?.max_daily_withdrawal_requests || 3;
-const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_threshold || 50000;
+const MAX_COIN_OPERATION = Number(getRuntimeConfig('MAX_COIN_OPERATION', 'monetization.max_coin_operation', 10000)) || 10000;
+const WITHDRAWAL_COOLDOWN_MS = (Number(getRuntimeConfig('WITHDRAWAL_COOLDOWN_HOURS', 'monetization.withdrawal_cooldown_hours', 24)) || 24) * 3600000;
+const MAX_DAILY_WITHDRAWAL_REQUESTS = Number(getRuntimeConfig('MAX_DAILY_WITHDRAWAL_REQUESTS', 'monetization.max_daily_withdrawal_requests', 3)) || 3;
+const MANUAL_REVIEW_THRESHOLD = Number(getRuntimeConfig('MANUAL_REVIEW_THRESHOLD', 'monetization.manual_review_threshold', 50000)) || 50000;
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
-const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
+const MIN_WITHDRAWAL_COINS = Number(getRuntimeConfig('MIN_WITHDRAWAL_COINS', 'monetization.min_withdrawal_coins')) || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
 // Per-day coin price of a paid post promotion. Canonical value lives in
 // `levelConfig.cjs` (shared with the client preview); the config override stays
 // available for an operator to change the rate without a code deploy.
-const BOOST_DAILY_RATE = functions.config().app?.boost_daily_rate ||
+const BOOST_DAILY_RATE = Number(getRuntimeConfig('BOOST_DAILY_RATE', 'app.boost_daily_rate')) ||
   require('./levelConfig.cjs').BOOST_DAILY_RATE_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
@@ -153,7 +153,7 @@ const checkMutualTransfer = async (senderUid, receiverUid, amount) => {
   if (senderUid === receiverUid) return;
   const key = [senderUid, receiverUid].sort().join('_');
   const docRef = admin.firestore().collection('fraud_interactions').doc(key);
-  await admin.firestore().runTransaction(async (t) => {
+  const flagInfo = await admin.firestore().runTransaction(async (t) => {
     const snap = await t.get(docRef);
     const data = snap.exists ? snap.data() : { totalAmount: 0, count: 0, lastTs: 0 };
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
@@ -165,23 +165,26 @@ const checkMutualTransfer = async (senderUid, receiverUid, amount) => {
         firstTs: Date.now(),
         expireAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
       }, { merge: true });
-      return;
+      return null;
     }
     const newTotal = data.totalAmount + amount;
     const newCount = data.count + 1;
-    if (newTotal > 50000 || newCount > 5) {
-      await flagSuspiciousActivity(senderUid, amount,
-        `Suspicious mutual transfer pair with ${receiverUid}: total ${newTotal}, count ${newCount}`);
-      await flagSuspiciousActivity(receiverUid, amount,
-        `Suspicious mutual transfer pair with ${senderUid}: total ${newTotal}, count ${newCount}`);
-    }
     t.set(docRef, {
       totalAmount: newTotal,
       count: newCount,
       lastTs: Date.now(),
       expireAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
     }, { merge: true });
+    return (newTotal > 50000 || newCount > 5) ? { newTotal, newCount } : null;
   });
+  if (flagInfo) {
+    await Promise.all([
+      flagSuspiciousActivity(senderUid, amount,
+        `Suspicious mutual transfer pair with ${receiverUid}: total ${flagInfo.newTotal}, count ${flagInfo.newCount}`),
+      flagSuspiciousActivity(receiverUid, amount,
+        `Suspicious mutual transfer pair with ${senderUid}: total ${flagInfo.newTotal}, count ${flagInfo.newCount}`),
+    ]);
+  }
 };
 
 // ----------------------------------------------------------------------
@@ -194,7 +197,14 @@ const getAvailableBalance = (privateData) => availableFrom(privateData);
 // ----------------------------------------------------------------------
 // ENVIRONMENT & STRIPE
 // ----------------------------------------------------------------------
-const stripe = new Stripe(functions.config().stripe?.secret_key, { apiVersion: '2023-10-16' });
+let stripeClient = null;
+function getStripe() {
+  if (stripeClient) return stripeClient;
+  const secretKey = getRuntimeConfig('STRIPE_SECRET_KEY', 'stripe.secret_key');
+  if (!secretKey) return null;
+  stripeClient = new Stripe(secretKey, { apiVersion: '2023-10-16' });
+  return stripeClient;
+}
 const DEFAULT_GIFT_TYPES = require('./levelConfig.cjs').GIFT_VALUES;
 
 // ----------------------------------------------------------------------
@@ -470,15 +480,19 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
         expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
 
+      return { ...resultData, _freshCommit: true };
+    });
+
+    const isFreshCommit = Boolean(result?._freshCommit);
+    if (isFreshCommit) {
+      delete result._freshCommit;
       enqueuePush(toUserId, {
         title: 'Coins received',
         body: `You received ${amount} coins from ${senderUid}`,
         type: 'coin_transfer',
         data: { from: senderUid, amount },
       }).catch((e) => logger.warn('Coin transfer notification failed', { error: e.message }));
-
-      return resultData;
-    });
+    }
 
     logEvent('transfer_coins_success', { sender: senderUid, receiver: toUserId, amount });
     return result;
@@ -494,7 +508,9 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
     const { postId, giftType, idempotencyKey } = data;
     if (!postId || !giftType) throw new functions.https.HttpsError('invalid-argument', 'postId and giftType required.');
 
-    const giftConfig = { ...DEFAULT_GIFT_TYPES, ...(functions.config().app?.gift_types || {}) };
+    const rawGiftConfig = getRuntimeConfig('APP_GIFT_TYPES', 'app.gift_types');
+    const parsedGiftTypes = typeof rawGiftConfig === 'string' ? (() => { try { return JSON.parse(rawGiftConfig); } catch { return {}; } })() : (rawGiftConfig || {});
+    const giftConfig = { ...DEFAULT_GIFT_TYPES, ...parsedGiftTypes };
     const giftValue = giftConfig[giftType];
     if (!giftValue) throw new functions.https.HttpsError('invalid-argument', `Unknown gift type: ${giftType}`);
 
@@ -504,6 +520,18 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
 
     const key = generateIdempotencyKey(idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    // Pre-read post author for fraud checks outside the atomic coin transaction.
+    const postPreSnap = await admin.firestore().collection('posts').doc(postId).get();
+    if (postPreSnap.exists) {
+      const preAuthorUid = postPreSnap.data().authorId || postPreSnap.data().userId;
+      if (preAuthorUid && senderUid === preAuthorUid && GIFT_SELF_SEND_FLAG) {
+        await flagSuspiciousActivity(senderUid, giftValue, 'Self-gifting detected on own post');
+      }
+      if (preAuthorUid) {
+        await checkMutualTransfer(senderUid, preAuthorUid, giftValue);
+      }
+    }
 
     const result = await createFirestoreTransaction(async (t) => {
       const ledgerSnap = await t.get(ledgerRef);
@@ -531,12 +559,6 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
       const postData = postSnap.data();
       const authorUid = postData.authorId || postData.userId;
       if (!authorUid) throw new functions.https.HttpsError('internal', 'Post has no author.');
-
-      if (senderUid === authorUid && GIFT_SELF_SEND_FLAG) {
-        await flagSuspiciousActivity(senderUid, giftValue, 'Self-gifting detected on own post');
-      }
-
-      await checkMutualTransfer(senderUid, authorUid, giftValue);
 
       const authorBal = (authorUid !== senderUid) ? await readCoinBalance(t, authorUid, { fallbackToPublic: true }) : senderBal;
 
@@ -578,17 +600,21 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
         expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
 
-      if (authorUid !== senderUid) {
-        enqueuePush(authorUid, {
+      return { ...resultData, _freshCommit: true };
+    });
+
+    const isFreshGiftCommit = Boolean(result?._freshCommit);
+    if (isFreshGiftCommit) {
+      delete result._freshCommit;
+      if (result.receiverId && result.receiverId !== senderUid) {
+        enqueuePush(result.receiverId, {
           title: 'New gift received!',
           body: `You received a ${giftType} gift worth ${giftValue} coins`,
           type: 'gift_received',
           data: { from: senderUid, postId, giftType },
         }).catch((e) => logger.warn('Coin transfer notification failed', { error: e.message }));
       }
-
-      return resultData;
-    });
+    }
 
     logEvent('gift_sent', { sender: senderUid, postId, giftType, value: giftValue });
 
@@ -745,7 +771,7 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
       );
     }
 
-    const configuredMinLevel = Number(functions.config().app?.withdrawal_min_level) || LEVEL_GATES.withdrawals;
+    const configuredMinLevel = Number(getRuntimeConfig('WITHDRAWAL_MIN_LEVEL', 'app.withdrawal_min_level')) || LEVEL_GATES.withdrawals;
     const userRef = admin.firestore().collection('users').doc(uid);
     const userSnap = await userRef.get();
     if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
@@ -853,8 +879,8 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
 // ----------------------------------------------------------------------
 exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
   const authHeader = req.headers.authorization;
-  const expectedSecret = functions.config()?.admin?.withdrawal_secret; // fail-closed: must be configured
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+  const expectedSecret = getRuntimeConfig('ADMIN_WITHDRAWAL_SECRET', 'admin.withdrawal_secret'); // fail-closed: must be configured
+  if (!expectedSecret || !authHeader || authHeader !== `Bearer ${expectedSecret}`) {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
@@ -866,7 +892,7 @@ exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
   const { withdrawalId, action } = req.body || {};
   try {
     const result = await settleWithdrawal(
-      { stripe, createLedgerEntry },
+      { stripe: getStripe(), createLedgerEntry },
       withdrawalId,
       action
     );
@@ -1047,7 +1073,12 @@ exports.getSponsoredSearchResult = functions.https.onCall(async (data, context) 
 // ----------------------------------------------------------------------
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   const sig = req.headers['stripe-signature'];
-  const endpointSecret = functions.config().stripe?.webhook_secret;
+  const endpointSecret = getRuntimeConfig('STRIPE_WEBHOOK_SECRET', 'stripe.webhook_secret');
+  const stripe = getStripe();
+  if (!stripe || !endpointSecret) {
+    res.status(503).send('Stripe webhook not configured');
+    return;
+  }
   let event;
 
   try {
@@ -1290,6 +1321,8 @@ async function creditSubscriptionCoins(t, { userId, tier, coinsPerMonth, idempot
 }
 
 async function getOrCreateStripeCustomer(uid) {
+  const stripe = getStripe();
+  if (!stripe) throw new functions.https.HttpsError('failed-precondition', 'Payments are not configured yet.');
   const userRef = admin.firestore().collection('users').doc(uid);
   const privateRef = admin.firestore().collection('users_private').doc(uid);
   const [userSnap, privateSnap] = await Promise.all([userRef.get(), privateRef.get()]);
@@ -1317,6 +1350,7 @@ exports.purchaseCoins = functions.https.onCall(async (data, context) => {
     if (!paymentMethodId) {
       throw new functions.https.HttpsError('failed-precondition', 'A payment method is required to purchase coins.');
     }
+    const stripe = getStripe();
     if (!stripe) {
       throw new functions.https.HttpsError('failed-precondition', 'Payments are not configured yet.');
     }
@@ -1427,6 +1461,7 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
     if (!paymentMethodId) {
       throw new functions.https.HttpsError('failed-precondition', 'A payment method is required to subscribe.');
     }
+    const stripe = getStripe();
     if (!stripe) {
       throw new functions.https.HttpsError('failed-precondition', 'Payments are not configured yet.');
     }
@@ -1517,6 +1552,7 @@ exports.cancelSubscription = functions.https.onCall(async (data, context) => {
     const subSnap = await subRef.get();
     if (!subSnap.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
     const stripeSubscriptionId = subSnap.data().stripeSubscriptionId;
+    const stripe = getStripe();
     if (stripeSubscriptionId && stripe) {
       try {
         await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: true });
@@ -1565,6 +1601,7 @@ exports.createPayoutAccount = functions.https.onCall(async (data, context) => {
     const uid = getUserIdFromContext(context);
     const { countryCode = 'US', returnUrl, deviceMetadata = {} } = data;
     await checkRateLimit(uid, 'createPayoutAccount', 5, 60000);
+    const stripe = getStripe();
     if (!stripe) throw new functions.https.HttpsError('failed-precondition', 'Payouts are not configured yet.');
 
     const userSnap = await admin.firestore().collection('users').doc(uid).get();
@@ -2028,15 +2065,19 @@ exports.sendLiveGift = functions.https.onCall(async (data, context) => {
         expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
 
-      enqueuePush(recipientUid, {
+      return { ...resultData, _freshCommit: true };
+    });
+
+    const isFreshLiveGift = Boolean(result?._freshCommit);
+    if (isFreshLiveGift) {
+      delete result._freshCommit;
+      enqueuePush(result.recipientId, {
         title: 'New live gift!',
         body: `You received a ${giftType} gift worth ${giftValue} coins`,
         type: 'gift_received',
         data: { from: senderUid, streamId, giftType },
       }).catch((e) => logger.warn('Gift notification failed', { error: e.message }));
-
-      return resultData;
-    });
+    }
 
     logEvent('live_gift_sent', { sender: senderUid, streamId, giftType, value: giftValue });
     await awardXpSafe(senderUid, 'gift_sent', { source: result.giftId });
@@ -2163,15 +2204,19 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
         expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
 
-      enqueuePush(recipientUid, {
+      return { ...resultData, _freshCommit: true };
+    });
+
+    const isFreshLiveTip = Boolean(result?._freshCommit);
+    if (isFreshLiveTip) {
+      delete result._freshCommit;
+      enqueuePush(result.recipientId, {
         title: 'You received a tip!',
         body: `You received a ${amount} coin tip`,
         type: 'tip_received',
         data: { from: senderUid, streamId, amount },
       }).catch((e) => logger.warn('Tip notification failed', { error: e.message }));
-
-      return resultData;
-    });
+    }
 
     logEvent('live_tip_sent', { sender: senderUid, streamId, amount });
     return result;
@@ -2181,5 +2226,5 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
 // Shared internals exposed to sibling modules (admin.js) so the money-path
 // helpers exist exactly once: the single configured Stripe client and the
 // double-entry ledger writer. Not deployed as callables.
-module.exports.getMonetizationStripe = () => stripe;
+module.exports.getMonetizationStripe = () => getStripe();
 module.exports.createLedgerEntry = createLedgerEntry;

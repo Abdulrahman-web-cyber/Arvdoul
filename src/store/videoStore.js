@@ -240,7 +240,7 @@ const useVideoStore = create(
             ? {
                 ...v,
                 isLiked: !v.isLiked,
-                likes: v.isLiked ? v.likes - 1 : v.likes + 1,
+                likes: v.isLiked ? Math.max(0, (v.likes ?? 0) - 1) : (v.likes ?? 0) + 1,
               }
             : v
         ),

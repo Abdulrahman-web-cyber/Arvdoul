@@ -7,14 +7,14 @@
 
 import { useState, useCallback, useMemo, useEffect, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Star, SlidersHorizontal, Image as ImageIcon } from "lucide-react";
 
 // ARVDOUL Design System
 const DNA_GRADIENT = BRAND_GRADIENT;
-const DNA_SHADOW = '0 0 20px rgba(147,51,234,0.4)';
+const DNA_SHADOW = `0 0 20px ${brandRgba(0.35)}`;
 
 /**
  * Filter presets with metadata
@@ -72,16 +72,17 @@ const FilterThumbnail = memo(({
       className="relative group"
     >
       <button
+        type="button"
         onClick={onSelect}
         className={`
           relative w-full aspect-square rounded-2xl overflow-hidden transition-all duration-200
           ${isActive 
-            ? 'ring-2 ring-transparent ring-offset-2 ring-offset-black' 
-            : 'hover:ring-2 hover:ring-white/30'
+            ? `ring-2 ring-arvdoul-purple ring-offset-2 ${isDark ? 'ring-offset-black' : 'ring-offset-white'}` 
+            : isDark ? 'hover:ring-2 hover:ring-white/30' : 'hover:ring-2 hover:ring-slate-300'
           }
         `}
         style={{
-          boxShadow: isActive ? `0 0 0 2px, ${DNA_SHADOW}` : 'none',
+          boxShadow: isActive ? DNA_SHADOW : 'none',
         }}
         aria-label={`Apply ${filter.name} filter`}
         aria-pressed={isActive}
@@ -110,7 +111,7 @@ const FilterThumbnail = memo(({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute top-2 right-2 w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center"
+            className="absolute top-2 right-2 w-5 h-5 rounded-full bg-arvdoul-gradient flex items-center justify-center"
           >
             <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
               <polyline points="20 6 9 17 4 12" />
@@ -121,6 +122,7 @@ const FilterThumbnail = memo(({
       
       {/* Favorite button */}
       <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation();
           onToggleFavorite(filter.id);
@@ -226,12 +228,12 @@ const FilterTool = memo(({
   }, [activeFavorites]);
 
   return (
-    <div className="w-full space-y-4 text-white">
+    <div className={`w-full space-y-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
       {/* Search and Category */}
       <div className="space-y-3">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
           <input
             type="text"
             placeholder="Search filters..."
@@ -242,8 +244,10 @@ const FilterTool = memo(({
           />
           {searchQuery && (
             <button
+              type="button"
+              aria-label="Clear filter search"
               onClick={() => setSearchQuery('')}
-              className={`absolute right-3 top-1/2 -translate-y-1/2 text-white/40 ${isDark ? 'hover:text-white' : 'hover:text-gray-900'}`}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-gray-900'}`}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -262,18 +266,21 @@ const FilterTool = memo(({
             
             return (
               <button
+                type="button"
                 key={category.id}
                 onClick={() => setActiveCategory(category.id)}
                 className={`
                   px-4 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200
                   ${activeCategory === category.id
-                    ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    ? 'bg-arvdoul-gradient text-white shadow-lg'
+                    : isDark
+                      ? 'bg-white/10 text-white/75 hover:bg-white/20'
+                      : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
                   }
                 `}
               >
                 {category.name}
-                <span className="ml-1.5 opacity-60">({count})</span>
+                <span className="ml-1.5 opacity-70 tabular-nums">({count})</span>
               </button>
             );
           })}
@@ -310,7 +317,7 @@ const FilterTool = memo(({
           <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
             {FILTER_CATEGORIES.find(c => c.id === activeCategory)?.name} Filters
           </span>
-          <span className="text-xs text-white/40">
+          <span className={`text-xs tabular-nums ${isDark ? 'text-white/45' : 'text-slate-500'}`}>
             {filteredFilters.length} filters
           </span>
         </div>
@@ -342,9 +349,9 @@ const FilterTool = memo(({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className={`w-4 h-4 ${isDark ? 'text-white/60' : 'text-gray-500'}`} />
-                <span className="text-xs font-medium text-white/80">Intensity</span>
+                <span className={`text-xs font-medium ${isDark ? 'text-white/80' : 'text-slate-700'}`}>Intensity</span>
               </div>
-              <span className="text-xs text-white/50 tabular-nums">{filterIntensity}%</span>
+              <span className={`text-xs tabular-nums ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{filterIntensity}%</span>
             </div>
             
             <div className="relative h-8 flex items-center">
@@ -384,9 +391,9 @@ const FilterTool = memo(({
       {/* Empty state */}
       {filteredFilters.length === 0 && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
-          <ImageIcon className="w-12 h-12 text-white/20 mb-3" />
-          <p className="text-sm text-white/50">No filters found</p>
-          <p className="text-xs text-white/30 mt-1">Try a different search term</p>
+          <ImageIcon className={`w-12 h-12 mb-3 ${isDark ? 'text-white/20' : 'text-slate-300'}`} />
+          <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-600'}`}>No filters found</p>
+          <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>Try a different search term</p>
         </div>
       )}
     </div>

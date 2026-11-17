@@ -258,18 +258,25 @@ export default function SponsoredPostCard({
           <div className="flex items-center gap-2 relative">
             {/* Rewarded Button: Watch for Coins */}
             <button
+              type="button"
               onClick={handleStartWatch}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer tabular-nums"
               title="Watch full ad to earn coins"
             >
-              <Gift className="w-3 h-3 text-amber-400" />
+              <Gift className="w-3 h-3 text-amber-500 dark:text-amber-400" />
               <span>+{AD_REWARD_COINS} Coins</span>
             </button>
 
             {/* Options Menu */}
             <button
+              type="button"
+              aria-label="Ad options"
+              aria-expanded={showMenu}
               onClick={() => setShowMenu(!showMenu)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className={cn(
+                "p-1.5 rounded-lg transition cursor-pointer",
+                isDark ? "text-gray-400 hover:text-white hover:bg-white/10" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              )}
             >
               <MoreHorizontal className="w-4 h-4" />
             </button>
@@ -280,24 +287,33 @@ export default function SponsoredPostCard({
                 isDark ? "bg-[#03071B]/95 border-white/10" : "bg-white border-gray-200 shadow-lg"
               )}>
                 <button
+                  type="button"
                   onClick={handleHideAd}
-                  className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg cursor-pointer"
+                  className="w-full text-left px-3 py-1.5 text-xs text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 rounded-lg cursor-pointer"
                 >
                   Hide this ad
                 </button>
                 <button
+                  type="button"
                   onClick={handleReportAd}
                   disabled={isReporting}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 rounded-lg text-gray-300 cursor-pointer disabled:opacity-50"
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs rounded-lg cursor-pointer disabled:opacity-50",
+                    isDark ? "text-gray-300 hover:bg-white/5" : "text-slate-700 hover:bg-slate-100"
+                  )}
                 >
                   {isReporting ? 'Reporting…' : 'Report ad'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setShowMenu(false);
                     toast.info('Ads on Arvdoul are matched based on content tags and creator engagement.');
                   }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 rounded-lg text-gray-400 cursor-pointer"
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs rounded-lg cursor-pointer",
+                    isDark ? "text-gray-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
+                  )}
                 >
                   Why this ad?
                 </button>
@@ -309,7 +325,10 @@ export default function SponsoredPostCard({
         {/* Ad Title & Description */}
         <div className="px-4 pb-2">
           <h4 className="text-sm font-bold leading-snug">{ad.title}</h4>
-          <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">
+          <p className={cn(
+            "text-xs mt-1 line-clamp-2 leading-relaxed",
+            isDark ? "text-gray-400" : "text-slate-600"
+          )}>
             {ad.description}
           </p>
         </div>
@@ -353,6 +372,7 @@ export default function SponsoredPostCard({
           </div>
 
           <button
+            type="button"
             onClick={handleCtaClick}
             className="px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-md hover:scale-105 active:scale-95 transition cursor-pointer"
             style={{ background: BRAND_GRADIENT }}
@@ -377,35 +397,40 @@ export default function SponsoredPostCard({
             >
               {/* Close button */}
               <button
+                type="button"
+                aria-label="Close rewarded ad modal"
                 onClick={() => {
                   if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
                   setIsWatchingModalOpen(false);
                 }}
-                className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition"
+                className={cn(
+                  "absolute top-4 right-4 p-2 rounded-full transition",
+                  isDark ? "bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900"
+                )}
               >
                 <X className="w-4 h-4" />
               </button>
 
               <div className="flex items-center gap-2 mb-3">
-                <Award className="w-5 h-5 text-amber-400" />
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                <Award className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   Rewarded Ad Experience
                 </span>
               </div>
 
               <h3 className="text-lg font-black mb-1">{ad.title}</h3>
-              <p className="text-xs text-gray-400 mb-4">{ad.description}</p>
+              <p className={cn("text-xs mb-4", isDark ? "text-gray-400" : "text-slate-600")}>{ad.description}</p>
 
               {/* Video/Media presentation */}
-              <div className="relative aspect-video rounded-2xl overflow-hidden mb-5 border border-white/10">
+              <div className={cn("relative aspect-video rounded-2xl overflow-hidden mb-5 border", isDark ? "border-white/10" : "border-slate-200")}>
                 <LazyImage src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center">
                   {!isRewarded ? (
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-14 h-14 rounded-full border-4 border-amber-400 border-t-transparent animate-spin flex items-center justify-center">
-                        <span className="text-base font-black text-amber-400 font-mono">{countdown}s</span>
+                        <span className="text-base font-black text-amber-400 font-mono tabular-nums">{countdown}s</span>
                       </div>
-                      <p className="text-xs font-semibold text-white/90">Watch {countdown}s to claim reward</p>
+                      <p className="text-xs font-semibold text-white/90 tabular-nums">Watch {countdown}s to claim reward</p>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-2">
@@ -419,20 +444,27 @@ export default function SponsoredPostCard({
               {/* Action */}
               <div className="flex items-center justify-end gap-3">
                 <button
+                  type="button"
                   onClick={handleCtaClick}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer"
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer transition",
+                    isDark
+                      ? "text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10"
+                      : "text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200"
+                  )}
                 >
                   Visit Website
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleClaimReward}
                   disabled={!isRewarded || isClaiming}
                   className={cn(
-                    "px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg flex items-center gap-2 transition-all cursor-pointer",
+                    "px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg flex items-center gap-2 transition-all cursor-pointer tabular-nums",
                     isRewarded
                       ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:scale-105 active:scale-95"
-                      : "bg-gray-700 opacity-50 cursor-not-allowed"
+                      : "bg-gray-500 dark:bg-gray-700 opacity-50 cursor-not-allowed"
                   )}
                 >
                   <Gift className="w-4 h-4" />

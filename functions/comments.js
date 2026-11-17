@@ -14,6 +14,7 @@ const admin = require('firebase-admin');
 const { enqueuePush } = require('./pushQueue');
 const { checkRateLimit } = require('./rateLimit');
 const { isFlagEnabled } = require('./featureFlags');
+const { getRuntimeConfig } = require('./auth');
 
 // A single shared Admin SDK instance. This module previously referenced a bare
 // `db` that was never defined (no `admin.initializeApp()` either), so every
@@ -64,7 +65,7 @@ exports.moderateComment = functions.firestore
     try {
       await checkRateLimit(userId, 'moderate', 10, 60000);
 
-      const apiKey = functions.config().perspective?.api_key;
+      const apiKey = getRuntimeConfig('PERSPECTIVE_API_KEY', 'perspective.api_key');
       if (!apiKey) {
         log('warn', 'Perspective API key missing – marking for manual review', { commentId });
         await snap.ref.update({
@@ -153,7 +154,7 @@ exports.moderateCommentOnUpdate = functions.firestore
     try {
       await checkRateLimit(userId, 'moderate', 10, 60000);
 
-      const apiKey = functions.config().perspective?.api_key;
+      const apiKey = getRuntimeConfig('PERSPECTIVE_API_KEY', 'perspective.api_key');
       if (!apiKey) return;
 
       const controller = new AbortController();

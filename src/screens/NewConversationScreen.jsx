@@ -109,7 +109,7 @@ const NewConversationScreen = () => {
 
     openDirectChat();
     return () => { cancelled = true; };
-  }, [user?.uid, toUserId, sharePostId, loadConversations, navigate]);
+  }, [user?.uid, toUserId, sharePostId, shareProfileId, loadConversations, navigate]);
 
   // Load friends on mount
   React.useEffect(() => {

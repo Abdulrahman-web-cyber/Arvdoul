@@ -12,7 +12,7 @@ class MarketplaceService {
   constructor() {
     this.cart = [];
     this.orders = [];
-    this._initOrdersStore();
+    this._initOrdersPromise = this._initOrdersStore();
   }
 
   /**
@@ -140,6 +140,7 @@ class MarketplaceService {
         throw new Error('Purchase did not complete: the server returned no order.');
       }
       const order = result.order;
+      await this._initOrdersPromise;
       this.orders.unshift(order);
       await this._saveOrders();
       return order;

@@ -1,7 +1,7 @@
 // src/routes/AppRoutes.jsx
 
 import { lazy, Suspense, useState, useEffect } from "react";
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useParams } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
@@ -144,6 +144,11 @@ const RouteLoadingFallback = () => (
   <RouteProgressBar isAnimating={true} />
 );
 const RouteFallback = RouteLoadingFallback;
+
+const RedirectChatToMessages = () => {
+  const { conversationId } = useParams();
+  return <Navigate to={conversationId ? `/messages/${conversationId}` : "/messages"} replace />;
+};
 
 const PublicRoute = ({ children }) => {
   return <AppStateGuard>{children}</AppStateGuard>;
@@ -1238,7 +1243,7 @@ export default function AppRoutes() {
       <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
       <Route path="/message" element={<Navigate to="/messages" replace />} />
       <Route path="/chat" element={<Navigate to="/messages" replace />} />
-      <Route path="/chat/:conversationId" element={<Navigate to="/messages/:conversationId" replace />} />
+      <Route path="/chat/:conversationId" element={<RedirectChatToMessages />} />
       <Route path="/inbox" element={<Navigate to="/messages" replace />} />
       <Route path="/dm" element={<Navigate to="/messages" replace />} />
       <Route path="/requests" element={<Navigate to="/messages" replace />} />

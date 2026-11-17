@@ -153,9 +153,14 @@ export async function testConnection() {
     await getDocFromServer(doc(db, 'system_health', 'probe'));
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+    const msg = error instanceof Error ? error.message : String(error || '');
+    const code = error?.code || '';
+    if (msg.includes('the client is offline') || code === 'unavailable') {
       console.error('Please check your Firebase configuration — Firestore client reported offline.');
       return false;
+    }
+    if (code === 'permission-denied' || msg.includes('Missing or insufficient permissions')) {
+      return true;
     }
     return true;
   }

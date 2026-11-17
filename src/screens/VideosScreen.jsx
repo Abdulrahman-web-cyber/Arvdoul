@@ -182,7 +182,11 @@ const VideosScreen = () => {
         <button
           type="button"
           onClick={() => navigate('/reels')}
-          className="px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400 border-pink-500/30"
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 ${
+            isDark
+              ? 'bg-pink-500/20 text-pink-300 border-pink-500/30'
+              : 'bg-white/90 text-pink-600 border-pink-200'
+          }`}
           title="Open Fullscreen Reels"
         >
           <Flame className="w-3.5 h-3.5 text-pink-500" />
@@ -265,7 +269,7 @@ const GridView = memo(({
         </div>
 
         {/* Tab Filters */}
-        <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/20 dark:bg-white/5 border border-black/5 dark:border-white/10 backdrop-blur-xl">
+        <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-200/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 backdrop-blur-xl">
           {[
             { id: 'sparks', label: '⚡ Sparks' },
             { id: 'for_you', label: 'For You' },

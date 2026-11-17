@@ -45,7 +45,7 @@ class CommunityService {
     await this.initialize();
     const snap = await getDoc(doc(this.db, 'communities', communityId));
     
-    if (!snap.exists || snap.data().isDeleted) {
+    if (!snap.exists() || snap.data().isDeleted) {
       return null;
     }
     

@@ -11,9 +11,9 @@ const { Mux } = require('@mux/mux-node');
 const { Storage } = require('@google-cloud/storage');
 const { VideoIntelligenceServiceClient } = require('@google-cloud/video-intelligence');
 const { SpeechClient } = require('@google-cloud/speech');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -159,7 +159,6 @@ async function transferCoinsInternal(fromUid, toUid, amount, reason, metadata = 
 exports.createMuxUpload = onCall({
   memory: '512MB',
   timeoutSeconds: 30,
-  minInstances: 1,
 }, async (data, context) => {
   const uid = validateAuth(context);
   const { fileName, fileSize, mimeType, visibility, isReel } = data;
@@ -854,29 +853,60 @@ async function watermarkVideoInternal(videoId) {
   if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
 
   const sourceUrl = `https://stream.mux.com/${playbackId}/high.mp4`;
-  const tempInput = path.join(os.tmpdir(), `${videoId}_input.mp4`);
-  const tempOutput = path.join(os.tmpdir(), `${videoId}_watermarked.mp4`);
+  const runSuffix = crypto.randomBytes(4).toString('hex');
+  const tempInput = path.join(os.tmpdir(), `${videoId}_${runSuffix}_input.mp4`);
+  const tempWatermark = path.join(os.tmpdir(), `${videoId}_${runSuffix}_wm.png`);
+  const tempOutput = path.join(os.tmpdir(), `${videoId}_${runSuffix}_watermarked.mp4`);
   const watermarkUrl = 'https://storage.googleapis.com/arvdoul-assets/logo.png';
 
-  // Download source
-  const response = await fetch(sourceUrl);
-  const buffer = await response.buffer();
-  fs.writeFileSync(tempInput, buffer);
+  try {
+    const [sourceRes, wmRes] = await Promise.all([fetch(sourceUrl), fetch(watermarkUrl)]);
+    if (!sourceRes.ok) throw new functions.https.HttpsError('unavailable', `Failed to fetch source video (${sourceRes.status})`);
+    if (!wmRes.ok) throw new functions.https.HttpsError('unavailable', `Failed to fetch watermark (${wmRes.status})`);
 
-  // Build FFmpeg command with escaped arguments
-  const watermarkFilter = `drawtext=text='Arvdoul':fontcolor=white:fontsize=24:x=w-tw-10:y=h-th-10:alpha=0.8`;
-  const forensicMetadata = `${video.userId}|${videoId}|${Date.now()}`;
-  const forensicFilter = `drawtext=text='${forensicMetadata.replace(/'/g, "\\'")}':fontcolor=white:fontsize=8:x=w-tw-10:y=10:alpha=0.2`;
+    fs.writeFileSync(tempInput, Buffer.from(await sourceRes.arrayBuffer()));
+    fs.writeFileSync(tempWatermark, Buffer.from(await wmRes.arrayBuffer()));
 
-  const cmd = `ffmpeg -i "${tempInput}" -i "${watermarkUrl}" -filter_complex "[1:v]scale=100:-1[wm];[0:v][wm]overlay=W-w-10:H-h-10,${watermarkFilter},${forensicFilter}" -c:a copy "${tempOutput}"`;
-  await execPromise(cmd, { shell: true });
+    // Escape FFmpeg drawtext characters safely; never invoke a subshell.
+    const safeUserId = String(video.userId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeVideoId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, '');
+    const forensicMetadata = `${safeUserId}|${safeVideoId}|${Date.now()}`;
+    const watermarkFilter = `drawtext=text='Arvdoul':fontcolor=white:fontsize=24:x=w-tw-10:y=h-th-10:alpha=0.8`;
+    const forensicFilter = `drawtext=text='${forensicMetadata}':fontcolor=white:fontsize=8:x=w-tw-10:y=10:alpha=0.2`;
+    const filterComplex = `[1:v]scale=100:-1[wm];[0:v][wm]overlay=W-w-10:H-h-10,${watermarkFilter},${forensicFilter}`;
 
-  const bucket = admin.storage().bucket(process.env.WATERMARK_BUCKET);
-  await bucket.upload(tempOutput, { destination: `watermarked/${videoId}.mp4` });
-  const signedUrl = await bucket.file(`watermarked/${videoId}.mp4`).getSignedUrl({ action: 'read', expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+    await execFilePromise('ffmpeg', [
+      '-y',
+      '-i', tempInput,
+      '-i', tempWatermark,
+      '-filter_complex', filterComplex,
+      '-c:a', 'copy',
+      tempOutput,
+    ]);
 
-  await videoRef.update({ watermarkedUrl: signedUrl[0], watermarkedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  return { success: true, watermarkedUrl: signedUrl[0] };
+    const bucket = admin.storage().bucket(process.env.WATERMARK_BUCKET);
+    await bucket.upload(tempOutput, { destination: `watermarked/${videoId}.mp4` });
+    const signedUrl = await bucket.file(`watermarked/${videoId}.mp4`).getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    });
+
+    await videoRef.update({
+      watermarkedUrl: signedUrl[0],
+      watermarkedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { success: true, watermarkedUrl: signedUrl[0] };
+  } finally {
+    for (const filePath of [tempInput, tempWatermark, tempOutput]) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (cleanupErr) {
+        // Temp file cleanup is best-effort after upload or error.
+        logger.warn('Temp watermark file cleanup skipped', { filePath, error: cleanupErr.message });
+      }
+    }
+  }
 }
 
 exports.watermarkVideo = onCall(async (data, context) => {

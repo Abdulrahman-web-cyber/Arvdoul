@@ -272,7 +272,7 @@ describe('ProfileFeedGrid regression fixes', () => {
 
 describe('AboutScreen & EditProfileScreen regression fixes', () => {
   test('AboutScreen resolves relationship state for a visitor and detects @handle owner cleanly', async () => {
-    const { rerender } = render(
+    const { unmount } = render(
       <MemoryRouter initialEntries={['/profile/target_creator/about']}>
         <Routes>
           <Route path="/profile/:userId/about" element={<AboutScreen />} />
@@ -284,6 +284,8 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
       expect(relSpy).toHaveBeenCalledWith('viewer-1', 'target-2');
     });
 
+    unmount();
+    relSpy.mockClear();
     useProfileStore.setState({
       profile: {
         id: 'viewer-1',
@@ -292,9 +294,8 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
         displayName: 'Viewer One',
       },
     });
-    relSpy.mockClear();
 
-    rerender(
+    render(
       <MemoryRouter initialEntries={['/profile/@viewer_handle/about']}>
         <Routes>
           <Route path="/profile/:userId/about" element={<AboutScreen />} />
@@ -302,7 +303,7 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole('button', { name: /Edit/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Edit Profile$/i })).toBeInTheDocument();
     expect(relSpy).not.toHaveBeenCalled();
   });
 

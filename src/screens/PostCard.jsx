@@ -112,7 +112,7 @@ class PostErrorBoundary extends React.Component {
               ? this.state.error?.message || 'Could not load post'
               : 'Something went wrong. Please try again.'}
           </p>
-          <button onClick={this.handleRetry} className="mt-3 px-4 py-1.5 rounded-full bg-red-500 text-white text-sm shadow-md">Try again</button>
+          <button type="button" onClick={this.handleRetry} className="mt-3 px-4 py-1.5 rounded-full bg-red-500 text-white text-sm shadow-md">Try again</button>
         </div>
       );
     }
@@ -309,27 +309,27 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
       >
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold text-sm" style={{ color: tokens.text }}>Share</h3>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition" aria-label="Close"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition" aria-label="Close"><X className="w-4 h-4" /></button>
         </div>
         <div className="grid grid-cols-4 gap-3 mb-4" role="listbox">
-          <button onClick={shareNative} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Share2 className="w-6 h-6 text-blue-500" /><span className="text-xs">Share</span></button>
-          <button onClick={copyLink} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Copy className="w-6 h-6" /><span className="text-xs">Copy</span></button>
-          <button onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(content + ' ' + url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaWhatsapp className="w-6 h-6 text-green-500" /><span className="text-xs">WA</span></button>
-          <button onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(content)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTelegram className="w-6 h-6 text-blue-500" /><span className="text-xs">TG</span></button>
-          <button onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(content)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTwitter className="w-6 h-6 text-sky-500" /><span className="text-xs">X</span></button>
-          <button onClick={() => { window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaFacebook className="w-6 h-6 text-blue-600" /><span className="text-xs">FB</span></button>
-          <button onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copied – share in Instagram DM'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaInstagram className="w-6 h-6 text-pink-500" /><span className="text-xs">IG</span></button>
-          <button onClick={repost} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><RefreshCw className="w-6 h-6 text-green-500" /><span className="text-xs">Repost</span></button>
+          <button type="button" onClick={shareNative} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Share2 className="w-6 h-6 text-blue-500" /><span className="text-xs">Share</span></button>
+          <button type="button" onClick={copyLink} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Copy className="w-6 h-6" /><span className="text-xs">Copy</span></button>
+          <button type="button" onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(content + ' ' + url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaWhatsapp className="w-6 h-6 text-green-500" /><span className="text-xs">WA</span></button>
+          <button type="button" onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(content)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTelegram className="w-6 h-6 text-blue-500" /><span className="text-xs">TG</span></button>
+          <button type="button" onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(content)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTwitter className="w-6 h-6 text-sky-500" /><span className="text-xs">X</span></button>
+          <button type="button" onClick={() => { window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaFacebook className="w-6 h-6 text-blue-600" /><span className="text-xs">FB</span></button>
+          <button type="button" onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copied – share in Instagram DM'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaInstagram className="w-6 h-6 text-pink-500" /><span className="text-xs">IG</span></button>
+          <button type="button" onClick={repost} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><RefreshCw className="w-6 h-6 text-green-500" /><span className="text-xs">Repost</span></button>
         </div>
         <div className="border-t pt-3 space-y-2" style={{ borderColor: tokens.overlayPanelBorder }}>
-          <button onClick={quotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Quote className="w-5 h-5" /><span className="text-sm">Quote Post</span></button>
-          <button onClick={sendToFriends} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Send className="w-5 h-5" /><span className="text-sm">Send to Friends</span></button>
+          <button type="button" onClick={quotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Quote className="w-5 h-5" /><span className="text-sm">Quote Post</span></button>
+          <button type="button" onClick={sendToFriends} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Send className="w-5 h-5" /><span className="text-sm">Send to Friends</span></button>
           {hasMedia && (
-            <button onClick={downloadMedia} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Download className="w-5 h-5" /><span className="text-sm">Download Media</span></button>
+            <button type="button" onClick={downloadMedia} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Download className="w-5 h-5" /><span className="text-sm">Download Media</span></button>
           )}
-          <button onClick={addToStory} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><PlusCircle className="w-5 h-5" /><span className="text-sm">Add to Story</span></button>
+          <button type="button" onClick={addToStory} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><PlusCircle className="w-5 h-5" /><span className="text-sm">Add to Story</span></button>
           {isCreator && (
-            <button onClick={promotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><TrendingUp className="w-5 h-5" style={{ color: tokens.gold }} /><span className="text-sm" style={{ color: tokens.gold }}>Promote Post</span></button>
+            <button type="button" onClick={promotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><TrendingUp className="w-5 h-5" style={{ color: tokens.gold }} /><span className="text-sm" style={{ color: tokens.gold }}>Promote Post</span></button>
           )}
         </div>
       </motion.div>
@@ -399,6 +399,7 @@ const CardReactionsPicker = React.memo(({ onSelect, onClose, tokens, targetRect 
       >
         {REACTIONS.map((r) => (
           <button
+            type="button"
             key={r.emoji}
             onClick={() => { onSelect(r); onClose(); }}
             className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition text-2xl"
@@ -467,7 +468,7 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
   if (!visiblePreview.length) return null;
   return (
     <div className="px-4 pb-2">
-      <button onClick={onViewAll} className="text-xs hover:underline mb-1" style={{ color: tokens.textSecondary }}>
+      <button type="button" onClick={onViewAll} className="text-xs hover:underline mb-1 tabular-nums" style={{ color: tokens.textSecondary }}>
         {typeof totalComments === 'number' ? `View all ${totalComments} comments` : 'View all comments'}
       </button>
       {visiblePreview.map(comment => (
@@ -1105,7 +1106,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     >
       {/* HEADER – larger avatar (w-10 h-10), compact padding */}
       <div className="p-3 flex items-start gap-3">
-        <button onClick={() => navigate(`/profile/${post.authorId}`)} className="relative flex-shrink-0" aria-label={`Visit ${post.authorName}'s profile`}>
+        <button type="button" onClick={() => navigate(`/profile/${post.authorId}`)} className="relative flex-shrink-0" aria-label={`Visit ${post.authorName}'s profile`}>
           <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-gradient-to-r from-purple-400 to-pink-600' : 'bg-transparent'}`} />
           <LazyImage src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
           {isPremium && <Crown className="absolute -top-1 -right-1 w-3 h-3 text-yellow-400" />}
@@ -1117,7 +1118,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             {isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
             {isCreator && <Zap className="w-3 h-3 text-amber-400" />}
             {isSponsored && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-300">Sponsored</span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-gray-300">Sponsored</span>
             )}
           </div>
           <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: tokens.textSecondary }}>
@@ -1137,6 +1138,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         <div className="flex items-center gap-2">
           {!isAuthor && currentUser && (
             <motion.button
+              type="button"
               onClick={handleFollow}
               whileTap={{ scale: 0.96 }}
               className="px-2 py-0.5 rounded-full text-xs font-semibold shadow-md transition-all"
@@ -1150,7 +1152,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
               {engagement.followState === 'following' ? 'Following' : engagement.followState === 'requested' ? 'Requested' : 'Follow'}
             </motion.button>
           )}
-          <button onClick={() => onOpenOptions?.(post)} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Post options">
+          <button type="button" onClick={() => onOpenOptions?.(post)} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Post options">
             <MoreHorizontal className="w-4 h-4" style={{ color: tokens.textSecondary }} />
           </button>
         </div>
@@ -1160,8 +1162,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isSponsored && adDetails && (
         <div className="mx-3 mb-2 p-2 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="w-4 h-4 text-purple-400" />
-            <span className="text-xs text-white/80">{adDetails.title || 'Sponsored'}</span>
+            <ShoppingBag className="w-4 h-4 text-arvdoul-purple dark:text-purple-400" />
+            <span className="text-xs font-medium text-slate-800 dark:text-white/90">{adDetails.title || 'Sponsored'}</span>
           </div>
           {ctaLink && (
             <a
@@ -1202,7 +1204,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <LazyImage src={post.originalMedia[0]?.url || post.originalMedia[0]?.thumbnail} alt="" className="mt-2 rounded-xl w-full max-h-60 object-cover" loading="lazy" />
           )}
           {post.originalPostId && (
-            <button onClick={() => navigate(`/post/${post.originalPostId}`)} className="mt-2 text-xs font-medium" style={{ color: tokens.primary }}>
+            <button type="button" onClick={() => navigate(`/post/${post.originalPostId}`)} className="mt-2 text-xs font-medium" style={{ color: tokens.primary }}>
               View original post
             </button>
           )}
@@ -1231,7 +1233,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {/* ENGAGEMENT STATS (simplified – only analytics toggle for creators) */}
       <div className="px-3 py-1 flex justify-end items-center text-sm">
         {isAuthor && (
-          <button onClick={() => setUi(prev => ({ ...prev, showAnalytics: !prev.showAnalytics }))} className="flex items-center gap-1 hover:underline text-xs" style={{ color: tokens.textSecondary }} aria-label="View post analytics">
+          <button type="button" onClick={() => setUi(prev => ({ ...prev, showAnalytics: !prev.showAnalytics }))} className="flex items-center gap-1 hover:underline text-xs" style={{ color: tokens.textSecondary }} aria-label="View post analytics">
             <BarChart3 className="w-3 h-3" /> Analytics
           </button>
         )}
@@ -1243,13 +1245,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       <AnimatePresence>
         {ui.showAnalytics && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-2 overflow-hidden">
-            <div className="bg-black/20 rounded-xl p-2 space-y-1 text-xs" style={{ color: tokens.textSecondary }}>
+            <div className="bg-slate-100 dark:bg-black/20 rounded-xl p-2 space-y-1 text-xs" style={{ color: tokens.textSecondary }}>
               {analyticsLoading ? (
                 <div className="py-1 text-center">Loading analytics…</div>
               ) : postAnalytics ? (
                 <>
                   {[['Views', postAnalytics.totalViews], ['Likes', postAnalytics.totalLikes], ['Comments', postAnalytics.totalComments], ['Shares', postAnalytics.totalShares]].map(([label, value]) => (
-                    <div key={label} className="flex justify-between"><span>{label}</span><span>{typeof value === 'number' ? value.toLocaleString() : '—'}</span></div>
+                    <div key={label} className="flex justify-between"><span>{label}</span><span className="tabular-nums font-medium">{typeof value === 'number' ? value.toLocaleString() : '—'}</span></div>
                   ))}
                 </>
               ) : (
@@ -1274,6 +1276,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {/* Like button with bubble */}
           <div className="relative flex items-center">
             <button
+              type="button"
               ref={likeButtonRef}
               onClick={handleLikeClick}
               onMouseDown={startLongPress}
@@ -1288,12 +1291,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
               {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
               <span className="text-xs text-white/90">Like</span>
               {engagement.likeCount > 0 && (
-                <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm">
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
                   {formatCount(engagement.likeCount)}
                 </span>
               )}
             </button>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 if (likeButtonRef.current) {
@@ -1312,6 +1316,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
           {/* Comment button with bubble */}
           <button
+            type="button"
             onClick={() => onOpenComments?.(post)}
             className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
             aria-label="Comment"
@@ -1319,7 +1324,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <MessageCircle className="w-4 h-4" />
             <span className="text-xs text-white/90">Comment</span>
             {engagement.commentCount > 0 && (
-              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
                 {formatCount(engagement.commentCount)}
               </span>
             )}
@@ -1327,6 +1332,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
           {/* Share button with bubble */}
           <button
+            type="button"
             onClick={handleShare}
             className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
             aria-label="Share"
@@ -1334,7 +1340,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <Share2 className="w-4 h-4" />
             <span className="text-xs text-white/90">Share</span>
             {engagement.shareCount > 0 && (
-              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm">
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
                 {formatCount(engagement.shareCount)}
               </span>
             )}
@@ -1342,6 +1348,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
           {/* Save button */}
           <button
+            type="button"
             onClick={handleSave}
             className={cn("flex items-center gap-1.5 text-sm transition", engagement.saved ? 'text-yellow-400' : 'text-white hover:text-white/80')}
             aria-label={engagement.saved ? 'Unsave' : 'Save'}
@@ -1354,6 +1361,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {/* Gift button (creator only) — opens the real gift picker */}
           {isCreator && !isAuthor && (
             <button
+              type="button"
               onClick={() => setUi(prev => ({ ...prev, showGiftPicker: true }))}
               disabled={ui.giftLoading}
               className="flex items-center gap-1.5 text-sm text-pink-300 hover:text-pink-200 transition disabled:opacity-50"
@@ -1403,13 +1411,13 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold" style={{ color: tokens.text }}>Send a Gift</h3>
-          <button onClick={onClose} disabled={sending} className="p-1" style={{ color: tokens.textSecondary }} aria-label="Close">
+          <button type="button" onClick={onClose} disabled={sending} className="p-1" style={{ color: tokens.textSecondary }} aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="flex items-center justify-between mb-4 text-sm">
           <span style={{ color: tokens.textSecondary }}>Your balance</span>
-          <span className="font-bold text-amber-500 flex items-center gap-1">
+          <span className="font-bold text-amber-500 flex items-center gap-1 tabular-nums">
             <Coins className="w-4 h-4" /> {balance == null ? '—' : balance.toLocaleString()}
           </span>
         </div>
@@ -1427,7 +1435,7 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
             >
               <div className="text-2xl mb-1">{gift.emoji}</div>
               <div className="text-xs font-semibold truncate" style={{ color: tokens.text }}>{gift.name}</div>
-              <div className="text-xs font-bold text-amber-500">{gift.coins} 🪙</div>
+              <div className="text-xs font-bold text-amber-500 tabular-nums">{gift.coins} 🪙</div>
             </button>
           ))}
         </div>
@@ -1435,7 +1443,7 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
           type="button"
           disabled={sending || !canAfford}
           onClick={() => onSelect(selected.type)}
-          className="w-full py-3 rounded-2xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-95 disabled:opacity-50"
+          className="w-full py-3 rounded-2xl font-bold bg-arvdoul-gradient text-white hover:opacity-95 disabled:opacity-50"
         >
           {sending ? 'Sending…' : canAfford ? `Send ${selected.name}` : 'Not enough coins'}
         </button>

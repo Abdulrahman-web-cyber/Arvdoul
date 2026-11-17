@@ -23,9 +23,10 @@ try {
   logger.warn('algoliasearch package not installed; search will fall back to Firestore');
 }
 
-const ALGOLIA_APP_ID = functions.config().algolia?.app_id;
-const ALGOLIA_ADMIN_KEY = functions.config().algolia?.admin_key;
-const ALGOLIA_MESSAGES_INDEX = functions.config().algolia?.messages_index || 'messages';
+const { getRuntimeConfig } = require('./auth');
+const ALGOLIA_APP_ID = getRuntimeConfig('ALGOLIA_APP_ID', 'algolia.app_id');
+const ALGOLIA_ADMIN_KEY = getRuntimeConfig('ALGOLIA_ADMIN_KEY', 'algolia.admin_key');
+const ALGOLIA_MESSAGES_INDEX = getRuntimeConfig('ALGOLIA_MESSAGES_INDEX', 'algolia.messages_index', 'messages');
 const USE_ALGOLIA = !!(ALGOLIA_APP_ID && ALGOLIA_ADMIN_KEY && algoliaSearchLib);
 
 let algoliaIndex = null;

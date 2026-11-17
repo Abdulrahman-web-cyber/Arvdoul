@@ -11,6 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { unknownNumber } from '../lib/unknownNumber.js';
 import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info, Archive, ArchiveRestore } from 'lucide-react';
+import ErrorState from '../design-system/ErrorState.jsx';
 
 export default function ConversationSettingsScreen() {
   const confirm = useConfirm();
@@ -22,14 +23,15 @@ export default function ConversationSettingsScreen() {
 
   const [conv, setConv] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [muted, setMuted] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [archived, setArchived] = useState(false);
   const [acting, setActing] = useState(false);
 
   const colors = {
-    bg: isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]',
-    card: isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white/90 border-gray-200',
+    bg: isDark ? 'bg-[#0B0F17]' : 'bg-gray-50',
+    card: isDark ? 'bg-gray-900/70 border border-gray-800' : 'bg-white border border-gray-200',
     text: isDark ? 'text-white' : 'text-gray-900',
     secondary: isDark ? 'text-gray-400' : 'text-gray-600',
   };
@@ -37,25 +39,25 @@ export default function ConversationSettingsScreen() {
   const load = useCallback(async () => {
     if (!conversationId) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const messagingService = (await import('../services/messagesService.js')).default || (await import('../services/messagesService.js'));
       const service = messagingService.getMessagingService ? messagingService.getMessagingService() : messagingService.default?.getMessagingService?.() || messagingService;
       const res = await service.getConversation(conversationId, { cacheFirst: false });
-      if (res?.success) {
+      if (res?.success && res.conversation) {
         setConv(res.conversation);
         setMuted(res.conversation.mutedBy?.includes(user?.uid) || false);
         setPinned(res.conversation.pinnedBy?.includes(user?.uid) || false);
         setArchived(res.conversation.archivedBy?.includes(user?.uid) || false);
       } else {
-        toast.error('Conversation not found.');
-        navigate('/messages');
+        setLoadError(res?.error || 'Conversation not found.');
       }
     } catch (err) {
-      toast.error('Could not load conversation.');
+      setLoadError(err?.message || 'Could not load conversation settings.');
     } finally {
       setLoading(false);
     }
-  }, [conversationId, user?.uid, navigate]);
+  }, [conversationId, user?.uid]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -131,8 +133,8 @@ export default function ConversationSettingsScreen() {
 
   return (
     <div className={cn("min-h-screen", colors.bg)}>
-      <div className={cn("sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3", colors.card, "border")}>
-        <button onClick={() => navigate(-1)} aria-label="Go back" className="rounded-full p-2 transition hover:bg-gray-100 dark:hover:bg-gray-800">
+      <div className={cn("sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3 backdrop-blur-xl", isDark ? "bg-[#0B0F17]/85 border-gray-800" : "bg-white/85 border-gray-200")}>
+        <button type="button" onClick={() => navigate(-1)} aria-label="Go back" className="rounded-full p-2 transition hover:bg-gray-100 dark:hover:bg-gray-800">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className={cn("flex-1 text-lg font-semibold", colors.text)}>Conversation Settings</h1>
@@ -140,25 +142,32 @@ export default function ConversationSettingsScreen() {
 
       <main className="max-w-md mx-auto px-4 py-6 space-y-4">
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-violet-500 animate-spin" /></div>
+          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-arvdoul-purple animate-spin" /></div>
+        ) : loadError ? (
+          <ErrorState
+            title="Unable to load conversation"
+            message={loadError}
+            onRetry={load}
+          />
         ) : (
           <>
             {/* Info card */}
-            <div className={cn("rounded-2xl p-5 text-center", colors.card, "border")}>
-              <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center">
-                <Users className="w-8 h-8 text-violet-500" />
+            <div className={cn("rounded-2xl p-5 text-center", colors.card)}>
+              <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-arvdoul-purple/15 flex items-center justify-center">
+                <Users className="w-8 h-8 text-arvdoul-purple" />
               </div>
               <h2 className={cn("font-bold text-lg", colors.text)}>{conv?.title || conv?.name || 'Conversation'}</h2>
-              <p className={cn("text-sm mt-1", colors.secondary)}>{memberCount === null ? 'Member count unavailable' : `${memberCount} members`}{memberNames ? ` · ${memberNames}` : ''}</p>
+              <p className={cn("text-sm mt-1 tabular-nums", colors.secondary)}>{memberCount === null ? 'Member count unavailable' : `${memberCount} members`}{memberNames ? ` · ${memberNames}` : ''}</p>
             </div>
 
             {/* Actions */}
             {conv?.type === 'group' && (
               <button
+                type="button"
                 onClick={() => navigate(`/messages/${conversationId}/info`)}
-                className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+                className={cn("w-full flex items-center gap-3 p-4 rounded-xl transition-opacity hover:opacity-90", colors.card)}
               >
-                <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-arvdoul-purple/15 text-arvdoul-purple flex items-center justify-center">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="flex-1 text-left">
@@ -169,12 +178,13 @@ export default function ConversationSettingsScreen() {
             )}
 
             <button
+              type="button"
               onClick={togglePin}
               disabled={acting}
-              className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+              className={cn("w-full flex items-center gap-3 p-4 rounded-xl transition-opacity hover:opacity-90", colors.card)}
             >
               <div className="w-10 h-10 rounded-xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center">
-                <Pin className={cn("w-5 h-5", pinned && "rotate-45 text-purple-500")} />
+                <Pin className={cn("w-5 h-5", pinned && "rotate-45 text-arvdoul-purple")} />
               </div>
               <div className="flex-1 text-left">
                 <p className={cn("font-medium text-sm", colors.text)}>{pinned ? 'Unpin Conversation' : 'Pin Conversation'}</p>
@@ -183,24 +193,26 @@ export default function ConversationSettingsScreen() {
             </button>
 
             <button
+              type="button"
               onClick={toggleMute}
               disabled={acting}
-              className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+              className={cn("w-full flex items-center gap-3 p-4 rounded-xl transition-opacity hover:opacity-90", colors.card)}
             >
-              <div className="w-10 h-10 rounded-xl bg-violet-500/15 text-violet-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-arvdoul-purple/15 text-arvdoul-purple flex items-center justify-center">
                 {muted ? <BellOff className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
               </div>
               <div className="flex-1 text-left">
                 <p className={cn("font-medium text-sm", colors.text)}>{muted ? 'Unmute Conversation' : 'Mute Conversation'}</p>
                 <p className={cn("text-xs", colors.secondary)}>{muted ? 'You will receive notifications again' : 'Stop receiving notifications'}</p>
               </div>
-              {acting && <Loader2 className="w-4 h-4 animate-spin text-violet-500" />}
+              {acting && <Loader2 className="w-4 h-4 animate-spin text-arvdoul-purple" />}
             </button>
 
             <button
+              type="button"
               onClick={toggleArchive}
               disabled={acting}
-              className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+              className={cn("w-full flex items-center gap-3 p-4 rounded-xl transition-opacity hover:opacity-90", colors.card)}
             >
               <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center">
                 {archived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
@@ -214,9 +226,10 @@ export default function ConversationSettingsScreen() {
 
             {conv?.type === 'group' && (
               <button
+                type="button"
                 onClick={handleLeave}
                 disabled={acting}
-                className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+                className={cn("w-full flex items-center gap-3 p-4 rounded-xl transition-opacity hover:opacity-90", colors.card)}
               >
                 <div className="w-10 h-10 rounded-xl bg-red-500/15 text-red-500 flex items-center justify-center">
                   <LogOut className="w-5 h-5" />

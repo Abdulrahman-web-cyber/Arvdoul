@@ -409,7 +409,41 @@ async function startServer() {
   // -------------------------------------------------------------------------
   // Real-time WebSocket signaling & media relay on /ws
   // -------------------------------------------------------------------------
-  const wss = new WebSocketServer({ noServer: true });
+  const WS_MAX_PAYLOAD = 64 * 1024;
+  const ALLOWED_WS_ROLES = new Set(['host', 'cohost', 'speaker', 'listener', 'viewer']);
+  const SELF_MUTABLE_ROLES = new Set(['listener', 'viewer']);
+  const ROOM_ID_RE = /^[A-Za-z0-9:_-]{1,140}$/;
+  const MAX_ROOM_PEERS = 250;
+
+  let cachedAuthVerifier: ((token: string) => Promise<string | null>) | null | undefined;
+  async function verifyOptionalFirebaseToken(token: string): Promise<string | null> {
+    if (!token) return null;
+    if (cachedAuthVerifier === undefined) {
+      try {
+        const [{ getApps, initializeApp }, { getAuth }] = await Promise.all([
+          import('firebase-admin/app'),
+          import('firebase-admin/auth'),
+        ]);
+        if (!getApps().length) {
+          initializeApp();
+        }
+        const auth = getAuth();
+        cachedAuthVerifier = async (idToken: string) => {
+          try {
+            const decoded = await auth.verifyIdToken(idToken);
+            return decoded?.uid || null;
+          } catch {
+            return null;
+          }
+        };
+      } catch {
+        cachedAuthVerifier = null;
+      }
+    }
+    return cachedAuthVerifier ? cachedAuthVerifier(token) : null;
+  }
+
+  const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
   server.on('upgrade', (request, socket, head) => {
     const pathname = request.url ? request.url.split('?')[0] : '';
@@ -423,6 +457,31 @@ async function startServer() {
   wss.on('connection', (ws: WebSocket) => {
     let joinedRoomId: string | null = null;
     let joinedPeerId: string | null = null;
+    let verifiedUid: string | null = null;
+    let controlWindowStart = Date.now();
+    let controlCount = 0;
+    let binaryWindowStart = Date.now();
+    let binaryCount = 0;
+
+    const allowControlMessage = () => {
+      const now = Date.now();
+      if (now - controlWindowStart > 5000) {
+        controlWindowStart = now;
+        controlCount = 0;
+      }
+      controlCount += 1;
+      return controlCount <= 60;
+    };
+
+    const allowBinaryFrame = () => {
+      const now = Date.now();
+      if (now - binaryWindowStart > 5000) {
+        binaryWindowStart = now;
+        binaryCount = 0;
+      }
+      binaryCount += 1;
+      return binaryCount <= 160;
+    };
 
     const leaveCurrentRoom = () => {
       if (!joinedRoomId || !joinedPeerId) return;
@@ -443,16 +502,23 @@ async function startServer() {
       joinedPeerId = null;
     };
 
-    ws.on('message', (raw: RawData, isBinary: boolean) => {
+    ws.on('message', async (raw: RawData, isBinary: boolean) => {
       // Binary WebM / audio media chunks relayed from broadcaster to room viewers
       if (isBinary) {
-        if (!joinedRoomId) return;
+        if (!joinedRoomId || !allowBinaryFrame()) return;
         const room = rooms.get(joinedRoomId);
         if (!room) return;
         for (const [peerId, peer] of room.entries()) {
           if (peerId !== joinedPeerId && peer.ws.readyState === WebSocket.OPEN) {
             peer.ws.send(raw, { binary: true });
           }
+        }
+        return;
+      }
+
+      if (!allowControlMessage()) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'error', code: 'rate-limited', message: 'Too many signaling messages.' }));
         }
         return;
       }
@@ -464,7 +530,7 @@ async function startServer() {
         return;
       }
 
-      const type = String(msg.type || '');
+      const type = String(msg.type || '').slice(0, 60);
       if (type === 'ping') {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
@@ -476,21 +542,41 @@ async function startServer() {
         leaveCurrentRoom();
         const roomId = String(msg.roomId || '').trim().slice(0, 140);
         const peerId =
-          String(msg.peerId || '').trim().slice(0, 120) ||
+          String(msg.peerId || '').trim().replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 120) ||
           `peer_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        if (!roomId) return;
+        if (!roomId || !ROOM_ID_RE.test(roomId)) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', code: 'invalid-room', message: 'Invalid roomId.' }));
+          }
+          return;
+        }
+
+        if (typeof msg.authToken === 'string' && msg.authToken.trim()) {
+          verifiedUid = await verifyOptionalFirebaseToken(msg.authToken.trim());
+        }
+
+        const requestedRole = String(msg.role || 'listener').trim().toLowerCase();
+        const safeRole = ALLOWED_WS_ROLES.has(requestedRole) ? requestedRole : 'listener';
 
         if (!rooms.has(roomId)) {
           rooms.set(roomId, new Map());
         }
+        const room = rooms.get(roomId)!;
+        if (room.size >= MAX_ROOM_PEERS && !room.has(peerId)) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', code: 'room-full', message: 'Room is full.' }));
+          }
+          return;
+        }
+
         const entry: PeerEntry = {
           peerId,
-          userId: String(msg.userId || ''),
+          userId: verifiedUid || String(msg.userId || '').slice(0, 128),
           displayName: String(msg.displayName || 'Participant').slice(0, 80),
-          role: String(msg.role || 'listener'),
+          role: safeRole,
           ws,
         };
-        rooms.get(roomId)!.set(peerId, entry);
+        room.set(peerId, entry);
         joinedRoomId = roomId;
         joinedPeerId = peerId;
 
@@ -545,9 +631,16 @@ async function startServer() {
 
       // Broadcast signaling or room event (role change, media chunk JSON, reaction, chat)
       if (type === 'speaker-state' && joinedRoomId && joinedPeerId) {
-        const entry = rooms.get(joinedRoomId)?.get(joinedPeerId);
-        if (entry && typeof msg.role === 'string') {
-          entry.role = msg.role;
+        const room = rooms.get(joinedRoomId);
+        const entry = room?.get(joinedPeerId);
+        const nextRole = typeof msg.role === 'string' ? msg.role.trim().toLowerCase() : '';
+        if (entry && ALLOWED_WS_ROLES.has(nextRole)) {
+          // Only hosts/cohosts can promote speakers/cohosts; self-service users can step down to listener/viewer.
+          if (SELF_MUTABLE_ROLES.has(nextRole) || entry.role === 'host' || entry.role === 'cohost') {
+            if (nextRole !== 'host' || entry.role === 'host') {
+              entry.role = nextRole;
+            }
+          }
         }
       }
 

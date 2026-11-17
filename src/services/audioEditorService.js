@@ -145,7 +145,7 @@ class AudioEditorService {
 
     this.initPromise = (async () => {
       try {
-        this.storage = getStorageInstance();
+        this.storage = await getStorageInstance();
         this.initialized = true;
         log.info('AudioEditorService successfully initialized');
       } catch (error) {
@@ -311,6 +311,9 @@ class AudioEditorService {
     pannerNode.pan.value = this.currentProject.pan;
 
     // Apply native BiquadFilters / dynamics Compressors from Web Audio API based on project effects
+    const readParam = (val, fallback) => (
+      val && typeof val === 'object' && 'default' in val ? val.default : (val ?? fallback)
+    );
     let lastNode = source;
     this.currentProject.effects.forEach((eff) => {
       if (!eff.enabled) return;
@@ -318,14 +321,14 @@ class AudioEditorService {
         const filter = this.audioContext.createBiquadFilter();
         filter.type = 'peaking';
         filter.frequency.value = 1000; // mid band
-        filter.gain.value = eff.params.midGain?.default || 0;
+        filter.gain.value = readParam(eff.params?.midGain, 0);
         lastNode.connect(filter);
         lastNode = filter;
       } else if (eff.type === 'compressor') {
         const comp = this.audioContext.createDynamicsCompressor();
-        comp.threshold.value = eff.params.threshold?.default || -24;
-        comp.knee.value = eff.params.knee?.default || 30;
-        comp.ratio.value = eff.params.ratio?.default || 12;
+        comp.threshold.value = readParam(eff.params?.threshold, -24);
+        comp.knee.value = readParam(eff.params?.knee, 30);
+        comp.ratio.value = readParam(eff.params?.ratio, 12);
         lastNode.connect(comp);
         lastNode = comp;
       }
@@ -579,10 +582,57 @@ class AudioEditorService {
     return true;
   }
 
+  _encodeWav(audioBuffer) {
+    const numChannels = Math.min(2, audioBuffer.numberOfChannels || 1);
+    const sampleRate = audioBuffer.sampleRate || 44100;
+    const length = audioBuffer.length;
+    const bytesPerSample = 2;
+    const dataSize = length * numChannels * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    const writeStr = (offset, str) => {
+      for (let i = 0; i < str.length; i += 1) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+    view.setUint16(32, numChannels * bytesPerSample, true);
+    view.setUint16(34, 16, true); // bits per sample
+    writeStr(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    const channels = [];
+    for (let ch = 0; ch < numChannels; ch += 1) {
+      channels.push(audioBuffer.getChannelData(ch));
+    }
+
+    let offset = 44;
+    for (let i = 0; i < length; i += 1) {
+      for (let ch = 0; ch < numChannels; ch += 1) {
+        const sample = Math.max(-1, Math.min(1, channels[ch][i] || 0));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+        offset += 2;
+      }
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
   /**
-   * Real browser-side audio export using MediaStream & MediaRecorder.
+   * Real browser-side offline audio export using OfflineAudioContext + PCM WAV
+   * rendering (or MediaRecorder capture when non-WAV compressed output is available).
    */
-  async exportAudio(format = 'mp3', bitrate = 192, progressCallback) {
+  async exportAudio(format = 'wav', bitrate = 192, progressCallback) {
     if (!this.currentProject) {
       throw new AudioEditorError('no_project', 'No project loaded');
     }
@@ -591,22 +641,130 @@ class AudioEditorService {
       throw new AudioEditorError('no_audio', 'No audio loaded');
     }
 
+    const trimStart = Math.max(0, this.currentProject.trimStart || 0);
+    const trimEnd = Math.min(
+      this.audioBuffer.duration,
+      this.currentProject.trimEnd > trimStart ? this.currentProject.trimEnd : this.audioBuffer.duration
+    );
+    const exportDuration = Math.max(AUDIO_EDITOR_CONFIG.TRIM.MIN_DURATION, trimEnd - trimStart);
+
     if (progressCallback) {
       progressCallback({
         progress: 0.1,
         stage: 'processing',
-        message: 'Re-routing audio nodes for export stream capture...',
+        message: 'Rendering trimmed audio and effects...',
       });
     }
 
-    // Dynamic export capture using native browser nodes
+    const readParam = (val, fallback) => (
+      val && typeof val === 'object' && 'default' in val ? val.default : (val ?? fallback)
+    );
+
+    const sampleRate = this.audioBuffer.sampleRate || 44100;
+    const channels = Math.min(2, this.audioBuffer.numberOfChannels || 2);
+    const OfflineCtx = typeof window !== 'undefined' && (window.OfflineAudioContext || window.webkitOfflineAudioContext);
+
+    if (OfflineCtx && (format === 'wav' || typeof MediaRecorder === 'undefined')) {
+      const frameCount = Math.max(1, Math.ceil(exportDuration * sampleRate));
+      const offline = new OfflineCtx(channels, frameCount, sampleRate);
+      const source = offline.createBufferSource();
+      source.buffer = this.audioBuffer;
+
+      let lastNode = source;
+      (this.currentProject.effects || []).forEach((eff) => {
+        if (!eff.enabled) return;
+        if (eff.type === 'eq' && offline.createBiquadFilter) {
+          const filter = offline.createBiquadFilter();
+          filter.type = 'peaking';
+          filter.frequency.value = 1000;
+          filter.gain.value = readParam(eff.params?.midGain, 0);
+          lastNode.connect(filter);
+          lastNode = filter;
+        } else if (eff.type === 'compressor' && offline.createDynamicsCompressor) {
+          const comp = offline.createDynamicsCompressor();
+          comp.threshold.value = readParam(eff.params?.threshold, -24);
+          comp.knee.value = readParam(eff.params?.knee, 30);
+          comp.ratio.value = readParam(eff.params?.ratio, 12);
+          lastNode.connect(comp);
+          lastNode = comp;
+        }
+      });
+
+      const gainNode = offline.createGain();
+      const baseVol = this.currentProject.volume ?? 1;
+      gainNode.gain.setValueAtTime(baseVol, 0);
+      if (this.currentProject.fadeIn > 0) {
+        const fadeInEnd = Math.min(exportDuration, this.currentProject.fadeIn);
+        gainNode.gain.setValueAtTime(0, 0);
+        gainNode.gain.linearRampToValueAtTime(baseVol, fadeInEnd);
+      }
+      if (this.currentProject.fadeOut > 0) {
+        const fadeOutStart = Math.max(0, exportDuration - this.currentProject.fadeOut);
+        gainNode.gain.setValueAtTime(baseVol, fadeOutStart);
+        gainNode.gain.linearRampToValueAtTime(0, exportDuration);
+      }
+      lastNode.connect(gainNode);
+
+      if (offline.createStereoPanner) {
+        const panner = offline.createStereoPanner();
+        panner.pan.value = this.currentProject.pan ?? 0;
+        gainNode.connect(panner);
+        panner.connect(offline.destination);
+      } else {
+        gainNode.connect(offline.destination);
+      }
+
+      if (progressCallback) {
+        progressCallback({
+          progress: 0.4,
+          stage: 'recording',
+          message: 'Rendering offline audio mix...',
+        });
+      }
+
+      source.start(0, trimStart, exportDuration);
+      const renderedBuffer = await offline.startRendering();
+
+      if (progressCallback) {
+        progressCallback({
+          progress: 0.9,
+          stage: 'encoding',
+          message: 'Encoding WAV output...',
+        });
+      }
+
+      const outputBlob = this._encodeWav(renderedBuffer);
+      return {
+        success: true,
+        projectId: this.currentProject.id,
+        format: 'wav',
+        extension: 'wav',
+        mimeType: 'audio/wav',
+        bitrate,
+        duration: exportDuration,
+        blob: outputBlob,
+        size: outputBlob.size,
+      };
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      throw new AudioEditorError('export_unsupported', 'Audio export is not supported in this environment.');
+    }
+
+    // Fallback compressed MediaRecorder capture
     const captureContext = new (window.AudioContext || window.webkitAudioContext)();
     const dest = captureContext.createMediaStreamDestination();
     const source = captureContext.createBufferSource();
     source.buffer = this.audioBuffer;
-    source.connect(dest);
+    const gainNode = captureContext.createGain();
+    gainNode.gain.value = this.currentProject.volume ?? 1;
+    source.connect(gainNode);
+    gainNode.connect(dest);
 
-    const mediaRecorder = new MediaRecorder(dest.stream);
+    const mimeType = MediaRecorder.isTypeSupported?.('audio/ogg;codecs=opus') && format === 'ogg'
+      ? 'audio/ogg;codecs=opus'
+      : 'audio/webm';
+    const mediaRecorder = new MediaRecorder(dest.stream, { mimeType });
     const chunks = [];
     mediaRecorder.ondataavailable = (evt) => {
       if (evt.data.size > 0) chunks.push(evt.data);
@@ -616,50 +774,61 @@ class AudioEditorService {
       progressCallback({
         progress: 0.4,
         stage: 'recording',
-        message: 'Capturing AudioBuffer into output blob stream...',
+        message: 'Capturing AudioBuffer into output stream...',
       });
     }
 
+    const stopped = new Promise((resolve) => {
+      mediaRecorder.onstop = resolve;
+    });
     mediaRecorder.start();
-    source.start(0);
+    source.start(0, trimStart, exportDuration);
 
     await new Promise((resolve) => {
       source.onended = () => {
-        mediaRecorder.stop();
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
         resolve();
       };
     });
+    await stopped;
+    captureContext.close?.().catch(() => {});
 
     if (progressCallback) {
       progressCallback({
         progress: 0.9,
         stage: 'encoding',
-        message: 'Encoding captured audio data to output blob...',
+        message: 'Encoding captured audio data...',
       });
     }
 
-    const outputBlob = new Blob(chunks, { type: 'audio/webm' });
+    const cleanMime = mimeType.split(';')[0];
+    const outputBlob = new Blob(chunks, { type: cleanMime });
+    const ext = cleanMime === 'audio/ogg' ? 'ogg' : 'webm';
 
     return {
       success: true,
       projectId: this.currentProject.id,
-      format,
+      format: ext,
+      extension: ext,
+      mimeType: cleanMime,
       bitrate,
-      duration: this.currentProject.trimEnd - this.currentProject.trimStart,
+      duration: exportDuration,
       blob: outputBlob,
       size: outputBlob.size,
     };
   }
 
-  async uploadExportedAudio(audioBlob, userId) {
+  async uploadExportedAudio(audioBlob, userId, options = {}) {
     await this.ensureInitialized();
 
     const audioId = uuidv4();
-    const format = AUDIO_EDITOR_CONFIG.EXPORT.FORMATS[0];
-    const storagePath = `audio_exports/${userId}/${audioId}.${format.extension}`;
+    const mime = options.mimeType || audioBlob?.type || 'audio/wav';
+    const extension = options.extension
+      || (mime.includes('wav') ? 'wav' : mime.includes('ogg') ? 'ogg' : mime.includes('webm') ? 'webm' : 'mp3');
+    const storagePath = `audio_exports/${userId}/${audioId}.${extension}`;
     const storageRef = ref(this.storage, storagePath);
 
-    const snapshot = await uploadBytes(storageRef, audioBlob);
+    const snapshot = await uploadBytes(storageRef, audioBlob, { contentType: mime });
     const downloadUrl = await getDownloadURL(snapshot.ref);
 
     return {
@@ -667,7 +836,8 @@ class AudioEditorService {
       url: downloadUrl,
       path: storagePath,
       size: audioBlob.size,
-      format: format.id,
+      format: extension,
+      mimeType: mime,
     };
   }
 

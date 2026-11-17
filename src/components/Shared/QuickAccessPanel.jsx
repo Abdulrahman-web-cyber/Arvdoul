@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useMemo, memo, useEffect } from "react";
 import { toast } from "sonner";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronUp, ChevronDown, X, Camera, PenSquare, Settings, BookOpen, Grid3X3, Video, Bookmark, Users, User, Sparkles, Moon, Sun, Zap, Heart, TrendingUp, Crown, MessageCircle, Home, PlayCircle, UserPlus, BarChart3, DollarSign, Trophy, Search, LogOut, CheckCircle, Link, Lock, Wifi, Battery, ShoppingBag, Target as TargetIcon, ArrowUpRight, BadgeCheck, Radio, Music } from "lucide-react";
+import { ChevronUp, ChevronDown, X, Camera, PenSquare, Settings, BookOpen, Grid3X3, Video, Bookmark, Users, User, Sparkles, Moon, Sun, Zap, Heart, TrendingUp, Crown, MessageCircle, Home, PlayCircle, UserPlus, BarChart3, DollarSign, Trophy, Search, LogOut, CheckCircle, Link, Lock, ShoppingBag, Target as TargetIcon, ArrowUpRight, BadgeCheck, Radio, Music } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 import { useTheme } from "../../context/ThemeContext";
 import { useSound } from "../../hooks/useSound";
@@ -46,6 +46,37 @@ const ANIMATION_CONFIG = {
   staggerChildren: 0.03,
   delayChildren: 0.05
 };
+
+const STAT_COLOR_CLASSES = Object.freeze({
+  blue: {
+    bg: "bg-blue-100 dark:bg-blue-900/30",
+    text: "text-blue-600 dark:text-blue-400",
+  },
+  purple: {
+    bg: "bg-purple-100 dark:bg-purple-900/30",
+    text: "text-purple-600 dark:text-purple-400",
+  },
+  green: {
+    bg: "bg-green-100 dark:bg-green-900/30",
+    text: "text-green-600 dark:text-green-400",
+  },
+  yellow: {
+    bg: "bg-yellow-100 dark:bg-yellow-900/30",
+    text: "text-yellow-600 dark:text-yellow-400",
+  },
+  red: {
+    bg: "bg-red-100 dark:bg-red-900/30",
+    text: "text-red-600 dark:text-red-400",
+  },
+  amber: {
+    bg: "bg-amber-100 dark:bg-amber-900/30",
+    text: "text-amber-600 dark:text-amber-400",
+  },
+  emerald: {
+    bg: "bg-emerald-100 dark:bg-emerald-900/30",
+    text: "text-emerald-600 dark:text-emerald-400",
+  },
+});
 
 // Level system configuration
 // Color schemes
@@ -775,10 +806,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   className="relative cursor-pointer"
                 >
                   <div className="relative w-16 h-16 sm:w-20 sm:h-20">
-                    {/* Animated gradient border */}
+                    {/* Brand gradient ring */}
                     <div
-                      className="absolute inset-0 rounded-full animate-spin-slow opacity-70"
-                      style={{ background: BRAND_GRADIENT, animationDuration: '8s' }}
+                      className="absolute inset-0 rounded-full opacity-80"
+                      style={{ background: BRAND_GRADIENT }}
                     />
 
                     {/* Profile image */}
@@ -797,13 +828,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
                     {/* Online status */}
                     {currentUser?.isOnline && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500 rounded-full border-2 border-white z-20 shadow-xl"
-                      >
-                        <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-60" />
-                      </motion.div>
+                      <div
+                        className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500 rounded-full border-2 border-white z-20 shadow-sm"
+                        aria-label="Online"
+                      />
                     )}
                   </div>
                 </motion.div>
@@ -891,16 +919,18 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 {/* User Badges & Coin Balance Hub */}
                 <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-gradient-to-r from-amber-500/10 via-yellow-500/15 to-amber-500/10 border border-amber-500/30">
                   <button
+                    type="button"
                     onClick={() => navigateToWithLoading(NAVIGATION_PATHS.coins)}
                     className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
                     aria-label="View Coins Treasury"
                   >
                     <FaCoins className="w-4 h-4 text-amber-500" />
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 tabular-nums">
                       {currentUser?.coins != null ? `${currentUser.coins.toLocaleString()} Coins` : '— Coins'}
                     </span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => navigateToWithLoading(NAVIGATION_PATHS.coins)}
                     className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-amber-500 hover:bg-amber-600 text-white transition-colors shadow-sm cursor-pointer"
                   >
@@ -909,7 +939,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
-                  <Badge variant="level" className="text-xs">
+                  <Badge variant="level" className="text-xs tabular-nums">
                     <FaStar className="w-3 h-3 mr-1" />
                     {levelSystem.hasXp ? `Lvl ${levelSystem.currentLevel}` : 'Level —'}
                   </Badge>
@@ -924,13 +954,14 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
                 {/* View Profile Button */}
                 <motion.button
+                  type="button"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
                   onClick={() => navigateToWithLoading(currentUser?.uid ? `/profile/${currentUser.uid}` : '/profile')}
                   className={cn(
                     "w-full mt-3 py-2 px-4 rounded-xl font-medium text-sm",
-                    "bg-gradient-to-r from-purple-500 to-blue-500",
+                    "bg-arvdoul-gradient",
                     "text-white hover:opacity-90 transition-opacity",
                     "flex items-center justify-center gap-2"
                   )}
@@ -1107,54 +1138,47 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           )}>
             Content Statistics
           </h3>
-          <Badge variant="info">Live</Badge>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:gap-4">
-          {userStatistics.content.map((stat, index) => (
-            <motion.button
-              key={stat.label}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              onClick={stat.navigate}
-              className={cn(
-                "p-3 sm:p-4 rounded-xl sm:rounded-2xl text-left",
-                themeColors.cardBg,
-                themeColors.cardBorder,
-                "transition-all duration-200 hover:scale-105"
-              )}
-              type="button"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className={cn(
-                  "p-1.5 sm:p-2 rounded-lg",
-                  `bg-${stat.color}-100 dark:bg-${stat.color}-900/30`
-                )}>
-                  <stat.icon className={cn(
-                    "w-4 h-4 sm:w-5 sm:h-5",
-                    `text-${stat.color}-600 dark:text-${stat.color}-400`
-                  )} />
-                </div>
-                {stat.change && (
-                  <span className={cn(
-                    "text-xs font-semibold",
-                    "text-emerald-500"
-                  )}>
-                    {stat.change}
-                  </span>
+          {userStatistics.content.map((stat, index) => {
+            const palette = STAT_COLOR_CLASSES[stat.color] || STAT_COLOR_CLASSES.blue;
+            return (
+              <motion.button
+                key={stat.label}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.1 }}
+                onClick={stat.navigate}
+                className={cn(
+                  "p-3 sm:p-4 rounded-xl sm:rounded-2xl text-left",
+                  themeColors.cardBg,
+                  themeColors.cardBorder,
+                  "transition-all duration-200 hover:scale-105"
                 )}
-              </div>
-              <div className={cn(
-                "text-lg sm:text-xl font-bold mb-1 truncate",
-                themeColors.text
-              )}>
-                {stat.value}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {stat.label}
-              </div>
-            </motion.button>
-          ))}
+                type="button"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className={cn("p-1.5 sm:p-2 rounded-lg", palette.bg)}>
+                    <stat.icon className={cn("w-4 h-4 sm:w-5 sm:h-5", palette.text)} />
+                  </div>
+                  {stat.change && (
+                    <span className="text-xs font-semibold text-emerald-500 tabular-nums">
+                      {stat.change}
+                    </span>
+                  )}
+                </div>
+                <div className={cn(
+                  "text-lg sm:text-xl font-bold mb-1 truncate tabular-nums",
+                  themeColors.text
+                )}>
+                  {stat.value}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {stat.label}
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
       </div>
 
@@ -1167,51 +1191,45 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           Social Engagement
         </h3>
         <div className="grid grid-cols-2 gap-2 sm:gap-4">
-          {userStatistics.social.map((stat, index) => (
-            <motion.button
-              key={stat.label}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              onClick={stat.navigate}
-              className={cn(
-                "p-3 sm:p-4 rounded-xl sm:rounded-2xl text-left",
-                themeColors.cardBg,
-                themeColors.cardBorder,
-                "transition-all duration-200 hover:scale-105"
-              )}
-              type="button"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className={cn(
-                  "p-1.5 sm:p-2 rounded-lg",
-                  `bg-${stat.color}-100 dark:bg-${stat.color}-900/30`
-                )}>
-                  <stat.icon className={cn(
-                    "w-4 h-4 sm:w-5 sm:h-5",
-                    `text-${stat.color}-600 dark:text-${stat.color}-400`
-                  )} />
-                </div>
-                {stat.change && (
-                  <span className={cn(
-                    "text-xs font-semibold",
-                    "text-emerald-500"
-                  )}>
-                    {stat.change}
-                  </span>
+          {userStatistics.social.map((stat, index) => {
+            const palette = STAT_COLOR_CLASSES[stat.color] || STAT_COLOR_CLASSES.purple;
+            return (
+              <motion.button
+                key={stat.label}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.1 }}
+                onClick={stat.navigate}
+                className={cn(
+                  "p-3 sm:p-4 rounded-xl sm:rounded-2xl text-left",
+                  themeColors.cardBg,
+                  themeColors.cardBorder,
+                  "transition-all duration-200 hover:scale-105"
                 )}
-              </div>
-              <div className={cn(
-                "text-lg sm:text-xl font-bold mb-1 truncate",
-                themeColors.text
-              )}>
-                {stat.value}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {stat.label}
-              </div>
-            </motion.button>
-          ))}
+                type="button"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className={cn("p-1.5 sm:p-2 rounded-lg", palette.bg)}>
+                    <stat.icon className={cn("w-4 h-4 sm:w-5 sm:h-5", palette.text)} />
+                  </div>
+                  {stat.change && (
+                    <span className="text-xs font-semibold text-emerald-500 tabular-nums">
+                      {stat.change}
+                    </span>
+                  )}
+                </div>
+                <div className={cn(
+                  "text-lg sm:text-xl font-bold mb-1 truncate tabular-nums",
+                  themeColors.text
+                )}>
+                  {stat.value}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {stat.label}
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
       </div>
     </motion.div>
@@ -1310,68 +1328,53 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
               {/* Monetization Stats Grid */}
               <div className="grid grid-cols-2 gap-2 sm:gap-4">
-                {monetizationStats.map((stat, index) => (
-                  <motion.button
-                    key={stat.label}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.1 }}
-                    onClick={stat.navigate}
-                    className={cn(
-                      "p-3 sm:p-4 rounded-xl sm:rounded-2xl text-left",
-                      themeColors.cardBg,
-                      themeColors.cardBorder,
-                      "transition-all duration-200 hover:scale-105"
-                    )}
-                    type="button"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className={cn(
-                        "p-1.5 sm:p-2 rounded-lg",
-                        `bg-${stat.color}-100 dark:bg-${stat.color}-900/30`
-                      )}>
-                        {stat.icon === FaCoins ? (
-                          <FaCoins className={cn(
-                            "w-4 h-4 sm:w-5 sm:h-5",
-                            `text-${stat.color}-600 dark:text-${stat.color}-400`
-                          )} />
-                        ) : stat.icon === MdAdsClick ? (
-                          <MdAdsClick className={cn(
-                            "w-4 h-4 sm:w-5 sm:h-5",
-                            `text-${stat.color}-600 dark:text-${stat.color}-400`
-                          )} />
-                        ) : stat.icon === FaBullhorn ? (
-                          <FaBullhorn className={cn(
-                            "w-4 h-4 sm:w-5 sm:h-5",
-                            `text-${stat.color}-600 dark:text-${stat.color}-400`
-                          )} />
-                        ) : (
-                          <stat.icon className={cn(
-                            "w-4 h-4 sm:w-5 sm:h-5",
-                            `text-${stat.color}-600 dark:text-${stat.color}-400`
-                          )} />
+                {monetizationStats.map((stat, index) => {
+                  const palette = STAT_COLOR_CLASSES[stat.color] || STAT_COLOR_CLASSES.purple;
+                  return (
+                    <motion.button
+                      key={stat.label}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      onClick={stat.navigate}
+                      className={cn(
+                        "p-3 sm:p-4 rounded-xl sm:rounded-2xl text-left",
+                        themeColors.cardBg,
+                        themeColors.cardBorder,
+                        "transition-all duration-200 hover:scale-105"
+                      )}
+                      type="button"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={cn("p-1.5 sm:p-2 rounded-lg", palette.bg)}>
+                          {stat.icon === FaCoins ? (
+                            <FaCoins className={cn("w-4 h-4 sm:w-5 sm:h-5", palette.text)} />
+                          ) : stat.icon === MdAdsClick ? (
+                            <MdAdsClick className={cn("w-4 h-4 sm:w-5 sm:h-5", palette.text)} />
+                          ) : stat.icon === FaBullhorn ? (
+                            <FaBullhorn className={cn("w-4 h-4 sm:w-5 sm:h-5", palette.text)} />
+                          ) : (
+                            <stat.icon className={cn("w-4 h-4 sm:w-5 sm:h-5", palette.text)} />
+                          )}
+                        </div>
+                        {stat.change && (
+                          <span className="text-xs font-semibold text-emerald-500 tabular-nums">
+                            {stat.change}
+                          </span>
                         )}
                       </div>
-                      {stat.change && (
-                        <span className={cn(
-                          "text-xs font-semibold",
-                          "text-emerald-500"
-                        )}>
-                          {stat.change}
-                        </span>
-                      )}
-                    </div>
-                    <div className={cn(
-                      "text-lg sm:text-xl font-bold mb-1 truncate",
-                      themeColors.text
-                    )}>
-                      {stat.value}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {stat.label}
-                    </div>
-                  </motion.button>
-                ))}
+                      <div className={cn(
+                        "text-lg sm:text-xl font-bold mb-1 truncate tabular-nums",
+                        themeColors.text
+                      )}>
+                        {stat.value}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {stat.label}
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
             </>
           )}
@@ -1498,14 +1501,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               )}
               type="button"
             >
-              {/* Sparkling effect */}
-              {action.sparkling && (
-                <div className="absolute inset-0 overflow-hidden rounded-xl">
-                  <div className="absolute top-1 left-1 w-1.5 h-1.5 bg-white/50 rounded-full animate-ping" />
-                  <div className="absolute bottom-1 right-1 w-1 h-1 bg-white/40 rounded-full animate-ping animation-delay-300" />
-                </div>
-              )}
-
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <action.icon className="w-4 h-4 sm:w-5 sm:h-5 text-white/90" />
@@ -1666,7 +1661,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             className={cn(
               "relative w-12 h-6 rounded-full transition-all duration-300",
               theme === "dark"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500"
+                ? "bg-arvdoul-gradient"
                 : "bg-gradient-to-r from-amber-500 to-orange-500"
             )}
             type="button"
@@ -1967,24 +1962,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               {/* Tab Content */}
               <div className="mt-4 sm:mt-6">
                 {renderContent()}
-              </div>
-
-              {/* Footer */}
-              <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 dark:border-gray-800">
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center space-x-2 sm:space-x-4">
-                    <span className="hidden sm:inline">Arvdoul v1.0</span>
-                    <span className="hidden sm:inline">•</span>
-                    <span className="flex items-center">
-                      <Wifi className="w-3 h-3 mr-1 text-emerald-500" />
-                      <span className="hidden sm:inline">Connected</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Battery className="w-3 h-3 text-emerald-500" />
-                    <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                </div>
               </div>
             </div>
           </motion.div>

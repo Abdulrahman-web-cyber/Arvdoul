@@ -12,7 +12,7 @@ const admin = require('firebase-admin');
 const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
-const { checkIsAdmin, getUserEmail } = require('./auth');
+const { checkIsAdmin, getUserEmail, getRuntimeConfig } = require('./auth');
 const { writeAudit } = require('./admin');
 const { writeNotification } = require('./notificationWriter');
 
@@ -202,10 +202,10 @@ async function processPushTask(docRef, taskData, pushId) {
           body: payload.body || '',
         },
         data: {
-          pushId,
-          type: payload.type || 'general',
-          targetId: payload.targetId || null,
-          priority: payload.priority || 'normal',
+          pushId: String(pushId || ''),
+          type: String(payload.type || 'general'),
+          targetId: payload.targetId ? String(payload.targetId) : '',
+          priority: String(payload.priority || 'normal'),
         },
         tokens: chunk.map(t => t.token),
       };
@@ -387,10 +387,18 @@ const CLIENT_SOCIAL_NOTIFICATION_TYPES = new Set([
 const CLIENT_SELF_NOTIFICATION_TYPES = new Set(['welcome', 'system']);
 
 exports.sendNotification = functions.https.onCall(async (data, context) => {
+  if (!context || !context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
+  }
   const senderId = context.auth.uid;
-  const { notificationData, options } = data;
+  const { notificationData } = data || {};
+  if (!notificationData || typeof notificationData !== 'object') {
+    throw new functions.https.HttpsError('invalid-argument', 'notificationData object required');
+  }
   const recipientId = notificationData.recipientId;
-  if (!recipientId) throw new functions.https.HttpsError('invalid-argument', 'recipientId required');
+  if (!recipientId || typeof recipientId !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'recipientId required');
+  }
 
   const type = notificationData.type;
   const isSelf = recipientId === senderId;
@@ -721,12 +729,13 @@ exports.processBulkNotifications = functions.firestore
 // makes it real. Email is honest: with no SendGrid key it reports
 // 'unconfigured' rather than pretending to send.
 async function sendDigestEmail(to, subject, html) {
-  const sendgridKey = functions.config()?.sendgrid?.key;
+  const sendgridKey = getRuntimeConfig('SENDGRID_API_KEY', 'sendgrid.key');
   if (!sendgridKey) return { success: false, status: 'unconfigured' };
   try {
     const sgMail = require('@sendgrid/mail');
     sgMail.setApiKey(sendgridKey);
-    await sgMail.send({ to, from: functions.config()?.sendgrid?.from || 'no-reply@arvdoul.com', subject, html });
+    const fromEmail = getRuntimeConfig('SENDGRID_FROM_EMAIL', 'sendgrid.from', 'no-reply@arvdoul.com');
+    await sgMail.send({ to, from: fromEmail, subject, html });
     return { success: true, status: 'sent' };
   } catch (err) {
     log('ERROR', 'Digest email failed', { error: err.message });
@@ -770,7 +779,7 @@ exports.generateNotificationDigest = functions.pubsub
         // In-app digest record (respects the in-app opt-out). Routed through the
         // canonical writer so it bumps the unread shard; the previous direct
         // `set()` left the digest uncounted in the Alerts badge.
-        if (prefs.inApp !== false) {
+        if (prefs?.inApp !== false) {
           await writeNotification(userId, {
             type: 'digest',
             title: 'Your digest',
@@ -778,7 +787,7 @@ exports.generateNotificationDigest = functions.pubsub
           });
         }
         // Email delivery (respects the email opt-out).
-        if (prefs.email !== false) {
+        if (prefs?.email !== false) {
           const to = await getUserEmail(userId);
           if (to) {
             await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);
@@ -801,7 +810,7 @@ exports.retryDeadLetters = functions.https.onRequest(async (req, res) => {
   // Fail-closed: the admin secret MUST be configured. The previous
   // `|| 'super-secret'` fallback meant anyone who read the source could
   // trigger dead-letter recovery.
-  const expectedSecret = functions.config()?.admin?.withdrawal_secret;
+  const expectedSecret = getRuntimeConfig('ADMIN_WITHDRAWAL_SECRET', 'admin.withdrawal_secret');
   if (!expectedSecret || !authHeader || authHeader !== `Bearer ${expectedSecret}`) {
     res.status(403).json({ error: 'Forbidden' });
     return;

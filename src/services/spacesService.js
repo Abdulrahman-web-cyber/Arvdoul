@@ -16,6 +16,7 @@ class SpacesService {
     this.remoteStream = null;
     this.signalingUnsubscribe = null;
     this.spacesUnsubscribe = null;
+    this.candidateUnsubs = [];
   }
 
   /**
@@ -68,45 +69,51 @@ class SpacesService {
       });
 
       this.signalingUnsubscribe = onSnapshot(roomRef, async (snapshot) => {
+        const pc = this.peerConnection;
+        if (!pc) return;
         const data = snapshot.data();
-        if (data?.answer && !this.peerConnection.currentRemoteDescription) {
+        if (data?.answer && !pc.currentRemoteDescription) {
           const rtcAnswer = new RTCSessionDescription(data.answer);
-          await this.peerConnection.setRemoteDescription(rtcAnswer);
+          await pc.setRemoteDescription(rtcAnswer);
         }
       }, (err) => log.warn('[spacesService] subscription error', err));
 
       const clientCandidatesCol = collection(roomRef, 'clientCandidates');
-      onSnapshot(clientCandidatesCol, (snapshot) => {
+      const candUnsub = onSnapshot(clientCandidatesCol, (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
-          if (change.type === 'added') {
+          if (change.type === 'added' && this.peerConnection) {
             const data = change.doc.data();
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
       }, (err) => log.warn('[spacesService] subscription error', err));
+      this.candidateUnsubs.push(candUnsub);
 
     } else {
       const roomSnap = doc(firestore, 'signaling_rooms', spaceId);
       this.signalingUnsubscribe = onSnapshot(roomSnap, async (snapshot) => {
+        const pc = this.peerConnection;
+        if (!pc) return;
         const data = snapshot.data();
-        if (data?.offer && !this.peerConnection.currentRemoteDescription) {
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-          const answer = await this.peerConnection.createAnswer();
-          await this.peerConnection.setLocalDescription(answer);
+        if (data?.offer && !pc.currentRemoteDescription) {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
 
           await setDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
         }
       }, (err) => log.warn('[spacesService] subscription error', err));
 
       const hostCandidatesCol = collection(roomRef, 'hostCandidates');
-      onSnapshot(hostCandidatesCol, (snapshot) => {
+      const candUnsub = onSnapshot(hostCandidatesCol, (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
-          if (change.type === 'added') {
+          if (change.type === 'added' && this.peerConnection) {
             const data = change.doc.data();
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
       }, (err) => log.warn('[spacesService] subscription error', err));
+      this.candidateUnsubs.push(candUnsub);
     }
   }
 
@@ -409,6 +416,12 @@ class SpacesService {
     if (this.signalingUnsubscribe) {
       this.signalingUnsubscribe();
       this.signalingUnsubscribe = null;
+    }
+    if (Array.isArray(this.candidateUnsubs) && this.candidateUnsubs.length > 0) {
+      this.candidateUnsubs.forEach((unsub) => {
+        try { unsub(); } catch { /* noop */ }
+      });
+      this.candidateUnsubs = [];
     }
     if (this.spacesUnsubscribe) {
       this.spacesUnsubscribe();

@@ -1,6 +1,6 @@
 // src/components/messaging/MessageInput.jsx
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { Send, Paperclip, Mic, Smile, Image as ImageIcon, Video, File, MapPin, User, X, Loader2 } from "lucide-react";
@@ -26,6 +26,7 @@ const MessageInput = React.memo(({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
   const { user: currentUser } = useAuth();
   const textInputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -35,6 +36,25 @@ const MessageInput = React.memo(({
   const audioChunksRef = useRef([]);
 
   const typingTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    const urls = attachedFiles.map((file) =>
+      file.type.startsWith('image/') || file.type.startsWith('video/')
+        ? URL.createObjectURL(file)
+        : null
+    );
+    setPreviewUrls(urls);
+    return () => {
+      urls.forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+    };
+  }, [attachedFiles]);
+
+  useEffect(() => () => {
+    clearTimeout(typingTimeoutRef.current);
+    clearInterval(recordingTimerRef.current);
+  }, []);
 
   // Handle typing indicator
   const handleTypingChange = (value) => {
@@ -178,15 +198,15 @@ const MessageInput = React.memo(({
                 theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
               )}
             >
-              {file.type.startsWith('image/') ? (
+              {file.type.startsWith('image/') && previewUrls[index] ? (
                 <LazyImage
-                  src={URL.createObjectURL(file)}
+                  src={previewUrls[index]}
                   alt={file.name}
                   className="h-20 w-20 object-cover"
                 />
-              ) : file.type.startsWith('video/') ? (
+              ) : file.type.startsWith('video/') && previewUrls[index] ? (
                 <video
-                  src={URL.createObjectURL(file)}
+                  src={previewUrls[index]}
                   className="h-20 w-20 object-cover"
                 />
               ) : (
@@ -195,8 +215,10 @@ const MessageInput = React.memo(({
                 </div>
               )}
               <button
+                type="button"
+                aria-label={`Remove ${file.name}`}
                 onClick={() => removeAttachedFile(index)}
-                className="absolute -top-2 -right-2 bg-red-500 rounded-full p-0.5 hover:bg-red-600 transition-colors"
+                className="absolute top-1 right-1 bg-red-500 rounded-full p-1 hover:bg-red-600 transition-colors"
               >
                 <X className="w-3 h-3 text-white" />
               </button>
@@ -241,6 +263,7 @@ const MessageInput = React.memo(({
       <div className="flex items-end gap-2">
         {/* Attachment button */}
         <button
+          type="button"
           onClick={() => setShowAttachments(!showAttachments)}
           disabled={disabled || isRecording || isSending}
           className={cn(
@@ -249,6 +272,7 @@ const MessageInput = React.memo(({
               ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300 disabled:text-gray-600'
               : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900 disabled:text-gray-300'
           )}
+          aria-label="Attach media"
           title="Attach media"
         >
           <Paperclip className="w-5 h-5" />
@@ -285,6 +309,7 @@ const MessageInput = React.memo(({
 
         {/* Emoji button */}
         <button
+          type="button"
           onClick={() => {
             setShowEmoji(!showEmoji);
             setShowGIFPicker(false);
@@ -293,11 +318,12 @@ const MessageInput = React.memo(({
           className={cn(
             'p-2 rounded-full transition-colors',
             showEmoji
-              ? 'bg-purple-600 text-white'
+              ? 'bg-arvdoul-gradient text-white'
               : (theme === 'dark'
                 ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300 disabled:text-gray-600'
                 : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900 disabled:text-gray-300')
           )}
+          aria-label="Emoji"
           title="Emoji"
         >
           <Smile className="w-5 h-5" />
@@ -305,6 +331,7 @@ const MessageInput = React.memo(({
 
         {/* GIF button */}
         <button
+          type="button"
           onClick={() => {
             setShowGIFPicker(!showGIFPicker);
             setShowEmoji(false);
@@ -312,13 +339,14 @@ const MessageInput = React.memo(({
           }}
           disabled={disabled || isRecording}
           className={cn(
-            'px-2 py-1.5 rounded-full transition-colors text-xs font-black tracking-tight',
+            'px-2.5 py-1.5 rounded-full transition-colors text-xs font-black tracking-tight',
             showGIFPicker
-              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm'
+              ? 'bg-arvdoul-gradient text-white shadow-sm'
               : (theme === 'dark'
                 ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300 disabled:text-gray-600'
                 : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900 disabled:text-gray-300')
           )}
+          aria-label="GIF Reactions"
           title="GIF Reactions"
         >
           GIF
@@ -327,14 +355,15 @@ const MessageInput = React.memo(({
         {/* Voice or Send button */}
         {text.trim() || attachedFiles.length > 0 ? (
           <button
+            type="button"
             onClick={handleSendMessage}
             disabled={disabled || isSending}
             className={cn(
-              'p-2 rounded-full transition-colors text-white',
-              'bg-gradient-to-r from-purple-600 to-pink-600',
-              'hover:from-purple-700 hover:to-pink-700',
+              'p-2 rounded-full transition-all text-white',
+              'bg-arvdoul-gradient hover:brightness-110 shadow-sm',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
+            aria-label="Send message"
             title="Send message"
           >
             {isSending ? (
@@ -345,18 +374,20 @@ const MessageInput = React.memo(({
           </button>
         ) : (
           <button
+            type="button"
             onMouseDown={handleStartRecording}
             onMouseUp={handleStopRecording}
             onTouchStart={handleStartRecording}
             onTouchEnd={handleStopRecording}
             disabled={disabled}
             className={cn(
-              'p-2 rounded-full transition-colors',
+              'p-2 rounded-full transition-all',
               isRecording
                 ? 'bg-red-500 text-white'
-                : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700',
+                : 'bg-arvdoul-gradient text-white hover:brightness-110 shadow-sm',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
+            aria-label="Record voice message"
             title="Press to record"
           >
             <Mic className="w-5 h-5" />
@@ -367,26 +398,38 @@ const MessageInput = React.memo(({
       {/* Attachment menu */}
       {showAttachments && (
         <div className={cn(
-          'flex gap-2 p-3 rounded-lg',
+          'flex gap-2 p-3 rounded-xl',
           theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
         )}>
           <button
+            type="button"
             onClick={() => mediaInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-700/50 transition-colors"
+            className={cn(
+              'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors',
+              theme === 'dark' ? 'hover:bg-gray-700/60' : 'hover:bg-gray-200/80'
+            )}
           >
             <ImageIcon className="w-5 h-5 text-blue-500" />
             <span className="text-xs">Photo</span>
           </button>
           <button
+            type="button"
             onClick={() => mediaInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-700/50 transition-colors"
+            className={cn(
+              'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors',
+              theme === 'dark' ? 'hover:bg-gray-700/60' : 'hover:bg-gray-200/80'
+            )}
           >
             <Video className="w-5 h-5 text-red-500" />
             <span className="text-xs">Video</span>
           </button>
           <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-700/50 transition-colors"
+            className={cn(
+              'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors',
+              theme === 'dark' ? 'hover:bg-gray-700/60' : 'hover:bg-gray-200/80'
+            )}
           >
             <File className="w-5 h-5 text-yellow-500" />
             <span className="text-xs">File</span>

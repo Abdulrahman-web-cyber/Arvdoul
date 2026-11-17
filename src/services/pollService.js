@@ -11,7 +11,7 @@ const log = svcLogger('pollService');
 class PollService {
   constructor() {
     this.votedHistory = new Map(); // pollId -> optionId
-    this._initVotes();
+    this._initPromise = this._initVotes();
   }
 
   _generateSecureHex(bytes = 4) {
@@ -68,6 +68,7 @@ class PollService {
       const firestore = await getFirestoreInstance();
       const { collection, getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
+      await this._initPromise;
       const hiddenAuthors = await this._getHiddenAuthors(viewerId);
       const colRef = collection(firestore, 'polls');
       let q = query(colRef, orderBy('createdAt', 'desc'), limit(40));

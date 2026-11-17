@@ -118,16 +118,15 @@ export class SectionErrorBoundary extends Component {
 
       return (
         <div className="w-full max-w-xl mx-auto my-8 px-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="relative rounded-3xl p-6 sm:p-8 bg-[#0d1424]/90 dark:bg-[#0d1424]/90 bg-white/95 border border-slate-200/90 dark:border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl text-center overflow-hidden">
+          <div className="relative rounded-3xl p-6 sm:p-8 bg-white/95 dark:bg-[#0d1424]/90 border border-slate-200/90 dark:border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl text-center overflow-hidden">
             {/* Ambient Background Glow Halo */}
             <div className="absolute -top-20 -right-20 w-48 h-48 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
 
             <div className="relative z-10 space-y-4">
-              {/* Status Pill */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-                <span>{sectionName} System Sync</span>
+              {/* Section Badge */}
+              <div className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                <span>{sectionName}</span>
               </div>
 
               {/* Glowing Icon Container */}
@@ -182,18 +181,18 @@ export class SectionErrorBoundary extends Component {
 
               {/* Diagnostic Collapsible Accordion (Premium Dev & Tech Support Experience) */}
               {error && (
-                <div className="pt-2 text-left">
+                <div className="pt-2 text-center">
                   <button
                     type="button"
                     onClick={() => this.setState(prev => ({ showDetails: !prev.showDetails }))}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-purple-600 dark:text-slate-400 dark:hover:text-purple-400 transition-colors mx-auto block"
+                    className="inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-purple-600 dark:text-slate-400 dark:hover:text-purple-400 transition-colors"
                   >
                     <span>{showDetails ? 'Hide Diagnostics' : 'View Diagnostics'}</span>
                     {showDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
 
                   {showDetails && (
-                    <div className="mt-3 p-3.5 rounded-2xl bg-slate-950/90 dark:bg-black/80 border border-slate-800 text-slate-300 text-xs font-mono relative overflow-hidden">
+                    <div className="mt-3 p-3.5 rounded-2xl bg-slate-950/90 dark:bg-black/80 border border-slate-800 text-slate-300 text-xs font-mono text-left relative overflow-hidden">
                       <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10 text-[10px] uppercase tracking-wider text-slate-400">
                         <div className="flex items-center gap-1.5">
                           <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />

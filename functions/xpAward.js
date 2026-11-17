@@ -32,14 +32,16 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
   if (!rule) throw new Error(`Unknown XP action: ${action}`);
   const idempotencyKey = source ? `${action}:${source}` : null;
   const userRef = db.doc(`users/${uid}`);
+  const privateRef = db.doc(`users_private/${uid}`);
 
   let result = null;
   await db.runTransaction(async (tx) => {
-    const userSnap = await tx.get(userRef);
+    const [userSnap, privateSnap] = await Promise.all([tx.get(userRef), tx.get(privateRef)]);
     const dataDoc = userSnap.exists ? userSnap.data() : {};
+    const privateDoc = privateSnap.exists ? privateSnap.data() : {};
 
     const today = new Date().toISOString().slice(0, 10);
-    const counters = dataDoc.xpCounters || {};
+    const counters = privateDoc.xpCounters || dataDoc.xpCounters || {};
     const todayEntry = counters[today] || {};
     const usedTodayXp = todayEntry[action] || 0;
     const allowed = Math.max(0, Math.min(count, Math.floor((rule.dailyCap - usedTodayXp) / rule.xp)));
@@ -48,7 +50,7 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
       return;
     }
 
-    const recent = dataDoc.xpAwards || {};
+    const recent = privateDoc.xpAwards || dataDoc.xpAwards || {};
     if (idempotencyKey && recent[idempotencyKey] === today) {
       result = { success: true, xpAwarded: 0, leveledUp: false, newLevel: dataDoc.level || 1, coinReward: 0, duplicate: true };
       return;
@@ -61,26 +63,41 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
     const leveledUp = after.level > before.level;
     const coinReward = leveledUp ? getLevelUpReward(before.level, after.level) : 0;
 
+    // Read coin balance BEFORE performing writes inside the transaction.
+    const privBal = coinReward > 0
+      ? await readCoinBalance(tx, uid, { fallbackToPublic: true })
+      : null;
+
     const patch = {
       experience,
       level: after.level,
       experienceToNextLevel: after.nextLevelXp === null ? null : Math.max(0, after.nextLevelXp - experience),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    if (idempotencyKey) patch[`xpAwards.${idempotencyKey}`] = today;
-    const nextCounters = { ...counters };
-    nextCounters[today] = { ...todayEntry, [action]: usedTodayXp + xpAwarded };
-    patch.xpCounters = nextCounters;
     if (leveledUp) patch.lastLevelUpAt = admin.firestore.FieldValue.serverTimestamp();
+    if (dataDoc.xpAwards !== undefined) patch.xpAwards = admin.firestore.FieldValue.delete();
+    if (dataDoc.xpCounters !== undefined) patch.xpCounters = admin.firestore.FieldValue.delete();
 
     tx.set(userRef, patch, { merge: true });
+
+    // Prune expired daily keys so xpAwards / xpCounters stay strictly O(today).
+    const prunedAwards = {};
+    for (const [k, day] of Object.entries(recent)) {
+      if (day === today) prunedAwards[k] = day;
+    }
+    if (idempotencyKey) prunedAwards[idempotencyKey] = today;
+
+    tx.set(privateRef, {
+      xpAwards: prunedAwards,
+      xpCounters: { [today]: { ...todayEntry, [action]: usedTodayXp + xpAwarded } },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
 
     if (coinReward > 0) {
       // The reward is a real coin credit, so it lands in the same
       // coin_transactions ledger the wallet reads and increments the system
       // supply, keeping the ledger and supply counters consistent. The balance
       // itself lives on users_private/{uid} (N324).
-      const privBal = await readCoinBalance(tx, uid, { fallbackToPublic: true });
       const rewardTxRef = db.collection('coin_transactions').doc();
       tx.set(rewardTxRef, {
         userId: uid,

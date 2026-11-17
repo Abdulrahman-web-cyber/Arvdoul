@@ -39,9 +39,10 @@ function normaliseAnswers(raw) {
     .filter((a) => a && typeof a === 'object');
 }
 
-/** Loads a post, asserts it is a question, and returns its answers. */
-async function loadQuestionAnswers(postId) {
-  const snap = await db.collection('posts').doc(postId).get();
+/** Loads a post, asserts it is a question, and returns its answers inside an optional transaction. */
+async function loadQuestionAnswers(postId, tx = null) {
+  const ref = db.collection('posts').doc(postId);
+  const snap = tx ? await tx.get(ref) : await ref.get();
   if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Post not found');
   const question = snap.data().question;
   if (!question || typeof question !== 'object') {
@@ -126,7 +127,7 @@ exports.editAnswer = functions.https.onCall(async (data, context) => {
 
   const postRef = db.collection('posts').doc(postId);
   await db.runTransaction(async (t) => {
-    const { answers } = await loadQuestionAnswers(postId);
+    const { answers } = await loadQuestionAnswers(postId, t);
     const index = answers.findIndex((a) => a.id === answerId);
     if (index < 0) throw new functions.https.HttpsError('not-found', 'Answer not found');
     if (answers[index].userId !== uid) {
@@ -152,7 +153,7 @@ exports.deleteAnswer = functions.https.onCall(async (data, context) => {
   const admin = await isAdmin(uid);
 
   await db.runTransaction(async (t) => {
-    const { answers } = await loadQuestionAnswers(postId);
+    const { answers } = await loadQuestionAnswers(postId, t);
     const index = answers.findIndex((a) => a.id === answerId);
     if (index < 0) throw new functions.https.HttpsError('not-found', 'Answer not found');
     const owner = answers[index].userId;
@@ -180,7 +181,7 @@ exports.castAnswerVote = functions.https.onCall(async (data, context) => {
   const voteRef = postRef.collection('answer_votes').doc(`${answerId}_${uid}`);
 
   const result = await db.runTransaction(async (t) => {
-    const { answers } = await loadQuestionAnswers(postId);
+    const { answers } = await loadQuestionAnswers(postId, t);
     const index = answers.findIndex((a) => a.id === answerId);
     if (index < 0) throw new functions.https.HttpsError('not-found', 'Answer not found');
 

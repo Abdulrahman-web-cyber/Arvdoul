@@ -25,6 +25,8 @@ import {
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { getUserService } from '../../services/userService.js';
+import { getAnalyticsService } from '../../services/analyticsService.js';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
 import { unknownNumber } from '../../lib/unknownNumber';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
@@ -126,70 +128,73 @@ export default function ProfilePublicScreen() {
     try {
       // 1. Fetch user profile via store
       await useProfileStore.getState().loadProfile(cleanUserId, currentUserId);
-      const currentProfile = useProfileStore.getState().profile;
+      const { profile: currentProfile, error: profileError } = useProfileStore.getState();
+      if (profileError && !currentProfile?.username) {
+        return;
+      }
+
       const resolvedUid = currentProfile?.id || currentProfile?.uid || cleanUserId;
+      const store = useProfileStore.getState();
 
-      // 2. Load posts & highlights via store
-      await Promise.allSettled([
-        useProfileStore.getState().loadPosts(resolvedUid, { limit: 30 }),
-        useProfileStore.getState().loadHighlights(resolvedUid),
-      ]);
-
-      // 3. Fetch relationship & follow status
+      // 2. Load posts, highlights, and relationship context in parallel
       if (currentUserId && resolvedUid !== currentUserId) {
-        const userServiceModule = await import('../../services/userService.js');
-        const userService = userServiceModule.getUserService();
+        const userService = getUserService();
+        const [relSettled, friendsSettled] = await Promise.allSettled([
+          userService.getRelationshipState(currentUserId, resolvedUid),
+          userService.areFriends(currentUserId, resolvedUid),
+          store.loadPosts(resolvedUid, { limit: 30 }),
+          store.loadHighlights(resolvedUid),
+          store.loadMutualFriends(currentUserId, resolvedUid),
+        ]);
 
-        try {
-          const rel = await userService.getRelationshipState(currentUserId, resolvedUid);
-          if (isMountedRef.current) {
-            setRelationship(rel);
-          }
-        } catch (followErr) {
-          console.warn('Relationship state note:', followErr);
+        const rel = relSettled.status === 'fulfilled' ? relSettled.value : null;
+        if (rel && isMountedRef.current) {
+          setRelationship(rel);
         }
 
-        // 4. Fetch mutual friends and friend request status
-        try {
-          await useProfileStore.getState().loadMutualFriends(currentUserId, resolvedUid);
+        if (rel?.isBlockedBy || rel?.isBlocking) {
+          return;
+        }
 
-          const areFriends = await userService.areFriends(currentUserId, resolvedUid).catch(() => false);
-          if (areFriends) {
-            if (isMountedRef.current) setFriendshipStatus('friends');
-          } else {
-            const sent = await userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }));
-            const sentReq = sent.requests?.find(r => r.toUserId === resolvedUid);
-            if (sentReq) {
-              if (isMountedRef.current) {
+        const areFriends = friendsSettled.status === 'fulfilled' ? Boolean(friendsSettled.value) : false;
+        if (areFriends) {
+          if (isMountedRef.current) setFriendshipStatus('friends');
+        } else {
+          try {
+            const [sent, received] = await Promise.all([
+              userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] })),
+              userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] })),
+            ]);
+            const sentReq = sent.requests?.find((r) => r.toUserId === resolvedUid);
+            const recReq = received.requests?.find((r) => r.fromUserId === resolvedUid);
+            if (isMountedRef.current) {
+              if (sentReq) {
                 setFriendshipStatus('pending');
                 setPendingRequestId(sentReq.id);
-              }
-            } else {
-              const received = await userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] }));
-              const recReq = received.requests?.find(r => r.fromUserId === resolvedUid);
-              if (recReq) {
-                if (isMountedRef.current) {
-                  setFriendshipStatus('received');
-                  setPendingRequestId(recReq.id);
-                }
+              } else if (recReq) {
+                setFriendshipStatus('received');
+                setPendingRequestId(recReq.id);
               } else {
-                if (isMountedRef.current) setFriendshipStatus('none');
+                setFriendshipStatus('none');
               }
             }
+          } catch (reqErr) {
+            console.warn('Friend request status note:', reqErr);
           }
-        } catch (mutualErr) {
-          console.warn('Mutual friends note:', mutualErr);
         }
 
-        // 5. Track profile view
         try {
-          const { getAnalyticsService } = await import('../../services/analyticsService.js');
           getAnalyticsService().trackProfileView(currentUserId, resolvedUid).catch((e) => {
             console.warn('[Profile] view not tracked', e?.message);
           });
         } catch (e) {
           console.warn('[Profile] analytics service unavailable for view tracking', e?.message);
         }
+      } else {
+        await Promise.allSettled([
+          store.loadPosts(resolvedUid, { limit: 30 }),
+          store.loadHighlights(resolvedUid),
+        ]);
       }
     } catch (err) {
       console.warn('Public profile fetch error:', err);
@@ -487,7 +492,7 @@ export default function ProfilePublicScreen() {
     );
   }
 
-  if (capabilities?.isBlockedBy || (!loading && capabilities?.canViewProfile === false)) {
+  if (capabilities?.isBlockedBy) {
     return (
       <div className={cn(
         "min-h-screen flex items-center justify-center p-4",
@@ -506,6 +511,7 @@ export default function ProfilePublicScreen() {
           </p>
           <div className="pt-2 flex justify-center">
             <button
+              type="button"
               onClick={() => navigate('/')}
               className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
             >
@@ -517,7 +523,7 @@ export default function ProfilePublicScreen() {
     );
   }
 
-  if (!loading && (!effectiveProfile || (storeError && !effectiveProfile?.username))) {
+  if (!loading && (!effectiveProfile || (storeError && !profileData?.username))) {
     return (
       <div className={cn(
         "min-h-screen flex items-center justify-center p-4",
@@ -527,7 +533,7 @@ export default function ProfilePublicScreen() {
           "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
           isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
         )}>
-          <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center text-2xl font-bold">
+          <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center text-2xl font-bold">
             {storeError ? <ShieldAlert className="w-8 h-8" /> : '?'}
           </div>
           <h2 className="text-xl font-black">
@@ -562,6 +568,37 @@ export default function ProfilePublicScreen() {
                 Discover Creators
               </button>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!loading && capabilities?.canViewProfile === false) {
+    return (
+      <div className={cn(
+        "min-h-screen flex items-center justify-center p-4",
+        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black">Profile Unavailable</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            This account is currently unavailable or restricted.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+            >
+              Back to Home
+            </button>
           </div>
         </div>
       </div>

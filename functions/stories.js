@@ -57,6 +57,7 @@ const FAILED_TASK_RETRY_AGE_MS = 60 * 60_000;
 const STUCK_TASK_TIMEOUT_MS = 10 * 60_000;
 const MODERATION_VIDEO_TIMEOUT_MS = 8 * 60 * 1000;
 const { checkRateLimit } = require('./rateLimit');
+const { getRuntimeConfig } = require('./auth');
 
 // ----------------------------------------------------------------------
 //  CLOUD TASKS CONFIG (with deduplication)
@@ -322,7 +323,7 @@ exports.moderateStory = functions.firestore
 
       // ---- 1. Text moderation (Perspective API) ----
       if (storyData.content) {
-        const apiKey = functions.config().perspective?.api_key;
+        const apiKey = getRuntimeConfig('PERSPECTIVE_API_KEY', 'perspective.api_key');
         if (apiKey) {
           const response = await fetch(
             `https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze?key=${apiKey}`,

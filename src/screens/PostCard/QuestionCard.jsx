@@ -65,8 +65,9 @@ const ExpandableText = React.memo(({ text, maxLength = 200, tokens }) => {
     <div>
       <span className="text-sm whitespace-pre-wrap break-words" style={{ color: tokens.textSecondary }}>{displayText}</span>
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="text-xs text-purple-400 hover:underline ml-1 flex items-center gap-0.5"
+        className="text-xs text-arvdoul-purple dark:text-purple-400 hover:underline ml-1 inline-flex items-center gap-0.5"
       >
         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         {expanded ? 'Show less' : 'Show more'}
@@ -154,7 +155,7 @@ const AnswerItem = React.memo(({
         isBest && "bg-yellow-500/10 border-yellow-500/50 shadow-md"
       )}
       style={{
-        backgroundColor: isBest ? 'rgba(234,179,8,0.1)' : tokens.actionBarBg,
+        backgroundColor: isBest ? 'rgba(234,179,8,0.1)' : (tokens.cardBg || 'transparent'),
         borderColor: isBest ? tokens.gold : tokens.border,
       }}
     >
@@ -189,10 +190,10 @@ const AnswerItem = React.memo(({
                 autoFocus
               />
               <div className="flex gap-2">
-                <button onClick={handleEdit} className="flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-green-500 text-white">
+                <button type="button" onClick={handleEdit} className="flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-green-500 text-white">
                   <Save className="w-3 h-3" /> Save
                 </button>
-                <button onClick={() => setIsEditing(false)} className="flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-gray-500 text-white">
+                <button type="button" onClick={() => setIsEditing(false)} className="flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-gray-500 text-white">
                   <X className="w-3 h-3" /> Cancel
                 </button>
               </div>
@@ -205,35 +206,37 @@ const AnswerItem = React.memo(({
 
       <div className="flex flex-wrap items-center gap-3 mt-3 ml-12">
         <button
+          type="button"
           onClick={() => handleVote('up')}
-          className={cn("flex items-center gap-1 text-xs transition", userVote === 'up' ? 'text-green-500' : 'text-gray-400 hover:text-green-500')}
+          className={cn("flex items-center gap-1 text-xs transition tabular-nums", userVote === 'up' ? 'text-green-500' : 'text-gray-500 dark:text-gray-400 hover:text-green-500')}
           aria-label="Upvote"
         >
           <ThumbsUp className="w-3.5 h-3.5" /> {optimisticUpvotes === null ? '—' : optimisticUpvotes}
         </button>
         <button
+          type="button"
           onClick={() => handleVote('down')}
-          className={cn("flex items-center gap-1 text-xs transition", userVote === 'down' ? 'text-red-500' : 'text-gray-400 hover:text-red-500')}
+          className={cn("flex items-center gap-1 text-xs transition", userVote === 'down' ? 'text-red-500' : 'text-gray-500 dark:text-gray-400 hover:text-red-500')}
           aria-label="Downvote"
         >
           <ThumbsDown className="w-3.5 h-3.5" />
         </button>
         {isAnswerAuthor && !isEditing && (
           <>
-            <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-yellow-500 transition" aria-label="Edit">
+            <button type="button" onClick={() => setIsEditing(true)} className="text-gray-500 dark:text-gray-400 hover:text-yellow-500 transition" aria-label="Edit">
               <Edit3 className="w-3.5 h-3.5" />
             </button>
-            <button onClick={handleDelete} className="text-gray-400 hover:text-red-500 transition" aria-label="Delete">
+            <button type="button" onClick={handleDelete} className="text-gray-500 dark:text-gray-400 hover:text-red-500 transition" aria-label="Delete">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </>
         )}
         {canMarkBest && (
-          <button onClick={() => onMarkBest(answer.id)} className="text-purple-400 hover:text-purple-300 transition flex items-center gap-1 text-xs">
+          <button type="button" onClick={() => onMarkBest(answer.id)} className="text-arvdoul-purple dark:text-purple-400 hover:opacity-80 transition flex items-center gap-1 text-xs">
             <Star className="w-3.5 h-3.5" /> Mark Best
           </button>
         )}
-        <button onClick={() => onReport(answer.id)} className="ml-auto text-gray-400 hover:text-red-500 transition" aria-label="Report">
+        <button type="button" onClick={() => onReport(answer.id)} className="ml-auto text-gray-500 dark:text-gray-400 hover:text-red-500 transition" aria-label="Report">
           <Flag className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -358,13 +361,14 @@ const QuestionCard = React.memo(({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       className="text-center py-8 px-4 rounded-2xl border border-dashed"
-      style={{ borderColor: tokens.border, backgroundColor: tokens.actionBarBg }}
+      style={{ borderColor: tokens.border, backgroundColor: tokens.cardBg || 'transparent' }}
     >
       <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-40" style={{ color: tokens.textSecondary }} />
       <p className="text-sm font-medium" style={{ color: tokens.textSecondary }}>No answers yet</p>
       <p className="text-xs mt-1" style={{ color: tokens.textSecondary }}>Be the first to share your knowledge</p>
       {!actualClosed && currentUser && (
         <button
+          type="button"
           onClick={() => setShowComposer(true)}
           className="mt-3 px-4 py-1.5 rounded-full text-xs font-medium text-white shadow-md"
           style={{ background: neonGradient, boxShadow: buttonGlow }}
@@ -431,14 +435,15 @@ const QuestionCard = React.memo(({
 
       {/* Answer composer – collapsible, visible by default */}
       {!actualClosed && currentUser && (
-        <div className="bg-black/20 rounded-2xl overflow-hidden transition-all">
+        <div className="rounded-2xl border overflow-hidden transition-all" style={{ borderColor: tokens.border, backgroundColor: tokens.cardBg }}>
           <button
+            type="button"
             onClick={() => setShowComposer(!showComposer)}
             className="w-full flex justify-between items-center p-3 text-sm font-medium"
             style={{ color: tokens.text }}
           >
             <span className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
+              <Sparkles className="w-4 h-4 text-arvdoul-purple dark:text-purple-400" />
               Write your answer
             </span>
             <ChevronDown className={cn("w-4 h-4 transition-transform", showComposer && "rotate-180")} />
@@ -455,13 +460,14 @@ const QuestionCard = React.memo(({
                   value={answerText}
                   onChange={(e) => setAnswerText(e.target.value)}
                   placeholder="Share your expertise..."
-                  className="w-full bg-black/30 rounded-xl border px-4 py-3 text-sm placeholder:text-gray-400 resize-none focus:outline-none focus:ring-1"
-                  style={{ borderColor: tokens.border, color: tokens.text }}
+                  className="w-full rounded-xl border px-4 py-3 text-sm placeholder:text-gray-400 resize-none focus:outline-none focus:ring-1"
+                  style={{ borderColor: tokens.border, backgroundColor: tokens.cardBgAlt, color: tokens.text }}
                   rows={4}
                   aria-label="Write your answer"
                 />
                 <div className="flex justify-end">
                   <button
+                    type="button"
                     onClick={submitAnswer}
                     disabled={isSubmitting || !answerText.trim()}
                     className="flex items-center gap-2 px-6 py-2 rounded-full text-white font-medium shadow-md transition-all"
@@ -480,12 +486,13 @@ const QuestionCard = React.memo(({
 
       {/* Toggle answers visibility – answers hidden by default */}
       <div className="flex justify-between items-center">
-        <span className="text-xs font-semibold" style={{ color: tokens.textSecondary }}>
+        <span className="text-xs font-semibold tabular-nums" style={{ color: tokens.textSecondary }}>
           {rankedAnswers.length} Answer{rankedAnswers.length !== 1 ? 's' : ''}
         </span>
         <button
+          type="button"
           onClick={() => setShowAnswers(!showAnswers)}
-          className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition"
+          className="flex items-center gap-1 text-xs text-arvdoul-purple dark:text-purple-400 hover:opacity-80 transition"
           aria-label={showAnswers ? 'Hide answers' : 'Show answers'}
         >
           {showAnswers ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}

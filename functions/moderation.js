@@ -32,7 +32,7 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const logger = functions.logger;
 const { checkRateLimit } = require('./rateLimit');
-const { checkIsAdmin } = require('./auth');
+const { checkIsAdmin, getRuntimeConfig } = require('./auth');
 
 // ----------------------------------------------------------------------
 //  Shared helpers
@@ -245,7 +245,7 @@ exports.moderatePost = functions.https.onCall(async (data, context) => {
 
   await checkRateLimit(uid, 'moderatePost', 30, 60000);
 
-  const apiKey = functions.config()?.perspective?.api_key;
+  const apiKey = getRuntimeConfig('PERSPECTIVE_API_KEY', 'perspective.api_key');
   if (!apiKey) {
     logger.warn('Perspective API key missing – post moderation unavailable');
     return {

@@ -32,7 +32,7 @@ import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply } from "lucide-react";
+import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply, Phone, Video } from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
@@ -431,6 +431,25 @@ export default function ChatScreen() {
     return () => { cancelled = true; };
   }, [otherParticipants]);
 
+  // Load this conversation's saved-message ids when the panel opens.
+  const loadSavedState = useCallback(async () => {
+    if (!uid) return;
+    try {
+      const svc = getMessagingService();
+      const res = await svc.getSavedMessages(uid, { limit: 200 });
+      if (res?.success) {
+        const list = res.messages || [];
+        setSavedMessages(list);
+        const ids = {};
+        list.forEach((m) => { if (m.conversationId === conversationId) ids[m.id] = true; });
+        setSavedIds(ids);
+      }
+    } catch (err) {
+      console.warn('[Chat] saved messages load failed', err);
+      toastError('Could not load your saved messages.');
+    }
+  }, [uid, conversationId]);
+
   // Conversation info panel: pinned messages, shared media, search
   const openInfoPanel = useCallback(async () => {
     setShowInfoPanel(true);
@@ -461,7 +480,7 @@ export default function ChatScreen() {
       console.warn('[Chat] conversation info panel load failed', err);
       setInfoPanelError('Could not load conversation details.');
     }
-  }, [conversationId]);
+  }, [conversationId, loadSavedState]);
 
   const runSearch = useCallback(async () => {
     const q = searchQuery.trim();
@@ -541,7 +560,7 @@ export default function ChatScreen() {
       if (savedIds[msg.id]) {
         await svc.unsaveMessage(msg.id, uid);
         setSavedIds((p) => { const n = { ...p }; delete n[msg.id]; return n; });
-        toastError?.('Removed from saved');
+        toastSuccess?.('Removed from saved');
       } else {
         await svc.saveMessage(conversationId, msg.id, uid);
         setSavedIds((p) => ({ ...p, [msg.id]: true }));
@@ -553,25 +572,6 @@ export default function ChatScreen() {
       toastError(err?.message || 'Could not update saved messages');
     }
   }, [conversationId, uid, savedIds]);
-
-  // Load this conversation's saved-message ids when the panel opens.
-  const loadSavedState = useCallback(async () => {
-    if (!uid) return;
-    try {
-      const svc = getMessagingService();
-      const res = await svc.getSavedMessages(uid, { limit: 200 });
-      if (res?.success) {
-        const list = res.messages || [];
-        setSavedMessages(list);
-        const ids = {};
-        list.forEach((m) => { if (m.conversationId === conversationId) ids[m.id] = true; });
-        setSavedIds(ids);
-      }
-    } catch (err) {
-      console.warn('[Chat] saved messages load failed', err);
-      toastError('Could not load your saved messages.');
-    }
-  }, [uid, conversationId]);
 
   // A message's sender label is the real participant name, else the uid prefix —
   // never a generic 'User'. `senderName` on the doc may itself be null (we no
@@ -755,6 +755,7 @@ export default function ChatScreen() {
       <header className={cn('sticky top-0 z-20 backdrop-blur-xl border-b', isDark ? 'bg-[#0B0F17]/85 border-white/10' : 'bg-white/85 border-gray-200')}>
         <div className="max-w-4xl mx-auto px-3 h-14 flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate('/messages')}
             aria-label="Back to conversations"
             className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
@@ -770,7 +771,28 @@ export default function ChatScreen() {
             </p>
           </div>
           {conversation?.participantCount > 2 && <Users className="w-4 h-4 opacity-60" aria-hidden="true" />}
+          {conversationId && otherParticipants.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate(`/call/${conversationId}?type=audio`)}
+                aria-label="Start voice call"
+                className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+              >
+                <Phone className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/call/${conversationId}?type=video`)}
+                aria-label="Start video call"
+                className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+              >
+                <Video className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </>
+          )}
           <button
+            type="button"
             onClick={openInfoPanel}
             aria-label="Conversation info"
             className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
@@ -795,9 +817,13 @@ export default function ChatScreen() {
         {hasMoreOlder && messages.length > 0 && (
           <div className="flex justify-center py-2">
             <button
+              type="button"
               onClick={loadOlderMessages}
               disabled={loadingOlder}
-              className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 text-xs font-semibold text-arvdoul-text-secondary disabled:opacity-50 transition-colors"
+              className={cn(
+                'px-4 py-2 rounded-full text-xs font-semibold disabled:opacity-50 transition-colors',
+                isDark ? 'bg-white/5 hover:bg-white/10 text-gray-300' : 'bg-gray-200/80 hover:bg-gray-300/80 text-gray-700'
+              )}
             >
               {loadingOlder ? 'Loading…' : 'Load earlier messages'}
             </button>
@@ -865,6 +891,7 @@ export default function ChatScreen() {
         {/* Jump-to-latest pill (spec §51) */}
         {!atBottom && newSinceScroll > 0 && (
           <button
+            type="button"
             onClick={() => {
               try {
                 messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
@@ -873,7 +900,7 @@ export default function ChatScreen() {
               setNewSinceScroll(0);
               setAtBottom(true);
             }}
-            className="sticky bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg shadow-purple-600/40 hover:bg-purple-500 transition-colors"
+            className="sticky bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-arvdoul-gradient text-white text-xs font-bold shadow-lg hover:opacity-95 transition-opacity tabular-nums"
             aria-label={`Jump to ${newSinceScroll} new message${newSinceScroll > 1 ? 's' : ''}`}
           >
             <ArrowDown className="w-3.5 h-3.5" />
@@ -899,11 +926,12 @@ export default function ChatScreen() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-base">Conversation details</h2>
               <button
+                type="button"
                 onClick={() => setShowInfoPanel(false)}
                 aria-label="Close details"
-                className={cn('p-2 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}
+                className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-600')}
               >
-                <Info className="w-4 h-4 opacity-60" aria-hidden="true" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -919,13 +947,14 @@ export default function ChatScreen() {
                 return (
                   <button
                     key={tab.id}
+                    type="button"
                     onClick={() => setInfoTab(tab.id)}
                     aria-pressed={infoTab === tab.id}
                     className={cn(
                       'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all',
                       infoTab === tab.id
-                        ? 'bg-purple-600 text-white shadow'
-                        : 'text-gray-400 hover:text-white'
+                        ? 'bg-arvdoul-gradient text-white shadow'
+                        : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
                     )}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -936,7 +965,7 @@ export default function ChatScreen() {
             </div>
 
             {infoPanelError && (
-              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300" role="alert">
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300" role="alert">
                 {infoPanelError}
               </div>
             )}
@@ -944,11 +973,12 @@ export default function ChatScreen() {
             {infoTab === 'pinned' && (
               <div className="space-y-2">
                 {pinnedMessages.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">No pinned messages yet</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No pinned messages yet</p>
                 ) : (
                   pinnedMessages.map((pid) => (
                     <button
                       key={pid}
+                      type="button"
                       onClick={() => jumpToMessage(pid)}
                       className={cn(
                         'w-full text-left p-3 rounded-xl text-xs border',
@@ -956,13 +986,14 @@ export default function ChatScreen() {
                       )}
                     >
                       <span className="font-semibold">Pinned message</span>
-                      <span className="block text-gray-400 mt-0.5 truncate">{pid}</span>
+                      <span className="block text-gray-500 dark:text-gray-400 mt-0.5 truncate">{pid}</span>
                     </button>
                   ))
                 )}
                 <button
+                  type="button"
                   onClick={() => navigate(`/messages/${conversationId}/settings`)}
-                  className="w-full mt-4 py-2.5 rounded-xl text-xs font-semibold border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 transition-colors"
+                  className="w-full mt-4 py-2.5 rounded-xl text-xs font-semibold border border-purple-500/40 text-arvdoul-purple dark:text-purple-400 hover:bg-purple-500/10 transition-colors"
                 >
                   Conversation settings
                 </button>
@@ -972,14 +1003,15 @@ export default function ChatScreen() {
             {infoTab === 'media' && (
               <div>
                 {sharedMedia.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">No shared media yet</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No shared media yet</p>
                 ) : (
                   <div className="grid grid-cols-3 gap-2">
                     {sharedMedia.map((m) => (
                       <button
                         key={m.id}
+                        type="button"
                         onClick={() => jumpToMessage(m.id)}
-                        className="aspect-square rounded-xl overflow-hidden border border-white/10"
+                        className="aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-white/10"
                         aria-label={`Open media message ${m.id}`}
                       >
                         {m.media?.url || m.media?.downloadUrl ? (
@@ -999,19 +1031,20 @@ export default function ChatScreen() {
             {infoTab === 'saved' && (
               <div>
                 {savedMessages.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">No saved messages yet — long-press a message and choose Save</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No saved messages yet — long-press a message and choose Save</p>
                 ) : (
                   <div className="space-y-2">
                     {savedMessages.map((m) => (
                       <button
                         key={m.id}
+                        type="button"
                         onClick={() => jumpToMessage(m.id)}
                         className={cn(
                           'w-full text-left p-3 rounded-xl text-xs border',
                           isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200'
                         )}
                       >
-                        <span className="text-gray-400 block mb-0.5">
+                        <span className="text-gray-500 dark:text-gray-400 block mb-0.5">
                           {resolveSenderLabel(m, m.senderId === uid)} · {m.createdAt?.toDate ? format(m.createdAt.toDate(), 'p') : ''}
                         </span>
                         <span className="line-clamp-2">{m.content || '(media message)'}</span>
@@ -1038,9 +1071,10 @@ export default function ChatScreen() {
                     )}
                   />
                   <button
+                    type="button"
                     onClick={runSearch}
                     disabled={searching || !searchQuery.trim()}
-                    className="px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-arvdoul-gradient text-white text-xs font-bold disabled:opacity-50"
                   >
                     {searching ? '…' : 'Search'}
                   </button>
@@ -1048,18 +1082,19 @@ export default function ChatScreen() {
                 {searchResults && (
                   <div className="space-y-2">
                     {searchResults.length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-8">No results</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No results</p>
                     ) : (
                       searchResults.map((r) => (
                         <button
                           key={r.id}
+                          type="button"
                           onClick={() => jumpToMessage(r.id)}
                           className={cn(
                             'w-full text-left p-3 rounded-xl text-xs border',
                             isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200'
                           )}
                         >
-                          <span className="text-gray-400 block mb-0.5">
+                          <span className="text-gray-500 dark:text-gray-400 block mb-0.5">
                             {resolveSenderLabel(r, r.senderId === uid)} · {r.createdAt?.toDate ? format(r.createdAt.toDate(), 'p') : ''}
                           </span>
                           <span className="line-clamp-2">{r.content || '(media message)'}</span>
@@ -1213,7 +1248,7 @@ export default function ChatScreen() {
                       onClick={() => handleForwardTo(c.id)}
                       className={cn('w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}
                     >
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                      <div className="w-9 h-9 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white text-xs font-bold">
                         {name.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-sm font-medium truncate">{name}</span>

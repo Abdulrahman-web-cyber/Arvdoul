@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Award, Users } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { cn, formatCount } from '../../lib/searchUtils';
+import { brandRgba } from '../../design-system/tokens.js';
 import ProfileAvatar from '../profile/ProfileAvatar';
 /**
  * Creator Carousel Component
@@ -39,7 +40,7 @@ const CreatorCarousel = memo(({
         <div className="flex items-center gap-3">
           <div className={cn(
             'w-10 h-10 rounded-2xl flex items-center justify-center',
-            'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue'
+            'bg-arvdoul-gradient'
           )}>
             <Users className="w-5 h-5 text-white" />
           </div>
@@ -92,14 +93,13 @@ CreatorCarousel.displayName = 'CreatorCarousel';
  */
 const ArrowButton = memo(({ direction, onClick, isDark }) => (
   <motion.button
+    type="button"
     whileHover={{ scale: 1.1 }}
     whileTap={{ scale: 0.95 }}
     onClick={onClick}
     className={cn(
-      'w-8 h-8 rounded-full flex items-center justify-center',
-      'backdrop-blur-md border border-white/20',
-      isDark ? 'bg-white/10 hover:bg-white/20' : 'bg-white/50 hover:bg-white/70',
-      'shadow-lg'
+      'w-8 h-8 rounded-full flex items-center justify-center border shadow-sm transition-colors',
+      isDark ? 'backdrop-blur-md border-white/20 bg-white/10 hover:bg-white/20' : 'border-slate-200 bg-white hover:bg-slate-100'
     )}
     aria-label={`Scroll ${direction}`}
   >
@@ -146,11 +146,12 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
       onClick={handleClick}
       className={cn(
         'flex-shrink-0 w-[190px] h-[240px] rounded-3xl overflow-hidden',
-        'backdrop-blur-2xl bg-white/8 border border-white/12',
-        'shadow-[0_25px_80px_rgba(139,30,243,0.15)]',
-        'snap-start cursor-pointer',
-        'transition-shadow duration-300 hover:shadow-[0_35px_100px_rgba(139,30,243,0.22)]'
+        'backdrop-blur-2xl border snap-start cursor-pointer transition-shadow duration-300',
+        isDark
+          ? 'bg-white/[0.06] border-white/12'
+          : 'bg-white border-slate-200 shadow-sm hover:shadow-md'
       )}
+      style={isDark ? { boxShadow: `0 25px 80px ${brandRgba(0.15)}` } : undefined}
     >
       <div className="h-full flex flex-col p-4">
         {/* Avatar */}
@@ -185,7 +186,7 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
           </p>
           
           <p className={cn(
-            'text-xs',
+            'text-xs tabular-nums',
             isDark ? 'text-gray-400' : 'text-gray-500'
           )}>
             {formatCount(creator.followers ?? creator.followerCount)} followers
@@ -194,18 +195,20 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
 
         {/* Follow Button */}
         <motion.button
+          type="button"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleFollow}
           aria-label={`${followLabel} ${creator.displayName || creator.name || 'creator'}`}
           className={cn(
             'w-full py-2.5 rounded-full font-semibold text-sm',
-            'text-white shadow-lg',
-            'hover:shadow-xl transition-shadow duration-200',
+            'shadow-lg hover:shadow-xl transition-shadow duration-200',
             'focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50',
             creator.isFollowing || isRequested
-              ? 'bg-white/10 border border-white/20'
-              : 'bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue'
+              ? isDark
+                ? 'bg-white/10 border border-white/20 text-white'
+                : 'bg-slate-100 border border-slate-300 text-slate-900 hover:bg-slate-200'
+              : 'bg-arvdoul-gradient text-white'
           )}
         >
           {followLabel}
@@ -226,9 +229,8 @@ const LoadingSkeleton = memo(({ isDark }) => (
       <div
         key={i}
         className={cn(
-          'flex-shrink-0 w-[190px] h-[240px] rounded-3xl',
-          'backdrop-blur-2xl bg-white/8 border border-white/12',
-          'animate-pulse'
+          'flex-shrink-0 w-[190px] h-[240px] rounded-3xl backdrop-blur-2xl border animate-pulse',
+          isDark ? 'bg-white/[0.06] border-white/12' : 'bg-white border-slate-200'
         )}
       >
         <div className="h-full flex flex-col p-4 items-center">
@@ -265,8 +267,8 @@ LoadingSkeleton.displayName = 'LoadingSkeleton';
  */
 const EmptyCarousel = memo(({ isDark }) => (
   <div className={cn(
-    'w-full py-12 text-center rounded-3xl',
-    'backdrop-blur-2xl bg-white/8 border border-white/12'
+    'w-full py-12 text-center rounded-3xl backdrop-blur-2xl border',
+    isDark ? 'bg-white/[0.06] border-white/12' : 'bg-white border-slate-200 shadow-sm'
   )}>
     <Users className={cn(
       'w-12 h-12 mx-auto mb-3',

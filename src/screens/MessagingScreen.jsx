@@ -349,12 +349,13 @@ export default function MessagingScreen() {
 
             return (
               <button
+                type="button"
                 key={tab.id}
                 onClick={() => setActiveFilter(tab.id)}
                 className={cn(
                   "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border",
                   isActive
-                    ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-400/40 shadow-[0_0_12px_rgba(168,85,247,0.4)]"
+                    ? "bg-arvdoul-gradient text-white border-purple-400/40 shadow-md"
                     : isDark
                       ? "bg-[#090e29]/80 text-gray-300 border-white/10 hover:bg-white/10"
                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-sm"
@@ -378,6 +379,7 @@ export default function MessagingScreen() {
                 <span>Pinned</span>
               </div>
               <button
+                type="button"
                 onClick={() => setPinnedOnly((v) => !v)}
                 className={`text-xs font-semibold flex items-center gap-0.5 transition-colors ${
                   pinnedOnly
@@ -478,12 +480,14 @@ export default function MessagingScreen() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
+                      type="button"
                       onClick={() => handleRequestResponse(req.id, true)}
-                      className="px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[11px] font-bold hover:opacity-90 shadow-sm"
+                      className="px-3 py-1.5 rounded-full bg-arvdoul-gradient text-white text-[11px] font-bold hover:opacity-90 shadow-sm"
                     >
                       Accept
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleRequestResponse(req.id, false)}
                       className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors ${
                         isDark ? 'bg-white/10 text-gray-300 hover:bg-white/20' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -501,7 +505,7 @@ export default function MessagingScreen() {
         {/* Master Conversation List */}
         <div className="mt-3 space-y-2">
           {loadingConversations && filteredConversations.length === 0 && (
-            <div className="space-y-2 shimmer" role="status" aria-label="Loading conversations">
+            <div className="space-y-2" role="status" aria-label="Loading conversations">
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -509,10 +513,10 @@ export default function MessagingScreen() {
                     isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'
                   }`}
                 >
-                  <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-white/10 animate-pulse shimmer shrink-0" />
+                  <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-white/10 animate-pulse shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-lg w-1/3 animate-pulse shimmer" />
-                    <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-lg w-2/3 animate-pulse shimmer" />
+                    <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-lg w-1/3 animate-pulse" />
+                    <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-lg w-2/3 animate-pulse" />
                   </div>
                 </div>
               ))}

@@ -1424,6 +1424,7 @@ export function AuthProvider({ children }) {
     checkAuthState
   }), [
     user, userProfile, loading, error, authError, isSignupInProgress, authInitialized,
+    profileResolved, needsOnboarding, isProfileComplete,
     securityChecks, authService, userService, authState,
     signInWithEmailPassword, verifyMFAAndSignIn, signUpWithEmailPassword, signInWithGoogle,
     sendPhoneVerificationCode, verifyPhoneOTP, signOut, checkEmailVerification,

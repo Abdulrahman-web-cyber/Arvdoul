@@ -34,13 +34,14 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled
   return (
     <div className="w-full py-3.5 flex items-center justify-between gap-3">
       <div className="flex items-start gap-3 min-w-0">
-        {Icon && <Icon className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" aria-hidden="true" />}
+        {Icon && <Icon className="w-4 h-4 mt-0.5 text-arvdoul-purple dark:text-purple-400 shrink-0" aria-hidden="true" />}
         <div className="min-w-0">
           <p className="font-bold text-sm">{label}</p>
-          {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+          {description && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>}
         </div>
       </div>
       <button
+        type="button"
         role="switch"
         aria-checked={Boolean(checked)}
         aria-label={label}
@@ -49,7 +50,7 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled
         className={cn(
           'relative w-11 h-6 rounded-full transition-colors shrink-0',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple focus-visible:ring-offset-2',
-          checked ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-gray-300 dark:bg-gray-700',
+          checked ? 'bg-arvdoul-gradient' : 'bg-gray-300 dark:bg-gray-700',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
       >
@@ -67,8 +68,8 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled
 
 function Section({ icon: Icon, title, children, id }) {
   return (
-    <section id={id} className="rounded-3xl p-5 border shadow-sm bg-white/[0.03] dark:bg-white/[0.03] border-gray-200 dark:border-white/10 scroll-mt-24">
-      <div className="flex items-center gap-2.5 text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
+    <section id={id} className="rounded-3xl p-5 border shadow-sm bg-white dark:bg-white/[0.03] border-gray-200 dark:border-white/10 scroll-mt-24">
+      <div className="flex items-center gap-2.5 text-xs font-bold text-arvdoul-purple dark:text-purple-400 uppercase tracking-wider mb-1">
         <Icon className="w-4 h-4" aria-hidden="true" />
         <span>{title}</span>
       </div>
@@ -79,12 +80,12 @@ function Section({ icon: Icon, title, children, id }) {
 
 function NavRow({ icon: Icon, label, description, onClick }) {
   return (
-    <button onClick={onClick} className="w-full py-3.5 flex items-center justify-between text-left group">
+    <button type="button" onClick={onClick} className="w-full py-3.5 flex items-center justify-between text-left group">
       <div className="flex items-start gap-3 min-w-0">
-        {Icon && <Icon className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" aria-hidden="true" />}
+        {Icon && <Icon className="w-4 h-4 mt-0.5 text-arvdoul-purple dark:text-purple-400 shrink-0" aria-hidden="true" />}
         <div className="min-w-0">
-          <p className="font-bold text-sm group-hover:text-purple-400 transition-colors">{label}</p>
-          {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+          <p className="font-bold text-sm group-hover:text-arvdoul-purple dark:group-hover:text-purple-400 transition-colors">{label}</p>
+          {description && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>}
         </div>
       </div>
       <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform shrink-0" aria-hidden="true" />
@@ -95,14 +96,15 @@ function NavRow({ icon: Icon, label, description, onClick }) {
 function OptionPill({ label, active, onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
         'px-3 py-1.5 rounded-full text-xs font-semibold transition-all min-h-[36px]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
         active
-          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
-          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          ? 'bg-arvdoul-gradient text-white shadow'
+          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
       )}
     >
       {label}
@@ -493,16 +495,16 @@ export default function SettingsScreen() {
 
         {/* ============ LEVEL & PROGRESS ============ */}
         {levelInfo && (
-          <section className="rounded-3xl p-5 border shadow-sm bg-gradient-to-br from-purple-600/15 via-indigo-600/10 to-transparent border-purple-500/20">
+          <section className="rounded-3xl p-5 border shadow-sm bg-white dark:bg-white/[0.03] border-purple-500/20">
             <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-              <div className="flex items-center gap-2.5 text-xs font-bold text-purple-400 uppercase tracking-wider">
+              <div className="flex items-center gap-2.5 text-xs font-bold text-arvdoul-purple dark:text-purple-400 uppercase tracking-wider">
                 <Trophy className="w-4 h-4" aria-hidden="true" />
                 <span>{t('level.title')}</span>
               </div>
               <button
                 type="button"
                 onClick={() => { setRoadmapTab('levels'); setShowRoadmapModal(true); }}
-                className="text-xs font-bold text-purple-400 hover:text-purple-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                className="text-xs font-bold text-arvdoul-purple dark:text-purple-400 hover:opacity-80 inline-flex items-center gap-1 cursor-pointer transition-opacity"
               >
                 <Zap className="w-3.5 h-3.5" />
                 <span>Perks &amp; Appearance Roadmap</span>
@@ -511,7 +513,7 @@ export default function SettingsScreen() {
             </div>
             <div className="flex items-center gap-4">
               <div
-                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex flex-col items-center justify-center text-white shadow-lg shrink-0"
+                className="w-16 h-16 rounded-2xl bg-arvdoul-gradient flex flex-col items-center justify-center text-white shadow-lg shrink-0 tabular-nums"
                 aria-label={`${t('level.level')} ${levelInfo.level}`}
               >
                 <span className="text-2xl font-black leading-none">{levelInfo.level}</span>
@@ -519,7 +521,7 @@ export default function SettingsScreen() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-black text-lg leading-tight">{levelInfo.title}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 tabular-nums">
                   {levelInfo.isMaxLevel
                     ? t('level.maxLevel')
                     : t('level.xpToNext', { xp: levelInfo.xpToNext })}
@@ -530,14 +532,14 @@ export default function SettingsScreen() {
                   aria-valuemax={100}
                   aria-valuenow={Math.round(levelInfo.progress)}
                   aria-label={`${t('level.progress')} ${Math.round(levelInfo.progress)}%`}
-                  className="mt-2 h-2 rounded-full bg-white/10 overflow-hidden"
+                  className="mt-2 h-2 rounded-full bg-gray-200 dark:bg-white/10 overflow-hidden"
                 >
                   <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 rounded-full transition-all duration-500"
+                    className="h-full bg-arvdoul-gradient rounded-full transition-all duration-500"
                     style={{ width: `${levelInfo.progress}%` }}
                   />
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 tabular-nums">
                   {levelInfo.isMaxLevel
                     ? t('level.maxLevelDesc')
                     : t('level.xpProgress', {
@@ -549,8 +551,8 @@ export default function SettingsScreen() {
                 </p>
               </div>
               <div className="text-right shrink-0 hidden sm:block">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">{t('level.rewardsEarned')}</p>
-                <p className="font-black text-amber-400 text-lg">+{getLifetimeRewards(levelInfo.level)} 🪙</p>
+                <p className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('level.rewardsEarned')}</p>
+                <p className="font-black text-amber-600 dark:text-amber-400 text-lg tabular-nums">+{getLifetimeRewards(levelInfo.level)} 🪙</p>
               </div>
             </div>
 
@@ -560,23 +562,23 @@ export default function SettingsScreen() {
                 <span
                   key={perk.title}
                   title={perk.description}
-                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/5 border border-white/10"
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-gray-200"
                 >
                   <span aria-hidden="true">{perk.icon}</span> {perk.title}
                 </span>
               ))}
               {getPerksForLevel(levelInfo.level).length === 0 && (
-                <p className="text-xs text-gray-400">{t('level.noPerksYet')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('level.noPerksYet')}</p>
               )}
             </div>
 
             {/* Level Appearance Unlocks Tracker */}
-            <div className="mt-4 pt-3 border-t border-white/10 flex flex-col gap-2">
+            <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-arvdoul-purple dark:text-purple-300 uppercase tracking-wider">
                   Standing &amp; Appearance Unlocks
                 </span>
-                <span className="text-[10px] text-gray-400 font-mono">
+                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono tabular-nums">
                   Level {levelInfo.level} of 100
                 </span>
               </div>
@@ -591,18 +593,18 @@ export default function SettingsScreen() {
                   return (
                     <>
                       <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5 tabular-nums",
                         levelInfo.level >= gates.verifiedPriority
-                          ? "bg-blue-500/15 border-blue-500/30 text-blue-300"
-                          : "bg-white/5 border-white/10 text-gray-500"
+                          ? "bg-blue-500/15 border-blue-500/30 text-blue-700 dark:text-blue-300"
+                          : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
                       )}>
                         <span>✅</span> Top Creator Standing {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}
                       </span>
                       <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5 tabular-nums",
                         levelInfo.level >= gates.sovereign
-                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
-                          : "bg-white/5 border-white/10 text-gray-500"
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                          : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
                       )}>
                         <span>💎</span> Crest Radiance {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}
                       </span>
@@ -632,15 +634,16 @@ export default function SettingsScreen() {
         <Section id="settings-appearance" icon={Sparkles} title={t('settings.appearanceSection')}>
           <div className="w-full py-3.5 flex items-center justify-between gap-3">
             <div className="flex items-start gap-3">
-              {isDark ? <Moon className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" /> : <Sun className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />}
+              {isDark ? <Moon className="w-4 h-4 mt-0.5 text-arvdoul-purple dark:text-purple-400" aria-hidden="true" /> : <Sun className="w-4 h-4 mt-0.5 text-arvdoul-purple dark:text-purple-400" aria-hidden="true" />}
               <div>
                 <p className="font-bold text-sm">{t('settings.theme')}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{isDark ? t('settings.themeDark') : t('settings.themeLight')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{isDark ? t('settings.themeDark') : t('settings.themeLight')}</p>
               </div>
             </div>
             <button
+              type="button"
               onClick={toggleThemeSafe}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow min-h-[36px]"
+              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-arvdoul-gradient text-white shadow min-h-[36px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               {isDark ? t('settings.switchLight') : t('settings.switchDark')}
             </button>
@@ -894,12 +897,12 @@ export default function SettingsScreen() {
               {t('settings.liteModeRecommended')}
             </p>
           )}
-          <button onClick={handleClearCache} className="w-full py-3.5 flex items-center justify-between text-left group">
+          <button type="button" onClick={handleClearCache} className="w-full py-3.5 flex items-center justify-between text-left group">
             <div className="flex items-start gap-3">
-              <RefreshCw className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
+              <RefreshCw className="w-4 h-4 mt-0.5 text-arvdoul-purple dark:text-purple-400" aria-hidden="true" />
               <div>
-                <p className="font-bold text-sm group-hover:text-purple-400 transition-colors">{t('settings.clearCache')}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{t('settings.clearCacheDesc')}</p>
+                <p className="font-bold text-sm group-hover:text-arvdoul-purple dark:group-hover:text-purple-400 transition-colors">{t('settings.clearCache')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.clearCacheDesc')}</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
@@ -909,22 +912,22 @@ export default function SettingsScreen() {
 
         {/* ============ DANGER ZONE ============ */}
         <Section icon={AlertTriangle} title={t('settings.dangerSection')}>
-          <button onClick={handleLogout} className="w-full py-3.5 flex items-center justify-between text-left group">
+          <button type="button" onClick={handleLogout} className="w-full py-3.5 flex items-center justify-between text-left group">
             <div className="flex items-start gap-3">
-              <LogOut className="w-4 h-4 mt-0.5 text-amber-400" aria-hidden="true" />
+              <LogOut className="w-4 h-4 mt-0.5 text-amber-500 dark:text-amber-400" aria-hidden="true" />
               <div>
-                <p className="font-bold text-sm text-amber-500 group-hover:text-amber-400 transition-colors">{t('settings.signOut')}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{t('settings.signOutDesc')}</p>
+                <p className="font-bold text-sm text-amber-600 dark:text-amber-500 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">{t('settings.signOut')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.signOutDesc')}</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </button>
-          <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 flex items-center justify-between text-left group">
+          <button type="button" onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 flex items-center justify-between text-left group">
             <div className="flex items-start gap-3">
-              <Trash2 className="w-4 h-4 mt-0.5 text-red-400" aria-hidden="true" />
+              <Trash2 className="w-4 h-4 mt-0.5 text-red-500 dark:text-red-400" aria-hidden="true" />
               <div>
-                <p className="font-bold text-sm text-red-500 group-hover:text-red-400 transition-colors">{t('settings.deleteAccount')}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{t('settings.deleteAccountDesc')}</p>
+                <p className="font-bold text-sm text-red-600 dark:text-red-500 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors">{t('settings.deleteAccount')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.deleteAccountDesc')}</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
@@ -936,17 +939,19 @@ export default function SettingsScreen() {
       <Dialog isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title={t('settings.deleteAccount')} size="sm">
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" aria-hidden="true" />
+            <AlertTriangle className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0" aria-hidden="true" />
             <p className="text-sm text-gray-700 dark:text-gray-200">{t('settings.deleteWarning')}</p>
           </div>
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={() => setShowDeleteConfirm(false)}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors min-h-[44px]"
             >
               {t('common.cancel')}
             </button>
             <button
+              type="button"
               onClick={handleDeleteAccount}
               disabled={deleting}
               className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-500 shadow-lg disabled:opacity-60 min-h-[44px]"
@@ -1041,7 +1046,7 @@ function MfaDialogBody({ loadFailed, factors, enroll, code, onCodeChange, busy, 
           type="button"
           onClick={onConfirm}
           disabled={busy}
-          className="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg disabled:opacity-60 min-h-[44px]"
+          className="w-full py-2.5 rounded-xl text-sm font-bold bg-arvdoul-gradient text-white shadow-lg disabled:opacity-60 min-h-[44px]"
         >
           {t('settings.mfaVerify')}
         </button>
@@ -1055,7 +1060,7 @@ function MfaDialogBody({ loadFailed, factors, enroll, code, onCodeChange, busy, 
         type="button"
         onClick={onStart}
         disabled={busy}
-        className="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg disabled:opacity-60 min-h-[44px]"
+        className="w-full py-2.5 rounded-xl text-sm font-bold bg-arvdoul-gradient text-white shadow-lg disabled:opacity-60 min-h-[44px]"
       >
         {t('settings.mfaEnable')}
       </button>

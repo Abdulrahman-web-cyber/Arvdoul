@@ -3,6 +3,7 @@
 import { memo, useMemo } from "react";
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
+import { brandRgba } from '../../design-system/tokens.js';
 
 /**
  * @param {Object} props
@@ -37,14 +38,12 @@ const GlassCard = memo(({
   // Generate shadow classes
   const shadowClass = useMemo(() => {
     if (glow) {
-      return isDark 
-        ? 'shadow-[0_25px_80px_rgba(139,30,243,0.15)] hover:shadow-[0_35px_100px_rgba(139,30,243,0.22)]'
-        : 'shadow-[0_25px_80px_rgba(0,0,0,0.08)] hover:shadow-[0_35px_100px_rgba(0,0,0,0.12)]';
+      return isDark
+        ? 'shadow-2xl'
+        : 'shadow-[0_20px_60px_rgba(0,0,0,0.08)] hover:shadow-[0_28px_80px_rgba(0,0,0,0.12)]';
     }
-    return isDark 
-      ? colors.shadow.card
-      : colors.shadow.card;
-  }, [glow, isDark, colors.shadow.card]);
+    return colors.shadow.card;
+  }, [glow, colors.shadow.card, isDark]);
 
   // Animation variants
   const motionProps = useMemo(() => ({
@@ -68,9 +67,16 @@ const GlassCard = memo(({
         ${className}
       `}
       onClick={disabled ? undefined : onClick}
+      onKeyDown={onClick && !disabled ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(e);
+        }
+      } : undefined}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick && !disabled ? 0 : undefined}
       aria-disabled={disabled}
+      style={glow && isDark ? { boxShadow: `0 25px 80px ${brandRgba(0.16)}` } : undefined}
       {...props}
     >
       {children}

@@ -17,6 +17,7 @@ import ProfileAbout from '../../components/profile/ProfileAbout';
 import { Skeleton } from '../../components/UI/Skeleton';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
+import { getUserService } from '../../services/userService.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine.js';
 import {
   pickHandle,
@@ -56,26 +57,27 @@ export default function AboutScreen() {
 
   useEffect(() => {
     if (!targetId) return;
-    const matchesStore = storeProfile && (
-      storeProfile.id === targetId ||
-      storeProfile.uid === targetId ||
-      storeProfile.username?.toLowerCase() === targetId.toLowerCase()
+    const currentProfile = useProfileStore.getState().profile;
+    const matchesStore = currentProfile && (
+      currentProfile.id === targetId ||
+      currentProfile.uid === targetId ||
+      currentProfile.username?.toLowerCase() === targetId.toLowerCase()
     );
     if (!matchesStore) {
       loadProfile(targetId, currentUserId);
     }
-  }, [targetId, currentUserId, storeProfile, loadProfile]);
+  }, [targetId, currentUserId, loadProfile]);
 
   useEffect(() => {
     let mounted = true;
     const resolvedUid = storeProfile?.uid || storeProfile?.id || targetId;
-    if (!currentUserId || !resolvedUid || isActualOwner) {
+    if (!currentUserId || !resolvedUid || isActualOwner || resolvedUid === currentUserId) {
       setRelationship(null);
       return;
     }
 
-    import('../../services/userService.js')
-      .then(({ getUserService }) => getUserService().getRelationshipState(currentUserId, resolvedUid))
+    getUserService()
+      .getRelationshipState(currentUserId, resolvedUid)
       .then((rel) => {
         if (mounted) setRelationship(rel);
       })
