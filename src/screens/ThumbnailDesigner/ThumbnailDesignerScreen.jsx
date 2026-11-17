@@ -553,7 +553,7 @@ export default function ThumbnailDesignerScreen() {
                     })
                     .join(' ');
                   const stroke =
-                    ch === 'r' ? '#EF4444' : ch === 'g' ? '#10B981' : tokens.color.brand.blue;
+                    ch === 'r' ? tokens.color.semantic.error : ch === 'g' ? tokens.color.semantic.success : tokens.color.brand.blue;
                   return (
                     <polyline
                       key={ch}
@@ -1167,7 +1167,7 @@ export default function ThumbnailDesignerScreen() {
                       />
                     </div>
                     <div className="flex items-center gap-1">
-                      {['#FFFFFF', '#000000', '#F59E0B', '#EF4444', '#10B981', tokens.color.brand.violet].map((clr) => (
+                      {['#FFFFFF', '#000000', tokens.color.semantic.warning, tokens.color.semantic.error, tokens.color.semantic.success, tokens.color.brand.violet].map((clr) => (
                         <button
                           type="button"
                           key={clr}
@@ -1216,7 +1216,7 @@ export default function ThumbnailDesignerScreen() {
                 <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
                   <div className="flex items-center gap-2">
                     <span>Color:</span>
-                    {[tokens.color.brand.violet, '#EF4444', '#10B981', '#3B82F6', '#F59E0B', '#FFFFFF'].map((color) => (
+                    {[tokens.color.brand.violet, tokens.color.semantic.error, tokens.color.semantic.success, '#3B82F6', tokens.color.semantic.warning, '#FFFFFF'].map((color) => (
                       <button
                         type="button"
                         key={color}

@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Layers as LayersIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
-import aiStudioService from '../../services/aiStudioService';
 import { INITIAL_TRACKS, RESOLUTION_PRESETS } from "./constants";
 
 import EditorHeader from './components/EditorHeader';
@@ -596,6 +595,7 @@ export default function VideoEditorScreen() {
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
+        const { default: aiStudioService } = await import('../../services/aiStudioService');
         const transcript = await aiStudioService.transcribeAudio({
           audioBase64,
           mimeType: blob.type || 'video/webm',

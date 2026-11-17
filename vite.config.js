@@ -100,7 +100,9 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     allowedHosts: true,
-    open: false
+    open: false,
+    hmr: false,
+    ws: false
   },
   preview: {
     host: '0.0.0.0',

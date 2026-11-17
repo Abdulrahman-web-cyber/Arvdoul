@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +26,56 @@ function getGeminiClient(): GoogleGenAI | null {
     });
   }
   return aiClient;
+}
+
+function parseGeminiError(err: unknown, fallbackMessage: string): { status: number; message: string; retryable: boolean } {
+  const raw = err instanceof Error ? err.message : fallbackMessage;
+  let status = typeof (err as { status?: number })?.status === 'number' ? (err as { status: number }).status : 502;
+  let message = raw || fallbackMessage;
+
+  // @google/genai ApiError often serializes JSON into err.message
+  if (message.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(message);
+      const inner = parsed?.error || parsed;
+      if (typeof inner?.code === 'number') status = inner.code;
+      if (typeof inner?.message === 'string' && inner.message.trim()) {
+        message = inner.message.trim();
+      }
+    } catch {
+      // Keep original message if not valid JSON
+    }
+  }
+
+  if (
+    (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) ||
+    /operation was aborted|timed out/i.test(message)
+  ) {
+    status = 504;
+    message = 'AI request timed out while waiting for Gemini.';
+  }
+
+  const retryable = status === 429 || status === 503 || status === 504 || /UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|timeout/i.test(message);
+  const httpStatus = status >= 400 && status < 600 ? status : 502;
+  return { status: httpStatus, message, retryable };
+}
+
+async function withGeminiRetry<T>(fn: (abortSignal: AbortSignal) => Promise<T>, maxRetries = 1): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn(AbortSignal.timeout(15000));
+    } catch (err) {
+      lastErr = err;
+      const { retryable } = parseGeminiError(err, 'Gemini request failed');
+      if (!retryable || attempt === maxRetries) {
+        throw err;
+      }
+      const delayMs = 450 * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastErr;
 }
 
 // Track live WebSocket media & signaling rooms
@@ -111,14 +161,20 @@ async function startServer() {
     }
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-4-hydrogen',
-        contents: prompt,
-        config: {
-          systemInstruction: systemPrompt,
-          ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
-        },
-      });
+      const thinkingLevel =
+        body.modelTier === 'fast' ? ThinkingLevel.LOW : ThinkingLevel.MEDIUM;
+      const response = await withGeminiRetry((abortSignal) =>
+        ai.models.generateContent({
+          model: 'gemini-4-hydrogen',
+          contents: prompt,
+          config: {
+            abortSignal,
+            systemInstruction: systemPrompt,
+            thinkingConfig: { thinkingLevel },
+            ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
+          },
+        }),
+      );
 
       const content = response.text || '';
       if (!content) {
@@ -141,8 +197,8 @@ async function startServer() {
         serverVerified: true,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Gemini request failed';
-      res.status(502).json({ error: message });
+      const parsed = parseGeminiError(err, 'Gemini request failed');
+      res.status(parsed.status).json({ error: parsed.message });
     }
   });
 
@@ -168,20 +224,23 @@ async function startServer() {
           ? instruction.trim().slice(0, 500)
           : 'Transcribe this audio accurately and break it into short timed caption lines (one sentence or phrase per line). Return plain text lines.';
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-transcribe',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: String(mimeType),
-                data: audioBase64,
+      const response = await withGeminiRetry((abortSignal) =>
+        ai.models.generateContent({
+          model: 'gemini-3.5-transcribe',
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: String(mimeType),
+                  data: audioBase64,
+                },
               },
-            },
-            { text: promptText },
-          ],
-        },
-      });
+              { text: promptText },
+            ],
+          },
+          config: { abortSignal },
+        }),
+      );
 
       const transcript = (response.text || '').trim();
       const lines = transcript
@@ -203,8 +262,8 @@ async function startServer() {
         model: 'gemini-3.5-transcribe',
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Audio transcription failed';
-      res.status(502).json({ error: message });
+      const parsed = parseGeminiError(err, 'Audio transcription failed');
+      res.status(parsed.status).json({ error: parsed.message });
     }
   });
 
@@ -230,75 +289,81 @@ async function startServer() {
       let response;
       if (multiSpeaker && Array.isArray(dialogue) && dialogue.length === 2) {
         const [first, second] = dialogue;
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash-tts',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: String(first.text || '').slice(0, 1200),
-                  speechMetadata: {
-                    speaker: String(first.speaker || 'Host'),
-                    style: String(first.style || 'Enthusiastic studio host'),
-                  },
-                },
-                {
-                  text: String(second.text || '').slice(0, 1200),
-                  speechMetadata: {
-                    speaker: String(second.speaker || 'Guest'),
-                    style: String(second.style || 'Thoughtful co-host'),
-                  },
-                },
-              ],
-            },
-          ],
-          config: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              multiSpeakerVoiceConfig: {
-                speakerVoiceConfigs: [
+        response = await withGeminiRetry((abortSignal) =>
+          ai.models.generateContent({
+            model: 'gemini-3.8-flash-tts',
+            contents: [
+              {
+                role: 'user',
+                parts: [
                   {
-                    speaker: String(first.speaker || 'Host'),
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: String(first.voice || 'Puck') } },
+                    text: String(first.text || '').slice(0, 1200),
+                    speechMetadata: {
+                      speaker: String(first.speaker || 'Host'),
+                      style: String(first.style || 'Enthusiastic studio host'),
+                    },
                   },
                   {
-                    speaker: String(second.speaker || 'Guest'),
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: String(second.voice || 'Kore') } },
+                    text: String(second.text || '').slice(0, 1200),
+                    speechMetadata: {
+                      speaker: String(second.speaker || 'Guest'),
+                      style: String(second.style || 'Thoughtful co-host'),
+                    },
                   },
                 ],
               },
+            ],
+            config: {
+              abortSignal,
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                multiSpeakerVoiceConfig: {
+                  speakerVoiceConfigs: [
+                    {
+                      speaker: String(first.speaker || 'Host'),
+                      voiceConfig: { prebuiltVoiceConfig: { voiceName: String(first.voice || 'Puck') } },
+                    },
+                    {
+                      speaker: String(second.speaker || 'Guest'),
+                      voiceConfig: { prebuiltVoiceConfig: { voiceName: String(second.voice || 'Kore') } },
+                    },
+                  ],
+                },
+              },
             },
-          },
-        });
+          }),
+        );
       } else {
         const cleanText = typeof text === 'string' ? text.trim().slice(0, 2000) : '';
         if (!cleanText) {
           res.status(400).json({ error: 'text is required for speech generation' });
           return;
         }
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash-lite-tts',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: cleanText,
-                  speechMetadata: { style: String(style).slice(0, 160) },
+        response = await withGeminiRetry((abortSignal) =>
+          ai.models.generateContent({
+            model: 'gemini-3.8-flash-lite-tts',
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: cleanText,
+                    speechMetadata: { style: String(style).slice(0, 160) },
+                  },
+                ],
+              },
+            ],
+            config: {
+              abortSignal,
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: String(voiceName) },
                 },
-              ],
-            },
-          ],
-          config: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: String(voiceName) },
               },
             },
-          },
-        });
+          }),
+        );
       }
 
       const inline = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
@@ -316,8 +381,8 @@ async function startServer() {
         model: multiSpeaker ? 'gemini-3.8-flash-tts' : 'gemini-3.8-flash-lite-tts',
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'TTS generation failed';
-      res.status(502).json({ error: message });
+      const parsed = parseGeminiError(err, 'TTS generation failed');
+      res.status(parsed.status).json({ error: parsed.message });
     }
   });
 
@@ -327,7 +392,7 @@ async function startServer() {
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

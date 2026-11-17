@@ -33,7 +33,7 @@ import { cn } from '../../lib/utils';
 export default function DesktopNavRail() {
   const { isDark } = useTheme();
   const { user } = useAuth();
-  const currentProfile = useProfileStore((s) => s.currentProfile);
+  const currentProfile = useProfileStore((s) => s.profile);
   const badges = useNavBadges();
   const location = useLocation();
   const navigate = useNavigate();
