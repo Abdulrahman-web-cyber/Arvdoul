@@ -276,6 +276,43 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
       }
     }
 
+    // Mutes / Restricts / Follow requests (both directions). These three
+    // party-readable safety collections were never cleaned, so a deleted
+    // account left orphaned edges behind: every user it had muted/restricted
+    // stayed muted, and a pending follow request to a deleted account sat in
+    // the owner's notifications forever.
+    const cleanupTwoWayEdges = async (collName, actorField, otherField) => {
+      let docs = (await db.collection(collName)
+        .where(actorField, '==', userId).limit(1000).get()).docs;
+      docs = docs.concat(
+        (await db.collection(collName).where(otherField, '==', userId).limit(1000).get()).docs
+      );
+      const uniqueIds = [...new Set(docs.map(d => d.id))];
+      for (const batch of chunkArray(uniqueIds, 500)) {
+        const wb = db.batch();
+        batch.forEach(id => wb.delete(db.collection(collName).doc(id)));
+        await wb.commit();
+        totalDeleted += batch.length;
+        if (totalDeleted >= MAX_DIRECT_DELETIONS) {
+          remaining.push(collName);
+          await enqueueDeletionTask(userId, remaining, cursors);
+          return { offloaded: true };
+        }
+      }
+      return { offloaded: false };
+    };
+
+    for (const [collName, actorField, otherField] of [
+      ['mutes', 'muterId', 'mutedId'],
+      ['restricts', 'restricterId', 'restrictedId'],
+      ['follow_requests', 'fromUserId', 'toUserId'],
+    ]) {
+      const { offloaded } = await cleanupTwoWayEdges(collName, actorField, otherField);
+      if (offloaded) {
+        return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
+      }
+    }
+
     // Posts, Comments, Stories (with subcollection cleanup)
     await processCollectionWithSubs('posts', 'authorId');
     if (totalDeleted >= MAX_DIRECT_DELETIONS) {
