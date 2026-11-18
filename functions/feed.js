@@ -43,13 +43,18 @@ const STUCK_TASK_TIMEOUT_MS = 10 * 60 * 1000;
  */
 async function resolveHiddenAuthorIds(userId) {
   if (!userId) return new Set();
-  const [outgoing, incoming] = await Promise.all([
+  const [outgoing, incoming, muted] = await Promise.all([
     db.collection('blocks').where('blockerId', '==', userId).get(),
     db.collection('blocks').where('blockedId', '==', userId).get(),
+    db.collection('mutes').where('muterId', '==', userId).get(),
   ]);
   const ids = new Set();
   outgoing.docs.forEach((d) => ids.add(d.data().blockedId));
   incoming.docs.forEach((d) => ids.add(d.data().blockerId));
+  // Mutes hide the author from the viewer's feed too (the client's
+  // `socialGraphService.getHiddenAuthorIds` unions blocked + blocked_by +
+  // muted), so the server feed must apply the same filter.
+  muted.docs.forEach((d) => ids.add(d.data().mutedId));
   ids.delete(userId);
   return ids;
 }

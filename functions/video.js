@@ -797,18 +797,24 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
     const video = videoDoc.data();
 
     // Hide recommendations from creators the viewer blocked (and who blocked the
-    // viewer). A block is a mutual denial; the recommendation read had no filter.
+    // viewer), and from creators the viewer muted. A block is a mutual denial;
+    // a mute hides the author from the viewer's surfaces (the client's
+    // `socialGraphService.getHiddenAuthorIds` unions blocked + blocked_by +
+    // muted), so the server recommendation read must apply the same filter.
     const hiddenAuthors = new Set();
     try {
       const uid = context.auth.uid;
-      const [outgoing, incoming] = await Promise.all([
+      const [blockedOut, blockedIn, muted] = await Promise.all([
         db.collection('blocks').where('blockerId', '==', uid).get(),
         db.collection('blocks').where('blockedId', '==', uid).get(),
+        db.collection('mutes').where('muterId', '==', uid).get(),
       ]);
-      outgoing.docs.forEach((d) => hiddenAuthors.add(d.data().blockedId));
-      incoming.docs.forEach((d) => hiddenAuthors.add(d.data().blockerId));
+      blockedOut.docs.forEach((d) => hiddenAuthors.add(d.data().blockedId));
+      blockedIn.docs.forEach((d) => hiddenAuthors.add(d.data().blockerId));
+      muted.docs.forEach((d) => hiddenAuthors.add(d.data().mutedId));
+      hiddenAuthors.delete(uid);
     } catch (err) {
-      logger.warn('getVideoRecommendations: block filter unavailable', { error: err.message });
+      logger.warn('getVideoRecommendations: block/mute filter unavailable', { error: err.message });
     }
 
     const seenIds = new Set([videoId]);

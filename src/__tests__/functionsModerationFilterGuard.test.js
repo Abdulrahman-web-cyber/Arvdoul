@@ -31,6 +31,14 @@ describe('functions/feed.js block filter', () => {
     expect(body).toContain("where('blockedId', '==', userId)");
   });
 
+  test('resolveHiddenAuthorIds also hides muted authors (N522)', () => {
+    const helper = feed.slice(feed.indexOf('async function resolveHiddenAuthorIds'));
+    const body = helper.slice(0, helper.indexOf('\n}\n'));
+    expect(body).toContain("db.collection('mutes')");
+    expect(body).toContain("where('muterId', '==', userId)");
+    expect(body).toContain('d.data().mutedId');
+  });
+
   test('no feed builder reads only the outgoing block direction', () => {
     const inlineBlockReads = feed.match(/db\.collection\('blocks'\)/g) || [];
     expect(inlineBlockReads.length).toBe(2); // both directions, inside the helper
@@ -44,6 +52,14 @@ describe('functions/video.js recommendations block filter', () => {
     const body = video.slice(start, video.indexOf('//  14. watermarkVideo'));
     expect(body).toContain("where('blockerId', '==', uid)");
     expect(body).toContain("where('blockedId', '==', uid)");
+  });
+
+  test('getVideoRecommendations also hides muted authors (N522)', () => {
+    const start = video.indexOf('exports.getVideoRecommendations');
+    const body = video.slice(start, video.indexOf('//  14. watermarkVideo'));
+    expect(body).toContain("db.collection('mutes')");
+    expect(body).toContain("where('muterId', '==', uid)");
+    expect(body).toContain('d.data().mutedId');
   });
 
   test('recommendations exclude hidden authors on both the same-creator and tag paths', () => {
