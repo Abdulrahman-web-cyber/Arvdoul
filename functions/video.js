@@ -1041,17 +1041,33 @@ async function processBatchWithCursor(collectionName, processDocFn, cursorDocNam
   let query = db.collection(collectionName).where('isDeleted', '==', false).orderBy('__name__').limit(limit);
   if (lastProcessedId) {
     const lastDoc = await db.collection(collectionName).doc(lastProcessedId).get();
+    // If the cursor doc no longer exists, restart from the top (wrap) rather
+    // than silently skipping the rest of the collection.
     if (lastDoc.exists) query = query.startAfter(lastDoc);
+    else lastProcessedId = null;
   }
 
   const snapshot = await query.get();
-  if (snapshot.empty) return { processed: 0 };
+  if (snapshot.empty) {
+    // End of a sweep. Clear the cursor so the NEXT run starts from the
+    // beginning (round-robin). Without this the cursor pinned to the highest
+    // id and every document created later — whose random id sorts below the
+    // cursor — was never aggregated again, so new videos kept a stale
+    // `stats.*`/`rankingScore` and `detectStuckVideos` never saw them.
+    if (lastProcessedId) {
+      await cursorRef.set({ lastId: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    return { processed: 0 };
+  }
 
   for (const doc of snapshot.docs) {
     await processDocFn(doc);
     lastProcessedId = doc.id;
   }
-  await cursorRef.set({ lastId: lastProcessedId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  // A short page means the sweep reached the end of the collection; clear the
+  // cursor so the next run wraps to the top. A full page means more remains.
+  const wrapped = snapshot.size < limit;
+  await cursorRef.set({ lastId: wrapped ? null : lastProcessedId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { processed: snapshot.size };
 }
 

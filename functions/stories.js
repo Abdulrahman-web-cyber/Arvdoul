@@ -521,6 +521,7 @@ exports.aggregateStoryStats = functions.pubsub
     let totalAggregated = 0;
     let hasMore = true;
     let safety = 0;
+    let wrapped = false;
 
     while (hasMore && safety++ < 1000) {
       let q = storiesRef
@@ -534,7 +535,7 @@ exports.aggregateStoryStats = functions.pubsub
         else lastStoryId = null;
       }
       const snap = await q.get();
-      if (snap.empty) break;
+      if (snap.empty) { wrapped = true; break; }
 
       for (const doc of snap.docs) {
         try {
@@ -592,10 +593,15 @@ exports.aggregateStoryStats = functions.pubsub
 
       lastStoryId = snap.docs[snap.docs.length - 1].id;
       hasMore = snap.size === batchSize;
+      if (!hasMore) wrapped = true;
     }
 
+    // Round-robin: once a sweep reaches the end of the active set, clear the
+    // cursor so the next run starts from the top. Otherwise the cursor pinned
+    // to the highest story id and stories created later (random ids sorting
+    // below it) never had their stats re-aggregated.
     await cursorRef.set({
-      lastStoryId,
+      lastStoryId: wrapped ? null : lastStoryId,
       updatedAt: Timestamp.fromDate(new Date()),
       totalProcessed: totalAggregated,
     }, { merge: true });
