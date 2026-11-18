@@ -577,7 +577,11 @@ exports.aggregateStoryStats = functions.pubsub
             'stats.backTaps': backTaps,
             'stats.replies': replies,
             'stats.comments': comments,
-            'stats.completionRate': totalViews > 0 ? completions / totalViews : 0,
+            // With no views the completion rate is undefined, not a measured
+            // 0% — `storyService` surfaces this through `unknownNumber`, so a
+            // hard 0 rendered as a real "0%" completion rate (a fabricated
+            // metric). Write null (unknown) when the denominator is zero.
+            'stats.completionRate': totalViews > 0 ? completions / totalViews : null,
             updatedAt: FieldValue.serverTimestamp(),
           });
           totalAggregated++;

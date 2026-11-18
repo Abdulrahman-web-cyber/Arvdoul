@@ -286,6 +286,7 @@ jobs:
           src/__tests__/rateLimitShardCleanupGuard.test.js
           src/__tests__/scheduledJobHygieneGuard.test.js
           src/__tests__/fanoutTaskOwnershipGuard.test.js
+          src/__tests__/derivedRateHonestyGuard.test.js
           src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js

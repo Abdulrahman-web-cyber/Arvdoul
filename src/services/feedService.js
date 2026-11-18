@@ -1624,19 +1624,6 @@ class UltimateFeedService {
     }), 2000);
   }
 
-  async getFeedAnalytics(userId, timeframe = '7d') {
-    const metrics = this.diversityMetrics.get(userId) || {};
-    return {
-      success: true,
-      analytics: [],
-      insights: {
-        message: 'Detailed analytics available in dashboard',
-        diversityScore: metrics.uniqueAuthors ? (metrics.uniqueAuthors / metrics.total) : 0,
-      },
-      timeframe
-    };
-  }
-
   async triggerRealTimeReRanking(userId, interactionType, postId) {
     this.clearUserCache(userId);
     this.mlCache.delete(`ml_${userId}_20`);
