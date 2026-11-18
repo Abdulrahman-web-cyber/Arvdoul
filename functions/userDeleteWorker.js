@@ -97,3 +97,55 @@ exports.markDeletionTaskDone = async (docId) => {
     { merge: true }
   );
 };
+
+// Scheduled drainer for the `deletion_tasks` fallback rows. These are written
+// when the Cloud Task could not be enqueued (worker URL unset, or the queue
+// call failed), so without a drainer a recorded remainder would still sit
+// undeleted forever. Bounded to 20 rows per run; a row that keeps failing is
+// left `pending` with an incremented attempt count for an operator to inspect.
+exports.drainPendingDeletionTasks = functions.pubsub
+  .schedule('every 30 minutes')
+  .onRun(async () => {
+    const snap = await db.collection('deletion_tasks')
+      .where('status', '==', 'pending')
+      .limit(20)
+      .get();
+    if (snap.empty) return null;
+
+    const cascade = getCascade();
+    let processed = 0;
+    for (const doc of snap.docs) {
+      const { userId } = doc.data();
+      if (!userId) {
+        await doc.ref.set({ status: 'failed', reason: 'missing_userId' }, { merge: true });
+        continue;
+      }
+      try {
+        const result = await cascade(userId);
+        await doc.ref.set(
+          {
+            // A cascade that again exceeds the budget re-enqueues a Cloud Task
+            // (and leaves its own status), so a re-offload still resolves here.
+            status: result.status === 'completely_deleted' ? 'completed' : 'resumed',
+            lastStatus: result.status,
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+        processed += 1;
+      } catch (err) {
+        await doc.ref.set(
+          {
+            attempts: admin.firestore.FieldValue.increment(1),
+            lastError: err.message,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+        log('error', 'Deletion task drain failed', { userId, error: err.message });
+      }
+    }
+    log('info', 'Drained pending deletion tasks', { processed, total: snap.size });
+    return null;
+  });
+

@@ -63,6 +63,11 @@ describe('the deletion offload has a real worker (N524)', () => {
     expect(index).toContain("merge(require('./userDeleteWorker.js'))");
   });
 
+  test('a scheduled drainer executes recorded deletion_tasks rows', () => {
+    expect(worker).toContain('exports.drainPendingDeletionTasks');
+    expect(worker).toContain("where('status', '==', 'pending')");
+  });
+
   test('enqueue records the remainder or fails the status (no silent drop)', () => {
     expect(user).toContain("'partial_offload_failed'");
     expect(user).not.toMatch(/if \(!deletionWorkerUrl\) return;/);
