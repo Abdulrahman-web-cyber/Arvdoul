@@ -14,6 +14,7 @@ import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, UserMinus, Shield, Edit2, Trash2, Link as LinkIcon, Loader2, CheckCircle2, Search, X } from "lucide-react";
 import { LazyImage } from '../components/Shared/LazyImage';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 
 export default function GroupInfoScreen() {
   const confirm = useConfirm();
@@ -21,6 +22,7 @@ export default function GroupInfoScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isDark } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
 
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -270,46 +272,48 @@ export default function GroupInfoScreen() {
       'flex-1 min-h-0 h-full overflow-y-auto flex flex-col font-sans transition-colors duration-200 pb-12',
       isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900'
     )}>
-      <header className={cn(
-        'sticky top-0 z-30 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md transition-colors',
-        isDark ? 'bg-[#050B24]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200'
-      )}>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(`/messages/${conversationId}`)}
-            aria-label="Back to chat"
-            className={cn(
-              'p-2 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-              isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
-            )}
-          >
-            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
-          </button>
-          <div>
-            <h1 className="font-bold text-base truncate max-w-[200px] sm:max-w-xs">
-              Group Info
-            </h1>
-            <p className={cn(
-              'text-xs font-medium tabular-nums',
-              isDark ? 'text-slate-400' : 'text-slate-500'
-            )}>
-              {participants.length} member{participants.length === 1 ? '' : 's'}
-            </p>
+      {!hasTopAppBar && (
+        <header className={cn(
+          'sticky top-0 z-30 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md transition-colors',
+          isDark ? 'bg-[#050B24]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200'
+        )}>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(`/messages/${conversationId}`)}
+              aria-label="Back to chat"
+              className={cn(
+                'p-2 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+              )}
+            >
+              <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+            </button>
+            <div>
+              <h1 className="font-bold text-base truncate max-w-[200px] sm:max-w-xs">
+                Group Info
+              </h1>
+              <p className={cn(
+                'text-xs font-medium tabular-nums',
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              )}>
+                {participants.length} member{participants.length === 1 ? '' : 's'}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {isAdmin && !isEditingInfo && (
-          <button
-            type="button"
-            onClick={() => setIsEditingInfo(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 transition-colors"
-          >
-            <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Edit</span>
-          </button>
-        )}
-      </header>
+          {isAdmin && !isEditingInfo && (
+            <button
+              type="button"
+              onClick={() => setIsEditingInfo(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 transition-colors"
+            >
+              <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Edit</span>
+            </button>
+          )}
+        </header>
+      )}
 
       <main className="max-w-2xl w-full mx-auto px-4 py-6 space-y-6">
         {/* Group Hero Card */}
@@ -414,6 +418,18 @@ export default function GroupInfoScreen() {
                 </p>
               ) : (
                 <p className="text-xs opacity-50 italic">No description set.</p>
+              )}
+              {hasTopAppBar && isAdmin && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingInfo(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Edit Group Info</span>
+                  </button>
+                </div>
               )}
             </div>
           )}

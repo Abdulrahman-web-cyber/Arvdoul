@@ -16,6 +16,8 @@ import {
   User,
   X,
   Loader2,
+  EyeOff,
+  Gift,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import EmojiPicker from 'emoji-picker-react';
@@ -27,6 +29,7 @@ const MessageInput = React.memo(
     onSendMessage,
     onSendMedia,
     onTyping,
+    onOpenGift,
     theme,
     disabled = false,
     placeholder = 'Message...',
@@ -41,6 +44,7 @@ const MessageInput = React.memo(
     const [recordingDuration, setRecordingDuration] = useState(0);
     const [attachedFiles, setAttachedFiles] = useState([]);
     const [previewUrls, setPreviewUrls] = useState([]);
+    const [viewOnce, setViewOnce] = useState(false);
     const { user: currentUser } = useAuth();
     const textInputRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -91,9 +95,12 @@ const MessageInput = React.memo(
         setIsSending(true);
         if (attachedFiles.length > 0) {
           for (let i = 0; i < attachedFiles.length; i += 1) {
+            const f = attachedFiles[i];
+            const isVisual = f.type?.startsWith('image/') || f.type?.startsWith('video/');
             await onSendMedia?.({
-              file: attachedFiles[i],
+              file: f,
               text: i === 0 ? text.trim() : '',
+              viewOnce: Boolean(viewOnce && isVisual),
             });
           }
         } else {
@@ -101,6 +108,7 @@ const MessageInput = React.memo(
         }
         setText('');
         setAttachedFiles([]);
+        setViewOnce(false);
         textInputRef.current?.focus();
       } catch (error) {
         toast.error('Failed to send message');
@@ -190,8 +198,16 @@ const MessageInput = React.memo(
     };
 
     const removeAttachedFile = (index) => {
-      setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+      setAttachedFiles((prev) => {
+        const next = prev.filter((_, i) => i !== index);
+        if (next.length === 0) setViewOnce(false);
+        return next;
+      });
     };
+
+    const hasVisualAttachment = attachedFiles.some(
+      (f) => f.type?.startsWith('image/') || f.type?.startsWith('video/')
+    );
 
     return (
       <div
@@ -202,35 +218,57 @@ const MessageInput = React.memo(
       >
         {/* Staged attachments preview */}
         {attachedFiles.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {attachedFiles.map((file, index) => (
-              <div
-                key={`${file.name}-${index}`}
-                className={cn(
-                  'relative flex-shrink-0 rounded-xl overflow-hidden border',
-                  isDark ? 'bg-[#090F2D] border-white/10' : 'bg-slate-100 border-slate-200'
-                )}
-              >
-                {file.type.startsWith('image/') && previewUrls[index] ? (
-                  <LazyImage src={previewUrls[index]} alt={file.name} className="h-20 w-20 object-cover" />
-                ) : file.type.startsWith('video/') && previewUrls[index] ? (
-                  <video src={previewUrls[index]} className="h-20 w-20 object-cover" />
-                ) : (
-                  <div className="h-20 w-20 flex flex-col items-center justify-center p-2 text-center">
-                    <File className="w-6 h-6 text-purple-400 mb-1" aria-hidden="true" />
-                    <span className="text-[10px] truncate max-w-full opacity-75">{file.name}</span>
-                  </div>
-                )}
+          <div className="space-y-2">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {attachedFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className={cn(
+                    'relative flex-shrink-0 rounded-xl overflow-hidden border',
+                    isDark ? 'bg-[#090F2D] border-white/10' : 'bg-slate-100 border-slate-200'
+                  )}
+                >
+                  {file.type.startsWith('image/') && previewUrls[index] ? (
+                    <LazyImage src={previewUrls[index]} alt={file.name} className="h-20 w-20 object-cover" />
+                  ) : file.type.startsWith('video/') && previewUrls[index] ? (
+                    <video src={previewUrls[index]} className="h-20 w-20 object-cover" />
+                  ) : (
+                    <div className="h-20 w-20 flex flex-col items-center justify-center p-2 text-center">
+                      <File className="w-6 h-6 text-purple-400 mb-1" aria-hidden="true" />
+                      <span className="text-[10px] truncate max-w-full opacity-75">{file.name}</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() => removeAttachedFile(index)}
+                    className="absolute top-1 right-1 bg-black/75 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                  >
+                    <X className="w-3 h-3" aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {hasVisualAttachment && (
+              <div className="flex items-center justify-between px-1">
                 <button
                   type="button"
-                  aria-label={`Remove ${file.name}`}
-                  onClick={() => removeAttachedFile(index)}
-                  className="absolute top-1 right-1 bg-black/75 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                  onClick={() => setViewOnce((v) => !v)}
+                  aria-pressed={viewOnce}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
+                    viewOnce
+                      ? 'bg-arvdoul-gradient text-white border-transparent shadow-sm'
+                      : isDark
+                        ? 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                        : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  )}
                 >
-                  <X className="w-3 h-3" aria-hidden="true" />
+                  <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{viewOnce ? 'View Once (1x) enabled' : 'Send as View Once'}</span>
                 </button>
               </div>
-            ))}
+            )}
           </div>
         )}
 
@@ -521,6 +559,22 @@ const MessageInput = React.memo(
               </span>
               <span>GIF</span>
             </button>
+            {onOpenGift && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAttachments(false);
+                  onOpenGift();
+                }}
+                className={cn(
+                  'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
+                  isDark ? 'hover:bg-white/10 text-amber-300' : 'hover:bg-slate-200/70 text-amber-600'
+                )}
+              >
+                <Gift className="w-5 h-5" aria-hidden="true" />
+                <span>Gift</span>
+              </button>
+            )}
           </div>
         )}
 

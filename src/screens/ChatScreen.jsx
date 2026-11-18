@@ -25,6 +25,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePrompt } from '../components/Shared/ConfirmProvider.jsx';
 import { useTheme } from '../context/ThemeContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { getMessagingService, MESSAGING_CONFIG } from '../services/messagesService.js';
 import MessageInput from '../components/messaging/MessageInput.jsx';
 import MessageBubble from '../components/messaging/MessageBubble.jsx';
@@ -32,8 +33,27 @@ import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
-import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply, Phone, Video } from "lucide-react";
+import { getLevelInfo, getRankTitle } from '../shared/levelConfig.cjs';
+import {
+  ArrowLeft,
+  Users,
+  Info,
+  Search,
+  Pin,
+  Image as ImageIcon,
+  ArrowDown,
+  Bookmark,
+  X,
+  Reply,
+  Phone,
+  Video,
+  Gift,
+  EyeOff,
+  CheckCircle2,
+  User as UserIcon,
+} from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
@@ -48,6 +68,7 @@ export default function ChatScreen() {
   const location = useLocation();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
   const uid = user?.uid;
@@ -63,6 +84,7 @@ export default function ChatScreen() {
   // screen subscribed to was never written by any code (N458), so the header's
   // "Online / Last seen" could never render.
   const [presence, setPresence] = useState(null);
+  const [peerMeta, setPeerMeta] = useState(null);
   const [atBottom, setAtBottom] = useState(true);
   const [newSinceScroll, setNewSinceScroll] = useState(0);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -70,6 +92,7 @@ export default function ChatScreen() {
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [pinnedBannerIndex, setPinnedBannerIndex] = useState(0);
   const [sharedMedia, setSharedMedia] = useState([]);
   const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search | saved
   const [infoPanelError, setInfoPanelError] = useState(null);
@@ -77,6 +100,8 @@ export default function ChatScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [savedIds, setSavedIds] = useState({});
   const [savedMessages, setSavedMessages] = useState([]);
+  const [openedViewOnceIds, setOpenedViewOnceIds] = useState({});
+  const [activeViewOnce, setActiveViewOnce] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
   const [forwardTarget, setForwardTarget] = useState(null);
   const [forwardConversations, setForwardConversations] = useState([]);
@@ -135,6 +160,7 @@ export default function ChatScreen() {
     setLoading(true);
     setLoadError(null);
     setConversation(null);
+    setPeerMeta(null);
     setMessages([]);
     setTypingUsers({});
     setReplyTo(null);
@@ -142,10 +168,13 @@ export default function ChatScreen() {
     setSearchQuery('');
     setSearchResults(null);
     setPinnedMessages([]);
+    setPinnedBannerIndex(0);
     setPinnedIds([]);
     setSharedMedia([]);
     setSavedIds({});
     setSavedMessages([]);
+    setOpenedViewOnceIds({});
+    setActiveViewOnce(null);
     setNewSinceScroll(0);
     setAtBottom(true);
     pendingRef.current.clear();
@@ -349,21 +378,31 @@ export default function ChatScreen() {
   );
 
   const handleSendMedia = useCallback(
-    async ({ file, isVoice, text: captionText }) => {
+    async ({ file, isVoice, text: captionText, viewOnce }) => {
       if (!conversationId || !uid || !file) return;
+      const isVisual = file.type?.startsWith('image/') || file.type?.startsWith('video/');
+      const isViewOnce = Boolean(viewOnce && !isVoice && isVisual);
       const type = isVoice
         ? 'voice'
-        : file.type?.startsWith('image/')
-          ? 'image'
-          : file.type?.startsWith('video/')
-            ? 'video'
-            : 'file';
+        : isViewOnce
+          ? (MESSAGING_CONFIG?.MESSAGE_TYPES?.VIEW_ONCE || 'view_once')
+          : file.type?.startsWith('image/')
+            ? 'image'
+            : file.type?.startsWith('video/')
+              ? 'video'
+              : 'file';
 
       const cleanCaption = captionText?.trim?.() || '';
+      const content = cleanCaption || (isViewOnce
+        ? (file.type?.startsWith('video/') ? 'View-once video' : 'View-once photo')
+        : '');
       const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const mediaPayload = isViewOnce
+        ? { file, mediaKind: file.type?.startsWith('video/') ? 'video' : 'image' }
+        : { file };
       pendingRef.current.set(localId, {
         conversationId,
-        data: { type, content: cleanCaption, media: { file } },
+        data: { type, content, media: mediaPayload },
       });
       setMessages((prev) => [
         ...prev,
@@ -373,16 +412,16 @@ export default function ChatScreen() {
           _pending: true,
           senderId: uid,
           type,
-          content: cleanCaption,
-          media: { fileName: file.name, isVoice },
+          content,
+          media: { fileName: file.name, isVoice, mediaKind: mediaPayload.mediaKind },
           createdAt: new Date(),
         },
       ]);
       try {
         const payload = {
           type,
-          ...(cleanCaption ? { content: cleanCaption } : {}),
-          media: { file },
+          ...(content ? { content } : {}),
+          media: mediaPayload,
           ...(replyTo
             ? {
                 replyTo: {
@@ -404,6 +443,22 @@ export default function ChatScreen() {
       }
     },
     [conversationId, uid, reconcileSentMessage, replyTo]
+  );
+
+  const handleOpenViewOnce = useCallback(
+    async (msg) => {
+      if (!msg?.id || !conversationId || !uid) return;
+      setActiveViewOnce(msg);
+      setOpenedViewOnceIds((prev) => ({ ...prev, [msg.id]: true }));
+      try {
+        await getMessagingService().viewOnceMessage?.(msg.id, conversationId, uid, {
+          createdAt: msg.createdAt,
+        });
+      } catch {
+        /* local opened state remains authoritative for this view session */
+      }
+    },
+    [conversationId, uid]
   );
 
   const handleReaction = useCallback(
@@ -506,6 +561,97 @@ export default function ChatScreen() {
     return () => { cancelled = true; };
   }, [otherParticipants]);
 
+  // Hydrate 1:1 peer standing (level, rank, verified, active Vibe) for ecosystem integration
+  useEffect(() => {
+    let cancelled = false;
+    const peerId = otherParticipants.length === 1 ? otherParticipants[0] : null;
+    if (!peerId || !uid) {
+      setPeerMeta(null);
+      return () => { cancelled = true; };
+    }
+    (async () => {
+      try {
+        const [{ getUserProfile }, { storyService }] = await Promise.all([
+          import('../services/userService.js'),
+          import('../services/storyService.js'),
+        ]);
+        const [profileRes, storiesRes] = await Promise.allSettled([
+          typeof getUserProfile === 'function' ? getUserProfile(peerId) : Promise.resolve(null),
+          typeof storyService?.getStoriesFeed === 'function'
+            ? storyService.getStoriesFeed(uid, { cacheFirst: true, limit: 12 })
+            : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        const p = profileRes.status === 'fulfilled' ? profileRes.value : null;
+        const rawXp = p?.experience ?? p?.xp;
+        const derivedLevel = rawXp != null
+          ? getLevelInfo(rawXp).level
+          : (typeof p?.level === 'number' && p.level > 0 ? p.level : null);
+        const level = derivedLevel && derivedLevel > 1 ? derivedLevel : null;
+        const rank = level ? getRankTitle(level) : null;
+        const groups = storiesRes.status === 'fulfilled' ? (storiesRes.value?.groups || []) : [];
+        const hasVibe = groups.some(
+          (g) => g?.userId === peerId && Array.isArray(g.stories) && g.stories.length > 0
+        );
+        setPeerMeta({
+          level,
+          rank,
+          verified: Boolean(p?.isVerified || p?.verified),
+          bio: typeof p?.bio === 'string' ? p.bio : '',
+          hasVibe,
+        });
+      } catch {
+        if (!cancelled) setPeerMeta(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [otherParticipants, uid]);
+
+  // Keep unified TopAppBar chat chrome synchronized with live thread metadata
+  useEffect(() => {
+    if (!conversationId) return undefined;
+    const isDirect = conversation?.type === 'direct' || otherParticipants.length === 1;
+    const peerId = otherParticipants.length === 1 ? otherParticipants[0] : null;
+    const fallbackSubtitle =
+      routeIntent?.subtitle ||
+      (otherParticipants.length > 0
+        ? `${otherParticipants.length} participant${otherParticipants.length > 1 ? 's' : ''}`
+        : '');
+    window.dispatchEvent(
+      new CustomEvent('arvdoul:chat_header_state', {
+        detail: {
+          conversationId,
+          title,
+          avatar: headerAvatar,
+          subtitle: typingText || presenceText || fallbackSubtitle,
+          isTyping: Boolean(typingText),
+          isOnline: Boolean(presence?.isOnline),
+          isDirect,
+          peerId,
+          level: peerMeta?.level || null,
+          rank: peerMeta?.rank || null,
+          verified: Boolean(peerMeta?.verified),
+          hasVibe: Boolean(peerMeta?.hasVibe),
+        },
+      })
+    );
+  }, [
+    conversationId,
+    conversation,
+    otherParticipants,
+    title,
+    headerAvatar,
+    typingText,
+    presenceText,
+    presence,
+    routeIntent?.subtitle,
+    peerMeta,
+  ]);
+
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent('arvdoul:chat_header_state', { detail: null }));
+  }, []);
+
   // Load this conversation's saved-message ids when the panel opens.
   const loadSavedState = useCallback(async () => {
     if (!uid) return;
@@ -570,6 +716,18 @@ export default function ChatScreen() {
       setInfoPanelError('Could not load conversation details.');
     }
   }, [conversationId, loadSavedState]);
+
+  useEffect(() => {
+    const onChatAction = (e) => {
+      if (e?.detail?.action === 'open_info') {
+        if (!e.detail.conversationId || e.detail.conversationId === conversationId) {
+          openInfoPanel();
+        }
+      }
+    };
+    window.addEventListener('arvdoul:chat_action', onChatAction);
+    return () => window.removeEventListener('arvdoul:chat_action', onChatAction);
+  }, [conversationId, openInfoPanel]);
 
   const runSearch = useCallback(async () => {
     const q = searchQuery.trim();
@@ -816,6 +974,14 @@ export default function ChatScreen() {
     return items;
   }, [messages, conversation, uid]);
 
+  const activePinnedId = pinnedIds.length > 0 ? pinnedIds[pinnedBannerIndex % pinnedIds.length] : null;
+  const activePinnedMsg = useMemo(() => {
+    if (!activePinnedId) return null;
+    const fromPins = pinnedMessages.find((p) => (typeof p === 'string' ? p : p?.id) === activePinnedId);
+    if (fromPins && typeof fromPins === 'object' && (fromPins.content || fromPins.type)) return fromPins;
+    return messages.find((m) => m.id === activePinnedId) || null;
+  }, [activePinnedId, pinnedMessages, messages]);
+
   // States
   if (loading) {
     return (
@@ -846,7 +1012,8 @@ export default function ChatScreen() {
         'flex flex-col flex-1 min-h-0 w-full overflow-hidden',
         isDark ? 'bg-[#04091E]' : 'bg-[#F8FAFC]'
       )}>
-      {/* Header */}
+      {/* Standalone Header — omitted when unified TopAppBar manages chat top chrome */}
+      {!hasTopAppBar && (
       <header className={cn('sticky top-0 z-20 backdrop-blur-xl border-b', isDark ? 'bg-[#050B24]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200')}>
         <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center gap-2.5">
           <button
@@ -859,15 +1026,30 @@ export default function ChatScreen() {
           </button>
 
           {headerAvatar && (
-            <LazyImage
-              src={headerAvatar}
-              alt={title}
-              className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
-            />
+            <div
+              className={cn('relative shrink-0 rounded-full', peerMeta?.hasVibe && 'p-[2px]')}
+              style={peerMeta?.hasVibe ? { background: BRAND_GRADIENT } : undefined}
+            >
+              <LazyImage
+                src={headerAvatar}
+                alt={title}
+                className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
+              />
+            </div>
           )}
 
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-sm sm:text-base truncate leading-tight">{title}</h1>
+            <div className="flex items-center gap-1 min-w-0">
+              <h1 className="font-bold text-sm sm:text-base truncate leading-tight">{title}</h1>
+              {peerMeta?.verified && (
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
+              )}
+              {peerMeta?.level && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-400 shrink-0">
+                  Lv.{peerMeta.level}
+                </span>
+              )}
+            </div>
             <p className={cn('text-xs truncate', typingText ? 'text-purple-400 font-medium' : isDark ? 'text-slate-400' : 'text-slate-500')}>
               {typingText || presenceText || (routeIntent?.subtitle) || (otherParticipants.length > 0
                 ? `${otherParticipants.length} participant${otherParticipants.length > 1 ? 's' : ''}`
@@ -893,6 +1075,16 @@ export default function ChatScreen() {
               >
                 <Video className="w-4 h-4" aria-hidden="true" />
               </button>
+              {otherParticipants.length === 1 && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/gift/${otherParticipants[0]}`)}
+                  aria-label="Send gift"
+                  className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-purple-300' : 'hover:bg-slate-100 text-purple-600')}
+                >
+                  <Gift className="w-4 h-4" aria-hidden="true" />
+                </button>
+              )}
             </>
           )}
           <button
@@ -905,6 +1097,61 @@ export default function ChatScreen() {
           </button>
         </div>
       </header>
+      )}
+
+      {/* Pinned Message Strip */}
+      {activePinnedId && (
+        <div
+          className={cn(
+            'border-b px-3 sm:px-5 py-2 flex items-center justify-between gap-2 max-w-4xl w-full mx-auto shrink-0',
+            isDark ? 'bg-[#08102D]/90 border-white/[0.08]' : 'bg-white/95 border-slate-200/80'
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => jumpToMessage(activePinnedId)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-lg"
+          >
+            <Pin className="w-3.5 h-3.5 text-purple-500 rotate-45 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-purple-500 dark:text-purple-300 truncate">
+                Pinned{pinnedIds.length > 1 ? ` (${(pinnedBannerIndex % pinnedIds.length) + 1}/${pinnedIds.length})` : ''}
+              </p>
+              <p className={cn('text-xs truncate', isDark ? 'text-slate-300' : 'text-slate-700')}>
+                {activePinnedMsg?.content || (activePinnedMsg?.type ? `(${activePinnedMsg.type} message)` : 'Jump to pinned message')}
+              </p>
+            </div>
+          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {pinnedIds.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setPinnedBannerIndex((i) => (i + 1) % pinnedIds.length)}
+                className={cn(
+                  'px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors',
+                  isDark ? 'bg-white/10 text-slate-300 hover:bg-white/15' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                )}
+              >
+                Next
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setInfoTab('pinned');
+                openInfoPanel();
+              }}
+              aria-label="View all pinned messages"
+              className={cn(
+                'px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors',
+                isDark ? 'text-purple-300 hover:bg-white/10' : 'text-purple-700 hover:bg-purple-50'
+              )}
+            >
+              All
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <main ref={mainRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 overscroll-contain max-w-4xl w-full mx-auto" aria-live="polite">
@@ -966,6 +1213,7 @@ export default function ChatScreen() {
               key={`${msg.id}-bubble`}
               message={msg}
               isOwn={isOwn}
+              currentUid={uid}
               senderName={resolveSenderLabel(msg, isOwn)}
               senderAvatar={conversation?.participantAvatars?.[msg.senderId]}
               onReaction={handleReaction}
@@ -982,6 +1230,10 @@ export default function ChatScreen() {
               onForward={openForwardPicker}
               onEdit={isOwn ? handleEdit : undefined}
               onPin={isOwn || conversation?.participantCount > 2 ? handleTogglePin : undefined}
+              onJumpToMessage={jumpToMessage}
+              onOpenViewOnce={handleOpenViewOnce}
+              openedViewOnceIds={openedViewOnceIds}
+              onNavigate={navigate}
               isPinned={pinnedIds.includes(msg.id)}
               onReport={(m) => { setReportTarget(m); setReportReason(''); setReportDetails(''); }}
               isGroup={conversation?.participantCount > 2}
@@ -1038,6 +1290,76 @@ export default function ChatScreen() {
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
+
+            {/* 1:1 Peer Identity, Standing & Ecosystem Actions */}
+            {otherParticipants.length === 1 && (
+              <div
+                className={cn(
+                  'rounded-2xl border p-3.5 mb-4 space-y-3',
+                  isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={cn('relative shrink-0 rounded-full', peerMeta?.hasVibe && 'p-[2px]')}
+                    style={peerMeta?.hasVibe ? { background: BRAND_GRADIENT } : undefined}
+                  >
+                    <LazyImage
+                      src={headerAvatar}
+                      alt={title}
+                      className="w-11 h-11 rounded-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="font-bold text-sm truncate">{title}</span>
+                      {peerMeta?.verified && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      {peerMeta?.level && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-500 dark:text-purple-300">
+                          Lv.{peerMeta.level}{peerMeta.rank ? ` · ${peerMeta.rank}` : ''}
+                        </span>
+                      )}
+                      {presenceText && (
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {presenceText}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInfoPanel(false);
+                      navigate(`/profile/${otherParticipants[0]}`);
+                    }}
+                    className={cn(
+                      'flex-1 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors',
+                      isDark ? 'border-white/15 hover:bg-white/10 text-slate-200' : 'border-slate-200 hover:bg-white text-slate-800'
+                    )}
+                  >
+                    <UserIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>View Profile</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInfoPanel(false);
+                      navigate(`/gift/${otherParticipants[0]}`);
+                    }}
+                    className="flex-1 py-2 rounded-xl text-xs font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 transition-all"
+                  >
+                    <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Send Gift</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="flex gap-1 p-1 rounded-xl mb-4" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
@@ -1346,10 +1668,57 @@ export default function ChatScreen() {
           onSendMessage={handleSendMessage}
           onSendMedia={handleSendMedia}
           onTyping={handleTyping}
+          onOpenGift={otherParticipants.length === 1 ? () => navigate(`/gift/${otherParticipants[0]}`) : undefined}
           theme={isDark ? 'dark' : 'light'}
           disabled={!conversation}
         />
       </div>
+
+      {/* View-once ephemeral media modal */}
+      {activeViewOnce && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/95 flex flex-col items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="View once media"
+        >
+          <div className="w-full max-w-2xl flex items-center justify-between mb-3 text-white">
+            <div className="flex items-center gap-2 text-xs font-semibold text-purple-300">
+              <EyeOff className="w-4 h-4" aria-hidden="true" />
+              <span>View-once media · Closes permanently after viewing</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveViewOnce(null)}
+              aria-label="Close view once media"
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <X className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="max-w-2xl max-h-[80vh] w-full flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black">
+            {(activeViewOnce.media?.mediaKind === 'video' || activeViewOnce.media?.mimeType?.startsWith('video/')) ? (
+              <video
+                src={activeViewOnce.media?.url || activeViewOnce.media?.downloadUrl}
+                controls
+                autoPlay
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            ) : (
+              <LazyImage
+                src={activeViewOnce.media?.url || activeViewOnce.media?.downloadUrl}
+                alt={activeViewOnce.content || 'View-once photo'}
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            )}
+          </div>
+          {activeViewOnce.content && (
+            <p className="mt-3 text-sm text-white/90 text-center max-w-lg">
+              {activeViewOnce.content}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Forward picker */}
       {forwardTarget && (

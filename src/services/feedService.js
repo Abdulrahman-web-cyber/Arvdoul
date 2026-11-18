@@ -178,8 +178,24 @@ class UltimateFeedService {
     this.activeUsers = new Set();
     this.algorithmVersion = 'v24.2';
     this.mlCache = new Map();
+    this._inflightPromises = new Map();
 
     this._readyPromise = this._initWithTimeout();
+  }
+
+  _dedupePromise(key, factory) {
+    if (this._inflightPromises.has(key)) {
+      return this._inflightPromises.get(key);
+    }
+    const promise = Promise.resolve()
+      .then(factory)
+      .finally(() => {
+        if (this._inflightPromises.get(key) === promise) {
+          this._inflightPromises.delete(key);
+        }
+      });
+    this._inflightPromises.set(key, promise);
+    return promise;
   }
 
   async _initWithTimeout() {
@@ -251,7 +267,8 @@ class UltimateFeedService {
       arrayRemove: fstore.arrayRemove,
       addDoc: fstore.addDoc
     };
-    await this._loadWeightsFromConfig();
+    // Keep BASE_WEIGHTS active on startup so initial feed queries do not block on config/feed_weights.
+    this._loadWeightsFromConfig().catch(() => {});
   }
 
   _dummyCollectionRef() { return { id: 'dummy', path: 'dummy' }; }
@@ -273,21 +290,23 @@ class UltimateFeedService {
     if (!force && this.configCache.weights && (now - this.configCache.timestamp) < FEED_CONFIG.PERFORMANCE.CONFIG_CACHE_TTL) {
       return this.configCache.weights;
     }
-    try {
-      if (!this.firestore || !this.firestoreMethods) return { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
-      const { doc, getDoc } = this.firestoreMethods;
-      const snap = await getDoc(doc(this.firestore, 'config', 'feed_weights'));
-      let weights = { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
-      if (snap.exists()) {
-        weights = { ...weights, ...snap.data() };
-        const total = Object.values(weights).reduce((a, b) => a + b, 0);
-        if (Math.abs(total - 1) > 0.01) Object.keys(weights).forEach(k => weights[k] /= total);
+    return this._dedupePromise(`weights_${force ? '1' : '0'}`, async () => {
+      try {
+        if (!this.firestore || !this.firestoreMethods) return { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
+        const { doc, getDoc } = this.firestoreMethods;
+        const snap = await getDoc(doc(this.firestore, 'config', 'feed_weights'));
+        let weights = { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
+        if (snap.exists()) {
+          weights = { ...weights, ...snap.data() };
+          const total = Object.values(weights).reduce((a, b) => a + b, 0);
+          if (Math.abs(total - 1) > 0.01) Object.keys(weights).forEach(k => weights[k] /= total);
+        }
+        this.configCache = { weights, timestamp: Date.now() };
+        return weights;
+      } catch (e) {
+        return { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
       }
-      this.configCache = { weights, timestamp: now };
-      return weights;
-    } catch (e) {
-      return { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
-    }
+    });
   }
 
   _getUserExperimentGroup(userId) {
@@ -341,25 +360,27 @@ class UltimateFeedService {
 
   async _loadSessionState(userId) {
     if (this.offlineMode) return { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
-    try {
-      await this._ensureInitialized();
-      const { doc, getDoc } = this.firestoreMethods;
-      const snap = await getDoc(doc(this.firestore, FEED_CONFIG.SESSION.COLLECTION, userId));
-      if (snap.exists()) {
-        const data = snap.data();
-        return {
-          sessionSeed: data.sessionSeed ?? Math.random(),
-          lastAuthor: data.lastAuthor ?? null,
-          seenPosts: data.seenPosts ?? [],
-          hiddenPosts: data.hiddenPosts ?? [],
-          notInterested: data.notInterested ?? [],
-          topicStreaks: data.topicStreaks ?? {},
-        };
+    return this._dedupePromise(`session_${userId}`, async () => {
+      try {
+        await this._ensureInitialized();
+        const { doc, getDoc } = this.firestoreMethods;
+        const snap = await getDoc(doc(this.firestore, FEED_CONFIG.SESSION.COLLECTION, userId));
+        if (snap.exists()) {
+          const data = snap.data();
+          return {
+            sessionSeed: data.sessionSeed ?? Math.random(),
+            lastAuthor: data.lastAuthor ?? null,
+            seenPosts: data.seenPosts ?? [],
+            hiddenPosts: data.hiddenPosts ?? [],
+            notInterested: data.notInterested ?? [],
+            topicStreaks: data.topicStreaks ?? {},
+          };
+        }
+      } catch (e) {
+        logger.warn('Feed session state read failed; starting a fresh session', { userId, error: e?.message });
       }
-    } catch (e) {
-      logger.warn('Feed session state read failed; starting a fresh session', { userId, error: e?.message });
-    }
-    return { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
+      return { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
+    });
   }
 
   async _saveSessionState(userId, state, immediate = false) {
@@ -396,19 +417,21 @@ class UltimateFeedService {
     const key = `hidden_${userId}`;
     const cached = this.blockCache.get(key);
     if (cached && Date.now() - cached.ts < FEED_CONFIG.BLOCK_CACHE_TTL) return cached.data;
-    try {
-      await this._ensureInitialized();
-      // Single graph reader: the spine's `getHiddenAuthorIds` unions blocked +
-      // blocked_by + muted through the rules-provable edge lists (ids only — no
-      // wasted profile hydration, unlike `listConnections`). A MUTE must hide
-      // the author's posts (it was written but never read = dead control), and
-      // the reverse block must too (someone who blocks the viewer must not keep
-      // surfacing their posts).
-      const { getSocialGraphService } = await import('./socialGraphService.js');
-      const hidden = await getSocialGraphService().getHiddenAuthorIds(userId);
-      this.blockCache.set(key, { data: hidden, ts: Date.now() });
-      return hidden;
-    } catch (e) { return new Set(); }
+    return this._dedupePromise(key, async () => {
+      try {
+        await this._ensureInitialized();
+        // Single graph reader: the spine's `getHiddenAuthorIds` unions blocked +
+        // blocked_by + muted through the rules-provable edge lists (ids only — no
+        // wasted profile hydration, unlike `listConnections`). A MUTE must hide
+        // the author's posts (it was written but never read = dead control), and
+        // the reverse block must too (someone who blocks the viewer must not keep
+        // surfacing their posts).
+        const { getSocialGraphService } = await import('./socialGraphService.js');
+        const hidden = await getSocialGraphService().getHiddenAuthorIds(userId);
+        this.blockCache.set(key, { data: hidden, ts: Date.now() });
+        return hidden;
+      } catch (e) { return new Set(); }
+    });
   }
 
   // The public-feed predicate the Firestore list rule proves. Every public
@@ -426,10 +449,11 @@ class UltimateFeedService {
     ];
   }
 
-  async _getFollowingFeedEfficient(userId, options) {
+  async _getFollowingFeedEfficient(userId, options = {}) {
     if (this.offlineMode) return [];
+    const { limit = 20, lastDoc } = options || {};
     try {
-      const { limit = 20, lastDoc } = options;
+      const hiddenAuthorsPromise = this._getHiddenAuthorsCached(userId);
       const followsSnap = await this.firestoreMethods.getDocs(
         this.firestoreMethods.query(
           this.firestoreMethods.collection(this.firestore, 'follows'),
@@ -440,21 +464,27 @@ class UltimateFeedService {
       const followedIds = followsSnap.docs.map(doc => doc.data().followingId);
       if (followedIds.length === 0) return [];
 
-      const hiddenAuthors = await this._getHiddenAuthorsCached(userId);
-
+      const hiddenAuthors = await hiddenAuthorsPromise;
       const posts = [];
       const chunkSize = 30;
+      const chunks = [];
       for (let i = 0; i < followedIds.length; i += chunkSize) {
-        const chunk = followedIds.slice(i, i + chunkSize);
-        const q = this.firestoreMethods.query(
-          this.firestoreMethods.collection(this.firestore, 'posts'),
-          this.firestoreMethods.where('authorId', 'in', chunk),
-          ...this._publicPostFilters(),
-          this.firestoreMethods.orderBy('createdAt', 'desc'),
-          this.firestoreMethods.limit(10)
-        );
-        const snap = await this.firestoreMethods.getDocs(q);
-        snap.forEach(doc => {
+        chunks.push(followedIds.slice(i, i + chunkSize));
+      }
+      const chunkResults = await Promise.all(
+        chunks.map((chunk) => {
+          const q = this.firestoreMethods.query(
+            this.firestoreMethods.collection(this.firestore, 'posts'),
+            this.firestoreMethods.where('authorId', 'in', chunk),
+            ...this._publicPostFilters(),
+            this.firestoreMethods.orderBy('createdAt', 'desc'),
+            this.firestoreMethods.limit(10)
+          );
+          return this.firestoreMethods.getDocs(q);
+        })
+      );
+      chunkResults.forEach((snap) => {
+        snap.forEach((doc) => {
           const data = doc.data();
           if (!hiddenAuthors.has(data.authorId)) {
             posts.push({
@@ -465,7 +495,7 @@ class UltimateFeedService {
             });
           }
         });
-      }
+      });
 
       posts.sort((a, b) => b.createdAt - a.createdAt);
       let startIndex = 0;
@@ -955,7 +985,17 @@ class UltimateFeedService {
       if (cached) return { ...cached, cached: true, operationId, duration: Date.now() - startTime };
     }
 
-    let sessionState = await this._loadSessionState(userId);
+    const [sessionRes, weightsRes, userWeightsRes, userPrefsRes] = await Promise.allSettled([
+      this._loadSessionState(userId),
+      this._loadWeightsFromConfig(),
+      this._getUserFeedWeights(userId),
+      this._getUserPreferencesCached(userId),
+      this._getHiddenAuthorsCached(userId),
+    ]);
+
+    const sessionState = sessionRes.status === 'fulfilled' && sessionRes.value
+      ? sessionRes.value
+      : { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
     let sessionSeed = sessionState.sessionSeed;
     let hiddenPosts = new Set(sessionState.hiddenPosts || []);
     let notInterestedPosts = new Set(sessionState.notInterested || []);
@@ -964,7 +1004,9 @@ class UltimateFeedService {
     this.notInterestedPosts.set(userId, notInterestedPosts);
     const seenPostIds = this._getSeenSet(userId);
     const expGroup = await this._getUserExperimentGroup(userId);
-    let dynamicWeights = await this._loadWeightsFromConfig();
+    let dynamicWeights = weightsRes.status === 'fulfilled' && weightsRes.value
+      ? { ...weightsRes.value }
+      : { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
 
     if (expGroup === 'weight_tuning') {
       dynamicWeights = { ...dynamicWeights, following: Math.min(0.6, dynamicWeights.following + 0.05) };
@@ -999,14 +1041,14 @@ class UltimateFeedService {
       }
     }
 
-    const userWeights = await this._getUserFeedWeights(userId);
+    const userWeights = userWeightsRes.status === 'fulfilled' ? userWeightsRes.value : null;
     if (userWeights) {
       dynamicWeights = { ...dynamicWeights, ...userWeights };
       const total = Object.values(dynamicWeights).reduce((s, w) => s + w, 0);
       if (Math.abs(total - 1) > 0.01) Object.keys(dynamicWeights).forEach(k => dynamicWeights[k] /= total);
     }
 
-    const userPreferences = await this._getUserPreferencesCached(userId).catch(() => ({}));
+    const userPreferences = userPrefsRes.status === 'fulfilled' && userPrefsRes.value ? userPrefsRes.value : {};
 
     let decodedCursor = lastDoc ? this._decodeCursor(lastDoc) : null;
 
@@ -1143,17 +1185,31 @@ class UltimateFeedService {
    * `getAll` per chunk. Best-effort: a shard read failure leaves the raw value.
    */
   async _overlayFeedCounters(sources) {
-    const items = [];
+    const allRefs = [];
+    const uniqueById = new Map();
     Object.values(sources).forEach((posts) => {
-      if (Array.isArray(posts)) posts.forEach((p) => { if (p && p.id) items.push(p); });
+      if (Array.isArray(posts)) {
+        posts.forEach((p) => {
+          if (p && p.id) {
+            allRefs.push(p);
+            if (!uniqueById.has(p.id)) uniqueById.set(p.id, p);
+          }
+        });
+      }
     });
-    if (items.length === 0) return;
+    if (uniqueById.size === 0) return;
     try {
       await countersManager.applyAll({
-        items,
+        items: Array.from(uniqueById.values()),
         collection: 'posts',
         fields: ['likes', 'comments', 'shares', 'saves', 'views'],
         scope: 'stats',
+      });
+      allRefs.forEach((p) => {
+        const canonical = uniqueById.get(p.id);
+        if (canonical && canonical !== p && canonical.stats) {
+          p.stats = canonical.stats;
+        }
       });
     } catch (error) {
       logger.warn('Feed counter overlay failed; ranking may be stale', { error: error?.message });
@@ -1446,18 +1502,20 @@ class UltimateFeedService {
     const cacheKey = `user_prefs_${userId}`;
     const cached = this.userPreferences.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PREF_CACHE_TTL) return cached.data;
-    try {
-      const { doc, getDoc } = this.firestoreMethods;
-      const prefsRef = doc(this.firestore, 'user_preferences', userId);
-      const prefsSnap = await getDoc(prefsRef);
-      if (prefsSnap.exists()) {
-        this.userPreferences.set(cacheKey, { data: prefsSnap.data(), timestamp: Date.now() });
-        return prefsSnap.data();
+    return this._dedupePromise(cacheKey, async () => {
+      try {
+        const { doc, getDoc } = this.firestoreMethods;
+        const prefsRef = doc(this.firestore, 'user_preferences', userId);
+        const prefsSnap = await getDoc(prefsRef);
+        if (prefsSnap.exists()) {
+          this.userPreferences.set(cacheKey, { data: prefsSnap.data(), timestamp: Date.now() });
+          return prefsSnap.data();
+        }
+      } catch (e) {
+        logger.warn('Feed user_preferences read failed', { userId, error: e?.message });
       }
-    } catch (e) {
-      logger.warn('Feed user_preferences read failed', { userId, error: e?.message });
-    }
-    return {};
+      return {};
+    });
   }
 
   async _getUserFeedWeights(userId) {
@@ -1465,20 +1523,22 @@ class UltimateFeedService {
     const cacheKey = `feed_weights_user_${userId}`;
     const cached = this.userPreferences.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PREF_CACHE_TTL) return cached.data;
-    try {
-      await this._ensureInitialized();
-      const { doc, getDoc } = this.firestoreMethods;
-      const prefDoc = doc(this.firestore, 'user_feed_preferences', userId);
-      const snap = await getDoc(prefDoc);
-      if (snap.exists() && snap.data().weights) {
-        const w = snap.data().weights;
-        this.userPreferences.set(cacheKey, { data: w, timestamp: Date.now() });
-        return w;
+    return this._dedupePromise(cacheKey, async () => {
+      try {
+        await this._ensureInitialized();
+        const { doc, getDoc } = this.firestoreMethods;
+        const prefDoc = doc(this.firestore, 'user_feed_preferences', userId);
+        const snap = await getDoc(prefDoc);
+        if (snap.exists() && snap.data().weights) {
+          const w = snap.data().weights;
+          this.userPreferences.set(cacheKey, { data: w, timestamp: Date.now() });
+          return w;
+        }
+      } catch (e) {
+        logger.warn('Feed weight preferences read failed', { userId, error: e?.message });
       }
-    } catch (e) {
-      logger.warn('Feed weight preferences read failed', { userId, error: e?.message });
-    }
-    return null;
+      return null;
+    });
   }
 
   _buildCursorObject(feed, sources) {

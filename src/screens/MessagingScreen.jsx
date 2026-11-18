@@ -1,14 +1,16 @@
 // src/screens/MessagingScreen.jsx
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { cn } from '../lib/utils';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
+import { getLevelInfo, getRankTitle } from '../shared/levelConfig.cjs';
 import ErrorState from '../design-system/ErrorState.jsx';
 import {
   Search,
@@ -34,6 +36,9 @@ import {
   Mic,
   Paperclip,
   Loader2,
+  EyeOff,
+  Gift,
+  Sparkles,
 } from 'lucide-react';
 import { LazyImage } from '../components/Shared/LazyImage';
 
@@ -51,6 +56,7 @@ const ATTACHMENT_LABEL = {
   video: 'Video',
   audio: 'Audio',
   voice: 'Voice note',
+  view_once: 'View-once',
   file: 'Attachment',
   gif: 'GIF',
   location: 'Location',
@@ -103,9 +109,22 @@ function mapServiceConversation(c, uid) {
       ? new Date(c.lastActivity)
       : null;
 
+  const rawXp = other?.experience ?? other?.xp;
+  const derivedLevel = rawXp != null
+    ? getLevelInfo(rawXp).level
+    : (typeof other?.level === 'number' && other.level > 0 ? other.level : null);
+  const peerLevel = derivedLevel && derivedLevel > 1 ? derivedLevel : null;
+  const peerRank = peerLevel ? getRankTitle(peerLevel) : null;
+  const peerId = !isGroup && !isChannel
+    ? (other?.id || other?.uid || (c.participants || []).find((p) => p !== uid) || null)
+    : null;
+
   return {
     id: c.id,
     isAd: false,
+    peerId,
+    peerLevel,
+    peerRank,
     name: otherName,
     type: c.type,
     avatar: getSafeAvatarUrl(
@@ -135,6 +154,8 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isDark } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
+  const searchInputRef = useRef(null);
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [pinnedOnly, setPinnedOnly] = useState(false);
@@ -149,6 +170,12 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
   const [conversationsError, setConversationsError] = useState(null);
   const [conversationsNonce, setConversationsNonce] = useState(0);
   const [messageRequests, setMessageRequests] = useState([]);
+  const [activeVibeCreators, setActiveVibeCreators] = useState([]);
+
+  const vibeAuthorIds = useMemo(
+    () => new Set(activeVibeCreators.map((v) => v.userId)),
+    [activeVibeCreators]
+  );
 
   const pinnedItems = useMemo(
     () =>
@@ -156,6 +183,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
         .filter((c) => !c.isAd && c.pinned && c.category !== 'archived')
         .map((c) => ({
           id: c.id,
+          peerId: c.peerId || null,
           name: c.name,
           avatar: c.avatar,
           unread: c.unread || 0,
@@ -388,6 +416,72 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
     [conversations]
   );
 
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('arvdoul:inbox_header_state', {
+        detail: { totalUnread, activeCount: activeThreadCount },
+      })
+    );
+  }, [totalUnread, activeThreadCount]);
+
+  useEffect(() => {
+    const onFocusSearch = () => {
+      const el = searchInputRef.current || document.getElementById('message-search-input');
+      if (el) {
+        el.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        el.focus?.();
+      }
+    };
+    window.addEventListener('arvdoul:focus_inbox_search', onFocusSearch);
+    return () => window.removeEventListener('arvdoul:focus_inbox_search', onFocusSearch);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.uid || sidebarMode) {
+      setActiveVibeCreators([]);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ storyService }, { getSocialGraphService }] = await Promise.all([
+          import('../services/storyService.js'),
+          import('../services/socialGraphService.js'),
+        ]);
+        const res = await storyService.getStoriesFeed(user.uid, { cacheFirst: true, limit: 12 });
+        if (cancelled) return;
+        const groups = (res?.groups || []).filter(
+          (g) => g?.userId && Array.isArray(g.stories) && g.stories.length > 0 && !g.stories.every((s) => s.isAd || s.type === 'ad')
+        );
+        if (groups.length === 0) {
+          setActiveVibeCreators([]);
+          return;
+        }
+        const ids = groups.map((g) => g.userId);
+        const profilesMap = await getSocialGraphService().hydrateProfiles(ids).catch(() => new Map());
+        if (cancelled) return;
+        const items = groups.map((g) => {
+          const p = profilesMap.get(g.userId) || {};
+          const name = pickDisplayName([p.displayName, p.name, g.stories[0]?.authorName], {
+            fallback: `user ${String(g.userId).slice(0, 6)}`,
+          });
+          return {
+            userId: g.userId,
+            name,
+            avatar: getSafeAvatarUrl(p.photoURL || g.stories[0]?.authorPhoto, name, g.userId),
+            hasUnseen: g.stories.some((s) => !s.seen),
+            count: g.stories.length,
+          };
+        });
+        setActiveVibeCreators(items);
+      } catch (err) {
+        console.warn('Failed to load active vibes in inbox:', err?.message || err);
+        if (!cancelled) setActiveVibeCreators([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid, sidebarMode]);
+
   return (
     <div
       className={cn(
@@ -401,62 +495,64 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
           ? 'w-full'
           : 'w-full lg:w-[360px] lg:flex-none xl:w-[392px] lg:border-r lg:border-slate-200/80 dark:lg:border-white/[0.08]'
       }`}>
-        {/* Unified Inbox Header */}
+        {/* Unified Inbox Header — title bar omitted when TopAppBar owns top chrome */}
         <header
           className={cn(
-            'sticky top-0 z-20 px-4 pt-3.5 pb-3 border-b backdrop-blur-xl',
+            'sticky top-0 z-20 px-4 pt-3 pb-3 border-b backdrop-blur-xl',
             isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F8FAFC]/90 border-slate-200/80'
           )}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+          {(!hasTopAppBar || sidebarMode) && (
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  aria-label="Open my profile"
+                  onClick={() => navigate('/profile')}
+                  className="relative shrink-0 rounded-full p-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                  style={{ background: BRAND_GRADIENT }}
+                >
+                  <LazyImage
+                    src={getSafeAvatarUrl(user?.photoURL, user?.displayName, user?.uid)}
+                    alt="My Profile"
+                    className={cn(
+                      'w-9 h-9 rounded-full object-cover border-2',
+                      isDark ? 'border-[#03071B]' : 'border-white'
+                    )}
+                  />
+                </button>
+
+                <div className="min-w-0">
+                  <h1 className="font-bold text-lg tracking-tight leading-tight truncate">
+                    Messages
+                  </h1>
+                  <p
+                    className={cn(
+                      'text-xs tabular-nums truncate',
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    )}
+                  >
+                    {totalUnread > 0
+                      ? `${totalUnread} unread`
+                      : `${activeThreadCount} conversation${activeThreadCount === 1 ? '' : 's'}`}
+                  </p>
+                </div>
+              </div>
+
               <button
                 type="button"
-                aria-label="Open my profile"
-                onClick={() => navigate('/profile')}
-                className="relative shrink-0 rounded-full p-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-                style={{ background: BRAND_GRADIENT }}
+                aria-label="New message"
+                onClick={() => navigate('/messages/new')}
+                className="min-h-[40px] min-w-[40px] px-3 rounded-xl bg-arvdoul-gradient text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 active:scale-[0.98] transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
-                <LazyImage
-                  src={getSafeAvatarUrl(user?.photoURL, user?.displayName, user?.uid)}
-                  alt="My Profile"
-                  className={cn(
-                    'w-9 h-9 rounded-full object-cover border-2',
-                    isDark ? 'border-[#03071B]' : 'border-white'
-                  )}
-                />
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                <span className={sidebarMode ? 'sr-only' : 'hidden sm:inline'}>New</span>
               </button>
-
-              <div className="min-w-0">
-                <h1 className="font-bold text-lg tracking-tight leading-tight truncate">
-                  Messages
-                </h1>
-                <p
-                  className={cn(
-                    'text-xs tabular-nums truncate',
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  )}
-                >
-                  {totalUnread > 0
-                    ? `${totalUnread} unread`
-                    : `${activeThreadCount} conversation${activeThreadCount === 1 ? '' : 's'}`}
-                </p>
-              </div>
             </div>
-
-            <button
-              type="button"
-              aria-label="New message"
-              onClick={() => navigate('/messages/new')}
-              className="min-h-[40px] min-w-[40px] px-3 rounded-xl bg-arvdoul-gradient text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 active:scale-[0.98] transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              <span className={sidebarMode ? 'sr-only' : 'hidden sm:inline'}>New</span>
-            </button>
-          </div>
+          )}
 
           {/* Search Input */}
-          <div className="mt-3 relative">
+          <div className="relative">
             <div
               className={cn(
                 'flex items-center gap-2 px-3 min-h-[40px] rounded-xl border transition-colors',
@@ -470,6 +566,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                 aria-hidden="true"
               />
               <input
+                ref={searchInputRef}
                 aria-label="Search messages, people, groups..."
                 id="message-search-input"
                 type="text"
@@ -541,6 +638,89 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
         </header>
 
         <div className="px-3 sm:px-4 pt-3 space-y-4">
+          {/* Active Vibes Strip — connected to live Stories/Vibes */}
+          {!sidebarMode && user?.uid && (
+            <section aria-label="Active vibes">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" aria-hidden="true" />
+                  <span>Vibes</span>
+                </div>
+                {activeVibeCreators.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/vibes')}
+                    className={cn(
+                      'text-xs font-medium rounded px-1.5 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                      isDark ? 'text-purple-300 hover:text-white' : 'text-purple-600 hover:text-purple-800'
+                    )}
+                  >
+                    Open Vibes
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  type="button"
+                  onClick={() => navigate('/create-story')}
+                  className="w-16 shrink-0 flex flex-col items-center text-center group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-xl py-0.5"
+                >
+                  <div className="relative mb-1">
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-full p-[2px] border border-dashed',
+                        isDark ? 'border-purple-400/50 bg-[#090F2D]' : 'border-purple-400/60 bg-white'
+                      )}
+                    >
+                      <LazyImage
+                        src={getSafeAvatarUrl(user?.photoURL, user?.displayName, user?.uid)}
+                        alt="Your Vibe"
+                        className="w-full h-full rounded-full object-cover opacity-85 group-hover:opacity-100 transition-opacity"
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        'absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center border-2 shadow-sm',
+                        isDark ? 'border-[#03071B]' : 'border-[#F8FAFC]'
+                      )}
+                      aria-hidden="true"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium truncate max-w-full">Your Vibe</span>
+                </button>
+
+                {activeVibeCreators.map((creator) => (
+                  <button
+                    key={creator.userId}
+                    type="button"
+                    onClick={() => navigate('/vibes', { state: { vibeUserId: creator.userId } })}
+                    className="w-16 shrink-0 flex flex-col items-center text-center group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-xl py-0.5"
+                  >
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-full p-[2px] mb-1 transition-transform group-hover:scale-105',
+                        !creator.hasUnseen && (isDark ? 'bg-white/20' : 'bg-slate-300')
+                      )}
+                      style={creator.hasUnseen ? { background: BRAND_GRADIENT } : undefined}
+                    >
+                      <LazyImage
+                        src={creator.avatar}
+                        alt={creator.name}
+                        className={cn(
+                          'w-full h-full rounded-full object-cover border-2',
+                          isDark ? 'border-[#03071B]' : 'border-[#F8FAFC]'
+                        )}
+                      />
+                    </div>
+                    <span className="text-[11px] font-medium truncate max-w-full">{creator.name}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* True Pinned Strip */}
           {pinnedItems.length > 0 && (
             <section aria-label="Pinned conversations">
@@ -570,6 +750,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 {pinnedItems.map((item) => {
                   const isCurrent = activeConversationId === item.id;
+                  const hasActiveVibe = Boolean(item.peerId && vibeAuthorIds.has(item.peerId));
                   return (
                     <button
                       key={item.id}
@@ -586,11 +767,17 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                             : 'bg-white border-slate-200 hover:border-purple-400'
                       )}
                     >
-                      <div className="relative mb-1.5">
+                      <div
+                        className={cn('relative mb-1.5 rounded-full', hasActiveVibe && 'p-[2px]')}
+                        style={hasActiveVibe ? { background: BRAND_GRADIENT } : undefined}
+                      >
                         <LazyImage
                           src={item.avatar}
                           alt={item.name}
-                          className="w-10 h-10 rounded-full object-cover"
+                          className={cn(
+                            'w-10 h-10 rounded-full object-cover',
+                            hasActiveVibe && (isDark ? 'border-2 border-[#090F2D]' : 'border-2 border-white')
+                          )}
                         />
                         {item.unread > 0 && (
                           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-arvdoul-gradient text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
@@ -762,6 +949,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
 
               const isCurrent = activeConversationId === item.id;
               const isMenuOpen = openMenuId === item.id;
+              const hasActiveVibe = Boolean(item.peerId && vibeAuthorIds.has(item.peerId));
 
               return (
                 <div
@@ -782,11 +970,17 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                     onClick={() => navigate(`/messages/${item.id}`)}
                     className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
-                    <div className="relative shrink-0">
+                    <div
+                      className={cn('relative shrink-0 rounded-full', hasActiveVibe && 'p-[2px]')}
+                      style={hasActiveVibe ? { background: BRAND_GRADIENT } : undefined}
+                    >
                       <LazyImage
                         src={item.avatar}
                         alt={item.name}
-                        className="w-11 h-11 rounded-full object-cover"
+                        className={cn(
+                          'w-11 h-11 rounded-full object-cover',
+                          hasActiveVibe && (isDark ? 'border-2 border-[#090F2D]' : 'border-2 border-white')
+                        )}
                       />
                       {item.type === 'direct' && item.activeDot && (
                         <span
@@ -813,6 +1007,17 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                           </h3>
                           {item.verified && (
                             <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
+                          )}
+                          {item.peerLevel && (
+                            <span
+                              title={item.peerRank ? `Level ${item.peerLevel} · ${item.peerRank}` : `Level ${item.peerLevel}`}
+                              className={cn(
+                                'px-1.5 py-0.5 rounded-full text-[10px] font-bold tabular-nums shrink-0',
+                                isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                              )}
+                            >
+                              Lv.{item.peerLevel}
+                            </span>
                           )}
                           {item.pinned && (
                             <Pin className="w-3 h-3 text-purple-400 rotate-45 shrink-0" aria-label="Pinned" />
@@ -857,6 +1062,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                               {item.attachmentType === 'video' && <Video className="w-3.5 h-3.5" aria-hidden="true" />}
                               {item.attachmentType === 'audio' && <Music className="w-3.5 h-3.5" aria-hidden="true" />}
                               {item.attachmentType === 'voice' && <Mic className="w-3.5 h-3.5" aria-hidden="true" />}
+                              {item.attachmentType === 'view_once' && <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />}
                               {(item.attachmentType === 'file' ||
                                 item.attachmentType === 'gif' ||
                                 item.attachmentType === 'location' ||
@@ -963,6 +1169,42 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                           )}
                           <span>{item.category === 'archived' ? 'Unarchive' : 'Archive'}</span>
                         </button>
+
+                        {item.type === 'direct' && item.peerId && (
+                          <>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                navigate(`/profile/${item.peerId}`);
+                              }}
+                              className={cn(
+                                'w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors',
+                                isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                              )}
+                            >
+                              <User className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>View profile</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                navigate(`/gift/${item.peerId}`);
+                              }}
+                              className={cn(
+                                'w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors text-purple-500 dark:text-purple-300',
+                                isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                              )}
+                            >
+                              <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>Send gift</span>
+                            </button>
+                          </>
+                        )}
 
                         <button
                           type="button"

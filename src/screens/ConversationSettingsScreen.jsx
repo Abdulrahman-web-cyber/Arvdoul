@@ -12,6 +12,7 @@ import { cn } from '../lib/utils';
 import { unknownNumber } from '../lib/unknownNumber.js';
 import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info, Archive, ArchiveRestore } from 'lucide-react';
 import ErrorState from '../design-system/ErrorState.jsx';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 
 export default function ConversationSettingsScreen() {
   const confirm = useConfirm();
@@ -20,6 +21,7 @@ export default function ConversationSettingsScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { hasTopAppBar } = useLayoutChrome();
 
   const [conv, setConv] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -137,12 +139,14 @@ export default function ConversationSettingsScreen() {
 
   return (
     <div className={cn("flex-1 min-h-0 h-full overflow-y-auto", colors.bg)}>
-      <div className={cn("sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3 backdrop-blur-xl", isDark ? "bg-[#050B24]/90 border-white/[0.08]" : "bg-white/90 border-slate-200")}>
-        <button type="button" onClick={() => navigate(-1)} aria-label="Go back" className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full transition hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple">
-          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
-        </button>
-        <h1 className={cn("flex-1 text-lg font-semibold", colors.text)}>Conversation Settings</h1>
-      </div>
+      {!hasTopAppBar && (
+        <div className={cn("sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3 backdrop-blur-xl", isDark ? "bg-[#050B24]/90 border-white/[0.08]" : "bg-white/90 border-slate-200")}>
+          <button type="button" onClick={() => navigate(-1)} aria-label="Go back" className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full transition hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple">
+            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+          </button>
+          <h1 className={cn("flex-1 text-lg font-semibold", colors.text)}>Conversation Settings</h1>
+        </div>
+      )}
 
       <main className="max-w-md mx-auto px-4 py-6 space-y-4">
         {loading ? (

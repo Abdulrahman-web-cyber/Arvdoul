@@ -1,7 +1,7 @@
 // src/screens/HomeScreen.jsx
 
 import React, { useState, useEffect, useCallback, useRef, useReducer, useContext, createContext, useMemo } from 'react';
-import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
+import { LOCAL_POSTS_KEY, readWarmFeed, writeWarmFeed } from '../utils/localContentCache.js';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -649,7 +649,26 @@ export default function HomeScreen() {
     blockedIds: new Set(),
   });
 
-  const [feedState, dispatchFeed] = useReducer(feedReducer, { byId: {}, order: [] });
+  const initialCacheUid = useMemo(() => {
+    try {
+      return user?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || null;
+    } catch {
+      return user?.uid || null;
+    }
+  }, [user?.uid]);
+
+  const [feedState, dispatchFeed] = useReducer(feedReducer, initialCacheUid, (uidSeed) => {
+    const warm = uidSeed ? readWarmFeed(uidSeed) : null;
+    if (!Array.isArray(warm) || warm.length === 0) return { byId: {}, order: [] };
+    const byId = {};
+    const order = [];
+    for (const p of warm) {
+      if (!p || !p.id) continue;
+      byId[p.id] = hydratePost(p);
+      order.push(p.id);
+    }
+    return { byId, order };
+  });
   const feed = useMemo(() => feedState.order.map(id => feedState.byId[id]), [feedState.order, feedState.byId]);
   // Resolve each visible author's verified/creator/premium standing in one
   // bounded batch so PostCard can render real badges instead of the dead
@@ -932,20 +951,22 @@ export default function HomeScreen() {
     };
   }, [user?.uid, scrollerReady]);
 
-  // Cache shell (non‑blocking, shows instantly)
+  // Cache shell (non-blocking, shows IDB cached posts immediately on cold localStorage)
+  const idbHydratedUidRef = useRef(null);
   useEffect(() => {
-    if (user?.uid) {
-      getCachedFeed(user.uid).then(cached => {
-        if (cached?.length && mountedRef.current && feedRef.current.length === 0 && !fallbackMode) {
-          const hydrated = cached.map(p => hydratePost(p));
-          dispatchFeed({ type: 'SET_FEED', payload: hydrated });
-          setFallbackMode(true);
-          setStatus(STATUS.SUCCESS);
-          telemetryRef.current.endFeedLoad();
-        }
-      });
-    }
-  }, [user?.uid, fallbackMode]);
+    const cacheUid = initialCacheUid;
+    if (!cacheUid || idbHydratedUidRef.current === cacheUid) return;
+    idbHydratedUidRef.current = cacheUid;
+    getCachedFeed(cacheUid).then(cached => {
+      if (cached?.length && mountedRef.current && feedRef.current.length === 0) {
+        const hydrated = cached.map(p => hydratePost(p));
+        dispatchFeed({ type: 'SET_FEED', payload: hydrated });
+        setFallbackMode(true);
+        setStatus(STATUS.SUCCESS);
+        telemetryRef.current.endFeedLoad();
+      }
+    });
+  }, [initialCacheUid]);
 
   // Core loader with all fixes
   const loadFeed = useCallback(
@@ -1053,15 +1074,20 @@ export default function HomeScreen() {
               feedRuntimeRef.current.seenIds = new Set(newPosts.map(p => p.id));
               feedRuntimeRef.current.insertedIds.clear();
               newPosts.forEach(p => feedRuntimeRef.current.insertedIds.add(p.id));
-              if (!skipCache && newPosts.length) setCachedFeed(user.uid, newPosts, 100);
-              await saveFeedSnapshot(user.uid, newPosts);
+              if (!skipCache && newPosts.length && effectiveUserId !== 'guest_user') {
+                setCachedFeed(effectiveUserId, newPosts, 100);
+                writeWarmFeed(effectiveUserId, newPosts);
+              }
+              if (effectiveUserId !== 'guest_user') {
+                await saveFeedSnapshot(effectiveUserId, newPosts);
+              }
               setFallbackMode(false);
             } else {
               dispatchFeed({ type: 'APPEND_FEED', payload: newPosts });
-              if (!skipCache && feedRef.current.length + newPosts.length > ACTIVE_FEED_LIMIT) {
+              if (!skipCache && effectiveUserId !== 'guest_user' && feedRef.current.length + newPosts.length > ACTIVE_FEED_LIMIT) {
                 if (cacheWriteDebounceRef.current) clearTimeout(cacheWriteDebounceRef.current);
                 cacheWriteDebounceRef.current = setTimeout(() => {
-                  setCachedFeed(user.uid, feedRef.current, WARM_FEED_LIMIT);
+                  setCachedFeed(effectiveUserId, feedRef.current, WARM_FEED_LIMIT);
                 }, CACHE_WRITE_DEBOUNCE_MS);
               }
             }
@@ -1081,7 +1107,7 @@ export default function HomeScreen() {
           if (requestId !== requestIdRef.current || currentSession !== sessionIdRef.current) return null;
           if (!isPreload) {
             if (!isOnline) {
-              const snapshot = await getFeedSnapshot(user.uid);
+              const snapshot = effectiveUserId !== 'guest_user' ? await getFeedSnapshot(effectiveUserId) : null;
               if (snapshot?.length && feedRef.current.length === 0) {
                 const hydrated = snapshot.map(p => hydratePost(p));
                 dispatchFeed({ type: 'SET_FEED', payload: hydrated });
@@ -1354,12 +1380,17 @@ export default function HomeScreen() {
     }
   }, [activeFeedTab, user?.uid, authInitialized]);
 
-  // Initial load
+  // Initial load: start immediately even if warm cached feed is already visible
+  const initialSyncUidRef = useRef(null);
   useEffect(() => {
-    if (!isLoadingRef.current && feed.length === 0 && (status === STATUS.LOADING || status === STATUS.IDLE)) {
+    const syncKey = user?.uid || (authInitialized ? '__anon__' : '__pending__');
+    if (initialSyncUidRef.current === syncKey) return;
+    if (!user?.uid && !authInitialized) return;
+    initialSyncUidRef.current = syncKey;
+    if (!isLoadingRef.current) {
       loadFeedRef.current?.(true);
     }
-  }, [user?.uid, authInitialized, feed.length, status]);
+  }, [user?.uid, authInitialized]);
 
   // Record first post render
   useEffect(() => {
@@ -1383,8 +1414,11 @@ export default function HomeScreen() {
   const [discoveryLoaded, setDiscoveryLoaded] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1280) {
+      return undefined;
+    }
     let cancelled = false;
-    (async () => {
+    const idleId = scheduleIdleTask(async () => {
       try {
         const [{ getRankingService }, spacesMod] = await Promise.all([
           import('../services/rankingService.js'),
@@ -1409,11 +1443,14 @@ export default function HomeScreen() {
       } finally {
         if (!cancelled) setDiscoveryLoaded(true);
       }
-    })();
-    return () => { cancelled = true; };
+    }, 1200);
+    return () => {
+      cancelled = true;
+      cancelIdleTask(idleId);
+    };
   }, [user?.uid]);
 
-  if (authLoading) {
+  if (authLoading && feed.length === 0) {
     return (
       <div className={cn(
         'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-6xl mx-auto px-4 py-6',

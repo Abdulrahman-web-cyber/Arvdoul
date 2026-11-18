@@ -1929,16 +1929,24 @@ class UltimateMessagingService {
     return { success: true, ...(data || {}) };
   }
 
-  async viewOnceMessage(messageId, conversationId, userId) {
+  async viewOnceMessage(messageId, conversationId, userId, options = {}) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
-    const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
+    const messagesSubPath = this._getMessageSubcollectionPath(
+      conversationId,
+      conv.conversation,
+      options?.createdAt || new Date()
+    );
     const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
     const msgSnap = await this.fs.getDoc(msgRef);
     if (!msgSnap.exists() || msgSnap.data().type !== MESSAGING_CONFIG.MESSAGE_TYPES.VIEW_ONCE) {
-      throw new Error('Not a view‑once message or already deleted.');
+      throw new Error('Not a view-once message or already expired.');
     }
-    await this.fs.updateDoc(msgRef, { deletedFor: this.fs.arrayUnion(userId) });
+    const data = msgSnap.data() || {};
+    await this.fs.updateDoc(msgRef, { readBy: this.fs.arrayUnion(userId) });
+    if (data.senderId === userId) {
+      await this.fs.updateDoc(msgRef, { deletedFor: this.fs.arrayUnion(userId) }).catch(() => {});
+    }
     this._invalidateConversationMessagesCache(conversationId);
     return { success: true };
   }
@@ -3457,7 +3465,7 @@ const messagingService = {
   lockPrivateKey: (uid) => getMessagingService().lockPrivateKey(uid),
   getSafetyNumber: (uid, otherUid) => getMessagingService().getSafetyNumber(uid, otherUid),
   getUserPublicKey: (uid) => getMessagingService().getUserPublicKey(uid),
-  viewOnceMessage: (mid, cid, uid) => getMessagingService().viewOnceMessage(mid, cid, uid),
+  viewOnceMessage: (mid, cid, uid, opts) => getMessagingService().viewOnceMessage(mid, cid, uid, opts),
   scheduleMessage: (cid, data, opts) => getMessagingService()._scheduleMessage(cid, data, opts),
   cancelScheduledMessage: (schedId) => getMessagingService().cancelScheduledMessage(schedId),
   saveDraft: (cid, uid, content) => getMessagingService().saveDraft(cid, uid, content),

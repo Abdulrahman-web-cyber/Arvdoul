@@ -15,6 +15,7 @@ import { X, Search, UserPlus, Loader2, ArrowLeft, Camera } from 'lucide-react';
 import storageService from '../services/storageService';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { LazyImage } from '../components/Shared/LazyImage';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 
 const NewConversationScreen = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const NewConversationScreen = () => {
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { loadConversations } = useMessagingStore();
+  const { hasTopAppBar } = useLayoutChrome();
 
   const sharePostId = searchParams.get('sharePost');
   const shareProfileId = searchParams.get('shareProfile') || searchParams.get('profile');
@@ -326,47 +328,49 @@ const NewConversationScreen = () => {
       'flex flex-col flex-1 min-h-0 h-full overflow-hidden',
       isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900'
     )}>
-      {/* Header */}
-      <div className={cn(
-        'border-b px-4 py-3 flex items-center justify-between',
-        isDark ? 'bg-[#050B24] border-white/[0.08]' : 'bg-white border-slate-200'
-      )}>
-        <div className="flex items-center gap-3">
+      {/* Header (shown only when mounted standalone without TopAppBar) */}
+      {!hasTopAppBar && (
+        <div className={cn(
+          'border-b px-4 py-3 flex items-center justify-between',
+          isDark ? 'bg-[#050B24] border-white/[0.08]' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Back to messages"
+              onClick={() => navigate('/messages')}
+              className={cn(
+                'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+              )}
+            >
+              <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+            </button>
+            <h1 className="text-lg font-bold">
+              New Conversation
+            </h1>
+          </div>
           <button
             type="button"
-            aria-label="Back to messages"
-            onClick={() => navigate('/messages')}
+            onClick={handleCreateConversation}
+            disabled={selectedUsers.length === 0 || loading}
             className={cn(
-              'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-              isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+              'px-4 py-2 rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+              selectedUsers.length > 0 && !loading
+                ? 'bg-arvdoul-gradient text-white hover:brightness-105 shadow-sm'
+                : isDark
+                  ? 'bg-white/10 text-slate-500 cursor-not-allowed'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             )}
           >
-            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              'Create'
+            )}
           </button>
-          <h1 className="text-lg font-bold">
-            New Conversation
-          </h1>
         </div>
-        <button
-          type="button"
-          onClick={handleCreateConversation}
-          disabled={selectedUsers.length === 0 || loading}
-          className={cn(
-            'px-4 py-2 rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-            selectedUsers.length > 0 && !loading
-              ? 'bg-arvdoul-gradient text-white hover:brightness-105 shadow-sm'
-              : isDark
-                ? 'bg-white/10 text-slate-500 cursor-not-allowed'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-          )}
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          ) : (
-            'Create'
-          )}
-        </button>
-      </div>
+      )}
 
       {/* Selected users chips */}
       {selectedUsers.length > 0 && (
@@ -563,6 +567,44 @@ const NewConversationScreen = () => {
           </div>
         )}
       </div>
+
+      {hasTopAppBar && (
+        <div
+          className={cn(
+            'shrink-0 border-t px-4 py-3 flex items-center justify-between gap-3',
+            isDark ? 'bg-[#050B24] border-white/[0.08]' : 'bg-white border-slate-200'
+          )}
+        >
+          <span className={cn('text-xs font-medium truncate', isDark ? 'text-slate-400' : 'text-slate-500')}>
+            {selectedUsers.length === 0
+              ? 'Select 1 person for DM or 2+ for a group'
+              : selectedUsers.length === 1
+                ? 'Direct conversation selected'
+                : `Group chat · ${selectedUsers.length} selected`}
+          </span>
+          <button
+            type="button"
+            onClick={handleCreateConversation}
+            disabled={selectedUsers.length === 0 || loading}
+            className={cn(
+              'px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+              selectedUsers.length > 0 && !loading
+                ? 'bg-arvdoul-gradient text-white hover:brightness-105 shadow-sm'
+                : isDark
+                  ? 'bg-white/10 text-slate-500 cursor-not-allowed'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            )}
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : selectedUsers.length > 1 ? (
+              'Create Group'
+            ) : (
+              'Start Chat'
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

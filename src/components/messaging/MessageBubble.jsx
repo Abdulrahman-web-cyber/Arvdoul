@@ -27,6 +27,7 @@ import {
   Volume2,
   SmilePlus,
   FileText,
+  EyeOff,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -41,6 +42,7 @@ const MessageBubble = React.memo(
     isOwn,
     senderName,
     senderAvatar,
+    currentUid = null,
     onReaction,
     onReply,
     onForward,
@@ -49,6 +51,10 @@ const MessageBubble = React.memo(
     onReport,
     onSave,
     onPin,
+    onJumpToMessage,
+    onOpenViewOnce,
+    openedViewOnceIds = null,
+    onNavigate,
     isSaved = false,
     isPinned = false,
     theme,
@@ -59,6 +65,9 @@ const MessageBubble = React.memo(
     const [showMenu, setShowMenu] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
     const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+    const [audioProgress, setAudioProgress] = useState(0);
+    const [audioDuration, setAudioDuration] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
     const audioRef = useRef(null);
     const longPressTimerRef = useRef(null);
 
@@ -123,12 +132,24 @@ const MessageBubble = React.memo(
         audioRef.current.pause();
         setIsPlayingAudio(false);
       } else {
+        audioRef.current.playbackRate = playbackRate;
         audioRef.current
           .play()
           .then(() => setIsPlayingAudio(true))
           .catch(() => setIsPlayingAudio(false));
       }
     };
+
+    const handleCycleSpeed = () => {
+      const nextRate = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
+      setPlaybackRate(nextRate);
+      if (audioRef.current) audioRef.current.playbackRate = nextRate;
+    };
+
+    const internalPathMatch = typeof content === 'string'
+      ? content.match(/https?:\/\/[^/\s]+(\/(?:post|profile|user|vibes|stories|community|spaces)\/[^\s]+)/i)
+      : null;
+    const sharedInternalPath = internalPathMatch ? internalPathMatch[1] : null;
 
     if (isDeleted) {
       return (
@@ -192,11 +213,13 @@ const MessageBubble = React.memo(
             </div>
           )}
 
-          {/* Reply quote — inset surface, no thick left accent border */}
+          {/* Clickable reply quote */}
           {message.replyTo && (
-            <div
+            <button
+              type="button"
+              onClick={() => message.replyTo?.messageId && onJumpToMessage?.(message.replyTo.messageId)}
               className={cn(
-                'px-3 py-1.5 text-xs rounded-xl border mb-0.5',
+                'w-full text-left px-3 py-1.5 text-xs rounded-xl border mb-0.5 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                 isOwn
                   ? 'bg-purple-500/15 border-purple-400/30 text-purple-100'
                   : isDark
@@ -210,7 +233,7 @@ const MessageBubble = React.memo(
               <div className="truncate opacity-80 text-[11px]">
                 {(message.replyTo.content || message.replyTo.contentPreview || '').substring(0, 80)}
               </div>
-            </div>
+            </button>
           )}
 
           <div className={cn('relative flex items-end gap-1', isOwn ? 'flex-row' : 'flex-row-reverse')}>
@@ -274,8 +297,76 @@ const MessageBubble = React.memo(
               )}
 
               {type === 'text' && (
-                <p className="text-[14px] leading-relaxed whitespace-pre-wrap select-text">{content}</p>
+                <div className="space-y-1.5">
+                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap select-text">{content}</p>
+                  {sharedInternalPath && onNavigate && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(sharedInternalPath)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
+                        isOwn
+                          ? 'bg-white/15 border-white/25 text-white hover:bg-white/25'
+                          : isDark
+                            ? 'bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25'
+                            : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
+                      )}
+                    >
+                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                      <span>Open in Arvdoul</span>
+                    </button>
+                  )}
+                </div>
               )}
+
+              {type === 'view_once' && (() => {
+                const isOpened = Boolean(
+                  openedViewOnceIds?.[id] ||
+                  (Array.isArray(message.deletedFor) && currentUid && message.deletedFor.includes(currentUid)) ||
+                  (!isOwn && Array.isArray(message.readBy) && currentUid && message.readBy.includes(currentUid))
+                );
+                const kindLabel = (media?.mimeType?.startsWith('video/') || media?.type?.startsWith('video/') || /video/i.test(content || ''))
+                  ? 'Video'
+                  : 'Photo';
+                return (
+                  <button
+                    type="button"
+                    disabled={isOpened || isOwn || !media?.url || !onOpenViewOnce}
+                    onClick={() => onOpenViewOnce?.(message)}
+                    className={cn(
+                      'flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all min-w-[180px]',
+                      isOpened || isOwn
+                        ? isOwn
+                          ? 'bg-white/10 border-white/20 opacity-85 cursor-default'
+                          : isDark
+                            ? 'bg-white/[0.04] border-white/10 text-slate-400 cursor-default'
+                            : 'bg-slate-100 border-slate-200 text-slate-500 cursor-default'
+                        : isDark
+                          ? 'bg-purple-500/15 border-purple-500/40 text-purple-200 hover:bg-purple-500/25'
+                          : 'bg-purple-50 border-purple-200 text-purple-800 hover:bg-purple-100'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
+                      isOpened || isOwn ? 'bg-white/15' : 'bg-arvdoul-gradient text-white'
+                    )}>
+                      <EyeOff className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold truncate">
+                        {isOpened
+                          ? 'Opened'
+                          : isOwn
+                            ? `View-once ${kindLabel.toLowerCase()}`
+                            : `${kindLabel} · Tap to view`}
+                      </p>
+                      <p className="text-[11px] opacity-75 truncate">
+                        {isOpened ? 'Disappeared after viewing' : isOwn ? 'Visible once by recipient' : 'Disappears after opening'}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })()}
 
               {type === 'image' && media?.url && (
                 <div className="space-y-1.5">
@@ -325,12 +416,25 @@ const MessageBubble = React.memo(
               )}
 
               {(type === 'voice' || type === 'audio') && media?.url && (
-                <div className="flex items-center gap-3 py-1 min-w-[200px]">
+                <div className="flex items-center gap-2.5 py-1 min-w-[220px]">
                   <audio
                     ref={audioRef}
                     src={media.url}
                     preload="metadata"
-                    onEnded={() => setIsPlayingAudio(false)}
+                    onLoadedMetadata={(e) => {
+                      const d = e.currentTarget.duration;
+                      if (Number.isFinite(d) && d > 0) setAudioDuration(d);
+                    }}
+                    onTimeUpdate={(e) => {
+                      const el = e.currentTarget;
+                      if (el.duration > 0) {
+                        setAudioProgress(Math.min(100, (el.currentTime / el.duration) * 100));
+                      }
+                    }}
+                    onEnded={() => {
+                      setIsPlayingAudio(false);
+                      setAudioProgress(0);
+                    }}
                   />
                   <button
                     type="button"
@@ -349,17 +453,38 @@ const MessageBubble = React.memo(
                       <Play className="w-4 h-4 fill-current ml-0.5" />
                     )}
                   </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <Volume2 className="w-3.5 h-3.5 opacity-75" aria-hidden="true" />
-                      <span className="text-xs font-semibold">
-                        {type === 'voice' ? 'Voice note' : 'Audio file'}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold flex items-center gap-1">
+                        <Volume2 className="w-3.5 h-3.5 opacity-75" aria-hidden="true" />
+                        {type === 'voice' ? 'Voice note' : 'Audio'}
+                      </span>
+                      <span className="text-[11px] opacity-80 tabular-nums">
+                        {media.durationSec
+                          ? `${Math.round(media.durationSec)}s`
+                          : audioDuration > 0
+                            ? `${Math.round(audioDuration)}s`
+                            : 'Audio'}
                       </span>
                     </div>
-                    <span className="text-[11px] opacity-80 tabular-nums">
-                      {media.durationSec ? `${media.durationSec}s` : 'Audio'}
-                    </span>
+                    <div className={cn('h-1.5 rounded-full overflow-hidden', isOwn ? 'bg-white/25' : isDark ? 'bg-white/10' : 'bg-slate-200')}>
+                      <div
+                        className={cn('h-full rounded-full transition-all duration-150', isOwn ? 'bg-white' : 'bg-arvdoul-gradient')}
+                        style={{ width: `${audioProgress}%` }}
+                      />
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleCycleSpeed}
+                    aria-label={`Playback speed ${playbackRate}x`}
+                    className={cn(
+                      'px-1.5 py-0.5 rounded-md text-[10px] font-bold tabular-nums shrink-0 transition-colors',
+                      isOwn ? 'bg-white/20 text-white hover:bg-white/30' : isDark ? 'bg-white/10 text-slate-200 hover:bg-white/15' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                    )}
+                  >
+                    {playbackRate}x
+                  </button>
                 </div>
               )}
 
@@ -395,26 +520,35 @@ const MessageBubble = React.memo(
                 </a>
               )}
 
-              {type === 'contact' && (
-                <div
-                  className={cn(
-                    'p-2.5 rounded-xl border flex items-center gap-2.5 min-w-[200px]',
-                    isOwn
-                      ? 'bg-white/10 border-white/20'
-                      : isDark
-                        ? 'bg-white/5 border-white/10'
-                        : 'bg-slate-50 border-slate-200'
-                  )}
-                >
-                  <div className="w-9 h-9 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-                    <User className="w-4 h-4" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold truncate">Contact Card</p>
-                    <p className="text-[11px] opacity-75 truncate">{content || 'User Profile'}</p>
-                  </div>
-                </div>
-              )}
+              {type === 'contact' && (() => {
+                const contactUid = typeof content === 'string' && content.startsWith('profile:')
+                  ? content.slice('profile:'.length).trim()
+                  : null;
+                return (
+                  <button
+                    type="button"
+                    disabled={!contactUid || !onNavigate}
+                    onClick={() => contactUid && onNavigate?.(`/profile/${contactUid}`)}
+                    className={cn(
+                      'w-full text-left p-2.5 rounded-xl border flex items-center gap-2.5 min-w-[200px] transition-colors',
+                      isOwn
+                        ? 'bg-white/10 border-white/20 hover:bg-white/15'
+                        : isDark
+                          ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    )}
+                  >
+                    <div className="w-9 h-9 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold truncate">Arvdoul Profile Card</p>
+                      <p className="text-[11px] opacity-75 truncate">{contactUid ? 'Tap to view profile' : content || 'User Profile'}</p>
+                    </div>
+                    {contactUid && <ExternalLink className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden="true" />}
+                  </button>
+                );
+              })()}
 
               {type === 'file' && media && (
                 <a

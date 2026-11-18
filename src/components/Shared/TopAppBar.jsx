@@ -7,7 +7,7 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2 } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
@@ -267,6 +267,32 @@ export const TopAppBar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [inboxHeaderState, setInboxHeaderState] = useState({ totalUnread: 0, activeCount: 0 });
+  const [chatHeaderState, setChatHeaderState] = useState(null);
+
+  useEffect(() => {
+    const onInboxState = (e) => {
+      if (e?.detail && typeof e.detail === "object") {
+        setInboxHeaderState({
+          totalUnread: Number(e.detail.totalUnread) || 0,
+          activeCount: Number(e.detail.activeCount) || 0,
+        });
+      }
+    };
+    const onChatState = (e) => {
+      if (e?.detail === null) {
+        setChatHeaderState(null);
+      } else if (e?.detail && typeof e.detail === "object") {
+        setChatHeaderState(e.detail);
+      }
+    };
+    window.addEventListener("arvdoul:inbox_header_state", onInboxState);
+    window.addEventListener("arvdoul:chat_header_state", onChatState);
+    return () => {
+      window.removeEventListener("arvdoul:inbox_header_state", onInboxState);
+      window.removeEventListener("arvdoul:chat_header_state", onChatState);
+    };
+  }, []);
 
   // Sync search query with URL search param and external events
   useEffect(() => {
@@ -351,6 +377,14 @@ export const TopAppBar = ({
       path.startsWith("/create-story")
     )
       return "composer";
+    if (path === "/messages") return "messages_inbox";
+    if (path.startsWith("/messages/")) {
+      const parts = path.split("/").filter(Boolean);
+      if (parts.length === 2 && parts[1].toLowerCase() !== "new") {
+        return "messages_chat";
+      }
+      return "contextual";
+    }
     if (path === "/profile" || path === "/profile/me")
       return "profile_me";
     if (path.startsWith("/profile/") || path.startsWith("/user/")) {
@@ -363,6 +397,12 @@ export const TopAppBar = ({
     }
     return "contextual";
   }, [location.pathname, propMode]);
+
+  useEffect(() => {
+    if (currentMode !== "messages_chat") {
+      setChatHeaderState(null);
+    }
+  }, [currentMode]);
 
   // Title
   const contextualTitle = useMemo(() => {
@@ -407,6 +447,11 @@ export const TopAppBar = ({
     if (path.startsWith("/sounds")) return "Sounds & Music";
     if (path.startsWith("/help")) return "Help Center";
     if (path.startsWith("/search")) return "Search";
+    if (path === "/messages") return "Messages";
+    if (path === "/messages/new") return "New Conversation";
+    if (path.startsWith("/messages/") && path.endsWith("/info")) return "Group Info";
+    if (path.startsWith("/messages/") && path.endsWith("/settings")) return "Conversation Settings";
+    if (path.startsWith("/messages/")) return chatHeaderState?.title || "Chat";
     if (path.startsWith("/vibes")) return "Vibes";
     if (path.startsWith("/menu")) return "Menu";
     if (path.startsWith("/admin/users")) return "Admin - Users";
@@ -420,7 +465,7 @@ export const TopAppBar = ({
       return "Profile";
     }
     return "Arvdoul";
-  }, [location.pathname, propTitle]);
+  }, [location.pathname, propTitle, chatHeaderState?.title]);
 
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -594,6 +639,202 @@ export const TopAppBar = ({
                         else navigate(ROUTES.menu);
                       }}
                     />
+                  </div>
+                </div>
+              )}
+
+              {currentMode === "messages_inbox" && (
+                <div className="flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button
+                      type="button"
+                      aria-label="Open my profile"
+                      onClick={() => navigate("/profile")}
+                      className="relative shrink-0 rounded-full p-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                      style={{ background: BRAND_GRADIENT }}
+                    >
+                      <LazyImage
+                        src={userAvatarUrl}
+                        alt={userDisplayName}
+                        className={cn(
+                          "w-9 h-9 rounded-full object-cover border-2",
+                          isDark ? "border-[#03071B]" : "border-white"
+                        )}
+                      />
+                    </button>
+                    <div className="flex flex-col min-w-0">
+                      <h2
+                        className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                        style={{ color: tokens.textPrimary }}
+                      >
+                        Messages
+                      </h2>
+                      <span
+                        className="text-[11px] font-medium tabular-nums truncate"
+                        style={{ color: tokens.textSecondary }}
+                      >
+                        {inboxHeaderState.totalUnread > 0
+                          ? `${inboxHeaderState.totalUnread} unread`
+                          : `${inboxHeaderState.activeCount} conversation${inboxHeaderState.activeCount === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <CircularButton
+                      icon={Search}
+                      label="Search messages"
+                      theme={theme}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("arvdoul:focus_inbox_search", { detail: { focus: true } }));
+                      }}
+                    />
+                    <CircularButton
+                      icon={Plus}
+                      label="New conversation"
+                      theme={theme}
+                      active
+                      onClick={() => navigate("/messages/new")}
+                    />
+                    <CircularButton
+                      icon={Menu}
+                      label="Menu"
+                      theme={theme}
+                      onClick={() => {
+                        if (onOpenMenu) onOpenMenu();
+                        else navigate(ROUTES.menu);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentMode === "messages_chat" && (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <CircularButton
+                      icon={ChevronLeft}
+                      label="Back to messages"
+                      theme={theme}
+                      onClick={() => navigate("/messages")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (chatHeaderState?.isDirect && chatHeaderState?.peerId) {
+                          navigate(`/profile/${chatHeaderState.peerId}`);
+                        } else if (chatHeaderState?.conversationId) {
+                          window.dispatchEvent(
+                            new CustomEvent("arvdoul:chat_action", {
+                              detail: { action: "open_info", conversationId: chatHeaderState.conversationId },
+                            })
+                          );
+                        }
+                      }}
+                      className="flex items-center gap-2 min-w-0 text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                    >
+                      <div className={cn("relative shrink-0 rounded-full", chatHeaderState?.hasVibe && "p-[2px]")} style={chatHeaderState?.hasVibe ? { background: BRAND_GRADIENT } : undefined}>
+                        {chatHeaderState?.avatar ? (
+                          <LazyImage
+                            src={chatHeaderState.avatar}
+                            alt={chatHeaderState.title || "Conversation"}
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/10"
+                          />
+                        ) : (
+                          <div
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                            style={{ background: BRAND_GRADIENT }}
+                          >
+                            {(chatHeaderState?.title || "C").charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        {chatHeaderState?.isOnline && (
+                          <span
+                            className={cn(
+                              "absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2",
+                              isDark ? "ring-[#03071B]" : "ring-white"
+                            )}
+                            aria-label="Online"
+                          />
+                        )}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span
+                            className="text-sm sm:text-base font-bold truncate leading-tight"
+                            style={{ color: tokens.textPrimary }}
+                          >
+                            {chatHeaderState?.title || contextualTitle}
+                          </span>
+                          {chatHeaderState?.verified && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
+                          )}
+                          {chatHeaderState?.level ? (
+                            <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">
+                              Lv.{chatHeaderState.level}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span
+                          className={cn(
+                            "text-[11px] truncate leading-tight",
+                            chatHeaderState?.isTyping ? "text-purple-400 font-semibold" : ""
+                          )}
+                          style={chatHeaderState?.isTyping ? undefined : { color: tokens.textSecondary }}
+                        >
+                          {chatHeaderState?.subtitle || "Active conversation"}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                    {chatHeaderState?.conversationId && (
+                      <>
+                        <CircularButton
+                          icon={Phone}
+                          label="Voice call"
+                          theme={theme}
+                          onClick={() => navigate(`/call/${chatHeaderState.conversationId}?type=audio`)}
+                        />
+                        <CircularButton
+                          icon={Video}
+                          label="Video call"
+                          theme={theme}
+                          onClick={() => navigate(`/call/${chatHeaderState.conversationId}?type=video`)}
+                        />
+                        {chatHeaderState?.isDirect && chatHeaderState?.peerId && (
+                          <CircularButton
+                            icon={Gift}
+                            label="Send gift"
+                            theme={theme}
+                            onClick={() => navigate(`/gift/${chatHeaderState.peerId}`)}
+                          />
+                        )}
+                        <CircularButton
+                          icon={Info}
+                          label="Conversation details"
+                          theme={theme}
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent("arvdoul:chat_action", {
+                                detail: { action: "open_info", conversationId: chatHeaderState.conversationId },
+                              })
+                            );
+                          }}
+                        />
+                      </>
+                    )}
+                    <div className="hidden sm:block">
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        onClick={() => {
+                          if (onOpenMenu) onOpenMenu();
+                          else navigate(ROUTES.menu);
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -905,8 +1146,9 @@ export const TopAppBar = ({
       {/* Spacer */}
       <div
         aria-hidden="true"
+        className="shrink-0"
         style={{
-          height: "calc(64px + env(safe-area-inset-top))",
+          height: "calc(72px + env(safe-area-inset-top))",
         }}
       />
     </>
