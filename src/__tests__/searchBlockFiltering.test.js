@@ -7,8 +7,10 @@
  * search did not: a blocked user (or someone who blocked the viewer) could
  * still appear in people/post/video results. This suite pins the fix:
  *
- *   - `_getBlockedUserIds` reads BOTH directions of the block through the
- *     social-graph spine and merges them, cached briefly.
+ *   - `_getHiddenAuthorIds` delegates to the graph spine's
+ *     `getHiddenAuthorIds` (blocks both directions + mutes), cached briefly.
+ *     Search previously read blocks only, so a muted author's posts surfaced
+ *     in search while the feed hid them (N525).
  *   - `_filterBlockedHits` / `_filterBlockedItems` drop blocked authors.
  *   - the search cache key is per-viewer (a shared page could leak a block).
  *
@@ -20,10 +22,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const listEdges = jest.fn();
+const getHiddenAuthorIds = jest.fn();
 jest.unstable_mockModule('../services/socialGraphService.js', () => ({
-  getSocialGraphService: () => ({ listEdges }),
-  socialGraphService: { listEdges },
+  getSocialGraphService: () => ({ getHiddenAuthorIds }),
+  socialGraphService: { getHiddenAuthorIds },
 }));
 
 // `searchService` imports the `offlineQueue` singleton, whose constructor opens
@@ -38,34 +40,31 @@ const { getSearchService } = await import('../services/searchService.js');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const searchSource = fs.readFileSync(path.join(root, 'src/services/searchService.js'), 'utf8');
 
-beforeEach(() => listEdges.mockReset());
+beforeEach(() => getHiddenAuthorIds.mockReset());
 
 describe('searchService block filtering', () => {
-  test('_getBlockedUserIds merges both block directions and caches the result', async () => {
-    listEdges.mockImplementation(async (_uid, kind) => ({
-      ids: kind === 'blocked' ? ['blocked-by-me'] : ['blocks-me'],
-      hasMore: false,
-      nextCursor: null,
-    }));
+  test('_getHiddenAuthorIds delegates to the spine (blocks both ways + mutes) and caches', async () => {
+    // The spine owns the definition of "hidden author": everyone blocked,
+    // everyone who blocks the viewer, and everyone the viewer muted.
+    getHiddenAuthorIds.mockResolvedValue(new Set(['blocked-by-me', 'blocks-me', 'muted-by-me']));
     const svc = getSearchService();
-    svc.blockCache.clear();
+    svc.hiddenAuthorCache.clear();
 
-    const ids = await svc._getBlockedUserIds('viewer-1');
-    expect([...ids].sort()).toEqual(['blocked-by-me', 'blocks-me']);
-    expect(listEdges).toHaveBeenCalledWith('viewer-1', 'blocked', expect.any(Object));
-    expect(listEdges).toHaveBeenCalledWith('viewer-1', 'blocked_by', expect.any(Object));
+    const ids = await svc._getHiddenAuthorIds('viewer-1');
+    expect([...ids].sort()).toEqual(['blocked-by-me', 'blocks-me', 'muted-by-me']);
+    expect(getHiddenAuthorIds).toHaveBeenCalledWith('viewer-1');
 
     // Second call is served from the cache (no extra graph reads).
-    listEdges.mockClear();
-    const again = await svc._getBlockedUserIds('viewer-1');
-    expect([...again].sort()).toEqual(['blocked-by-me', 'blocks-me']);
-    expect(listEdges).not.toHaveBeenCalled();
+    getHiddenAuthorIds.mockClear();
+    const again = await svc._getHiddenAuthorIds('viewer-1');
+    expect([...again].sort()).toEqual(['blocked-by-me', 'blocks-me', 'muted-by-me']);
+    expect(getHiddenAuthorIds).not.toHaveBeenCalled();
   });
 
-  test('_getBlockedUserIds returns an empty set for an anonymous viewer', async () => {
+  test('_getHiddenAuthorIds returns an empty set for an anonymous viewer', async () => {
     const svc = getSearchService();
-    expect((await svc._getBlockedUserIds(null)).size).toBe(0);
-    expect(listEdges).not.toHaveBeenCalled();
+    expect((await svc._getHiddenAuthorIds(null)).size).toBe(0);
+    expect(getHiddenAuthorIds).not.toHaveBeenCalled();
   });
 
   test('_filterBlockedHits drops blocked authors from posts/videos and blocked users', () => {
@@ -115,9 +114,9 @@ describe('searchService block filtering', () => {
     expect(_hitAuthorId({}, 'posts')).toBe(null);
   });
 
-  test('the search path applies block filtering to fresh and cached results, and scopes the cache per viewer', () => {
-    // Fresh results: the merged block set is applied before fusion.
-    expect(searchSource).toMatch(/_getBlockedUserIds\(viewerId\)[\s\S]*?_filterBlockedHits\(resultsByType, blockedIds\)/);
+  test('the search path applies hidden-author filtering to fresh and cached results, and scopes the cache per viewer', () => {
+    // Fresh results: the merged hidden-author set is applied before fusion.
+    expect(searchSource).toMatch(/_getHiddenAuthorIds\(viewerId\)[\s\S]*?_filterBlockedHits\(resultsByType, blockedIds\)/);
     // Cached results: filtered on read.
     expect(searchSource).toMatch(/_filterBlockedItems\(cached\.items, blocked\)/);
     // Per-viewer cache key.

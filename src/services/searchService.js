@@ -320,34 +320,30 @@ class UltimateSearchService {
     this.pendingSearchPromise = null;
     this.lastSearchKey = null;
     this.insightsClient = null;
-    this.blockCache = new Map();
+    this.hiddenAuthorCache = new Map();
   }
 
   /**
-   * The set of user ids the viewer cannot see in results: everyone they block
-   * or who blocks them (both directions, matching the feed). Read once through
-   * the graph spine and cached for `BLOCK_FILTER.TTL`. Fails open (an empty
-   * set) only when the graph read errors — a block read is a bounded
-   * actor-scoped query, not a scan.
+   * The set of user ids the viewer cannot see in results. Delegates to the
+   * graph spine's `getHiddenAuthorIds` — the same set the feed and the
+   * recommendation builders use (everyone blocked, everyone who blocks the
+   * viewer, and everyone the viewer muted). Previously this read blocks only,
+   * so a muted author's posts still surfaced in search while the feed hid
+   * them. Read once and cached for `BLOCK_FILTER.TTL`; fails open (an empty
+   * set) only when the graph read errors — these are bounded, actor-scoped
+   * queries, not scans.
    */
-  async _getBlockedUserIds(viewerId) {
+  async _getHiddenAuthorIds(viewerId) {
     if (!viewerId) return new Set();
-    const cached = this.blockCache.get(viewerId);
+    const cached = this.hiddenAuthorCache.get(viewerId);
     if (cached && Date.now() - cached.ts < SEARCH_CONFIG.BLOCK_FILTER.TTL) return cached.ids;
     try {
       const { getSocialGraphService } = await import('./socialGraphService.js');
-      const graph = getSocialGraphService();
-      // `listEdges` returns ids only (no profile hydration) and is the
-      // actor-equality, index-backed shape the `blocks` rule can prove.
-      const [outgoing, incoming] = await Promise.all([
-        graph.listEdges(viewerId, 'blocked', { limit: SEARCH_CONFIG.BLOCK_FILTER.MAX_BLOCKED }),
-        graph.listEdges(viewerId, 'blocked_by', { limit: SEARCH_CONFIG.BLOCK_FILTER.MAX_BLOCKED }),
-      ]);
-      const ids = new Set([...(outgoing.ids || []), ...(incoming.ids || [])]);
-      this.blockCache.set(viewerId, { ids, ts: Date.now() });
+      const ids = await getSocialGraphService().getHiddenAuthorIds(viewerId);
+      this.hiddenAuthorCache.set(viewerId, { ids, ts: Date.now() });
       return ids;
     } catch (err) {
-      logger.debug('[Search] block set unavailable; not filtering', { error: err?.message });
+      logger.debug('[Search] hidden-author set unavailable; not filtering', { error: err?.message });
       return new Set();
     }
   }
@@ -519,7 +515,7 @@ class UltimateSearchService {
       if (cached) {
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         const viewerId = this._resolveViewerId(options);
-        const blocked = await this._getBlockedUserIds(viewerId);
+        const blocked = await this._getHiddenAuthorIds(viewerId);
         const filteredItems = this._filterBlockedItems(cached.items, blocked);
         return { ...cached, items: filteredItems, cached: true };
       }
@@ -580,7 +576,7 @@ class UltimateSearchService {
       // Moderation enforcement: a blocked pair (either direction) must not
       // surface in results. Applied before fusion so ranking sees the real set.
       const viewerId = this._resolveViewerId(options);
-      const blockedIds = await this._getBlockedUserIds(viewerId);
+      const blockedIds = await this._getHiddenAuthorIds(viewerId);
       resultsByType = this._filterBlockedHits(resultsByType, blockedIds);
 
       let userProfile = null;
