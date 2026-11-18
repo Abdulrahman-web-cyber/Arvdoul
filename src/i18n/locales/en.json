@@ -194,7 +194,8 @@
     "mfaDisable": "Disable 2FA",
     "mfaError": "Something went wrong. Please try again.",
     "mfaDisabled": "Two-factor authentication disabled.",
-    "mfaStatusUnavailable": "Two-factor status is unavailable right now. Reopen this dialog to retry."
+    "mfaStatusUnavailable": "Two-factor status is unavailable right now. Reopen this dialog to retry.",
+    "accountDeleteIncomplete": "Account signed out, but some data could not be scheduled for removal. Contact support to complete the deletion."
   },
   "level": {
     "title": "Level & Progress",

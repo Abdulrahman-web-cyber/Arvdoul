@@ -194,7 +194,8 @@
     "mfaDisable": "إيقاف المصادقة الثنائية",
     "mfaError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
     "mfaDisabled": "تم إيقاف المصادقة الثنائية.",
-    "mfaStatusUnavailable": "حالة المصادقة الثنائية غير متاحة الآن. أعد فتح هذا الحوار للمحاولة مرة أخرى."
+    "mfaStatusUnavailable": "حالة المصادقة الثنائية غير متاحة الآن. أعد فتح هذا الحوار للمحاولة مرة أخرى.",
+    "accountDeleteIncomplete": "Account signed out, but some data could not be scheduled for removal. Contact support to complete the deletion."
   },
   "level": {
     "title": "المستوى والتقدم",

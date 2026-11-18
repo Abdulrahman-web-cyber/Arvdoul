@@ -435,9 +435,15 @@ export default function SettingsScreen() {
     setDeleting(true);
     try {
       const { default: userService } = await import('../services/userService.js');
-      await userService.deleteAccount(uid);
+      const result = await userService.deleteAccount(uid);
       setShowDeleteConfirm(false);
-      toast.success(t('settings.accountDeleted'));
+      // Never show a clean-deletion success when the server reported it could
+      // not schedule the remainder of the cascade.
+      if (result?.status === 'partial_offload_failed') {
+        toast.error(result.message || t('settings.accountDeleteIncomplete'));
+      } else {
+        toast.success(t('settings.accountDeleted'));
+      }
       navigate('/login');
     } catch {
       setDeleting(false);

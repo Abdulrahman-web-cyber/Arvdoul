@@ -194,7 +194,8 @@
     "mfaDisable": "Desativar 2FA",
     "mfaError": "Algo deu errado. Tente novamente.",
     "mfaDisabled": "Autenticação de dois fatores desativada.",
-    "mfaStatusUnavailable": "O status da autenticação de dois fatores está indisponível agora. Reabra esta caixa de diálogo para tentar novamente."
+    "mfaStatusUnavailable": "O status da autenticação de dois fatores está indisponível agora. Reabra esta caixa de diálogo para tentar novamente.",
+    "accountDeleteIncomplete": "Account signed out, but some data could not be scheduled for removal. Contact support to complete the deletion."
   },
   "level": {
     "title": "Nível e progresso",

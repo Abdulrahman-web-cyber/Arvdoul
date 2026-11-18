@@ -194,7 +194,8 @@
     "mfaDisable": "2FA deaktivieren",
     "mfaError": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
     "mfaDisabled": "Zwei-Faktor-Authentifizierung deaktiviert.",
-    "mfaStatusUnavailable": "Der Status der Zwei-Faktor-Authentifizierung ist derzeit nicht verfügbar. Öffne diesen Dialog erneut, um es noch einmal zu versuchen."
+    "mfaStatusUnavailable": "Der Status der Zwei-Faktor-Authentifizierung ist derzeit nicht verfügbar. Öffne diesen Dialog erneut, um es noch einmal zu versuchen.",
+    "accountDeleteIncomplete": "Account signed out, but some data could not be scheduled for removal. Contact support to complete the deletion."
   },
   "level": {
     "title": "Level & Fortschritt",
