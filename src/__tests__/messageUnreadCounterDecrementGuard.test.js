@@ -39,7 +39,14 @@ const firestoreMock = {
   arrayUnion: () => ({ __arrayUnion: true }),
   arrayRemove: () => ({}),
   writeBatch: () => ({ set: () => {}, update: () => {}, commit: async () => {} }),
-  runTransaction: async (_db, cb) => cb(globalThis.__tx),
+  runTransaction: async (_db, cb) => {
+    // Firestore gives each runTransaction a fresh transaction, so the
+    // read-before-write contract is per-transaction. Reset the flag so a
+    // method that opens two transactions (e.g. getConversation then the
+    // unread reset) is not falsely flagged.
+    globalThis.__tx._wrote = false;
+    return cb(globalThis.__tx);
+  },
   onSnapshot: () => () => {},
   getCountFromServer: async () => ({ data: () => ({ count: 0 }) }),
   Timestamp: { now: () => ({ toDate: () => new Date() }), fromDate: (d) => ({ __ts: d }) },
@@ -177,5 +184,19 @@ describe('message unread counters lose no decrements (N487)', () => {
     // The message is soft-deleted and the stale last_message repaired.
     const del = globalThis.__tx.writes.find((w) => w.type === 'update' && w.data?.isDeleted === true);
     expect(del).toBeTruthy();
+  });
+
+  test('markConversationAsRead clears unread even when read receipts are disabled', async () => {
+    const svc = primeService(getMessagingService());
+    globalThis.__docs[`conversations/${CONV}`].disableReadReceipts = true;
+
+    await svc.markConversationAsRead(CONV, 'viewer');
+
+    const shardWrites = globalThis.__tx.writes.filter((w) => String(w.ref.path).startsWith('unread_counters/'));
+    expect(shardWrites.length).toBeGreaterThan(0);
+    for (const w of shardWrites) expect(w.data.count).toBe(0);
+    // The `lastRead` receipt must NOT be published when receipts are disabled.
+    const receipt = globalThis.__tx.writes.find((w) => w.data && 'lastRead.viewer' in w.data);
+    expect(receipt).toBeUndefined();
   });
 });

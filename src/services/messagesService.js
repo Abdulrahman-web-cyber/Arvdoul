@@ -1624,27 +1624,43 @@ class UltimateMessagingService {
   async markConversationAsRead(conversationId, userId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
-    if (!conv.success || conv.conversation.disableReadReceipts) return;
+    if (!conv.success) return;
+    // Read receipts are a privacy choice about the SENDER ("don't tell them I
+    // saw it"), not a reason to leave the reader's own unread badge stuck.
+    // The old code early-returned for the whole method, so once receipts were
+    // disabled the per-conversation and total unread counters never reset.
+    const receiptsDisabled = !!conv.conversation.disableReadReceipts;
 
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
 
     await this.fs.runTransaction(this.firestore, async (transaction) => {
       const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
       const counterId = `unread_${conversationId}_${userId}`;
-      let totalReset = 0;
+      const shardRefs = [];
       for (let shard = 0; shard < shardCount; shard++) {
-        const shardRef = this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', shard.toString());
-        const snap = await transaction.get(shardRef);
-        if (snap.exists()) totalReset += snap.data().count;
-        transaction.set(shardRef, { count: 0 });
+        shardRefs.push(this.fs.doc(this.firestore, 'unread_counters', counterId, 'shards', shard.toString()));
       }
+      // Read EVERY shard before writing any of them. Firestore requires all
+      // reads before all writes, and the previous loop interleaved a
+      // `transaction.get()` with a `transaction.set()` per shard — which the
+      // SDK rejects, so marking a conversation read always threw and the unread
+      // badge never cleared.
+      const shardSnaps = await Promise.all(shardRefs.map((ref) => transaction.get(ref)));
+      let totalReset = 0;
+      shardSnaps.forEach((snap) => { if (snap.exists()) totalReset += snap.data().count; });
+
+      shardRefs.forEach((ref) => transaction.set(ref, { count: 0 }));
       if (totalReset > 0) {
         await this._decrementTotalUnread(userId, totalReset, transaction);
       }
-      transaction.update(convRef, {
-        [`lastRead.${userId}`]: this.fs.serverTimestamp(),
-        updatedAt: this.fs.serverTimestamp(),
-      });
+      // Only publish the `lastRead` receipt (which the sender reads to show
+      // "seen") when receipts are enabled.
+      if (!receiptsDisabled) {
+        transaction.update(convRef, {
+          [`lastRead.${userId}`]: this.fs.serverTimestamp(),
+          updatedAt: this.fs.serverTimestamp(),
+        });
+      }
     });
     this.conversationsCache.delete(conversationId);
     this._notifyUnreadChanged();
