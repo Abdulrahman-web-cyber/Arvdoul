@@ -221,6 +221,33 @@ const NewConversationScreen = () => {
           navigate('/messages');
           return;
         }
+        if (direct.conversationId) {
+          if (sharePostId) {
+            try {
+              const origin = typeof window !== 'undefined' ? window.location.origin : '';
+              await messagingService.sendMessage(direct.conversationId, {
+                type: 'text',
+                content: `Check out this post on ARVDOUL: ${origin}/post/${sharePostId}`,
+              });
+              toast.success('Post sent');
+            } catch {
+              toast.error('Conversation opened, but the post could not be sent');
+            }
+          }
+          if (shareProfileId) {
+            try {
+              const targetProfile = await userService.getUserProfile(shareProfileId).catch(() => null);
+              const targetHandle = getProfileHandle(targetProfile) || shareProfileId;
+              await messagingService.sendMessage(direct.conversationId, {
+                type: 'text',
+                content: `Check out @${targetHandle}'s profile on ARVDOUL: ${getProfileUrl(targetProfile || shareProfileId)}`,
+              });
+              toast.success('Profile shared');
+            } catch {
+              toast.error('Conversation opened, but profile could not be sent');
+            }
+          }
+        }
         await loadConversations(user.uid);
         navigate(`/messages/${direct.conversationId}`);
         return;
@@ -296,44 +323,45 @@ const NewConversationScreen = () => {
 
   return (
     <div className={cn(
-      'flex flex-col h-full',
-      theme === 'dark'
-        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+      'flex flex-col flex-1 min-h-0 h-full overflow-hidden',
+      isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900'
     )}>
       {/* Header */}
       <div className={cn(
-        'border-b p-4 flex items-center justify-between',
-        theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
+        'border-b px-4 py-3 flex items-center justify-between',
+        isDark ? 'bg-[#050B24] border-white/[0.08]' : 'bg-white border-slate-200'
       )}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
+            type="button"
+            aria-label="Back to messages"
             onClick={() => navigate('/messages')}
             className={cn(
-              'p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors'
+              'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+              isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
             )}
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </button>
-          <h1 className={cn(
-            'text-xl font-bold',
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          )}>
+          <h1 className="text-lg font-bold">
             New Conversation
           </h1>
         </div>
         <button
+          type="button"
           onClick={handleCreateConversation}
           disabled={selectedUsers.length === 0 || loading}
           className={cn(
-            'px-4 py-2 rounded-full font-medium transition-colors',
+            'px-4 py-2 rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
             selectedUsers.length > 0 && !loading
-              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
-              : 'bg-gray-200 dark:bg-gray-800 text-gray-500 cursor-not-allowed'
+              ? 'bg-arvdoul-gradient text-white hover:brightness-105 shadow-sm'
+              : isDark
+                ? 'bg-white/10 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
           )}
         >
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : (
             'Create'
           )}
@@ -343,27 +371,29 @@ const NewConversationScreen = () => {
       {/* Selected users chips */}
       {selectedUsers.length > 0 && (
         <div className={cn(
-          'border-b p-4 flex flex-wrap gap-2',
-          theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+          'border-b px-4 py-3 flex flex-wrap gap-2',
+          isDark ? 'border-white/[0.08] bg-[#050B24]/60' : 'border-slate-200 bg-slate-50'
         )}>
           {selectedUsers.map((u) => {
-            const uid = u.uid || u.id;
+            const targetId = u.uid || u.id;
             return (
               <div
-                key={uid}
+                key={targetId}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-1 rounded-full',
-                  theme === 'dark'
-                    ? 'bg-purple-600/30 text-purple-300 border border-purple-600/50'
-                    : 'bg-purple-100 text-purple-900 border border-purple-300'
+                  'flex items-center gap-2 px-3 py-1 rounded-lg border text-sm',
+                  isDark
+                    ? 'bg-purple-500/20 text-purple-200 border-purple-500/40'
+                    : 'bg-purple-50 text-purple-900 border-purple-200'
                 )}
               >
-                <span className="text-sm">{u.displayName}</span>
+                <span>{u.displayName}</span>
                 <button
+                  type="button"
+                  aria-label={`Remove ${u.displayName || 'user'}`}
                   onClick={() => toggleUserSelection(u)}
-                  className="p-0 hover:scale-110 transition-transform"
+                  className="p-0.5 rounded hover:bg-black/10 transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               </div>
             );
@@ -484,16 +514,17 @@ const NewConversationScreen = () => {
               return (
                 <button
                   key={uid}
+                  type="button"
                   onClick={() => toggleUserSelection(u)}
                   className={cn(
-                    'w-full p-4 text-left transition-colors flex items-center gap-3',
+                    'w-full px-4 py-3 text-left transition-colors flex items-center gap-3',
                     isSelected
-                      ? (theme === 'dark'
-                        ? 'bg-purple-600/20 hover:bg-purple-600/30'
-                        : 'bg-purple-100 hover:bg-purple-200')
-                      : (theme === 'dark'
-                        ? 'hover:bg-gray-800'
-                        : 'hover:bg-gray-50')
+                      ? isDark
+                        ? 'bg-purple-500/15 hover:bg-purple-500/20'
+                        : 'bg-purple-50 hover:bg-purple-100'
+                      : isDark
+                        ? 'hover:bg-white/[0.04]'
+                        : 'hover:bg-slate-100/80'
                   )}
                 >
                   <div className="relative">
@@ -501,15 +532,15 @@ const NewConversationScreen = () => {
                       <LazyImage
                         src={u.photoURL}
                         alt={u.displayName}
-                        className="w-12 h-12 rounded-full object-cover"
+                        className="w-11 h-11 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-                        {u.displayName?.[0]?.toUpperCase()}
+                      <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
+                        {u.displayName?.[0]?.toUpperCase() || '?'}
                       </div>
                     )}
                     {isSelected && (
-                      <div className="absolute inset-0 rounded-full ring-2 ring-purple-600" />
+                      <div className="absolute inset-0 rounded-full ring-2 ring-arvdoul-purple" />
                     )}
                   </div>
                   <div className="flex-1">

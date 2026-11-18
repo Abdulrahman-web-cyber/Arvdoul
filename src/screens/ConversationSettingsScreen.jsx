@@ -30,10 +30,10 @@ export default function ConversationSettingsScreen() {
   const [acting, setActing] = useState(false);
 
   const colors = {
-    bg: isDark ? 'bg-[#0B0F17]' : 'bg-gray-50',
-    card: isDark ? 'bg-gray-900/70 border border-gray-800' : 'bg-white border border-gray-200',
-    text: isDark ? 'text-white' : 'text-gray-900',
-    secondary: isDark ? 'text-gray-400' : 'text-gray-600',
+    bg: isDark ? 'bg-[#03071B]' : 'bg-[#F8FAFC]',
+    card: isDark ? 'bg-[#090F2D] border border-white/[0.08]' : 'bg-white border border-slate-200',
+    text: isDark ? 'text-white' : 'text-slate-900',
+    secondary: isDark ? 'text-slate-400' : 'text-slate-600',
   };
 
   const load = useCallback(async () => {
@@ -70,8 +70,9 @@ export default function ConversationSettingsScreen() {
       if (muted) await service.unmuteConversation(conversationId, user.uid);
       else await service.muteConversation(conversationId, user.uid);
       setMuted(!muted);
+      window.dispatchEvent(new CustomEvent('arvdoul:messages-read'));
       toast.success(muted ? 'Conversation unmuted.' : 'Conversation muted.');
-    } catch (err) {
+    } catch {
       toast.error('Action failed.');
     } finally {
       setActing(false);
@@ -87,8 +88,9 @@ export default function ConversationSettingsScreen() {
       if (pinned) await service.unpinConversation(conversationId, user.uid);
       else await service.pinConversation(conversationId, user.uid);
       setPinned(!pinned);
-      toast.success(pinned ? 'Conversation unpinned.' : 'Conversation pinned 📌');
-    } catch (err) {
+      window.dispatchEvent(new CustomEvent('arvdoul:messages-read'));
+      toast.success(pinned ? 'Conversation unpinned.' : 'Conversation pinned');
+    } catch {
       toast.error('Action failed.');
     } finally {
       setActing(false);
@@ -104,8 +106,9 @@ export default function ConversationSettingsScreen() {
       if (archived) await service.unarchiveConversation(conversationId, user.uid);
       else await service.archiveConversation(conversationId, user.uid);
       setArchived(!archived);
+      window.dispatchEvent(new CustomEvent('arvdoul:messages-read'));
       toast.success(archived ? 'Conversation unarchived.' : 'Conversation archived.');
-    } catch (err) {
+    } catch {
       toast.error('Action failed.');
     } finally {
       setActing(false);
@@ -120,9 +123,10 @@ export default function ConversationSettingsScreen() {
     try {
       const { getMessagingService } = await import('../services/messagesService.js');
       await getMessagingService().leaveGroup(conversationId, user.uid);
+      window.dispatchEvent(new CustomEvent('arvdoul:messages-read'));
       toast.success('You left the conversation.');
       navigate('/messages');
-    } catch (err) {
+    } catch {
       toast.error('Could not leave conversation.');
       setActing(false);
     }
@@ -132,10 +136,10 @@ export default function ConversationSettingsScreen() {
   const memberNames = (conv?.participantDetails || []).map((p) => p.displayName || p.username).filter(Boolean).join(', ');
 
   return (
-    <div className={cn("min-h-screen", colors.bg)}>
-      <div className={cn("sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3 backdrop-blur-xl", isDark ? "bg-[#0B0F17]/85 border-gray-800" : "bg-white/85 border-gray-200")}>
-        <button type="button" onClick={() => navigate(-1)} aria-label="Go back" className="rounded-full p-2 transition hover:bg-gray-100 dark:hover:bg-gray-800">
-          <ArrowLeft className="w-5 h-5" />
+    <div className={cn("flex-1 min-h-0 h-full overflow-y-auto", colors.bg)}>
+      <div className={cn("sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3 backdrop-blur-xl", isDark ? "bg-[#050B24]/90 border-white/[0.08]" : "bg-white/90 border-slate-200")}>
+        <button type="button" onClick={() => navigate(-1)} aria-label="Go back" className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full transition hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple">
+          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
         </button>
         <h1 className={cn("flex-1 text-lg font-semibold", colors.text)}>Conversation Settings</h1>
       </div>

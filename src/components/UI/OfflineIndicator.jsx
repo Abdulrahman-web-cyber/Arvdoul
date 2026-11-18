@@ -125,10 +125,7 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
           {/* Offline State */}
           {!isOnline ? (
             <>
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-              </span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 shrink-0" />
               <WifiOff className="w-3.5 h-3.5 text-red-400 shrink-0" />
               <span className="truncate">
                 {pendingCount > 0
@@ -139,7 +136,7 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
           ) : showOnlinePill ? (
             /* Reconnected Online State */
             <>
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 animate-bounce" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span className="truncate text-emerald-100">
                 Back Online · All data synchronized
               </span>

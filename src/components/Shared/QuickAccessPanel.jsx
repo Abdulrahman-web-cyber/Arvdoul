@@ -1,9 +1,10 @@
-import { useRef, useState, useCallback, useMemo, memo, useEffect } from "react";
+import { useRef, useState, useCallback, useMemo, memo, useEffect, useContext } from "react";
 import { toast } from "sonner";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChevronUp, ChevronDown, X, Camera, PenSquare, Settings, BookOpen, Grid3X3, Video, Bookmark, Users, User, Sparkles, Moon, Sun, Zap, Heart, TrendingUp, Crown, MessageCircle, Home, PlayCircle, UserPlus, BarChart3, DollarSign, Trophy, Search, LogOut, CheckCircle, Link, Lock, ShoppingBag, Target as TargetIcon, ArrowUpRight, BadgeCheck, Radio, Music } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 import { useTheme } from "../../context/ThemeContext";
+import { AuthContext } from "../../context/AuthContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { cn } from "../../lib/utils";
@@ -153,7 +154,7 @@ const ProgressBar = memo(({ value, max = 100, label, showLabel = true, color = "
 
   const colors = {
     blue: "bg-gradient-to-r from-blue-500 to-cyan-500",
-    purple: "bg-gradient-to-r from-purple-500 to-pink-500",
+    purple: "bg-arvdoul-gradient",
     green: "bg-gradient-to-r from-emerald-500 to-teal-500",
     yellow: "bg-gradient-to-r from-yellow-500 to-orange-500",
     red: "bg-gradient-to-r from-rose-500 to-pink-500",
@@ -214,6 +215,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const authCtx = useContext(AuthContext);
   const { track } = useAnalytics();
   // `userStats` / `monetization` were never slices on the store, so their
   // `= {}` defaults silently fabricated empty objects for every read. The
@@ -503,7 +505,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           label: "Create Story",
           icon: Camera,
           action: () => navigateToWithLoading(NAVIGATION_PATHS.createStory),
-          color: "from-purple-500 to-pink-600",
+          color: "from-arvdoul-purple to-arvdoul-blue",
           description: "24-hour content",
           shortcut: "S",
           sparkling: true,
@@ -564,7 +566,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           label: "Sponsored",
           icon: FaBullhorn,
           action: () => navigate(NAVIGATION_PATHS.sponsored),
-          color: "from-purple-500 to-pink-500",
+          color: "from-arvdoul-purple to-arvdoul-blue",
           description: "Brand deals",
           disabled: !canMonetize,
           disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
@@ -581,7 +583,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           label: "Videos",
           icon: PlayCircle,
           action: () => navigate(NAVIGATION_PATHS.videos),
-          color: "from-purple-600 to-indigo-600"
+          color: "from-arvdoul-purple to-arvdoul-indigo"
         },
         {
           label: "Messages",
@@ -601,7 +603,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           label: "AI Studio Pro",
           icon: Sparkles,
           action: () => navigate(NAVIGATION_PATHS.aiStudio),
-          color: "from-purple-600 to-indigo-600",
+          color: "from-arvdoul-purple to-arvdoul-blue",
           description: "Viral hooks & AI scriptwriter",
           badge: "AI Pro",
           sparkling: true
@@ -1049,7 +1051,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 { label: "Settings", icon: Settings, action: () => navigate(NAVIGATION_PATHS.settings) },
                 { label: "Payouts", icon: DollarSign, action: () => navigate(NAVIGATION_PATHS.monetization) },
                 { separator: true },
-                { label: "Sign Out", icon: LogOut, action: () => track("Sign_Out_Click"), danger: true }
+                { label: "Sign Out", icon: LogOut, action: async () => { track("Sign_Out_Click"); closePanel?.(); await authCtx?.signOut?.(); }, danger: true }
               ].map((item, index) => (
                 item.separator ? (
                   <div key={`sep-${index}`} className="border-t border-gray-200 dark:border-gray-700 my-1" />
@@ -1113,6 +1115,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         {searchQuery && (
           <button
             type="button"
+            aria-label="Clear search"
             onClick={() => setSearchQuery("")}
             className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2"
           >
@@ -1860,7 +1863,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 <div className="flex items-center space-x-2 sm:space-x-3">
                   <div className={cn(
                     "p-1.5 sm:p-2 rounded-lg sm:rounded-xl",
-                    "bg-gradient-to-br from-purple-500 to-pink-500",
+                    "bg-arvdoul-gradient",
                     "shadow-md"
                   )}>
                     <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />

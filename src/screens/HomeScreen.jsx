@@ -1732,7 +1732,7 @@ export default function HomeScreen() {
                 exit={{ scale: 0.92, y: 20 }}
                 className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#0f1424] border border-purple-500/30 p-6 shadow-2xl space-y-4 text-center"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-white mx-auto shadow-lg shadow-purple-500/30">
+                <div className="w-14 h-14 rounded-2xl bg-arvdoul-gradient flex items-center justify-center text-white mx-auto shadow-lg shadow-arvdoul-purple/25">
                   <Coins className="w-7 h-7" />
                 </div>
                 <div>
@@ -1764,12 +1764,13 @@ export default function HomeScreen() {
                     </div>
                   ) : (
                     <button
+                      type="button"
                       onClick={handleClaimReward}
                       disabled={isClaimingCoins || !rewardAd}
-                      className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-2.5 rounded-full bg-arvdoul-gradient text-white font-bold text-xs shadow-lg shadow-arvdoul-purple/25 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Gift className="w-4 h-4" />
-                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim Coins Now 🎉'}
+                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim Coins Now'}
                     </button>
                   )}
                 </div>

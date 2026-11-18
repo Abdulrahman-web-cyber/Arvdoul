@@ -1,7 +1,7 @@
 // src/routes/AppRoutes.jsx
 
 import { lazy, Suspense, useState, useEffect } from "react";
-import { Routes, Route, Navigate, Outlet, useParams } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useParams, useLocation, useMatch } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
@@ -162,11 +162,56 @@ const ProtectedRoute = ({ children }) => {
   );
 };
 
-// Special layout for messaging that handles both list and chat views
+// Special layout for messaging that handles split-pane desktop workspace and mobile full-screen subroutes
 const MessagingLayout = ({ children }) => {
+  const location = useLocation();
+  const match = useMatch("/messages/:conversationId/*");
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(min-width: 1024px)").matches
+      : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const onChange = (e) => setIsDesktop(e.matches);
+    setIsDesktop(mql.matches);
+    if (mql.addEventListener) {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    }
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
+  }, []);
+
+  const isIndexRoute = location.pathname === "/messages" || location.pathname === "/messages/";
+  const activeConversationId =
+    match?.params?.conversationId && match.params.conversationId !== "new"
+      ? match.params.conversationId
+      : null;
+
   return (
     <AppStateGuard>
-      <MainLayout>{children}</MainLayout>
+      <MainLayout>
+        {isDesktop && !isIndexRoute ? (
+          <div className="flex flex-1 min-h-0 w-full h-full overflow-hidden">
+            <aside
+              aria-label="Conversations sidebar"
+              className="w-[360px] xl:w-[392px] shrink-0 h-full min-h-0 flex flex-col border-r border-slate-200/80 dark:border-white/[0.08]"
+            >
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <MessagingScreen sidebarMode activeConversationId={activeConversationId} />
+              </Suspense>
+            </aside>
+            <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
+              {children}
+            </div>
+          </div>
+        ) : (
+          children
+        )}
+      </MainLayout>
     </AppStateGuard>
   );
 };

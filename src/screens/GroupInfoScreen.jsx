@@ -20,7 +20,7 @@ export default function GroupInfoScreen() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
 
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -254,11 +254,11 @@ export default function GroupInfoScreen() {
   if (loading) {
     return (
       <div className={cn(
-        'min-h-screen flex items-center justify-center p-4',
-        isDark ? 'bg-[#030614] text-white' : 'bg-slate-50 text-slate-900'
+        'flex-1 min-h-0 h-full flex items-center justify-center p-4',
+        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900'
       )}>
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" aria-hidden="true" />
           <p className="text-xs font-semibold opacity-60">Loading group details...</p>
         </div>
       </div>
@@ -267,32 +267,32 @@ export default function GroupInfoScreen() {
 
   return (
     <div className={cn(
-      'min-h-screen flex flex-col font-sans transition-colors duration-200 pb-12',
-      isDark ? 'bg-[#030614] text-white' : 'bg-slate-50 text-slate-900'
+      'flex-1 min-h-0 h-full overflow-y-auto flex flex-col font-sans transition-colors duration-200 pb-12',
+      isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900'
     )}>
-      {/* Top Bar Contract: Zone 1 (Back/Title), Zone 2 (Meta), Zone 3 (Action) */}
       <header className={cn(
         'sticky top-0 z-30 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md transition-colors',
-        isDark ? 'bg-[#030614]/85 border-white/10' : 'bg-white/85 border-slate-200'
+        isDark ? 'bg-[#050B24]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200'
       )}>
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate(`/messages/${conversationId}`)}
             aria-label="Back to chat"
             className={cn(
-              'p-2 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center',
-              isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-slate-100 text-slate-700'
+              'p-2 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+              isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
             )}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </button>
           <div>
             <h1 className="font-bold text-base truncate max-w-[200px] sm:max-w-xs">
               Group Info
             </h1>
             <p className={cn(
-              'text-[11px] font-medium',
-              isDark ? 'text-gray-400' : 'text-slate-500'
+              'text-xs font-medium tabular-nums',
+              isDark ? 'text-slate-400' : 'text-slate-500'
             )}>
               {participants.length} member{participants.length === 1 ? '' : 's'}
             </p>
@@ -301,10 +301,11 @@ export default function GroupInfoScreen() {
 
         {isAdmin && !isEditingInfo && (
           <button
+            type="button"
             onClick={() => setIsEditingInfo(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600/10 text-purple-500 hover:bg-purple-600/20 border border-purple-500/30 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 transition-colors"
           >
-            <Edit2 className="w-3.5 h-3.5" />
+            <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Edit</span>
           </button>
         )}
@@ -313,26 +314,25 @@ export default function GroupInfoScreen() {
       <main className="max-w-2xl w-full mx-auto px-4 py-6 space-y-6">
         {/* Group Hero Card */}
         <div className={cn(
-          'p-6 rounded-3xl border text-center transition-all shadow-sm',
-          isDark ? 'bg-[#090e29]/70 border-white/10' : 'bg-white border-slate-200'
+          'p-6 rounded-2xl border text-center transition-all shadow-sm',
+          isDark ? 'bg-[#090F2D] border-white/[0.08]' : 'bg-white border-slate-200'
         )}>
           {/* Group Avatar */}
           <div className="relative inline-block mb-4">
-            <div className="w-24 h-24 rounded-full p-[2px] shadow-[0_0_20px_rgba(168,85,247,0.35)]"
-              style={{ background: BRAND_GRADIENT }}>
+            <div className="w-24 h-24 rounded-full p-[2px]" style={{ background: BRAND_GRADIENT }}>
               {conversation?.photoURL ? (
                 <LazyImage
                   src={conversation.photoURL}
                   alt={groupName}
                   className={cn(
                     'w-full h-full rounded-full object-cover border-2',
-                    isDark ? 'border-[#090e29]' : 'border-white'
+                    isDark ? 'border-[#090F2D]' : 'border-white'
                   )}
                 />
               ) : (
                 <div className={cn(
-                  'w-full h-full rounded-full flex items-center justify-center text-3xl font-black text-white bg-gradient-to-tr from-purple-600 to-indigo-600 border-2',
-                  isDark ? 'border-[#090e29]' : 'border-white'
+                  'w-full h-full rounded-full flex items-center justify-center text-3xl font-black text-white bg-arvdoul-gradient border-2',
+                  isDark ? 'border-[#090F2D]' : 'border-white'
                 )}>
                   {(groupName?.[0] || 'G').toUpperCase()}
                 </div>
@@ -384,7 +384,7 @@ export default function GroupInfoScreen() {
                   disabled={saving}
                   className={cn(
                     'flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors',
-                    isDark ? 'bg-white/10 hover:bg-white/15 text-gray-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    isDark ? 'bg-white/10 hover:bg-white/15 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   )}
                 >
                   Cancel
@@ -393,9 +393,9 @@ export default function GroupInfoScreen() {
                   type="button"
                   onClick={handleUpdateGroupInfo}
                   disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-90 shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-arvdoul-gradient text-white hover:brightness-105 shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
                   <span>Save Changes</span>
                 </button>
               </div>
@@ -423,19 +423,20 @@ export default function GroupInfoScreen() {
         {isAdmin && (
           <div className={cn(
             'p-4 rounded-2xl border space-y-3',
-            isDark ? 'bg-[#090e29]/70 border-white/10' : 'bg-white border-slate-200'
+            isDark ? 'bg-[#090F2D] border-white/[0.08]' : 'bg-white border-slate-200'
           )}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <LinkIcon className="w-4 h-4 text-purple-500" />
+                <LinkIcon className="w-4 h-4 text-purple-500" aria-hidden="true" />
                 <span className="text-xs font-bold uppercase tracking-wider">Group Invite Link</span>
               </div>
               <button
+                type="button"
                 onClick={handleCreateInviteLink}
                 disabled={creatingInvite}
                 className="text-xs font-semibold text-purple-500 hover:underline flex items-center gap-1"
               >
-                {creatingInvite ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                {creatingInvite ? <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" /> : null}
                 <span>{inviteLink ? 'Regenerate link' : 'Generate link'}</span>
               </button>
             </div>
@@ -447,6 +448,7 @@ export default function GroupInfoScreen() {
               )}>
                 <span className="font-mono text-[11px] truncate flex-1 opacity-90">{inviteLink}</span>
                 <button
+                  type="button"
                   onClick={async () => {
                     if (navigator?.clipboard?.writeText) {
                       await navigator.clipboard.writeText(inviteLink);
@@ -464,8 +466,8 @@ export default function GroupInfoScreen() {
 
         {/* Group Members Section */}
         <div className={cn(
-          'p-5 rounded-3xl border space-y-4',
-          isDark ? 'bg-[#090e29]/70 border-white/10' : 'bg-white border-slate-200'
+          'p-5 rounded-2xl border space-y-4',
+          isDark ? 'bg-[#090F2D] border-white/[0.08]' : 'bg-white border-slate-200'
         )}>
           <div className="flex items-center justify-between">
             <div>
@@ -473,8 +475,8 @@ export default function GroupInfoScreen() {
                 Members
               </h3>
               <p className={cn(
-                'text-[11px]',
-                isDark ? 'text-gray-400' : 'text-slate-500'
+                'text-xs tabular-nums',
+                isDark ? 'text-slate-400' : 'text-slate-500'
               )}>
                 {participants.length} member{participants.length === 1 ? '' : 's'} in this conversation
               </p>
@@ -482,10 +484,11 @@ export default function GroupInfoScreen() {
 
             {isAdmin && (
               <button
+                type="button"
                 onClick={() => setShowAddMembers((v) => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 text-white hover:bg-purple-500 shadow-sm transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-arvdoul-gradient text-white hover:brightness-105 shadow-sm transition-all"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Add Member</span>
               </button>
             )}
@@ -498,21 +501,23 @@ export default function GroupInfoScreen() {
               isDark ? 'bg-white/5 border-purple-500/30' : 'bg-purple-50/50 border-purple-200'
             )}>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-500">Search users to add</span>
+                <span className="text-xs font-bold text-purple-400">Search users to add</span>
                 <button
+                  type="button"
+                  aria-label="Close add member panel"
                   onClick={() => {
                     setShowAddMembers(false);
                     setMemberQuery('');
                     setMemberResults([]);
                   }}
-                  className="p-1 rounded-lg hover:bg-black/10 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-black/10 transition-colors"
                 >
-                  <X className="w-4 h-4 opacity-60" />
+                  <X className="w-4 h-4 opacity-70" aria-hidden="true" />
                 </button>
               </div>
 
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-40" aria-hidden="true" />
                 <input aria-label="Type name or username..."
                   type="text"
                   value={memberQuery}
@@ -527,7 +532,7 @@ export default function GroupInfoScreen() {
 
               {searchingMembers && (
                 <div className="flex items-center gap-2 py-2 text-xs text-purple-400">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                   <span>Searching...</span>
                 </div>
               )}
@@ -562,9 +567,10 @@ export default function GroupInfoScreen() {
                         </div>
 
                         <button
+                          type="button"
                           onClick={() => handleAddMember(u)}
                           disabled={isAdding}
-                          className="px-3 py-1 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 disabled:opacity-50 transition-colors shrink-0"
+                          className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 disabled:opacity-50 transition-colors shrink-0"
                         >
                           {isAdding ? 'Adding...' : 'Add'}
                         </button>
@@ -593,7 +599,7 @@ export default function GroupInfoScreen() {
                 <div
                   key={pid}
                   className={cn(
-                    'flex items-center justify-between p-3 rounded-2xl border transition-colors',
+                    'flex items-center justify-between p-3 rounded-xl border transition-colors',
                     isDark ? 'bg-white/5 border-white/5 hover:bg-white/[0.08]' : 'bg-slate-50 border-slate-200/60 hover:bg-slate-100/70'
                   )}
                 >
@@ -605,8 +611,8 @@ export default function GroupInfoScreen() {
                         className="w-10 h-10 rounded-full object-cover border border-white/10"
                       />
                       {isParticipantAdmin && (
-                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] shadow-sm">
-                          ★
+                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-sm" aria-label="Group admin">
+                          <Shield className="w-2.5 h-2.5" aria-hidden="true" />
                         </span>
                       )}
                     </div>

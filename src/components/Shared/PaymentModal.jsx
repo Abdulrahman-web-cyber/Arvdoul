@@ -71,7 +71,7 @@ function CheckoutForm({ amountLabel, onSubmit, onCancel }) {
         <button
           type="submit"
           disabled={processing || !stripe}
-          className="flex-1 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex-1 py-3 rounded-xl bg-arvdoul-gradient text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-arvdoul-purple/20"
         >
           {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
           {processing ? 'Processing…' : `Pay ${amountLabel}`}
@@ -103,7 +103,7 @@ export default function PaymentModal({ open, title, amountLabel, onConfirm, onCl
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-white">{title}</h2>
-              <button onClick={onClose} aria-label="Close" className="p-2 rounded-full hover:bg-white/10 text-gray-400">
+              <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-full hover:bg-white/10 text-gray-400">
                 <X className="w-5 h-5" />
               </button>
             </div>

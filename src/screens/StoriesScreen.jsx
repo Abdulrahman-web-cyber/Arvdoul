@@ -799,9 +799,9 @@ export default function StoriesScreen() {
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue flex items-center justify-center shadow-[0_0_25px_rgba(139,30,243,0.6)] group-hover:scale-110 transition-transform duration-300">
               <Plus className="w-7 h-7 text-white" />
             </div>
-            {/* Pulsing ring */}
-            <div className="absolute -inset-2 rounded-full border border-blue-400/30 animate-ping opacity-25 pointer-events-none" />
-            <div className="absolute -inset-3.5 rounded-full border border-purple-500/20 pointer-events-none" />
+            {/* Subtle concentric outer ring */}
+            <div className="absolute -inset-2 rounded-full border border-arvdoul-blue/30 opacity-40 pointer-events-none" />
+            <div className="absolute -inset-3.5 rounded-full border border-arvdoul-purple/20 pointer-events-none" />
           </div>
 
           <span className={cn(

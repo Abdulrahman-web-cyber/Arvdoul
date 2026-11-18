@@ -32,6 +32,7 @@ import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
+import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark, X, Reply, Phone, Video } from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
@@ -46,9 +47,11 @@ export default function ChatScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   const uid = user?.uid;
+  const routeIntent = location.state || null;
 
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -87,6 +90,7 @@ export default function ChatScreen() {
 
   const messagesEndRef = useRef(null);
   const pendingRef = useRef(new Map()); // localId -> {convId, data}
+  const localToServerRef = useRef(new Map()); // localId -> server messageId
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const reloadTimerRef = useRef(null);
@@ -99,14 +103,11 @@ export default function ChatScreen() {
       const res = await svc.getMessages(conversationId, { cacheFirst: false, limit: 60 });
       if (res.success) {
         setHasMoreOlder(Boolean(res.hasMore));
-        // Merge pending optimistic messages that the server copy has NOT yet
-        // returned. The optimistic id IS the server id (it is sent as the
-        // idempotency key), so any pending entry already present in the server
-        // page is dropped here — otherwise the sent bubble rendered twice.
         const serverMessages = res.messages || [];
         const serverIds = new Set(serverMessages.map((m) => m.id));
         const pending = Array.from(pendingRef.current.entries())
           .filter(([localId]) => !serverIds.has(localId))
+          .filter(([localId]) => !serverIds.has(localToServerRef.current.get(localId)))
           .map(([localId, p]) => ({
             id: localId,
             _local: true,
@@ -130,14 +131,43 @@ export default function ChatScreen() {
     let cancelled = false;
     let unsubscribe = () => {};
 
+    // Reset thread state cleanly on conversation switch (important in desktop split pane)
+    setLoading(true);
+    setLoadError(null);
+    setConversation(null);
+    setMessages([]);
+    setTypingUsers({});
+    setReplyTo(null);
+    setShowInfoPanel(false);
+    setSearchQuery('');
+    setSearchResults(null);
+    setPinnedMessages([]);
+    setPinnedIds([]);
+    setSharedMedia([]);
+    setSavedIds({});
+    setSavedMessages([]);
+    setNewSinceScroll(0);
+    setAtBottom(true);
+    pendingRef.current.clear();
+    localToServerRef.current.clear();
+
     (async () => {
-      if (!conversationId || !uid) return;
+      if (!conversationId || !uid) {
+        setLoading(false);
+        return;
+      }
       try {
         const svc = getMessagingService();
         const conv = await svc.getConversation(conversationId, { cacheFirst: false });
         if (!cancelled) {
-          if (conv.success) setConversation(conv.conversation);
-          else setLoadError(conv.error || 'Conversation not found');
+          if (conv.success) {
+            setConversation(conv.conversation);
+            if (Array.isArray(conv.conversation?.pinnedMessages)) {
+              setPinnedIds(conv.conversation.pinnedMessages);
+            }
+          } else {
+            setLoadError(conv.error || 'Conversation not found');
+          }
         }
 
         await loadMessages();
@@ -146,6 +176,9 @@ export default function ChatScreen() {
           if (cancelled) return;
           if (event.type === 'conversation_updated') {
             setConversation(event.conversation);
+            if (Array.isArray(event.conversation?.pinnedMessages)) {
+              setPinnedIds(event.conversation.pinnedMessages);
+            }
           } else if (event.type === 'typing_update') {
             setTypingUsers((prev) => ({ ...prev, ...(event.typing || {}) }));
           } else if (event.type === 'new_message') {
@@ -153,7 +186,6 @@ export default function ChatScreen() {
             if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
             reloadTimerRef.current = setTimeout(() => {
               loadMessages();
-              // Drop any pending optimistic message that was just confirmed
               const incomingId = event.message?.id;
               if (incomingId && pendingRef.current.has(incomingId)) {
                 pendingRef.current.delete(incomingId);
@@ -254,16 +286,24 @@ export default function ChatScreen() {
   const reconcileSentMessage = useCallback((localId, res) => {
     if (res?.offlineQueued) return;
     pendingRef.current.delete(localId);
-    setMessages((prev) => prev.map((m) => (
-      m.id === localId ? { ...m, _local: false, _pending: false, _failed: false } : m
-    )));
+    const serverId = res?.messageId || res?.message?.id || null;
+    if (serverId) localToServerRef.current.set(localId, serverId);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === localId
+          ? { ...m, id: serverId || m.id, _local: false, _pending: false, _failed: false }
+          : m
+      )
+    );
   }, []);
 
   const handleSendMessage = useCallback(
     async (data) => {
-      if (!conversationId || !uid || !data?.content?.trim()) return;
+      const msgType = data?.type || 'text';
+      const hasBody = Boolean(data?.content?.trim?.() || data?.media?.url || data?.location);
+      if (!conversationId || !uid || !hasBody) return;
       const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      pendingRef.current.set(localId, { conversationId, data });
+      pendingRef.current.set(localId, { conversationId, data: { ...data, type: msgType } });
       setMessages((prev) => [
         ...prev,
         {
@@ -271,16 +311,19 @@ export default function ChatScreen() {
           _local: true,
           _pending: true,
           senderId: uid,
-          type: 'text',
+          type: msgType,
           content: data.content,
+          media: data.media || null,
           replyTo: replyTo ? { senderName: replyTo.senderName, content: replyTo.content } : null,
           createdAt: new Date(),
         },
       ]);
       try {
-        const res = await getMessagingService().sendMessage(conversationId, {
-          type: 'text',
+        const payload = {
+          type: msgType,
           content: data.content,
+          ...(data.media ? { media: data.media } : {}),
+          ...(data.location ? { location: data.location } : {}),
           ...(replyTo
             ? {
                 replyTo: {
@@ -291,7 +334,8 @@ export default function ChatScreen() {
                 },
               }
             : {}),
-        });
+        };
+        const res = await getMessagingService().sendMessage(conversationId, payload);
         reconcileSentMessage(localId, res);
         setReplyTo(null);
       } catch (err) {
@@ -305,7 +349,7 @@ export default function ChatScreen() {
   );
 
   const handleSendMedia = useCallback(
-    async ({ file, isVoice }) => {
+    async ({ file, isVoice, text: captionText }) => {
       if (!conversationId || !uid || !file) return;
       const type = isVoice
         ? 'voice'
@@ -315,8 +359,12 @@ export default function ChatScreen() {
             ? 'video'
             : 'file';
 
+      const cleanCaption = captionText?.trim?.() || '';
       const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      pendingRef.current.set(localId, { conversationId, data: { type, media: { file } } });
+      pendingRef.current.set(localId, {
+        conversationId,
+        data: { type, content: cleanCaption, media: { file } },
+      });
       setMessages((prev) => [
         ...prev,
         {
@@ -325,21 +373,37 @@ export default function ChatScreen() {
           _pending: true,
           senderId: uid,
           type,
+          content: cleanCaption,
           media: { fileName: file.name, isVoice },
           createdAt: new Date(),
         },
       ]);
       try {
-        // The service uploads the file and builds the media message.
-        const res = await getMessagingService().sendMessage(conversationId, { type, media: { file } });
+        const payload = {
+          type,
+          ...(cleanCaption ? { content: cleanCaption } : {}),
+          media: { file },
+          ...(replyTo
+            ? {
+                replyTo: {
+                  messageId: replyTo.id,
+                  senderId: replyTo.senderId,
+                  senderName: replyTo.senderName,
+                  contentPreview: (replyTo.content || '').slice(0, 80),
+                },
+              }
+            : {}),
+        };
+        const res = await getMessagingService().sendMessage(conversationId, payload);
         reconcileSentMessage(localId, res);
+        if (replyTo) setReplyTo(null);
       } catch (err) {
         toastError(err.message || 'Failed to send media');
         pendingRef.current.delete(localId);
         setMessages((prev) => prev.filter((m) => m.id !== localId));
       }
     },
-    [conversationId, uid, reconcileSentMessage]
+    [conversationId, uid, reconcileSentMessage, replyTo]
   );
 
   const handleReaction = useCallback(
@@ -371,6 +435,7 @@ export default function ChatScreen() {
 
   const title = useMemo(() => {
     if (conversation?.title) return conversation.title;
+    if (conversation?.name) return conversation.name;
     if (otherParticipants.length === 1) {
       return conversation.participantNames?.[otherParticipants[0]] || 'Conversation';
     }
@@ -378,6 +443,16 @@ export default function ChatScreen() {
       ? 'Group Chat'
       : 'Conversation';
   }, [conversation, otherParticipants]);
+
+  const headerAvatar = useMemo(() => {
+    if (!conversation) return null;
+    if (conversation.type === 'group' || conversation.type === 'channel') {
+      return getSafeAvatarUrl(conversation.photoURL, title, conversation.id);
+    }
+    const peerId = otherParticipants[0];
+    const peerPhoto = peerId ? conversation.participantAvatars?.[peerId] : null;
+    return getSafeAvatarUrl(peerPhoto, title, peerId || conversation.id);
+  }, [conversation, otherParticipants, title]);
 
   const typingText = useMemo(() => {
     const names = Object.entries(typingUsers)
@@ -461,8 +536,22 @@ export default function ChatScreen() {
         svc.getConversationMedia(conversationId, { limit: 30 }),
       ]);
       const pinnedIds = pinnedRes.status === 'fulfilled' ? pinnedRes.value?.pinnedMessageIds : [];
-      setPinnedMessages(Array.isArray(pinnedIds) ? pinnedIds : []);
-      setPinnedIds(Array.isArray(pinnedIds) ? pinnedIds : []);
+      const validIds = Array.isArray(pinnedIds) ? pinnedIds : [];
+      setPinnedIds(validIds);
+      const localMap = new Map((messagesRef.current || []).map((m) => [m.id, m]));
+      const resolvedPins = await Promise.all(
+        validIds.map(async (pid) => {
+          if (localMap.has(pid)) return localMap.get(pid);
+          try {
+            const fetched = await svc._getMessage?.(conversationId, pid);
+            if (fetched) return fetched;
+          } catch {
+            /* noop */
+          }
+          return { id: pid };
+        })
+      );
+      setPinnedMessages(resolvedPins);
       const mediaList = mediaRes.status === 'fulfilled' ? mediaRes.value?.media : [];
       setSharedMedia(Array.isArray(mediaList) ? mediaList : []);
       const failed = [];
@@ -512,7 +601,11 @@ export default function ChatScreen() {
         // Preserve visual position: remember scroll height before inserting.
         const el = mainRef.current;
         const prevHeight = el ? el.scrollHeight : 0;
-        setMessages((prev) => [...res.messages, ...prev]);
+        setMessages((prev) => {
+          const existing = new Set(prev.map((m) => m.id));
+          const older = res.messages.filter((m) => !existing.has(m.id));
+          return [...older, ...prev];
+        });
         setHasMoreOlder(Boolean(res.hasMore));
         requestAnimationFrame(() => {
           if (el) el.scrollTop = el.scrollHeight - prevHeight + el.scrollTop;
@@ -617,7 +710,9 @@ export default function ChatScreen() {
     setForwardConversations([]);
     try {
       const res = await getMessagingService().getUserConversations(uid, { limit: 50 });
-      setForwardConversations((res?.conversations || []).filter((c) => c.id !== conversationId));
+      setForwardConversations(
+        (res?.conversations || []).filter((c) => c.id !== conversationId && !c.isAd && c.type !== 'ad')
+      );
     } catch (err) {
       toastError('Could not load your conversations.');
     }
@@ -643,12 +738,12 @@ export default function ChatScreen() {
       if (pinnedIds.includes(msg.id)) {
         await svc.unpinMessage(conversationId, msg.id, uid);
         setPinnedIds((p) => p.filter((id) => id !== msg.id));
-        setPinnedMessages((p) => p.filter((id) => id !== msg.id));
+        setPinnedMessages((p) => p.filter((item) => (typeof item === 'string' ? item : item.id) !== msg.id));
         toastSuccess('Message unpinned');
       } else {
         await svc.pinMessage(conversationId, msg.id, uid);
         setPinnedIds((p) => [...p, msg.id]);
-        setPinnedMessages((p) => [...p, msg.id]);
+        setPinnedMessages((p) => [...p, msg]);
         toastSuccess('Message pinned');
       }
     } catch (err) {
@@ -724,12 +819,12 @@ export default function ChatScreen() {
   // States
   if (loading) {
     return (
-      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900')}>
         <div className="max-w-4xl mx-auto px-4 pt-6 space-y-4">
-          <Skeleton className="h-12 w-full rounded-2xl" />
-          <Skeleton className="h-24 w-2/3 rounded-2xl" />
-          <Skeleton className="h-24 w-1/2 rounded-2xl ml-auto" />
-          <Skeleton className="h-24 w-2/3 rounded-2xl" />
+          <Skeleton className="h-14 w-full rounded-2xl" />
+          <Skeleton className="h-20 w-2/3 rounded-2xl" />
+          <Skeleton className="h-20 w-1/2 rounded-2xl ml-auto" />
+          <Skeleton className="h-20 w-2/3 rounded-2xl" />
         </div>
       </div>
     );
@@ -737,7 +832,7 @@ export default function ChatScreen() {
 
   if (loadError && !conversation) {
     return (
-      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900')}>
         <div className="max-w-4xl mx-auto px-4 pt-6">
           <ErrorState title="Could not open conversation" message={loadError} onRetry={() => { setLoadError(null); setLoading(true); loadMessages().finally(() => setLoading(false)); }} />
         </div>
@@ -746,38 +841,47 @@ export default function ChatScreen() {
   }
 
   return (
-    <div className={cn('flex flex-col h-[100dvh] w-full max-w-5xl mx-auto lg:py-4', isDark ? 'text-white' : 'text-gray-900')}>
+    <div className={cn('flex flex-col flex-1 min-h-0 h-full w-full', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900')}>
       <div className={cn(
-        'flex flex-col flex-1 min-h-0 w-full overflow-hidden lg:rounded-2xl lg:border',
-        isDark ? 'bg-[#0B0F17] lg:border-white/10' : 'bg-gray-50 lg:border-slate-200 lg:shadow-sm'
+        'flex flex-col flex-1 min-h-0 w-full overflow-hidden',
+        isDark ? 'bg-[#04091E]' : 'bg-[#F8FAFC]'
       )}>
       {/* Header */}
-      <header className={cn('sticky top-0 z-20 backdrop-blur-xl border-b', isDark ? 'bg-[#0B0F17]/85 border-white/10' : 'bg-white/85 border-gray-200')}>
-        <div className="max-w-4xl mx-auto px-3 h-14 flex items-center gap-3">
+      <header className={cn('sticky top-0 z-20 backdrop-blur-xl border-b', isDark ? 'bg-[#050B24]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200')}>
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => navigate('/messages')}
             aria-label="Back to conversations"
-            className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+            className={cn('lg:hidden min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
           >
             <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </button>
+
+          {headerAvatar && (
+            <LazyImage
+              src={headerAvatar}
+              alt={title}
+              className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
+            />
+          )}
+
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-sm truncate">{title}</h1>
-            <p className="text-[11px] opacity-60 truncate">
-              {typingText || presenceText || (otherParticipants.length > 0
+            <h1 className="font-bold text-sm sm:text-base truncate leading-tight">{title}</h1>
+            <p className={cn('text-xs truncate', typingText ? 'text-purple-400 font-medium' : isDark ? 'text-slate-400' : 'text-slate-500')}>
+              {typingText || presenceText || (routeIntent?.subtitle) || (otherParticipants.length > 0
                 ? `${otherParticipants.length} participant${otherParticipants.length > 1 ? 's' : ''}`
                 : '')}
             </p>
           </div>
-          {conversation?.participantCount > 2 && <Users className="w-4 h-4 opacity-60" aria-hidden="true" />}
+          {conversation?.participantCount > 2 && <Users className="w-4 h-4 opacity-60 shrink-0" aria-hidden="true" />}
           {conversationId && otherParticipants.length > 0 && (
             <>
               <button
                 type="button"
                 onClick={() => navigate(`/call/${conversationId}?type=audio`)}
                 aria-label="Start voice call"
-                className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+                className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
               >
                 <Phone className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -785,7 +889,7 @@ export default function ChatScreen() {
                 type="button"
                 onClick={() => navigate(`/call/${conversationId}?type=video`)}
                 aria-label="Start video call"
-                className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+                className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
               >
                 <Video className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -795,7 +899,7 @@ export default function ChatScreen() {
             type="button"
             onClick={openInfoPanel}
             aria-label="Conversation info"
-            className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+            className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
           >
             <Info className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -803,7 +907,7 @@ export default function ChatScreen() {
       </header>
 
       {/* Messages */}
-      <main ref={mainRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 py-4 overscroll-contain" aria-live="polite">
+      <main ref={mainRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 overscroll-contain max-w-4xl w-full mx-auto" aria-live="polite">
         {messages.length === 0 && (
           <div className="h-full flex items-center justify-center">
             <EmptyState
@@ -973,27 +1077,51 @@ export default function ChatScreen() {
             {infoTab === 'pinned' && (
               <div className="space-y-2">
                 {pinnedMessages.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No pinned messages yet</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">No pinned messages yet</p>
                 ) : (
-                  pinnedMessages.map((pid) => (
-                    <button
-                      key={pid}
-                      type="button"
-                      onClick={() => jumpToMessage(pid)}
-                      className={cn(
-                        'w-full text-left p-3 rounded-xl text-xs border',
-                        isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200 hover:border-purple-400'
-                      )}
-                    >
-                      <span className="font-semibold">Pinned message</span>
-                      <span className="block text-gray-500 dark:text-gray-400 mt-0.5 truncate">{pid}</span>
-                    </button>
-                  ))
+                  pinnedMessages.map((p) => {
+                    const pid = typeof p === 'string' ? p : p.id;
+                    const msgObj = typeof p === 'string' ? null : p;
+                    const sender = msgObj ? resolveSenderLabel(msgObj, msgObj.senderId === uid) : 'Pinned message';
+                    const preview = msgObj?.content || (msgObj?.type ? `(${msgObj.type} message)` : 'Jump to message');
+                    return (
+                      <button
+                        key={pid}
+                        type="button"
+                        onClick={() => jumpToMessage(pid)}
+                        className={cn(
+                          'w-full text-left p-3 rounded-xl text-xs border transition-colors',
+                          isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-slate-50 border-slate-200 hover:border-purple-400'
+                        )}
+                      >
+                        <span className="font-semibold block">{sender}</span>
+                        <span className="block text-slate-500 dark:text-slate-400 mt-0.5 truncate">{preview}</span>
+                      </button>
+                    );
+                  })
+                )}
+                {conversation?.type === 'group' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInfoPanel(false);
+                      navigate(`/messages/${conversationId}/info`);
+                    }}
+                    className={cn(
+                      'w-full mt-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors',
+                      isDark ? 'border-white/15 text-slate-200 hover:bg-white/10' : 'border-slate-200 text-slate-800 hover:bg-slate-100'
+                    )}
+                  >
+                    Group info & members
+                  </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => navigate(`/messages/${conversationId}/settings`)}
-                  className="w-full mt-4 py-2.5 rounded-xl text-xs font-semibold border border-purple-500/40 text-arvdoul-purple dark:text-purple-400 hover:bg-purple-500/10 transition-colors"
+                  onClick={() => {
+                    setShowInfoPanel(false);
+                    navigate(`/messages/${conversationId}/settings`);
+                  }}
+                  className="w-full mt-2 py-2.5 rounded-xl text-xs font-semibold border border-purple-500/40 text-arvdoul-purple dark:text-purple-400 hover:bg-purple-500/10 transition-colors"
                 >
                   Conversation settings
                 </button>
@@ -1181,20 +1309,23 @@ export default function ChatScreen() {
         </div>
       )}
 
-      {/* Reply / editing banner */}
+      {/* Reply banner — inset surface, no thick left accent border */}
       {replyTo && (
         <div className={cn('max-w-4xl mx-auto w-full px-3')}>
-          <div className={cn('flex items-center gap-2 rounded-t-xl border-l-2 border-purple-500 px-3 py-2', isDark ? 'bg-white/5' : 'bg-slate-100')}>
+          <div className={cn(
+            'flex items-center gap-2 rounded-t-xl border border-b-0 px-3 py-2',
+            isDark ? 'bg-[#090F2D] border-purple-500/30' : 'bg-purple-50/70 border-purple-200'
+          )}>
             <Reply className="w-4 h-4 text-purple-400 shrink-0" aria-hidden="true" />
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-bold text-purple-400">Replying to {replyTo.senderName}</p>
-              <p className="text-[11px] truncate opacity-70">{replyTo.content || '(media message)'}</p>
+              <p className="text-[11px] truncate opacity-75">{replyTo.content || '(media message)'}</p>
             </div>
             <button
               type="button"
               onClick={() => setReplyTo(null)}
               aria-label="Cancel reply"
-              className={cn('p-1.5 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-200 text-gray-600')}
+              className={cn('p-1.5 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-slate-200 text-slate-600')}
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>

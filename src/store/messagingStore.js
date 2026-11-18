@@ -50,11 +50,15 @@ export const useMessagingStore = create((set, get) => ({
             }
             draft.conversationsHasMore = result.hasMore || false;
             draft.conversationsNextCursor = result.nextCursor || null;
-            // Update unread counts
-            if (result.unreadCounts) {
-              draft.unreadCounts = result.unreadCounts;
-              draft.totalUnreadCount = Object.values(draft.unreadCounts).reduce((a, b) => a + b, 0);
+            // Sync per-conversation unread map from the real sharded unreadCount
+            const nextUnread = options.startAfter ? { ...draft.unreadCounts } : {};
+            for (const c of (result.conversations || [])) {
+              if (c?.id && !c.isAd) {
+                nextUnread[c.id] = Number(c.unreadCount) || 0;
+              }
             }
+            draft.unreadCounts = nextUnread;
+            draft.totalUnreadCount = Object.values(nextUnread).reduce((a, b) => a + b, 0);
           })
         );
       }
@@ -108,9 +112,10 @@ export const useMessagingStore = create((set, get) => ({
           })
         );
 
-        // Mark as read if requested
-        if (options.markAsRead !== false) {
-          get().markConversationAsRead(conversationId);
+        // Mark as read if requested (only when userId is known)
+        const readerId = options.userId || messagingService.getService?.()?.auth?.currentUser?.uid;
+        if (options.markAsRead !== false && readerId) {
+          get().markConversationAsRead(conversationId, readerId);
         }
       }
     } catch (error) {
@@ -318,17 +323,72 @@ export const useMessagingStore = create((set, get) => ({
   },
 
   markConversationAsRead: async (conversationId, userId) => {
+    const resolvedUid = userId || messagingService.getService?.()?.auth?.currentUser?.uid;
+    if (!resolvedUid) return;
     try {
-      await messagingService.markConversationAsRead(conversationId, userId);
+      await messagingService.markConversationAsRead(conversationId, resolvedUid);
       set(
         produce((draft) => {
           draft.unreadCounts[conversationId] = 0;
           draft.totalUnreadCount = Object.values(draft.unreadCounts).reduce((a, b) => a + b, 0);
+          const conv = draft.conversations.find((c) => c.id === conversationId);
+          if (conv) conv.unreadCount = 0;
         })
       );
     } catch (error) {
       console.error('Mark read error:', error);
     }
+  },
+
+  togglePinConversation: async (conversationId, userId, currentlyPinned) => {
+    if (!conversationId || !userId) return;
+    if (currentlyPinned) await messagingService.unpinConversation(conversationId, userId);
+    else await messagingService.pinConversation(conversationId, userId);
+    set(
+      produce((draft) => {
+        const conv = draft.conversations.find((c) => c.id === conversationId);
+        if (conv) {
+          const list = new Set(conv.pinnedBy || []);
+          if (currentlyPinned) list.delete(userId);
+          else list.add(userId);
+          conv.pinnedBy = Array.from(list);
+        }
+      })
+    );
+  },
+
+  toggleMuteConversation: async (conversationId, userId, currentlyMuted) => {
+    if (!conversationId || !userId) return;
+    if (currentlyMuted) await messagingService.unmuteConversation(conversationId, userId);
+    else await messagingService.muteConversation(conversationId, userId);
+    set(
+      produce((draft) => {
+        const conv = draft.conversations.find((c) => c.id === conversationId);
+        if (conv) {
+          const list = new Set(conv.mutedBy || []);
+          if (currentlyMuted) list.delete(userId);
+          else list.add(userId);
+          conv.mutedBy = Array.from(list);
+        }
+      })
+    );
+  },
+
+  toggleArchiveConversation: async (conversationId, userId, currentlyArchived) => {
+    if (!conversationId || !userId) return;
+    if (currentlyArchived) await messagingService.unarchiveConversation(conversationId, userId);
+    else await messagingService.archiveConversation(conversationId, userId);
+    set(
+      produce((draft) => {
+        const conv = draft.conversations.find((c) => c.id === conversationId);
+        if (conv) {
+          const list = new Set(conv.archivedBy || []);
+          if (currentlyArchived) list.delete(userId);
+          else list.add(userId);
+          conv.archivedBy = Array.from(list);
+        }
+      })
+    );
   },
 
   saveDraft: (conversationId, content) => {

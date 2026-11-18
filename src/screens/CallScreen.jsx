@@ -175,15 +175,15 @@ export default function CallScreen() {
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="min-h-screen bg-[#03071B] text-white flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
-        <button onClick={() => { endCall(); navigate(-1); }} aria-label="Back" className="p-2 rounded-full hover:bg-white/10">
-          <ArrowLeft className="w-5 h-5" />
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#050B24]/80">
+        <button type="button" onClick={() => { endCall(); navigate(-1); }} aria-label="Back" className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple">
+          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
         </button>
         <div>
           <p className="font-semibold">{peer?.name || 'Call'}</p>
-          <p className="text-xs text-gray-400">{status === 'active' ? fmt(elapsed) : status === 'ringing' ? 'Ringing…' : status}</p>
+          <p className="text-xs text-slate-400 tabular-nums">{status === 'active' ? fmt(elapsed) : status === 'ringing' ? 'Ringing…' : status}</p>
         </div>
       </div>
 
@@ -196,11 +196,11 @@ export default function CallScreen() {
             {peer?.avatar ? (
               <LazyImage src={peer.avatar} alt={peer.name} className="w-24 h-24 rounded-full object-cover" />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-4xl font-bold">
+              <div className="w-24 h-24 rounded-full bg-arvdoul-gradient flex items-center justify-center text-4xl font-bold">
                 {(peer?.name || 'U').charAt(0).toUpperCase()}
               </div>
             )}
-            <p className="text-gray-300 text-sm">{error || (status === 'ringing' ? 'Waiting for answer…' : 'Connecting…')}</p>
+            <p className="text-slate-300 text-sm">{error || (status === 'ringing' ? 'Waiting for answer…' : 'Connecting…')}</p>
           </div>
         )}
 

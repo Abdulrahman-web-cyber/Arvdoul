@@ -68,7 +68,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
       {/* Header Bar */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-white shadow-sm shadow-purple-500/30">
+          <div className="w-7 h-7 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white shadow-sm shadow-arvdoul-purple/25">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
@@ -84,6 +84,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
         </div>
 
         <button
+          type="button"
           onClick={() => navigate('/stories')}
           className={cn(
             "flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-all cursor-pointer",
@@ -115,7 +116,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
               />
               <div className="absolute inset-0 bg-black/25 flex items-center justify-center" />
             </div>
-            <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center ring-2 ring-white dark:ring-[#0f1424] shadow-md">
+            <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center ring-2 ring-white dark:ring-[#0f1424] shadow-md">
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
             </div>
           </div>

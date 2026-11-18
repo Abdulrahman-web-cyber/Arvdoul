@@ -90,11 +90,11 @@ export default function GiftScreen() {
     <div className={cn('min-h-screen pb-16', colors.bg)}>
       <div className={cn('sticky top-0 z-30 border-b backdrop-blur-xl', colors.card, 'border')}>
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} aria-label="Back" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+          <button type="button" onClick={() => navigate(-1)} aria-label="Back" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className={cn('font-bold', colors.text)}>Send Gift</h1>
-          <div className={cn('ml-auto flex items-center gap-1 text-sm font-semibold', colors.text)}>
+          <div className={cn('ml-auto flex items-center gap-1 text-sm font-semibold tabular-nums', colors.text)}>
             <Coins className="w-4 h-4 text-amber-500" /> {balance ?? '…'}
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function GiftScreen() {
           {recipient?.avatar ? (
             <LazyImage src={recipient.avatar} alt={recipient?.name} className="w-14 h-14 rounded-full object-cover" />
           ) : (
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xl">
+            <div className="w-14 h-14 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold text-xl">
               {(pickDisplayName([recipient?.name], { fallback: '?' })).charAt(0).toUpperCase()}
             </div>
           )}
@@ -121,29 +121,31 @@ export default function GiftScreen() {
           {GIFTS.map((g) => (
             <motion.button
               key={g.id}
+              type="button"
               whileTap={{ scale: 0.95 }}
               onClick={() => setSelected(g)}
               className={cn(
                 'rounded-2xl p-4 border transition-all',
                 selected.id === g.id
-                  ? 'border-violet-500 bg-violet-500/10 shadow-lg'
+                  ? 'border-arvdoul-purple bg-arvdoul-purple/10 shadow-lg'
                   : colors.card
               )}
             >
               <div className="text-3xl mb-1">{g.emoji}</div>
               <p className={cn('text-sm font-semibold', colors.text)}>{g.name}</p>
-              <p className="text-xs text-amber-500 font-semibold">{g.coins} 🪙</p>
+              <p className="text-xs text-amber-500 font-semibold tabular-nums">{g.coins} coins</p>
             </motion.button>
           ))}
         </div>
 
         {/* Send */}
         <button
+          type="button"
           onClick={handleSend}
           disabled={sending || !recipient}
           className={cn(
             'w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition disabled:opacity-50',
-            'bg-gradient-to-r from-violet-500 to-cyan-500 text-white'
+            'bg-arvdoul-gradient text-white shadow-lg shadow-arvdoul-purple/20'
           )}
         >
           {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}

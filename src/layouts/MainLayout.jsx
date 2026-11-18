@@ -45,7 +45,9 @@ export default function MainLayout({ children }) {
   }, [navigate]);
 
   const isImmersiveVideo = location.pathname.startsWith("/videos") || location.pathname.startsWith("/reels");
-  const isIndividualChat = location.pathname.startsWith("/messages/") && location.pathname !== "/messages/new";
+  const isMessagesRoute = location.pathname === "/messages" || location.pathname.startsWith("/messages/");
+  const isMessagesSubroute = location.pathname.startsWith("/messages/");
+  const isIndividualChat = isMessagesSubroute && location.pathname !== "/messages/new";
   const isDedicatedStudioOrCall = (
     location.pathname.startsWith("/call") ||
     location.pathname.startsWith("/video-editor") ||
@@ -59,12 +61,14 @@ export default function MainLayout({ children }) {
   const isCreatePost = location.pathname.startsWith("/create-post");
   const isCreateStory = location.pathname.startsWith("/create-story");
 
-  // create-post displays the top app bar and bottom nav; stories, immersive video and studios hide them
-  const hideTopAppBar = isImmersiveVideo || isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
+  // Messaging owns a unified responsive header, so TopAppBar is hidden on all
+  // messaging routes (preventing stacked double headers). BottomNav stays on
+  // the mobile /messages inbox and hides inside threads & new-chat flows.
+  const hideTopAppBar = isImmersiveVideo || isMessagesRoute || isDedicatedStudioOrCall || isCreateStory;
   const hideTopAppBarOnDesktop = isAdminRoute || location.pathname === "/home" || location.pathname === "/";
-  const hideBottomNav = isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
+  const hideBottomNav = isMessagesSubroute || isDedicatedStudioOrCall || isCreateStory;
   const showDesktopRail = !isDedicatedStudioOrCall && !isCreateStory;
-  const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || location.pathname === "/messages";
+  const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || isMessagesRoute;
 
   return (
     <div

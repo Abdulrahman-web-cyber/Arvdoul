@@ -969,6 +969,7 @@ class UltimateMessagingService {
       isActive: true,
       lastRead: cleanParticipants.reduce((acc, id) => ({ ...acc, [id]: null }), {}),
       mutedBy: [],
+      silencedBy: [],
       pinnedBy: [],
       archivedBy: [],
       hiddenFor: [],
@@ -1206,7 +1207,9 @@ class UltimateMessagingService {
 
     const conv = await this.getConversation(conversationId, { cacheFirst: true });
     if (!conv.success) throw new Error('Conversation not found');
-    if (conv.conversation.mutedBy?.includes(currentUser.uid)) throw new Error('You are muted');
+    if (conv.conversation.silencedBy?.includes(currentUser.uid)) {
+      throw new Error('You have been muted in this conversation by a moderator');
+    }
 
     // Channel: only admins/moderators can send
     if (conv.conversation.type === 'channel') {
@@ -1306,7 +1309,15 @@ class UltimateMessagingService {
       }
     }
 
-    const message = this._buildMessage(idempotencyKey, conversationId, currentUser, validated, mediaInfo, ttlExpiresAt, encryptedPayload);
+    const message = this._buildMessage(
+      idempotencyKey,
+      conversationId,
+      currentUser,
+      validated,
+      mediaInfo || validated.media || null,
+      ttlExpiresAt,
+      encryptedPayload
+    );
 
     // `message.createdAt` is a serverTimestamp() sentinel until the write is
     // committed, so it has no .toDate(); passing it here threw a TypeError on
@@ -2196,7 +2207,7 @@ class UltimateMessagingService {
     if (conv.conversation.admins?.includes(targetUserId)) throw new Error('Cannot mute an admin');
 
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
-    await this.fs.updateDoc(convRef, { mutedBy: arrayUnion(targetUserId), updatedAt: this.fs.serverTimestamp() });
+    await this.fs.updateDoc(convRef, { silencedBy: arrayUnion(targetUserId), updatedAt: this.fs.serverTimestamp() });
     this.conversationsCache.delete(conversationId);
     return { success: true };
   }
@@ -2210,7 +2221,7 @@ class UltimateMessagingService {
     if (!isAdmin && !isMod) throw new Error('Only admins or moderators can unmute members');
 
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
-    await this.fs.updateDoc(convRef, { mutedBy: arrayRemove(targetUserId), updatedAt: this.fs.serverTimestamp() });
+    await this.fs.updateDoc(convRef, { silencedBy: arrayRemove(targetUserId), updatedAt: this.fs.serverTimestamp() });
     this.conversationsCache.delete(conversationId);
     return { success: true };
   }
@@ -2335,7 +2346,8 @@ class UltimateMessagingService {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
     if (!conv.success) throw new Error('Conversation not found');
-    if (!conv.conversation.admins?.includes(userId) && !conv.conversation.moderators?.includes(userId)) {
+    const isDirectParticipant = conv.conversation.type === 'direct' && conv.conversation.participants?.includes(userId);
+    if (!isDirectParticipant && !conv.conversation.admins?.includes(userId) && !conv.conversation.moderators?.includes(userId)) {
       throw new Error('Only admins or moderators can pin messages');
     }
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
@@ -2348,7 +2360,8 @@ class UltimateMessagingService {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
     if (!conv.success) throw new Error('Conversation not found');
-    if (!conv.conversation.admins?.includes(userId) && !conv.conversation.moderators?.includes(userId)) {
+    const isDirectParticipant = conv.conversation.type === 'direct' && conv.conversation.participants?.includes(userId);
+    if (!isDirectParticipant && !conv.conversation.admins?.includes(userId) && !conv.conversation.moderators?.includes(userId)) {
       throw new Error('Only admins or moderators can unpin messages');
     }
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
@@ -2839,7 +2852,11 @@ class UltimateMessagingService {
       if (!data.content || !data.content.trim()) throw new Error('Message cannot be empty');
       if (data.content.length > MESSAGING_CONFIG.TEXT_MAX_LENGTH) throw new Error(`Message too long (max ${MESSAGING_CONFIG.TEXT_MAX_LENGTH} characters)`);
     }
-    if (this._isMediaMessage(data.type) && !data.media?.file) throw new Error('Media file required');
+    if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.GIF) {
+      if (!data.media?.url && !data.media?.file && !data.content) throw new Error('GIF URL or file required');
+    } else if (this._isMediaMessage(data.type) && !data.media?.file && !data.media?.url) {
+      throw new Error('Media file required');
+    }
     return data;
   }
 
@@ -2964,8 +2981,10 @@ class UltimateMessagingService {
 
   async _compressImage(file, maxWidth, quality = 0.8) {
     return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
@@ -2978,10 +2997,14 @@ class UltimateMessagingService {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
         }, 'image/jpeg', quality);
       };
-      img.src = URL.createObjectURL(file);
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(file);
+      };
+      img.src = objectUrl;
     });
   }
 
@@ -3231,17 +3254,33 @@ class UltimateMessagingService {
 
   async _getImageDimensions(file) {
     return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = () => resolve({ width: img.width, height: img.height });
-      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({ width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+      };
+      img.src = objectUrl;
     });
   }
 
   async _getVideoDuration(file) {
     return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
       const video = document.createElement('video');
-      video.onloadedmetadata = () => resolve(video.duration);
-      video.src = URL.createObjectURL(file);
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+      };
+      video.src = objectUrl;
     });
   }
 

@@ -855,7 +855,7 @@ export const TopAppBar = ({
                     ? "bg-red-950/85 text-red-200 border-red-500/40 shadow-red-950/40 cursor-pointer hover:bg-red-900/90 active:scale-95 transition-all"
                     : syncSuccess
                     ? "bg-emerald-950/85 text-emerald-200 border-emerald-500/40 shadow-emerald-950/40"
-                    : "bg-purple-950/85 text-purple-200 border-purple-500/40 shadow-purple-950/40"
+                    : "bg-[#090F2D]/95 text-slate-100 border-white/15 shadow-black/40"
                 )}
                 onClick={() => {
                   if (!isOnline) {
@@ -865,7 +865,7 @@ export const TopAppBar = ({
               >
                 {!isOnline ? (
                   <>
-                    <WifiOff className="w-3.5 h-3.5 text-red-400 animate-pulse" />
+                    <WifiOff className="w-3.5 h-3.5 text-red-400" />
                     <span>
                       Offline Mode ·{" "}
                       {pendingCount > 0 ? `${pendingCount} saved` : "Viewing cache"}
