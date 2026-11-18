@@ -32,6 +32,10 @@ const merge = (mod) => {
 };
 
 merge(require('./user.js'));
+// Cloud Tasks worker that resumes an account-deletion cascade which exceeded the
+// per-call budget. deleteUserData enqueues a task targeting DELETION_WORKER_URL;
+// this is the function that URL must resolve to.
+merge(require('./userDeleteWorker.js'));
 merge(require('./feed.js'));
 merge(require('./comments.js'));
 merge(require('./stories.js'));

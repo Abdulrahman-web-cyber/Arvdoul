@@ -97,6 +97,40 @@ const SUBCOLLECTIONS_TO_CLEAN = {
   stories: ['viewers', 'reactions', 'reaction_shards'],
 };
 
+// Every two-way party-readable graph/safety edge keyed `${actor}_${other}`.
+// The actor field and the other-party field let the deletion sweep remove both
+// the edges the account created and the edges pointing at it.
+const TWO_WAY_EDGE_COLLECTIONS = [
+  ['follows', 'followerId', 'followingId'],
+  ['blocks', 'blockerId', 'blockedId'],
+  ['friend_requests', 'fromUserId', 'toUserId'],
+  ['mutes', 'muterId', 'mutedId'],
+  ['restricts', 'restricterId', 'restrictedId'],
+  ['follow_requests', 'fromUserId', 'toUserId'],
+];
+
+/**
+ * Deletes every edge in `collName` where `userId` is either the actor or the
+ * other party. Bounded to 1000 per side per call; returns the count deleted so
+ * the caller can enforce its own budget.
+ */
+async function deleteTwoWayEdges(collName, actorField, otherField, userId) {
+  let docs = (await db.collection(collName)
+    .where(actorField, '==', userId).limit(1000).get()).docs;
+  docs = docs.concat(
+    (await db.collection(collName).where(otherField, '==', userId).limit(1000).get()).docs
+  );
+  const uniqueIds = [...new Set(docs.map(d => d.id))];
+  let deleted = 0;
+  for (const batch of chunkArray(uniqueIds, 500)) {
+    const wb = db.batch();
+    batch.forEach(id => wb.delete(db.collection(collName).doc(id)));
+    await wb.commit();
+    deleted += batch.length;
+  }
+  return deleted;
+}
+
 async function deleteSubcollectionsSequentially(docRef, subNames) {
   for (const sub of subNames) {
     const subRef = docRef.collection(sub);
@@ -115,26 +149,56 @@ async function deleteSubcollectionsSequentially(docRef, subNames) {
   }
 }
 
+// Enqueues a Cloud Task that resumes the cascade in `processDeletionTask`.
+// Returns `true` when the remaining work is durably recorded (a task was
+// created, or a `deletion_tasks` fallback row was written), `false` when it
+// could not be recorded at all — the caller must NOT report the deletion as
+// offloaded in that case.
+//
+// The previous version returned silently when `DELETION_WORKER_URL` was unset,
+// so a deletion that hit the 2000-document budget returned
+// `partial_with_offload` while the remaining collections were never queued and
+// never cleaned. There is no other drainer of `deletion_tasks`, so this was a
+// fabricated success on the most destructive operation the platform performs.
 async function enqueueDeletionTask(userId, remainingCollections = [], cursors = {}) {
-  if (!deletionWorkerUrl) return;
-  const parent = tasksClient.queuePath(projectId, location, queueName);
-  const task = {
-    httpRequest: {
-      httpMethod: 'POST',
-      url: deletionWorkerUrl,
-      body: Buffer.from(JSON.stringify({ userId, remainingCollections, cursors })).toString('base64'),
-      headers: { 'Content-Type': 'application/json' },
-    },
-  };
+  const payload = { userId, remainingCollections, cursors };
+  if (deletionWorkerUrl) {
+    try {
+      const parent = tasksClient.queuePath(projectId, location, queueName);
+      const task = {
+        httpRequest: {
+          httpMethod: 'POST',
+          url: deletionWorkerUrl,
+          body: Buffer.from(JSON.stringify(payload)).toString('base64'),
+          headers: { 'Content-Type': 'application/json' },
+          oidcToken: {
+            serviceAccountEmail: `${projectId}@appspot.gserviceaccount.com`,
+            audience: deletionWorkerUrl,
+          },
+        },
+      };
+      await tasksClient.createTask({ parent, task });
+      return true;
+    } catch (e) {
+      log('ERROR', 'Cloud Task enqueue failed; writing fallback deletion_tasks row', { error: e.message });
+    }
+  } else {
+    log('ERROR', 'DELETION_WORKER_URL is not configured; deletion cannot be offloaded', { userId });
+  }
+
+  // Fallback: persist the remaining work so an operator (or the worker, once
+  // configured) can resume it. Without this the remainder is silently dropped.
   try {
-    await tasksClient.createTask({ parent, task });
-  } catch (e) {
-    log('ERROR', 'Cloud Task enqueue failed', { error: e.message });
     await db.collection('deletion_tasks').add({
-      userId, remainingCollections, cursors,
+      ...payload,
       status: 'pending',
+      reason: deletionWorkerUrl ? 'enqueue_failed' : 'worker_unconfigured',
       createdAt: FieldValue.serverTimestamp(),
     });
+    return true;
+  } catch (e) {
+    log('ERROR', 'Could not record remaining deletion work', { userId, error: e.message });
+    return false;
   }
 }
 
@@ -161,10 +225,37 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
     selfInitiated: callerUid === userId,
   }, 'user');
 
+  return runUserDataDeletion(userId);
+});
+
+/**
+ * The complete cascade. Called by `deleteUserData` (after auth + audit) and by
+ * `processDeletionTask` (the Cloud Tasks worker that resumes a cascade which hit
+ * the per-call document budget). Not itself a deployed function — it carries no
+ * trigger, so `index.js#merge` skips it.
+ */
+async function runUserDataDeletion(userId) {
   const MAX_DIRECT_DELETIONS = 2000;
   let totalDeleted = 0;
   const remaining = [];
   const cursors = {};
+
+  // Records the remaining work and returns the caller-facing response. When the
+  // remainder cannot be recorded at all (no worker URL and the fallback write
+  // failed) the status is `partial_offload_failed`, never `partial_with_offload`
+  // — the client must not report a clean deletion it did not achieve.
+  const offload = async () => {
+    const recorded = await enqueueDeletionTask(userId, remaining, cursors);
+    return {
+      success: true,
+      status: recorded ? 'partial_with_offload' : 'partial_offload_failed',
+      message: recorded
+        ? 'Cleanup continues in background.'
+        : 'Cleanup could not be scheduled; contact support so the remaining data can be removed.',
+      totalDeleted,
+      remaining,
+    };
+  };
 
   try {
     const userDocRef = db.collection('users').doc(userId);
@@ -216,120 +307,34 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
       }
     }
 
-    // Follows (both directions)
-    let followsDocs = (await db.collection('follows')
-        .where('followerId', '==', userId).limit(1000).get()).docs;
-    followsDocs = followsDocs.concat(
-      (await db.collection('follows').where('followingId', '==', userId).limit(1000).get()).docs
-    );
-    const uniqueFollowIds = [...new Set(followsDocs.map(d => d.id))];
-    const followBatches = chunkArray(uniqueFollowIds, 500);
-    for (const batch of followBatches) {
-      const wb = db.batch();
-      batch.forEach(id => wb.delete(db.collection('follows').doc(id)));
-      await wb.commit();
-      totalDeleted += batch.length;
+    // Graph & safety edges (both directions): follows, blocks, friend
+    // requests, mutes, restricts and follow requests. `mutes`/`restricts`/
+    // `follow_requests` were previously never cleaned, so a deleted account
+    // stayed muted/restricted on every user it had acted on and a pending
+    // follow request to it lingered in the owner's notifications forever.
+    for (const [collName, actorField, otherField] of TWO_WAY_EDGE_COLLECTIONS) {
+      totalDeleted += await deleteTwoWayEdges(collName, actorField, otherField, userId);
       if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-        remaining.push('follows');
-        await enqueueDeletionTask(userId, remaining, cursors);
-        return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
-      }
-    }
-
-    // Blocks (both directions)
-    let blocksDocs = (await db.collection('blocks')
-        .where('blockerId', '==', userId).limit(1000).get()).docs;
-    blocksDocs = blocksDocs.concat(
-      (await db.collection('blocks').where('blockedId', '==', userId).limit(1000).get()).docs
-    );
-    const uniqueBlockIds = [...new Set(blocksDocs.map(d => d.id))];
-    const blockBatches = chunkArray(uniqueBlockIds, 500);
-    for (const batch of blockBatches) {
-      const wb = db.batch();
-      batch.forEach(id => wb.delete(db.collection('blocks').doc(id)));
-      await wb.commit();
-      totalDeleted += batch.length;
-      if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-        remaining.push('blocks');
-        await enqueueDeletionTask(userId, remaining, cursors);
-        return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
-      }
-    }
-
-    // Friend requests (both directions)
-    let frDocs = (await db.collection('friend_requests')
-        .where('fromUserId', '==', userId).limit(1000).get()).docs;
-    frDocs = frDocs.concat(
-      (await db.collection('friend_requests').where('toUserId', '==', userId).limit(1000).get()).docs
-    );
-    const uniqueFrIds = [...new Set(frDocs.map(d => d.id))];
-    const frBatches = chunkArray(uniqueFrIds, 500);
-    for (const batch of frBatches) {
-      const wb = db.batch();
-      batch.forEach(id => wb.delete(db.collection('friend_requests').doc(id)));
-      await wb.commit();
-      totalDeleted += batch.length;
-      if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-        remaining.push('friend_requests');
-        await enqueueDeletionTask(userId, remaining, cursors);
-        return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
-      }
-    }
-
-    // Mutes / Restricts / Follow requests (both directions). These three
-    // party-readable safety collections were never cleaned, so a deleted
-    // account left orphaned edges behind: every user it had muted/restricted
-    // stayed muted, and a pending follow request to a deleted account sat in
-    // the owner's notifications forever.
-    const cleanupTwoWayEdges = async (collName, actorField, otherField) => {
-      let docs = (await db.collection(collName)
-        .where(actorField, '==', userId).limit(1000).get()).docs;
-      docs = docs.concat(
-        (await db.collection(collName).where(otherField, '==', userId).limit(1000).get()).docs
-      );
-      const uniqueIds = [...new Set(docs.map(d => d.id))];
-      for (const batch of chunkArray(uniqueIds, 500)) {
-        const wb = db.batch();
-        batch.forEach(id => wb.delete(db.collection(collName).doc(id)));
-        await wb.commit();
-        totalDeleted += batch.length;
-        if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-          remaining.push(collName);
-          await enqueueDeletionTask(userId, remaining, cursors);
-          return { offloaded: true };
-        }
-      }
-      return { offloaded: false };
-    };
-
-    for (const [collName, actorField, otherField] of [
-      ['mutes', 'muterId', 'mutedId'],
-      ['restricts', 'restricterId', 'restrictedId'],
-      ['follow_requests', 'fromUserId', 'toUserId'],
-    ]) {
-      const { offloaded } = await cleanupTwoWayEdges(collName, actorField, otherField);
-      if (offloaded) {
-        return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
+        const idx = TWO_WAY_EDGE_COLLECTIONS.findIndex(([c]) => c === collName);
+        remaining.push(...TWO_WAY_EDGE_COLLECTIONS.slice(idx).map(([c]) => c));
+        return offload();
       }
     }
 
     // Posts, Comments, Stories (with subcollection cleanup)
     await processCollectionWithSubs('posts', 'authorId');
     if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-      await enqueueDeletionTask(userId, remaining, cursors);
-      return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
+      return offload();
     }
 
     await processCollectionWithSubs('comments', 'userId');
     if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-      await enqueueDeletionTask(userId, remaining, cursors);
-      return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
+      return offload();
     }
 
     await processCollectionWithSubs('stories', 'userId');
     if (totalDeleted >= MAX_DIRECT_DELETIONS) {
-      await enqueueDeletionTask(userId, remaining, cursors);
-      return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
+      return offload();
     }
 
     // Push tokens
@@ -357,8 +362,7 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
     if (totalDeleted >= MAX_DIRECT_DELETIONS) {
       remaining.push('feeds');
       cursors['feeds'] = 'resume_needed';
-      await enqueueDeletionTask(userId, remaining, cursors);
-      return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
+      return offload();
     }
 
     // Core profile documents
@@ -409,7 +413,13 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
     log('ERROR', 'deleteUserData failed', { userId, error: error.message });
     throw new functions.https.HttpsError('internal', error.message);
   }
-});
+}
+
+// Internal helper (no trigger): the Cloud Tasks worker resumes the cascade by
+// calling this in-process. A server-side fetch back to the callable would be
+// rejected (a callable needs the JSON `data` envelope + an ID token), so the
+// worker must share the implementation rather than re-POST to it.
+exports.runUserDataDeletion = runUserDataDeletion;
 
 // ----------------------------------------------------------------------
 //  2. getMutualFriends (callable) – O(2) queries, capped at 200 follows

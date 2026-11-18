@@ -2001,7 +2001,14 @@ class ProfessionalUserService {
     }
 
     this._invalidateUserCache(userId);
-    return { success: true, ...(data || {}), message: 'Account deleted.' };
+    // Never claim a clean deletion the server did not report. When the cascade
+    // could not schedule its remainder (`partial_offload_failed`) the caller
+    // must surface that so the user can contact support.
+    const status = data?.status;
+    const message = status === 'partial_offload_failed'
+      ? 'Account signed out, but some data could not be scheduled for removal. Contact support to complete the deletion.'
+      : 'Account deleted.';
+    return { success: true, ...(data || {}), message };
   }
 
   async searchUsers(queryStr, options = {}) {
