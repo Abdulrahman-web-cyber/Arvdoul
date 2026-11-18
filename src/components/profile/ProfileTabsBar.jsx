@@ -1,30 +1,28 @@
 /**
- * Production-grade Profile Tabs Bar.
- * Matches the exact pill tab design in both Light and Dark reference images:
- * - Tabs: Posts, Videos, Reels, Photos, Stories, Saved (for owner), Tagged, About
- * - Active Tab: Vibrant gradient purple pill with white text & icon
- * - Inactive Tabs: Subtle text with clean icon and smooth hover transition
- * - Right Side: Optional Grid/Feed View mode toggle
- * 
+ * Production-grade Architectural Underline Tabs Bar for Arvdoul Profiles.
+ * Replaces pill-card containers with a clean, sticky horizontal hairline underline bar
+ * supporting optional Grid/Feed mode switching.
+ *
  * @component
  */
 
 import { memo } from "react";
-import { 
-  Grid3x3, 
-  Video, 
-  Film, 
-  Image as ImageIcon, 
-  Disc, 
+import {
+  Grid3x3,
+  Video,
+  Film,
+  Image as ImageIcon,
+  Disc,
   Music,
-  Bookmark, 
-  Tag, 
+  Bookmark,
+  Tag,
   Info,
   ShieldCheck,
   LayoutGrid,
-  Rows3
+  Rows3,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const ProfileTabsBar = memo(({
   activeTab = 'posts',
@@ -50,22 +48,31 @@ const ProfileTabsBar = memo(({
     { id: 'about', label: 'About', icon: Info },
   ];
 
+  const showViewToggle =
+    typeof onViewModeChange === 'function' &&
+    activeTab !== 'about' &&
+    activeTab !== 'citizenship' &&
+    activeTab !== 'audio';
+
   return (
-    <div className={cn(
-      "w-full rounded-2xl sm:rounded-3xl p-1.5 sm:p-2 border backdrop-blur-xl transition-all duration-200 flex items-center justify-between gap-2 shadow-sm overflow-hidden",
-      isDark
-        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
-    )}>
-      {/* Category Tabs Row */}
+    <div
+      className={cn(
+        "w-full border-b backdrop-blur-md transition-colors flex items-center justify-between gap-3",
+        isDark
+          ? "bg-[#03071B]/90 border-white/[0.08] text-white"
+          : "bg-[#F6F8FC]/90 border-slate-200/80 text-slate-900"
+      )}
+    >
+      {/* Horizontal Scrollable Tab Strip */}
       <div
         role="tablist"
         aria-label="Profile sections"
-        className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5 flex-1 min-w-0"
+        className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0"
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
+          const count = counts[tab.id];
 
           return (
             <button
@@ -75,36 +82,42 @@ const ProfileTabsBar = memo(({
               aria-selected={isActive}
               onClick={() => onTabChange?.(tab.id)}
               className={cn(
-                "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all duration-200 shrink-0 cursor-pointer select-none",
+                "relative flex items-center gap-1.5 px-2.5 sm:px-3.5 py-3 text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer select-none whitespace-nowrap",
                 isActive
-                  ? "bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md shadow-purple-600/25"
-                  : isDark
-                    ? "text-slate-400 hover:text-white hover:bg-white/5 active:scale-95"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 active:scale-95"
+                  ? "text-slate-900 dark:text-white"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               )}
             >
-              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Icon className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", isActive && "text-arvdoul-purple")} />
               <span>{tab.label}</span>
-              {counts[tab.id] > 0 && (
+              {count > 0 && (
                 <span
                   className={cn(
-                    "ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums",
-                    isActive ? "bg-white/25 text-white" : (isDark ? "bg-white/10 text-slate-300" : "bg-slate-200/80 text-slate-600")
+                    "text-[11px] font-semibold tabular-nums",
+                    isActive ? "text-arvdoul-purple dark:text-purple-300" : "text-slate-400 dark:text-slate-500"
                   )}
                 >
-                  {counts[tab.id]}
+                  {count}
                 </span>
+              )}
+
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full"
+                  style={{ background: BRAND_GRADIENT }}
+                />
               )}
             </button>
           );
         })}
       </div>
 
-      {/* View Mode Toggle (Grid vs Feed) if enabled */}
-      {typeof onViewModeChange === 'function' && activeTab !== 'about' && activeTab !== 'citizenship' && activeTab !== 'audio' && (
+      {/* View Mode Switcher */}
+      {showViewToggle && (
         <div className={cn(
-          "flex items-center gap-1 p-1 rounded-xl border shrink-0 mr-0.5",
-          isDark ? "bg-white/5 border-white/10" : "bg-slate-100 border-slate-200"
+          "flex items-center gap-0.5 p-0.5 rounded-xl border shrink-0 my-1.5",
+          isDark ? "bg-white/[0.04] border-white/10" : "bg-white border-slate-200"
         )}>
           <button
             type="button"
@@ -113,9 +126,9 @@ const ProfileTabsBar = memo(({
             aria-label="Grid view"
             aria-pressed={viewMode === 'grid'}
             className={cn(
-              "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              "p-1.5 rounded-lg transition-colors cursor-pointer",
               viewMode === 'grid'
-                ? "bg-arvdoul-purple text-white shadow-sm"
+                ? "bg-arvdoul-purple text-white"
                 : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
             )}
           >
@@ -128,9 +141,9 @@ const ProfileTabsBar = memo(({
             aria-label="Feed view"
             aria-pressed={viewMode === 'feed'}
             className={cn(
-              "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              "p-1.5 rounded-lg transition-colors cursor-pointer",
               viewMode === 'feed'
-                ? "bg-arvdoul-purple text-white shadow-sm"
+                ? "bg-arvdoul-purple text-white"
                 : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
             )}
           >

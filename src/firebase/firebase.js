@@ -144,26 +144,27 @@ export function handleFirestoreError(error, operationType, path) {
   throw new Error(JSON.stringify(errInfo));
 }
 
+function isProbeOfflineError(error) {
+  const msg = error instanceof Error ? error.message : String(error || '');
+  const code = error?.code || '';
+  return msg.includes('the client is offline') || code === 'unavailable';
+}
+
 export async function testConnection() {
   if (typeof window === 'undefined' || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test')) {
     return true;
   }
+  let reachable = true;
   try {
     const { doc, getDocFromServer } = await import('firebase/firestore');
     await getDocFromServer(doc(db, 'system_health', 'probe'));
-    return true;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error || '');
-    const code = error?.code || '';
-    if (msg.includes('the client is offline') || code === 'unavailable') {
+    if (isProbeOfflineError(error)) {
       console.error('Please check your Firebase configuration — Firestore client reported offline.');
-      return false;
+      reachable = false;
     }
-    if (code === 'permission-denied' || msg.includes('Missing or insufficient permissions')) {
-      return true;
-    }
-    return true;
   }
+  return reachable;
 }
 
 if (typeof window !== 'undefined' && (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test')) {

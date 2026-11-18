@@ -549,10 +549,11 @@ const RevenueTab = ({ revenue }) => {
         return;
       }
       try {
-        const [{ default: walletService }, { default: monetizationService }] = await Promise.all([
+        const [{ default: walletService }, { getMonetizationService }] = await Promise.all([
           import('../services/walletService.js'),
           import('../services/monetizationService.js'),
         ]);
+        const monetizationService = getMonetizationService();
         const [settingsRes, walletRes, historyRes] = await Promise.allSettled([
           monetizationService.getPayoutSettings(),
           walletService.getWalletOverview(user.uid),

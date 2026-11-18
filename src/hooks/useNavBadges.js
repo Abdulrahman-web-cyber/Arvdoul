@@ -30,20 +30,30 @@ export function useNavBadges() {
       const { getNotificationsService } = await import('../services/notificationsService.js');
       const { getUserService } = await import('../services/userService.js');
 
-      const [messages, stats, requests] = await Promise.allSettled([
+      const userSvc = getUserService();
+      const [messages, stats, requests, followRequests] = await Promise.allSettled([
         getMessagingService().getTotalUnreadCount(uid),
         getNotificationsService().getNotificationStats(uid),
-        getUserService().getFriendRequests(uid, 'received'),
+        userSvc.getFriendRequests(uid, 'received'),
+        typeof userSvc.getFollowRequests === 'function'
+          ? userSvc.getFollowRequests(uid)
+          : Promise.resolve({ requests: [] }),
       ]);
+
+      const friendReqCount =
+        requests.status === 'fulfilled' && Array.isArray(requests.value?.requests)
+          ? requests.value.requests.length
+          : 0;
+      const followReqCount =
+        followRequests.status === 'fulfilled' && Array.isArray(followRequests.value?.requests)
+          ? followRequests.value.requests.length
+          : 0;
 
       setCounts({
         messages: messages.status === 'fulfilled' ? Number(messages.value) || 0 : 0,
         notifications:
           stats.status === 'fulfilled' ? Number(stats.value?.stats?.unread) || 0 : 0,
-        network:
-          requests.status === 'fulfilled' && Array.isArray(requests.value?.requests)
-            ? requests.value.requests.length
-            : 0,
+        network: friendReqCount + followReqCount,
       });
     } finally {
       inFlight.current = false;
@@ -68,12 +78,14 @@ export function useNavBadges() {
     window.addEventListener('arvdoul:messages-read', onMessageEvent);
     window.addEventListener('arvdoul:notification-read', onMessageEvent);
     window.addEventListener('arvdoul:friend-request-changed', onMessageEvent);
+    window.addEventListener('arvdoul:follow-request-changed', onMessageEvent);
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('arvdoul:messages-read', onMessageEvent);
       window.removeEventListener('arvdoul:notification-read', onMessageEvent);
       window.removeEventListener('arvdoul:friend-request-changed', onMessageEvent);
+      window.removeEventListener('arvdoul:follow-request-changed', onMessageEvent);
     };
   }, [uid, refresh]);
 

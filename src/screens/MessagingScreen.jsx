@@ -509,14 +509,14 @@ export default function MessagingScreen() {
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={`p-3 rounded-2xl border flex items-center gap-3 ${
-                    isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'
+                  className={`p-3 rounded-2xl border flex items-center gap-3 shimmer ${
+                    isDark ? 'bg-[#080F2E]/80 border-white/[0.08]' : 'bg-white border-slate-200 shadow-sm'
                   }`}
                 >
-                  <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-white/10 animate-pulse shrink-0" />
+                  <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-white/10 animate-pulse shimmer shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-lg w-1/3 animate-pulse" />
-                    <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-lg w-2/3 animate-pulse" />
+                    <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-lg w-1/3 animate-pulse shimmer" />
+                    <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-lg w-2/3 animate-pulse shimmer" />
                   </div>
                 </div>
               ))}

@@ -12,7 +12,8 @@ import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
 import { getStoredUid } from '../../utils/security';
 import { cn } from '../../lib/utils';
-import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight, ArrowLeft } from "lucide-react";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight } from "lucide-react";
 import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
 
 /**
@@ -97,45 +98,30 @@ export default function CreatorDashboardScreen() {
       'min-h-screen pb-20',
       theme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
     )}>
-      {/* Top Sub-Toolbar: Back, Timeframe & Actions */}
+      {/* Top Sub-Toolbar: Timeframe & Actions (TopAppBar handles main app title and back navigation) */}
       <div className={cn(
         'sticky top-0 z-20 backdrop-blur-xl border-b transition-colors',
         theme === 'dark' ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200 shadow-sm'
       )}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              aria-label="Go back"
-              className={cn(
-                'w-9 h-9 rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0',
-                theme === 'dark'
-                  ? 'border-white/10 bg-white/[0.05] text-slate-300 hover:text-white'
-                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-              )}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-
-            {/* Timeframe Selector */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
-              {['7d', '30d', '90d', '365d'].map((tf) => (
-                <button
-                  key={tf}
-                  type="button"
-                  onClick={() => handleTimeframeChange(tf)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer tabular-nums',
-                    timeframe === tf
-                      ? 'bg-purple-600 text-white shadow-sm'
-                      : 'bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10'
-                  )}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
+          {/* Timeframe Selector */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+            {['7d', '30d', '90d', '365d'].map((tf) => (
+              <button
+                key={tf}
+                type="button"
+                onClick={() => handleTimeframeChange(tf)}
+                className={cn(
+                  'min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer tabular-nums',
+                  timeframe === tf
+                    ? 'text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10'
+                )}
+                style={timeframe === tf ? { background: BRAND_GRADIENT } : undefined}
+              >
+                {tf}
+              </button>
+            ))}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -146,7 +132,7 @@ export default function CreatorDashboardScreen() {
               aria-label="Refresh Analytics"
               title="Refresh Analytics"
               className={cn(
-                'p-2 rounded-xl transition-colors cursor-pointer',
+                'min-h-[38px] min-w-[38px] p-2 rounded-xl transition-colors cursor-pointer flex items-center justify-center',
                 'bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10',
                 loading && 'opacity-50'
               )}
@@ -159,7 +145,7 @@ export default function CreatorDashboardScreen() {
               aria-label="Export Analytics JSON"
               title="Export Analytics JSON"
               className={cn(
-                'p-2 rounded-xl transition-colors cursor-pointer',
+                'min-h-[38px] min-w-[38px] p-2 rounded-xl transition-colors cursor-pointer flex items-center justify-center',
                 'bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/10'
               )}
             >
@@ -290,10 +276,10 @@ export default function CreatorDashboardScreen() {
                   type="button"
                   onClick={() => navigate('/coins')}
                   className={cn(
-                    'flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-semibold transition border',
+                    'flex-1 sm:flex-none min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold transition border cursor-pointer whitespace-nowrap',
                     theme === 'dark'
                       ? 'border-white/10 hover:bg-white/10 text-white'
-                      : 'border-gray-300 hover:bg-white text-gray-800'
+                      : 'border-slate-300 hover:bg-white text-slate-800'
                   )}
                 >
                   Top Up Coins
@@ -301,7 +287,8 @@ export default function CreatorDashboardScreen() {
                 <button
                   type="button"
                   onClick={() => navigate('/wallet')}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white shadow-md transition"
+                  className="flex-1 sm:flex-none min-h-[40px] flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-md hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap"
+                  style={{ background: BRAND_GRADIENT }}
                 >
                   <Wallet className="w-3.5 h-3.5" />
                   <span>Withdraw in Wallet</span>

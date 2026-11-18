@@ -112,7 +112,6 @@ export default function ProfileMyScreen() {
 
   // Analytics store - reactive state selectors
   const analytics = useAnalyticsStore((state) => state.analytics);
-  const analyticsLoading = useAnalyticsStore((state) => state.loading);
   const timeframe = useAnalyticsStore((state) => state.timeframe);
   const ranking = useAnalyticsStore((state) => state.ranking);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
@@ -314,10 +313,7 @@ export default function ProfileMyScreen() {
 
   if (loading && !profile && !currentUser) {
     return (
-      <div className={cn(
-        'min-h-screen pb-20',
-        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
-      )}>
+      <div className="w-full pb-20">
         <ProfileSkeleton theme={theme} />
       </div>
     );
@@ -327,17 +323,16 @@ export default function ProfileMyScreen() {
     <ErrorBoundary>
       <div
         className={cn(
-          "min-h-screen pb-24 transition-colors duration-200",
+          "w-full pb-20 transition-colors duration-200",
           isDark
-            ? "bg-[#03071B] text-white selection:bg-purple-500/30"
-            : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
+            ? "text-white selection:bg-purple-500/30"
+            : "text-slate-900 selection:bg-purple-500/20"
         )}
       >
 
-        {/* Load failure banner: the store keeps a fallback profile so the screen
-            still renders, but the user must know the data did not load. */}
+        {/* Load failure banner */}
         {error && (
-          <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3">
+          <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 pt-2">
             <div className={cn(
               "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
               isDark
@@ -362,7 +357,7 @@ export default function ProfileMyScreen() {
         )}
 
         {/* Master Container */}
-        <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
+        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-6">
           {/* 1. Master Identity Card with Level Badge, Passport & Action Bar */}
           <ProfileHeroSection
             profile={displayedProfile}
@@ -405,8 +400,8 @@ export default function ProfileMyScreen() {
 
           {viewAs !== 'owner' && !capabilities.canViewContent ? (
             <div className={cn(
-              "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
-              isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+              "p-8 sm:p-12 rounded-2xl border text-center space-y-3",
+              isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-white border-slate-200/90 shadow-sm"
             )}>
               <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
                 <Lock className="w-6 h-6" />
@@ -454,8 +449,8 @@ export default function ProfileMyScreen() {
                 />
               )}
 
-              {/* 5. Pill Tabs Bar with View Mode Switcher */}
-              <div className="sticky top-2 z-30 pt-1">
+              {/* 5. Sticky Underline Tabs Bar with View Mode Switcher */}
+              <div className="sticky top-0 z-30">
                 <ProfileTabsBar
                   activeTab={activeTab}
                   onTabChange={handleTabChange}

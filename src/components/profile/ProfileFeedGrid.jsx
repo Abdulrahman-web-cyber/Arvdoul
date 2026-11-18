@@ -301,11 +301,11 @@ const ProfileFeedGrid = memo(({
     const perks = hasLevel ? (getPerksForLevel(profile.level) || []) : [];
     return (
       <div className={cn(
-        "w-full rounded-2xl p-5 sm:p-7 border transition-all shadow-sm space-y-6",
-        isDark ? "bg-[#0B0F19] border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+        "w-full rounded-2xl p-5 sm:p-7 border transition-colors space-y-6",
+        isDark ? "bg-[#080F2E]/85 border-white/[0.08] text-white" : "bg-white border-slate-200/90 text-slate-900 shadow-sm"
       )}>
         <div>
-          <h3 className="text-base font-bold mb-2">About Citizen</h3>
+          <h3 className="font-display text-base sm:text-lg font-bold mb-2 tracking-tight">About Citizen</h3>
           <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
             {profile?.bio || 'No bio written yet.'}
           </p>
@@ -533,24 +533,24 @@ const ProfileFeedGrid = memo(({
 
     return (
       <div className={cn(
-        "py-16 px-4 text-center rounded-2xl border space-y-4 my-2 w-full",
-        isDark ? "bg-[#0B0F19]/60 border-slate-800/80 text-white" : "bg-white/60 border-slate-200/80 text-slate-900"
+        "py-14 px-4 text-center rounded-2xl border space-y-3.5 my-2 w-full",
+        isDark ? "bg-[#080F2E]/65 border-white/[0.08] text-white" : "bg-white/80 border-slate-200/90 text-slate-900"
       )}>
-        <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
-          <EmptyIcon className="w-6 h-6" />
+        <div className="w-11 h-11 mx-auto rounded-2xl bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
+          <EmptyIcon className="w-5 h-5" />
         </div>
         <div className="space-y-1">
-          <h4 className="text-sm font-bold">{currentEmpty.title}</h4>
+          <h4 className="font-display text-sm sm:text-base font-bold tracking-tight">{currentEmpty.title}</h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
             {currentEmpty.desc}
           </p>
         </div>
         {currentEmpty.cta && (
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               type="button"
               onClick={currentEmpty.action}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-arvdoul-purple to-arvdoul-indigo text-white shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-arvdoul-gradient text-white shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
             >
               <span>{currentEmpty.cta}</span>
             </button>
@@ -603,10 +603,10 @@ const ProfileFeedGrid = memo(({
                 }
               }}
               className={cn(
-                "rounded-2xl p-4 border transition-all duration-200 cursor-pointer group flex flex-col justify-between gap-3 shadow-sm",
-                isDark 
-                  ? "bg-[#080F2E]/90 border-white/[0.08] hover:border-indigo-500/50 hover:bg-[#0E1426]" 
-                  : "bg-white border-slate-200 hover:border-indigo-400 hover:shadow-md"
+                "rounded-2xl p-4 border transition-colors cursor-pointer group flex flex-col justify-between gap-3",
+                isDark
+                  ? "bg-[#080F2E]/85 border-white/[0.08] hover:border-arvdoul-purple/50 hover:bg-[#0D1742]"
+                  : "bg-white border-slate-200/90 hover:border-arvdoul-purple/50 shadow-sm"
               )}
             >
               <div className="flex items-center gap-3">
@@ -763,7 +763,8 @@ const ProfileFeedGrid = memo(({
                 }
               }}
               className={cn(
-                "group relative rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-sm bg-slate-900 transition-all hover:scale-[1.02]",
+                "group relative rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer border transition-transform hover:scale-[1.015]",
+                isDark ? "border-white/[0.08] bg-[#080F2E]" : "border-slate-200/80 bg-white",
                 isReel ? "aspect-[9/16]" : "aspect-square"
               )}
             >
@@ -776,13 +777,18 @@ const ProfileFeedGrid = memo(({
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-full h-full flex flex-col justify-between p-3.5 bg-gradient-to-br from-purple-900/40 via-indigo-950/40 to-slate-900 border border-white/5">
-                  <span className="text-[11px] font-semibold text-slate-200 line-clamp-4 leading-relaxed">
+                <div className={cn(
+                  "w-full h-full flex flex-col justify-between p-4 text-left",
+                  isDark
+                    ? "bg-[#080F2E] text-slate-100"
+                    : "bg-white text-slate-800"
+                )}>
+                  <span className="text-xs font-medium line-clamp-5 leading-relaxed">
                     {item.content || item.caption || item.text || item.title || 'Post'}
                   </span>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
                     <span className="capitalize">{item.type || 'post'}</span>
-                    <span>{item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</span>
+                    <span className="tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</span>
                   </div>
                 </div>
               )}

@@ -1,15 +1,27 @@
 // src/screens/Profile/ConnectionsScreen.jsx
 //
 // Unified Connections Screen for Arvdoul Digital Nation.
-// Unifies Followers, Following, and Mutual Friends tabs with real backend telemetry.
-// Adheres strictly to Zero-Pill discipline, heraldic dignity, and privacy capability governance.
+// Unifies Followers, Following, Mutual Friends, and Owner Discover tabs with real backend telemetry,
+// cursor pagination, and privacy capability governance.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
-import { Search, Users, UserCheck, ShieldCheck, MessageCircle, Lock, Loader2, X, Sparkles } from "lucide-react";
+import {
+  Search,
+  Users,
+  UserCheck,
+  UserPlus,
+  ShieldCheck,
+  MessageCircle,
+  Lock,
+  Loader2,
+  X,
+  Check,
+  Clock,
+} from "lucide-react";
 import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
@@ -20,6 +32,11 @@ import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import { toast } from 'sonner';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import { ListRowsSkeleton } from '../../components/UI/SkeletonLoaders';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { getUserService } from '../../services/userService.js';
+
+const PAGE_SIZE = 30;
 
 export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const { userId } = useParams();
@@ -36,46 +53,48 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const targetUserId = userId || currentUserId;
   const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
 
-  // 1. State hooks declared first before any derived values (prevents TDZ ReferenceError)
   const [targetProfile, setTargetProfile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Lists state
+
+  // Lists & cursor pagination state
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [friends, setFriends] = useState([]);
-  
-  // Loading & privacy state
+  const [suggestions, setSuggestions] = useState([]);
+  const [sentFriendIds, setSentFriendIds] = useState(() => new Set());
+  const [friendBusyIds, setFriendBusyIds] = useState(() => new Set());
+
+  const [cursors, setCursors] = useState({ followers: null, following: null, friends: null });
+  const [hasMore, setHasMore] = useState({ followers: false, following: false, friends: false });
+  const [loadingMoreTab, setLoadingMoreTab] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
   // Capability map resolved once from the engine. Each tab has its own scope
-  // (`followersList` / `followingList`), so a viewer denied one list must not
-  // reach the other through a shared screen-level gate.
+  // (`followersList` / `followingList` / `friendsList`), so a viewer denied one
+  // list must not reach another through a shared screen-level gate.
   const [capabilities, setCapabilities] = useState(null);
 
-  // Basic level users start with community Friends; Level 3+ unlocks public Followers
   const rawLvl = targetProfile?.level ?? userProfile?.level ?? currentUser?.level;
-  const effectiveLevel = rawLvl != null ? Number(rawLvl) : null;
+  const effectiveLevel = rawLvl != null && Number.isFinite(Number(rawLvl)) ? Number(rawLvl) : null;
   const isCreatorOrAdvanced = Boolean(
-    targetProfile?.isCreator || 
-    userProfile?.isCreator || 
+    targetProfile?.isCreator ||
+    userProfile?.isCreator ||
     (effectiveLevel != null && effectiveLevel >= LEVEL_GATES.publicFollowers)
   );
 
-  // Derive initial active tab from props or route path
   const derivedInitialTab = useMemo(() => {
     if (propInitialTab) return propInitialTab;
     const pathname = location.pathname.toLowerCase();
     if (pathname.includes('/following')) return 'following';
     if (pathname.includes('/followers')) return 'followers';
     if (pathname.includes('/friends')) return 'friends';
-    // When visiting without explicit subpath, basic level users default to friends
+    if (pathname.includes('/discover')) return 'discover';
     return isCreatorOrAdvanced ? 'followers' : 'friends';
   }, [propInitialTab, location.pathname, isCreatorOrAdvanced]);
 
   const [activeTab, setActiveTab] = useState(propInitialTab || derivedInitialTab);
 
-  // Keep activeTab in sync if propInitialTab changes
   useEffect(() => {
     if (propInitialTab) {
       setActiveTab(propInitialTab);
@@ -84,19 +103,43 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
   const { follow, unfollow, cancelFollowRequest, followLoading } = useProfileStore();
 
-  // Load target profile & check capabilities
+  const hydrateFollowStates = useCallback(async (userService, lists) => {
+    const allIds = [...new Set(
+      lists.flat().map((u) => u?.id || u?.uid).filter((id) => id && id !== currentUserId)
+    )];
+    let followStates = new Map();
+    if (currentUserId && allIds.length) {
+      try {
+        followStates = await userService.getFollowStates(currentUserId, allIds);
+      } catch (e) {
+        console.warn('Follow-state hydration failed:', e?.message);
+      }
+    }
+    return (list) => list.map((u) => {
+      const id = u?.id || u?.uid;
+      const s = followStates instanceof Map ? followStates.get(id) : followStates?.[id];
+      return {
+        ...u,
+        isFollowing: Boolean(s?.isFollowing),
+        requestStatus: s?.requestStatus ?? null,
+      };
+    });
+  }, [currentUserId]);
+
+  // Load target profile, capabilities, and authorized lists
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
-      if (!targetUserId) return;
+      if (!targetUserId) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setPermissionDenied(false);
 
       try {
-        const userServiceModule = await import('../../services/userService.js');
-        const userService = userServiceModule.getUserService();
+        const userService = getUserService();
 
-        // 1. Fetch target profile & viewer relationship
         const [profile, rel] = await Promise.all([
           userService.getUserProfile(targetUserId, currentUserId).catch(() => null),
           currentUserId && currentUserId !== targetUserId
@@ -108,75 +151,88 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           setTargetProfile(profile);
         }
 
-        // 2. Resolve capability permissions. Owner always sees their own lists.
         const caps = resolveCapabilities({
           viewer: currentUser,
           target: profile,
           relationship: rel || {},
         });
-        // Fail closed: only an explicit grant renders a list. The friends graph
-        // is a mutual follow, so the engine resolves `canViewFriends` once
-        // (both lists) instead of each surface re-deriving it.
         const canViewFollowers = isOwner || Boolean(caps.canViewFollowers);
         const canViewFollowing = isOwner || Boolean(caps.canViewFollowing);
         const canViewFriends = isOwner || Boolean(caps.canViewFriends);
 
-        if (isMounted) setCapabilities({ ...caps, canViewFollowers, canViewFollowing, canViewFriends });
+        if (isMounted) {
+          setCapabilities({ ...caps, canViewFollowers, canViewFollowing, canViewFriends });
+        }
 
-        // 3. Fetch only the graphs the viewer is allowed to see. Fetching a
-        // denied list and hiding the tab would still read (and hydrate) it.
+        // Fetch only the graphs the viewer is allowed to see.
         const followersPromise = canViewFollowers
-          ? userService.getFollowers(targetUserId, { viewerId: currentUserId })
+          ? userService.getFollowers(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE })
           : Promise.resolve({ followers: [] });
         const followingPromise = canViewFollowing
-          ? userService.getFollowing(targetUserId, { viewerId: currentUserId })
+          ? userService.getFollowing(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE })
           : Promise.resolve({ following: [] });
         const friendsPromise = canViewFriends
-          ? (currentUserId && currentUserId !== targetUserId
-              ? userService.getFriends(targetUserId, { viewerId: currentUserId })
-              : Promise.resolve({ friends: [] }))
+          ? userService.getFriends(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE })
           : Promise.resolve({ friends: [] });
 
-        const [followersRes, followingRes, friendsRes] = await Promise.allSettled([
+        const discoverPromise = isOwner && currentUserId && typeof userService.getFriendRecommendations === 'function'
+          ? userService.getFriendRecommendations(currentUserId, 20).catch(() => ({ recommendations: [] }))
+          : Promise.resolve({ recommendations: [] });
+        const sentRequestsPromise = isOwner && currentUserId && typeof userService.getFriendRequests === 'function'
+          ? userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }))
+          : Promise.resolve({ requests: [] });
+
+        const [followersRes, followingRes, friendsRes, discoverRes, sentReqRes] = await Promise.allSettled([
           followersPromise,
           followingPromise,
           friendsPromise,
+          discoverPromise,
+          sentRequestsPromise,
         ]);
 
         if (isMounted) {
-          let followersList = [];
-          let followingList = [];
-          let friendsList = [];
-          if (followersRes.status === 'fulfilled') {
-            followersList = followersRes.value?.followers || [];
-          }
-          if (followingRes.status === 'fulfilled') {
-            followingList = followingRes.value?.following || followingRes.value?.friends || [];
-          }
-          if (friendsRes.status === 'fulfilled') {
-            friendsList = friendsRes.value?.mutualFriends || friendsRes.value?.friends || [];
-          }
+          const followersVal = followersRes.status === 'fulfilled' ? followersRes.value : null;
+          const followingVal = followingRes.status === 'fulfilled' ? followingRes.value : null;
+          const friendsVal = friendsRes.status === 'fulfilled' ? friendsRes.value : null;
 
-          // The spine's projection masks privacy but never attaches the
-          // viewer→row follow edge, so `citizen.isFollowing` was always
-          // undefined and every row rendered "Follow" even for accounts the
-          // viewer already followed (or had a pending request to). Resolve the
-          // real per-pair state in one bounded batched read.
+          const followersList = followersVal?.followers || [];
+          const followingList = followingVal?.following || followingVal?.friends || [];
+          const friendsList = friendsVal?.mutualFriends || friendsVal?.friends || [];
+          const suggestionsList = discoverRes.status === 'fulfilled'
+            ? (discoverRes.value?.recommendations || discoverRes.value?.suggestions || [])
+            : [];
+          const sentReqs = sentReqRes.status === 'fulfilled'
+            ? (Array.isArray(sentReqRes.value) ? sentReqRes.value : sentReqRes.value?.requests || [])
+            : [];
+
+          setCursors({
+            followers: followersVal?.nextCursor || null,
+            following: followingVal?.nextCursor || null,
+            friends: friendsVal?.nextCursor || null,
+          });
+          setHasMore({
+            followers: Boolean(followersVal?.hasMore && followersVal?.nextCursor),
+            following: Boolean(followingVal?.hasMore && followingVal?.nextCursor),
+            friends: Boolean(friendsVal?.hasMore && friendsVal?.nextCursor),
+          });
+
+          setSentFriendIds(new Set(sentReqs.map((r) => r.toUserId).filter(Boolean)));
+
           const allIds = [...new Set([
-            ...followersList, ...followingList, ...friendsList,
+            ...followersList, ...followingList, ...friendsList, ...suggestionsList,
           ].map((u) => u?.id || u?.uid).filter((id) => id && id !== currentUserId))];
+
           let followStates = new Map();
           if (currentUserId && allIds.length) {
             try {
-              const { getUserService } = await import('../../services/userService.js');
-              followStates = await getUserService().getFollowStates(currentUserId, allIds);
+              followStates = await userService.getFollowStates(currentUserId, allIds);
             } catch (e) {
               console.warn('Follow-state hydration failed:', e?.message);
             }
           }
           const withState = (list) => list.map((u) => {
             const id = u?.id || u?.uid;
-            const s = followStates.get(id);
+            const s = followStates instanceof Map ? followStates.get(id) : followStates?.[id];
             return {
               ...u,
               isFollowing: Boolean(s?.isFollowing),
@@ -187,8 +243,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           setFollowers(withState(followersList));
           setFollowing(withState(followingList));
           setFriends(withState(friendsList));
-          // Only a viewer with no visible list at all sees the protected state.
-          if (!canViewFollowers && !canViewFollowing) setPermissionDenied(true);
+          setSuggestions(withState(suggestionsList));
+
+          if (!isOwner && !canViewFollowers && !canViewFollowing && !canViewFriends) {
+            setPermissionDenied(true);
+          }
         }
       } catch (err) {
         console.error('Failed to load connection graph:', err);
@@ -203,23 +262,73 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     };
   }, [targetUserId, currentUserId, isOwner, currentUser]);
 
-  // Handle follow toggle with optimistic update across all lists
+  // Cursor-based Load More for active list tab
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMoreTab || activeTab === 'discover') return;
+    const cursor = cursors[activeTab];
+    if (!cursor || !hasMore[activeTab] || !targetUserId) return;
+
+    setLoadingMoreTab(activeTab);
+    try {
+      const userService = getUserService();
+
+      let res = null;
+      let rawNext = [];
+      if (activeTab === 'followers') {
+        res = await userService.getFollowers(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor });
+        rawNext = res?.followers || [];
+      } else if (activeTab === 'following') {
+        res = await userService.getFollowing(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor });
+        rawNext = res?.following || res?.friends || [];
+      } else if (activeTab === 'friends') {
+        res = await userService.getFriends(targetUserId, { viewerId: currentUserId, limit: PAGE_SIZE, startAfter: cursor });
+        rawNext = res?.mutualFriends || res?.friends || [];
+      }
+
+      const withState = await hydrateFollowStates(userService, [rawNext]);
+      const hydrated = withState(rawNext);
+
+      const mergeUnique = (prev) => {
+        const seen = new Set(prev.map((u) => u?.id || u?.uid));
+        return [...prev, ...hydrated.filter((u) => !seen.has(u?.id || u?.uid))];
+      };
+
+      if (activeTab === 'followers') setFollowers(mergeUnique);
+      else if (activeTab === 'following') setFollowing(mergeUnique);
+      else if (activeTab === 'friends') setFriends(mergeUnique);
+
+      setCursors((prev) => ({ ...prev, [activeTab]: res?.nextCursor || null }));
+      setHasMore((prev) => ({ ...prev, [activeTab]: Boolean(res?.hasMore && res?.nextCursor) }));
+    } catch (err) {
+      toast.error(err?.message || 'Could not load more connections');
+    } finally {
+      setLoadingMoreTab(null);
+    }
+  }, [loadingMoreTab, activeTab, cursors, hasMore, targetUserId, currentUserId, hydrateFollowStates]);
+
+  // Handle follow toggle with optimistic update & full state rollback across all lists
   const handleFollowToggle = useCallback(async (targetId, currentFollowState) => {
     if (!currentUserId) return;
     const nextState = !currentFollowState;
 
-    // Optimistically update lists
+    const existingRow = [...followers, ...following, ...friends, ...suggestions].find(
+      (u) => (u.id || u.uid) === targetId
+    );
+    const prevSnapshot = {
+      isFollowing: existingRow?.isFollowing ?? currentFollowState,
+      requestStatus: existingRow?.requestStatus ?? null,
+    };
+
     const updater = (list) =>
       list.map((u) => (u.id === targetId || u.uid === targetId ? { ...u, isFollowing: nextState } : u));
     setFollowers(updater);
     setFollowing(updater);
     setFriends(updater);
+    setSuggestions(updater);
 
     try {
       if (nextState) {
         const result = await follow(currentUserId, targetId);
-        // A private target records a pending request (no edge, no counter):
-        // reflect "Requested" rather than a fabricated "Following".
         if (result?.requested || result?.requestStatus === 'pending') {
           const markRequested = (list) =>
             list.map((u) => (u.id === targetId || u.uid === targetId
@@ -228,19 +337,22 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           setFollowers(markRequested);
           setFollowing(markRequested);
           setFriends(markRequested);
+          setSuggestions(markRequested);
         }
       } else {
         await unfollow(currentUserId, targetId);
       }
-    } catch (err) {
-      // Rollback on failure
+    } catch {
       const rollbacker = (list) =>
-        list.map((u) => (u.id === targetId || u.uid === targetId ? { ...u, isFollowing: currentFollowState } : u));
+        list.map((u) => (u.id === targetId || u.uid === targetId
+          ? { ...u, isFollowing: prevSnapshot.isFollowing, requestStatus: prevSnapshot.requestStatus }
+          : u));
       setFollowers(rollbacker);
       setFollowing(rollbacker);
       setFriends(rollbacker);
+      setSuggestions(rollbacker);
     }
-  }, [currentUserId, follow, unfollow]);
+  }, [currentUserId, follow, unfollow, followers, following, friends, suggestions]);
 
   // Withdraw a pending follow request (private target).
   const handleCancelRequest = useCallback(async (targetId) => {
@@ -254,40 +366,68 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       setFollowers(clearRequested);
       setFollowing(clearRequested);
       setFriends(clearRequested);
+      setSuggestions(clearRequested);
     } catch {
       toast.error('Could not withdraw the follow request');
     }
   }, [currentUserId, cancelFollowRequest]);
 
-  // Per-tab visibility. Owner sees every tab; a non-owner tab is only shown
-  // when the engine grants its scope. The screen-level `permissionDenied` state
-  // is not enough: a viewer denied `followingList` but allowed `followersList`
-  // would otherwise still reach the Following list through the shared screen.
+  // Send or cancel friend request from owner Discover tab
+  const handleFriendRequestToggle = useCallback(async (targetId) => {
+    if (!currentUserId || !targetId || friendBusyIds.has(targetId)) return;
+    const isSent = sentFriendIds.has(targetId);
+
+    setFriendBusyIds((prev) => new Set(prev).add(targetId));
+    try {
+      const svc = getUserService();
+      if (isSent) {
+        await svc.cancelFriendRequest(currentUserId, targetId);
+        setSentFriendIds((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+        toast.info('Friend request withdrawn');
+      } else {
+        const res = await svc.sendFriendRequest(currentUserId, targetId);
+        if (res?.alreadyFriends) {
+          toast.info('You are already mutual friends');
+        } else {
+          setSentFriendIds((prev) => new Set(prev).add(targetId));
+          toast.success('Friend request sent');
+        }
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not update friend request');
+    } finally {
+      setFriendBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetId);
+        return next;
+      });
+    }
+  }, [currentUserId, friendBusyIds, sentFriendIds]);
+
   const tabVisible = useMemo(() => ({
     followers: isOwner || Boolean(capabilities?.canViewFollowers),
     following: isOwner || Boolean(capabilities?.canViewFollowing),
     friends: isOwner || Boolean(capabilities?.canViewFriends),
+    discover: isOwner,
   }), [isOwner, capabilities]);
 
-  const visibleTabs = useMemo(
-    () => ['followers', 'following', 'friends'].filter((k) => tabVisible[k]),
-    [tabVisible]
-  );
-
-  // Keep the active tab on a visible one (a denied route/default must not leak).
   useEffect(() => {
     if (!tabVisible[activeTab]) {
-      const fallback = ['followers', 'following', 'friends'].find((k) => tabVisible[k]);
+      const fallback = ['followers', 'following', 'friends', 'discover'].find((k) => tabVisible[k]);
       if (fallback) setActiveTab(fallback);
     }
   }, [tabVisible, activeTab]);
 
-  // Filter current active list by search query
   const currentItems = useMemo(() => {
     let rawList = [];
     if (activeTab === 'followers' && tabVisible.followers) rawList = followers;
     else if (activeTab === 'following' && tabVisible.following) rawList = following;
     else if (activeTab === 'friends' && tabVisible.friends) rawList = friends;
+    else if (activeTab === 'discover' && tabVisible.discover) rawList = suggestions;
 
     if (!searchQuery.trim()) return rawList;
     const q = searchQuery.toLowerCase().trim();
@@ -297,7 +437,23 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       const bio = (item.bio || '').toLowerCase();
       return name.includes(q) || user.includes(q) || bio.includes(q);
     });
-  }, [activeTab, followers, following, friends, searchQuery]);
+  }, [activeTab, tabVisible, followers, following, friends, suggestions, searchQuery]);
+
+  const tabs = useMemo(() => [
+    tabVisible.followers && { id: 'followers', label: 'Followers', count: followers.length, icon: Users },
+    tabVisible.following && { id: 'following', label: 'Following', count: following.length, icon: UserCheck },
+    tabVisible.friends && {
+      id: 'friends',
+      label: isOwner ? 'Friends' : 'Mutual',
+      count: friends.length,
+      icon: ShieldCheck,
+    },
+    tabVisible.discover && { id: 'discover', label: 'Discover', count: suggestions.length, icon: UserPlus },
+  ].filter(Boolean), [tabVisible, followers.length, following.length, friends.length, suggestions.length, isOwner]);
+
+  const targetDisplayName = targetProfile
+    ? resolveActorName([targetProfile.displayName, targetProfile.username], targetUserId)
+    : null;
 
   return (
     <div className={cn(
@@ -306,132 +462,79 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ? "bg-[#03071B] text-white selection:bg-purple-500/30"
         : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
     )}>
-      {/* Main Container - TopAppBar handles title and back navigation */}
-      <div className="max-w-3xl mx-auto px-4 pt-3 sm:pt-4 space-y-4">
-        {/* Unified 3-Tab Navigator: Followers | Following | Mutual Friends */}
+      <div className="max-w-3xl mx-auto px-4 pt-3 sm:pt-5 space-y-4">
+        {/* Underline Tab Navigation */}
         <div
           role="tablist"
           aria-label="Connection lists"
           className={cn(
-            "p-1 rounded-2xl border backdrop-blur-xl transition-all shadow-sm",
-            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200"
+            "flex items-center overflow-x-auto no-scrollbar border-b",
+            isDark ? "border-white/[0.08]" : "border-slate-200"
           )}
         >
-          <div className={cn('grid gap-1', visibleTabs.length === 1 ? 'grid-cols-1' : visibleTabs.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
-            {/* Tab 1: Followers */}
-            {tabVisible.followers && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'followers'}
-              onClick={() => {
-                setActiveTab('followers');
-                setSearchQuery('');
-              }}
-              className={cn(
-                "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
-                activeTab === 'followers'
-                  ? "bg-purple-600 text-white shadow"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              )}
-            >
-              <Users className="w-4 h-4 shrink-0" />
-              <span>Followers</span>
-              <span className={cn(
-                "text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums",
-                activeTab === 'followers'
-                  ? "bg-white/20 text-white font-extrabold"
-                  : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
-              )}>
-                {followers.length}
-              </span>
-            </button>
-            )}
-
-            {/* Tab 2: Following */}
-            {tabVisible.following && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'following'}
-              onClick={() => {
-                setActiveTab('following');
-                setSearchQuery('');
-              }}
-              className={cn(
-                "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
-                activeTab === 'following'
-                  ? "bg-purple-600 text-white shadow"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              )}
-            >
-              <UserCheck className="w-4 h-4 shrink-0" />
-              <span>Following</span>
-              <span className={cn(
-                "text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums",
-                activeTab === 'following'
-                  ? "bg-white/20 text-white font-extrabold"
-                  : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
-              )}>
-                {following.length}
-              </span>
-            </button>
-            )}
-
-            {/* Tab 3: Friends */}
-            {tabVisible.friends && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'friends'}
-              onClick={() => {
-                setActiveTab('friends');
-                setSearchQuery('');
-              }}
-              className={cn(
-                "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
-                activeTab === 'friends'
-                  ? (isDark ? "bg-amber-500 text-slate-950 font-black shadow" : "bg-amber-600 text-white shadow")
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              )}
-            >
-              <ShieldCheck className={cn(
-                "w-4 h-4 shrink-0",
-                activeTab === 'friends'
-                  ? (isDark ? "text-slate-950" : "text-white")
-                  : "text-amber-500 dark:text-amber-400"
-              )} />
-              <span>{isOwner ? 'Friends' : 'Mutual'}</span>
-              <span className={cn(
-                "text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums",
-                activeTab === 'friends'
-                  ? (isDark ? "bg-black/20 text-slate-950 font-extrabold" : "bg-white/20 text-white font-extrabold")
-                  : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
-              )}>
-                {friends.length}
-              </span>
-            </button>
-            )}
-          </div>
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSearchQuery('');
+                }}
+                className={cn(
+                  "relative flex-1 min-w-[92px] min-h-[44px] px-3 py-2.5 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                  active
+                    ? isDark ? "text-white" : "text-slate-950"
+                    : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "w-4 h-4 shrink-0",
+                    active && (tab.id === 'friends' ? "text-amber-500" : "text-purple-500")
+                  )}
+                  aria-hidden="true"
+                />
+                <span>{tab.label}</span>
+                <span className={cn(
+                  "text-xs tabular-nums",
+                  active
+                    ? isDark ? "text-slate-300" : "text-slate-700"
+                    : isDark ? "text-slate-500" : "text-slate-400"
+                )}>
+                  {tab.count}
+                </span>
+                {active && (
+                  <span
+                    className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
+                    style={{ background: BRAND_GRADIENT }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Citizen Social Progression Banner */}
+        {/* Quiet Tier / Access Context Strip */}
         <div className={cn(
-          "px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs transition-all",
-          isCreatorOrAdvanced
-            ? isDark
-              ? "bg-purple-950/20 border-purple-500/30 text-purple-200"
-              : "bg-purple-50 border-purple-200 text-purple-900"
-            : isDark
-            ? "bg-amber-950/20 border-amber-500/30 text-amber-200"
-            : "bg-amber-50 border-amber-200 text-amber-900"
+          "px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs",
+          isDark
+            ? "bg-[#080F2E]/70 border-white/[0.08] text-slate-300"
+            : "bg-white border-slate-200/80 text-slate-700"
         )}>
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 shrink-0 text-amber-400" />
-            <span>
+          <div className="min-w-0">
+            <span className={cn("font-semibold", isDark ? "text-white" : "text-slate-900")}>
+              {targetDisplayName ? `${targetDisplayName} · ` : ''}
+              {effectiveLevel != null ? `Level ${effectiveLevel}` : 'Connection Graph'}
+            </span>
+            <span className={cn("ml-1.5", isDark ? "text-slate-400" : "text-slate-500")}>
               {isCreatorOrAdvanced
-                ? `Level ${effectiveLevel} Citizen Graph: Public broadcast reach, Followers, and Mutual Friends are active.`
-                : `Level ${effectiveLevel} Resident: Basic level citizens build mutual Friends. At Level ${LEVEL_GATES.publicFollowers}+, your profile unlocks Public Followers!`}
+                ? 'Public broadcast reach, Followers, and Mutual Friends are active.'
+                : `Residents start with Mutual Friends; Level ${LEVEL_GATES.publicFollowers}+ unlocks Public Followers.`}
             </span>
           </div>
 
@@ -439,33 +542,46 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             <button
               type="button"
               onClick={() => navigate('/perks')}
-              className="text-[11px] font-bold underline shrink-0 cursor-pointer hover:opacity-80"
+              className={cn(
+                "min-h-[36px] px-2 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer hover:underline",
+                isDark ? "text-purple-400" : "text-purple-700"
+              )}
             >
               View Perks
             </button>
           )}
         </div>
 
-        {/* Search Bar with Instant Reset */}
+        {/* Search Input */}
         <div className={cn(
-          "flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border transition-all shadow-sm",
-          isDark ? "bg-[#080F2E]/90 border-white/[0.08] focus-within:border-purple-500/50" : "bg-white border-slate-200 focus-within:border-purple-400"
+          "flex items-center gap-2.5 px-3.5 min-h-[44px] rounded-2xl border transition-colors",
+          isDark
+            ? "bg-[#080F2E]/90 border-white/[0.08] focus-within:border-purple-500/50"
+            : "bg-white border-slate-200 focus-within:border-purple-400"
         )}>
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
           <input
             aria-label="Search connections"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeTab === 'followers' ? 'followers' : activeTab === 'following' ? 'following' : 'mutual friends'} by name or handle...`}
-            className="flex-1 bg-transparent text-xs sm:text-sm placeholder-slate-400 focus:outline-none"
+            placeholder={`Search ${
+              activeTab === 'followers'
+                ? 'followers'
+                : activeTab === 'following'
+                  ? 'following'
+                  : activeTab === 'discover'
+                    ? 'suggested people'
+                    : 'mutual friends'
+            } by name or handle...`}
+            className="flex-1 bg-transparent text-xs sm:text-sm placeholder-slate-400 focus:outline-none py-2.5"
           />
           {searchQuery && (
             <button
               type="button"
               aria-label="Clear search"
               onClick={() => setSearchQuery('')}
-              className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -474,30 +590,33 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
         {/* Loading State */}
         {loading ? (
-          <div className="py-24 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-            <p className="text-xs font-mono text-slate-500">Querying sovereign connection graph...</p>
-          </div>
+          <ListRowsSkeleton count={6} />
         ) : permissionDenied ? (
           /* Privacy Protected State */
           <div className={cn(
-            "rounded-3xl p-8 sm:p-12 text-center border shadow-xl space-y-4 my-8 backdrop-blur-xl",
+            "rounded-3xl p-8 sm:p-12 text-center border space-y-4 my-6",
             isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center border border-purple-500/20">
-              <Lock className="w-8 h-8" />
+            <div className={cn(
+              "w-14 h-14 mx-auto rounded-2xl flex items-center justify-center border",
+              isDark ? "bg-purple-500/10 text-purple-400 border-purple-500/20" : "bg-purple-50 text-purple-700 border-purple-200"
+            )}>
+              <Lock className="w-7 h-7" />
             </div>
             <div className="space-y-1">
               <h2 className="text-base sm:text-lg font-bold">Connections Protected</h2>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                This citizen has chosen to keep their connection list private in accordance with Arvdoul sovereign privacy laws.
+                This account keeps its connection lists private.
               </p>
             </div>
             <div className="pt-2">
               <button
                 type="button"
                 onClick={() => navigate(-1)}
-                className="px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
+                className={cn(
+                  "min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-xs whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 cursor-pointer",
+                  isDark ? "bg-white/10 text-white" : "bg-slate-200 text-slate-900"
+                )}
               >
                 Return to Profile
               </button>
@@ -506,116 +625,166 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ) : currentItems.length === 0 ? (
           /* Empty State */
           <div className={cn(
-            "py-20 text-center rounded-3xl border space-y-3 p-6",
-            isDark ? "bg-white/[0.02] border-white/5" : "bg-white/50 border-slate-200"
+            "py-16 text-center rounded-3xl border space-y-2.5 px-6",
+            isDark ? "bg-[#080F2E]/60 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-500/10 flex items-center justify-center text-slate-400">
-              <Users className="w-6 h-6 opacity-60" />
+            <div className={cn(
+              "w-12 h-12 mx-auto rounded-2xl flex items-center justify-center",
+              isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-500"
+            )}>
+              <Users className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-              {searchQuery ? 'No matching citizens found' : `No ${activeTab} yet`}
+            <h3 className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>
+              {searchQuery ? 'No matching accounts' : `No ${activeTab === 'discover' ? 'suggestions' : activeTab} yet`}
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
               {searchQuery
-                ? `No citizen in this list matched "${searchQuery}". Try a different spelling or keyword.`
+                ? `No account in this list matched "${searchQuery}".`
                 : activeTab === 'followers'
-                ? 'When people follow this profile, they will appear here.'
-                : activeTab === 'following'
-                ? 'Citizens followed by this profile will appear here.'
-                : 'Mutual friends who follow each other will appear here.'}
+                  ? 'People who follow this profile will appear here.'
+                  : activeTab === 'following'
+                    ? 'Accounts followed by this profile will appear here.'
+                    : activeTab === 'discover'
+                      ? 'Suggested people and creators will appear here as your network grows.'
+                      : 'Mutual friends who follow each other will appear here.'}
             </p>
           </div>
         ) : (
-          /* Citizens Connection Card List */
+          /* Connection List */
           <div className="space-y-2.5">
-            {currentItems.map((citizen) => {
-              const citizenId = citizen.id || citizen.uid;
-              const citizenName = resolveActorName([citizen.displayName, citizen.name], citizen.id || citizen.uid);
-              const citizenHandle = pickHandle([citizen.username]) || deriveHandle(citizenName);
-              const safeAvatar = getSafeAvatarUrl(citizen.photoURL, citizenName, citizenId);
-              const rank = citizen.level ? getRankTitle(citizen.level) : null;
-              const isSelf = Boolean(currentUserId && citizenId === currentUserId);
+            {currentItems.map((rowUser) => {
+              const rowId = rowUser.id || rowUser.uid;
+              const rowName = resolveActorName([rowUser.displayName, rowUser.name], rowId);
+              const rowHandle = pickHandle([rowUser.username]) || deriveHandle(rowName);
+              const safeAvatar = getSafeAvatarUrl(rowUser.photoURL, rowName, rowId);
+              const rank = rowUser.level ? getRankTitle(rowUser.level) : null;
+              const isSelf = Boolean(currentUserId && rowId === currentUserId);
+              const isFriendRequested = sentFriendIds.has(rowId);
+              const isFriendBusy = friendBusyIds.has(rowId);
 
               return (
                 <div
-                  key={citizenId}
+                  key={rowId}
                   className={cn(
-                    "group p-3.5 sm:p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 shadow-sm",
+                    "p-3.5 sm:p-4 rounded-2xl border transition-colors flex items-center justify-between gap-3",
                     isDark
-                      ? "bg-[#080F2E]/90 hover:bg-[#080F2E] border-white/[0.08] hover:border-purple-500/30"
-                      : "bg-white hover:bg-slate-50 border-slate-200/80 hover:border-purple-300"
+                      ? "bg-[#080F2E]/90 hover:bg-[#080F2E] border-white/[0.08] hover:border-white/15"
+                      : "bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300"
                   )}
                 >
                   {/* Left: Avatar + Identity */}
                   <button
                     type="button"
-                    onClick={() => navigate(`/profile/${citizenId}`)}
-                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-arvdoul-blue rounded-xl"
+                    onClick={() => navigate(`/profile/${rowId}`)}
+                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-arvdoul-purple rounded-xl"
                   >
-                    <div className="relative shrink-0">
-                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/20 dark:border-white/10 shadow-sm bg-slate-800">
-                        <LazyImage
-                          src={safeAvatar}
-                          alt={citizenName}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.src = getSafeAvatarUrl(null, citizenName, citizenId);
-                          }}
-                        />
-                      </div>
-                      {/* Presence indicator */}
-                      {citizen.isOnline || citizen.presence?.status === 'online' ? (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#03071B]" title="Online" />
-                      ) : (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-[#03071B]" title="Offline" />
-                      )}
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl overflow-hidden border shrink-0",
+                      isDark ? "border-white/10 bg-slate-800" : "border-slate-200 bg-slate-100"
+                    )}>
+                      <LazyImage
+                        src={safeAvatar}
+                        alt={rowName}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = getSafeAvatarUrl(null, rowName, rowId);
+                        }}
+                      />
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                          {citizenName}
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn(
+                          "text-sm font-semibold truncate",
+                          isDark ? "text-white" : "text-slate-900"
+                        )}>
+                          {rowName}
                         </span>
-                        {citizen.isVerified && (
-                          <span className="w-3.5 h-3.5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[9px] font-black shrink-0">
-                            ✓
-                          </span>
-                        )}
-                        {citizen.isCreator && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
-                            Creator
-                          </span>
+                        {rowUser.isVerified && (
+                          <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-label="Verified" />
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                        {citizenHandle && <span className="truncate">@{citizenHandle}</span>}
+                      <div className={cn(
+                        "flex items-center gap-1.5 text-xs truncate",
+                        isDark ? "text-slate-400" : "text-slate-500"
+                      )}>
+                        {rowHandle && <span className="truncate">@{rowHandle}</span>}
                         {rank && (
                           <>
-                            <span>·</span>
-                            <span className="text-amber-500 dark:text-amber-400 font-bold uppercase truncate">
+                            <span aria-hidden="true">·</span>
+                            <span className={cn(
+                              "font-medium truncate",
+                              isDark ? "text-amber-400" : "text-amber-700"
+                            )}>
                               {rank}
+                            </span>
+                          </>
+                        )}
+                        {rowUser.isCreator && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className={cn(
+                              "font-medium shrink-0",
+                              isDark ? "text-purple-400" : "text-purple-700"
+                            )}>
+                              Creator
                             </span>
                           </>
                         )}
                       </div>
 
-                      {citizen.bio && (
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1 mt-0.5">
-                          {citizen.bio}
+                      {rowUser.bio && (
+                        <p className={cn(
+                          "text-xs line-clamp-1 mt-0.5",
+                          isDark ? "text-slate-300" : "text-slate-600"
+                        )}>
+                          {rowUser.bio}
                         </p>
                       )}
                     </div>
                   </button>
 
-                  {/* Right Actions: Message + Follow Button */}
+                  {/* Right Actions */}
                   <div className="flex items-center gap-2 shrink-0">
+                    {!isSelf && activeTab === 'discover' && (
+                      <button
+                        type="button"
+                        onClick={() => handleFriendRequestToggle(rowId)}
+                        disabled={isFriendBusy}
+                        className={cn(
+                          "min-h-[40px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
+                          isFriendRequested
+                            ? isDark
+                              ? "bg-white/[0.06] border-white/15 text-slate-200 hover:bg-white/10"
+                              : "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200"
+                            : isDark
+                              ? "bg-purple-500/15 border-purple-400/30 text-purple-200 hover:bg-purple-500/25"
+                              : "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                        )}
+                      >
+                        {isFriendBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : isFriendRequested ? (
+                          <>
+                            <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>Friend Sent</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>Add Friend</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
                     {!isSelf && (
                       <button
                         type="button"
-                        onClick={() => navigate(`/messages/new?to=${citizenId}`)}
+                        onClick={() => navigate(`/messages/new?to=${rowId}`)}
                         className={cn(
-                          "w-9 h-9 rounded-xl border flex items-center justify-center transition-colors cursor-pointer",
+                          "min-w-[40px] min-h-[40px] rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0",
                           isDark
                             ? "bg-white/[0.05] hover:bg-white/10 border-white/10 text-slate-300 hover:text-white"
                             : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
@@ -629,12 +798,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
                     {!isSelf && (
                       <FollowButton
-                        isFollowing={citizen.isFollowing}
-                        requested={citizen.requestStatus === 'pending'}
+                        isFollowing={rowUser.isFollowing}
+                        requested={rowUser.requestStatus === 'pending'}
                         loading={followLoading}
-                        onFollow={() => handleFollowToggle(citizenId, false)}
-                        onUnfollow={() => handleFollowToggle(citizenId, true)}
-                        onCancelRequest={() => handleCancelRequest(citizenId)}
+                        onFollow={() => handleFollowToggle(rowId, false)}
+                        onUnfollow={() => handleFollowToggle(rowId, true)}
+                        onCancelRequest={() => handleCancelRequest(rowId)}
                         theme={theme}
                         size="sm"
                       />
@@ -643,6 +812,26 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 </div>
               );
             })}
+
+            {/* Cursor Pagination Load More */}
+            {activeTab !== 'discover' && hasMore[activeTab] && !searchQuery.trim() && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMoreTab === activeTab}
+                  className={cn(
+                    "min-h-[44px] px-5 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
+                    isDark
+                      ? "bg-[#080F2E]/90 border-white/[0.08] text-slate-200 hover:bg-white/10"
+                      : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50"
+                  )}
+                >
+                  {loadingMoreTab === activeTab && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{loadingMoreTab === activeTab ? 'Loading more…' : 'Load more'}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

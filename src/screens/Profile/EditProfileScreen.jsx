@@ -46,8 +46,7 @@ import {
   ShieldCheck,
   Flame,
   LayoutGrid,
-  Palette,
-  ArrowLeft
+  Palette
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -536,32 +535,25 @@ export default function EditProfileScreen() {
           : "bg-white/90 border-slate-200/90 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
       )}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
-            <button
-              type="button"
-              onClick={handleCancel}
-              aria-label="Go back"
-              className={cn(
-                "p-1.5 rounded-xl border transition-colors cursor-pointer mr-1",
-                isDark
-                  ? "border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.06]"
-                  : "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              )}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
             <span className="font-mono text-arvdoul-purple dark:text-[#B978FF] font-bold">@{formData.username || 'citizen'}</span>
             <span aria-hidden="true">·</span>
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">{completeness.score}% complete</span>
             {isCreatorAccount && (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
-                Creator
-              </span>
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">
+                  Creator
+                </span>
+              </>
             )}
             {isRoyalOrNoble && (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                Heraldic
-              </span>
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                  Heraldic
+                </span>
+              </>
             )}
           </div>
 
@@ -617,13 +609,14 @@ export default function EditProfileScreen() {
               type="button"
               onClick={() => setActiveSection(tab.id)}
               className={cn(
-                "px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer",
+                "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer",
                 activeSection === tab.id
-                  ? "bg-purple-600 text-white shadow-sm"
+                  ? "text-white shadow-sm"
                   : isDark
                   ? "bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]"
                   : "bg-slate-200/60 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
               )}
+              style={activeSection === tab.id ? { background: BRAND_GRADIENT } : undefined}
             >
               {tab.label}
             </button>

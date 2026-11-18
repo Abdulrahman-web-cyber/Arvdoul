@@ -205,7 +205,8 @@ export const useProfileStore = create(
         let mutualFriendsResolved = false;
         if (!isOwner && currentUserId) {
           if (mutualSettled.status === 'fulfilled') {
-            mutualFriends = mutualSettled.value?.mutualFriends?.slice(0, 5) || [];
+            const mutualResult = mutualSettled.value;
+            mutualFriends = mutualResult?.mutualFriends?.slice(0, 5) || [];
             mutualFriendsResolved = true;
           } else {
             console.warn('Could not fetch mutual friends:', mutualSettled.reason);
@@ -219,7 +220,8 @@ export const useProfileStore = create(
         let balance = null;
         if (isOwner) {
           if (balanceSettled.status === 'fulfilled') {
-            balance = typeof balanceSettled.value === 'number' ? balanceSettled.value : null;
+            const balanceResult = balanceSettled.value;
+            balance = typeof balanceResult === 'number' ? balanceResult : null;
           } else {
             console.warn('Could not fetch balance:', balanceSettled.reason);
           }

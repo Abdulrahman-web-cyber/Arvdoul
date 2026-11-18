@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import { tokens } from '../../design-system/tokens.js';
+import { tokens, BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { useAuth } from '../../context/AuthContext';
 import { Trophy, Crown, Medal, ArrowUp, ArrowDown, Minus, Star, Users, Flame, LineChart, Coins, ShieldCheck, Check, ChevronRight } from "lucide-react";
 import { RANKING_CONFIG } from '../../services/rankingService.js';
@@ -12,44 +12,57 @@ import { cn } from '../../lib/utils';
 import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../../services/profileReadModel.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 
-const TabButton = ({ active, onClick, children, icon: Icon, isDark }) => (
+const TabButton = ({ active, onClick, children, icon: Icon }) => (
   <button
     type="button"
+    role="tab"
+    aria-selected={active}
     onClick={onClick}
     className={cn(
-      "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap",
-      active 
-        ? "bg-purple-600 text-white shadow-md shadow-purple-500/20" 
-        : isDark
-        ? "bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]"
-        : "bg-slate-200/70 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
+      "relative flex items-center gap-1.5 min-h-[44px] px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0",
+      active
+        ? "text-slate-900 dark:text-white font-bold"
+        : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
     )}
   >
-    {Icon && <Icon className="w-4 h-4 shrink-0" />}
+    {Icon && <Icon className={cn("w-4 h-4 shrink-0", active && "text-purple-500")} />}
     <span>{children}</span>
+    {active && (
+      <span
+        className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
+        style={{ background: BRAND_GRADIENT }}
+      />
+    )}
   </button>
 );
 
 const TimeRangeSelector = ({ value, onChange, isDark }) => (
-  <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-    {RANKING_CONFIG.TIME_RANGES.map((range) => (
-      <button
-        key={range.id}
-        type="button"
-        onClick={() => onChange(range.id)}
-        className={cn(
-          "px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap",
-          value === range.id 
-            ? "bg-purple-600 text-white shadow-sm" 
-            : isDark
-            ? "bg-white/[0.03] text-slate-400 hover:text-white"
-            : "bg-slate-100 text-slate-600 hover:text-slate-900"
-        )}
-        aria-label={`Show ${range.name} rankings`}
-      >
-        {range.name}
-      </button>
-    ))}
+  <div className={cn(
+    "inline-flex items-center p-1 rounded-xl border overflow-x-auto no-scrollbar",
+    isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200"
+  )}>
+    {RANKING_CONFIG.TIME_RANGES.map((range) => {
+      const selected = value === range.id;
+      return (
+        <button
+          key={range.id}
+          type="button"
+          onClick={() => onChange(range.id)}
+          className={cn(
+            "min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0",
+            selected
+              ? "text-white shadow-sm"
+              : isDark
+              ? "text-slate-400 hover:text-white"
+              : "text-slate-600 hover:text-slate-900"
+          )}
+          style={selected ? { background: BRAND_GRADIENT } : undefined}
+          aria-label={`Show ${range.name} rankings`}
+        >
+          {range.name}
+        </button>
+      );
+    })}
   </div>
 );
 
@@ -155,19 +168,19 @@ const RankCard = ({ rank, item, isDark }) => {
       onClick={handleClick}
       className={cn(
         "flex items-center gap-3.5 p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer active:scale-[0.99]",
-        rank <= 3 
+        rank <= 3
           ? isDark
-            ? "bg-gradient-to-r from-purple-950/30 via-[#070D27] to-[#070D27] border-purple-500/30 shadow-md"
-            : "bg-gradient-to-r from-purple-50 via-white to-white border-purple-200 shadow-sm"
+            ? "bg-[#0B143D] border-purple-500/35 shadow-md"
+            : "bg-purple-50/50 border-purple-200 shadow-sm"
           : isDark
-          ? "bg-[#070D27]/80 hover:bg-[#070D27] border-white/[0.06] hover:border-white/10"
+          ? "bg-[#080F2E] hover:bg-[#0B143D] border-white/[0.08]"
           : "bg-white hover:bg-slate-50 border-slate-200"
       )}
       role="listitem"
       aria-label={`Rank ${rank}: ${pickDisplayName([item.user?.displayName, item.user?.username, item.community?.name], { fallback: (item.user?.uid || item.user?.id) ? `user ${String(item.user.uid || item.user.id).slice(0, 6)}` : '—' })}`}
     >
       {/* Rank Indicator */}
-      <div className="w-8 text-center shrink-0 flex items-center justify-center">
+      <div className="w-8 text-center shrink-0 flex items-center justify-center tabular-nums">
         {getRankBadge(rank)}
       </div>
 
@@ -176,24 +189,24 @@ const RankCard = ({ rank, item, isDark }) => {
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <h4 className="font-bold text-xs sm:text-sm truncate flex items-center gap-1.5">
-          <span>{resolveActorName([item.user?.displayName, item.community?.name], item.user?.id || item.userId || item.id)}</span>
+        <h4 className="font-bold text-xs sm:text-sm truncate flex items-center gap-1.5 text-slate-900 dark:text-white">
+          <span className="truncate">{resolveActorName([item.user?.displayName, item.community?.name], item.user?.id || item.userId || item.id)}</span>
           {item.badge && <TierBadge tier={item.badge} />}
         </h4>
-        <p className="text-slate-400 text-xs truncate font-mono">
+        <p className="text-slate-500 dark:text-slate-400 text-xs truncate font-mono">
           @{pickHandle([item.user?.username]) || deriveHandle(item.community?.name) || 'unknown'}
         </p>
       </div>
 
       {/* Score & Trend */}
-      <div className="text-right shrink-0">
-        <div className="font-black text-sm sm:text-base text-purple-400">
+      <div className="text-right shrink-0 tabular-nums">
+        <div className="font-black text-sm sm:text-base text-purple-600 dark:text-purple-400">
           {typeof item.score === 'number' ? item.score.toLocaleString() : '—'}
         </div>
         <TrendIndicator trend={item.trend} />
       </div>
 
-      <ChevronRight className="w-4 h-4 text-slate-400 opacity-40 shrink-0" />
+      <ChevronRight className="w-4 h-4 text-slate-400 opacity-50 shrink-0" />
     </div>
   );
 };
@@ -303,21 +316,20 @@ export default function RankingsScreen() {
   return (
     <div className={cn(
       "min-h-screen pb-24 transition-colors",
-      isDark ? "bg-[#03071B] text-white" : "bg-[#f0f4fa] text-slate-900"
+      isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-slate-900"
     )}>
       {/* Sub-Tabs Toolbar (TopAppBar handles main app title and back navigation) */}
       <div className={cn(
         "sticky top-0 z-20 border-b backdrop-blur-2xl transition-colors",
         isDark ? "bg-[#03071B]/90 border-white/[0.08]" : "bg-white/90 border-slate-200"
       )}>
-        <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          {/* Main tabs */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <div className="max-w-4xl mx-auto px-4 flex items-center justify-between gap-3">
+          {/* Main underline tabs */}
+          <div role="tablist" aria-label="Ranking categories" className="flex gap-1 overflow-x-auto no-scrollbar">
             <TabButton
               active={activeTab === 'creators'}
               onClick={() => setActiveTab('creators')}
               icon={Star}
-              isDark={isDark}
             >
               Creators
             </TabButton>
@@ -325,7 +337,6 @@ export default function RankingsScreen() {
               active={activeTab === 'wealth'}
               onClick={() => setActiveTab('wealth')}
               icon={Coins}
-              isDark={isDark}
             >
               Treasury
             </TabButton>
@@ -333,7 +344,6 @@ export default function RankingsScreen() {
               active={activeTab === 'reputation'}
               onClick={() => setActiveTab('reputation')}
               icon={ShieldCheck}
-              isDark={isDark}
             >
               Reputation
             </TabButton>
@@ -341,7 +351,6 @@ export default function RankingsScreen() {
               active={activeTab === 'communities'}
               onClick={() => setActiveTab('communities')}
               icon={Users}
-              isDark={isDark}
             >
               Communities
             </TabButton>
@@ -349,18 +358,19 @@ export default function RankingsScreen() {
               active={activeTab === 'rising'}
               onClick={() => setActiveTab('rising')}
               icon={Flame}
-              isDark={isDark}
             >
               Rising
             </TabButton>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 py-1.5">
             <button
+              type="button"
               onClick={() => navigate('/perks')}
-              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-sm transition-colors cursor-pointer"
+              className="min-h-[36px] text-xs font-bold px-3.5 py-1.5 rounded-xl text-white shadow-sm hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+              style={{ background: BRAND_GRADIENT }}
             >
-              Perks & Rewards
+              Perks &amp; Rewards
             </button>
           </div>
         </div>
@@ -373,19 +383,21 @@ export default function RankingsScreen() {
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {getCategories().map((cat) => {
               const IconComp = getCategoryIcon(cat.id);
+              const selected = activeCategory === cat.id;
               return (
                 <button
                   key={cat.id}
                   type="button"
                   onClick={() => setActiveCategory(cat.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer",
-                    activeCategory === cat.id 
-                      ? "bg-purple-600 text-white shadow-sm" 
+                    "min-h-[38px] flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer",
+                    selected
+                      ? "text-white shadow-sm"
                       : isDark
-                      ? "bg-[#070D27] text-slate-400 hover:text-white border border-white/[0.06]"
+                      ? "bg-[#080F2E] text-slate-400 hover:text-white border border-white/[0.08]"
                       : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
                   )}
+                  style={selected ? { background: BRAND_GRADIENT } : undefined}
                   aria-label={`Filter by ${cat.name}`}
                 >
                   <IconComp className="w-3.5 h-3.5 shrink-0" />
@@ -403,7 +415,7 @@ export default function RankingsScreen() {
             onChange={setActiveTimeRange}
             isDark={isDark}
           />
-          <span className="text-[11px] font-mono text-slate-400">
+          <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">
             {rankings.length} Citizens Ranked
           </span>
         </div>
@@ -411,7 +423,7 @@ export default function RankingsScreen() {
         {/* Loading state */}
         {loading && rankings.length === 0 && (
           <div className="flex items-center justify-center py-16">
-            <div className="animate-spin w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full" />
+            <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full" />
           </div>
         )}
 
@@ -422,7 +434,7 @@ export default function RankingsScreen() {
             <button
               type="button"
               onClick={fetchRankings}
-              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer"
+              className="min-h-[36px] px-4 py-1.5 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer whitespace-nowrap"
             >
               Retry
             </button>
@@ -445,8 +457,8 @@ export default function RankingsScreen() {
         {!loading && rankings.length === 0 && !error && (
           <div className="text-center py-16 space-y-3">
             <Trophy className="w-12 h-12 text-slate-500 mx-auto opacity-40" />
-            <h3 className="text-sm font-bold text-slate-400">No rankings yet in this category</h3>
-            <p className="text-xs text-slate-500">Live rankings update as citizens participate across Arvdoul.</p>
+            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400">No rankings yet in this category</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Live rankings update as citizens participate across Arvdoul.</p>
           </div>
         )}
 
@@ -457,7 +469,12 @@ export default function RankingsScreen() {
               type="button"
               onClick={handleLoadMore}
               disabled={loading}
-              className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+              className={cn(
+                "min-h-[42px] px-6 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 border whitespace-nowrap",
+                isDark
+                  ? "bg-[#080F2E] border-white/[0.1] text-white hover:bg-white/[0.06]"
+                  : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50"
+              )}
             >
               {loading ? 'Loading...' : 'Load More Citizens'}
             </button>

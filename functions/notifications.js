@@ -787,7 +787,7 @@ exports.generateNotificationDigest = functions.pubsub
           });
         }
         // Email delivery (respects the email opt-out).
-        if (prefs?.email !== false) {
+        if (!prefs || prefs.email !== false) {
           const to = await getUserEmail(userId);
           if (to) {
             await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);

@@ -106,6 +106,12 @@ class ProfessionalUserService {
     }
   }
 
+  _notifyFollowRequestsChanged() {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('arvdoul:follow-request-changed'));
+    }
+  }
+
   /**
    * Record today's follower-count snapshot (feeds real growth analytics).
    * One write per user per day - cheap and bounded.
@@ -1118,6 +1124,7 @@ class ProfessionalUserService {
       }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
+      this._notifyFollowRequestsChanged();
       return { success: true, requested: true, requestStatus: 'pending' };
     }
 
@@ -1326,6 +1333,7 @@ class ProfessionalUserService {
       this._invalidateUserCache(requesterId);
     }
     this._invalidateUserCache(ownerId);
+    this._notifyFollowRequestsChanged();
     return result;
   }
 
@@ -1339,6 +1347,7 @@ class ProfessionalUserService {
     if (snap.data().toUserId !== ownerId) throw new Error('Not authorized');
     if (snap.data().status !== 'pending') throw new Error('Already processed');
     await updateDoc(requestRef, { status: 'declined', updatedAt: serverTimestamp() });
+    this._notifyFollowRequestsChanged();
     return { success: true };
   }
 
@@ -1366,6 +1375,7 @@ class ProfessionalUserService {
     }
     this._invalidateUserCache(fromUserId);
     this._invalidateUserCache(toUserId);
+    this._notifyFollowRequestsChanged();
     return { success: true };
   }
 

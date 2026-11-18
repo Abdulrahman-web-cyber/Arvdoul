@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import titleService from '../../services/titleService';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { cn } from '../../lib/utils';
 import { Check, Lock, Info, ShieldCheck, X, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 
@@ -53,7 +55,10 @@ export default function TitlesScreen() {
 
   const loadTitles = useCallback(async () => {
     const uid = profile?.uid || user?.uid;
-    if (!uid) return;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
     try {
       const items = await titleService.getUserTitles(uid);
       setEarnedTitles(items);
@@ -73,7 +78,7 @@ export default function TitlesScreen() {
   }, [earnedTitles]);
 
   const activeTitleId = useMemo(() => {
-    return profile?.activeTitle?.id || (profile?.primaryTitle ? profile.primaryTitle.toLowerCase() : 'resident');
+    return profile?.activeTitle?.id || (profile?.primaryTitle ? profile.primaryTitle.toLowerCase() : null);
   }, [profile]);
 
   const handleSetActive = async (titleId) => {
@@ -121,41 +126,52 @@ export default function TitlesScreen() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen pb-24 flex items-center justify-center ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" aria-label="Loading titles" />
+      <div className={cn(
+        'min-h-screen pb-24 flex items-center justify-center',
+        isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
+      )}>
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" aria-label="Loading titles" />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={cn(
+      'min-h-screen pb-24 transition-colors',
+      isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
+    )}>
       <main className="max-w-4xl mx-auto px-4 py-4 sm:py-6 space-y-6">
         {/* Top Summary Strip */}
-        <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
+        <div className="flex items-center justify-between pb-1 flex-wrap gap-3">
           <div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <span>Titles & Provenance</span>
+            <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              <span>Titles &amp; Provenance</span>
               {profile?.isVerified && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Verified
-                </span>
+                <CheckCircle2 className="w-4 h-4 text-sky-500 shrink-0" aria-label="Verified" />
               )}
             </h2>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums mt-0.5">
               Active: {profile?.primaryTitle || activeTitleObj?.name || '—'} · {earnedTitles.length} Earned Titles
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={() => navigate('/perks')}
-              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-sm transition-colors cursor-pointer"
+              className={cn(
+                'min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer whitespace-nowrap shrink-0',
+                isDark
+                  ? 'bg-[#080F2E] border-white/[0.1] text-slate-200 hover:bg-white/[0.06]'
+                  : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
+              )}
             >
-              Perks & Rewards
+              Perks &amp; Rewards
             </button>
             <button
+              type="button"
               onClick={() => navigate('/passport')}
-              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors cursor-pointer"
+              className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold text-white shadow-md hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+              style={{ background: BRAND_GRADIENT }}
             >
               Digital Passport
             </button>
@@ -165,26 +181,32 @@ export default function TitlesScreen() {
         {/* Active Title Banner */}
         <section
           aria-labelledby="active-title-heading"
-          className={`p-6 rounded-2xl border transition-all ${
-            isDark ? 'bg-gradient-to-r from-gray-900 via-indigo-950/40 to-purple-950/30 border-gray-800' : 'bg-white border-gray-200 shadow-sm'
-          }`}
+          className={cn(
+            'p-6 rounded-2xl border transition-all',
+            isDark
+              ? 'bg-[#080F2E] border-white/[0.08] shadow-[0_12px_32px_rgba(2,4,16,0.45)]'
+              : 'bg-white border-slate-200/90 shadow-sm'
+          )}
         >
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-purple-500 dark:text-purple-400">
                 Primary Identity Title
               </span>
-              <h2 id="active-title-heading" className="text-2xl font-black tracking-tight mt-1 flex items-center space-x-2">
-                <span className="text-2xl">{activeTitleObj?.icon || '👑'}</span>
+              <h2 id="active-title-heading" className="text-2xl font-black tracking-tight mt-1 flex items-center gap-2 text-slate-900 dark:text-white">
+                {activeTitleObj?.icon && <span className="text-2xl">{activeTitleObj.icon}</span>}
                 <span>{profile?.primaryTitle || activeTitleObj?.name || '—'}</span>
               </h2>
-              <p className="text-xs text-gray-400 mt-1 max-w-md">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 max-w-md leading-relaxed">
                 This title appears beside your handle across all feeds, spaces, digital passport credentials, and citizen registry artifacts.
               </p>
             </div>
             <div className="text-right">
-              <span className="text-xs text-gray-500 block">Civic Standing</span>
-              <span className="text-sm font-semibold text-emerald-400 flex items-center justify-end gap-1">
+              <span className="text-xs text-slate-500 dark:text-slate-400 block">Civic Standing</span>
+              <span className={cn(
+                'text-sm font-semibold flex items-center justify-end gap-1.5 mt-0.5',
+                profile?.isVerified ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'
+              )}>
                 <ShieldCheck className="w-4 h-4" />
                 <span>{profile?.isVerified ? 'Verified' : 'Unverified'}</span>
               </span>
@@ -192,23 +214,41 @@ export default function TitlesScreen() {
           </div>
         </section>
 
-        {/* Domain Tabs */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
-          {DOMAINS.map((dom) => (
-            <button
-              key={dom.id}
-              onClick={() => setSelectedDomain(dom.id)}
-              className={`text-xs px-3.5 py-2 rounded-xl shrink-0 transition-colors cursor-pointer ${
-                selectedDomain === dom.id
-                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                  : isDark
-                  ? 'bg-gray-900 text-gray-400 hover:bg-gray-800'
-                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-              }`}
-            >
-              {dom.label}
-            </button>
-          ))}
+        {/* Domain Underline Tabs */}
+        <div
+          role="tablist"
+          aria-label="Title domains"
+          className={cn(
+            'flex items-center gap-1 overflow-x-auto no-scrollbar border-b',
+            isDark ? 'border-white/[0.08]' : 'border-slate-200'
+          )}
+        >
+          {DOMAINS.map((dom) => {
+            const isSelected = selectedDomain === dom.id;
+            return (
+              <button
+                key={dom.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => setSelectedDomain(dom.id)}
+                className={cn(
+                  'relative min-h-[44px] px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer',
+                  isSelected
+                    ? 'text-slate-900 dark:text-white font-bold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                )}
+              >
+                {dom.label}
+                {isSelected && (
+                  <span
+                    className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
+                    style={{ background: BRAND_GRADIENT }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Titles Grid */}
@@ -235,80 +275,87 @@ export default function TitlesScreen() {
             return (
               <div
                 key={t.id}
-                className={`p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                className={cn(
+                  'p-5 rounded-2xl border flex flex-col justify-between transition-all',
                   isActive
                     ? isDark
-                      ? 'bg-indigo-950/20 border-indigo-600 shadow-md ring-1 ring-indigo-500/40'
-                      : 'bg-indigo-50/50 border-indigo-400 shadow-sm'
+                      ? 'bg-[#0B143D] border-purple-500/60 shadow-md'
+                      : 'bg-purple-50/60 border-purple-300 shadow-sm'
                     : isEarned
                     ? isDark
-                      ? 'bg-gray-900/60 border-gray-800'
-                      : 'bg-white border-gray-200'
+                      ? 'bg-[#080F2E] border-white/[0.08]'
+                      : 'bg-white border-slate-200 shadow-sm'
                     : isDark
-                    ? 'bg-gray-950/40 border-gray-900 opacity-60'
-                    : 'bg-gray-100/60 border-gray-200 opacity-60'
-                }`}
+                    ? 'bg-[#080F2E]/50 border-white/[0.05] opacity-75'
+                    : 'bg-slate-100/70 border-slate-200/80 opacity-80'
+                )}
               >
                 <div>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-3xl">{t.icon}</span>
-                      <div>
-                        <h3 className="text-base font-bold flex items-center space-x-1.5">
-                          <span>{t.name}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-3xl shrink-0">{t.icon}</span>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate">{t.name}</span>
                           {isActive && (
-                            <span className="text-[11px] font-semibold text-indigo-400">
-                              (Active)
+                            <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                              · Active
                             </span>
                           )}
                         </h3>
-                        <p className="text-xs text-gray-500 capitalize">{t.domain} Domain</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{t.domain} Domain</p>
                       </div>
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => setInspectingTitle(t)}
                       aria-label="Inspect title details"
-                      className="p-1 rounded-lg text-gray-400 hover:text-gray-200 cursor-pointer"
+                      className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer shrink-0"
                     >
                       <Info className="w-4 h-4" />
                     </button>
                   </div>
 
-                  <p className="text-xs text-gray-400 mt-3">{t.description}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 leading-relaxed">{t.description}</p>
                 </div>
 
-                <div className="mt-5 pt-3 border-t border-gray-800/40 dark:border-gray-800 flex items-center justify-between">
+                <div className={cn(
+                  'mt-5 pt-3 border-t flex items-center justify-between gap-2',
+                  isDark ? 'border-white/[0.08]' : 'border-slate-200'
+                )}>
                   {/* Status & Action */}
                   {isActive ? (
-                    <span className="text-xs font-semibold text-indigo-400 flex items-center space-x-1">
+                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
                       <Check className="w-3.5 h-3.5" />
                       <span>Primary Active Title</span>
                     </span>
                   ) : isEarned ? (
                     <button
+                      type="button"
                       onClick={() => handleSetActive(t.id)}
                       disabled={activating === t.id}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors cursor-pointer"
+                      className="min-h-[36px] text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white/[0.1] dark:hover:bg-white/[0.18] text-white transition-colors cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-60"
                     >
                       {activating === t.id ? 'Setting...' : 'Set as Active'}
                     </button>
                   ) : evalResult.eligible ? (
                     <button
+                      type="button"
                       onClick={() => handleClaim(t.id)}
                       disabled={claiming === t.id}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer shadow-sm"
+                      className="min-h-[36px] text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer shadow-sm whitespace-nowrap shrink-0 disabled:opacity-60"
                     >
                       {claiming === t.id ? 'Claiming...' : 'Claim Title'}
                     </button>
                   ) : (
-                    <div className="flex items-center space-x-1 text-xs text-gray-500">
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>{evalResult.reasons[0] || 'Criteria Locked'}</span>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
+                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{evalResult.reasons[0] || 'Criteria Locked'}</span>
                     </div>
                   )}
 
-                  <span className="text-[11px] text-gray-500 font-mono">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono shrink-0">
                     {isEarned ? 'Granted' : 'Locked'}
                   </span>
                 </div>
@@ -323,51 +370,62 @@ export default function TitlesScreen() {
         <div
           role="dialog"
           aria-modal="true"
+          onClick={() => setInspectingTitle(null)}
           className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
         >
           <div
-            className={`max-w-md w-full p-6 rounded-2xl border ${
-              isDark ? 'bg-gray-900 border-gray-800 text-gray-100' : 'bg-white border-gray-200 text-gray-900'
-            }`}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'max-w-md w-full p-6 rounded-3xl border shadow-2xl',
+              isDark ? 'bg-[#080F2E] border-white/[0.1] text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+            )}
           >
             <div className="flex items-start justify-between">
               <div className="text-4xl">{inspectingTitle.icon}</div>
               <button
+                type="button"
                 onClick={() => setInspectingTitle(null)}
                 aria-label="Close dialog"
-                className="p-1 rounded-lg text-gray-400 hover:text-white cursor-pointer"
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="mt-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400 capitalize">
+              <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 capitalize">
                 {inspectingTitle.domain} Domain
               </span>
               <h3 className="text-xl font-bold mt-1">{inspectingTitle.name}</h3>
-              <p className="text-sm text-gray-400 mt-2">{inspectingTitle.description}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">{inspectingTitle.description}</p>
             </div>
 
-            <div className="mt-5 p-4 rounded-xl bg-black/20 dark:bg-black/40 border border-gray-800/60 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Multidimensional Rules</span>
-                <span className="font-semibold text-indigo-400">Zero Pay-to-Legitimacy</span>
+            <div className={cn(
+              'mt-5 p-4 rounded-2xl border space-y-2.5 text-xs',
+              isDark ? 'bg-white/[0.04] border-white/[0.08]' : 'bg-slate-50 border-slate-200'
+            )}>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500 dark:text-slate-400">Multidimensional Rules</span>
+                <span className="font-semibold text-purple-600 dark:text-purple-400">Zero Pay-to-Legitimacy</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Minimum Level</span>
-                <span>{inspectingTitle.minLevel != null ? `Level ${inspectingTitle.minLevel}` : 'No level gate'}</span>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500 dark:text-slate-400">Minimum Level</span>
+                <span className="font-medium tabular-nums">
+                  {inspectingTitle.minLevel != null ? `Level ${inspectingTitle.minLevel}` : 'No level gate'}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Provenance Status</span>
-                <span className="text-emerald-400 font-mono">Granted from verified milestones</span>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500 dark:text-slate-400">Provenance Status</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-mono">Granted from verified milestones</span>
               </div>
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
+                type="button"
                 onClick={() => setInspectingTitle(null)}
-                className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors cursor-pointer"
+                className="min-h-[40px] px-5 py-2 rounded-xl text-white text-xs font-bold hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+                style={{ background: BRAND_GRADIENT }}
               >
                 Done
               </button>

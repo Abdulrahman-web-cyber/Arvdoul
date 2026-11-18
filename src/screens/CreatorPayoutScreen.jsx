@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '@context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Banknote, DollarSign, ArrowLeft, TrendingUp, ShieldCheck, CreditCard, Sparkles, Clock, ArrowUpRight, RefreshCw, Wallet } from "lucide-react";
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import { Banknote, DollarSign, TrendingUp, ShieldCheck, CreditCard, Sparkles, Clock, ArrowUpRight, RefreshCw, Wallet } from "lucide-react";
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
 import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
@@ -34,10 +34,9 @@ function sumCredits(items, reasons) {
 }
 
 export default function CreatorPayoutScreen() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const isDark = theme === 'dark' || theme === 'midnight';
 
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(null);
@@ -220,91 +219,78 @@ export default function CreatorPayoutScreen() {
 
   return (
     <div className={cn(
-      "min-h-screen pb-24",
-      isDark ? "bg-arvdoul-bg text-white" : "bg-slate-50 text-slate-900"
+      "min-h-screen pb-24 transition-colors",
+      isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-slate-900"
     )}>
-      {/* Header */}
-      <div className={cn(
-        "sticky top-0 z-30 backdrop-blur-xl border-b px-4 py-4",
-        isDark ? "bg-arvdoul-surface/90 border-arvdoul-border" : "bg-white/90 border-slate-200"
-      )}>
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className={cn(
-                "p-2 rounded-xl transition-colors",
-                isDark ? "hover:bg-white/10" : "hover:bg-slate-100"
-              )}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-xl font-bold font-display flex items-center gap-2">
-                <Banknote className="w-5 h-5 text-emerald-500" />
-                Creator Payouts
-              </h1>
-              <p className="text-xs text-arvdoul-text-secondary">Monetization and direct revenue earnings</p>
-            </div>
+      <main className="max-w-4xl mx-auto px-4 py-4 sm:py-6 space-y-6">
+        {/* In-page utility bar (TopAppBar handles main app title and back navigation) */}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-extrabold tracking-tight flex items-center gap-2 text-slate-900 dark:text-white">
+              <Banknote className="w-5 h-5 text-emerald-500 shrink-0" />
+              <span>Creator Payouts</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Monetization and direct revenue earnings</p>
           </div>
           <button
+            type="button"
             onClick={loadData}
             className={cn(
-              "p-2 rounded-xl border flex items-center gap-1 text-xs font-semibold",
-              isDark ? "border-arvdoul-border bg-white/5 hover:bg-white/10" : "border-slate-200 bg-white hover:bg-slate-50"
+              "min-h-[40px] px-3.5 py-2 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0",
+              isDark ? "border-white/[0.1] bg-[#080F2E] hover:bg-white/[0.06] text-slate-200" : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
             )}
           >
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-            Refresh
+            <span>Refresh</span>
           </button>
         </div>
-      </div>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Earnings Card */}
-        <div className="relative overflow-hidden rounded-arvdoul-xl bg-arvdoul-gradient p-6 text-white shadow-arvdoul-glow">
-          <div className="absolute -right-8 -bottom-8 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
-          
+        <div
+          className="relative overflow-hidden rounded-3xl p-6 sm:p-7 text-white shadow-xl"
+          style={{ background: BRAND_GRADIENT }}
+        >
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             <div>
-              <span className="text-xs uppercase font-bold tracking-widest text-violet-200">Available Creator Balance</span>
-              <div className="flex items-baseline gap-3 mt-1">
-                <h2 className="text-4xl font-extrabold tracking-tight font-display">
+              <span className="text-[11px] uppercase font-bold tracking-widest text-white/80">Available Creator Balance</span>
+              <div className="flex items-baseline gap-2.5 mt-1 flex-wrap">
+                <h2 className="text-4xl font-extrabold tracking-tight tabular-nums">
                   {balance == null ? '—' : balance.toLocaleString()}
                 </h2>
-                <span className="text-lg font-medium text-violet-200">Coins</span>
-                <span className="text-xl font-semibold text-emerald-300 ml-2">≈ {estimatedUsd == null ? '—' : `$${estimatedUsd}`} USD</span>
+                <span className="text-base font-medium text-white/80">Coins</span>
+                <span className="text-lg font-semibold text-emerald-300 ml-1 tabular-nums">≈ {estimatedUsd == null ? '—' : `$${estimatedUsd}`} USD</span>
               </div>
-              <p className="text-xs text-violet-200 mt-2 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-300" />
-                Server-verified ledger · payouts reviewed before settlement
+              <p className="text-xs text-white/80 mt-2 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-300 shrink-0" />
+                <span>Server-verified ledger · payouts reviewed before settlement</span>
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               <button
+                type="button"
                 onClick={() => setRequestModal(true)}
                 disabled={!eligibleForPayout}
                 className={cn(
-                  "px-6 py-3.5 rounded-arvdoul-md font-bold text-sm shadow-lg transition-all flex items-center gap-2",
+                  "min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0",
                   eligibleForPayout
-                    ? "bg-white text-indigo-900 hover:bg-violet-50 active:scale-95"
+                    ? "bg-white text-indigo-950 hover:bg-slate-50 active:scale-95"
                     : "bg-white/20 text-white/60 cursor-not-allowed"
                 )}
               >
                 <DollarSign className="w-4 h-4" />
-                Request Payout
+                <span>Request Payout</span>
               </button>
             </div>
           </div>
 
           {/* Threshold Progress */}
           <div className="mt-6 pt-4 border-t border-white/15">
-            <div className="flex justify-between text-xs font-semibold mb-1.5">
+            <div className="flex justify-between text-xs font-semibold mb-1.5 tabular-nums">
               <span>Payout Threshold ({MIN_WITHDRAWAL_COINS.toLocaleString()} coins)</span>
               <span>{progressPercent}% Complete</span>
             </div>
-            <div className="w-full h-2 rounded-full bg-black/20 overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-black/25 overflow-hidden">
               <div
                 className="h-full bg-emerald-400 rounded-full transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
@@ -315,33 +301,35 @@ export default function CreatorPayoutScreen() {
 
         {/* Payout Method Status */}
         <div className={cn(
-          "rounded-arvdoul-xl border p-5 transition-colors",
-          isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200 shadow-sm"
+          "rounded-2xl border p-5 transition-colors",
+          isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
         )}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
                 <CreditCard className="w-5 h-5" />
               </div>
-              <div>
-                <h3 className="font-bold text-sm">Payout Account</h3>
-                <p className="text-xs text-arvdoul-text-secondary">
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Payout Account</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {stripeConnected
                     ? 'Stripe Express account connected & active'
-                    : 'Connect your bank or PayPal to receive direct deposits'}
+                    : 'Connect your bank or payout account to receive direct deposits'}
                 </p>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={handleConnectStripe}
               disabled={connectingStripe || stripeConnected}
               className={cn(
-                "px-4 py-2 rounded-arvdoul-sm text-xs font-bold transition-all",
+                "min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0",
                 stripeConnected
-                  ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                  : "bg-arvdoul-purple text-white hover:bg-violet-600 active:scale-95"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                  : "text-white hover:opacity-95 active:scale-95"
               )}
+              style={!stripeConnected ? { background: BRAND_GRADIENT } : undefined}
             >
               {connectingStripe ? 'Connecting...' : stripeConnected ? '✓ Connected' : 'Connect Stripe'}
             </button>
@@ -351,43 +339,49 @@ export default function CreatorPayoutScreen() {
         {/* Breakdown Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className={cn(
-            "rounded-arvdoul-lg border p-4",
-            isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200"
+            "rounded-2xl border p-4",
+            isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
           )}>
-            <div className="flex items-center justify-between text-xs text-arvdoul-text-secondary mb-1">
-              <span>Gifts & Tips</span>
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+              <span>Gifts &amp; Tips</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             </div>
-            <p className="text-xl font-bold">{earnings.gifts == null ? '—' : earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold tabular-nums text-slate-900 dark:text-white">
+              {earnings.gifts == null ? '—' : earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Coins</span>
+            </p>
           </div>
 
           <div className={cn(
-            "rounded-arvdoul-lg border p-4",
-            isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200"
+            "rounded-2xl border p-4",
+            isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
           )}>
-            <div className="flex items-center justify-between text-xs text-arvdoul-text-secondary mb-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
               <span>Ad Revenue Share</span>
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
-            <p className="text-xl font-bold">{earnings.ads == null ? '—' : earnings.ads.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold tabular-nums text-slate-900 dark:text-white">
+              {earnings.ads == null ? '—' : earnings.ads.toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Coins</span>
+            </p>
           </div>
 
           <div className={cn(
-            "rounded-arvdoul-lg border p-4",
-            isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200"
+            "rounded-2xl border p-4",
+            isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
           )}>
-            <div className="flex items-center justify-between text-xs text-arvdoul-text-secondary mb-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
               <span>Lifetime Withdrawn</span>
-              <Clock className="w-3.5 h-3.5 text-blue-500" />
+              <Clock className="w-3.5 h-3.5 text-sky-500" />
             </div>
-            <p className="text-xl font-bold">{lifetimeWithdrawnCoins == null ? '—' : formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
+            <p className="text-xl font-bold tabular-nums text-slate-900 dark:text-white">
+              {lifetimeWithdrawnCoins == null ? '—' : formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">USD</span>
+            </p>
           </div>
         </div>
 
         {/* Payout History */}
         <div className={cn(
-          "rounded-arvdoul-xl border p-5",
-          isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200"
+          "rounded-2xl border p-5",
+          isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
         )}>
           <h3 className="font-bold text-base mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-violet-500" />

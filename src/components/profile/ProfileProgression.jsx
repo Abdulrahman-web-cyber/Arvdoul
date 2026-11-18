@@ -1,10 +1,10 @@
 /**
- * Production-grade Citizen Progression & Civic Standing showcase component.
- * Displays server-authoritative level, rank title, XP curve, daily streak,
- * and upcoming milestone rewards.
- * 
+ * Production-grade Citizen Progression & Civic Standing strip component.
+ * Displays server-authoritative rank title, XP progress, daily streak,
+ * reputation, and upcoming milestone reward cleanly on a single hairline bar.
+ *
  * Never fabricates progression (renders unavailable when level is absent).
- * 
+ *
  * @component
  */
 
@@ -12,11 +12,12 @@ import { memo, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Crown, Flame, ChevronRight, Award, Sparkles } from "lucide-react";
 import { cn } from '../../lib/utils';
-import { 
-  getLevelInfo, 
-  getRankTitle, 
+import { tokens } from '../../design-system/tokens.js';
+import {
+  getLevelInfo,
+  getRankTitle,
   getLevelBandColor,
-  getLevelUpReward 
+  getLevelUpReward,
 } from '../../services/levelSystemService';
 
 const ProfileProgression = memo(({
@@ -41,11 +42,6 @@ const ProfileProgression = memo(({
   const hasReputation = reputation !== null && reputation !== undefined && Number.isFinite(Number(reputation));
   const safeReputation = hasReputation ? Number(reputation) : null;
 
-  // XP is only known when the profile actually carries an `experience` value.
-  // A level without XP is a real state (the level is stored, the XP counter is
-  // not), and rendering the XP bar off a `0` default would report a fabricated
-  // measured "0 XP earned / 100 XP to Level N" (AUDIT noFabricatedData). The
-  // curve is consulted only once a real XP value exists.
   const hasExperience = experience !== null && experience !== undefined && Number.isFinite(Number(experience));
 
   const xpInfo = useMemo(() => {
@@ -67,11 +63,11 @@ const ProfileProgression = memo(({
   }, [hasLevel, effectiveLevel]);
 
   const levelColor = useMemo(() => {
-    if (!hasLevel) return '#8B5CF6';
+    if (!hasLevel) return tokens.color.brand.violet;
     try {
       return getLevelBandColor(effectiveLevel);
     } catch {
-      return '#8B5CF6';
+      return tokens.color.brand.violet;
     }
   }, [hasLevel, effectiveLevel]);
 
@@ -84,24 +80,23 @@ const ProfileProgression = memo(({
     }
   }, [hasLevel, effectiveLevel]);
 
-  // If standing is absent, never fabricate Level 1 (AUDIT N005 / noFabricatedData)
   if (!hasLevel) {
     if (!isOwner) return null;
 
     return (
       <div className={cn(
-        "w-full rounded-2xl p-4 sm:p-5 border transition-all shadow-sm flex items-center justify-between gap-4",
+        "w-full rounded-2xl px-4 sm:px-5 py-3.5 border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3",
         isDark
-          ? "bg-[#0B0F19] border-slate-800 text-white"
-          : "bg-white border-slate-200 text-slate-900",
+          ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
+          : "bg-white border-slate-200/90 text-slate-900 shadow-sm",
         className
       )}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0">
-            <Crown className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-xl bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center shrink-0">
+            <Crown className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+            <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white">
               Civic Standing Initializing
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -112,9 +107,10 @@ const ProfileProgression = memo(({
         <button
           type="button"
           onClick={() => navigate('/passport')}
-          className="shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
+          className="shrink-0 inline-flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer self-start sm:self-center"
         >
-          View Passport
+          <span>View Passport</span>
+          <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
     );
@@ -127,48 +123,40 @@ const ProfileProgression = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border transition-all shadow-sm relative overflow-hidden",
+      "w-full rounded-2xl px-4 sm:px-5 py-3.5 border transition-colors",
       isDark
-        ? "bg-[#080F2E]/90 border-white/[0.08] text-white"
-        : "bg-white border-slate-200/90 text-slate-900",
+        ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_10px_rgba(15,23,42,0.03)]",
       className
     )}>
-      {/* Ambient background aura */}
-      <div 
-        className="absolute -right-16 -top-16 w-44 h-44 rounded-full blur-3xl opacity-15 pointer-events-none"
-        style={{ backgroundColor: levelColor }}
-      />
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        {/* Left: Level Emblem & Rank Title */}
-        <div className="flex items-center gap-3.5">
-          <div 
-            className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black shadow-inner shrink-0 relative border border-white/20"
-            style={{ 
-              background: `linear-gradient(135deg, ${levelColor}22 0%, ${levelColor}44 100%)`,
-              color: isDark ? '#fff' : levelColor
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border"
+            style={{
+              background: `${levelColor}18`,
+              borderColor: `${levelColor}38`,
+              color: isDark ? '#fff' : levelColor,
             }}
           >
-            <span className="text-[10px] font-semibold tracking-wider uppercase opacity-80 leading-none">LVL</span>
-            <span className="text-lg font-black leading-none">{effectiveLevel}</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider opacity-75 leading-none">LVL</span>
+            <span className="font-display text-sm font-bold leading-tight tabular-nums">{effectiveLevel}</span>
           </div>
 
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-extrabold tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h3 className="font-display text-sm sm:text-base font-bold tracking-tight truncate">
                 {rankTitle || `Citizen Tier ${effectiveLevel}`}
               </h3>
-              <Crown className="w-4 h-4 text-amber-500 shrink-0" />
+              <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-              {/* The owner's showLevel/showReputation/showStreak privacy toggles
-                  decide what renders here; a hidden metric is omitted, never
-                  fabricated. */}
-              {showLevel && <span>Civic Tier {effectiveLevel}</span>}
+
+            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-slate-400">
+              {showLevel && <span className="tabular-nums">Civic Tier {effectiveLevel}</span>}
               {showReputation && safeReputation !== null && (
                 <>
                   {showLevel && <span aria-hidden="true">·</span>}
-                  <span className="inline-flex items-center gap-1 text-emerald-500 font-semibold">
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
                     <Award className="w-3.5 h-3.5" />
                     <span>{safeReputation} Reputation</span>
                   </span>
@@ -177,7 +165,7 @@ const ProfileProgression = memo(({
               {showStreak && streak > 0 && (
                 <>
                   {(showLevel || (showReputation && safeReputation !== null)) && <span aria-hidden="true">·</span>}
-                  <span className="inline-flex items-center gap-1 text-amber-500 font-semibold">
+                  <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
                     <Flame className="w-3.5 h-3.5 fill-amber-500" />
                     <span>{streak} Day Streak</span>
                   </span>
@@ -187,48 +175,44 @@ const ProfileProgression = memo(({
           </div>
         </div>
 
-        {/* Right: Quick Passport Action Link */}
         <button
           type="button"
           onClick={() => navigate('/passport')}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer self-end sm:self-center"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline cursor-pointer self-start sm:self-center shrink-0 whitespace-nowrap"
         >
           <span>Digital Passport & Perks</span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Center: XP Progress Bar — only when the profile carries a real XP
-          value; a level without XP renders no fabricated "0 XP" bar. */}
       {xpInfo && (
-        <div className="mt-3.5 space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-semibold tabular-nums">
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.06] space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-medium tabular-nums">
             <span className="text-slate-500 dark:text-slate-400">
               {isMaxLevel ? 'Maximum Level Reached' : `${xpIntoLevel.toLocaleString()} XP earned`}
             </span>
-            <span className="text-slate-700 dark:text-slate-300 font-mono">
+            <span className="text-slate-700 dark:text-slate-300">
               {isMaxLevel ? 'Apex Citizen' : `${xpToNext.toLocaleString()} XP to Level ${effectiveLevel + 1}`}
             </span>
           </div>
 
-          <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative">
+          <div className="w-full h-1.5 rounded-full bg-slate-200/90 dark:bg-white/10 overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-700 relative"
+              className="h-full rounded-full transition-all duration-700"
               style={{
                 width: `${Math.min(100, Math.max(4, progress))}%`,
-                background: 'linear-gradient(90deg, var(--arv-brand-indigo) 0%, var(--arv-brand-violet) 55%, var(--arv-brand-pink) 100%)'
+                background: 'linear-gradient(90deg, var(--arv-brand-indigo) 0%, var(--arv-brand-violet) 55%, var(--arv-brand-pink) 100%)',
               }}
             />
           </div>
 
-          {/* Milestone perks preview */}
           {nextReward > 0 && !isMaxLevel && (
-            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5 tabular-nums">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
               <span className="inline-flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-amber-500" />
                 <span>Next Level Reward: +{nextReward} Coins grant</span>
               </span>
-              <span className="text-indigo-500 font-medium">{Math.round(progress)}% Complete</span>
+              <span className="font-semibold text-arvdoul-purple dark:text-purple-300">{Math.round(progress)}%</span>
             </div>
           )}
         </div>

@@ -1,39 +1,32 @@
 /**
- * Production-grade Creator Dashboard Showcase.
- * Recreates the exact Creator Dashboard from the reference design (Light & Dark theme):
- * - Header with BarChart2 icon and timeframe dropdown
- * - 5 metric cards:
- *   1. Profile Views (with purple sparkline & trend)
- *   2. Reach (with cyan sparkline & trend)
- *   3. Engagement (with magenta sparkline & trend)
- *   4. Coins Earned (with golden sparkline & trend)
- *   5. Top 1% Ranking Badge ("Top 1% Among Creators" with Crown icon)
- * 
+ * Production-grade Creator Studio Dashboard.
+ * Displays hairline-divided audience analytics (Profile Views, Reach,
+ * Engagement, Coins Earned) with real sparklines + creator ranking standing.
+ *
+ * Strictly zero fabricated trends/metrics and fail-closed on missing data.
+ *
  * @component
  */
 
 import { memo, useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { 
-  BarChart2, 
+import {
+  BarChart2,
   Crown,
   ChevronDown,
-  ArrowUpRight
+  ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 import { unknownNumber } from '../../lib/unknownNumber.js';
-import { tokens } from '../../design-system/tokens.js';
+import { tokens, BRAND_GRADIENT } from '../../design-system/tokens.js';
 
-// Clean SVG Sparklines matching image curves. `data === null` means the trend
-// is genuinely unknown (fewer than two daily points), so we render an explicit
-// placeholder instead of drawing a line through fabricated zeros.
 const Sparkline = ({ color = 'var(--arv-brand-violet)', data = null }) => {
   const safeData = Array.isArray(data) && data.length >= 2 ? data : null;
   if (!safeData) {
     return (
-      <div className="w-full max-w-[120px] h-9 flex items-center text-[10px] font-medium text-slate-400 dark:text-slate-500">
+      <div className="w-full max-w-[110px] h-8 flex items-center text-[10px] font-medium text-slate-400 dark:text-slate-500">
         No trend data yet
       </div>
     );
@@ -42,7 +35,7 @@ const Sparkline = ({ color = 'var(--arv-brand-violet)', data = null }) => {
   const max = Math.max(...safeData);
   const range = max - min || 1;
   const width = 100;
-  const height = 36;
+  const height = 32;
 
   const points = safeData.map((val, idx) => {
     const denom = Math.max(1, safeData.length - 1);
@@ -56,17 +49,16 @@ const Sparkline = ({ color = 'var(--arv-brand-violet)', data = null }) => {
   const lastY = Number(lastPoint[1]);
 
   return (
-    <svg width={width} height={height} className="overflow-visible w-full max-w-[120px] h-9">
+    <svg width={width} height={height} className="overflow-visible w-full max-w-[110px] h-8">
       <polyline
         fill="none"
         stroke={color}
-        strokeWidth="2.5"
+        strokeWidth="2.25"
         strokeLinecap="round"
         strokeLinejoin="round"
         points={points}
       />
-      {/* End circle node */}
-      <circle cx={lastX} cy={lastY} r="3" fill={color} />
+      <circle cx={lastX} cy={lastY} r="2.75" fill={color} />
     </svg>
   );
 };
@@ -91,44 +83,39 @@ const ProfileCreatorDashboard = memo(({
   const explicitLevel = Number(userLevel);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
   const effectiveLevel = hasLevel ? explicitLevel : null;
-  // Creator standing resolves through the canonical read model (explicit flag
-  // first, then the level gate). LEVEL_GATES below only drives the unlock copy.
   const isEligibleCreator = resolveCreatorFlag({ isCreator }, {}, effectiveLevel);
 
-  // If user is not yet level 5 creator, show unlock card
   if (!isEligibleCreator) {
     return (
       <div className={cn(
-        "w-full rounded-2xl sm:rounded-3xl p-5 sm:p-6 border backdrop-blur-xl transition-all shadow-sm relative overflow-hidden",
+        "w-full rounded-2xl p-5 border transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4",
         isDark
-          ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-          : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+          ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
+          : "bg-white border-slate-200/90 text-slate-900 shadow-sm"
       )}>
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
-          <div className="space-y-2 max-w-lg">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5" />
-                <span>Level {LEVEL_GATES.creatorProfile} Creator Milestone</span>
-              </span>
-              <span className="text-xs font-semibold text-slate-400">Locked</span>
-            </div>
-            <h3 className="text-base sm:text-lg font-black tracking-tight">
-              Creator Dashboard & Growth Analytics
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Reach Level {LEVEL_GATES.creatorProfile} to unlock real-time audience reach, impressions, sparklines, and creator monetization.
-            </p>
+        <div className="space-y-1.5 max-w-lg">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <Crown className="w-3.5 h-3.5" />
+            <span>Level {LEVEL_GATES.creatorProfile} Creator Milestone</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
+            <span className="text-slate-500 dark:text-slate-400">Locked</span>
           </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/progress')}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs shadow-md shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
-          >
-            Level Up Standing
-          </button>
+          <h3 className="font-display text-base sm:text-lg font-bold tracking-tight">
+            Creator Dashboard & Growth Analytics
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Reach Level {LEVEL_GATES.creatorProfile} to unlock real-time audience reach, impressions, sparklines, and creator monetization.
+          </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/progress')}
+          className="px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-md shrink-0 cursor-pointer hover:brightness-110 transition-all whitespace-nowrap"
+          style={{ background: BRAND_GRADIENT }}
+        >
+          Level Up Standing
+        </button>
       </div>
     );
   }
@@ -139,8 +126,6 @@ const ProfileCreatorDashboard = memo(({
     onTimeframeChange?.(val);
   };
 
-  // Real metrics from analytics; an absent metric is *unknown* (rendered as —),
-  // never a fabricated 0 that claims a measured empty audience.
   const metric = (v) => (v == null ? null : Number(v));
   const views = metric(analytics?.totalViews);
   const reach = metric(analytics?.totalReach);
@@ -152,10 +137,6 @@ const ProfileCreatorDashboard = memo(({
   const engagementTrend = analytics?.changes?.engagement ?? analytics?.engagementGrowth ?? null;
   const coinsTrend = analytics?.changes?.coins ?? analytics?.coinsGrowth ?? null;
 
-  // Extract real daily stats for sparklines if available. With fewer than two
-  // points there is no trend to draw, and a day whose metric was never recorded
-  // must not be drawn as a measured 0 — either way we render an explicit "no
-  // trend data" placeholder rather than a fabricated flat-then-spike series.
   const dailyStats = Array.isArray(analytics?.dailyStats) ? analytics.dailyStats : [];
   const hasTrend = dailyStats.length >= 2;
   const series = (key) => {
@@ -173,7 +154,7 @@ const ProfileCreatorDashboard = memo(({
     if (num === null) return { text: '—', isNeutral: true };
     if (num > 0) return { text: `▲ +${num.toFixed(1)}%`, isPositive: true };
     if (num < 0) return { text: `▼ ${num.toFixed(1)}%`, isPositive: false };
-    return { text: `— 0.0%`, isNeutral: true };
+    return { text: '— 0.0%', isNeutral: true };
   };
 
   const vTrend = formatTrend(viewsTrend);
@@ -181,8 +162,6 @@ const ProfileCreatorDashboard = memo(({
   const eTrend = formatTrend(engagementTrend);
   const cTrend = formatTrend(coinsTrend);
 
-  // Real ranking calculation from ranking prop; absent ranking is reported as
-  // unavailable, never as a fabricated 'Creator' label.
   const rankLabel = ranking?.percentile
     ? `Top ${ranking.percentile}%`
     : ranking?.position || ranking?.rank
@@ -191,31 +170,69 @@ const ProfileCreatorDashboard = memo(({
     ? ranking.label
     : '—';
 
+  const studioCells = [
+    {
+      key: 'views',
+      label: 'Profile Views',
+      value: views === null ? '—' : views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views,
+      trend: vTrend,
+      sparkColor: 'var(--arv-brand-violet)',
+      sparkData: viewsSeries,
+    },
+    {
+      key: 'reach',
+      label: 'Reach',
+      value: reach === null ? '—' : reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach,
+      trend: rTrend,
+      sparkColor: tokens.color.brand.cyan,
+      sparkData: reachSeries,
+    },
+    {
+      key: 'engagement',
+      label: 'Engagement',
+      value: engagement === null ? '—' : engagement >= 1000 ? `${(engagement / 1000).toFixed(1)}K` : engagement,
+      trend: eTrend,
+      sparkColor: tokens.color.brand.pink,
+      sparkData: engagementSeries,
+    },
+    {
+      key: 'coins',
+      label: 'Coins Earned',
+      value: coins === null ? '—' : coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins,
+      trend: cTrend,
+      sparkColor: tokens.color.semantic.warning,
+      sparkData: coinsSeries,
+    },
+  ];
+
   return (
     <div className={cn(
-      "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
+      "w-full rounded-2xl border overflow-hidden",
       isDark
-        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+        ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
+        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.03)]"
     )}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <BarChart2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-          <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+      {/* Studio Header */}
+      <div className={cn(
+        "flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b",
+        isDark ? "border-white/[0.07]" : "border-slate-100"
+      )}>
+        <div className="flex items-center gap-2 min-w-0">
+          <BarChart2 className="w-4 h-4 text-arvdoul-purple shrink-0" />
+          <h2 className="font-display font-bold text-sm sm:text-base tracking-tight text-slate-900 dark:text-white truncate">
             Creator Dashboard
           </h2>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => navigate('/profile/analytics')}
             className={cn(
-              "text-xs font-semibold px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-colors cursor-pointer",
+              "text-xs font-semibold px-3 py-1.5 rounded-xl border inline-flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap",
               isDark
-                ? "bg-purple-950/30 hover:bg-purple-900/40 text-purple-300 border-purple-500/20"
-                : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                ? "bg-white/[0.04] hover:bg-white/[0.08] text-purple-300 border-white/10"
+                : "bg-purple-50/70 hover:bg-purple-100/80 text-arvdoul-purple border-purple-200/80"
             )}
             title="Open Full Analytics Studio"
           >
@@ -224,13 +241,14 @@ const ProfileCreatorDashboard = memo(({
           </button>
 
           <div className="relative">
-            <select aria-label="Analytics timeframe"
+            <select
+              aria-label="Analytics timeframe"
               value={selectedTimeframe}
               onChange={handleSelectTimeframe}
               className={cn(
-                "appearance-none text-xs font-semibold pl-3 pr-7 py-1.5 rounded-xl border cursor-pointer transition-all outline-none",
+                "appearance-none text-xs font-semibold pl-3 pr-7 py-1.5 rounded-xl border cursor-pointer transition-colors outline-none",
                 isDark
-                  ? "bg-white/5 border-white/10 text-gray-200 hover:bg-white/10"
+                  ? "bg-white/[0.04] border-white/10 text-slate-200 hover:bg-white/[0.08]"
                   : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
               )}
             >
@@ -244,127 +262,70 @@ const ProfileCreatorDashboard = memo(({
         </div>
       </div>
 
-      {/* 5 Cards Row (4 Metric Cards with Sparklines + 1 Creator Standing Badge) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {/* 1. Profile Views */}
-        <div className={cn(
-          "rounded-2xl p-3 sm:p-3.5 border transition-all duration-200 flex flex-col justify-between",
-          isDark ? "bg-white/[0.03] border-white/5" : "bg-slate-50/80 border-slate-100"
-        )}>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              Profile Views
+      {/* Hairline-Divided Studio Metrics */}
+      <div className={cn(
+        "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px",
+        isDark ? "bg-white/[0.07]" : "bg-slate-200/80"
+      )}>
+        {studioCells.map((cell) => (
+          <div
+            key={cell.key}
+            className={cn(
+              "p-3.5 sm:p-4 flex flex-col justify-between gap-2",
+              isDark ? "bg-[#080F2E]" : "bg-white"
+            )}
+          >
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                {cell.label}
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="font-display text-lg sm:text-xl font-bold tabular-nums text-slate-900 dark:text-white">
+                  {cell.value}
+                </span>
+                <span className={cn(
+                  "text-[10px] font-semibold tabular-nums",
+                  cell.trend.isPositive ? "text-emerald-600 dark:text-emerald-400" : cell.trend.isNeutral ? "text-slate-400" : "text-rose-500"
+                )}>
+                  {cell.trend.text}
+                </span>
+              </div>
             </div>
-            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
-              {views === null ? '—' : views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views}
-            </div>
-            <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
-              vTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : vTrend.isNeutral ? "text-slate-400" : "text-rose-500"
-            )}>
-              <span>{vTrend.text}</span>
-            </div>
-          </div>
-          <div className="mt-2">
-            <Sparkline color="var(--arv-brand-violet)" data={viewsSeries} />
-          </div>
-        </div>
 
-        {/* 2. Reach */}
-        <div className={cn(
-          "rounded-2xl p-3 sm:p-3.5 border transition-all duration-200 flex flex-col justify-between",
-          isDark ? "bg-white/[0.03] border-white/5" : "bg-slate-50/80 border-slate-100"
-        )}>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              Reach
-            </div>
-            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
-              {reach === null ? '—' : reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach}
-            </div>
-            <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
-              rTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : rTrend.isNeutral ? "text-slate-400" : "text-rose-500"
-            )}>
-              <span>{rTrend.text}</span>
+            <div className="pt-1">
+              <Sparkline color={cell.sparkColor} data={cell.sparkData} />
             </div>
           </div>
-          <div className="mt-2">
-            <Sparkline color={tokens.color.brand.cyan} data={reachSeries} />
-          </div>
-        </div>
+        ))}
 
-        {/* 3. Engagement */}
-        <div className={cn(
-          "rounded-2xl p-3 sm:p-3.5 border transition-all duration-200 flex flex-col justify-between",
-          isDark ? "bg-white/[0.03] border-white/5" : "bg-slate-50/80 border-slate-100"
-        )}>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              Engagement
-            </div>
-            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
-              {engagement === null ? '—' : engagement >= 1000 ? `${(engagement / 1000).toFixed(1)}K` : engagement}
-            </div>
-            <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
-              eTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : eTrend.isNeutral ? "text-slate-400" : "text-rose-500"
-            )}>
-              <span>{eTrend.text}</span>
-            </div>
-          </div>
-          <div className="mt-2">
-            <Sparkline color={tokens.color.brand.pink} data={engagementSeries} />
-          </div>
-        </div>
-
-        {/* 4. Coins Earned */}
-        <div className={cn(
-          "rounded-2xl p-3 sm:p-3.5 border transition-all duration-200 flex flex-col justify-between",
-          isDark ? "bg-white/[0.03] border-white/5" : "bg-slate-50/80 border-slate-100"
-        )}>
-          <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              Coins Earned
-            </div>
-            <div className="text-lg sm:text-xl font-black tabular-nums text-slate-900 dark:text-white mt-1">
-              {coins === null ? '—' : coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins}
-            </div>
-            <div className={cn(
-              "flex items-center gap-1 text-[10px] font-bold mt-0.5 tabular-nums",
-              cTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : cTrend.isNeutral ? "text-slate-400" : "text-rose-500"
-            )}>
-              <span>{cTrend.text}</span>
-            </div>
-          </div>
-          <div className="mt-2">
-            <Sparkline color={tokens.color.semantic.warning} data={coinsSeries} />
-          </div>
-        </div>
-
-        {/* 5. Creator Standing / Ranking Badge Card */}
+        {/* Creator Standing / Ranking Cell */}
         <button
-        type="button"
-        aria-label="View creator rankings"
-        className={cn(
-          "rounded-2xl p-3 sm:p-3.5 border flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1 transition-all duration-200 group cursor-pointer",
-          isDark
-            ? "bg-purple-950/20 border-purple-500/20 hover:border-purple-500/40"
-            : "bg-purple-50/60 border-purple-200/70 hover:border-purple-300"
-        )}
-        onClick={() => navigate('/rankings')}
+          type="button"
+          aria-label="View creator rankings"
+          onClick={() => navigate('/rankings')}
+          className={cn(
+            "p-3.5 sm:p-4 flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1 transition-colors group cursor-pointer",
+            isDark
+              ? "bg-[#0B1438] hover:bg-[#101C4D]"
+              : "bg-slate-50/70 hover:bg-purple-50/60"
+          )}
         >
-          {/* Circular Crown Icon */}
-          <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-arvdoul-purple to-arvdoul-glow-magenta flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform mb-2">
-            <div className="w-full h-full rounded-full bg-white dark:bg-[#080F2E] flex items-center justify-center">
-              <Crown className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+          <div
+            className="w-10 h-10 rounded-full p-[2px] flex items-center justify-center group-hover:scale-105 transition-transform mb-2"
+            style={{ background: BRAND_GRADIENT }}
+          >
+            <div className={cn(
+              "w-full h-full rounded-full flex items-center justify-center",
+              isDark ? "bg-[#080F2E]" : "bg-white"
+            )}>
+              <Crown className="w-4 h-4 text-arvdoul-purple" />
             </div>
           </div>
 
-          <div className="text-sm font-black text-purple-700 dark:text-purple-300">
+          <div className="font-display text-sm font-bold text-arvdoul-purple dark:text-purple-300 tabular-nums">
             {rankLabel}
           </div>
-          <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+          <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
             Among Creators
           </div>
         </button>

@@ -3,11 +3,11 @@
 // View Perks, Level Milestone Coin Rewards, Virtual Gifts, and Prestige Benefits.
 // Consumes canonical shared/levelConfig.cjs and adheres to Zero-Pill discipline.
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import {
   LEVEL_PERKS,
   LEVELS,
@@ -21,9 +21,20 @@ import {
   MAX_LEVEL,
   ROYAL_ELIGIBILITY,
 } from '../../shared/levelConfig.cjs';
-import { Sparkles, Gift, Coins, Crown, Lock, CheckCircle2, Send, Zap, ArrowRight, UserCheck } from "lucide-react";
+import { Gift, Coins, Crown, Lock, CheckCircle2, Send, Zap, ArrowRight, UserCheck } from "lucide-react";
+import { getMonetizationService } from '../../services/monetizationService.js';
+import { getUserService } from '../../services/userService.js';
+import { levelSystemService } from '../../services/levelSystemService.js';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
+
+const TABS = [
+  { id: 'all', label: 'All Rewards & Gifts' },
+  { id: 'perks', label: 'Level Perks' },
+  { id: 'gifts', label: 'Virtual Gifts' },
+  { id: 'coins', label: 'Coin Grants' },
+  { id: 'prestige', label: 'Prestige' },
+];
 
 export default function PerksRewardsScreen() {
   const navigate = useNavigate();
@@ -31,45 +42,81 @@ export default function PerksRewardsScreen() {
   const { theme } = useTheme();
   const isDark = theme === 'dark' || theme === 'midnight';
 
-  const profile = userProfile || user;
-  // A missing stored level is "unknown", not Level 1. Gate math still needs a
-  // floor, but the standing badge renders an em-dash when nothing is stored
-  // rather than asserting a rank the profile has not earned.
-  const storedLevel = profile?.level != null ? Number(profile.level) : null;
+  const authProfile = userProfile || user;
+  const uid = authProfile?.uid || user?.uid || null;
+
+  const [liveProfile, setLiveProfile] = useState(null);
+  const [liveBalance, setLiveBalance] = useState(undefined);
+  const [liveLevelInfo, setLiveLevelInfo] = useState(null);
+  const [activeTab, setActiveTab] = useState('all');
+
+  useEffect(() => {
+    if (!uid) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [balRes, profRes, lvlRes] = await Promise.allSettled([
+          getMonetizationService().getBalance(uid),
+          getUserService().getUserProfile(uid, uid),
+          levelSystemService.getLevelInfo(uid),
+        ]);
+        if (cancelled) return;
+        if (balRes.status === 'fulfilled') {
+          setLiveBalance(typeof balRes.value === 'number' ? balRes.value : null);
+        }
+        if (profRes.status === 'fulfilled' && profRes.value) {
+          setLiveProfile(profRes.value);
+        }
+        if (lvlRes.status === 'fulfilled' && lvlRes.value) {
+          setLiveLevelInfo(lvlRes.value);
+        }
+      } catch (err) {
+        console.warn('[PerksRewards] live fetch failed:', err?.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  const profile = liveProfile || authProfile;
+  const storedLevel = liveLevelInfo?.level != null
+    ? Number(liveLevelInfo.level)
+    : (profile?.level != null ? Number(profile.level) : null);
   const hasStoredLevel = storedLevel != null && Number.isFinite(storedLevel);
   const currentLevel = hasStoredLevel ? storedLevel : 1;
+
   // An unknown balance stays null: '0 Coins ($0.00)' would claim an empty
   // treasury, and `>= g.coins` would then wrongly show 'insufficient funds'.
-  const coinsRaw = profile?.coins;
-  const userCoins = coinsRaw === null || coinsRaw === undefined || Number.isNaN(Number(coinsRaw)) ? null : Number(coinsRaw);
+  const coinsRaw = liveBalance !== undefined ? liveBalance : profile?.coins;
+  const userCoins = coinsRaw === null || coinsRaw === undefined || Number.isNaN(Number(coinsRaw))
+    ? null
+    : Number(coinsRaw);
+
   // An unknown active-day count is treated as the conservative floor (0), not a
   // fabricated "1 day" that bumps a citizen tier; `getCitizenTier` floors at 0.
   const activeDaysRaw = profile?.activeDaysCount ?? profile?.activeDays;
   const activeDays = Number.isFinite(Number(activeDaysRaw)) ? Number(activeDaysRaw) : 0;
+
   // An unwritten experience total is unknown, not 0 XP — deriving the level
   // bar from a fabricated 0 would claim progress the profile has not earned.
-  const experienceRaw = profile?.experience;
+  const experienceRaw = liveLevelInfo?.experience ?? profile?.experience;
   const hasExperience = experienceRaw != null && Number.isFinite(Number(experienceRaw));
   const experience = hasExperience ? Number(experienceRaw) : 0;
 
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'perks' | 'coins' | 'gifts' | 'prestige'
-
   const citizenTier = useMemo(() => getCitizenTier(currentLevel, activeDays), [currentLevel, activeDays]);
   const prestige = useMemo(() => getPrestigeInfo(currentLevel), [currentLevel]);
-  const levelInfo = useMemo(() => getLevelInfo(experience), [experience]);
+  const levelInfo = useMemo(
+    () => (liveLevelInfo && hasExperience ? liveLevelInfo : getLevelInfo(experience)),
+    [liveLevelInfo, hasExperience, experience]
+  );
 
-  // Unlocked vs upcoming perks
-  const unlockedPerks = useMemo(() => LEVEL_PERKS.filter(p => currentLevel >= p.minLevel), [currentLevel]);
-
-  // Upcoming coin reward milestones
+  const unlockedPerks = useMemo(() => LEVEL_PERKS.filter((p) => currentLevel >= p.minLevel), [currentLevel]);
   const upcomingCoinMilestones = useMemo(() => {
-    return LEVELS.filter(l => l.level >= currentLevel && l.coinReward > 0).slice(0, 8);
+    return LEVELS.filter((l) => l.level >= currentLevel && l.coinReward > 0).slice(0, 8);
   }, [currentLevel]);
 
   const handleSendGiftClick = (gift) => {
-    // Gifts are sent from a recipient's profile (/gift/:userId); there is no
-    // recipient yet on this catalogue screen, so send the user to their
-    // connections to pick one instead of dropping the selection.
     toast.info(`Open a friend or creator's profile to send the ${gift.name} (${gift.coins} coins).`);
     navigate('/connections');
   };
@@ -77,146 +124,155 @@ export default function PerksRewardsScreen() {
   return (
     <div className={cn(
       "min-h-screen pb-28 transition-colors duration-200 relative",
-      isDark ? "bg-[#03071B] text-white" : "bg-[#f0f4fa] text-slate-900"
+      isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-slate-900"
     )}>
-      {/* Top Ambient Highlight */}
+      {/* Top Hairline Accent */}
       <span
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-0 h-[2px] z-30"
-        style={{
-          background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`,
-        }}
+        style={{ background: BRAND_GRADIENT }}
       />
 
-      {/* Sub-Header Toolbar */}
+      {/* Sticky Utility & Tab Header */}
       <div className={cn(
-        "sticky top-0 z-20 border-b backdrop-blur-2xl transition-colors",
-        isDark ? "bg-[#03071B]/90 border-white/[0.08]" : "bg-white/90 border-slate-200"
+        "sticky top-0 z-20 border-b backdrop-blur-xl transition-colors",
+        isDark ? "bg-[#03071B]/90 border-white/[0.08]" : "bg-[#F6F8FC]/90 border-slate-200"
       )}>
-        <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" />
-              <span>Perks & Rewards Suite</span>
+        <div className="max-w-4xl mx-auto px-4 pt-3 pb-2 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-xs">
+            <span className={cn("font-semibold", isDark ? "text-slate-200" : "text-slate-800")}>
+              Perks &amp; Rewards
             </span>
-            <span className="text-xs text-slate-400">·</span>
-            <span className="text-xs font-mono font-bold text-amber-400">
-              {userCoins == null ? '— Coins' : `${userCoins} Coins (${formatCoinsAsUsd(userCoins)})`}
+            <span aria-hidden="true" className="text-slate-400">·</span>
+            <span className={cn("font-semibold tabular-nums", isDark ? "text-amber-400" : "text-amber-700")}>
+              {userCoins == null ? '— Coins' : `${userCoins.toLocaleString()} Coins (${formatCoinsAsUsd(userCoins)})`}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => navigate('/progress')}
               className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                isDark ? "border-white/10 hover:bg-white/[0.06] text-slate-300" : "border-slate-200 hover:bg-slate-100 text-slate-700"
+                "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                isDark ? "border-white/15 hover:bg-white/[0.06] text-slate-200" : "border-slate-200 bg-white hover:bg-slate-100 text-slate-700"
               )}
             >
               Level Progression
             </button>
             <button
+              type="button"
               onClick={() => navigate('/wallet')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm cursor-pointer"
-              style={{
-                background: `linear-gradient(135deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 100%)`
-              }}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer"
+              style={{ background: BRAND_GRADIENT }}
             >
               Coins Treasury
             </button>
           </div>
         </div>
 
-        {/* Filter Navigation */}
-        <div className="max-w-4xl mx-auto px-4 pb-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {[
-            { id: 'all', label: 'All Rewards & Gifts' },
-            { id: 'perks', label: `Level Perks (${unlockedPerks.length} Unlocked)` },
-            { id: 'gifts', label: 'Virtual Gifts & Tips' },
-            { id: 'coins', label: 'Level-Up Coin Grants' },
-            { id: 'prestige', label: 'Prestige & Nobility' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer",
-                activeTab === tab.id
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : isDark
-                  ? "bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]"
-                  : "bg-slate-200/60 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Underline Filter Navigation */}
+        <div
+          role="tablist"
+          aria-label="Perks sections"
+          className="max-w-4xl mx-auto px-4 flex items-center gap-1 overflow-x-auto no-scrollbar"
+        >
+          {TABS.map((tab) => {
+            const active = activeTab === tab.id;
+            const label = tab.id === 'perks' ? `${tab.label} (${unlockedPerks.length})` : tab.label;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "relative min-h-[44px] px-3 py-2 text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                  active
+                    ? isDark ? "text-white" : "text-slate-950"
+                    : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                <span>{label}</span>
+                {active && (
+                  <span
+                    className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
+                    style={{ background: BRAND_GRADIENT }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6">
-
-        {/* Hero Card: Standing & Unlocked Capabilities Overview */}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-6 space-y-6">
+        {/* Hero Overview */}
         <section className={cn(
-          "rounded-[28px] border p-6 sm:p-7 relative overflow-hidden backdrop-blur-2xl transition-all",
+          "rounded-3xl border p-6 sm:p-7 space-y-5 transition-colors",
           isDark
-            ? "bg-gradient-to-br from-[#0c142c] via-[#070D27] to-[#03071B] border-purple-500/20 shadow-[0_12px_40px_rgba(139,30,243,0.15)]"
-            : "bg-gradient-to-br from-purple-50 via-white to-white border-purple-200 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+            ? "bg-[#080F2E]/90 border-white/[0.08]"
+            : "bg-white border-slate-200/80 shadow-sm"
         )}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{hasStoredLevel ? citizenTier.icon : '—'}</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-purple-400 font-mono">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-xl" aria-hidden="true">{hasStoredLevel ? citizenTier.icon : '—'}</span>
+                <span className={cn("font-semibold", isDark ? "text-purple-400" : "text-purple-700")}>
                   {hasStoredLevel ? `${citizenTier.tier} Standing · Level ${currentLevel}` : 'Standing unavailable'}
                 </span>
                 {hasStoredLevel && prestige.isPrestige && (
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Prestige {prestige.prestigeRoman}
-                  </span>
+                  <>
+                    <span aria-hidden="true" className="text-slate-400">·</span>
+                    <span className={cn("font-semibold", isDark ? "text-amber-300" : "text-amber-700")}>
+                      Prestige {prestige.prestigeRoman}
+                    </span>
+                  </>
                 )}
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 {hasStoredLevel ? `${getRankTitle(currentLevel)} Rank Capabilities` : 'Rank Capabilities'}
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-lg">
-                Your citizen level unlocks platform creation powers, virtual gift sending, level-up coin rewards, and civic poll participation.
+              <p className={cn("text-xs sm:text-sm max-w-lg", isDark ? "text-slate-400" : "text-slate-600")}>
+                Your level unlocks creation tools, virtual gift sending, level-up coin grants, and civic poll participation.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="grid grid-cols-2 gap-3 shrink-0">
               <div className={cn(
-                "p-3.5 rounded-2xl border text-center space-y-0.5 min-w-[110px]",
-                isDark ? "bg-black/30 border-white/10" : "bg-white border-slate-200 shadow-sm"
+                "p-3.5 rounded-2xl border text-center space-y-0.5 min-w-[120px]",
+                isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
               )}>
-                <div className="text-[10px] uppercase font-bold text-slate-400">Treasury</div>
-                <div className="text-lg font-black text-amber-400 flex items-center justify-center gap-1">
-                  <Coins className="w-4 h-4" />
-                  <span>{userCoins == null ? '—' : userCoins}</span>
+                <div className="text-[11px] font-medium text-slate-500">Treasury</div>
+                <div className={cn("text-lg font-bold flex items-center justify-center gap-1 tabular-nums", isDark ? "text-amber-400" : "text-amber-700")}>
+                  <Coins className="w-4 h-4 shrink-0" />
+                  <span>{userCoins == null ? '—' : userCoins.toLocaleString()}</span>
                 </div>
-                <div className="text-[10px] font-mono text-slate-500">{userCoins == null ? 'Balance unavailable' : formatCoinsAsUsd(userCoins)}</div>
+                <div className="text-[11px] text-slate-500 tabular-nums">
+                  {userCoins == null ? 'Balance unavailable' : formatCoinsAsUsd(userCoins)}
+                </div>
               </div>
 
               <div className={cn(
-                "p-3.5 rounded-2xl border text-center space-y-0.5 min-w-[110px]",
-                isDark ? "bg-black/30 border-white/10" : "bg-white border-slate-200 shadow-sm"
+                "p-3.5 rounded-2xl border text-center space-y-0.5 min-w-[120px]",
+                isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
               )}>
-                <div className="text-[10px] uppercase font-bold text-slate-400">Perks Earned</div>
-                <div className="text-lg font-black text-emerald-400 flex items-center justify-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" />
+                <div className="text-[11px] font-medium text-slate-500">Perks Earned</div>
+                <div className="text-lg font-bold text-emerald-500 flex items-center justify-center gap-1 tabular-nums">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>{unlockedPerks.length}</span>
                 </div>
-                <div className="text-[10px] font-mono text-slate-500">of {LEVEL_PERKS.length} Total</div>
+                <div className="text-[11px] text-slate-500 tabular-nums">of {LEVEL_PERKS.length} Total</div>
               </div>
             </div>
           </div>
 
-          {/* Progress Bar towards Next Unlock */}
-          <div className="mt-5 pt-4 border-t border-slate-200/60 dark:border-white/[0.06] space-y-2">
+          {/* Stage Experience Bar */}
+          <div className={cn("pt-4 border-t space-y-2", isDark ? "border-white/[0.08]" : "border-slate-200")}>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium">Stage Experience Progress</span>
-              <span className="font-mono text-purple-400 font-bold">
+              <span className={isDark ? "text-slate-400" : "text-slate-600"}>Stage Experience Progress</span>
+              <span className={cn("font-semibold tabular-nums", isDark ? "text-purple-400" : "text-purple-700")}>
                 {!hasExperience
                   ? '—'
                   : levelInfo.isMaxLevel
@@ -224,13 +280,13 @@ export default function PerksRewardsScreen() {
                     : `${levelInfo.xpToNext} XP to Level ${levelInfo.level + 1}`}
               </span>
             </div>
-            <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/[0.08]">
+            <div className={cn("w-full h-2 rounded-full overflow-hidden", isDark ? "bg-white/[0.08]" : "bg-slate-200")}>
               {hasExperience ? (
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
                     width: `${levelInfo.progress}%`,
-                    background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, #00F0FF 100%)`
+                    background: BRAND_GRADIENT,
                   }}
                 />
               ) : (
@@ -240,277 +296,276 @@ export default function PerksRewardsScreen() {
           </div>
         </section>
 
-        {/* 1. VIRTUAL GIFTS & TIP REWARDS SHOWCASE */}
+        {/* 1. VIRTUAL GIFTS & TIP REWARDS */}
         {(activeTab === 'all' || activeTab === 'gifts') && (
-        <section className={cn(
-          "rounded-[28px] border p-5 sm:p-7 space-y-5 transition-all",
-          isDark ? "bg-[#070D27]/90 border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
-        )}>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <div className="flex items-center gap-2">
-                <Gift className="w-5 h-5 text-rose-500" />
-                <h2 className="text-base sm:text-lg font-black tracking-tight">
-                  Virtual Gifts & Creator Patronage
-                </h2>
+          <section className={cn(
+            "rounded-3xl border p-5 sm:p-7 space-y-5",
+            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80 shadow-sm"
+          )}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-rose-500 shrink-0" />
+                  <h2 className="text-base sm:text-lg font-bold tracking-tight">
+                    Virtual Gifts &amp; Creator Patronage
+                  </h2>
+                </div>
+                <p className={cn("text-xs mt-1", isDark ? "text-slate-400" : "text-slate-600")}>
+                  Share virtual gifts with friends and creators across Arvdoul. Sending gifts awards{' '}
+                  <span className={cn("font-semibold", isDark ? "text-purple-400" : "text-purple-700")}>
+                    +{XP_RULES.gift_received.xp} XP
+                  </span>{' '}
+                  to recipients.
+                </p>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Share virtual gifts with friends and creators across Arvdoul. Sending gifts awards <span className="text-purple-400 font-bold">+{XP_RULES.gift_received.xp} XP</span> to recipients and builds your civic contribution standing.
-              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate('/connections')}
+                className={cn(
+                  "min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer border",
+                  isDark ? "bg-white/[0.05] hover:bg-white/10 border-white/10 text-white" : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
+                )}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Browse Friends</span>
+              </button>
             </div>
 
-            <button
-              onClick={() => navigate('/connections')}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                isDark ? "bg-white/[0.06] hover:bg-white/[0.1] text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-800"
-              )}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Browse Friends</span>
-            </button>
-          </div>
-
-          {/* Canonical 7 Virtual Gifts Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-            {GIFT_CATALOG.map((g) => {
-              const canAfford = userCoins != null && userCoins >= g.coins;
-              return (
-                <div
-                  key={g.id}
-                  className={cn(
-                    "p-3 rounded-2xl border text-center transition-all flex flex-col justify-between gap-2 relative group hover:scale-[1.02]",
-                    isDark 
-                      ? "bg-black/20 hover:bg-black/40 border-white/[0.06] hover:border-purple-500/40" 
-                      : "bg-slate-50 hover:bg-white border-slate-200 hover:border-purple-300 shadow-xs"
-                  )}
-                >
-                  <div className="text-3xl my-1 group-hover:scale-110 transition-transform">
-                    {g.emoji}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-xs">{g.name}</h3>
-                    <div className="flex items-center justify-center gap-1 font-mono text-[11px] font-black text-amber-400 mt-0.5">
-                      <Coins className="w-3 h-3" />
-                      <span>{g.coins}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      {formatCoinsAsUsd(g.coins)}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSendGiftClick(g)}
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+              {GIFT_CATALOG.map((g) => {
+                const canAfford = userCoins != null && userCoins >= g.coins;
+                return (
+                  <div
+                    key={g.id}
                     className={cn(
-                      "mt-1 py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer w-full flex items-center justify-center gap-1",
-                      canAfford
-                        ? "bg-purple-600 hover:bg-purple-500 text-white shadow-xs"
-                        : "bg-slate-300 dark:bg-white/10 text-slate-500 hover:opacity-80"
+                      "p-3 rounded-2xl border text-center transition-colors flex flex-col justify-between gap-2",
+                      isDark
+                        ? "bg-[#03071B]/60 hover:bg-[#03071B] border-white/[0.08]"
+                        : "bg-slate-50 hover:bg-white border-slate-200"
                     )}
                   >
-                    <Send className="w-2.5 h-2.5" />
-                    <span>Send</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-        )}
+                    <div className="text-3xl my-1" aria-hidden="true">{g.emoji}</div>
+                    <div>
+                      <h3 className="font-semibold text-xs">{g.name}</h3>
+                      <div className={cn("flex items-center justify-center gap-1 text-xs font-bold mt-0.5 tabular-nums", isDark ? "text-amber-400" : "text-amber-700")}>
+                        <Coins className="w-3 h-3 shrink-0" />
+                        <span>{g.coins}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 tabular-nums">
+                        {formatCoinsAsUsd(g.coins)}
+                      </div>
+                    </div>
 
-        {/* 2. LEVEL-UP COIN GRANTS & MILESTONES */}
-        {(activeTab === 'all' || activeTab === 'coins') && (
-        <section className={cn(
-          "rounded-[28px] border p-5 sm:p-7 space-y-5 transition-all",
-          isDark ? "bg-[#070D27]/90 border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
-        )}>
-          <div>
-            <div className="flex items-center gap-2">
-              <Coins className="w-5 h-5 text-amber-400" />
-              <h2 className="text-base sm:text-lg font-black tracking-tight">
-                Level-Up Coin Reward Ledger
-              </h2>
+                    <button
+                      type="button"
+                      onClick={() => handleSendGiftClick(g)}
+                      className={cn(
+                        "min-h-[36px] py-1.5 px-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer w-full flex items-center justify-center gap-1 whitespace-nowrap",
+                        canAfford
+                          ? "bg-purple-600 hover:bg-purple-500 text-white"
+                          : isDark
+                            ? "bg-white/[0.08] text-slate-300 hover:bg-white/15"
+                            : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      )}
+                    >
+                      <Send className="w-3 h-3 shrink-0" />
+                      <span>Send</span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Every level advanced in Arvdoul credits platform coins to your wallet, recorded in your transaction history.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            {upcomingCoinMilestones.map((milestone) => {
-              const isPast = milestone.level < currentLevel;
-              const isCurrent = milestone.level === currentLevel;
-              return (
-                <div
-                  key={milestone.level}
-                  className={cn(
-                    "p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-2",
-                    isCurrent
-                      ? "bg-purple-600/15 border-purple-500/40 ring-1 ring-purple-500/30"
-                      : isDark
-                      ? "bg-black/20 border-white/[0.06]"
-                      : "bg-slate-50 border-slate-200"
-                  )}
-                >
-                  <div>
-                    <div className="text-[11px] font-mono font-bold text-slate-400">
-                      Level {milestone.level}
-                    </div>
-                    <div className="text-xs font-semibold">
-                      {milestone.level % 10 === 0 ? 'Decade Milestone' : 'Level Reward'}
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-sm font-black text-amber-400 flex items-center justify-end gap-1">
-                      <Coins className="w-3.5 h-3.5" />
-                      <span>+{milestone.coinReward}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      {formatCoinsAsUsd(milestone.coinReward)}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+          </section>
         )}
 
-        {/* 3. PLATFORM UNLOCKED & UPCOMING PERKS */}
-        {(activeTab === 'all' || activeTab === 'perks') && (
-        <section className={cn(
-          "rounded-[28px] border p-5 sm:p-7 space-y-5 transition-all",
-          isDark ? "bg-[#070D27]/90 border-white/[0.08]" : "bg-white border-slate-200 shadow-sm"
-        )}>
-          <div className="flex items-center justify-between">
+        {/* 2. LEVEL-UP COIN GRANTS */}
+        {(activeTab === 'all' || activeTab === 'coins') && (
+          <section className={cn(
+            "rounded-3xl border p-5 sm:p-7 space-y-5",
+            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80 shadow-sm"
+          )}>
             <div>
               <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base sm:text-lg font-black tracking-tight">
-                  Platform Capabilities & Privilege Gates
+                <Coins className="w-5 h-5 text-amber-500 shrink-0" />
+                <h2 className="text-base sm:text-lg font-bold tracking-tight">
+                  Level-Up Coin Reward Ledger
                 </h2>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Functional gates that unlock real tools: live streaming, creator withdrawals, profile highlights, and civic poll participation.
+              <p className={cn("text-xs mt-1", isDark ? "text-slate-400" : "text-slate-600")}>
+                Every level advanced credits platform coins to your wallet, recorded in your transaction history.
               </p>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {LEVEL_PERKS.map((perk) => {
-              const isUnlocked = currentLevel >= perk.minLevel;
-              return (
-                <div
-                  key={`${perk.minLevel}-${perk.title}`}
-                  className={cn(
-                    "p-4 rounded-2xl border transition-all flex items-start gap-3.5",
-                    isUnlocked
-                      ? isDark
-                        ? "bg-purple-950/20 border-purple-500/30 shadow-xs"
-                        : "bg-purple-50/40 border-purple-200 shadow-xs"
-                      : isDark
-                      ? "bg-black/20 border-white/[0.06] opacity-60"
-                      : "bg-slate-100 border-slate-200 opacity-60"
-                  )}
-                >
-                  <div className="text-2xl p-1 shrink-0">
-                    {perk.icon}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-xs sm:text-sm truncate">
-                        {perk.title}
-                      </h3>
-                      {isUnlocked ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          <CheckCircle2 className="w-2.5 h-2.5" />
-                          Unlocked
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-mono">
-                          <Lock className="w-2.5 h-2.5" />
-                          Lvl {perk.minLevel}
-                        </span>
-                      )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              {upcomingCoinMilestones.map((milestone) => {
+                const isCurrent = milestone.level === currentLevel;
+                return (
+                  <div
+                    key={milestone.level}
+                    className={cn(
+                      "p-3.5 rounded-2xl border flex items-center justify-between gap-2",
+                      isCurrent
+                        ? isDark ? "bg-purple-500/15 border-purple-400/40" : "bg-purple-50 border-purple-300"
+                        : isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
+                    )}
+                  >
+                    <div>
+                      <div className="text-xs font-semibold text-slate-500 tabular-nums">
+                        Level {milestone.level}
+                      </div>
+                      <div className="text-xs font-semibold">
+                        {milestone.level % 10 === 0 ? 'Decade Milestone' : 'Level Reward'}
+                      </div>
                     </div>
 
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                      {perk.description}
-                    </p>
+                    <div className="text-right">
+                      <div className={cn("text-sm font-bold flex items-center justify-end gap-1 tabular-nums", isDark ? "text-amber-400" : "text-amber-700")}>
+                        <Coins className="w-3.5 h-3.5 shrink-0" />
+                        <span>+{milestone.coinReward}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 tabular-nums">
+                        {formatCoinsAsUsd(milestone.coinReward)}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* 3. PLATFORM CAPABILITIES */}
+        {(activeTab === 'all' || activeTab === 'perks') && (
+          <section className={cn(
+            "rounded-3xl border p-5 sm:p-7 space-y-5",
+            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80 shadow-sm"
+          )}>
+            <div>
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-indigo-400 shrink-0" />
+                <h2 className="text-base sm:text-lg font-bold tracking-tight">
+                  Platform Capabilities &amp; Privilege Gates
+                </h2>
+              </div>
+              <p className={cn("text-xs mt-1", isDark ? "text-slate-400" : "text-slate-600")}>
+                Functional gates that unlock tools: live streaming, creator withdrawals, profile highlights, and civic poll participation.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {LEVEL_PERKS.map((perk) => {
+                const isUnlocked = currentLevel >= perk.minLevel;
+                return (
+                  <div
+                    key={`${perk.minLevel}-${perk.title}`}
+                    className={cn(
+                      "p-4 rounded-2xl border flex items-start gap-3.5",
+                      isUnlocked
+                        ? isDark ? "bg-purple-500/10 border-purple-500/25" : "bg-purple-50/40 border-purple-200"
+                        : isDark ? "bg-[#03071B]/50 border-white/[0.06] opacity-70" : "bg-slate-50 border-slate-200 opacity-75"
+                    )}
+                  >
+                    <div className="text-2xl p-1 shrink-0" aria-hidden="true">
+                      {perk.icon}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-xs sm:text-sm truncate">
+                          {perk.title}
+                        </h3>
+                        {isUnlocked ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-500 shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Unlocked</span>
+                          </span>
+                        ) : (
+                          <span className={cn("inline-flex items-center gap-1 text-xs font-semibold tabular-nums shrink-0", isDark ? "text-amber-400" : "text-amber-700")}>
+                            <Lock className="w-3 h-3" />
+                            <span>Lvl {perk.minLevel}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <p className={cn("text-xs mt-1 line-clamp-2", isDark ? "text-slate-400" : "text-slate-600")}>
+                        {perk.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* 4. PRESTIGE & NOBILITY STANDING */}
         {(activeTab === 'all' || activeTab === 'prestige') && (
-        <section className={cn(
-          "rounded-[28px] border p-5 sm:p-7 space-y-5 transition-all relative overflow-hidden",
-          isDark
-            ? "bg-gradient-to-br from-[#12072B] to-[#070D27] border-purple-500/20"
-            : "bg-gradient-to-br from-purple-50/70 to-white border-purple-200"
-        )}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
-              <Crown className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black tracking-tight">
-                Prestige & Sovereign Nobility
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Exceeding Level {MAX_LEVEL} unlocks Roman Numeral Prestige tiers (I through X), computed from your level.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className={cn(
-              "p-4 rounded-2xl border text-center space-y-1.5",
-              isDark ? "bg-black/30 border-white/10" : "bg-white border-slate-200"
-            )}>
-              <span className="text-2xl">⭐</span>
-              <h3 className="font-bold text-xs sm:text-sm">Founding Citizen</h3>
-              <p className="text-[11px] text-slate-400">Level {MAX_LEVEL} + {ROYAL_ELIGIBILITY.king.minActiveDays} Active Days</p>
+          <section className={cn(
+            "rounded-3xl border p-5 sm:p-7 space-y-5",
+            isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80 shadow-sm"
+          )}>
+            <div className="flex items-center gap-2.5">
+              <div className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center border shrink-0",
+                isDark ? "bg-purple-500/15 text-purple-400 border-purple-500/25" : "bg-purple-50 text-purple-700 border-purple-200"
+              )}>
+                <Crown className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold tracking-tight">
+                  Prestige &amp; Sovereign Nobility
+                </h2>
+                <p className={cn("text-xs mt-0.5", isDark ? "text-slate-400" : "text-slate-600")}>
+                  Exceeding Level {MAX_LEVEL} unlocks Roman Numeral Prestige tiers (I through X), computed from your level.
+                </p>
+              </div>
             </div>
 
-            <div className={cn(
-              "p-4 rounded-2xl border text-center space-y-1.5",
-              isDark ? "bg-black/30 border-white/10" : "bg-white border-slate-200"
-            )}>
-              <span className="text-2xl">⚜️</span>
-              <h3 className="font-bold text-xs sm:text-sm">Ducal Nobility</h3>
-              <p className="text-[11px] text-slate-400">Level {ROYAL_ELIGIBILITY.duke.minLevel} + High Reputation & Contribution</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={cn(
+                "p-4 rounded-2xl border text-center space-y-1.5",
+                isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
+              )}>
+                <span className="text-2xl" aria-hidden="true">⭐</span>
+                <h3 className="font-bold text-xs sm:text-sm">Founding Citizen</h3>
+                <p className="text-xs text-slate-500">Level {MAX_LEVEL} · {ROYAL_ELIGIBILITY.king.minActiveDays} Active Days</p>
+              </div>
+
+              <div className={cn(
+                "p-4 rounded-2xl border text-center space-y-1.5",
+                isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
+              )}>
+                <span className="text-2xl" aria-hidden="true">⚜️</span>
+                <h3 className="font-bold text-xs sm:text-sm">Ducal Nobility</h3>
+                <p className="text-xs text-slate-500">Level {ROYAL_ELIGIBILITY.duke.minLevel} · High Reputation &amp; Contribution</p>
+              </div>
+
+              <div className={cn(
+                "p-4 rounded-2xl border text-center space-y-1.5",
+                isDark ? "bg-[#03071B]/60 border-white/[0.08]" : "bg-slate-50 border-slate-200"
+              )}>
+                <span className="text-2xl" aria-hidden="true">👑</span>
+                <h3 className="font-bold text-xs sm:text-sm">Crown Sovereign</h3>
+                <p className="text-xs text-slate-500">Level {ROYAL_ELIGIBILITY.king.minLevel} · Impeccable Provenance</p>
+              </div>
             </div>
 
-            <div className={cn(
-              "p-4 rounded-2xl border text-center space-y-1.5",
-              isDark ? "bg-black/30 border-white/10" : "bg-white border-slate-200"
-            )}>
-              <span className="text-2xl">👑</span>
-              <h3 className="font-bold text-xs sm:text-sm">Crown Sovereign</h3>
-              <p className="text-[11px] text-slate-400">Level {ROYAL_ELIGIBILITY.king.minLevel} + Impeccable Civic Provenance</p>
+            <div className="flex items-center justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => navigate('/titles')}
+                className={cn(
+                  "min-h-[40px] inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer hover:underline",
+                  isDark ? "text-purple-400" : "text-purple-700"
+                )}
+              >
+                <span>View All Titles &amp; Verified Provenance</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          </div>
-
-          <div className="flex items-center justify-end pt-2">
-            <button
-              onClick={() => navigate('/titles')}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer"
-            >
-              <span>View All Titles &amp; Verified Provenance</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </section>
+          </section>
         )}
-
       </main>
     </div>
   );

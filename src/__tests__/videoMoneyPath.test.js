@@ -30,8 +30,14 @@ process.env.FIRESTORE_EMULATOR_HOST = emulatorHost;
 
 async function emulatorReachable() {
   try {
-    const res = await fetch(`http://${emulatorHost}/`);
-    return res.ok || res.status === 200;
+    const res = await fetch(`http://${emulatorHost}/`, { signal: AbortSignal.timeout(1500) });
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const serverHeader = (res.headers.get('server') || '').toLowerCase();
+    if (!res.ok || contentType.includes('text/html') || serverHeader.includes('nginx')) {
+      return false;
+    }
+    const body = (await res.text()).trim();
+    return body === 'Ok';
   } catch {
     return false;
   }

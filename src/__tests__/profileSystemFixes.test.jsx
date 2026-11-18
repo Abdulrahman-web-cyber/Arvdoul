@@ -13,6 +13,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 const mockUpdateUserProfile = jest.fn();
+const mockGetHighlights = jest.fn(async () => ({ success: true, highlights: [] }));
 
 jest.mock('../firebase/firebase.js', () => ({
   __esModule: true,
@@ -35,16 +36,16 @@ jest.mock('firebase/auth', () => ({
 jest.mock('../services/storyService.js', () => ({
   __esModule: true,
   getStoryService: () => ({
-    getHighlights: async () => ({ success: true, highlights: [] }),
+    getHighlights: (...args) => mockGetHighlights(...args),
     getUserStories: async () => [],
     getStoriesFeed: async () => [],
   }),
   storyService: {
-    getHighlights: async () => ({ success: true, highlights: [] }),
+    getHighlights: (...args) => mockGetHighlights(...args),
     getUserStories: async () => [],
   },
   default: {
-    getHighlights: async () => ({ success: true, highlights: [] }),
+    getHighlights: (...args) => mockGetHighlights(...args),
     getUserStories: async () => [],
   },
 }));
@@ -106,9 +107,12 @@ import { getMonetizationService } from '../services/monetizationService.js';
 import { getAnalyticsService } from '../services/analyticsService.js';
 
 import ProfilePublicScreen from '../screens/Profile/ProfilePublicScreen';
+import ProfileMyScreen from '../screens/Profile/ProfileMyScreen';
 import AboutScreen from '../screens/Profile/AboutScreen';
 import EditProfileScreen from '../screens/Profile/EditProfileScreen';
 import ProfileFeedGrid from '../components/profile/ProfileFeedGrid';
+import ProfileHeroSection from '../components/profile/ProfileHeroSection';
+import ProfileHighlightsSection from '../components/profile/ProfileHighlightsSection';
 
 let userSvc;
 let relSpy;
@@ -117,6 +121,7 @@ let getUserProfileSpy;
 beforeEach(() => {
   useProfileStore.getState().clear();
   mockUpdateUserProfile.mockReset().mockResolvedValue({ success: true });
+  mockGetHighlights.mockReset().mockResolvedValue({ success: true, highlights: [] });
 
   userSvc = getUserService();
   const monSvc = getMonetizationService();
@@ -319,3 +324,86 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
     expect(screen.getByRole('button', { name: 'Change profile photo' })).toBeInTheDocument();
   });
 });
+
+describe('Redesigned Profile Hero, Highlights, and Owner Screen', () => {
+  test('ProfileHeroSection displays Requested / Following / Follow states and wired Share + Options actions', () => {
+    const onShare = jest.fn();
+    const onOpenOptions = jest.fn();
+    const onFollowToggle = jest.fn();
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProfileHeroSection
+          profile={{ id: 'target-2', username: 'target_creator', displayName: 'Target Creator', level: 4 }}
+          isOwner={false}
+          isFollowing={false}
+          requestStatus="pending"
+          onFollowToggle={onFollowToggle}
+          onShare={onShare}
+          onOpenOptions={onOpenOptions}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('button', { name: /Requested/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Share Profile/i }));
+    expect(onShare).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /More Options/i }));
+    expect(onOpenOptions).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <MemoryRouter>
+        <ProfileHeroSection
+          profile={{ id: 'target-2', username: 'target_creator', displayName: 'Target Creator', level: 4 }}
+          isOwner={false}
+          isFollowing={true}
+          requestStatus={null}
+          onFollowToggle={onFollowToggle}
+          onShare={onShare}
+          onOpenOptions={onOpenOptions}
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('button', { name: /Following/i })).toBeInTheDocument();
+  });
+
+  test('ProfileHighlightsSection clears previous user highlights when userId prop switches', async () => {
+    mockGetHighlights
+      .mockResolvedValueOnce({
+        highlights: [{ id: 'h1', title: 'Old Trip', cover: 'https://example.com/old.jpg' }],
+      })
+      .mockResolvedValueOnce({ highlights: [] });
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProfileHighlightsSection userId="user-a" isOwner={false} />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Old Trip')).toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <ProfileHighlightsSection userId="user-b" isOwner={false} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Old Trip')).toBeNull();
+    });
+  });
+
+  test('ProfileMyScreen renders owner actions and switches tabs cleanly', async () => {
+    render(
+      <MemoryRouter initialEntries={['/profile']}>
+        <ProfileMyScreen />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole('button', { name: /Edit Profile/i })).toBeInTheDocument();
+    const audioTab = screen.getByRole('tab', { name: /Audio/i });
+    fireEvent.click(audioTab);
+    expect(audioTab).toHaveAttribute('aria-selected', 'true');
+  });
+});
+

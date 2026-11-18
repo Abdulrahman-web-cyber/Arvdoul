@@ -222,7 +222,7 @@ export default function ProfilePreviewScreen({
         </header>
 
         {/* Main Preview Container */}
-        <div className="max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
+        <div className="max-w-[1160px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
           {/* Banner notification for Visitor Mode */}
           {viewPerspective === 'visitor' && (
             <div className={cn(

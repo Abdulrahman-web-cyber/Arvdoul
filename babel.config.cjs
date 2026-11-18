@@ -17,6 +17,17 @@ const importMetaEnvPlugin = () => ({
         path.replaceWithSourceString('process.env');
       }
     },
+    UnaryExpression(path) {
+      const { operator, argument } = path.node;
+      if (
+        operator === 'typeof' &&
+        argument.type === 'MetaProperty' &&
+        argument.meta.name === 'import' &&
+        argument.property.name === 'meta'
+      ) {
+        path.replaceWithSourceString('"object"');
+      }
+    },
   },
 });
 

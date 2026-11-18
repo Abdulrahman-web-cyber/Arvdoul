@@ -447,10 +447,7 @@ export default function ProfilePublicScreen() {
 
   if (loading && !profileData) {
     return (
-      <div className={cn(
-        'min-h-screen pb-20',
-        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
-      )}>
+      <div className="w-full pb-20">
         <ProfileSkeleton theme={theme} />
       </div>
     );
@@ -459,30 +456,32 @@ export default function ProfilePublicScreen() {
   if (capabilities?.isBlocking) {
     return (
       <div className={cn(
-        "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
       )}>
         <div className={cn(
-          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
             <UserX className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-black">You have blocked this profile</h2>
+          <h2 className="font-display text-xl font-bold">You have blocked this profile</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             You cannot view content or interact with @{effectiveProfile?.username || 'this user'} while they are blocked.
           </p>
           <div className="pt-2 flex justify-center gap-3">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
             >
               Go Back
             </button>
             <button
+              type="button"
               onClick={handleUnblock}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity cursor-pointer"
             >
               Unblock Profile
             </button>
@@ -495,17 +494,17 @@ export default function ProfilePublicScreen() {
   if (capabilities?.isBlockedBy) {
     return (
       <div className={cn(
-        "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
       )}>
         <div className={cn(
-          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-black">Profile Unavailable</h2>
+          <h2 className="font-display text-xl font-bold">Profile Unavailable</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             This account is currently unavailable or restricted.
           </p>
@@ -513,7 +512,7 @@ export default function ProfilePublicScreen() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
             >
               Back to Home
             </button>
@@ -526,17 +525,17 @@ export default function ProfilePublicScreen() {
   if (!loading && (!effectiveProfile || (storeError && !profileData?.username))) {
     return (
       <div className={cn(
-        "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-slate-900"
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
       )}>
         <div className={cn(
-          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center text-2xl font-bold">
             {storeError ? <ShieldAlert className="w-8 h-8" /> : '?'}
           </div>
-          <h2 className="text-xl font-black">
+          <h2 className="font-display text-xl font-bold">
             {storeError ? 'Could Not Load Profile' : 'Creator Profile Not Found'}
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -577,17 +576,17 @@ export default function ProfilePublicScreen() {
   if (!loading && capabilities?.canViewProfile === false) {
     return (
       <div className={cn(
-        "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
       )}>
         <div className={cn(
-          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-black">Profile Unavailable</h2>
+          <h2 className="font-display text-xl font-bold">Profile Unavailable</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             This account is currently unavailable or restricted.
           </p>
@@ -595,7 +594,7 @@ export default function ProfilePublicScreen() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
             >
               Back to Home
             </button>
@@ -608,14 +607,14 @@ export default function ProfilePublicScreen() {
   return (
     <ErrorBoundary>
       <div className={cn(
-        "min-h-screen pb-24 transition-colors duration-200",
+        "w-full pb-20 transition-colors duration-200",
         isDark
-          ? "bg-[#03071B] text-white selection:bg-purple-500/30"
-          : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
+          ? "text-white selection:bg-purple-500/30"
+          : "text-slate-900 selection:bg-purple-500/20"
       )}>
-        {/* Inline load failure banner when a partial/fallback profile is present */}
+        {/* Inline load failure banner */}
         {storeError && (
-          <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 pt-3">
+          <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 pt-2">
             <div className={cn(
               "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
               isDark
@@ -639,8 +638,8 @@ export default function ProfilePublicScreen() {
         )}
 
         {/* Master Container */}
-        <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
-          {/* 1. Master Identity Card with Level Badge, Passport & Public Action Buttons */}
+        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-6">
+          {/* 1. Master Identity Header */}
           <ProfileHeroSection
             profile={effectiveProfile}
             isOwner={false}
@@ -655,6 +654,8 @@ export default function ProfilePublicScreen() {
               navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`);
             }}
             onOpenVerificationModal={() => setShowVerificationModal(true)}
+            onOpenQrCode={() => setShowQrModal(true)}
+            onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowQrModal(true)}
             onShare={handleShare}
             onFollowToggle={handleFollowToggle}
@@ -705,22 +706,23 @@ export default function ProfilePublicScreen() {
           {!capabilities.canViewContent ? (
             /* Restricted / Private Account Access Gate */
             <div className={cn(
-              "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-2",
-              isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
+              "rounded-2xl p-8 sm:p-12 text-center border space-y-4 my-2",
+              isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-white border-slate-200/90 shadow-sm"
             )}>
-              <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                <Lock className="w-8 h-8" />
+              <div className="w-14 h-14 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
+                <Lock className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">This Account is Private</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
                   Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
                 </p>
               </div>
               <div className="pt-2 flex justify-center">
                 <button
+                  type="button"
                   onClick={handleFollowToggle}
-                  className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
@@ -760,8 +762,8 @@ export default function ProfilePublicScreen() {
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
               />
 
-              {/* 6. Multi-Tab Navigation Bar with Multi-View Switcher */}
-              <div className="sticky top-2 z-30 pt-1">
+              {/* 6. Sticky Underline Tabs Bar with Multi-View Switcher */}
+              <div className="sticky top-0 z-30">
                 <ProfileTabsBar
                   activeTab={activeTab}
                   onTabChange={setActiveTab}

@@ -1,12 +1,8 @@
 /**
- * Production-grade Pinned Posts Section.
- * Recreates the exact 4-card grid from both reference images:
- * - Header: '📌 Pinned Posts' and 'View all >'
- * - 4 cards with:
- *   - High-fidelity rounded cover image
- *   - Pin badge icon on top right
- *   - Red heart icon + like count on bottom left
- * 
+ * Production-grade Unboxed Pinned Posts Section.
+ * Renders pinned showcase media directly on the profile canvas with a crisp
+ * editorial section header and rounded media tiles.
+ *
  * @component
  */
 
@@ -30,8 +26,6 @@ const ProfilePinnedPosts = memo(({
       const pinned = posts.filter(p => p.isPinned || p.pinned);
       if (pinned.length > 0) {
         return pinned.slice(0, 4).map((p) => {
-          // Engagement lives under `stats`; an absent count is unknown ('—'),
-          // never a measured 0 (top-level `likesCount` is never written).
           const rawLikes = p.likesCount ?? (Array.isArray(p.likes) ? p.likes.length : p.likes) ?? p.stats?.likes;
           const numLikes = typeof rawLikes === 'number' ? rawLikes : null;
           const formattedLikes = numLikes == null
@@ -54,41 +48,31 @@ const ProfilePinnedPosts = memo(({
     return [];
   }, [posts]);
 
-  // If no pinned posts exist, return null for visitors or an empty state for owner
   if (items.length === 0) {
     if (!isOwner) return null;
     return (
       <div className={cn(
-        "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
+        "w-full rounded-2xl px-4 py-3.5 border flex items-center justify-between gap-3",
         isDark
-          ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-          : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+          ? "bg-[#080F2E]/65 border-white/[0.08] text-white"
+          : "bg-white/80 border-slate-200/90 text-slate-900"
       )}>
-        <div className="flex items-center gap-2 mb-2">
-          <Pin className="w-4 h-4 text-purple-600 dark:text-purple-400 rotate-45" />
-          <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-            Pinned Posts
-          </h2>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Pin className="w-4 h-4 text-arvdoul-purple rotate-45 shrink-0" />
+          <p className="text-xs text-slate-600 dark:text-slate-300 truncate">
+            You haven&apos;t pinned any posts yet. Pin top creations to spotlight them above your feed.
+          </p>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          You haven't pinned any posts yet. Pin your top photos or videos to showcase them here.
-        </p>
       </div>
     );
   }
 
   return (
-    <div className={cn(
-      "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
-      isDark
-        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
-    )}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+    <section aria-label="Pinned Posts" className="w-full py-1">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Pin className="w-4 h-4 text-purple-600 dark:text-purple-400 rotate-45" />
-          <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+          <Pin className="w-4 h-4 text-arvdoul-purple rotate-45" />
+          <h2 className="font-display font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white">
             Pinned Posts
           </h2>
         </div>
@@ -96,14 +80,13 @@ const ProfilePinnedPosts = memo(({
         <button
           type="button"
           onClick={() => navigate('/profile')}
-          className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:opacity-80 transition-opacity cursor-pointer"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer"
         >
           <span>View all</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Grid of 4 Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {items.map((item) => (
           <button
@@ -111,7 +94,7 @@ const ProfilePinnedPosts = memo(({
             type="button"
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
             aria-label={item.title}
-            className="group relative aspect-[3/4] sm:aspect-[4/3] w-full text-left rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arvdoul-blue"
+            className="group relative aspect-[3/4] sm:aspect-[4/3] w-full text-left rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer border border-slate-200/60 dark:border-white/10 bg-slate-900 select-none hover:scale-[1.015] active:scale-[0.985] transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
           >
             <LazyImage
               src={item.image}
@@ -120,27 +103,22 @@ const ProfilePinnedPosts = memo(({
               loading="lazy"
             />
 
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/25" />
 
-            {/* Top Right: Pin Badge */}
-            <div className="absolute top-2.5 right-2.5">
-              <div className="p-1.5 rounded-full bg-black/60 backdrop-blur-md text-white shadow-md">
-                <Pin className="w-3 h-3 rotate-45" />
-              </div>
+            <div className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/55 backdrop-blur-md text-white">
+              <Pin className="w-3 h-3 rotate-45" />
             </div>
 
-            {/* Bottom Left: Heart + Likes */}
             <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 text-white">
               <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-              <span className="text-xs font-bold tabular-nums text-white drop-shadow-sm">
+              <span className="text-xs font-bold tabular-nums drop-shadow-sm">
                 {item.likes}
               </span>
             </div>
           </button>
         ))}
       </div>
-    </div>
+    </section>
   );
 });
 

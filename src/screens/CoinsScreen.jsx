@@ -11,22 +11,23 @@ import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 import { unknownNumber } from '../lib/unknownNumber.js';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL, AD_REWARD_COINS as AD_REWARD_COINS_CANONICAL } from '../shared/levelConfig.cjs';
 
 import { Coins, Crown, Zap, Rocket, Star, CheckCircle, Shield, Gift, TrendingUp, Play, History, Banknote, Loader2, Sparkles } from "lucide-react";
 import PaymentModal from '../components/Shared/PaymentModal';
 import CoinStackIcon from '../components/Shared/CoinStackIcon';
 import ErrorState from '../design-system/ErrorState.jsx';
-// Presentation-only icon/color, keyed by the canonical package id. Amounts and
+// Presentation-only icon/accent, keyed by the canonical package id. Amounts and
 // prices come from COIN_PACKAGES in the shared levelConfig (same table the
 // server prices from), so the client can never advertise a price or coin amount
 // the server will not honour.
 const PACKAGE_STYLE = {
-  coins_100:  { icon: Coins,   color: 'from-amber-500 to-yellow-500' },
-  coins_500:  { icon: Crown,   color: 'from-purple-500 to-pink-500', popular: true },
-  coins_1200: { icon: Star,    color: 'from-blue-500 to-cyan-500' },
-  coins_2500: { icon: Rocket,  color: 'from-orange-500 to-red-500' },
-  coins_5000: { icon: Zap,     color: 'from-green-500 to-emerald-500' },
+  coins_100:  { icon: Coins,  iconTone: 'bg-amber-500/15 text-amber-500 dark:text-amber-400' },
+  coins_500:  { icon: Crown,  iconTone: 'bg-purple-500/15 text-purple-600 dark:text-purple-300', popular: true },
+  coins_1200: { icon: Star,   iconTone: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300' },
+  coins_2500: { icon: Rocket, iconTone: 'bg-sky-500/15 text-sky-600 dark:text-sky-300' },
+  coins_5000: { icon: Zap,    iconTone: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' },
 };
 const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg) => ({
   ...pkg,
@@ -89,13 +90,13 @@ export default function CoinsScreen() {
     };
   });
 
-  const isDark = theme === 'dark';
+  const isDark = theme === 'dark' || theme === 'midnight';
   const colors = {
-    bg: isDark ? 'bg-gradient-to-b from-gray-900 via-gray-950 to-black' : 'bg-gradient-to-b from-blue-50 via-white to-white',
-    card: isDark ? 'bg-gray-800/90' : 'bg-white/95',
-    border: isDark ? 'border-gray-700' : 'border-gray-200',
-    text: isDark ? 'text-white' : 'text-gray-900',
-    secondary: isDark ? 'text-gray-400' : 'text-gray-600',
+    bg: isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]',
+    card: isDark ? 'bg-[#080F2E]' : 'bg-white shadow-sm',
+    border: isDark ? 'border-white/[0.08]' : 'border-slate-200/90',
+    text: isDark ? 'text-white' : 'text-slate-900',
+    secondary: isDark ? 'text-slate-400' : 'text-slate-600',
   };
 
   const loadBalance = useCallback(async () => {
@@ -277,124 +278,127 @@ export default function CoinsScreen() {
 
 
   return (
-    <div className={cn("min-h-screen pb-24", colors.bg)}>
-      <main className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
+    <div className={cn("min-h-screen pb-24 transition-colors", colors.bg, colors.text)}>
+      <main className="max-w-6xl mx-auto px-4 py-4 sm:py-6 space-y-8">
         {/* Balance Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className={cn("rounded-3xl p-6 sm:p-8 mb-8 relative overflow-hidden shadow-xl", colors.card, colors.border, "border")}
+          className={cn("rounded-3xl p-6 sm:p-8 relative overflow-hidden border", colors.card, colors.border)}
         >
-          <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-gradient-to-br from-amber-500/25 to-yellow-500/10 blur-3xl" />
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative">
             <div className="text-center md:text-left">
-              <h2 className={cn("text-2xl sm:text-3xl font-black mb-2", colors.text)}>Your Coin Vault</h2>
-              <div className="flex items-center justify-center md:justify-start gap-4 mb-4">
-                <div className="relative">
-                  <CoinStackIcon size={56} />
-                  <div className="absolute -inset-3 rounded-full bg-amber-500/20 blur-md pointer-events-none" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-500 dark:text-amber-400 block mb-1">
+                Treasury &amp; Balance
+              </span>
+              <h2 className={cn("text-2xl sm:text-3xl font-black tracking-tight mb-3", colors.text)}>Your Coin Vault</h2>
+              <div className="flex items-center justify-center md:justify-start gap-4">
+                <div className="relative shrink-0">
+                  <CoinStackIcon size={52} />
                 </div>
                 <div>
-                  <div className="text-4xl sm:text-5xl font-black text-amber-400 tracking-tight">
+                  <div className="text-4xl sm:text-5xl font-black text-amber-500 dark:text-amber-400 tracking-tight tabular-nums">
                     {balanceLoading ? '…' : balance === null ? '—' : balance.toLocaleString()}
                   </div>
-                  <p className={cn("text-sm sm:text-base font-semibold", colors.secondary)}>Arvdoul Golden Coins</p>
+                  <p className={cn("text-sm font-medium mt-0.5", colors.secondary)}>Arvdoul Golden Coins</p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className={cn("p-4 rounded-xl text-center", colors.card, colors.border, "border")}>
-                <div className="text-2xl font-bold text-green-500">2 / 30s</div>
-                <div className={cn("text-sm", colors.secondary)}>Coins per ad</div>
+            <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
+              <div className={cn("p-4 rounded-2xl border text-center", isDark ? "bg-white/[0.03] border-white/[0.08]" : "bg-slate-50 border-slate-200")}>
+                <div className="text-xl sm:text-2xl font-extrabold text-emerald-500 tabular-nums">{AD_REWARD_COINS} / 30s</div>
+                <div className={cn("text-xs mt-0.5", colors.secondary)}>Coins per ad</div>
               </div>
-              <div className={cn("p-4 rounded-xl text-center", colors.card, colors.border, "border")}>
-                <div className="text-2xl font-bold text-purple-500">{MIN_WITHDRAWAL_COINS.toLocaleString()}+</div>
-                <div className={cn("text-sm", colors.secondary)}>Withdrawal minimum</div>
+              <div className={cn("p-4 rounded-2xl border text-center", isDark ? "bg-white/[0.03] border-white/[0.08]" : "bg-slate-50 border-slate-200")}>
+                <div className="text-xl sm:text-2xl font-extrabold text-purple-500 dark:text-purple-400 tabular-nums">{MIN_WITHDRAWAL_COINS.toLocaleString()}+</div>
+                <div className={cn("text-xs mt-0.5", colors.secondary)}>Withdrawal minimum</div>
               </div>
             </div>
           </div>
         </motion.div>
 
         {/* Buy Coins */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={cn("text-2xl font-bold", colors.text)}>Buy Coins</h2>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20">
-              <Shield className="w-4 h-4 text-green-500" />
-              <span className="text-sm font-medium text-green-500">Secure Payment</span>
+        <section>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h2 className={cn("text-xl font-extrabold tracking-tight", colors.text)}>Buy Coins</h2>
+              <p className={cn("text-xs", colors.secondary)}>Server-verified Stripe checkout</p>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <Shield className="w-4 h-4 shrink-0" />
+              <span>Secure Payment</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
             {COIN_PACKAGES.map((pkg) => {
               const Icon = pkg.icon;
               const isSelected = selectedPackage === pkg.id;
               const isBuying = purchasing === pkg.id;
 
               return (
-                <motion.div
+                <div
                   key={pkg.id}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => setSelectedPackage(pkg.id)}
                   className={cn(
-                    "relative rounded-2xl p-6 cursor-pointer transition-all duration-300",
-                    "border-2 backdrop-blur-sm",
+                    "rounded-2xl p-5 cursor-pointer transition-all border flex flex-col justify-between",
                     isSelected
-                      ? "border-blue-500 bg-gradient-to-br from-blue-500/10 to-purple-500/10 shadow-xl"
+                      ? "border-purple-500 shadow-lg ring-1 ring-purple-500/30"
                       : colors.border,
-                    colors.card,
-                    "hover:shadow-lg"
+                    colors.card
                   )}
                 >
-                  {pkg.popular && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <div className="px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-xs font-bold">
-                        MOST POPULAR
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", pkg.iconTone)}>
+                        <Icon className="w-5 h-5" />
                       </div>
+                      {pkg.popular && (
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">
+                          Popular
+                        </span>
+                      )}
                     </div>
-                  )}
-
-                  <div className="text-center mb-6">
-                    <div className={cn(
-                      "w-16 h-16 rounded-2xl mb-4 flex items-center justify-center mx-auto",
-                      `bg-gradient-to-br ${pkg.color}`
-                    )}>
-                      <Icon className="w-8 h-8 text-white" />
-                    </div>
-                    <div className="text-3xl font-bold mb-1">{pkg.coins.toLocaleString()}</div>
-                    <div className={cn("text-sm mb-2", colors.secondary)}>Coins</div>
+                    <div className="text-2xl font-extrabold tabular-nums">{pkg.coins.toLocaleString()}</div>
+                    <div className={cn("text-xs mb-4", colors.secondary)}>Coins</div>
                   </div>
 
-                  <div className="text-center">
-                    <div className="text-2xl font-bold mb-4">{pkg.price}</div>
+                  <div>
+                    <div className="text-xl font-bold mb-3 tabular-nums">{pkg.price}</div>
                     <button
+                      type="button"
                       disabled={isBuying}
                       onClick={(e) => { e.stopPropagation(); handlePurchase(pkg); }}
                       className={cn(
-                        "w-full py-3 rounded-xl font-bold transition-all duration-300 disabled:opacity-60",
+                        "w-full min-h-[42px] py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap disabled:opacity-60",
                         isSelected
-                          ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600"
-                          : "bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 text-gray-800 dark:text-gray-200 hover:opacity-90"
+                          ? "text-white shadow-sm hover:opacity-95"
+                          : isDark
+                          ? "bg-white/[0.08] text-slate-200 hover:bg-white/[0.14]"
+                          : "bg-slate-100 text-slate-800 hover:bg-slate-200"
                       )}
+                      style={isSelected ? { background: BRAND_GRADIENT } : undefined}
                     >
-                      {isBuying ? 'PROCESSING…' : 'BUY NOW'}
+                      {isBuying ? 'Processing…' : 'Buy Coins'}
                     </button>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
-        </div>
+        </section>
 
         {/* Subscriptions */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={cn("text-2xl font-bold", colors.text)}>Arvdoul Pro</h2>
+        <section>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h2 className={cn("text-xl font-extrabold tracking-tight", colors.text)}>Arvdoul Pro</h2>
+              <p className={cn("text-xs", colors.secondary)}>Monthly coin allocation memberships</p>
+            </div>
             {currentSub && (
-              <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-500/20 to-cyan-500/20 text-violet-500 text-sm font-semibold">
-                {currentSub.tier} · active
+              <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 capitalize">
+                Active · {currentSub.tier}
               </span>
             )}
           </div>
@@ -402,101 +406,127 @@ export default function CoinsScreen() {
             {SUBSCRIPTION_TIERS.map((tier) => {
               const isBuying = purchasing === tier.id;
               return (
-                <motion.div
+                <div
                   key={tier.id}
-                  whileHover={{ scale: 1.03 }}
-                  className={cn("relative rounded-2xl p-6", colors.card, colors.border, "border", tier.popular && "border-violet-500 shadow-xl")}
-                >
-                  {tier.popular && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 text-white text-xs font-bold">
-                      POPULAR
-                    </div>
+                  className={cn(
+                    "rounded-2xl p-6 border flex flex-col justify-between transition-all",
+                    colors.card,
+                    tier.popular ? "border-purple-500/70 shadow-md" : colors.border
                   )}
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="w-5 h-5 text-violet-500" />
-                    <h3 className={cn("text-lg font-bold", colors.text)}>{tier.name}</h3>
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-purple-500" />
+                        <h3 className={cn("text-lg font-bold", colors.text)}>{tier.name}</h3>
+                      </div>
+                      {tier.popular && (
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                          Recommended
+                        </span>
+                      )}
+                    </div>
+                    <div className={cn("text-3xl font-extrabold mb-3 tabular-nums", colors.text)}>{tier.price}</div>
+                    <ul className={cn("text-sm space-y-2 mb-6", colors.secondary)}>
+                      {tier.perks.map((perk) => (
+                        <li key={perk} className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span>{perk}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <div className={cn("text-3xl font-bold mb-1", colors.text)}>{tier.price}</div>
-                  <ul className={cn("text-sm space-y-2 mb-6", colors.secondary)}>
-                    {tier.perks.map((perk) => (
-                      <li key={perk} className="flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-500" /> {perk}
-                      </li>
-                    ))}
-                  </ul>
                   <button
+                    type="button"
                     onClick={() => handleSubscribe(tier)}
                     disabled={isBuying || currentSub?.tier === tier.id}
                     className={cn(
-                      "w-full py-3 rounded-xl font-bold transition disabled:opacity-50",
+                      "w-full min-h-[44px] py-2.5 rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer whitespace-nowrap",
                       tier.popular
-                        ? "bg-gradient-to-r from-violet-500 to-cyan-500 text-white"
-                        : "bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 text-gray-800 dark:text-gray-200"
+                        ? "text-white shadow-sm hover:opacity-95"
+                        : isDark
+                        ? "bg-white/[0.08] text-slate-200 hover:bg-white/[0.14]"
+                        : "bg-slate-100 text-slate-800 hover:bg-slate-200"
                     )}
+                    style={tier.popular ? { background: BRAND_GRADIENT } : undefined}
                   >
-                    {currentSub?.tier === tier.id ? 'ACTIVE' : isBuying ? 'PROCESSING…' : `Subscribe · ${tier.price}`}
+                    {currentSub?.tier === tier.id ? 'Active' : isBuying ? 'Processing…' : `Subscribe · ${tier.price}`}
                   </button>
-                </motion.div>
+                </div>
               );
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Earn via Ads (real getAd/watchAd path) */}
-        <div className={cn("rounded-2xl p-6 mb-8", colors.card, colors.border, "border")}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className={cn("text-xl font-bold flex items-center gap-2", colors.text)}>
-              <Play className="w-5 h-5 text-green-500" /> Earn Coins by Watching Ads
-            </h2>
-            <span className={cn("text-sm", colors.secondary)}>+{AD_REWARD_COINS} coins per 30s</span>
-          </div>
+        {/* Earn via Ads & Withdraw Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Earn via Ads (real getAd/watchAd path) */}
+          <div className={cn("rounded-2xl p-6 border flex flex-col justify-between gap-4", colors.card, colors.border)}>
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h2 className={cn("text-lg font-bold flex items-center gap-2", colors.text)}>
+                  <Play className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <span>Watch Ads to Earn</span>
+                </h2>
+                <span className={cn("text-xs font-semibold tabular-nums", colors.secondary)}>+{AD_REWARD_COINS} coins per 30s</span>
+              </div>
+              {ad && !adWatching ? (
+                <div className={cn("mt-3 p-3 rounded-xl text-xs border", isDark ? "bg-white/[0.03] border-white/[0.08]" : "bg-slate-50 border-slate-200")}>
+                  <p className={cn("font-semibold", colors.text)}>{ad.title || 'Sponsored'}</p>
+                  <p className={colors.secondary}>{ad.cta || 'Tap to watch a 30s ad and earn coins.'}</p>
+                </div>
+              ) : (
+                <p className={cn("text-xs", colors.secondary)}>
+                  Watch a verified 30-second sponsor clip to earn +{AD_REWARD_COINS} coins directly to your ledger.
+                </p>
+              )}
+            </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4">
             <button
+              type="button"
               onClick={ad ? startWatchingAd : fetchAd}
               disabled={adLoading || adWatching || (adTimer > 0)}
               className={cn(
-                "px-6 py-3 rounded-xl font-bold text-white transition-all disabled:opacity-60",
-                adWatching ? "bg-gradient-to-r from-red-500 to-orange-500" : "bg-gradient-to-r from-green-500 to-emerald-500"
+                "w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-60 cursor-pointer whitespace-nowrap shrink-0",
+                adWatching ? "bg-amber-600" : "bg-emerald-600 hover:bg-emerald-500"
               )}
             >
               {adLoading ? 'Loading…' : adWatching ? `Watching… ${adTimer}s` : ad ? 'Watch Now' : 'Find an Ad'}
             </button>
+          </div>
 
-            {ad && !adWatching && (
-              <div className={cn("flex-1 p-3 rounded-xl text-sm", colors.card, "border", colors.border)}>
-                <p className={cn("font-semibold", colors.text)}>{ad.title || 'Sponsored'}</p>
-                <p className={colors.secondary}>{ad.cta || 'Tap to watch a 30s ad and earn coins.'}</p>
-              </div>
-            )}
+          {/* Withdraw */}
+          <div className={cn("rounded-2xl p-6 border flex flex-col justify-between gap-4", colors.card, colors.border)}>
+            <div>
+              <h2 className={cn("text-lg font-bold flex items-center gap-2 mb-2", colors.text)}>
+                <Banknote className="w-5 h-5 text-purple-500 shrink-0" />
+                <span>Withdraw Earnings</span>
+              </h2>
+              <p className={cn("text-xs leading-relaxed", colors.secondary)}>
+                Payouts settle to your connected Stripe account (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins).
+                Connect and manage your payout account from the creator payout screen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/creator-payout')}
+              className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl text-xs font-bold text-white hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+              style={{ background: BRAND_GRADIENT }}
+            >
+              Go to Payouts
+            </button>
           </div>
         </div>
 
-        {/* Withdraw */}
-        <div className={cn("rounded-2xl p-6 mb-8", colors.card, colors.border, "border")}>
-          <h2 className={cn("text-xl font-bold flex items-center gap-2 mb-4", colors.text)}>
-            <Banknote className="w-5 h-5 text-purple-500" /> Withdraw Earnings
-          </h2>
-          <p className={cn("text-sm mb-4", colors.secondary)}>
-            Payouts settle to your connected Stripe account (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins).
-            Connect and manage your payout account from the creator payout screen.
-          </p>
-          <button
-            onClick={() => navigate('/creator-payout')}
-            className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-purple-500 to-violet-500 text-white hover:from-purple-600 hover:to-violet-600 transition-all"
-          >
-            GO TO PAYOUTS
-          </button>
-        </div>
-
         {/* Transaction History (real) */}
-        <div className={cn("rounded-2xl p-6", colors.card, colors.border, "border")}>
-          <h2 className={cn("text-xl font-bold flex items-center gap-2 mb-4", colors.text)}>
-            <History className="w-5 h-5 text-blue-500" /> Recent Transactions
+        <section className={cn("rounded-2xl p-6 border", colors.card, colors.border)}>
+          <h2 className={cn("text-lg font-bold flex items-center gap-2 mb-4", colors.text)}>
+            <History className="w-5 h-5 text-sky-500 shrink-0" />
+            <span>Recent Transactions</span>
           </h2>
           {transactionsLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+              <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
             </div>
           ) : transactionsError ? (
             <div className="py-2">
@@ -518,22 +548,22 @@ export default function CoinsScreen() {
                 const sign = isCredit ? '+' : '-';
                 const amountLabel = amount == null ? '—' : `${sign}${amount.toLocaleString()}`;
                 return (
-                <div key={tx.id} className={cn("flex items-center justify-between p-3 rounded-xl", colors.card, "border", colors.border)}>
-                  <div className="flex items-center gap-3">
+                <div key={tx.id} className={cn("flex items-center justify-between p-3.5 rounded-xl border", isDark ? "bg-white/[0.02] border-white/[0.06]" : "bg-slate-50/70 border-slate-200/80")}>
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className={cn(
-                      "w-9 h-9 rounded-full flex items-center justify-center",
-                      tx.type === 'credit' ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"
+                      "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                      isCredit ? "bg-emerald-500/15 text-emerald-500" : "bg-rose-500/15 text-rose-500"
                     )}>
-                      {tx.type === 'credit' ? <TrendingUp className="w-4 h-4" /> : <Banknote className="w-4 h-4" />}
+                      {isCredit ? <TrendingUp className="w-4 h-4" /> : <Banknote className="w-4 h-4" />}
                     </div>
-                    <div>
-                      <p className={cn("text-sm font-medium capitalize", colors.text)}>{(tx.reason || tx.type || 'transaction').replace(/_/g, ' ')}</p>
-                      <p className={cn("text-xs", colors.secondary)}>
-                        {tx.createdAt?.toDate ? new Date(tx.createdAt.toDate()).toLocaleDateString() : new Date(tx.createdAt).toLocaleDateString()}
+                    <div className="min-w-0">
+                      <p className={cn("text-sm font-medium capitalize truncate", colors.text)}>{(tx.reason || tx.type || 'transaction').replace(/_/g, ' ')}</p>
+                      <p className={cn("text-xs tabular-nums", colors.secondary)}>
+                        {tx.createdAt?.toDate ? new Date(tx.createdAt.toDate()).toLocaleDateString() : tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—'}
                       </p>
                     </div>
                   </div>
-                  <div className={cn("font-bold", isCredit ? "text-green-500" : "text-red-500")}>
+                  <div className={cn("font-bold tabular-nums shrink-0", isCredit ? "text-emerald-500" : "text-rose-500")}>
                     {amountLabel}
                   </div>
                 </div>
@@ -547,41 +577,59 @@ export default function CoinsScreen() {
               onClick={loadMoreTransactions}
               disabled={transactionsLoadingMore}
               className={cn(
-                "mt-3 w-full py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-60",
+                "mt-3 w-full min-h-[42px] py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-60 cursor-pointer",
                 colors.border, colors.secondary, "hover:opacity-80"
               )}
             >
               {transactionsLoadingMore ? 'Loading…' : 'Load more'}
             </button>
           )}
-        </div>
+        </section>
 
         {/* Features */}
-        <div className={cn("rounded-2xl p-8 mt-8", colors.card, colors.border, "border")}>
-          <h2 className={cn("text-2xl font-bold mb-8 text-center", colors.text)}>What Can You Do With Coins?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <section className={cn("rounded-2xl p-6 sm:p-8 border", colors.card, colors.border)}>
+          <h2 className={cn("text-lg font-extrabold mb-6 text-center", colors.text)}>What Can You Do With Coins?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
-                <Rocket className="w-8 h-8 text-purple-500" />
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 flex items-center justify-center mx-auto mb-3">
+                <Rocket className="w-6 h-6 text-purple-500" />
               </div>
-              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Boost Posts</h3>
-              <p className={colors.secondary}>Increase your reach and get more engagement on your content</p>
+              <h3 className={cn("text-base font-bold mb-1.5", colors.text)}>Boost Posts</h3>
+              <p className={cn("text-xs leading-relaxed", colors.secondary)}>Increase your reach and get more engagement on your content</p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 flex items-center justify-center mx-auto mb-4">
-                <Gift className="w-8 h-8 text-amber-500" />
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 flex items-center justify-center mx-auto mb-3">
+                <Gift className="w-6 h-6 text-amber-500" />
               </div>
-              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Send Gifts</h3>
-              <p className={colors.secondary}>Support your favorite creators with virtual gifts</p>
+              <h3 className={cn("text-base font-bold mb-1.5", colors.text)}>Send Gifts</h3>
+              <p className={cn("text-xs leading-relaxed", colors.secondary)}>Support your favorite creators with virtual gifts</p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-blue-500" />
+              <div className="w-12 h-12 rounded-2xl bg-sky-500/15 flex items-center justify-center mx-auto mb-3">
+                <Crown className="w-6 h-6 text-sky-500" />
               </div>
-              <h3 className={cn("text-xl font-bold mb-3", colors.text)}>Marketplace &amp; Polls</h3>
-              <p className={colors.secondary}>Buy creator digital goods and back your predictions in community polls</p>
+              <h3 className={cn("text-base font-bold mb-1.5", colors.text)}>Marketplace &amp; Polls</h3>
+              <p className={cn("text-xs leading-relaxed", colors.secondary)}>Buy creator digital goods and back your predictions in community polls</p>
             </div>
           </div>
+        </section>
+
+        {/* Trust & Verification Strip (inline, no collision with BottomNav) */}
+        <div className={cn("rounded-2xl border p-4 flex flex-col sm:flex-row items-center justify-between gap-3", colors.card, colors.border)}>
+          <div className="flex items-center gap-2.5 text-center sm:text-left">
+            <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className={cn("text-xs", colors.secondary)}>
+              Secure Stripe payment • Coins credited after server verification • Support tickets
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/create-post')}
+            className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold text-white hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
+            style={{ background: BRAND_GRADIENT }}
+          >
+            Create Post with Coins
+          </button>
         </div>
       </main>
 
@@ -600,24 +648,6 @@ export default function CoinsScreen() {
         onConfirm={confirmSubscription}
         onClose={() => setSubTier(null)}
       />
-
-      {/* Bottom Bar */}
-      <div className={cn("fixed bottom-0 left-0 right-0 border-t backdrop-blur-xl", colors.card, colors.border)}>
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className={cn("text-sm", colors.secondary)}>Secure Stripe payment • Coins credited after server verification • Support tickets</span>
-            </div>
-            <button
-              onClick={() => navigate('/create-post')}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-white font-bold hover:from-amber-600 hover:to-yellow-600 transition-all"
-            >
-              Create Post with Coins
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

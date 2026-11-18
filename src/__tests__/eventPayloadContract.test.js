@@ -98,6 +98,7 @@ describe('event-payload contract', () => {
         const name = m[0].match(/['"](arvdoul:[\w:.-]+)['"]/)?.[1];
         // Events that intentionally carry no payload are allowed only if listed.
         const NO_PAYLOAD_OK = new Set([
+          'arvdoul:follow-request-changed',
           'arvdoul:friend-request-changed',
           'arvdoul:messages-read',
           'arvdoul:notification-read',

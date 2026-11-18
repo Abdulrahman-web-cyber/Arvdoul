@@ -7,12 +7,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import walletService from '../../services/walletService';
-import monetizationService from '../../services/monetizationService';
+import { getMonetizationService } from '../../services/monetizationService';
 import PaymentModal from '../../components/Shared/PaymentModal';
 import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, LEVEL_GATES, getCreatorCapabilities } from '../../shared/levelConfig.cjs';
 import { unknownNumber } from '../../lib/unknownNumber';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { cn } from '../../lib/utils';
 
 // Package amounts/prices come from the shared COIN_PACKAGES (the same table the
 // server prices from). The server credits `coins` exactly, so no bonus is
@@ -101,6 +103,7 @@ export default function WalletScreen() {
     if (!paymentPkg || purchasing) return;
     setPurchasing(true);
     try {
+      const monetizationService = getMonetizationService();
       const res = await monetizationService.purchaseCoins(paymentPkg.id, paymentMethodId);
       if (res?.success) {
         toast.success(`+${res?.coinsAdded ?? paymentPkg.coins} coins added to your wallet.`);
@@ -164,8 +167,11 @@ export default function WalletScreen() {
 
   if (loading && !wallet) {
     return (
-      <div className={`min-h-screen pb-24 flex items-center justify-center ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" aria-label="Loading wallet" />
+      <div className={cn(
+        'min-h-screen pb-24 flex items-center justify-center',
+        isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
+      )}>
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" aria-label="Loading wallet" />
       </div>
     );
   }
@@ -174,14 +180,19 @@ export default function WalletScreen() {
   // instead of a "0 Coins" balance the ledger never confirmed.
   if (loadError && !wallet) {
     return (
-      <div className={`min-h-screen pb-24 flex items-center justify-center px-4 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+      <div className={cn(
+        'min-h-screen pb-24 flex items-center justify-center px-4',
+        isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
+      )}>
         <div role="alert" className="text-center space-y-4 max-w-sm">
           <AlertCircle className="w-10 h-10 mx-auto text-amber-500" />
           <h2 className="text-lg font-semibold">Wallet unavailable</h2>
-          <p className="text-sm text-gray-500">{loadError}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{loadError}</p>
           <button
+            type="button"
             onClick={() => { setLoading(true); loadWallet(); }}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold"
+            className="min-h-[40px] px-4 py-2 rounded-xl text-white text-sm font-semibold cursor-pointer whitespace-nowrap"
+            style={{ background: BRAND_GRADIENT }}
           >
             Try again
           </button>
@@ -196,49 +207,63 @@ export default function WalletScreen() {
   );
 
   return (
-    <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={cn(
+      'min-h-screen pb-24 transition-colors',
+      isDark ? 'bg-[#03071B] text-slate-100' : 'bg-[#F6F8FC] text-slate-900'
+    )}>
       <main className="max-w-3xl mx-auto px-4 py-4 space-y-6">
         {/* In-page utility bar (TopAppBar handles main app title and back navigation) */}
         <div className="flex items-center justify-between gap-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Economic Ledger &amp; Sovereign Balance
+          <div>
+            <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
+              Wallet Ledger
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Economic Ledger &amp; Sovereign Balance
+            </p>
           </div>
           <button
+            type="button"
             onClick={loadWallet}
             aria-label="Refresh wallet"
-            className={`p-2 rounded-xl transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-            }`}
+            className={cn(
+              'min-h-[40px] min-w-[40px] p-2 rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0',
+              isDark ? 'bg-[#080F2E] border-white/[0.1] hover:bg-white/[0.06] text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-600'
+            )}
           >
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
+
         {/* Sovereign Balance Card */}
         <section
           aria-labelledby="balance-heading"
-          className={`p-6 sm:p-8 rounded-3xl border transition-all ${
+          className={cn(
+            'p-6 sm:p-8 rounded-3xl border transition-all',
             isDark
-              ? 'bg-gradient-to-br from-gray-900 via-gray-950 to-indigo-950/30 border-gray-800 shadow-xl'
-              : 'bg-gradient-to-br from-white via-indigo-50/30 to-white border-gray-200 shadow-sm'
-          }`}
+              ? 'bg-[#080F2E] border-white/[0.08] shadow-xl'
+              : 'bg-white border-slate-200/90 shadow-sm'
+          )}
         >
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
                 Available Reserve
               </span>
-              <div className="flex items-baseline space-x-2 mt-1">
-                <Coins className="w-6 h-6 text-amber-400 self-center" />
-                <h2 id="balance-heading" className="text-4xl font-extrabold tracking-tight">
+              <div className="flex items-baseline gap-2.5 mt-1">
+                <Coins className="w-6 h-6 text-amber-500 self-center shrink-0" />
+                <h2 id="balance-heading" className="text-4xl font-extrabold tracking-tight tabular-nums text-slate-900 dark:text-white">
                   {fmtCoins(wallet?.availableCoins ?? user?.coins)}
                 </h2>
-                <span className="text-sm font-semibold text-gray-500">Coins</span>
+                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Coins</span>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={() => setPaymentPkg(COIN_PACKAGES[1])}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+              className="min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0 shadow-md"
+              style={{ background: BRAND_GRADIENT }}
             >
               <Plus className="w-4 h-4" />
               <span>Acquire Coins</span>
@@ -246,25 +271,28 @@ export default function WalletScreen() {
           </div>
 
           {/* Sub-balances breakdown */}
-          <div className="mt-8 pt-6 border-t border-gray-800/40 grid grid-cols-3 gap-2 text-xs">
+          <div className={cn(
+            'mt-7 pt-5 border-t grid grid-cols-3 gap-3 text-xs',
+            isDark ? 'border-white/[0.08]' : 'border-slate-200'
+          )}>
             <div>
-              <span className="text-gray-500 block">Pending / Held</span>
-              <span className="font-semibold text-amber-400 mt-0.5 block">
+              <span className="text-slate-500 dark:text-slate-400 block">Pending / Held</span>
+              <span className="font-semibold text-amber-500 dark:text-amber-400 mt-0.5 block tabular-nums">
                 {fmtCoins(wallet?.pendingCoins)} Coins
               </span>
             </div>
             <div>
-              <span className="text-gray-500 block">Lifetime Earned</span>
-              <span className="font-semibold text-emerald-400 mt-0.5 block">
+              <span className="text-slate-500 dark:text-slate-400 block">Lifetime Earned</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5 block tabular-nums">
                 {fmtCoins(wallet?.totalEarned)} Coins
               </span>
-              <span className="text-[10px] text-gray-500 block">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block tabular-nums">
                 {wallet?.totalEarned == null ? '—' : `${formatCoinsAsUsd(wallet.totalEarned)} USD`}
               </span>
             </div>
             <div>
-              <span className="text-gray-500 block">Lifetime Spent</span>
-              <span className="font-semibold text-gray-400 mt-0.5 block">
+              <span className="text-slate-500 dark:text-slate-400 block">Lifetime Spent</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300 mt-0.5 block tabular-nums">
                 {fmtCoins(wallet?.totalSpent)} Coins
               </span>
             </div>
@@ -273,25 +301,27 @@ export default function WalletScreen() {
 
         {/* Quick Packages */}
         <section aria-labelledby="packages-heading" className="space-y-3">
-          <h3 id="packages-heading" className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          <h3 id="packages-heading" className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Coin Packages
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {COIN_PACKAGES.map((pkg) => (
               <button
+                type="button"
                 key={pkg.id}
                 onClick={() => setPaymentPkg(pkg)}
-                className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all ${
-                  isDark ? 'bg-gray-900/60 border-gray-800 hover:border-indigo-600' : 'bg-white border-gray-200 hover:border-indigo-400'
-                }`}
+                className={cn(
+                  'p-4 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer',
+                  isDark ? 'bg-[#080F2E] border-white/[0.08] hover:border-purple-500/60' : 'bg-white border-slate-200 hover:border-purple-400 shadow-sm'
+                )}
               >
                 <div>
-                  <span className="text-lg font-bold">{pkg.coins}</span>
-                  <span className="text-xs text-gray-500 block">Coins</span>
+                  <span className="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{pkg.coins}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 block">Coins</span>
                 </div>
-                <div className="mt-4 pt-2 border-t border-gray-800/40 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-indigo-400">{pkg.price}</span>
-                  <span className="text-[11px] text-gray-500">USD</span>
+                <div className={cn('mt-4 pt-2 border-t flex items-center justify-between', isDark ? 'border-white/[0.08]' : 'border-slate-200')}>
+                  <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 tabular-nums">{pkg.price}</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">USD</span>
                 </div>
               </button>
             ))}
@@ -300,12 +330,15 @@ export default function WalletScreen() {
 
         {/* Creator Payouts Card */}
         {wallet?.monetizationEligible && (
-          <section aria-labelledby="payout-heading" className={`p-6 rounded-2xl border ${isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-white border-gray-200'}`}>
-            <h3 id="payout-heading" className="text-base font-bold flex items-center space-x-2">
-              <Building className="w-4 h-4 text-emerald-400" />
+          <section aria-labelledby="payout-heading" className={cn(
+            'p-6 rounded-2xl border',
+            isDark ? 'bg-[#080F2E] border-white/[0.08]' : 'bg-white border-slate-200/90 shadow-sm'
+          )}>
+            <h3 id="payout-heading" className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <Building className="w-4 h-4 text-emerald-500" />
               <span>Creator Payouts</span>
             </h3>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
               Convert earned creator revenue into fiat currency via Stripe Connect. Minimum threshold: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${MIN_WITHDRAWAL_USD} USD).
             </p>
 
@@ -313,29 +346,34 @@ export default function WalletScreen() {
               const eligibility = resolveWithdrawEligibility(wallet);
               if (!eligibility.allowed) {
                 return (
-                  <div className={`mt-4 flex items-start gap-2 p-3 rounded-xl text-xs ${isDark ? 'bg-amber-950/30 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
+                  <div className={cn(
+                    'mt-4 flex items-start gap-2 p-3 rounded-xl text-xs border',
+                    isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'
+                  )}>
                     <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>{eligibility.reason}</span>
                   </div>
                 );
               }
               return (
-                <form onSubmit={handleWithdrawal} className="mt-4 flex items-center space-x-2">
-                  <input aria-label="return ("
+                <form onSubmit={handleWithdrawal} className="mt-4 flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <input
+                    aria-label="Coins to withdraw"
                     type="number"
                     min={MIN_WITHDRAWAL_COINS}
                     step="100"
                     placeholder={`Coins to withdraw (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
-                    className={`p-2.5 rounded-xl border text-xs flex-1 outline-none ${
-                      isDark ? 'bg-black border-gray-800 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
-                    }`}
+                    className={cn(
+                      'min-h-[42px] px-3.5 py-2 rounded-xl border text-xs flex-1 outline-none tabular-nums',
+                      isDark ? 'bg-white/[0.04] border-white/[0.1] text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    )}
                   />
                   <button
                     type="submit"
                     disabled={withdrawing}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                    className="min-h-[42px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     {withdrawing ? 'Submitting...' : 'Request Payout'}
                   </button>
@@ -347,22 +385,27 @@ export default function WalletScreen() {
 
         {/* Ledger Transaction History */}
         <section aria-labelledby="ledger-heading" className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 id="ledger-heading" className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          <div className="flex items-center justify-between gap-2">
+            <h3 id="ledger-heading" className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 tabular-nums">
               Audit Ledger ({filteredTxs.length})
             </h3>
-            <div className={`flex rounded-lg p-0.5 border ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+            <div className={cn(
+              'flex rounded-xl p-0.5 border',
+              isDark ? 'bg-[#080F2E] border-white/[0.08]' : 'bg-white border-slate-200'
+            )}>
               {['all', 'in', 'out'].map((tab) => (
                 <button
+                  type="button"
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`text-[11px] uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${
+                  className={cn(
+                    'min-h-[32px] text-[11px] uppercase tracking-wider px-3 py-1 rounded-lg transition-colors cursor-pointer whitespace-nowrap',
                     activeTab === tab
                       ? isDark
-                        ? 'bg-gray-800 text-white font-semibold'
-                        : 'bg-gray-100 text-gray-900 font-semibold'
-                      : 'text-gray-500 hover:text-gray-300'
-                  }`}
+                        ? 'bg-white/[0.12] text-white font-semibold'
+                        : 'bg-slate-100 text-slate-900 font-semibold'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  )}
                 >
                   {tab}
                 </button>
@@ -370,44 +413,53 @@ export default function WalletScreen() {
             </div>
           </div>
 
-          <div className={`rounded-2xl border divide-y ${isDark ? 'bg-gray-900/40 border-gray-800 divide-gray-800' : 'bg-white border-gray-200 divide-gray-100'}`}>
+          <div className={cn(
+            'rounded-2xl border divide-y',
+            isDark ? 'bg-[#080F2E] border-white/[0.08] divide-white/[0.06]' : 'bg-white border-slate-200 divide-slate-100 shadow-sm'
+          )}>
             {filteredTxs.map((tx) => {
               // An unreadable amount renders as an explicit unavailable state
               // ('—'), never a fabricated '+0 Coins' ledger row.
               const amount = unknownNumber(tx.amount);
               const isCredit = amount != null && amount >= 0;
               return (
-              <div key={tx.id} className="p-4 flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-3">
-                  <div className={`p-2 rounded-xl ${
-                    isCredit ? 'bg-emerald-950/40 text-emerald-400' : 'bg-red-950/40 text-red-400'
-                  }`}>
+              <div key={tx.id} className="p-4 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn(
+                    'p-2 rounded-xl shrink-0',
+                    isCredit ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'
+                  )}>
                     {isCredit ? (
                       <ArrowDownLeft className="w-4 h-4" />
                     ) : (
                       <ArrowUpRight className="w-4 h-4" />
                     )}
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-200">{tx.description || tx.type || 'Transaction'}</h4>
-                    <p className="text-[11px] text-gray-500">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                      {tx.description || tx.type || 'Transaction'}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className={`font-mono font-bold block ${
-                    isCredit ? 'text-emerald-400' : 'text-gray-300'
-                  }`}>
+                <div className="text-right shrink-0">
+                  <span className={cn(
+                    'font-mono font-bold block tabular-nums',
+                    isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'
+                  )}>
                     {amount == null ? '—' : `${isCredit ? '+' : ''}${amount}`} Coins
                   </span>
-                  <span className="text-[10px] uppercase font-mono text-gray-500">{tx.status}</span>
+                  <span className="text-[10px] uppercase font-mono text-slate-500 dark:text-slate-400">{tx.status}</span>
                 </div>
               </div>
               );
             })}
 
             {filteredTxs.length === 0 && (
-              <div className="p-8 text-center text-xs text-gray-500">
+              <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
                 No ledger transactions recorded yet.
               </div>
             )}

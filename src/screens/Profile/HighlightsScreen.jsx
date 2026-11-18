@@ -15,6 +15,7 @@ import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import ErrorState from '../../design-system/ErrorState.jsx';
 import { unknownNumber } from '../../lib/unknownNumber.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 
 const EMOJI_OPTIONS = ['✨', '🔥', '💖', '🎵', '✈️', '📸', '⚡', '🏆', '🌴', '🎨', '🚀', '🌟'];
@@ -180,23 +181,19 @@ export default function HighlightsScreen() {
     )}>
       {/* Content */}
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-        <div className="flex items-center justify-between pb-2">
+        <div className="flex items-center justify-between pb-2 gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">Story Highlights</h2>
+            <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Story Highlights</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">Curate your best memories on your profile</p>
           </div>
           <button
             type="button"
             onClick={handleCreateHighlight}
-            className={cn(
-              'px-4 py-2 rounded-2xl font-bold text-xs',
-              'bg-arvdoul-gradient',
-              'text-white hover:opacity-90 shadow-md transition-opacity',
-              'flex items-center gap-1.5 cursor-pointer'
-            )}
+            className="min-h-[44px] px-4 py-2 rounded-2xl font-bold text-xs text-white hover:opacity-95 shadow-md transition-opacity flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+            style={{ background: BRAND_GRADIENT }}
           >
-            <Plus className="w-3.5 h-3.5" />
-            New Highlight
+            <Plus className="w-4 h-4" />
+            <span>New Highlight</span>
           </button>
         </div>
         {loading ? (
@@ -210,25 +207,27 @@ export default function HighlightsScreen() {
             onRetry={() => setReloadNonce((n) => n + 1)}
           />
         ) : highlights.length === 0 ? (
-          <div className="text-center py-20">
+          <div className={cn(
+            'text-center py-16 px-6 rounded-3xl border',
+            theme === 'dark' ? 'bg-[#080F2E] border-white/[0.08]' : 'bg-white border-slate-200/90 shadow-sm'
+          )}>
             <div className={cn(
-              'w-20 h-20 rounded-full mx-auto mb-4',
-              'bg-gray-100 dark:bg-gray-800',
-              'flex items-center justify-center'
+              'w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center',
+              theme === 'dark' ? 'bg-white/[0.06] text-slate-300' : 'bg-slate-100 text-slate-500'
             )}>
-              <Plus className="w-8 h-8 text-gray-400" />
+              <Plus className="w-7 h-7" />
             </div>
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
               No highlights yet
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
+              Pin favorite stories here so visitors can explore them anytime.
             </p>
             <button
               type="button"
               onClick={handleCreateHighlight}
-              className={cn(
-                'px-4 py-2 rounded-xl font-medium cursor-pointer',
-                'bg-purple-600 text-white',
-                'hover:bg-purple-500 transition-colors'
-              )}
+              className="min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0 shadow-md"
+              style={{ background: BRAND_GRADIENT }}
             >
               Create Your First Highlight
             </button>
@@ -490,7 +489,7 @@ export default function HighlightsScreen() {
                   setShowCreate(false);
                   setSelectedStoryIds([]);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.08] text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-white/[0.12] transition cursor-pointer whitespace-nowrap"
               >
                 Cancel
               </button>
@@ -529,7 +528,8 @@ export default function HighlightsScreen() {
                   }
                 }}
                 disabled={creating}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-95 transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                style={{ background: BRAND_GRADIENT }}
               >
                 {creating ? 'Creating…' : 'Create'}
               </button>
@@ -565,7 +565,7 @@ export default function HighlightsScreen() {
               <button
                 type="button"
                 onClick={() => { setEditingHighlight(null); setEditTitle(''); }}
-                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-white/[0.08] text-slate-700 dark:text-slate-300 cursor-pointer whitespace-nowrap"
               >
                 Cancel
               </button>
@@ -573,7 +573,8 @@ export default function HighlightsScreen() {
                 type="button"
                 onClick={handleSaveEditHighlight}
                 disabled={savingEdit}
-                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 disabled:opacity-50"
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 cursor-pointer whitespace-nowrap hover:opacity-95 transition-opacity"
+                style={{ background: BRAND_GRADIENT }}
               >
                 {savingEdit ? 'Saving...' : 'Save Changes'}
               </button>

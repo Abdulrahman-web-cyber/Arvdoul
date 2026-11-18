@@ -24,6 +24,47 @@ if (typeof globalThis.structuredClone === 'undefined') {
 }
 
 // ---------------------------------------------------------------------------
+// Fetch / Response / Request / Headers shims for jsdom component tests loading Firebase Auth
+// ---------------------------------------------------------------------------
+if (typeof globalThis.Headers === 'undefined') {
+  globalThis.Headers = class Headers {
+    constructor(init = {}) {
+      this._map = new Map(Object.entries(init || {}));
+    }
+    get(k) { return this._map.get(String(k).toLowerCase()) ?? null; }
+    set(k, v) { this._map.set(String(k).toLowerCase(), String(v)); }
+    has(k) { return this._map.has(String(k).toLowerCase()); }
+    forEach(cb) { this._map.forEach((v, k) => cb(v, k, this)); }
+  };
+}
+if (typeof globalThis.Response === 'undefined') {
+  globalThis.Response = class Response {
+    constructor(body = null, init = {}) {
+      this.body = body;
+      this.status = init.status ?? 200;
+      this.ok = this.status >= 200 && this.status < 300;
+      this.headers = new globalThis.Headers(init.headers);
+    }
+    async json() { return typeof this.body === 'string' ? JSON.parse(this.body || '{}') : (this.body ?? {}); }
+    async text() { return typeof this.body === 'string' ? this.body : JSON.stringify(this.body ?? ''); }
+    clone() { return new globalThis.Response(this.body, { status: this.status }); }
+  };
+}
+if (typeof globalThis.Request === 'undefined') {
+  globalThis.Request = class Request {
+    constructor(url, init = {}) {
+      this.url = String(url);
+      this.method = init.method || 'GET';
+      this.headers = new globalThis.Headers(init.headers);
+      this.body = init.body ?? null;
+    }
+  };
+}
+if (typeof globalThis.fetch === 'undefined') {
+  globalThis.fetch = async () => new globalThis.Response('{}', { status: 503 });
+}
+
+// ---------------------------------------------------------------------------
 // TextEncoder / TextDecoder (Node 22 provides globals, but keep for parity)
 // ---------------------------------------------------------------------------
 if (typeof globalThis.TextEncoder === 'undefined' || typeof globalThis.TextDecoder === 'undefined') {

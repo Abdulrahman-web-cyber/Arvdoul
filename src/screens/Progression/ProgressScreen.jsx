@@ -8,6 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { unknownNumber } from '../../lib/unknownNumber.js';
 import { levelSystemService, getCitizenTier, getPerksForLevel, LEVEL_PERKS, getPrestigeInfo, XP_RULES } from "../../services/levelSystemService";
+import { getMonetizationService } from "../../services/monetizationService.js";
+import { getUserService } from "../../services/userService.js";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { Flame, ChevronRight, Lock, Coins, ShieldCheck, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
 
@@ -16,13 +19,13 @@ export default function ProgressScreen() {
   const { user, userProfile } = useAuth();
   const { theme } = useTheme();
 
-  const profile = userProfile || user;
-  const currentUid = profile?.uid || user?.uid;
+  const authProfile = userProfile || user;
+  const currentUid = authProfile?.uid || user?.uid;
 
   const [refreshing, setRefreshing] = useState(false);
   const [levelInfo, setLevelInfo] = useState(null);
-  // Unknown streak/active-days render as unavailable, never as a fabricated
-  // "1 day" (a new account that has never been active is not on a 1-day streak).
+  const [liveProfile, setLiveProfile] = useState(null);
+  const [liveBalance, setLiveBalance] = useState(undefined);
   const [activeStreak, setActiveStreak] = useState(null);
   const [activeDaysCount, setActiveDaysCount] = useState(null);
 
@@ -31,18 +34,33 @@ export default function ProgressScreen() {
   const loadProgression = useCallback(async () => {
     if (!currentUid) return;
     try {
-      const info = await levelSystemService.getLevelInfo(currentUid);
-      setLevelInfo(info);
-      const streak = Number(profile?.activeStreak);
+      const [infoRes, balRes, profRes] = await Promise.allSettled([
+        levelSystemService.getLevelInfo(currentUid),
+        getMonetizationService().getBalance(currentUid),
+        getUserService().getUserProfile(currentUid, currentUid),
+      ]);
+
+      if (infoRes.status === 'fulfilled') {
+        setLevelInfo(infoRes.value);
+      }
+      if (balRes.status === 'fulfilled') {
+        setLiveBalance(typeof balRes.value === 'number' ? balRes.value : null);
+      }
+      const fetchedProfile = profRes.status === 'fulfilled' && profRes.value ? profRes.value : authProfile;
+      if (profRes.status === 'fulfilled' && profRes.value) {
+        setLiveProfile(profRes.value);
+      }
+
+      const streak = Number(fetchedProfile?.activeStreak);
       setActiveStreak(Number.isFinite(streak) && streak > 0 ? streak : null);
-      const days = Number(profile?.activeDaysCount);
+      const days = Number(fetchedProfile?.activeDaysCount ?? fetchedProfile?.activeDays);
       setActiveDaysCount(Number.isFinite(days) && days > 0 ? days : null);
     } catch {
       toast.error('Failed to load live progression data');
     } finally {
       setRefreshing(false);
     }
-  }, [currentUid, profile]);
+  }, [currentUid, authProfile]);
 
   useEffect(() => {
     loadProgression();
@@ -50,20 +68,21 @@ export default function ProgressScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    levelSystemService.invalidate(user?.uid);
+    levelSystemService.invalidate(currentUid || user?.uid);
     await loadProgression();
   };
 
-  // A missing stored level renders as unavailable, never as a plausible-but-false
-  // "Level 1". `level` is still floored to 1 for gate math (perk/tier lookup),
-  // but `hasLevel` decides what the standing badge claims.
+  const effectiveProfile = liveProfile || authProfile;
   const hasLevel = (levelInfo?.level != null && Number.isFinite(Number(levelInfo.level)))
-    || (user?.level != null && Number.isFinite(Number(user.level)));
-  const level = levelInfo?.level ?? user?.level ?? 1;
+    || (effectiveProfile?.level != null && Number.isFinite(Number(effectiveProfile.level)));
+  const level = levelInfo?.level ?? effectiveProfile?.level ?? 1;
+
+  const experienceTotal = levelInfo?.experience ?? effectiveProfile?.experience ?? null;
+  const coinsBalance = liveBalance !== undefined ? liveBalance : (effectiveProfile?.coins ?? null);
+
   const citizenTier = useMemo(() => getCitizenTier(level, activeDaysCount), [level, activeDaysCount]);
   const prestige = useMemo(() => getPrestigeInfo(level), [level]);
 
-  // Perks unlocked vs upcoming
   const unlockedPerks = useMemo(() => getPerksForLevel(level), [level]);
   const upcomingPerks = useMemo(
     () => LEVEL_PERKS.filter((p) => p.minLevel > level).slice(0, 4),
@@ -71,74 +90,90 @@ export default function ProgressScreen() {
   );
 
   return (
-    <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      <main className="max-w-3xl mx-auto px-4 py-4 space-y-6">
-        {/* In-page utility bar (TopAppBar handles main app title and back navigation) */}
+    <div className={`min-h-screen pb-24 transition-colors duration-200 ${isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'}`}>
+      <main className="max-w-3xl mx-auto px-4 py-4 sm:py-5 space-y-6">
+        {/* Utility Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+          <div className="text-xs font-semibold flex items-center gap-1.5">
+            <span className={isDark ? 'text-purple-400' : 'text-purple-700'}>
               {hasLevel ? `${citizenTier.tier} · Level ${level}` : 'Standing unavailable'}
-              {hasLevel && prestige.isPrestige ? ` · Prestige ${prestige.prestigeRoman}` : ''}
             </span>
+            {hasLevel && prestige.isPrestige && (
+              <>
+                <span aria-hidden="true" className="text-slate-400">·</span>
+                <span className={isDark ? 'text-amber-300' : 'text-amber-700'}>
+                  Prestige {prestige.prestigeRoman}
+                </span>
+              </>
+            )}
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleRefresh}
               disabled={refreshing}
               aria-label="Refresh progression"
-              className={`p-2 rounded-xl transition-colors ${
-                isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+              className={`min-w-[40px] min-h-[40px] rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                isDark ? 'bg-[#080F2E] border-white/[0.08] hover:bg-white/10 text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
               }`}
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
+              type="button"
               onClick={() => navigate('/perks')}
-              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white transition-colors cursor-pointer shadow-sm"
+              className="min-h-[40px] text-xs font-semibold px-3.5 py-2 rounded-xl text-white transition-opacity hover:opacity-95 whitespace-nowrap shrink-0 cursor-pointer"
+              style={{ background: BRAND_GRADIENT }}
             >
-              Perks & Rewards
+              Perks &amp; Rewards
             </button>
             <button
+              type="button"
               onClick={() => navigate('/passport')}
-              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
+              className={`min-h-[40px] text-xs font-semibold px-3.5 py-2 rounded-xl border whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                isDark ? 'bg-[#080F2E] border-white/15 hover:bg-white/10 text-white' : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-800'
+              }`}
             >
               Digital Passport
             </button>
           </div>
         </div>
-        {/* Section 1: Where am I? & Why am I here? (Primary Progress Card) */}
+
+        {/* Section 1: Primary Progress Overview */}
         <section
           aria-labelledby="progress-overview-heading"
-          className={`p-6 rounded-2xl border transition-all ${
+          className={`p-6 rounded-3xl border transition-colors ${
             isDark
-              ? 'bg-gradient-to-b from-gray-900 to-gray-950 border-gray-800 shadow-xl'
-              : 'bg-gradient-to-b from-white to-gray-50 border-gray-200 shadow-sm'
+              ? 'bg-[#080F2E]/90 border-white/[0.08]'
+              : 'bg-white border-slate-200/80 shadow-sm'
           }`}
         >
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <span className="text-xs font-medium uppercase tracking-wider text-indigo-500">
+              <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>
                 Current Standing
               </span>
-              <h2 id="progress-overview-heading" className="text-3xl font-extrabold tracking-tight mt-1">
+              <h2 id="progress-overview-heading" className="text-3xl font-bold tracking-tight mt-1 tabular-nums">
                 {hasLevel ? `Level ${level}` : 'Level unavailable'}
                 {hasLevel && (
-                  <span className="text-lg font-medium text-gray-500 ml-2">
+                  <span className={`text-lg font-medium ml-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {levelInfo?.title || citizenTier.tier}
                   </span>
                 )}
               </h2>
             </div>
-            <div className="text-right">
-              <span className="text-2xl">{hasLevel ? citizenTier.icon : '—'}</span>
-              <p className="text-xs text-gray-500 mt-1">{hasLevel ? `${citizenTier.tier} Tier` : 'Not yet rated'}</p>
+            <div className="text-right shrink-0">
+              <span className="text-2xl" aria-hidden="true">{hasLevel ? citizenTier.icon : '—'}</span>
+              <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {hasLevel ? `${citizenTier.tier} Tier` : 'Not yet rated'}
+              </p>
             </div>
           </div>
 
           {/* Progress Bar */}
           <div className="mt-6 space-y-2">
-            <div className="flex justify-between text-xs text-gray-400">
+            <div className={`flex justify-between text-xs tabular-nums ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               <span>{levelInfo?.xpIntoLevel != null ? `${levelInfo.xpIntoLevel} XP earned this level` : 'XP unavailable'}</span>
               <span>
                 {!hasLevel
@@ -148,65 +183,68 @@ export default function ProgressScreen() {
                     : `${unknownNumber(levelInfo?.xpToNext) ?? '—'} XP to Level ${level + 1}`}
               </span>
             </div>
-            <div
-              className={`h-3 w-full rounded-full overflow-hidden ${
-                isDark ? 'bg-gray-800' : 'bg-gray-200'
-              }`}
-            >
+            <div className={`h-2.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-white/[0.08]' : 'bg-slate-200'}`}>
               <div
-                className="h-full bg-arvdoul-gradient transition-all duration-700 rounded-full"
-                style={{ width: `${unknownNumber(levelInfo?.progress) ?? 0}%` }}
+                className="h-full transition-all duration-700 rounded-full"
+                style={{
+                  width: `${unknownNumber(levelInfo?.progress) ?? 0}%`,
+                  background: BRAND_GRADIENT,
+                }}
                 role="progressbar"
                 aria-valuenow={unknownNumber(levelInfo?.progress) ?? 0}
                 aria-valuemin={0}
                 aria-valuemax={100}
               />
             </div>
-            <div className="flex justify-between items-center text-xs text-gray-500 pt-1">
+            <div className={`flex justify-between items-center text-xs pt-1 tabular-nums ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               <span>Stage Progress: {unknownNumber(levelInfo?.progress) != null ? `${levelInfo.progress}%` : '—'}</span>
-              <span>Total XP: {user?.experience != null ? Number(user.experience).toLocaleString() : '—'}</span>
+              <span>Total XP: {experienceTotal != null && Number.isFinite(Number(experienceTotal)) ? Number(experienceTotal).toLocaleString() : '—'}</span>
             </div>
           </div>
 
-          {/* Stats Triad: Active Days, Streak, Rewards */}
-          <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-gray-800/60 dark:border-gray-800">
+          {/* Stats Triad */}
+          <div className={`grid grid-cols-3 gap-3 mt-6 pt-6 border-t ${isDark ? 'border-white/[0.08]' : 'border-slate-200'}`}>
             <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 text-amber-500">
-                <Flame className="w-4 h-4" />
+              <div className="flex items-center justify-center gap-1.5 text-amber-500 tabular-nums">
+                <Flame className="w-4 h-4 shrink-0" />
                 <span className="text-lg font-bold">{activeStreak ?? '—'}</span>
               </div>
-              <p className="text-[11px] text-gray-500 mt-0.5">Day Streak</p>
+              <p className="text-xs text-slate-500 mt-0.5">Day Streak</p>
             </div>
 
             <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 text-emerald-500">
-                <ShieldCheck className="w-4 h-4" />
+              <div className="flex items-center justify-center gap-1.5 text-emerald-500 tabular-nums">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
                 <span className="text-lg font-bold">{activeDaysCount ?? '—'}</span>
               </div>
-              <p className="text-[11px] text-gray-500 mt-0.5">Active Days</p>
+              <p className="text-xs text-slate-500 mt-0.5">Active Days</p>
             </div>
 
             <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 text-purple-400">
-                <Coins className="w-4 h-4" />
-                <span className="text-lg font-bold">{user?.coins != null ? Number(user.coins).toLocaleString() : '—'}</span>
+              <div className={`flex items-center justify-center gap-1.5 tabular-nums ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>
+                <Coins className="w-4 h-4 shrink-0" />
+                <span className="text-lg font-bold">
+                  {coinsBalance != null && Number.isFinite(Number(coinsBalance)) ? Number(coinsBalance).toLocaleString() : '—'}
+                </span>
               </div>
-              <p className="text-[11px] text-gray-500 mt-0.5">Coins Balance</p>
+              <p className="text-xs text-slate-500 mt-0.5">Coins Balance</p>
             </div>
           </div>
         </section>
 
-        {/* Section 2: What did I accomplish? (Next Rank & Milestone) */}
+        {/* Section 2: Next Milestones */}
         <section aria-labelledby="milestones-heading" className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 id="milestones-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
-              Stage Milestones & Unlocks
+            <h3 id="milestones-heading" className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Stage Milestones &amp; Unlocks
             </h3>
             <button
+              type="button"
               onClick={() => navigate('/achievements')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center"
+              className={`min-h-[36px] text-xs font-semibold flex items-center gap-0.5 cursor-pointer hover:underline ${isDark ? 'text-purple-400' : 'text-purple-700'}`}
             >
-              All Achievements <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+              <span>All Achievements</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -214,29 +252,27 @@ export default function ProgressScreen() {
             {upcomingPerks.map((perk) => (
               <div
                 key={`${perk.minLevel}-${perk.title}`}
-                className={`p-4 rounded-xl border flex items-start space-x-3.5 ${
-                  isDark ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200'
+                className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
+                  isDark ? 'bg-[#080F2E]/80 border-white/[0.08]' : 'bg-white border-slate-200/80'
                 }`}
               >
-                <div
-                  className={`p-2.5 rounded-lg shrink-0 ${
-                    isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  <Lock className="w-4 h-4 text-amber-500" />
+                <div className={`p-2.5 rounded-xl shrink-0 ${isDark ? 'bg-white/[0.05] text-amber-400' : 'bg-amber-50 text-amber-700'}`}>
+                  <Lock className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold truncate">{perk.title}</h4>
-                    <span className="text-xs font-mono text-amber-500">Lvl {perk.minLevel}</span>
+                    <span className={`text-xs font-semibold tabular-nums shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                      Lvl {perk.minLevel}
+                    </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{perk.description}</p>
+                  <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{perk.description}</p>
                 </div>
               </div>
             ))}
 
             {upcomingPerks.length === 0 && (
-              <div className="col-span-2 p-6 text-center text-sm text-gray-500">
+              <div className={`col-span-2 p-6 rounded-2xl border text-center text-sm ${isDark ? 'bg-[#080F2E]/60 border-white/[0.08] text-slate-400' : 'bg-white border-slate-200 text-slate-600'}`}>
                 You have reached Ascendant standing and unlocked all standard tier capabilities!
               </div>
             )}
@@ -246,14 +282,15 @@ export default function ProgressScreen() {
         {/* Section 3: Unlocked Capabilities */}
         <section aria-labelledby="unlocked-heading" className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 id="unlocked-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
-              Unlocked Platform Capabilities ({unlockedPerks.length})
+            <h3 id="unlocked-heading" className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Unlocked Capabilities ({unlockedPerks.length})
             </h3>
             <button
+              type="button"
               onClick={() => navigate('/perks')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+              className={`min-h-[36px] text-xs font-semibold flex items-center gap-0.5 cursor-pointer hover:underline ${isDark ? 'text-purple-400' : 'text-purple-700'}`}
             >
-              <span>All Perks & Virtual Gifts</span>
+              <span>All Perks &amp; Virtual Gifts</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -262,85 +299,56 @@ export default function ProgressScreen() {
             {unlockedPerks.map((perk) => (
               <div
                 key={`${perk.minLevel}-${perk.title}`}
-                className={`p-4 rounded-xl border flex items-start space-x-3.5 ${
-                  isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-white border-gray-200'
+                className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
+                  isDark ? 'bg-[#080F2E]/70 border-white/[0.08]' : 'bg-white border-slate-200/80'
                 }`}
               >
-                <div className="text-xl shrink-0 p-1">{perk.icon}</div>
+                <div className="text-xl shrink-0 p-1" aria-hidden="true">{perk.icon}</div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium truncate">{perk.title}</h4>
-                    <span className="text-xs text-emerald-500 font-medium">Unlocked</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold truncate">{perk.title}</h4>
+                    <span className="text-xs text-emerald-500 font-semibold shrink-0">Unlocked</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">{perk.description}</p>
+                  <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{perk.description}</p>
                 </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Section 4: Legitimate XP Sources & Anti-Farming Transparency */}
+        {/* Section 4: XP Rules */}
         <section aria-labelledby="xp-rules-heading" className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 id="xp-rules-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
+            <h3 id="xp-rules-heading" className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               Eligible Progression Activities
             </h3>
-            <span className="text-[11px] font-bold text-purple-400">XP Resets Daily 00:00 UTC</span>
+            <span className={`text-xs font-medium ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>
+              Resets Daily 00:00 UTC
+            </span>
           </div>
 
-          <div
-            className={`p-5 rounded-xl border divide-y ${
-              isDark ? 'bg-gray-900/50 border-gray-800 divide-gray-800' : 'bg-white border-gray-200 divide-gray-100'
-            }`}
-          >
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Daily Verified Presence</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.daily_login.xp} XP / day</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Active Streak Milestone (7d, 14d, 30d)</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.streak_milestone.xp} XP</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Original Post Publication</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.post_created.xp} XP (Cap: {XP_RULES.post_created.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Story & Ephemeral Moments</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.story_created.xp} XP (Cap: {XP_RULES.story_created.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Audio Studio Production</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.audio_track_created.xp} XP (Cap: {XP_RULES.audio_track_created.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Constructive Conversation Comment</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.comment_created.xp} XP (Cap: {XP_RULES.comment_created.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Genuine Community Connection</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.follow_received.xp} XP</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Sending Virtual Gifts to Creators</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.gift_sent.xp} XP (Cap: {XP_RULES.gift_sent.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Receiving Creator Patronage & Gifts</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.gift_received.xp} XP (Cap: {XP_RULES.gift_received.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Sharing Great Content Across the Network</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.post_shared.xp} XP (Cap: {XP_RULES.post_shared.dailyCap}/day)</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Civic Poll & Governance Voting</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.civic_vote_cast.xp} XP</span>
-            </div>
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Watching Sponsored Video Ads</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.ad_reward_claimed.xp} XP (Cap: {XP_RULES.ad_reward_claimed.dailyCap}/day)</span>
-            </div>
+          <div className={`px-5 py-2 rounded-2xl border divide-y ${
+            isDark ? 'bg-[#080F2E]/80 border-white/[0.08] divide-white/[0.08]' : 'bg-white border-slate-200/80 divide-slate-100'
+          }`}>
+            {[
+              ['Daily Verified Presence', `+${XP_RULES.daily_login.xp} XP / day`],
+              ['Active Streak Milestone (7d, 14d, 30d)', `+${XP_RULES.streak_milestone.xp} XP`],
+              ['Original Post Publication', `+${XP_RULES.post_created.xp} XP (Cap: ${XP_RULES.post_created.dailyCap}/day)`],
+              ['Story & Ephemeral Moments', `+${XP_RULES.story_created.xp} XP (Cap: ${XP_RULES.story_created.dailyCap}/day)`],
+              ['Audio Studio Production', `+${XP_RULES.audio_track_created.xp} XP (Cap: ${XP_RULES.audio_track_created.dailyCap}/day)`],
+              ['Constructive Conversation Comment', `+${XP_RULES.comment_created.xp} XP (Cap: ${XP_RULES.comment_created.dailyCap}/day)`],
+              ['Genuine Community Connection', `+${XP_RULES.follow_received.xp} XP`],
+              ['Sending Virtual Gifts to Creators', `+${XP_RULES.gift_sent.xp} XP (Cap: ${XP_RULES.gift_sent.dailyCap}/day)`],
+              ['Receiving Creator Patronage & Gifts', `+${XP_RULES.gift_received.xp} XP (Cap: ${XP_RULES.gift_received.dailyCap}/day)`],
+              ['Sharing Content Across the Network', `+${XP_RULES.post_shared.xp} XP (Cap: ${XP_RULES.post_shared.dailyCap}/day)`],
+              ['Civic Poll & Governance Voting', `+${XP_RULES.civic_vote_cast.xp} XP`],
+              ['Watching Sponsored Video Ads', `+${XP_RULES.ad_reward_claimed.xp} XP (Cap: ${XP_RULES.ad_reward_claimed.dailyCap}/day)`],
+            ].map(([label, value]) => (
+              <div key={label} className="py-3 flex items-center justify-between gap-3 text-xs">
+                <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{label}</span>
+                <span className="font-semibold text-emerald-500 tabular-nums whitespace-nowrap">{value}</span>
+              </div>
+            ))}
           </div>
         </section>
       </main>

@@ -136,16 +136,24 @@ export default function DesktopNavRail() {
               onClick={() => navigate(item.path)}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-arvdoul-purple',
+                'w-full min-h-[40px] flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors whitespace-nowrap shrink-0 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple',
                 active
-                  ? 'bg-arvdoul-gradient text-white shadow-sm'
+                  ? isDark
+                    ? 'bg-purple-500/15 text-white border border-purple-400/25'
+                    : 'bg-purple-50 text-purple-700 border border-purple-200'
                   : isDark
-                    ? 'text-slate-300 hover:bg-white/5 hover:text-white'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                    ? 'text-slate-300 border border-transparent hover:bg-white/5 hover:text-white'
+                    : 'text-slate-700 border border-transparent hover:bg-slate-100 hover:text-slate-950'
               )}
             >
               <span className="flex items-center gap-3 min-w-0">
-                <Icon className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
+                <Icon
+                  className={cn(
+                    'w-[18px] h-[18px] shrink-0',
+                    active && (isDark ? 'text-purple-400' : 'text-purple-600')
+                  )}
+                  aria-hidden="true"
+                />
                 <span className="truncate">{item.label}</span>
               </span>
               {count > 0 && (
@@ -153,7 +161,9 @@ export default function DesktopNavRail() {
                   className={cn(
                     'px-1.5 py-0.5 min-w-[20px] text-center rounded-md text-[11px] font-bold tabular-nums shrink-0',
                     active
-                      ? 'bg-white/20 text-white'
+                      ? isDark
+                        ? 'bg-purple-400/20 text-purple-200'
+                        : 'bg-purple-600 text-white'
                       : 'bg-arvdoul-purple/15 text-arvdoul-purple dark:text-purple-300'
                   )}
                 >

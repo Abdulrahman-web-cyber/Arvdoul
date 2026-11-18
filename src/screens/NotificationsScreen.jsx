@@ -7,8 +7,31 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2, UserCheck } from "lucide-react";
+import {
+  Bell,
+  Search,
+  SlidersHorizontal,
+  CheckCircle2,
+  Settings,
+  Sparkles,
+  X,
+  Heart,
+  MessageCircle,
+  Gift,
+  Users,
+  AtSign,
+  Eye,
+  Radio,
+  ChevronRight,
+  ChevronDown,
+  DollarSign,
+  RefreshCw,
+  Loader2,
+  UserCheck,
+} from "lucide-react";
 import notificationsService from '../services/notificationsService';
+import { getUserService } from '../services/userService.js';
+import { socialGraphService } from '../services/socialGraphService.js';
 import { pickDisplayName, resolveActorName } from '../services/profileReadModel';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
@@ -29,11 +52,6 @@ const FILTERS = [
   { id: 'System', label: 'System', icon: Settings },
 ];
 
-// The notifications service emits canonical type ids (`like`, `gift_received`,
-// `live_started`), while this screen's icon/navigation logic was written
-// against older aliases (`post_like`, `coin_gift`, `live_stream`). Normalise
-// once so the icon badge, the gift modal and the Live/Stories navigation are
-// driven by the real payload instead of dead branches.
 const NOTIFICATION_TYPE_ALIASES = {
   like: 'post_like',
   reply: 'story_reply',
@@ -44,9 +62,6 @@ const NOTIFICATION_TYPE_ALIASES = {
 };
 const normalizeNotificationType = (type) => NOTIFICATION_TYPE_ALIASES[type] || type || 'system';
 
-// Notification types that are platform-generated (no human sender). They map to
-// the "System" filter tab. Mirrors NOTIFICATIONS_CONFIG.TYPES entries whose
-// notifications are emitted with `senderId: 'system'`.
 const SYSTEM_NOTIFICATION_TYPES = new Set([
   'system', 'system_alert', 'maintenance', 'policy_update', 'security_alert',
   'verification', 'new_feature', 'reminder', 'level_up', 'badge_earned',
@@ -68,8 +83,6 @@ export default function NotificationsScreen() {
   const [networkTab, setNetworkTab] = useState('requests');
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
-  // Real per-pair follow state for the follower rows (the list read returns bare
-  // profiles, so a pending follow-back request was invisible).
   const [followStates, setFollowStates] = useState({});
   const [requests, setRequests] = useState([]);
   const [followRequests, setFollowRequests] = useState([]);
@@ -80,24 +93,21 @@ export default function NotificationsScreen() {
   const [pendingNetworkAction, setPendingNetworkAction] = useState(null);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [networkActionState, setNetworkActionState] = useState({});
   const [notifications, setNotifications] = useState([]);
-  // First snapshot not yet delivered → show a skeleton instead of the "no
-  // notifications" empty state (which falsely reads as "you have none").
   const [notificationsLoading, setNotificationsLoading] = useState(true);
-  // A denied/failed stream must be visible, not silently rendered as "no
-  // notifications" (the `type: 'error'` payload used to fall through).
   const [notificationsError, setNotificationsError] = useState(null);
   const [streamNonce, setStreamNonce] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [friendActions, setFriendActions] = useState({}); // { notifId: 'accepted' | 'declined' }
+  const [friendActions, setFriendActions] = useState({});
   const [expandedSections, setExpandedSections] = useState({
     Now: true,
     Today: true,
     Yesterday: true,
-    Earlier: false
+    Earlier: false,
   });
   const [giftModal, setGiftModal] = useState(null);
   const [pushStatus, setPushStatus] = useState(() => {
@@ -108,6 +118,42 @@ export default function NotificationsScreen() {
   });
   const [requestingPush, setRequestingPush] = useState(false);
   const [dismissPushBanner, setDismissPushBanner] = useState(false);
+
+  // Preload pending friend + follow request lists on mount so the "Network & Friends"
+  // badge count is accurate before switching tabs.
+  const loadPendingRequestsOnly = useCallback(async () => {
+    if (!user?.uid) {
+      setRequests([]);
+      setFollowRequests([]);
+      return;
+    }
+    try {
+      const svc = getUserService();
+      const [r, fr] = await Promise.allSettled([
+        svc.getFriendRequests(user.uid, 'received'),
+        typeof svc.getFollowRequests === 'function' ? svc.getFollowRequests(user.uid) : Promise.resolve({ requests: [] }),
+      ]);
+      if (r.status === 'fulfilled') {
+        setRequests(Array.isArray(r.value) ? r.value : r.value?.requests || []);
+      }
+      if (fr.status === 'fulfilled') {
+        setFollowRequests(fr.value?.requests || []);
+      }
+    } catch {
+      // Non-fatal: full loadNetwork handles error surface on tab open.
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    loadPendingRequestsOnly();
+    const onReqChange = () => loadPendingRequestsOnly();
+    window.addEventListener('arvdoul:friend-request-changed', onReqChange);
+    window.addEventListener('arvdoul:follow-request-changed', onReqChange);
+    return () => {
+      window.removeEventListener('arvdoul:friend-request-changed', onReqChange);
+      window.removeEventListener('arvdoul:follow-request-changed', onReqChange);
+    };
+  }, [loadPendingRequestsOnly]);
 
   const loadNetwork = useCallback(async () => {
     setNetworkLoading(true);
@@ -123,7 +169,6 @@ export default function NotificationsScreen() {
         return;
       }
 
-      const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       const [f, g, r, fr] = await Promise.allSettled([
         svc.getFollowers(user.uid, { limit: 50 }),
@@ -137,10 +182,7 @@ export default function NotificationsScreen() {
       const followingList = g.status === 'fulfilled' ? g.value.following || [] : [];
       setFollowers(followerList);
       setFollowing(followingList);
-      // The list read returns bare profiles with no viewer→row edge, so a
-      // follower the viewer already follows (or has a pending request to) was
-      // indistinguishable from one they do not. Resolve the real per-pair state
-      // in one bounded batched read.
+
       const stateIds = [...new Set(
         [...followerList, ...followingList].map((u) => u?.id || u?.uid).filter(Boolean)
       )];
@@ -157,28 +199,22 @@ export default function NotificationsScreen() {
         setFollowStates({});
       }
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
-      // Private-account follow requests arrive as `follow_request` notifications
-      // but only a friend/follow request *document* can be approved. Load the
-      // real pending rows so the owner can act on them (previously a dead end).
+
       const rawFollowRequests = fr.status === 'fulfilled' ? (fr.value?.requests || []) : [];
       setFollowRequests(rawFollowRequests);
       if (rawFollowRequests.length) {
         try {
-          const { socialGraphService } = await import('../services/socialGraphService.js');
           const profiles = await socialGraphService.hydrateProfiles(
-            rawFollowRequests.map((r) => r.fromUserId),
+            rawFollowRequests.map((item) => item.fromUserId),
             { viewerId: user.uid }
           );
           const byId = new Map(profiles.map((p) => [p.uid || p.id, p]));
-          setFollowRequests(rawFollowRequests.map((r) => ({ ...r, fromUser: byId.get(r.fromUserId) || null })));
+          setFollowRequests(rawFollowRequests.map((item) => ({ ...item, fromUser: byId.get(item.fromUserId) || null })));
         } catch (err) {
-          // Keep the raw rows; the row falls back to a generic label.
           console.warn('[Notifications] follow-request profile hydration failed', err?.message);
         }
       }
     } catch (err) {
-      // The network lists failed to load; surface a retry instead of an empty
-      // tab that reads as "no connections / no requests".
       setNetworkError(err?.message || 'Could not load your network.');
       setRecommended([]);
     } finally {
@@ -192,8 +228,6 @@ export default function NotificationsScreen() {
     }
   }, [mainTab, loadNetwork]);
 
-  // The Follow Requests tab only exists while rows are pending; fall back to the
-  // Requests tab once the last one is approved/declined.
   useEffect(() => {
     if (networkTab === 'followRequests' && followRequests.length === 0) {
       setNetworkTab('requests');
@@ -204,11 +238,10 @@ export default function NotificationsScreen() {
     if (!user?.uid || pendingNetworkAction) return;
     setPendingNetworkAction(requestId);
     try {
-      const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       if (accept) {
         await svc.acceptFriendRequest(requestId, user.uid);
-        toast.success('Friend request accepted 🎉');
+        toast.success('Friend request accepted');
       } else {
         await svc.declineFriendRequest(requestId, user.uid);
         toast.success('Friend request declined');
@@ -221,13 +254,10 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Approve / decline a private-account follow request. The row id is the
-  // deterministic `${fromUserId}_${toUserId}`.
   const handleFollowRequestAction = async (request, accept) => {
     if (!user?.uid || pendingFollowRequestAction) return;
     setPendingFollowRequestAction(request.id);
     try {
-      const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       if (accept) {
         await svc.approveFollowRequest(request.id, user.uid);
@@ -237,6 +267,7 @@ export default function NotificationsScreen() {
         toast.info('Follow request declined');
       }
       setFollowRequests((prev) => prev.filter((r) => r.id !== request.id));
+      window.dispatchEvent(new CustomEvent('arvdoul:follow-request-changed'));
     } catch (err) {
       toast.error(err?.message || 'Could not process the follow request.');
     } finally {
@@ -253,27 +284,22 @@ export default function NotificationsScreen() {
     }
     setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
     try {
-      const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       await svc.sendFriendRequest(user.uid, targetId);
       setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
-      toast.success(`Friend request sent to ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! ✨`);
+      toast.success(`Friend request sent to ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
     } catch {
       try {
-        const { getUserService } = await import('../services/userService.js');
         const svc = getUserService();
         const result = await svc.followUser(user.uid, targetId);
         if (result?.requested || result?.requestStatus === 'pending') {
-          // Private target: a pending request, not a follow.
           setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
           toast.success('Follow request sent');
         } else {
           setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
-          toast.success(`Now following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! ✨`);
+          toast.success(`Now following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
         }
       } catch {
-        // Both the friend request and the follow failed — do not claim a
-        // connection that was never made.
         setNetworkActionState((prev) => ({ ...prev, [targetId]: 'idle' }));
         toast.error(`Could not connect with ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
       }
@@ -285,7 +311,6 @@ export default function NotificationsScreen() {
     if (!targetId || !user?.uid) return;
     setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
     try {
-      const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       if (isCurrentlyFollowing) {
         await svc.unfollowUser(user.uid, targetId);
@@ -295,13 +320,12 @@ export default function NotificationsScreen() {
       } else {
         const result = await svc.followUser(user.uid, targetId);
         if (result?.requested || result?.requestStatus === 'pending') {
-          // A private target records a pending request — no edge, no "following".
           setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: 'pending' } }));
           toast.success('Follow request sent');
         } else {
           setFollowing((prev) => [...prev, targetUser]);
           setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: true, requestStatus: null } }));
-          toast.success(`Following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}! 🎉`);
+          toast.success(`Following ${pickDisplayName([targetUser.displayName, targetUser.username], { fallback: 'this user' })}`);
         }
       }
     } catch {
@@ -311,12 +335,10 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Withdraw a pending follow request to a private account.
   const handleCancelFollowRequest = async (targetId) => {
     if (!targetId || !user?.uid) return;
     setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
     try {
-      const { getUserService } = await import('../services/userService.js');
       await getUserService().cancelFollowRequest(user.uid, targetId);
       setFollowStates((prev) => ({ ...prev, [targetId]: { isFollowing: false, requestStatus: null } }));
       toast.info('Follow request withdrawn');
@@ -337,7 +359,7 @@ export default function NotificationsScreen() {
       const res = await notificationsService.requestPushPermission(user.uid);
       if (res?.success || Notification.permission === 'granted') {
         setPushStatus('granted');
-        toast.success("Push notifications enabled! 🔔");
+        toast.success("Push notifications enabled");
       } else {
         setPushStatus(Notification.permission);
         toast.info("Push notification permission was not granted.");
@@ -350,7 +372,6 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Load real Firestore notifications if user is authenticated
   useEffect(() => {
     if (!user?.uid) return;
     let unsub;
@@ -361,20 +382,11 @@ export default function NotificationsScreen() {
         ? createdAt.toLocaleString()
         : (fn.timestamp ? String(fn.timestamp) : '');
       const type = normalizeNotificationType(fn.type);
-      // The filter tabs bucket by `category`. Stories/Mentions/Live/Coins also
-      // have a `type`-based fallback in the filter, but the System tab keyed on
-      // `category === 'System'` alone and nothing ever produced that category,
-      // so the tab matched nothing. Platform-generated types now map to it.
       const category = type === 'message' || type === 'story_reply' ? 'Messages'
         : type?.includes('friend') ? 'Friends'
           : type === 'coin_gift' ? 'Coins'
             : SYSTEM_NOTIFICATION_TYPES.has(type) ? 'System'
               : 'All';
-      // Bucket into the groups the list actually renders (Now/Today/Yesterday/
-      // Earlier). The old value was a raw `toLocaleDateString()` for anything
-      // older than an hour, which matched no rendered group key, so every
-      // notification past the one-hour window silently disappeared from the
-      // list; a missing timestamp fell into a never-rendered 'Recent' group.
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
       const startOfYesterday = new Date(startOfToday);
@@ -401,16 +413,9 @@ export default function NotificationsScreen() {
           verified: !!fn.senderVerified,
         },
         message: fn.body || fn.message || '',
-        // Friend requests must carry the friend_requests doc id (not the
-        // notification id) so accept/decline can hit the right document.
         requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
-        // Deep-link targets from the server-written metadata. Without these a
-        // notification row could only mark itself read, never open what it
-        // was about.
         postId: fn.metadata?.postId || null,
         conversationId: fn.metadata?.conversationId || null,
-        // Real gift metadata only — never invent an amount. The gift
-        // modal hides the amount block when the payload omits it.
         amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
         giftType: fn.metadata?.giftType || null,
         timestamp: ts,
@@ -428,19 +433,13 @@ export default function NotificationsScreen() {
     try {
       unsub = notificationsService.subscribeToUserNotifications(user.uid, (payload) => {
         if (payload?.type === 'error') {
-          // The service reports a rules/network failure here; surface it with a
-          // retry instead of pretending the inbox is empty.
           setNotificationsError(payload.error || 'Could not load notifications.');
           setNotificationsLoading(false);
           return;
         }
-        // The subscription emits change batches ({ added, modified }), not a
-        // plain array — the array shape is tolerated for older callers/tests.
         const raw = Array.isArray(payload)
           ? payload
           : [...(payload?.added || []), ...(payload?.modified || [])];
-        // First snapshot (even an empty one) settles the loading state so the
-        // skeleton gives way to the real list or the genuine empty state.
         setNotificationsError(null);
         setNotificationsLoading(false);
         if (raw.length === 0) return;
@@ -456,7 +455,6 @@ export default function NotificationsScreen() {
     };
   }, [user?.uid, streamNonce]);
 
-  // Handle Mark All Read
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const handleMarkAllRead = async () => {
     if (markingAllRead) return;
@@ -476,8 +474,6 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Handle Mark Single Item Read — optimistic, then persisted so the server
-  // unread counter (and the nav badge) actually clears. Roll back on failure.
   const handleMarkRead = async (id) => {
     if (!user?.uid) return;
     let wasUnread = false;
@@ -494,24 +490,21 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Handle Friend Request Action
   const handleFriendRequest = async (notifId, action, targetUser, requestId) => {
     const rid = requestId || notifId;
     if (!user?.uid || friendActions[notifId]) return;
     setFriendActions((prev) => ({ ...prev, [notifId]: action }));
     try {
-      const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       if (action === 'accepted') {
         await svc.acceptFriendRequest(rid, user.uid);
-        toast.success(`You are now friends with ${targetUser?.name || 'this user'}! 🎉`);
+        toast.success(`You are now friends with ${targetUser?.name || 'this account'}`);
       } else {
         await svc.declineFriendRequest(rid, user.uid);
-        toast.info(`Declined friend request from ${targetUser?.name || 'this user'}`);
+        toast.info(`Declined friend request from ${targetUser?.name || 'this account'}`);
       }
       handleMarkRead(notifId);
     } catch (err) {
-      // Roll the button state back — the request was NOT processed.
       setFriendActions((prev) => {
         const next = { ...prev };
         delete next[notifId];
@@ -521,9 +514,6 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Handle Thank Creator for Coins — there is no "thank you note" backend, so
-  // the honest action is to open a real direct message to the gifter rather
-  // than toast a note that was never sent.
   const handleThankCreator = (notif) => {
     const recipientId = notif?.user?.id || notif?.user?.uid;
     if (!recipientId) {
@@ -534,9 +524,6 @@ export default function NotificationsScreen() {
     navigate(`/messages/new?to=${recipientId}`);
   };
 
-  // Open the thing a notification is about. Friend requests have no
-  // destination (the accept/decline buttons are the action); everything else
-  // routes to the real entity using the server-written metadata.
   const handleNotificationClick = (notif) => {
     if (!notif) return;
     handleMarkRead(notif.id);
@@ -561,10 +548,9 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Filtered Notifications
   const filteredNotifications = useMemo(() => {
     return notifications.filter((notif) => {
-      // Category Filter
+      if (unreadOnly && !notif.unread) return false;
       if (activeFilter !== 'All') {
         if (activeFilter === 'Messages' && notif.category !== 'Messages' && notif.type !== 'story_reply') return false;
         if (activeFilter === 'Friends' && notif.category !== 'Friends' && notif.type !== 'friend_request') return false;
@@ -574,7 +560,6 @@ export default function NotificationsScreen() {
         if (activeFilter === 'Live' && notif.category !== 'Live' && notif.type !== 'live_stream') return false;
         if (activeFilter === 'System' && notif.category !== 'System') return false;
       }
-      // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = notif.user?.name?.toLowerCase().includes(q);
@@ -583,15 +568,11 @@ export default function NotificationsScreen() {
       }
       return true;
     });
-  }, [notifications, activeFilter, searchQuery]);
+  }, [notifications, activeFilter, unreadOnly, searchQuery]);
 
-  // Group by TimeGroup
   const groupedNotifications = useMemo(() => {
     const groups = { Now: [], Today: [], Yesterday: [], Earlier: [] };
     filteredNotifications.forEach((n) => {
-      // `timeGroup` is always one of the rendered keys (set in
-      // formatNotification); an unexpected value must not silently drop the
-      // item, so it falls back to the always-rendered 'Earlier' bucket.
       const g = groups[n.timeGroup] ? n.timeGroup : 'Earlier';
       groups[g].push(n);
     });
@@ -602,260 +583,357 @@ export default function NotificationsScreen() {
     return notifications.filter((n) => n.unread).length;
   }, [notifications]);
 
+  const totalPendingNetworkCount = requests.length + followRequests.length;
+
   return (
     <div className={cn(
-      "min-h-screen pb-24 select-none",
-      isDark ? "bg-[#060814] text-white" : "bg-slate-50 text-slate-900"
+      "min-h-screen pb-24 transition-colors duration-200",
+      isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-slate-900"
     )}>
-      {/* Top Header Bar */}
-      {/* Notifications In-Page Toolbar (TopAppBar handles main app title and back navigation) */}
+      {/* Sticky Toolbar */}
       <div className={cn(
-        "sticky top-0 z-30 backdrop-blur-2xl px-4 py-2.5 border-b transition-colors mb-2",
-        isDark ? "bg-[#060814]/85 border-white/5" : "bg-white/90 border-slate-200"
+        "sticky top-0 z-30 backdrop-blur-xl px-4 pt-3 border-b transition-colors",
+        isDark ? "bg-[#03071B]/90 border-white/[0.08]" : "bg-[#F6F8FC]/90 border-slate-200"
       )}>
-        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Activity &amp; Updates</span>
-            {unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-arvdoul-gradient text-white shadow-sm tabular-nums">
-                {unreadCount} unread
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className={cn("font-semibold", isDark ? "text-slate-300" : "text-slate-700")}>
+                Activity &amp; Updates
               </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Search Icon */}
-            <button
-              type="button"
-              onClick={() => setShowSearch(!showSearch)}
-              aria-label="Search notifications"
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer",
-                isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+              {unreadCount > 0 && (
+                <>
+                  <span aria-hidden="true" className="text-slate-400">·</span>
+                  <span className={cn("font-semibold tabular-nums", isDark ? "text-purple-400" : "text-purple-700")}>
+                    {unreadCount} unread
+                  </span>
+                </>
               )}
-            >
-              <Search className="w-3.5 h-3.5" />
-            </button>
+            </div>
 
-            {/* Filter Icon */}
-            <button
-              type="button"
-              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              aria-label="Filter notifications"
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-all relative cursor-pointer",
-                showFilterDropdown ? "bg-arvdoul-purple text-white shadow-arvdoul-glow" : isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              )}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-violet-400" />
-            </button>
-
-            {/* Mark All Read */}
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              disabled={markingAllRead}
-              title="Mark all as read"
-              aria-label="Mark all as read"
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer",
-                isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              )}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Settings */}
-            <button
-              type="button"
-              onClick={() => navigate('/settings')}
-              aria-label="Notification settings"
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer",
-                isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              )}
-            >
-              <Settings className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Main Tab Switcher: Alerts vs Network */}
-        <div className={cn(
-          "max-w-xl mx-auto mt-3 flex items-center p-1 border rounded-full",
-          isDark ? "bg-white/[0.06] border-white/10" : "bg-slate-200/80 border-slate-200"
-        )}>
-          <button
-            type="button"
-            onClick={() => setMainTab('alerts')}
-            className={cn(
-              "flex-1 py-1.5 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5",
-              mainTab === 'alerts'
-                ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25"
-                : isDark ? "text-white/70 hover:text-white" : "text-gray-700 hover:text-gray-900"
-            )}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>Alerts</span>
-            {unreadCount > 0 && (
-              <span className={cn(
-                "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
-                mainTab === 'alerts' ? "bg-white/20 text-white" : "bg-arvdoul-purple/15 text-arvdoul-purple dark:text-violet-300"
-              )}>
-                {unreadCount}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMainTab('network')}
-            className={cn(
-              "flex-1 py-1.5 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5",
-              mainTab === 'network'
-                ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25"
-                : isDark ? "text-white/70 hover:text-white" : "text-gray-700 hover:text-gray-900"
-            )}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Network &amp; Friends</span>
-            {requests.length > 0 && (
-              <span className={cn(
-                "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
-                mainTab === 'network' ? "bg-white/20 text-white" : "bg-arvdoul-purple text-white"
-              )}>
-                {requests.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Collapsible Search Input */}
-        <AnimatePresence>
-          {showSearch && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="max-w-xl mx-auto pt-3 overflow-hidden"
-            >
-              <div className={cn(
-                "flex items-center gap-2 px-3.5 py-2 rounded-xl border",
-                isDark ? "bg-white/5 border-white/10" : "bg-slate-100 border-slate-200"
-              )}>
-                <Search className="w-4 h-4 text-arvdoul-text-secondary" />
-                <input aria-label="Search in notifications..."
-                  type="text"
-                  placeholder="Search in notifications..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent text-xs w-full outline-none"
-                  autoFocus
-                />
-                {searchQuery && (
-                  <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search">
-                    <X className="w-3.5 h-3.5 text-arvdoul-text-secondary" />
-                  </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowSearch((v) => !v)}
+                aria-label="Search notifications"
+                className={cn(
+                  "min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center transition-colors cursor-pointer",
+                  showSearch
+                    ? isDark ? "bg-purple-500/20 text-purple-300" : "bg-purple-50 text-purple-700"
+                    : isDark ? "bg-white/[0.05] hover:bg-white/10 text-slate-300" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
                 )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              >
+                <Search className="w-4 h-4" />
+              </button>
 
-        {/* Sub-Filters / Sub-Tabs */}
-        {mainTab === 'alerts' ? (
-          <div className="max-w-xl mx-auto mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-            {FILTERS.map((f) => {
-              const isActive = activeFilter === f.id;
-              return (
-                <button
-                  type="button"
-                  key={f.id}
-                  onClick={() => {
-                    if (f.id === 'Friends') {
-                      setMainTab('network');
-                      setNetworkTab('requests');
-                    } else {
-                      setActiveFilter(f.id);
-                    }
-                  }}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
-                    isActive
-                      ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25 scale-[1.02]"
-                      : isDark
-                        ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
-                  )}
-                >
-                  {f.icon && <f.icon className="w-3.5 h-3.5" />}
-                  {f.label}
-                  {f.badge && (
-                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400/20 text-violet-300 tabular-nums">
-                      {f.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+              <button
+                type="button"
+                onClick={() => setShowFilterDropdown((v) => !v)}
+                aria-label="Filter notifications"
+                className={cn(
+                  "min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center transition-colors cursor-pointer",
+                  showFilterDropdown || unreadOnly
+                    ? isDark ? "bg-purple-500/20 text-purple-300" : "bg-purple-50 text-purple-700"
+                    : isDark ? "bg-white/[0.05] hover:bg-white/10 text-slate-300" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
+                )}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                disabled={markingAllRead}
+                title="Mark all as read"
+                aria-label="Mark all as read"
+                className={cn(
+                  "min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 cursor-pointer",
+                  isDark ? "bg-white/[0.05] hover:bg-white/10 text-slate-300" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
+                )}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                aria-label="Notification settings"
+                className={cn(
+                  "min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center transition-colors cursor-pointer",
+                  isDark ? "bg-white/[0.05] hover:bg-white/10 text-slate-300" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
+                )}
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="max-w-xl mx-auto mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-            {[
-              { id: 'requests', label: 'Requests', count: requests.length },
-              ...(followRequests.length > 0
-                ? [{ id: 'followRequests', label: 'Follow Requests', count: followRequests.length }]
-                : []),
-              { id: 'followers', label: 'Followers', count: followers.length },
-              { id: 'following', label: 'Following', count: following.length },
-              { id: 'recommended', label: 'Suggested', count: recommended.length },
-            ].map((nt) => {
-              const isActive = networkTab === nt.id;
-              return (
-                <button
-                  type="button"
-                  key={nt.id}
-                  onClick={() => setNetworkTab(nt.id)}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
-                    isActive
-                      ? "bg-arvdoul-gradient text-white shadow-md shadow-violet-500/25 scale-[1.02]"
-                      : isDark
-                        ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+
+          {/* Filter Dropdown Bar (Unread toggle + Quick reset) */}
+          <AnimatePresence>
+            {showFilterDropdown && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden pt-2"
+              >
+                <div className={cn(
+                  "p-2 rounded-xl border flex items-center justify-between gap-2 text-xs",
+                  isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200"
+                )}>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setUnreadOnly(false)}
+                      className={cn(
+                        "min-h-[36px] px-3 rounded-lg font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                        !unreadOnly
+                          ? isDark ? "bg-purple-500/20 text-purple-200" : "bg-purple-50 text-purple-700"
+                          : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                      )}
+                    >
+                      All alerts
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnreadOnly(true)}
+                      className={cn(
+                        "min-h-[36px] px-3 rounded-lg font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                        unreadOnly
+                          ? isDark ? "bg-purple-500/20 text-purple-200" : "bg-purple-50 text-purple-700"
+                          : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                      )}
+                    >
+                      Unread only
+                    </button>
+                  </div>
+                  {(unreadOnly || activeFilter !== 'All' || searchQuery) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUnreadOnly(false);
+                        setActiveFilter('All');
+                        setSearchQuery('');
+                      }}
+                      className={cn(
+                        "min-h-[36px] px-2.5 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer hover:underline",
+                        isDark ? "text-slate-300" : "text-slate-700"
+                      )}
+                    >
+                      Reset
+                    </button>
                   )}
-                >
-                  <span>{nt.label}</span>
-                  {nt.count > 0 && (
-                    <span className={cn(
-                      "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold tabular-nums",
-                      isActive ? "bg-white/20 text-white" : "bg-violet-500/20 text-arvdoul-purple dark:text-violet-300"
-                    )}>
-                      {nt.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Underline Main Tab Switcher: Alerts vs Network */}
+          <div
+            role="tablist"
+            aria-label="Notification sections"
+            className={cn(
+              "mt-3 flex items-center border-b",
+              isDark ? "border-white/[0.08]" : "border-slate-200"
+            )}
+          >
             <button
               type="button"
-              onClick={loadNetwork}
-              disabled={networkLoading}
-              title="Refresh network"
-              aria-label="Refresh network"
+              role="tab"
+              aria-selected={mainTab === 'alerts'}
+              onClick={() => setMainTab('alerts')}
               className={cn(
-                "p-2 rounded-full text-xs transition-colors ml-auto flex-shrink-0",
-                isDark ? "text-white/60 hover:text-white bg-white/5" : "text-slate-600 hover:text-slate-900 bg-slate-100"
+                "relative flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                mainTab === 'alerts'
+                  ? isDark ? "text-white" : "text-slate-950"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
               )}
             >
-              <RefreshCw className={cn("w-3.5 h-3.5", networkLoading && "animate-spin")} />
+              <Bell className={cn("w-4 h-4 shrink-0", mainTab === 'alerts' && "text-purple-500")} />
+              <span>Alerts</span>
+              {unreadCount > 0 && (
+                <span className={cn(
+                  "text-xs tabular-nums",
+                  mainTab === 'alerts'
+                    ? isDark ? "text-purple-300" : "text-purple-700"
+                    : isDark ? "text-slate-500" : "text-slate-400"
+                )}>
+                  {unreadCount}
+                </span>
+              )}
+              {mainTab === 'alerts' && (
+                <span
+                  className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full"
+                  style={{ background: BRAND_GRADIENT }}
+                />
+              )}
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'network'}
+              onClick={() => setMainTab('network')}
+              className={cn(
+                "relative flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                mainTab === 'network'
+                  ? isDark ? "text-white" : "text-slate-950"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <Users className={cn("w-4 h-4 shrink-0", mainTab === 'network' && "text-purple-500")} />
+              <span>Network &amp; Friends</span>
+              {totalPendingNetworkCount > 0 && (
+                <span className={cn(
+                  "px-1.5 py-0.5 rounded-md text-[11px] font-bold tabular-nums",
+                  isDark ? "bg-purple-500/20 text-purple-300" : "bg-purple-100 text-purple-700"
+                )}>
+                  {totalPendingNetworkCount}
+                </span>
+              )}
+              {mainTab === 'network' && (
+                <span
+                  className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full"
+                  style={{ background: BRAND_GRADIENT }}
+                />
+              )}
             </button>
           </div>
-        )}
+
+          {/* Collapsible Search Input */}
+          <AnimatePresence>
+            {showSearch && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="pt-3 overflow-hidden"
+              >
+                <div className={cn(
+                  "flex items-center gap-2 px-3.5 min-h-[42px] rounded-xl border",
+                  isDark ? "bg-[#080F2E] border-white/[0.08]" : "bg-white border-slate-200"
+                )}>
+                  <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  <input
+                    aria-label="Search in notifications..."
+                    type="text"
+                    placeholder="Search in notifications..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-transparent text-xs sm:text-sm w-full outline-none py-2"
+                    autoFocus
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search"
+                      className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Sub-Filters / Sub-Tabs */}
+          {mainTab === 'alerts' ? (
+            <div className="py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {FILTERS.map((f) => {
+                const isActive = activeFilter === f.id;
+                return (
+                  <button
+                    type="button"
+                    key={f.id}
+                    onClick={() => {
+                      if (f.id === 'Friends') {
+                        setMainTab('network');
+                        setNetworkTab('requests');
+                      } else {
+                        setActiveFilter(f.id);
+                      }
+                    }}
+                    className={cn(
+                      "min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer border",
+                      isActive
+                        ? isDark
+                          ? "bg-purple-500/15 text-purple-200 border-purple-400/30"
+                          : "bg-purple-50 text-purple-700 border-purple-200"
+                        : isDark
+                          ? "bg-transparent text-slate-400 border-transparent hover:bg-white/[0.05] hover:text-white"
+                          : "bg-transparent text-slate-600 border-transparent hover:bg-slate-200/60 hover:text-slate-900"
+                    )}
+                  >
+                    {f.icon && <f.icon className="w-3.5 h-3.5 shrink-0" />}
+                    <span>{f.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'requests', label: 'Requests', count: requests.length },
+                ...(followRequests.length > 0
+                  ? [{ id: 'followRequests', label: 'Follow Requests', count: followRequests.length }]
+                  : []),
+                { id: 'followers', label: 'Followers', count: followers.length },
+                { id: 'following', label: 'Following', count: following.length },
+                { id: 'recommended', label: 'Suggested', count: recommended.length },
+              ].map((nt) => {
+                const isActive = networkTab === nt.id;
+                return (
+                  <button
+                    type="button"
+                    key={nt.id}
+                    onClick={() => setNetworkTab(nt.id)}
+                    className={cn(
+                      "min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer border",
+                      isActive
+                        ? isDark
+                          ? "bg-purple-500/15 text-purple-200 border-purple-400/30"
+                          : "bg-purple-50 text-purple-700 border-purple-200"
+                        : isDark
+                          ? "bg-transparent text-slate-400 border-transparent hover:bg-white/[0.05] hover:text-white"
+                          : "bg-transparent text-slate-600 border-transparent hover:bg-slate-200/60 hover:text-slate-900"
+                    )}
+                  >
+                    <span>{nt.label}</span>
+                    {nt.count > 0 && (
+                      <span className={cn(
+                        "text-[11px] font-bold tabular-nums",
+                        isActive
+                          ? isDark ? "text-purple-200" : "text-purple-700"
+                          : isDark ? "text-slate-500" : "text-slate-400"
+                      )}>
+                        {nt.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={loadNetwork}
+                disabled={networkLoading}
+                title="Refresh network"
+                aria-label="Refresh network"
+                className={cn(
+                  "min-w-[38px] min-h-[38px] rounded-lg flex items-center justify-center transition-colors ml-auto shrink-0 cursor-pointer",
+                  isDark ? "text-slate-400 hover:text-white bg-white/[0.04]" : "text-slate-600 hover:text-slate-900 bg-white border border-slate-200"
+                )}
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", networkLoading && "animate-spin")} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Content Area */}
-      <main className="max-w-xl mx-auto px-4 pt-4 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
         {mainTab === 'network' ? (
           <div className="space-y-4">
             {networkLoading ? (
@@ -883,8 +961,8 @@ export default function NotificationsScreen() {
                       <div
                         key={reqId}
                         className={cn(
-                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all",
-                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors",
+                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -895,16 +973,19 @@ export default function NotificationsScreen() {
                             <LazyImage
                               src={reqUser.photoURL || reqUser.avatar}
                               alt={reqName}
-                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                              className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
+                            <div
+                              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shrink-0"
+                              style={{ background: BRAND_GRADIENT }}
+                            >
                               {reqName.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{reqName}</p>
-                            <p className="text-xs text-arvdoul-text-secondary truncate">
+                            <p className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
                               {reqUser.bio || 'Wants to connect with you'}
                             </p>
                           </div>
@@ -914,7 +995,8 @@ export default function NotificationsScreen() {
                             type="button"
                             onClick={() => handleNetworkRequest(reqId, true)}
                             disabled={pendingNetworkAction === reqId}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-md active:scale-95 transition-all"
+                            className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60"
+                            style={{ background: BRAND_GRADIENT }}
                           >
                             Accept
                           </button>
@@ -923,8 +1005,8 @@ export default function NotificationsScreen() {
                             onClick={() => handleNetworkRequest(reqId, false)}
                             disabled={pendingNetworkAction === reqId}
                             className={cn(
-                              "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all",
-                              isDark ? "border-white/10 hover:bg-white/5 text-white/70" : "border-slate-300 hover:bg-slate-100 text-slate-600"
+                              "min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
+                              isDark ? "border-white/15 hover:bg-white/5 text-slate-300" : "border-slate-300 hover:bg-slate-100 text-slate-700"
                             )}
                           >
                             Decline
@@ -953,8 +1035,8 @@ export default function NotificationsScreen() {
                       <div
                         key={req.id}
                         className={cn(
-                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all",
-                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors",
+                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -965,16 +1047,19 @@ export default function NotificationsScreen() {
                             <LazyImage
                               src={reqAvatar}
                               alt={reqName}
-                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                              className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
+                            <div
+                              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shrink-0"
+                              style={{ background: BRAND_GRADIENT }}
+                            >
                               {reqName.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{reqName}</p>
-                            <p className="text-xs text-arvdoul-text-secondary truncate">
+                            <p className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
                               {reqUser.bio || 'Requested to follow you'}
                             </p>
                           </div>
@@ -984,7 +1069,8 @@ export default function NotificationsScreen() {
                             type="button"
                             onClick={() => handleFollowRequestAction(req, true)}
                             disabled={busy}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
+                            className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60"
+                            style={{ background: BRAND_GRADIENT }}
                           >
                             Approve
                           </button>
@@ -993,8 +1079,8 @@ export default function NotificationsScreen() {
                             onClick={() => handleFollowRequestAction(req, false)}
                             disabled={busy}
                             className={cn(
-                              "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all disabled:opacity-50",
-                              isDark ? "border-white/10 hover:bg-white/5 text-white/70" : "border-slate-300 hover:bg-slate-100 text-slate-600"
+                              "min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
+                              isDark ? "border-white/15 hover:bg-white/5 text-slate-300" : "border-slate-300 hover:bg-slate-100 text-slate-700"
                             )}
                           >
                             Decline
@@ -1016,43 +1102,44 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {followers.map((fUser) => {
                     const fName = resolveActorName([fUser.displayName, fUser.username], fUser.id || fUser.uid);
+                    const fId = fUser.id || fUser.uid;
+                    const state = followStates[fId] || { isFollowing: false, requestStatus: null };
+                    const rowStatus = networkActionState[fId];
+                    const isRequested = state.requestStatus === 'pending';
                     return (
                       <div
-                        key={fUser.id || fUser.uid}
+                        key={fId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
-                          onClick={() => navigate(`/profile/${fUser.id || fUser.uid}`)}
+                          onClick={() => navigate(`/profile/${fId}`)}
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
                           {fUser.photoURL ? (
                             <LazyImage
                               src={fUser.photoURL}
                               alt={fName}
-                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                              className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
+                            <div
+                              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shrink-0"
+                              style={{ background: BRAND_GRADIENT }}
+                            >
                               {fName.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{fName}</p>
                             {fUser.bio && (
-                              <p className="text-xs text-arvdoul-text-secondary truncate">{fUser.bio}</p>
+                              <p className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>{fUser.bio}</p>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const fId = fUser.id || fUser.uid;
-                            const state = followStates[fId] || { isFollowing: false, requestStatus: null };
-                            const rowStatus = networkActionState[fId];
-                            const isRequested = state.requestStatus === 'pending';
-                            return (
+                        <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1065,17 +1152,18 @@ export default function NotificationsScreen() {
                             }}
                             disabled={rowStatus === 'loading'}
                             className={cn(
-                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1",
+                              "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer",
                               state.isFollowing
                                 ? isDark
-                                  ? "bg-white/10 text-white/80 hover:bg-white/15"
-                                  : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                  ? "bg-white/10 text-slate-200 hover:bg-white/15"
+                                  : "bg-slate-200 text-slate-800 hover:bg-slate-300"
                                 : isRequested
                                   ? isDark
-                                    ? "bg-white/10 text-white/70 border border-white/15"
-                                    : "bg-slate-100 text-slate-600 border border-slate-300"
-                                  : "bg-arvdoul-gradient text-white shadow-md active:scale-95"
+                                    ? "bg-white/10 text-slate-300 border border-white/15"
+                                    : "bg-slate-100 text-slate-700 border border-slate-300"
+                                  : "text-white"
                             )}
+                            style={!state.isFollowing && !isRequested ? { background: BRAND_GRADIENT } : undefined}
                           >
                             {rowStatus === 'loading' ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1087,8 +1175,6 @@ export default function NotificationsScreen() {
                               'Follow Back'
                             )}
                           </button>
-                            );
-                          })()}
                         </div>
                       </div>
                     );
@@ -1112,7 +1198,7 @@ export default function NotificationsScreen() {
                         key={gId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                          isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
                         )}
                       >
                         <div
@@ -1123,21 +1209,24 @@ export default function NotificationsScreen() {
                             <LazyImage
                               src={gUser.photoURL}
                               alt={gName}
-                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                              className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
                             />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
+                            <div
+                              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shrink-0"
+                              style={{ background: BRAND_GRADIENT }}
+                            >
                               {gName.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{gName}</p>
                             {gUser.bio && (
-                              <p className="text-xs text-arvdoul-text-secondary truncate">{gUser.bio}</p>
+                              <p className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>{gUser.bio}</p>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1146,10 +1235,10 @@ export default function NotificationsScreen() {
                             }}
                             disabled={networkActionState[gId] === 'loading'}
                             className={cn(
-                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1",
+                              "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer border",
                               isDark
-                                ? "bg-white/10 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 text-white/80"
-                                : "bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-700"
+                                ? "bg-white/[0.06] border-white/10 hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/30 text-slate-200"
+                                : "bg-slate-100 border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-700"
                             )}
                           >
                             {networkActionState[gId] === 'loading' ? (
@@ -1171,367 +1260,379 @@ export default function NotificationsScreen() {
                 icon={<Sparkles className="w-8 h-8" />}
               />
             ) : (
-                  <div className="space-y-2.5">
-                    {recommended.map((rUser) => {
-                      const rId = rUser.id || rUser.uid;
-                      const rName = resolveActorName([rUser.displayName, rUser.username], rId);
-                      const actionStatus = networkActionState[rId];
-                      return (
-                        <div
-                          key={rId}
-                          className={cn(
-                            "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
-                            isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
-                          )}
-                        >
+              <div className="space-y-2.5">
+                {recommended.map((rUser) => {
+                  const rId = rUser.id || rUser.uid;
+                  const rName = resolveActorName([rUser.displayName, rUser.username], rId);
+                  const actionStatus = networkActionState[rId];
+                  return (
+                    <div
+                      key={rId}
+                      className={cn(
+                        "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
+                        isDark ? "bg-[#080F2E]/90 border-white/[0.08]" : "bg-white border-slate-200/80"
+                      )}
+                    >
+                      <div
+                        onClick={() => navigate(`/profile/${rId}`)}
+                        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                      >
+                        {rUser.photoURL ? (
+                          <LazyImage
+                            src={rUser.photoURL}
+                            alt={rName}
+                            className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
+                          />
+                        ) : (
                           <div
-                            onClick={() => navigate(`/profile/${rId}`)}
-                            className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                            className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shrink-0"
+                            style={{ background: BRAND_GRADIENT }}
                           >
-                            {rUser.photoURL ? (
-                              <LazyImage
-                                src={rUser.photoURL}
-                                alt={rName}
-                                className="w-11 h-11 rounded-full object-cover border border-white/10"
-                              />
-                            ) : (
-                              <div className="w-11 h-11 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white font-bold">
-                                {rName.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="font-semibold text-sm truncate">{rName}</p>
-                              <p className="text-xs text-arvdoul-text-secondary truncate">
-                                {rUser.bio || 'Suggested creator'}
-                              </p>
-                            </div>
+                            {rName.charAt(0).toUpperCase()}
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following') {
-                                navigate(`/profile/${rId}`);
-                              } else {
-                                handleConnectUser(rUser);
-                              }
-                            }}
-                            disabled={actionStatus === 'loading'}
-                            className={cn(
-                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0",
-                              actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following'
-                                ? isDark ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700"
-                                : "bg-arvdoul-gradient text-white shadow-md active:scale-95"
-                            )}
-                          >
-                            {actionStatus === 'loading' ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : actionStatus === 'requested' ? (
-                              'Requested ✓'
-                            ) : actionStatus === 'following' ? (
-                              'Following ✓'
-                            ) : actionStatus === 'connected' ? (
-                              'Connected ✓'
-                            ) : (
-                              'Connect'
-                            )}
-                          </button>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{rName}</p>
+                          <p className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
+                            {rUser.bio || 'Suggested creator'}
+                          </p>
                         </div>
-                      );
-                    })}
-                  </div>
-                )
-            }
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following') {
+                            navigate(`/profile/${rId}`);
+                          } else {
+                            handleConnectUser(rUser);
+                          }
+                        }}
+                        disabled={actionStatus === 'loading'}
+                        className={cn(
+                          "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer",
+                          actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following'
+                            ? isDark
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "text-white"
+                        )}
+                        style={
+                          actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following'
+                            ? undefined
+                            : { background: BRAND_GRADIENT }
+                        }
+                      >
+                        {actionStatus === 'loading' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : actionStatus === 'requested' ? (
+                          'Requested'
+                        ) : actionStatus === 'following' ? (
+                          'Following'
+                        ) : actionStatus === 'connected' ? (
+                          'Connected'
+                        ) : (
+                          'Connect'
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
           <>
-        {/* Push Notification Opt-In Banner */}
-        {pushStatus === 'default' && !dismissPushBanner && (
-          <div className={cn(
-            "p-3.5 rounded-2xl border flex items-center justify-between gap-3 relative overflow-hidden",
-            isDark
-              ? "bg-gradient-to-r from-purple-950/40 via-indigo-950/40 to-blue-950/30 border-purple-500/30"
-              : "bg-purple-50/80 border-purple-200"
-          )}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-arvdoul-purple dark:text-purple-400 shrink-0">
-                <Bell className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white">
-                  Enable Real-Time Push Alerts
-                </h3>
-                <p className="text-[11px] text-gray-600 dark:text-gray-400 line-clamp-1">
-                  Get instant alerts for messages, coin gifts, and live broadcasts.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleEnablePush}
-                disabled={requestingPush}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md hover:scale-105 active:scale-95 transition cursor-pointer"
-                style={{ background: BRAND_GRADIENT }}
-              >
-                {requestingPush ? 'Enabling…' : 'Enable'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDismissPushBanner(true)}
-                className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                title="Dismiss"
-                aria-label="Dismiss push notification banner"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Timeline Groupings: Now, Today, Yesterday */}
-        {['Now', 'Today', 'Yesterday', 'Earlier'].map((groupKey) => {
-          const items = groupedNotifications[groupKey] || [];
-          if (items.length === 0) return null;
-          const isExpanded = expandedSections[groupKey];
-
-          return (
-            <section key={groupKey} className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setExpandedSections(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))}
-                className="w-full flex items-center justify-between px-1 py-1 text-xs font-bold text-arvdoul-text-secondary uppercase tracking-wider group"
-              >
-                <span>{groupKey}</span>
-                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", isExpanded ? "rotate-0" : "-rotate-90")} />
-              </button>
-
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="space-y-2"
+            {/* Push Notification Opt-In Banner */}
+            {pushStatus === 'default' && !dismissPushBanner && (
+              <div className={cn(
+                "p-4 rounded-2xl border flex items-center justify-between gap-3",
+                isDark ? "bg-[#080F2E]/90 border-purple-500/25" : "bg-white border-purple-200"
+              )}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    isDark ? "bg-purple-500/15 text-purple-400" : "bg-purple-50 text-purple-700"
+                  )}>
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className={cn("text-xs sm:text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+                      Enable Push Alerts
+                    </h3>
+                    <p className={cn("text-xs line-clamp-1", isDark ? "text-slate-400" : "text-slate-600")}>
+                      Get instant alerts for messages, coin gifts, and live broadcasts.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleEnablePush}
+                    disabled={requestingPush}
+                    className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60"
+                    style={{ background: BRAND_GRADIENT }}
                   >
-                    {items.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleNotificationClick(item)}
-                        className={cn(
-                          "relative group overflow-hidden rounded-2xl p-3.5 transition-all duration-200 border flex items-center justify-between gap-3",
-                          item.unread
-                            ? isDark
-                              ? "bg-white/[0.04] border-violet-500/20 hover:border-violet-500/40"
-                              : "bg-white border-violet-200 shadow-sm"
-                            : isDark
-                              ? "bg-white/[0.015] border-white/5 hover:border-white/10"
-                              : "bg-slate-50 border-slate-200"
-                        )}
+                    {requestingPush ? 'Enabling…' : 'Enable'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissPushBanner(true)}
+                    className={cn(
+                      "min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center cursor-pointer",
+                      isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
+                    )}
+                    title="Dismiss"
+                    aria-label="Dismiss push notification banner"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Timeline Groupings: Now, Today, Yesterday, Earlier */}
+            {['Now', 'Today', 'Yesterday', 'Earlier'].map((groupKey) => {
+              const items = groupedNotifications[groupKey] || [];
+              if (items.length === 0) return null;
+              const isExpanded = expandedSections[groupKey];
+
+              return (
+                <section key={groupKey} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSections((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
+                    className={cn(
+                      "w-full min-h-[36px] flex items-center justify-between px-1 py-1 text-xs font-semibold uppercase tracking-wider cursor-pointer",
+                      isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    <span>{groupKey}</span>
+                    <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", isExpanded ? "rotate-0" : "-rotate-90")} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="space-y-2"
                       >
-                        {/* Left: Avatar with type icon */}
-                        <div className="relative flex-shrink-0">
-                          <LazyImage
-                            src={item.user.avatar}
-                            alt={item.user.name}
-                            referrerPolicy="no-referrer"
-                            className="w-12 h-12 rounded-full object-cover ring-2 ring-violet-500/20"
-                          />
-                          {/* Type icon on bottom right of avatar */}
-                          {item.type === 'friend_request' && (
-                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
-                              <Users className="w-2.5 h-2.5" />
-                            </div>
-                          )}
-                          {item.type === 'coin_gift' && (
-                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
-                              <DollarSign className="w-2.5 h-2.5" />
-                            </div>
-                          )}
-                          {item.type === 'story_reply' && (
-                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
-                              <MessageCircle className="w-2.5 h-2.5" />
-                            </div>
-                          )}
-                          {item.type === 'post_like' && (
-                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
-                              <Heart className="w-2.5 h-2.5 fill-current" />
-                            </div>
-                          )}
-                          {item.type === 'mention' && (
-                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
-                              <AtSign className="w-2.5 h-2.5" />
-                            </div>
-                          )}
-                          {item.type === 'story_view' && (
-                            <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-cyan-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#060814]" : "ring-white")}>
-                              <Eye className="w-2.5 h-2.5" />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Center: Details */}
-                        <div className="flex-1 min-w-0 pr-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-xs hover:text-violet-400 transition-colors truncate">
-                              {item.user.name}
-                            </span>
-                            {item.user.verified && (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20 flex-shrink-0" />
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleNotificationClick(item)}
+                            className={cn(
+                              "relative group rounded-2xl p-3.5 transition-colors border flex items-center justify-between gap-3 cursor-pointer",
+                              item.unread
+                                ? isDark
+                                  ? "bg-[#080F2E] border-purple-500/30 hover:border-purple-400/50"
+                                  : "bg-white border-purple-200"
+                                : isDark
+                                  ? "bg-[#080F2E]/60 border-white/[0.08] hover:border-white/15"
+                                  : "bg-white/80 border-slate-200/80 hover:border-slate-300"
                             )}
-                          </div>
-
-                          <p className="text-xs text-arvdoul-text-secondary mt-0.5">
-                            {item.message}
-                          </p>
-
-                          <span className="text-[10px] text-arvdoul-text-secondary/70 mt-1 block">
-                            {item.timestamp}
-                          </span>
-                        </div>
-
-                        {/* Right: Actions or Media Thumbnails */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {/* Friend Request Accept / Decline buttons */}
-                          {item.type === 'friend_request' && (
-                            <div className="flex items-center gap-1.5">
-                              {friendActions[item.id] === 'accepted' ? (
-                                <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
-                                  ✓ Friends
-                                </span>
-                              ) : friendActions[item.id] === 'declined' ? (
-                                <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5">
-                                  Declined
-                                </span>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleFriendRequest(item.id, 'accepted', item.user, item.requestId);
-                                    }}
-                                    className="px-4 py-1.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-md hover:opacity-95 active:scale-95 transition-all"
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleFriendRequest(item.id, 'declined', item.user, item.requestId);
-                                    }}
-                                    className={cn(
-                                      "px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors",
-                                      isDark ? "border-white/10 hover:bg-white/10 text-white/70" : "border-slate-300 hover:bg-slate-100 text-slate-600"
-                                    )}
-                                  >
-                                    Decline
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Mention Comment Quote */}
-                          {item.type === 'mention' && item.commentQuote && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate('/messages');
-                              }}
-                              className={cn(
-                                "px-3 py-1.5 rounded-xl text-[11px] font-medium border flex items-center gap-1 max-w-[150px] truncate transition-colors",
-                                isDark ? "bg-white/5 border-white/10 text-white/80 hover:bg-white/10" : "bg-slate-100 border-slate-200 text-slate-700"
-                              )}
-                            >
-                              <span className="truncate">{item.commentQuote}</span>
-                              <ChevronRight className="w-3 h-3 flex-shrink-0" />
-                            </button>
-                          )}
-
-                          {/* Media Thumbnail (Like, Story reply, View, Coin Gift) */}
-                          {item.thumbnail && (
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (item.type === 'coin_gift') setGiftModal(item);
-                                else if (item.type?.includes('story')) navigate('/stories');
-                                else navigate('/reels');
-                              }}
-                              className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-500/50 transition-all flex-shrink-0 relative group/thumb"
-                            >
+                          >
+                            {/* Avatar with type emblem */}
+                            <div className="relative shrink-0">
                               <LazyImage
-                                src={item.thumbnail}
-                                alt="preview"
+                                src={item.user.avatar}
+                                alt={item.user.name}
                                 referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300"
+                                className="w-11 h-11 rounded-xl object-cover border border-white/10"
                               />
+                              {item.type === 'friend_request' && (
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <Users className="w-2.5 h-2.5" />
+                                </div>
+                              )}
                               {item.type === 'coin_gift' && (
-                                <div className="absolute inset-0 bg-violet-950/40 flex items-center justify-center">
-                                  <Gift className="w-5 h-5 text-amber-300" />
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <DollarSign className="w-2.5 h-2.5" />
+                                </div>
+                              )}
+                              {item.type === 'story_reply' && (
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <MessageCircle className="w-2.5 h-2.5" />
+                                </div>
+                              )}
+                              {item.type === 'post_like' && (
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <Heart className="w-2.5 h-2.5 fill-current" />
+                                </div>
+                              )}
+                              {item.type === 'mention' && (
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <AtSign className="w-2.5 h-2.5" />
+                                </div>
+                              )}
+                              {item.type === 'story_view' && (
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-cyan-500 text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <Eye className="w-2.5 h-2.5" />
                                 </div>
                               )}
                             </div>
-                          )}
 
-                          {/* Unread Purple Glow Indicator Dot */}
-                          {item.unread && (
-                            <span className="w-2.5 h-2.5 rounded-full bg-violet-500 shadow-arvdoul-glow flex-shrink-0" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </section>
-          );
-        })}
+                            {/* Center Details */}
+                            <div className="flex-1 min-w-0 pr-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={cn("font-semibold text-xs sm:text-sm truncate", isDark ? "text-white" : "text-slate-900")}>
+                                  {item.user.name}
+                                </span>
+                                {item.user.verified && (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                )}
+                              </div>
 
-        {/* Stream failure (rules denial / dropped connection) — retry rather
-            than showing the misleading "no notifications" empty state. */}
-        {!notificationsLoading && notificationsError && (
-          <ErrorState
-            title="Could not load notifications"
-            message={notificationsError}
-            onRetry={() => {
-              setNotificationsError(null);
-              setNotificationsLoading(true);
-              setStreamNonce((n) => n + 1);
-            }}
-          />
-        )}
+                              <p className={cn("text-xs mt-0.5", isDark ? "text-slate-300" : "text-slate-600")}>
+                                {item.message}
+                              </p>
 
-        {/* First-load skeleton — the empty state below would otherwise read as
-            "you have no notifications" before the first snapshot arrives. */}
-        {notificationsLoading && (
-          <ListRowsSkeleton count={7} />
-        )}
+                              <span className={cn("text-[11px] mt-1 block", isDark ? "text-slate-500" : "text-slate-400")}>
+                                {item.timestamp}
+                              </span>
+                            </div>
 
-        {/* Empty State when filters yield no results */}
-        {!notificationsLoading && !notificationsError && filteredNotifications.length === 0 && (
-          <EmptyState
-            title="No notifications found"
-            description={`There are no notifications under the ${activeFilter} filter at this moment.`}
-            icon={<Bell className="w-7 h-7" />}
-            action={
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => { setActiveFilter('All'); setSearchQuery(''); }}
-              >
-                Reset Filters
-              </Button>
-            }
-          />
-        )}
+                            {/* Right Actions */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {item.type === 'friend_request' && (
+                                <div className="flex items-center gap-1.5">
+                                  {friendActions[item.id] === 'accepted' ? (
+                                    <span className={cn("px-2.5 py-1.5 rounded-xl text-xs font-semibold", isDark ? "text-emerald-400 bg-emerald-500/15" : "text-emerald-700 bg-emerald-50")}>
+                                      Friends
+                                    </span>
+                                  ) : friendActions[item.id] === 'declined' ? (
+                                    <span className={cn("px-2.5 py-1.5 rounded-xl text-xs font-semibold", isDark ? "text-slate-400 bg-white/5" : "text-slate-600 bg-slate-100")}>
+                                      Declined
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleFriendRequest(item.id, 'accepted', item.user, item.requestId);
+                                        }}
+                                        className="min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white whitespace-nowrap shrink-0 cursor-pointer"
+                                        style={{ background: BRAND_GRADIENT }}
+                                      >
+                                        Accept
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleFriendRequest(item.id, 'declined', item.user, item.requestId);
+                                        }}
+                                        className={cn(
+                                          "min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                                          isDark ? "border-white/15 hover:bg-white/10 text-slate-300" : "border-slate-300 hover:bg-slate-100 text-slate-700"
+                                        )}
+                                      >
+                                        Decline
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {item.type === 'mention' && item.commentQuote && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate('/messages');
+                                  }}
+                                  className={cn(
+                                    "min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-1 max-w-[150px] truncate transition-colors cursor-pointer",
+                                    isDark ? "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10" : "bg-slate-100 border-slate-200 text-slate-700"
+                                  )}
+                                >
+                                  <span className="truncate">{item.commentQuote}</span>
+                                  <ChevronRight className="w-3 h-3 shrink-0" />
+                                </button>
+                              )}
+
+                              {item.thumbnail && (
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (item.type === 'coin_gift') setGiftModal(item);
+                                    else if (item.type?.includes('story')) navigate('/stories');
+                                    else navigate('/reels');
+                                  }}
+                                  className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer shrink-0 relative group/thumb"
+                                >
+                                  <LazyImage
+                                    src={item.thumbnail}
+                                    alt="preview"
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-200"
+                                  />
+                                  {item.type === 'coin_gift' && (
+                                    <div className="absolute inset-0 bg-slate-950/50 flex items-center justify-center">
+                                      <Gift className="w-5 h-5 text-amber-300" />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {item.unread && (
+                                <span
+                                  aria-label="Unread notification"
+                                  className="w-2 h-2 rounded-full bg-purple-500 shrink-0"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
+              );
+            })}
+
+            {!notificationsLoading && notificationsError && (
+              <ErrorState
+                title="Could not load notifications"
+                message={notificationsError}
+                onRetry={() => {
+                  setNotificationsError(null);
+                  setNotificationsLoading(true);
+                  setStreamNonce((n) => n + 1);
+                }}
+              />
+            )}
+
+            {notificationsLoading && <ListRowsSkeleton count={7} />}
+
+            {!notificationsLoading && !notificationsError && filteredNotifications.length === 0 && (
+              <EmptyState
+                title="No notifications found"
+                description={`There are no notifications under the ${activeFilter} filter at this moment.`}
+                icon={<Bell className="w-7 h-7" />}
+                action={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setActiveFilter('All');
+                      setUnreadOnly(false);
+                      setSearchQuery('');
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                }
+              />
+            )}
           </>
         )}
       </main>
 
-      {/* Gift Detail Modal - accessible Dialog (focus trap, Escape, aria-modal) */}
+      {/* Gift Detail Dialog */}
       <Dialog
         isOpen={Boolean(giftModal)}
         onClose={() => setGiftModal(null)}
@@ -1539,10 +1640,10 @@ export default function NotificationsScreen() {
         size="sm"
       >
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 ring-4 ring-amber-500/30">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-3 border border-amber-500/25">
             <Gift className="w-8 h-8" aria-hidden="true" />
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <p className={cn("text-xs mt-1", isDark ? "text-slate-300" : "text-slate-600")}>
             {giftModal?.user?.name || 'A creator'}
             {Number.isFinite(giftModal?.amount)
               ? ` gifted you ${giftModal.amount} ARVDOUL Coins.`
@@ -1550,11 +1651,11 @@ export default function NotificationsScreen() {
           </p>
 
           {Number.isFinite(giftModal?.amount) && (
-            <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
-              <span className="text-3xl font-black text-amber-600 dark:text-amber-400 font-display tabular-nums">
+            <div className="my-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
+              <span className="text-3xl font-black text-amber-600 dark:text-amber-400 tabular-nums">
                 +{giftModal.amount}
               </span>
-              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <span className={cn("text-xs font-bold uppercase tracking-wider", isDark ? "text-slate-300" : "text-slate-600")}>
                 Coins
               </span>
             </div>
@@ -1564,7 +1665,7 @@ export default function NotificationsScreen() {
             <button
               type="button"
               onClick={() => setGiftModal(null)}
-              className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors min-h-[44px]"
+              className="flex-1 min-h-[44px] py-2.5 rounded-xl text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
             >
               Close
             </button>
@@ -1574,9 +1675,10 @@ export default function NotificationsScreen() {
                 handleThankCreator(giftModal);
                 setGiftModal(null);
               }}
-              className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-arvdoul-gradient text-white shadow-lg min-h-[44px]"
+              className="flex-1 min-h-[44px] py-2.5 rounded-xl text-xs font-semibold text-white cursor-pointer"
+              style={{ background: BRAND_GRADIENT }}
             >
-              Send Thank You 💜
+              Send Thank You
             </button>
           </div>
         </div>

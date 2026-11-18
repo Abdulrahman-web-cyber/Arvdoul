@@ -1,15 +1,15 @@
 /**
- * Production-grade 6-Stat Civic Metrics Grid.
- * Recreates the exact 6-item metrics layout shown in the reference design (Light & Dark theme):
- * 1. Posts (e.g. 254)
- * 2. Followers (e.g. 45.8K) with trend badge
- * 3. Following (e.g. 312)
- * 4. Friends / Mutuals (e.g. 1,250)
- * 5. Profile Views / Likes (e.g. 2.18M / 2.1M) with trend badge
- * 6. Coins Ledger (e.g. 18.2M)
- * 
- * Fully wired to real service data and privacy projection rules.
- * 
+ * Production-grade 6-Stat Civic Metrics Ledger.
+ * Renders a unified, hairline-divided architectural ledger strip (Light & Dark theme):
+ * 1. Posts
+ * 2. Followers
+ * 3. Following
+ * 4. Friends / Mutuals
+ * 5. Profile Views / Likes
+ * 6. Coins Ledger
+ *
+ * Strictly fail-closed on capability gates and never fabricates unknown counts.
+ *
  * @component
  */
 
@@ -18,9 +18,9 @@ import { FileText, Users, UserCheck, UserPlus, Eye, Heart, Coins } from "lucide-
 import { cn } from '../../lib/utils';
 
 const formatNumber = (num) => {
-  // A missing count is unknown; rendering '0' claims a measured empty account.
   if (num === undefined || num === null) return '—';
   const n = Number(num);
+  if (Number.isNaN(n)) return '—';
   if (n >= 1000000) return `${(n / 1000000).toFixed(n % 1000000 === 0 ? 0 : (n >= 10000000 ? 1 : 2))}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`;
   return n.toLocaleString();
@@ -39,29 +39,17 @@ const ProfileMetricsGrid = memo(({
   const postsCount = profile?.postCount ?? profile?.postsCount ?? profile?.posts?.length ?? null;
   const followersCount = profile?.followerCount ?? profile?.followersCount ?? null;
   const followingCount = profile?.followingCount ?? null;
-  // `friendCount` is not a stored counter; when it is absent the honest value is
-  // "unknown" (—), not a fabricated 0 that claims the account has no friends.
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? null;
-  // A missing economic balance is unknown (—), never a fabricated 0 that
-  // claims an empty wallet.
   const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? null;
-  // Analytics-derived counts are *unknown* when no source provides them — a 0
-  // here would claim a measured empty audience.
   const profileViews = analytics?.totalViews ?? profile?.profileViews ?? profile?.viewsCount ?? null;
   const likesCount = profile?.likesReceived ?? profile?.likesCount ?? null;
 
-  // Fail CLOSED when the capability map is absent: a section the engine did not
-  // explicitly grant must not render. `?? true` / `?? isOwner` previously made a
-  // missing capabilities prop leak follower counts and economic status.
+  // Fail CLOSED when the capability map is absent
   const canShowFollowers = Boolean(capabilities?.canViewFollowers);
   const canShowFollowing = Boolean(capabilities?.canViewFollowing);
-  // Friends is a mutual follow, so it is visible only when both graphs are
-  // (resolved once in the capability engine). Gating it here stops a viewer
-  // denied the lists from reading the friend count off the metrics grid.
   const canShowFriends = Boolean(capabilities?.canViewFriends);
   const canShowEconomic = isOwner || Boolean(capabilities?.canViewEconomicStatus);
 
-  // Growth percentages strictly from analytics (no fake default growth numbers)
   const followerGrowth = analytics?.followerGrowth ? Number(analytics.followerGrowth) : null;
   const viewsGrowth = analytics?.viewsGrowth ? Number(analytics.viewsGrowth) : null;
 
@@ -71,8 +59,7 @@ const ProfileMetricsGrid = memo(({
       label: 'Posts',
       value: formatNumber(postsCount),
       icon: FileText,
-      iconColor: 'text-arvdoul-purple dark:text-[#A855F7]',
-      iconBg: isDark ? 'bg-purple-500/10' : 'bg-purple-50',
+      accentClass: 'text-arvdoul-purple dark:text-purple-400',
       clickable: Boolean(onMetricPress),
       trend: null,
     },
@@ -81,8 +68,7 @@ const ProfileMetricsGrid = memo(({
       label: 'Followers',
       value: canShowFollowers ? formatNumber(followersCount) : '—',
       icon: Users,
-      iconColor: 'text-arvdoul-purple dark:text-[#A855F7]',
-      iconBg: isDark ? 'bg-purple-500/10' : 'bg-purple-50',
+      accentClass: 'text-arvdoul-purple dark:text-purple-400',
       clickable: canShowFollowers && Boolean(onMetricPress),
       trend: canShowFollowers && followerGrowth ? `+${followerGrowth}%` : null,
     },
@@ -91,8 +77,7 @@ const ProfileMetricsGrid = memo(({
       label: 'Following',
       value: canShowFollowing ? formatNumber(followingCount) : '—',
       icon: UserCheck,
-      iconColor: 'text-cyan-600 dark:text-cyan-400',
-      iconBg: isDark ? 'bg-cyan-500/10' : 'bg-cyan-50',
+      accentClass: 'text-cyan-600 dark:text-cyan-400',
       clickable: canShowFollowing && Boolean(onMetricPress),
       trend: null,
     },
@@ -101,8 +86,7 @@ const ProfileMetricsGrid = memo(({
       label: 'Friends',
       value: canShowFriends && friendsCount !== null ? formatNumber(friendsCount) : '—',
       icon: UserPlus,
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      iconBg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
+      accentClass: 'text-arvdoul-blue dark:text-blue-400',
       clickable: canShowFriends && friendsCount !== null && Boolean(onMetricPress),
       trend: null,
     },
@@ -113,10 +97,7 @@ const ProfileMetricsGrid = memo(({
         ? (profileViews === null ? '—' : formatNumber(profileViews))
         : (likesCount === null ? '—' : formatNumber(likesCount)),
       icon: isOwner ? Eye : Heart,
-      iconColor: isOwner ? 'text-cyan-600 dark:text-cyan-400' : 'text-pink-500 dark:text-pink-400',
-      iconBg: isDark 
-        ? (isOwner ? 'bg-cyan-500/10' : 'bg-pink-500/10')
-        : (isOwner ? 'bg-cyan-50' : 'bg-pink-50'),
+      accentClass: isOwner ? 'text-cyan-600 dark:text-cyan-400' : 'text-rose-500 dark:text-rose-400',
       clickable: isOwner && Boolean(onMetricPress),
       trend: isOwner && viewsGrowth ? `+${viewsGrowth}%` : null,
     },
@@ -125,74 +106,77 @@ const ProfileMetricsGrid = memo(({
       label: 'Coins',
       value: canShowEconomic && coinsCount !== null ? formatNumber(coinsCount) : '—',
       icon: Coins,
-      iconColor: 'text-amber-500 dark:text-amber-400',
-      iconBg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',
+      accentClass: 'text-amber-500 dark:text-amber-400',
       clickable: Boolean(onMetricPress),
       trend: null,
     },
   ];
 
   return (
-    <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
-      {stats.map((item) => {
-        const Icon = item.icon;
-        const isClickable = item.clickable;
-        const cardClass = cn(
-          "rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between relative overflow-hidden group select-none text-left",
-          isDark
-            ? "bg-[#080F2E]/90 hover:bg-[#0B1438] border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-            : "bg-white hover:bg-slate-50/70 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]",
-          isClickable && "cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-        );
+    <div
+      className={cn(
+        "w-full rounded-2xl border overflow-hidden",
+        isDark
+          ? "border-white/[0.08] bg-white/[0.07]"
+          : "border-slate-200/90 bg-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.03)]"
+      )}
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px">
+        {stats.map((item) => {
+          const Icon = item.icon;
+          const isClickable = item.clickable;
 
-        const content = (
-          <>
-            {/* Top row: Icon and Trend Badge (if available) */}
-            <div className="flex items-center justify-between mb-2 w-full">
-              <div className={cn(
-                "w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105",
-                item.iconBg,
-                item.iconColor
-              )}>
-                <Icon className="w-4 h-4" />
-              </div>
+          const cellClass = cn(
+            "px-4 py-3.5 sm:py-4 transition-colors flex flex-col justify-between gap-2 text-left select-none",
+            isDark
+              ? "bg-[#080F2E] text-white"
+              : "bg-white text-slate-900",
+            isClickable && (
+              isDark
+                ? "cursor-pointer hover:bg-[#0D1742] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-arvdoul-purple"
+                : "cursor-pointer hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-arvdoul-purple"
+            )
+          );
 
-              {item.trend && (
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 tabular-nums">
-                  <span className="text-[8px]">▲</span>
-                  <span>{item.trend}</span>
+          const inner = (
+            <>
+              <div className="flex items-center justify-between gap-2 w-full">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
+                  {item.label}
                 </span>
-              )}
-            </div>
-
-            {/* Bottom: Stat Value and Label */}
-            <div className="w-full">
-              <div className="text-lg sm:text-xl font-black tracking-tight tabular-nums text-slate-900 dark:text-white leading-tight">
-                {item.value}
+                <Icon className={cn("w-3.5 h-3.5 shrink-0 opacity-85", item.accentClass)} />
               </div>
-              <div className="text-[11px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                {item.label}
-              </div>
-            </div>
-          </>
-        );
 
-        return isClickable ? (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onMetricPress?.(item.key)}
-            aria-label={`${item.label}: ${item.value}`}
-            className={cardClass}
-          >
-            {content}
-          </button>
-        ) : (
-          <div key={item.key} className={cardClass}>
-            {content}
-          </div>
-        );
-      })}
+              <div className="flex items-baseline justify-between gap-2 w-full">
+                <span className="font-display text-xl sm:text-[22px] font-bold tracking-tight tabular-nums text-slate-900 dark:text-white leading-none">
+                  {item.value}
+                </span>
+                {item.trend && (
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+                    {item.trend}
+                  </span>
+                )}
+              </div>
+            </>
+          );
+
+          return isClickable ? (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onMetricPress?.(item.key)}
+              aria-label={`${item.label}: ${item.value}`}
+              className={cellClass}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div key={item.key} className={cellClass}>
+              {inner}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });

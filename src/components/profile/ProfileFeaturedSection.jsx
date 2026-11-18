@@ -1,13 +1,7 @@
 /**
- * Production-grade 'Featured by [Name]' Section for Public Profile view.
- * Matches Image 2 hierarchy:
- * - Header with Sparkles icon, 'Featured by [Name]' and 'See all >' button
- * - 4 horizontal cards:
- *   1. Pinned Post (with Pin icon & title)
- *   2. Pinned Reel (with Play icon & title)
- *   3. Pinned Album (with Album icon & title)
- *   4. More Handpicked card (with Sparkles icon)
- * 
+ * Production-grade 'Featured by [Name]' Canvas Section.
+ * Renders pinned/featured creations cleanly on the profile canvas without an enclosing box wrapper.
+ *
  * @component
  */
 
@@ -29,14 +23,11 @@ const ProfileFeaturedSection = memo(({
   const isDark = theme === 'dark';
   const creatorName = pickDisplayName([profile?.displayName, profile?.name], { fallback: '—' });
 
-  // Extract pinned or featured posts if available (strictly real posts)
   const items = React.useMemo(() => {
     if (Array.isArray(posts) && posts.length > 0) {
       const pinned = posts.filter(p => p.isPinned || p.isFeatured || p.featured || p.pinned);
       if (pinned.length > 0) {
         return pinned.slice(0, 3).map((p, idx) => {
-          // Engagement lives under `stats`; an absent count is unknown ('—'),
-          // never a measured 0 (top-level `likesCount` is never written).
           const rawLikes = p.likesCount ?? (Array.isArray(p.likes) ? p.likes.length : p.likes) ?? p.stats?.likes;
           const numLikes = typeof rawLikes === 'number' ? rawLikes : null;
           const formattedLikes = numLikes == null
@@ -61,31 +52,18 @@ const ProfileFeaturedSection = memo(({
     return [];
   }, [posts]);
 
-  // If creator has no explicit featured items, don't show mock photos
   if (items.length === 0) {
     return null;
   }
 
-  // Collections are owner-scoped: `firestore.rules` restricts `collections`
-  // reads to `resource.data.userId == uid()` and the only collections route
-  // serves the signed-in user. The "More Handpicked" card is therefore an owner
-  // affordance — for a visitor it is hidden rather than linking to
-  // `/profile/:id/collections`, a route that does not exist (it fell through to
-  // the 404 screen).
   const showCollectionsCard = Boolean(isOwner);
 
   return (
-    <div className={cn(
-      "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-5 border backdrop-blur-xl transition-all duration-200 shadow-sm",
-      isDark
-        ? "bg-[#080F2E]/90 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
-        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
-    )}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-arvdoul-purple" />
-          <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+    <section aria-label="Featured Creations" className="w-full py-1">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles className="w-4 h-4 text-arvdoul-purple shrink-0" />
+          <h2 className="font-display font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white truncate">
             Featured by {creatorName}
           </h2>
         </div>
@@ -93,14 +71,13 @@ const ProfileFeaturedSection = memo(({
         <button
           type="button"
           onClick={() => navigate(`/profile/${profile?.id || profile?.uid || 'user'}/posts`)}
-          className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:opacity-80 transition-opacity cursor-pointer"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer shrink-0"
         >
           <span>See all</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Grid of 4 Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {items.map((item) => (
           <button
@@ -108,7 +85,7 @@ const ProfileFeaturedSection = memo(({
             type="button"
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
             aria-label={`${item.badgeType}: ${item.title}`}
-            className="group relative aspect-[16/11] w-full text-left rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900 select-none hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arvdoul-blue"
+            className="group relative aspect-[16/11] w-full text-left rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer border border-slate-200/60 dark:border-white/10 bg-slate-900 select-none hover:scale-[1.015] active:scale-[0.985] transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
           >
             <LazyImage
               src={item.cover}
@@ -117,11 +94,9 @@ const ProfileFeaturedSection = memo(({
               loading="lazy"
             />
 
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/10" />
 
-            {/* Top Badge: Type Indicator */}
-            <div className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
+            <div className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-black/60 backdrop-blur-md text-white">
               {item.type === 'reel' ? (
                 <Play className="w-2.5 h-2.5 fill-white" />
               ) : item.type === 'album' ? (
@@ -132,40 +107,34 @@ const ProfileFeaturedSection = memo(({
               <span>{item.badgeType}</span>
             </div>
 
-            {/* Bottom Title & Info */}
             <div className="absolute bottom-2.5 left-2.5 right-2.5 text-white">
-              <h3 className="text-xs font-bold truncate group-hover:text-purple-300 transition-colors">
+              <h3 className="text-xs font-semibold truncate group-hover:text-purple-300 transition-colors">
                 {item.title}
               </h3>
             </div>
           </button>
         ))}
 
-        {/* 4th Card: More Handpicked */}
         {showCollectionsCard && (
           <button
             type="button"
             onClick={() => navigate('/collections')}
             className={cn(
-              "group relative aspect-[16/11] w-full rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-arvdoul-blue",
+              "group relative aspect-[16/11] w-full rounded-xl sm:rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-arvdoul-purple",
               isDark
                 ? "border-white/15 bg-white/[0.02] hover:bg-white/[0.05] text-white"
-                : "border-slate-300 bg-slate-50/70 hover:bg-slate-100 text-slate-800"
+                : "border-slate-300 bg-white/60 hover:bg-white text-slate-800"
             )}
           >
-            <div className="w-9 h-9 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
               <Sparkles className="w-4 h-4" />
             </div>
-            <div className="text-xs font-bold">
-              More
-            </div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">
-              Handpicked
-            </div>
+            <div className="text-xs font-semibold">More</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">Handpicked</div>
           </button>
         )}
       </div>
-    </div>
+    </section>
   );
 });
 
