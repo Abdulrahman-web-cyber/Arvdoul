@@ -436,6 +436,9 @@ class UltimateStoryService {
       content: storyData.content || '',
       hashtags,
       media: mediaInfo,
+      duration: Number(storyData.duration) > 0
+        ? Math.min(Number(storyData.duration), STORY_CONFIG.MAX_DURATION_SECONDS)
+        : (storyData.type === 'video' ? 15 : 5),
       visibility: storyData.visibility || STORY_CONFIG.VISIBILITY.PUBLIC,
       allowReactions: storyData.allowReactions !== false,
       allowComments: storyData.allowComments !== false,
@@ -654,6 +657,23 @@ class UltimateStoryService {
       this.storyCache.set(storyId, { data: story, timestamp: Date.now() });
     }
     return { success: true, story };
+  }
+
+  async reportStoryView(storyId, viewerId = null) {
+    await this.ensureInitialized();
+    const uid = viewerId || this.auth.currentUser?.uid;
+    if (!uid || !storyId) return { success: false };
+    await this._markStorySeen(uid, storyId);
+    try {
+      const storyDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'stories', storyId));
+      if (storyDoc.exists() && storyDoc.data().userId !== uid && STORY_CONFIG.VIEW_TRACKING.ENABLED) {
+        await this._recordStoryViewSharded(storyId, uid);
+      }
+      return { success: true };
+    } catch (err) {
+      logger.warn('[StoryService] reportStoryView failed', { storyId, error: err?.message });
+      return { success: false, error: err?.message };
+    }
   }
 
   async getStoryViewers(storyId, options = {}) {
@@ -997,7 +1017,9 @@ class UltimateStoryService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
     const templatesRef = this.fs.collection(this.firestore, 'users', currentUser.uid, 'story_templates');
-    const countSnap = await this.fs.getDocs(templatesRef);
+    const countSnap = await this.fs.getDocs(
+      this.fs.query(templatesRef, this.fs.limit(STORY_CONFIG.TEMPLATES.MAX_USER_TEMPLATES))
+    );
     if (countSnap.size >= STORY_CONFIG.TEMPLATES.MAX_USER_TEMPLATES) {
       throw new Error(`Max ${STORY_CONFIG.TEMPLATES.MAX_USER_TEMPLATES} templates reached`);
     }
@@ -1016,7 +1038,10 @@ class UltimateStoryService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
     const snap = await this.fs.getDocs(
-      this.fs.collection(this.firestore, 'users', currentUser.uid, 'story_templates')
+      this.fs.query(
+        this.fs.collection(this.firestore, 'users', currentUser.uid, 'story_templates'),
+        this.fs.limit(50)
+      )
     );
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
@@ -1377,10 +1402,7 @@ class UltimateStoryService {
     if (music) conditions.push(this.fs.where('music.id', '==', music));
 
     if (query) {
-      // Use Algolia or Firestore full‑text in production; here we use tokenized search
-      const tokens = query.toLowerCase().split(/\s+/).slice(0, 5);
-      const tokenConditions = tokens.map(t => this.fs.where('content', '>=', t).where('content', '<=', t + '\uf8ff'));
-      // Firestore only supports one range per query, so we take the first token for simplicity
+      // Firestore only supports one range per query; search on content prefix
       const q = this.fs.query(storiesRef, ...conditions, this.fs.where('content', '>=', query), this.fs.where('content', '<=', query + '\uf8ff'), this.fs.limit(limit));
       const snap = await this.fs.getDocs(q);
       return { success: true, stories: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
@@ -1405,15 +1427,27 @@ class UltimateStoryService {
     await this.ensureInitialized();
     const data = { stories: [], archived: [], highlights: [] };
     const sSnap = await this.fs.getDocs(
-      this.fs.query(this.fs.collection(this.firestore, 'stories'), this.fs.where('userId', '==', userId))
+      this.fs.query(
+        this.fs.collection(this.firestore, 'stories'),
+        this.fs.where('userId', '==', userId),
+        this.fs.limit(200)
+      )
     );
     data.stories = sSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const aSnap = await this.fs.getDocs(
-      this.fs.query(this.fs.collection(this.firestore, 'archived_stories'), this.fs.where('userId', '==', userId))
+      this.fs.query(
+        this.fs.collection(this.firestore, 'archived_stories'),
+        this.fs.where('userId', '==', userId),
+        this.fs.limit(200)
+      )
     );
     data.archived = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const hSnap = await this.fs.getDocs(
-      this.fs.query(this.fs.collection(this.firestore, 'highlights'), this.fs.where('userId', '==', userId))
+      this.fs.query(
+        this.fs.collection(this.firestore, 'highlights'),
+        this.fs.where('userId', '==', userId),
+        this.fs.limit(200)
+      )
     );
     data.highlights = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     return data;
@@ -1571,7 +1605,12 @@ class UltimateStoryService {
   }
 
   async _getShardedViewCount(storyId) {
-    const shardsSnap = await this.fs.getDocs(this.fs.collection(this.firestore, 'stories', storyId, 'view_shards'));
+    const shardsSnap = await this.fs.getDocs(
+      this.fs.query(
+        this.fs.collection(this.firestore, 'stories', storyId, 'view_shards'),
+        this.fs.limit(STORY_CONFIG.SHARDED_COUNTERS.VIEW_SHARDS)
+      )
+    );
     let total = 0;
     shardsSnap.docs.forEach(d => total += d.data().count || 0);
     return total;
@@ -1596,7 +1635,12 @@ class UltimateStoryService {
   }
 
   async _getShardedReactionCounts(storyId) {
-    const shardsSnap = await this.fs.getDocs(this.fs.collection(this.firestore, 'stories', storyId, 'reaction_shards'));
+    const shardsSnap = await this.fs.getDocs(
+      this.fs.query(
+        this.fs.collection(this.firestore, 'stories', storyId, 'reaction_shards'),
+        this.fs.limit(STORY_CONFIG.SHARDED_COUNTERS.REACTION_SHARDS)
+      )
+    );
     const counts = {};
     shardsSnap.docs.forEach(d => {
       const data = d.data();
@@ -1616,7 +1660,8 @@ class UltimateStoryService {
       const snap = await this.fs.getDocs(
         this.fs.query(
           this.fs.collection(this.firestore, 'users', userId, 'storySeen'),
-          this.fs.where('storyId', 'in', chunk)
+          this.fs.where('storyId', 'in', chunk),
+          this.fs.limit(STORY_CONFIG.BATCH_SIZE.SEEN_STORIES)
         )
       );
       snap.docs.forEach(d => { seen[d.data().storyId] = true; });
@@ -1966,6 +2011,8 @@ const storyService = {
   createStory: (...args) => getStoryService().createStory(...args),
   getStoriesFeed: (...args) => getStoryService().getStoriesFeed(...args),
   getStory: (...args) => getStoryService().getStory(...args),
+  reportStoryView: (...args) => getStoryService().reportStoryView(...args),
+  markStorySeen: (userId, storyId) => getStoryService()._markStorySeen(userId, storyId),
   getStoryViewers: (...args) => getStoryService().getStoryViewers(...args),
   reactToStory: (...args) => getStoryService().reactToStory(...args),
   commentOnStory: (...args) => getStoryService().commentOnStory(...args),

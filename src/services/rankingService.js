@@ -689,7 +689,7 @@ class RankingService {
       const chunk = unique.slice(i, i + 30);
       try {
         const snap = await getDocs(
-          query(collection(this.firestore, 'users'), where('__name__', 'in', chunk))
+          query(collection(this.firestore, 'users'), where('__name__', 'in', chunk), limit(chunk.length))
         );
         snap.forEach((d) => users.set(d.id, { id: d.id, ...d.data() }));
       } catch (err) {

@@ -451,11 +451,17 @@ service cloud.firestore {
           ['uid', 'email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt', 'coins']
         ) &&
         request.resource.data.get('coins', null) == 100 &&
-        !request.resource.data.keys().hasAny(['lockedCoins']);
+        !request.resource.data.keys().hasAny(['lockedCoins']) &&
+        request.resource.data.get('emailVerified', false) == (request.auth.token.email_verified == true) &&
+        request.resource.data.get('phoneVerified', false) == (request.auth.token.phone_number != null);
       allow update: if isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
           ['email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
-        );
+        ) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['emailVerified']) ||
+          request.resource.data.emailVerified == (request.auth.token.email_verified == true)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneVerified']) ||
+          request.resource.data.phoneVerified == (request.auth.token.phone_number != null));
       allow delete: if false;
     }
 
@@ -1446,7 +1452,8 @@ service cloud.firestore {
       allow write: if false; // server-only
     }
     match /payout_settings/{userId} {
-      allow read, create, update: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update, delete: if false; // server-only (monetization Stripe onboarding)
     }
     match /withdrawal_requests/{requestId} {
       // `read` and `create` need DIFFERENT expressions: `request.resource` is

@@ -517,8 +517,14 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
 // 5. markNotificationRead (Callable)
 // ======================================================================
 exports.markNotificationRead = functions.https.onCall(async (data, context) => {
+  if (!context.auth?.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
   const userId = context.auth.uid;
-  const { notificationId } = data;
+  const notificationId = typeof data?.notificationId === 'string' ? data.notificationId.trim() : '';
+  if (!notificationId) {
+    throw new functions.https.HttpsError('invalid-argument', 'notificationId is required.');
+  }
   const notifRef = db.collection('users').doc(userId).collection('notifications').doc(notificationId);
   const snap = await notifRef.get();
   if (!snap.exists) return { success: false };
@@ -532,6 +538,9 @@ exports.markNotificationRead = functions.https.onCall(async (data, context) => {
 // 6. markAllNotificationsRead (Callable)
 // ======================================================================
 exports.markAllNotificationsRead = functions.https.onCall(async (data, context) => {
+  if (!context.auth?.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
   const userId = context.auth.uid;
   const notifsRef = db.collection('users').doc(userId).collection('notifications');
 
@@ -573,8 +582,14 @@ exports.markAllNotificationsRead = functions.https.onCall(async (data, context) 
 // 7. deleteNotification (Callable)
 // ======================================================================
 exports.deleteNotification = functions.https.onCall(async (data, context) => {
+  if (!context.auth?.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
   const userId = context.auth.uid;
-  const { notificationId } = data;
+  const notificationId = typeof data?.notificationId === 'string' ? data.notificationId.trim() : '';
+  if (!notificationId) {
+    throw new functions.https.HttpsError('invalid-argument', 'notificationId is required.');
+  }
   const notifRef = db.collection('users').doc(userId).collection('notifications').doc(notificationId);
   const snap = await notifRef.get();
   if (!snap.exists) return { success: false };
@@ -590,8 +605,13 @@ exports.deleteNotification = functions.https.onCall(async (data, context) => {
 // 8. getUserNotifications (Callable) – paginated, ranked
 // ======================================================================
 exports.getUserNotifications = functions.https.onCall(async (data, context) => {
+  if (!context.auth?.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
   const userId = context.auth.uid;
-  const { limit = 20, cursor } = data.options || {};
+  const rawLimit = data?.options?.limit ?? 20;
+  const limit = Math.min(Math.max(1, Number(rawLimit) || 20), 100);
+  const cursor = typeof data?.options?.cursor === 'string' ? data.options.cursor.trim() : null;
   const notifsRef = db.collection('users').doc(userId).collection('notifications');
   let q = notifsRef.orderBy('createdAt', 'desc').limit(limit);
   if (cursor) {
@@ -613,6 +633,9 @@ exports.getUserNotifications = functions.https.onCall(async (data, context) => {
 // 9. getNotificationStats (Callable)
 // ======================================================================
 exports.getNotificationStats = functions.https.onCall(async (data, context) => {
+  if (!context.auth?.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
   const userId = context.auth.uid;
   const shardCount = 10;
   let unread = 0;

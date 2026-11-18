@@ -10,9 +10,9 @@ export default function TrimSubPanel({
   selectedClip,
   activeSubAction = 'trim', // 'trim' | 'cut' | 'split' | 'delete'
   onSelectSubAction,
-  startTime = 2.4,
-  endTime = 28.5,
-  duration = 26.1,
+  startTime = 0,
+  endTime = 0,
+  duration = 0,
   onStartTimeChange,
   onEndTimeChange,
   speed = 1.0,
@@ -27,6 +27,35 @@ export default function TrimSubPanel({
   onSelectSnapMode,
 }) {
   const [showSnapMenu, setShowSnapMenu] = React.useState(false);
+  const stripRef = React.useRef(null);
+  const hasClip = Boolean(selectedClip);
+
+  const startHandleDrag = (side) => (e) => {
+    if (!hasClip || !stripRef.current) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const origStart = startTime;
+    const origEnd = endTime;
+    const width = Math.max(120, stripRef.current.getBoundingClientRect().width);
+    const clipSpan = Math.max(1, origEnd - origStart, duration || 1);
+
+    const onMove = (ev) => {
+      const deltaSec = ((ev.clientX - startX) / width) * clipSpan;
+      if (side === 'left') {
+        const nextStart = Math.max(0, Math.min(origEnd - 0.5, Number((origStart + deltaSec).toFixed(2))));
+        onStartTimeChange?.(nextStart);
+      } else {
+        const nextEnd = Math.max(origStart + 0.5, Number((origEnd + deltaSec).toFixed(2)));
+        onEndTimeChange?.(nextEnd);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
   return (
     <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
@@ -91,8 +120,10 @@ export default function TrimSubPanel({
               <span className="font-medium text-gray-400">Start</span>
               <div className="flex items-center bg-black/50 border border-white/10 rounded-lg overflow-hidden">
                 <button
+                  disabled={!hasClip}
+                  aria-label="Decrease start time"
                   onClick={() => onStartTimeChange?.(Math.max(0, startTime - 0.1))}
-                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10"
+                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-40"
                 >
                   <Minus className="w-3 h-3" />
                 </button>
@@ -100,8 +131,10 @@ export default function TrimSubPanel({
                   {formatTimecode(startTime)}
                 </span>
                 <button
+                  disabled={!hasClip}
+                  aria-label="Increase start time"
                   onClick={() => onStartTimeChange?.(Math.min(endTime - 0.5, startTime + 0.1))}
-                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10"
+                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-40"
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -113,8 +146,10 @@ export default function TrimSubPanel({
               <span className="font-medium text-gray-400">End</span>
               <div className="flex items-center bg-black/50 border border-white/10 rounded-lg overflow-hidden">
                 <button
+                  disabled={!hasClip}
+                  aria-label="Decrease end time"
                   onClick={() => onEndTimeChange?.(Math.max(startTime + 0.5, endTime - 0.1))}
-                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10"
+                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-40"
                 >
                   <Minus className="w-3 h-3" />
                 </button>
@@ -122,8 +157,10 @@ export default function TrimSubPanel({
                   {formatTimecode(endTime)}
                 </span>
                 <button
+                  disabled={!hasClip}
+                  aria-label="Increase end time"
                   onClick={() => onEndTimeChange?.(endTime + 0.1)}
-                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10"
+                  className="px-1.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-40"
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -140,7 +177,12 @@ export default function TrimSubPanel({
           </div>
 
           {/* Interactive Graphic Filmstrip Frame with Handles */}
-          <div className="relative h-14 sm:h-16 rounded-2xl bg-black border border-purple-500/80 overflow-hidden shadow-lg flex items-center p-1">
+          <div ref={stripRef} className="relative h-14 sm:h-16 rounded-2xl bg-black border border-purple-500/80 overflow-hidden shadow-lg flex items-center p-1">
+            {!hasClip && (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 z-10 pointer-events-none">
+                Select a clip on the timeline to trim
+              </div>
+            )}
             {/* Filmstrip Repeating Video Frames Thumbnail Canvas */}
             <div className="absolute inset-1 flex overflow-hidden rounded-xl opacity-80">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -161,12 +203,26 @@ export default function TrimSubPanel({
             </div>
 
             {/* Left Trim Bracket Handle */}
-            <div className="absolute left-1 top-1 bottom-1 w-4 bg-purple-600 rounded-l-lg flex items-center justify-center cursor-ew-resize z-20 shadow-md border-r border-white/30">
+            <div
+              role="slider"
+              tabIndex={hasClip ? 0 : -1}
+              aria-label="Trim clip start"
+              aria-valuenow={startTime}
+              onPointerDown={startHandleDrag('left')}
+              className={`absolute left-1 top-1 bottom-1 w-4 bg-purple-600 rounded-l-lg flex items-center justify-center z-20 shadow-md border-r border-white/30 touch-none ${hasClip ? 'cursor-ew-resize' : 'opacity-40 cursor-not-allowed'}`}
+            >
               <div className="w-1 h-5 bg-white/90 rounded-full" />
             </div>
 
             {/* Right Trim Bracket Handle */}
-            <div className="absolute right-1 top-1 bottom-1 w-4 bg-purple-600 rounded-r-lg flex items-center justify-center cursor-ew-resize z-20 shadow-md border-l border-white/30">
+            <div
+              role="slider"
+              tabIndex={hasClip ? 0 : -1}
+              aria-label="Trim clip end"
+              aria-valuenow={endTime}
+              onPointerDown={startHandleDrag('right')}
+              className={`absolute right-1 top-1 bottom-1 w-4 bg-purple-600 rounded-r-lg flex items-center justify-center z-20 shadow-md border-l border-white/30 touch-none ${hasClip ? 'cursor-ew-resize' : 'opacity-40 cursor-not-allowed'}`}
+            >
               <div className="w-1 h-5 bg-white/90 rounded-full" />
             </div>
           </div>

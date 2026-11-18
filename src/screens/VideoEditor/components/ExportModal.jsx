@@ -113,7 +113,7 @@ export default function ExportModal({
         ctx.font = `${Math.round(W * 0.12)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(c.sticker || c.text || '✨', W / 2, H / 2);
+        ctx.fillText(c.emoji || c.sticker || c.text || '✨', W / 2, H / 2);
       });
   };
 

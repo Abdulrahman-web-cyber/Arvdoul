@@ -46,7 +46,7 @@ const FILTERS = [
   { id: 'Messages', label: 'Messages', icon: MessageCircle },
   { id: 'Friends', label: 'Friends', icon: Users },
   { id: 'Mentions', label: 'Mentions', icon: AtSign },
-  { id: 'Stories', label: 'Stories', icon: Sparkles },
+  { id: 'Stories', label: 'Vibes', icon: Sparkles },
   { id: 'Coins', label: 'Coins', icon: DollarSign },
   { id: 'Live', label: 'Live', icon: Radio },
   { id: 'System', label: 'System', icon: Settings },
@@ -385,8 +385,9 @@ export default function NotificationsScreen() {
       const category = type === 'message' || type === 'story_reply' ? 'Messages'
         : type?.includes('friend') ? 'Friends'
           : type === 'coin_gift' ? 'Coins'
-            : SYSTEM_NOTIFICATION_TYPES.has(type) ? 'System'
-              : 'All';
+            : type?.includes('story') ? 'Stories'
+              : SYSTEM_NOTIFICATION_TYPES.has(type) ? 'System'
+                : 'All';
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
       const startOfYesterday = new Date(startOfToday);
@@ -415,6 +416,8 @@ export default function NotificationsScreen() {
         message: fn.body || fn.message || '',
         requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
         postId: fn.metadata?.postId || null,
+        storyId: fn.metadata?.storyId || null,
+        actionUrl: fn.actionUrl || fn.metadata?.actionUrl || null,
         conversationId: fn.metadata?.conversationId || null,
         amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
         giftType: fn.metadata?.giftType || null,
@@ -536,7 +539,19 @@ export default function NotificationsScreen() {
       return;
     }
     if (notif.type?.includes('story')) {
-      navigate('/stories');
+      navigate('/stories', notif.user?.id ? { state: { vibeUserId: notif.user.id } } : undefined);
+      return;
+    }
+    if (notif.type === 'level_up' || notif.type === 'milestone_reached') {
+      navigate(notif.actionUrl || '/progress');
+      return;
+    }
+    if (notif.type === 'achievement_unlocked') {
+      navigate(notif.actionUrl || '/achievements');
+      return;
+    }
+    if (notif.type === 'badge_earned') {
+      navigate(notif.actionUrl || '/titles');
       return;
     }
     if (notif.type === 'follow' || notif.type === 'follow_request' || notif.type === 'friend_request' || notif.type === 'friend_accepted' || notif.type === 'follow_accepted') {
@@ -545,6 +560,10 @@ export default function NotificationsScreen() {
     }
     if (notif.type?.includes('coin') || notif.type?.includes('gift') || notif.type?.includes('withdraw') || notif.type?.includes('payment') || notif.type?.includes('subscription')) {
       navigate('/coins');
+      return;
+    }
+    if (notif.actionUrl && String(notif.actionUrl).startsWith('/')) {
+      navigate(notif.actionUrl);
     }
   };
 
@@ -1472,6 +1491,11 @@ export default function NotificationsScreen() {
                                   <Eye className="w-2.5 h-2.5" />
                                 </div>
                               )}
+                              {(item.type === 'level_up' || item.type === 'achievement_unlocked' || item.type === 'badge_earned') && (
+                                <div className={cn("absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-arvdoul-gradient text-white flex items-center justify-center ring-2", isDark ? "ring-[#03071B]" : "ring-white")}>
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                </div>
+                              )}
                             </div>
 
                             {/* Center Details */}
@@ -1559,8 +1583,9 @@ export default function NotificationsScreen() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (item.type === 'coin_gift') setGiftModal(item);
-                                    else if (item.type?.includes('story')) navigate('/stories');
-                                    else navigate('/reels');
+                                    else if (item.type?.includes('story')) {
+                                      navigate('/stories', item.user?.id ? { state: { vibeUserId: item.user.id } } : undefined);
+                                    } else navigate('/reels');
                                   }}
                                   className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer shrink-0 relative group/thumb"
                                 >

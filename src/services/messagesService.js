@@ -1570,7 +1570,8 @@ class UltimateMessagingService {
           this.fs.query(
             this.fs.collectionGroup(this.firestore, 'reactions'),
             this.fs.where('conversationId', '==', conversationId),
-            this.fs.where('messageId', 'in', chunk)
+            this.fs.where('messageId', 'in', chunk),
+            this.fs.limit(300)
           )
         );
         rSnap.forEach((d) => {
@@ -2326,7 +2327,7 @@ class UltimateMessagingService {
     if (!conv.conversation.admins?.includes(adminId)) throw new Error('Admin required');
 
     const invitesRef = this.fs.collection(this.firestore, 'group_invites');
-    const q = this.fs.query(invitesRef, this.fs.where('conversationId', '==', conversationId));
+    const q = this.fs.query(invitesRef, this.fs.where('conversationId', '==', conversationId), this.fs.limit(50));
     const snap = await this.fs.getDocs(q);
     return { success: true, invites: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
   }

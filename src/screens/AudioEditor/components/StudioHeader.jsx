@@ -153,15 +153,8 @@ export default function StudioHeader({
                 onClick={() => handleExportOption('WAV')}
                 className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold hover:bg-purple-600/20 flex items-center justify-between cursor-pointer"
               >
-                <span>Master WAV (24-bit)</span>
-                <span className="text-[10px] text-gray-400">HQ</span>
-              </button>
-              <button
-                onClick={() => handleExportOption('MP3')}
-                className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold hover:bg-purple-600/20 flex items-center justify-between cursor-pointer"
-              >
-                <span>Compressed MP3 (320kbps)</span>
-                <span className="text-[10px] text-gray-400">Web</span>
+                <span>Master WAV (16-bit PCM)</span>
+                <span className="text-[10px] text-gray-400">Lossless</span>
               </button>
               <div className="my-1 border-t border-inherit opacity-40" />
               <button

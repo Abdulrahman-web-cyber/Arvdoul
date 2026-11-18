@@ -85,6 +85,34 @@ function captureVideoFrame(url) {
   });
 }
 
+function probeVideoDuration(url) {
+  return new Promise((resolve) => {
+    if (!url || typeof document === 'undefined') {
+      resolve(12);
+      return;
+    }
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    let settled = false;
+    const finish = (secs) => {
+      if (settled) return;
+      settled = true;
+      resolve(secs > 0 && Number.isFinite(secs) ? Number(secs.toFixed(2)) : 12);
+      try { video.removeAttribute('src'); video.load(); } catch { /* noop */ }
+    };
+    const timer = setTimeout(() => finish(12), 4000);
+    video.addEventListener('loadedmetadata', () => {
+      clearTimeout(timer);
+      finish(video.duration);
+    }, { once: true });
+    video.addEventListener('error', () => {
+      clearTimeout(timer);
+      finish(12);
+    }, { once: true });
+    video.src = url;
+  });
+}
+
 /**
  * REAL audio waveform: decodes the audio with the Web Audio API and returns
  * 40 peak values (0-100). Returns [] when decoding fails — callers must show
@@ -158,7 +186,7 @@ export default function VideoEditorScreen() {
   };
 
   // Playhead & Playback State
-  const [currentTime, setCurrentTime] = useState(4.2);
+  const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const [isMagnetSnap, setIsMagnetSnap] = useState(true);
@@ -269,7 +297,9 @@ export default function VideoEditorScreen() {
   useEffect(() => {
     if (videoRef.current && currentVideoClip) {
       if (isPlaying && videoRef.current.paused) {
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch((err) => {
+          console.warn('[VideoEditor] Preview play blocked:', err?.message);
+        });
       } else if (!isPlaying && !videoRef.current.paused) {
         videoRef.current.pause();
       }
@@ -418,6 +448,7 @@ export default function VideoEditorScreen() {
   const handleAddTextClip = (textData) => {
     const newClip = {
       id: `text-${Date.now()}`,
+      type: 'text',
       startTime: currentTime,
       duration: 5,
       text: textData.text,
@@ -442,6 +473,7 @@ export default function VideoEditorScreen() {
   const handleAddStickerClip = (emoji) => {
     const newClip = {
       id: `sticker-${Date.now()}`,
+      type: 'sticker',
       startTime: currentTime,
       duration: 4,
       emoji: emoji,
@@ -465,6 +497,7 @@ export default function VideoEditorScreen() {
     const waveform = await analyzeAudioWaveform(audioData.url);
     const newClip = {
       id: `audio-${Date.now()}`,
+      type: 'audio',
       startTime: currentTime,
       duration: audioData.duration || 30,
       title: audioData.title,
@@ -490,12 +523,16 @@ export default function VideoEditorScreen() {
     const isAudio = file.type.startsWith('audio');
 
     if (isVideo) {
-      // Real frame from the user's own video ('' if it cannot be decoded).
-      const thumbnail = await captureVideoFrame(url);
+      // Real frame & duration from the user's own video.
+      const [thumbnail, duration] = await Promise.all([
+        captureVideoFrame(url),
+        probeVideoDuration(url),
+      ]);
       const newClip = {
         id: `video-${Date.now()}`,
+        type: 'video',
         startTime: currentTime,
-        duration: 12,
+        duration,
         title: file.name,
         url: url,
         thumbnail,
@@ -522,11 +559,15 @@ export default function VideoEditorScreen() {
       const url = location.state.videoUrl;
       const title = location.state.title || 'Imported Video';
       (async () => {
-        const thumbnail = await captureVideoFrame(url);
+        const [thumbnail, duration] = await Promise.all([
+          captureVideoFrame(url),
+          probeVideoDuration(url),
+        ]);
         const newClip = {
           id: `video-${Date.now()}`,
+          type: 'video',
           startTime: 0,
-          duration: 15,
+          duration,
           title,
           url,
           thumbnail,
@@ -549,6 +590,7 @@ export default function VideoEditorScreen() {
       if (lines.length > 0) {
         const scriptClips = lines.map((line, i) => ({
           id: `script-${Date.now()}-${i}`,
+          type: 'text',
           startTime: i * 4,
           duration: 3.8,
           text: line.slice(0, 90),
@@ -617,6 +659,7 @@ export default function VideoEditorScreen() {
                 }));
         const captionClips = segments.map((seg, idx) => ({
           id: `caption-${Date.now()}-${idx}`,
+          type: 'text',
           startTime: Number(seg.startSec) || (targetClip.startTime || 0) + idx * 3,
           duration: Math.max(1.2, (Number(seg.endSec) || idx * 3 + 3) - (Number(seg.startSec) || idx * 3)),
           text: String(seg.text || '').trim(),
@@ -982,6 +1025,7 @@ export default function VideoEditorScreen() {
           currentTime={currentTime}
           duration={totalDuration}
           zoomLevel={zoomLevel}
+          isMagnetOn={isMagnetSnap}
           selectedClipId={selectedClipId}
           onSelectClip={handleSelectClip}
           onSeek={setCurrentTime}
@@ -1011,9 +1055,9 @@ export default function VideoEditorScreen() {
               if (sub === 'split') handleSplitClip();
               if (sub === 'delete') handleDeleteClip();
             }}
-            startTime={selectedClip ? selectedClip.startTime : 2.4}
-            endTime={selectedClip ? selectedClip.startTime + selectedClip.duration : 28.5}
-            duration={selectedClip ? selectedClip.duration : 26.1}
+            startTime={selectedClip ? selectedClip.startTime : 0}
+            endTime={selectedClip ? selectedClip.startTime + selectedClip.duration : 0}
+            duration={selectedClip ? selectedClip.duration : 0}
             onStartTimeChange={(newStart) => {
               if (selectedClip) {
                 const newDuration = Math.max(0.5, (selectedClip.startTime + selectedClip.duration) - newStart);
@@ -1108,6 +1152,7 @@ export default function VideoEditorScreen() {
               const thumbnail = await captureVideoFrame(clip.url);
               const newClip = {
                 id: `video-rec-${Date.now()}`,
+                type: 'video',
                 startTime: currentTime,
                 duration: clip.duration,
                 title: clip.title,
@@ -1139,6 +1184,7 @@ export default function VideoEditorScreen() {
           if (media.type === 'video') {
             const newClip = {
               id: `video-stock-${Date.now()}`,
+              type: 'video',
               startTime: currentTime,
               duration: media.duration || 10,
               title: media.title,

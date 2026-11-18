@@ -133,20 +133,39 @@ exports.verifySAMLAssertion = functions
       throw new functions.https.HttpsError('permission-denied', 'SAML audience mismatch');
     }
 
-    // 5. Signature verification when a cert is configured
-    const signatureMatch = decoded.match(/<ds:SignatureValue[^>]*>([^<]+)</);
-    const signatureB64 = signatureMatch ? signatureMatch[1] : null;
-    if (tenant.publicCert) {
-      // Extract the SignedInfo-ish payload is complex; verify against the
-      // raw assertion body for the common case and reject when a cert is
-      // configured but no signature is present.
-      if (!signatureB64) {
-        throw new functions.https.HttpsError('permission-denied', 'SAML assertion is not signed');
+    // 5. Time validity window check (NotBefore / NotOnOrAfter with 5m skew)
+    const SKEW_MS = 5 * 60 * 1000;
+    const nowMs = Date.now();
+    const notBeforeMatch = decoded.match(/NotBefore=["']([^"']+)["']/i);
+    if (notBeforeMatch) {
+      const nb = Date.parse(notBeforeMatch[1]);
+      if (Number.isNaN(nb) || nowMs + SKEW_MS < nb) {
+        throw new functions.https.HttpsError('permission-denied', 'SAML assertion is not yet valid');
       }
-      const valid = verifySignature(decoded, signatureB64, tenant.publicCert);
-      if (!valid) {
-        throw new functions.https.HttpsError('permission-denied', 'SAML signature verification failed');
+    }
+    const notOnOrAfterMatch = decoded.match(/NotOnOrAfter=["']([^"']+)["']/i);
+    if (notOnOrAfterMatch) {
+      const exp = Date.parse(notOnOrAfterMatch[1]);
+      if (Number.isNaN(exp) || nowMs - SKEW_MS >= exp) {
+        throw new functions.https.HttpsError('permission-denied', 'SAML assertion has expired');
       }
+    }
+
+    // 6. Signature verification — fail closed if no tenant publicCert is configured
+    if (!tenant.publicCert || typeof tenant.publicCert !== 'string') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'SAML tenant is missing publicCert signature verification key'
+      );
+    }
+    const signatureMatch = decoded.match(/<(?:ds:)?SignatureValue[^>]*>([^<]+)</);
+    const signatureB64 = signatureMatch ? signatureMatch[1].trim() : null;
+    if (!signatureB64) {
+      throw new functions.https.HttpsError('permission-denied', 'SAML assertion is not signed');
+    }
+    const valid = verifySignature(decoded, signatureB64, tenant.publicCert);
+    if (!valid) {
+      throw new functions.https.HttpsError('permission-denied', 'SAML signature verification failed');
     }
 
     // 6. Claims extraction

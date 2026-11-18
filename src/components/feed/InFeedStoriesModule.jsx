@@ -42,15 +42,15 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
               id: g.userId,
               name,
               avatar: getSafeAvatarUrl(p?.photoURL, name, g.userId),
-              hasUnseen: g.stories?.some((s) => !s.seen),
+              hasUnseen: Boolean(g.stories?.some((s) => !s.seen)),
             };
-          });
+          }).sort((a, b) => Number(b.hasUnseen) - Number(a.hasUnseen));
           if (isMounted) setCreators(realList);
         }
       } catch (err) {
-        // The strip degrades to just "Your Story", but a failed feed read must
-        // still be observable rather than looking like "nobody has stories".
-        console.warn('InFeedStoriesModule: story feed load failed', err);
+        // The strip degrades to just "Your Vibe", but a failed feed read must
+        // still be observable rather than looking like "nobody has vibes".
+        console.warn('InFeedStoriesModule: vibe feed load failed', err);
         if (isMounted) setCreators([]);
       }
     }
@@ -62,24 +62,19 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
     <div className={cn(
       "my-4 rounded-2xl p-4 border transition-all duration-200 overflow-hidden",
       isDark
-        ? "bg-[#0f1424]/90 border-slate-800/80 shadow-lg shadow-purple-950/20"
+        ? "bg-[#0f1424]/90 border-slate-800/80 shadow-lg"
         : "bg-white/95 border-slate-200 shadow-md shadow-slate-200/50"
     )}>
       {/* Header Bar */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white shadow-sm shadow-arvdoul-purple/25">
+          <div className="w-7 h-7 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white shadow-sm">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className={cn("text-sm font-bold tracking-tight", isDark ? "text-white" : "text-slate-900")}>
-                Stories & Vibes
-              </h3>
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                Live
-              </span>
-            </div>
+            <h3 className={cn("text-sm font-bold tracking-tight", isDark ? "text-white" : "text-slate-900")}>
+              Vibes
+            </h3>
           </div>
         </div>
 
@@ -87,31 +82,32 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
           type="button"
           onClick={() => navigate('/stories')}
           className={cn(
-            "flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-all cursor-pointer",
+            "flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition-all cursor-pointer",
             isDark
-              ? "text-purple-400 hover:text-purple-300 hover:bg-purple-950/40"
-              : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+              ? "text-slate-300 hover:text-white hover:bg-white/[0.06]"
+              : "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
           )}
         >
-          <span>View all stories</span>
+          <span>All Vibes</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Stories Scroll Container */}
+      {/* Vibes Scroll Container */}
       <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-hide select-none -mx-1 px-1">
-        {/* User's Add Story Card */}
-        <motion.div
+        {/* User's Add Vibe Card */}
+        <motion.button
+          type="button"
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.96 }}
           onClick={() => navigate('/create-story')}
-          className="flex-shrink-0 flex flex-col items-center gap-1.5 cursor-pointer w-[72px]"
+          className="flex-shrink-0 flex flex-col items-center gap-1.5 cursor-pointer w-[72px] bg-transparent border-0 p-0"
         >
           <div className="relative w-14 h-14 rounded-full p-[2px] bg-slate-200 dark:bg-slate-800">
             <div className="w-full h-full rounded-full overflow-hidden relative">
               <LazyImage
                 src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'You', user?.uid)}
-                alt="My Story"
+                alt="Your Vibe"
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-black/25 flex items-center justify-center" />
@@ -121,23 +117,24 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
             </div>
           </div>
           <span className={cn("text-[11px] font-semibold text-center truncate w-full", isDark ? "text-slate-300" : "text-slate-700")}>
-            Your Story
+            Your Vibe
           </span>
-        </motion.div>
+        </motion.button>
 
-        {/* Creator Story Items */}
+        {/* Creator Vibe Items */}
         {creators.map((creator) => (
-          <motion.div
+          <motion.button
+            type="button"
             key={creator.id}
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.96 }}
-            onClick={() => navigate('/stories')}
-            className="flex-shrink-0 flex flex-col items-center gap-1.5 cursor-pointer w-[72px] group"
+            onClick={() => navigate('/stories', { state: { vibeUserId: creator.id } })}
+            className="flex-shrink-0 flex flex-col items-center gap-1.5 cursor-pointer w-[72px] group bg-transparent border-0 p-0"
           >
             <div className={cn(
               "relative w-14 h-14 rounded-full p-[2.5px] transition-all duration-300",
               creator.hasUnseen
-                ? "bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-400 shadow-sm shadow-purple-500/30 group-hover:scale-105"
+                ? "bg-arvdoul-gradient shadow-sm group-hover:scale-105"
                 : isDark ? "bg-slate-800" : "bg-slate-300"
             )}>
               <div className="w-full h-full rounded-full overflow-hidden p-[2px] bg-white dark:bg-[#0f1424]">
@@ -157,7 +154,7 @@ export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
             )}>
               {creator.name.split(' ')[0]}
             </span>
-          </motion.div>
+          </motion.button>
         ))}
       </div>
     </div>

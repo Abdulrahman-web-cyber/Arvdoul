@@ -167,10 +167,6 @@ export async function testConnection() {
   return reachable;
 }
 
-if (typeof window !== 'undefined' && (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test')) {
-  void testConnection();
-}
-
 class UltimateFirebaseManager {
   constructor() {
     this._app = null;

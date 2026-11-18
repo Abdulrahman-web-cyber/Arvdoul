@@ -313,6 +313,27 @@ exports.evaluateAchievements = functions
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         await batch.commit();
+
+        try {
+          const { writeNotification } = require('./notificationWriter');
+          const first = newlyEarned[0];
+          await writeNotification(uid, {
+            type: 'achievement_unlocked',
+            title: newlyEarned.length === 1
+              ? `Achievement Unlocked: ${first.title}`
+              : `${newlyEarned.length} New Achievements Unlocked!`,
+            message: newlyEarned.length === 1
+              ? first.description || `You earned +${first.points || 0} pts.`
+              : `Unlocked ${newlyEarned.map((a) => a.title).slice(0, 3).join(', ')}.`,
+            metadata: {
+              achievementIds: newlyEarned.map((a) => a.id),
+              count: newlyEarned.length,
+              actionUrl: '/achievements',
+            },
+          });
+        } catch (notifErr) {
+          functions.logger.warn('achievement notification failed', { uid, error: notifErr.message });
+        }
       }
 
       return {
@@ -411,6 +432,22 @@ exports.claimTitle = functions
       source: 'system_provenance',
       status: 'active',
     }, { merge: true });
+
+    try {
+      const { writeNotification } = require('./notificationWriter');
+      await writeNotification(uid, {
+        type: 'badge_earned',
+        title: `Title Claimed: ${titleDef.name}`,
+        message: `You unlocked the "${titleDef.name}" title in ${titleDef.domain}.`,
+        metadata: {
+          titleId,
+          domain: titleDef.domain,
+          actionUrl: '/titles',
+        },
+      });
+    } catch (notifErr) {
+      functions.logger.warn('title claim notification failed', { uid, titleId, error: notifErr.message });
+    }
 
     return {
       success: true,

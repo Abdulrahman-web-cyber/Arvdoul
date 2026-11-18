@@ -246,6 +246,11 @@ const AdminRoute = ({ children }) => {
   return <AppStateGuard><MainLayout>{children}</MainLayout></AppStateGuard>;
 };
 
+function RedirectProfilePosts() {
+  const { userId } = useParams();
+  return <Navigate to={userId ? `/profile/${encodeURIComponent(userId)}` : '/profile'} replace />;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -452,7 +457,7 @@ export default function AppRoutes() {
       
       <Route path="/network" element={<Navigate to="/connections" replace />} />
       <Route path="/posts" element={<Navigate to="/home" replace />} />
-      <Route path="/profile/:userId/posts" element={<Navigate to="/profile/:userId" replace />} />
+      <Route path="/profile/:userId/posts" element={<RedirectProfilePosts />} />
       
       <Route path="/coins" element={
         <ProtectedRoute>

@@ -62,10 +62,10 @@ const { getRuntimeConfig } = require('./auth');
 // ----------------------------------------------------------------------
 //  CLOUD TASKS CONFIG (with deduplication)
 // ----------------------------------------------------------------------
-const projectId = process.env.GCLOUD_PROJECT;
+const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || getRuntimeConfig()?.projectId || '';
 const location = 'us-central1';
-const serviceAccountEmail = `${projectId}@appspot.gserviceaccount.com`;
-const videoModerationUrl = `https://${location}-${projectId}.cloudfunctions.net/processVideoModeration`;
+const serviceAccountEmail = projectId ? `${projectId}@appspot.gserviceaccount.com` : '';
+const videoModerationUrl = projectId ? `https://${location}-${projectId}.cloudfunctions.net/processVideoModeration` : '';
 
 // ----------------------------------------------------------------------
 //  STRUCTURED LOGGING
@@ -749,26 +749,30 @@ exports.personalizeFeed = functions.https.onCall(async (data, context) => {
 
   const now = new Date();
 
-  // Blocked users
+  // Blocked & muted users (mutual block + outgoing mutes, bounded)
   const blockedIds = new Set();
   const blockers = new Set();
+  const mutedIds = new Set();
   try {
-    const [blocksSnap, blockedMeSnap] = await Promise.all([
-      db.collection('blocks').where('blockerId', '==', userId).get(),
-      db.collection('blocks').where('blockedId', '==', userId).get(),
+    const [blocksSnap, blockedMeSnap, mutesSnap] = await Promise.all([
+      db.collection('blocks').where('blockerId', '==', userId).limit(300).get(),
+      db.collection('blocks').where('blockedId', '==', userId).limit(300).get(),
+      db.collection('mutes').where('muterId', '==', userId).limit(300).get(),
     ]);
     blocksSnap.docs.forEach(d => blockedIds.add(d.data().blockedId));
     blockedMeSnap.docs.forEach(d => blockers.add(d.data().blockerId));
+    mutesSnap.docs.forEach(d => mutedIds.add(d.data().mutedId));
   } catch (err) {
-    log('error', 'Failed to load block lists', { userId, error: err.message });
+    log('error', 'Failed to load moderation lists', { userId, error: err.message });
   }
 
-  // Followed users (full list – no artificial cap)
+  // Followed users (bounded to prevent unbounded Firestore scans)
   const followedUserIds = [];
   try {
     const followsSnap = await db.collection('follows')
       .where('followerId', '==', userId)
       .select('followingId')
+      .limit(300)
       .get();
     followsSnap.docs.forEach(d => followedUserIds.push(d.data().followingId));
   } catch (err) {
@@ -782,7 +786,7 @@ exports.personalizeFeed = functions.https.onCall(async (data, context) => {
     const snap = await query.limit(limitCount).get();
     snap.forEach(doc => {
       const data = doc.data();
-      if (!blockedIds.has(data.userId) && !blockers.has(data.userId)) {
+      if (!blockedIds.has(data.userId) && !blockers.has(data.userId) && !mutedIds.has(data.userId)) {
         result.push({ id: doc.id, ...data });
       }
     });

@@ -463,7 +463,7 @@ export default function CreateVideo() {
               const idx = mediaItems.indexOf(media);
               dispatch({
                 type: "UPDATE_MEDIA_ITEM",
-                payload: { index: idx, updates: { thumbnailUrl: thumbUrl, duration: media.duration || 0 } },
+                payload: { id: media.id, index: idx, updates: { thumbnailUrl: thumbUrl, duration: thumbs[0].duration || media.duration || 0 } },
               });
             }
           } catch (err) {
@@ -537,38 +537,29 @@ export default function CreateVideo() {
               onProgress: (progressData) => {
                 const progress = Math.round(progressData.progress || 0);
                 setUploadProgressMap((prev) => ({ ...prev, [item.id]: progress }));
-                const idx = mediaItems.findIndex((m) => m.id === item.id);
-                if (idx !== -1) {
-                  dispatch({
-                    type: "UPDATE_MEDIA_ITEM",
-                    payload: { index: idx, updates: { progress } },
-                  });
-                }
+                dispatch({
+                  type: "UPDATE_MEDIA_ITEM",
+                  payload: { id: item.id, updates: { progress } },
+                });
               },
             }
           );
-          const idx = mediaItems.findIndex((m) => m.id === item.id);
-          if (idx !== -1) {
-            dispatch({
-              type: "UPDATE_MEDIA_ITEM",
-              payload: {
-                index: idx,
-                updates: {
-                  url: result.downloadURL,
-                  progress: 100,
-                },
+          dispatch({
+            type: "UPDATE_MEDIA_ITEM",
+            payload: {
+              id: item.id,
+              updates: {
+                url: result.downloadURL,
+                progress: 100,
               },
-            });
-          }
+            },
+          });
         } catch (err) {
           toast.error(`Failed to upload ${item.name}`);
-          const idx = mediaItems.findIndex((m) => m.id === item.id);
-          if (idx !== -1) {
-            dispatch({
-              type: "UPDATE_MEDIA_ITEM",
-              payload: { index: idx, updates: { error: err.message } },
-            });
-          }
+          dispatch({
+            type: "UPDATE_MEDIA_ITEM",
+            payload: { id: item.id, updates: { error: err.message } },
+          });
         }
       }
     },
@@ -770,7 +761,7 @@ export default function CreateVideo() {
         } ${isDark ? "bg-[#080C14]/80 border-[#1A2440]" : "bg-white/90 border-gray-200/50"}`}
         style={{ boxShadow: isDark ? "0 12px 35px rgba(0,0,0,0.6)" : "0 12px 35px rgba(0,0,0,0.15)" }}
       >
-        <input aria-label="isDragActive ? border-purple-500 bg-purple-500/10 :" {...getInputProps()} />
+        <input aria-label="Upload videos" {...getInputProps()} />
         {!hasMedia ? (
           <EmptyState onUpload={() => fileInputRef.current?.click()} />
         ) : (

@@ -19,6 +19,7 @@ const {
 
 const db = admin.firestore();
 const { readCoinBalance, writeCoinBalance } = require('./coinBalance');
+const { writeNotification } = require('./notificationWriter');
 
 /**
  * Award XP for `action` to `uid` inside one transaction, applying the
@@ -123,6 +124,29 @@ async function awardXp(uid, action, { count = 1, source = null } = {}) {
       info: { level: after.level, progress: after.progress, xpToNext: after.xpToNext },
     };
   });
+
+  if (result?.leveledUp) {
+    try {
+      await writeNotification(uid, {
+        type: 'level_up',
+        title: `Level ${result.newLevel} Unlocked!`,
+        message: result.coinReward > 0
+          ? `You reached Level ${result.newLevel} and earned ${result.coinReward} bonus coins.`
+          : `Congratulations on reaching Level ${result.newLevel}!`,
+        metadata: {
+          level: result.newLevel,
+          coinReward: result.coinReward || 0,
+          actionUrl: '/progress',
+        },
+      });
+    } catch (err) {
+      try {
+        require('firebase-functions').logger.warn('level_up notification failed', { uid, error: err.message });
+      } catch {
+        /* logger unavailable */
+      }
+    }
+  }
 
   return result;
 }

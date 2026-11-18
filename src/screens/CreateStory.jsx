@@ -6,35 +6,64 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check, Loader2, Globe, Users, Lock } from "lucide-react";
+import {
+  X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle,
+  AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check,
+  Loader2, Globe, Users, Lock, Video, Square, Image as ImageIcon, Mic
+} from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import GIFPicker from '../components/Shared/GIFPicker';
 import { useFeatureFlag } from '../hooks/useFeatureFlag.js';
 import { LazyImage } from '../components/Shared/LazyImage';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 
 const CREATIVE_TOOLS = [
-  { id: 'text', label: 'Text', icon: Type, color: 'text-white' },
-  { id: 'stickers', label: 'Stickers', icon: Smile, color: 'text-white' },
-  { id: 'music', label: 'Music', icon: Music, color: 'text-white' },
-  { id: 'gif', label: 'GIF', icon: Sparkles, color: 'text-white' },
-  { id: 'poll', label: 'Poll', icon: BarChart2, color: 'text-white' },
-  { id: 'question', label: 'Question', icon: HelpCircle, color: 'text-white' },
-  { id: 'mention', label: 'Mention', icon: AtSign, color: 'text-white' },
-  { id: 'location', label: 'Location', icon: MapPin, color: 'text-white' },
-  { id: 'link', label: 'Link', icon: Link2, color: 'text-white' },
-  { id: 'timer', label: 'Timer', icon: Timer, color: 'text-white' },
+  { id: 'text', label: 'Text', icon: Type },
+  { id: 'stickers', label: 'Stickers', icon: Smile },
+  { id: 'music', label: 'Music', icon: Music },
+  { id: 'gif', label: 'GIF', icon: Sparkles },
+  { id: 'poll', label: 'Poll', icon: BarChart2 },
+  { id: 'question', label: 'Q&A', icon: HelpCircle },
+  { id: 'mention', label: 'Mention', icon: AtSign },
+  { id: 'location', label: 'Location', icon: MapPin },
+  { id: 'link', label: 'Link', icon: Link2 },
+  { id: 'timer', label: 'Countdown', icon: Timer },
 ];
 
-const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'LAYOUT'];
+const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'AUDIO'];
 
-// Story background templates - real gradient presets (no fabricated photos)
 const STORY_GRADIENTS = [
   { id: 'd1', gradient: 'linear-gradient(135deg, #FF512F, #F09819)', label: 'Sunset' },
   { id: 'd2', gradient: 'linear-gradient(135deg, #0F2027, #2C5364)', label: 'City lights' },
-  { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Mountain' },
-  { id: 'd4', gradient: 'linear-gradient(135deg, #41295a, #2F0743)', label: 'Studio' },
-  { id: 'd5', gradient: 'linear-gradient(135deg, #0B0C10, #45A29E)', label: 'Night vibe' },
+  { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Forest' },
+  { id: 'd4', gradient: 'linear-gradient(135deg, #41295a, #2F0743)', label: 'Midnight' },
+  { id: 'd5', gradient: 'linear-gradient(135deg, #0B0C10, #45A29E)', label: 'Deep sea' },
 ];
+
+function probeMediaDuration(url, kind) {
+  return new Promise((resolve) => {
+    try {
+      const el = document.createElement(kind === 'audio' ? 'audio' : 'video');
+      el.preload = 'metadata';
+      const cleanup = () => {
+        el.onloadedmetadata = null;
+        el.onerror = null;
+      };
+      el.onloadedmetadata = () => {
+        const dur = Number(el.duration);
+        cleanup();
+        resolve(Number.isFinite(dur) && dur > 0 ? Math.min(60, Math.max(1, Math.round(dur))) : (kind === 'video' ? 15 : 10));
+      };
+      el.onerror = () => {
+        cleanup();
+        resolve(kind === 'video' ? 15 : 10);
+      };
+      el.src = url;
+    } catch {
+      resolve(kind === 'video' ? 15 : 10);
+    }
+  });
+}
 
 export default function CreateStory() {
   const navigate = useNavigate();
@@ -45,8 +74,8 @@ export default function CreateStory() {
   // Camera & Mode state
   const [activeMode, setActiveMode] = useState('STORY');
   const [zoomLevel, setZoomLevel] = useState('1x');
-  const [flashMode, setFlashMode] = useState('auto'); // 'off' | 'on' | 'auto'
-  const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
+  const [flashMode, setFlashMode] = useState('auto');
+  const [facingMode, setFacingMode] = useState('user');
   const [cameraActive, setCameraActive] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -56,16 +85,19 @@ export default function CreateStory() {
   const [activeTool, setActiveTool] = useState(null);
   const [toolsExpanded, setToolsExpanded] = useState(true);
   const [storyText, setStoryText] = useState('');
-  const [backgroundGradient, setBackgroundGradient] = useState(null);
+  const [backgroundGradient, setBackgroundGradient] = useState(STORY_GRADIENTS[3].gradient);
   const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOption1, setPollOption1] = useState('Yes 🔥');
-  const [pollOption2, setPollOption2] = useState('No ❄️');
+  const [pollOption1, setPollOption1] = useState('Yes');
+  const [pollOption2, setPollOption2] = useState('No');
+  const [questionPrompt, setQuestionPrompt] = useState('');
   const [selectedMusic, setSelectedMusic] = useState(null);
   const musicLibraryEnabled = useFeatureFlag('stories.music_library');
   const [musicTracks, setMusicTracks] = useState([]);
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicError, setMusicError] = useState(null);
   const [mediaFile, setMediaFile] = useState(null);
+  const [mediaType, setMediaType] = useState('image');
+  const [mediaDuration, setMediaDuration] = useState(5);
   const [capturedPreview, setCapturedPreview] = useState(null);
   const [selectedGif, setSelectedGif] = useState(null);
   const [linkUrl, setLinkUrl] = useState('');
@@ -73,8 +105,6 @@ export default function CreateStory() {
   const [mentionHandle, setMentionHandle] = useState('');
   const [storyTimer, setStoryTimer] = useState(0);
   const [publishing, setPublishing] = useState(false);
-  // Audience maps to the service visibility contract (public/followers/private)
-  // enforced by storyService + firestore.rules — not a decorative toggle.
   const [audience, setAudience] = useState('public');
 
   const videoRef = useRef(null);
@@ -82,8 +112,25 @@ export default function CreateStory() {
   const timerRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const recordedSecondsRef = useRef(0);
+  const previewUrlRef = useRef(null);
+  const holdActiveRef = useRef(false);
 
-  // Music tool pulls the real catalog; there is no hardcoded default track.
+  const setPreviewSafely = useCallback((url) => {
+    if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrlRef.current);
+    }
+    previewUrlRef.current = url;
+    setCapturedPreview(url);
+  }, []);
+
+  const clearPreview = useCallback(() => {
+    setPreviewSafely(null);
+    setMediaFile(null);
+    setMediaType('image');
+    setMediaDuration(5);
+  }, [setPreviewSafely]);
+
   const loadMusicTracks = useCallback(async () => {
     setMusicLoading(true);
     setMusicError(null);
@@ -92,7 +139,6 @@ export default function CreateStory() {
       const tracks = await soundService.getTrendingSounds('All', user?.uid);
       setMusicTracks(Array.isArray(tracks) ? tracks : []);
     } catch (err) {
-      // "No tracks available" would be wrong when the catalog read failed.
       setMusicError(err?.message || 'Could not load the music catalog.');
       setMusicTracks([]);
     } finally {
@@ -100,17 +146,28 @@ export default function CreateStory() {
     }
   }, [user?.uid]);
 
-  // Initialize WebRTC Camera Stream
   const initCamera = useCallback(async () => {
+    if (activeMode === 'TEXT' || activeMode === 'AUDIO') {
+      setCameraActive(false);
+      return;
+    }
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
-          audio: false
-        });
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
+            audio: activeMode === 'VIDEO',
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
+            audio: false,
+          });
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play();
+          videoRef.current.play().catch((err) => console.warn('[CreateVibe] preview play:', err?.message));
           setCameraActive(true);
           const track = stream.getVideoTracks?.()[0];
           const caps = track?.getCapabilities?.();
@@ -118,28 +175,35 @@ export default function CreateStory() {
         }
       }
     } catch (err) {
-      console.warn('Camera access not available in sandbox, using high-definition canvas preview:', err);
+      console.warn('Camera access unavailable:', err?.message);
       setCameraActive(false);
     }
-  }, [facingMode]);
+  }, [facingMode, activeMode]);
 
   useEffect(() => {
     initCamera();
+    const videoEl = videoRef.current;
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject;
+      if (videoEl && videoEl.srcObject) {
+        const stream = videoEl.srcObject;
         stream.getTracks().forEach((track) => track.stop());
       }
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [initCamera]);
 
-  // Flip Camera
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleFlipCamera = () => {
     setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
 
-  // Toggle Flash — drives the camera track torch when the hardware exposes it.
   const handleToggleFlash = async () => {
     const next = flashMode === 'auto' ? 'on' : flashMode === 'on' ? 'off' : 'auto';
     setFlashMode(next);
@@ -155,36 +219,11 @@ export default function CreateStory() {
     }
   };
 
-  // Shutter Action (Tap for photo, hold for video)
-  const handleShutterTap = () => {
-    if (capturedPreview) {
-      // Clear preview
-      setCapturedPreview(null);
-      return;
-    }
-
-    if (cameraActive && videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth || 1080;
-      canvas.height = videoRef.current.videoHeight || 1920;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-      setCapturedPreview(dataUrl);
-      toast.success('Photo captured! ✨');
-    } else {
-      // No camera active - never fabricate a photo. Show an honest error.
-      toast.error('Camera is not active. Enable camera access to capture a photo.');
-    }
-  };
-
-  // Hold for Video Recording
-  const handleShutterMouseDown = () => {
-    if (capturedPreview) return;
-    // video recording via MediaRecorder on the camera stream
+  const startVideoRecording = useCallback(() => {
+    if (capturedPreview || isRecording) return;
     const stream = videoRef.current?.srcObject;
     if (!stream || typeof MediaRecorder === 'undefined') {
-      toast.error('Camera is not active. Enable camera access to record.');
+      toast.error('Camera is not active. Enable camera access or choose a video from Gallery.');
       return;
     }
     try {
@@ -196,317 +235,503 @@ export default function CreateStory() {
       const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       recorderRef.current = recorder;
       chunksRef.current = [];
+      recordedSecondsRef.current = 0;
+
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mime || 'video/webm' });
+        const finalType = mime || 'video/webm';
+        const blob = new Blob(chunksRef.current, { type: finalType });
+        const secs = Math.max(1, Math.min(60, recordedSecondsRef.current || 1));
         if (blob.size > 0) {
-          const url = URL.createObjectURL(blob);
-          setCapturedPreview(url);
-          toast.success(`Video recorded (${recordSeconds}s)! 🎥`);
+          const file = new File([blob], `vibe-${Date.now()}.webm`, { type: finalType });
+          const url = URL.createObjectURL(file);
+          setMediaFile(file);
+          setMediaType('video');
+          setMediaDuration(secs);
+          setPreviewSafely(url);
+          toast.success(`Video recorded (${secs}s)`);
         } else {
           toast.error('Recording produced no data. Try again.');
         }
       };
-      recorder.start();
+
+      recorder.start(250);
       setIsRecording(true);
       setRecordSeconds(0);
       timerRef.current = setInterval(() => {
         setRecordSeconds((sec) => {
-          if (sec >= 30) {
-            handleShutterMouseUp();
+          const next = sec + 1;
+          recordedSecondsRef.current = next;
+          if (next >= 30) {
+            if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+              recorderRef.current.stop();
+            }
+            setIsRecording(false);
+            clearInterval(timerRef.current);
             return 30;
           }
-          return sec + 1;
+          return next;
         });
       }, 1000);
     } catch (err) {
       console.error('Recording failed:', err);
       toast.error('Could not start recording on this device.');
     }
+  }, [capturedPreview, isRecording, setPreviewSafely]);
+
+  const stopVideoRecording = useCallback(() => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    try {
+      if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+        recorderRef.current.stop();
+      }
+    } catch (err) {
+      console.error('Stop recording failed:', err);
+    }
+  }, [isRecording]);
+
+  const handleCapturePhoto = useCallback(() => {
+    if (!cameraActive || !videoRef.current) {
+      toast.error('Camera is not active. Enable camera access or pick media from Gallery.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth || 1080;
+    canvas.height = videoRef.current.videoHeight || 1920;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          toast.error('Could not capture photo.');
+          return;
+        }
+        const file = new File([blob], `vibe-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const url = URL.createObjectURL(file);
+        setMediaFile(file);
+        setMediaType('image');
+        setMediaDuration(5);
+        setPreviewSafely(url);
+        toast.success('Photo captured');
+      },
+      'image/jpeg',
+      0.92
+    );
+  }, [cameraActive, setPreviewSafely]);
+
+  const handleShutterClick = () => {
+    if (holdActiveRef.current) {
+      holdActiveRef.current = false;
+      return;
+    }
+    if (capturedPreview) {
+      clearPreview();
+      return;
+    }
+    if (activeMode === 'VIDEO') {
+      if (isRecording) stopVideoRecording();
+      else startVideoRecording();
+      return;
+    }
+    handleCapturePhoto();
   };
 
-  const handleShutterMouseUp = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-      try {
-        if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-          recorderRef.current.stop();
-        }
-      } catch (err) {
-        console.error('Stop recording failed:', err);
-      }
+  const handleShutterHoldStart = () => {
+    if (activeMode === 'VIDEO' || activeMode === 'TEXT' || activeMode === 'AUDIO' || capturedPreview) return;
+    holdActiveRef.current = false;
+    timerRef.current = setTimeout(() => {
+      holdActiveRef.current = true;
+      startVideoRecording();
+    }, 280);
+  };
+
+  const handleShutterHoldEnd = () => {
+    if (!isRecording && timerRef.current && !holdActiveRef.current) {
+      clearTimeout(timerRef.current);
+      return;
+    }
+    if (isRecording && activeMode !== 'VIDEO') {
+      stopVideoRecording();
     }
   };
 
-  // Pick Gallery File
-  const handleFilePicked = (e) => {
+  const handleFilePicked = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isVid = file.type.startsWith('video/');
+    const isAud = file.type.startsWith('audio/');
+    const kind = isVid ? 'video' : isAud ? 'audio' : 'image';
+    const url = URL.createObjectURL(file);
     setMediaFile(file);
-    setCapturedPreview(URL.createObjectURL(file));
+    setMediaType(kind);
+    setPreviewSafely(url);
+    if (kind === 'video' || kind === 'audio') {
+      const dur = await probeMediaDuration(url, kind);
+      setMediaDuration(dur);
+      if (kind === 'audio') setActiveMode('AUDIO');
+    } else {
+      setMediaDuration(5);
+    }
   };
 
-  // Real stickers assembled from the active creative tools.
   const buildStickers = () => {
     const stickers = [];
     if (selectedGif) {
       stickers.push({ type: 'gif', data: { url: selectedGif.url, title: selectedGif.title }, position: { x: 0.5, y: 0.5 } });
     }
     if (storyTimer > 0) {
-      stickers.push({ type: 'countdown', data: { seconds: storyTimer }, position: { x: 0.5, y: 0.35 } });
+      stickers.push({
+        type: 'countdown',
+        data: { seconds: storyTimer, endsAt: Date.now() + storyTimer * 1000 },
+        position: { x: 0.5, y: 0.35 },
+      });
+    }
+    if (questionPrompt.trim()) {
+      stickers.push({ type: 'question', data: { prompt: questionPrompt.trim() }, position: { x: 0.5, y: 0.48 } });
+    }
+    if (mentionHandle.trim()) {
+      stickers.push({
+        type: 'mention',
+        data: { handle: mentionHandle.trim().replace(/^@/, '') },
+        position: { x: 0.5, y: 0.62 },
+      });
+    }
+    if (storyLocation.trim()) {
+      stickers.push({ type: 'location', data: { name: storyLocation.trim() }, position: { x: 0.5, y: 0.24 } });
+    }
+    if (linkUrl.trim()) {
+      stickers.push({ type: 'link', data: { url: linkUrl.trim() }, position: { x: 0.5, y: 0.78 } });
     }
     return stickers.length ? stickers : null;
   };
 
-  // Publish Story to Firestore / StoryService
+  const isTextMode = activeMode === 'TEXT';
+  const canPublish = isTextMode ? storyText.trim().length > 0 : Boolean(mediaFile);
+
   const handlePublishStory = async () => {
     if (!user?.uid || publishing) {
-      if (!user?.uid) toast.error('Please sign in to share stories.');
+      if (!user?.uid) toast.error('Please sign in to publish a Vibe.');
+      return;
+    }
+
+    if (!canPublish) {
+      toast.error(isTextMode ? 'Write a message for your Text Vibe.' : 'Capture or select a photo, video, or audio clip.');
       return;
     }
 
     setPublishing(true);
     try {
       const storyService = getStoryService();
-      const isText = activeMode.toLowerCase() === 'text';
+      const targetType = isTextMode ? 'text' : mediaType;
+      const cleanPoll = pollQuestion.trim() && pollOption1.trim() && pollOption2.trim()
+        ? { question: pollQuestion.trim(), options: [pollOption1.trim(), pollOption2.trim()] }
+        : null;
+
       const storyPayload = {
-        type: isText ? 'text' : 'image',
-        content: storyText || (isText ? '' : 'Sharing an Arvdoul moment ✨'),
-        // The service uploads the media file; text stories use the gradient
-        // (or a default) as their background color.
-        mediaFile: isText ? null : mediaFile,
-        backgroundColor: backgroundGradient || (isText ? '#1e1b4b' : '#000000'),
+        type: targetType,
+        content: storyText.trim(),
+        mediaFile: isTextMode ? null : mediaFile,
+        duration: isTextMode ? 6 : mediaDuration,
+        backgroundColor: backgroundGradient || '#0c0f24',
         textColor: '#FFFFFF',
-        poll: pollQuestion ? { question: pollQuestion, options: [pollOption1, pollOption2] } : null,
+        poll: cleanPoll,
         music: selectedMusic || null,
         linkUrl: linkUrl.trim() || null,
         location: storyLocation.trim() || null,
         taggedUsers: mentionHandle.trim() ? [mentionHandle.trim().replace(/^@/, '')] : [],
         stickers: buildStickers(),
-        // audience maps to the service visibility contract (public/followers).
         visibility: audience,
       };
-      if (!isText && !mediaFile) {
-        toast.error('Add a photo or video to share an image story.');
-        setPublishing(false);
-        return;
-      }
 
       const res = await storyService.createStory(storyPayload);
       if (res?.success) {
-        toast.success('Vibe published! ✨');
+        toast.success('Vibe published!');
         navigate('/stories');
       } else if (res?.queued) {
-        // HONEST offline state (spec §53): the Vibe is NOT published yet —
-        // it is queued locally and will publish when the connection returns.
         toast.info('Offline — saved as draft. Will publish when you are back online.');
         navigate('/stories');
       } else {
-        toast.error(res?.error || 'Failed to publish story');
+        toast.error(res?.error || 'Failed to publish Vibe');
       }
     } catch (err) {
-      toast.error(err?.message || 'Story publication error');
+      toast.error(err?.message || 'Vibe publication failed');
     } finally {
       setPublishing(false);
     }
   };
 
+  const liveVideoZoomStyle = {
+    transform: zoomLevel === '0.5' ? 'scale(0.88)' : zoomLevel === '2' ? 'scale(1.25)' : 'scale(1)',
+    transition: 'transform 200ms ease-out',
+  };
+
   return (
     <div className={cn(
-      "min-h-screen select-none relative overflow-hidden",
-      isDark ? "bg-[#060814] text-white" : "bg-slate-900 text-white"
+      "min-h-screen select-none relative overflow-x-hidden",
+      isDark ? "bg-[#060814] text-white" : "bg-slate-950 text-white"
     )}>
-      {/* Background Ambience / Glow */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-violet-950/20 via-black to-indigo-950/30 pointer-events-none" />
+      <div className="max-w-7xl mx-auto min-h-screen flex flex-col lg:flex-row items-center justify-between p-4 lg:p-8 gap-6 lg:gap-8 relative z-10">
 
-      <div className="max-w-7xl mx-auto min-h-screen flex flex-col lg:flex-row items-center justify-between p-4 lg:p-8 gap-8 relative z-10">
-        
-        {/* Left Column: Branding & Creative Tools */}
-        <div className="hidden lg:flex flex-col justify-between h-[820px] w-72 py-4">
+        {/* Left Column: Branding & Creative Tools (Desktop) */}
+        <div className="hidden lg:flex flex-col justify-between h-[780px] w-72 py-2">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-arvdoul-gradient flex items-center justify-center shadow-arvdoul-glow font-black text-xl text-white">
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-lg"
+                style={{ background: BRAND_GRADIENT }}
+              >
                 A
               </div>
               <div>
-                <h1 className="text-xl font-black font-display tracking-tight uppercase">
-                  ARVDOUL
+                <h1 className="text-xl font-black font-display tracking-tight">
+                  Vibes Studio
                 </h1>
-                <p className="text-xs font-bold text-violet-400 tracking-wider">
-                  STORY CAMERA
+                <p className="text-xs font-semibold text-white/60">
+                  Capture, design &amp; publish
                 </p>
               </div>
             </div>
-            <p className="text-xs text-arvdoul-text-secondary mt-3">
-              Capture. Create. Share your moment.
-            </p>
 
-            {/* Creative Tools Drawer */}
             {toolsExpanded && (
-            <div className="mt-8">
-              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-400 block mb-3">
-                Creative Tools
-              </span>
-              <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-3 space-y-1 backdrop-blur-xl shadow-2xl">
-                {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
-                  const Icon = tool.icon;
-                  const isSelected = activeTool === tool.id;
-                  return (
-                    <button
-                      key={tool.id}
-                      onClick={() => {
-                        setActiveTool(isSelected ? null : tool.id);
-                        if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
-                      }}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-200",
-                        isSelected
-                          ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                          : "text-white/80 hover:bg-white/10 hover:text-white"
-                      )}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span>{tool.label}</span>
-                    </button>
-                  );
-                })}
+              <div className="mt-8">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-white/50 block mb-3">
+                  Creative Tools
+                </span>
+                <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-2.5 space-y-1 backdrop-blur-xl shadow-2xl">
+                  {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
+                    const Icon = tool.icon;
+                    const isSelected = activeTool === tool.id;
+                    return (
+                      <button
+                        type="button"
+                        key={tool.id}
+                        onClick={() => {
+                          setActiveTool(isSelected ? null : tool.id);
+                          if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
+                        }}
+                        className={cn(
+                          "w-full min-h-[40px] flex items-center gap-3 px-3.5 py-2 rounded-2xl text-xs font-semibold transition-all duration-150 cursor-pointer",
+                          isSelected
+                            ? "text-white shadow-md"
+                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                        )}
+                        style={isSelected ? { background: BRAND_GRADIENT } : undefined}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span>{tool.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
             )}
           </div>
 
-          <div className="text-[11px] text-arvdoul-text-secondary flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-            <span>{toolsExpanded ? 'Tools shown' : 'Tap to expand creative tools'}</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/stories')}
+            className="w-full min-h-[44px] rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-semibold text-white/80 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          >
+            <span>Browse Vibes Feed</span>
+            <ChevronRight className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
 
-        {/* Center: Live Story Viewfinder Device */}
-        <div className="relative w-full max-w-[390px] h-[800px] rounded-[48px] bg-black border-4 border-white/15 shadow-[0_0_80px_rgba(139,92,246,0.35)] overflow-hidden flex flex-col justify-between">
-          
-          {/* Top Speaker / Notch & Status bar */}
-          <div className="absolute top-0 inset-x-0 z-30 pt-3 px-6 flex items-center justify-between text-[11px] font-semibold text-white/80 pointer-events-none">
-            <span>9:41</span>
-            <div className="w-24 h-4 bg-black rounded-full mx-auto" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px]">5G</span>
-              <span className="w-4 h-2 rounded-sm border border-white/60 flex items-center px-0.5">
-                <span className="w-2.5 h-1 bg-emerald-400 rounded-[1px]" />
-              </span>
-            </div>
-          </div>
+        {/* Center: Clean Studio Canvas (No fake phone bezel) */}
+        <div className="relative w-full max-w-[420px] h-[calc(100vh-2rem)] max-h-[820px] min-h-[580px] rounded-3xl bg-black border border-white/15 shadow-2xl overflow-hidden flex flex-col justify-between">
 
-          {/* Camera Viewport Canvas / Video Stream */}
-          <div className="absolute inset-0 z-0 bg-[#0c0f24]">
-            {cameraActive ? (
+          {/* Media / Canvas Stage */}
+          <div className="absolute inset-0 z-0 bg-[#0c0f24]" style={isTextMode || mediaType === 'audio' ? { background: backgroundGradient } : undefined}>
+            {capturedPreview ? (
+              mediaType === 'video' ? (
+                <video
+                  src={capturedPreview}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : mediaType === 'audio' ? (
+                <div className="w-full h-full flex flex-col items-center justify-center px-6 gap-5 text-center">
+                  <div className="w-20 h-20 rounded-3xl bg-white/15 border border-white/25 backdrop-blur-xl flex items-center justify-center">
+                    <Music className="w-9 h-9 text-white" aria-hidden="true" />
+                  </div>
+                  <p className="text-sm font-bold text-white truncate max-w-full">
+                    {mediaFile?.name || 'Audio Vibe'}
+                  </p>
+                  <audio src={capturedPreview} controls className="w-full max-w-xs" />
+                </div>
+              ) : (
+                <LazyImage
+                  src={capturedPreview}
+                  alt="Vibe capture preview"
+                  className="w-full h-full object-cover"
+                />
+              )
+            ) : isTextMode ? (
+              <div className="w-full h-full flex flex-col items-center justify-center px-8 text-center">
+                <textarea
+                  aria-label="Text Vibe content"
+                  value={storyText}
+                  onChange={(e) => setStoryText(e.target.value)}
+                  placeholder="Write your Vibe..."
+                  rows={4}
+                  maxLength={280}
+                  className="w-full bg-transparent text-center text-2xl sm:text-3xl font-extrabold text-white placeholder:text-white/50 outline-none resize-none leading-snug"
+                />
+                <span className="text-[11px] font-medium text-white/60 mt-2">
+                  {storyText.length} / 280
+                </span>
+              </div>
+            ) : cameraActive ? (
               <video
                 ref={videoRef}
                 playsInline
                 muted
+                style={liveVideoZoomStyle}
                 className="w-full h-full object-cover"
               />
             ) : (
-              capturedPreview ? (
-                <LazyImage
-                  src={capturedPreview}
-                  alt="Story capture preview"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#141730] to-[#0c0f24]">
-                  <p className="text-white/40 text-sm font-medium">
-                    Camera preview unavailable - enable camera access or pick from gallery
-                  </p>
+              <div className="w-full h-full flex flex-col items-center justify-center px-6 text-center bg-[#0c0f24] gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center">
+                  <ImageIcon className="w-7 h-7 text-white/70" aria-hidden="true" />
                 </div>
-              )
+                <p className="text-white/70 text-sm font-medium max-w-xs">
+                  Camera unavailable in this browser. Pick a photo, video, or audio clip from Gallery, or switch to TEXT mode.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-white cursor-pointer"
+                  style={{ background: BRAND_GRADIENT }}
+                >
+                  Choose Media
+                </button>
+              </div>
             )}
 
-            {/* Overlaid Atmosphere Gradient */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
 
-            {/* Active Text Overlay if typed */}
-            {storyText && (
+            {/* Overlay Text Caption when in Media mode */}
+            {!isTextMode && storyText && (
               <div className="absolute inset-0 flex items-center justify-center p-8 z-10 pointer-events-none">
-                <p className="text-3xl font-extrabold text-white text-center font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]">
+                <p className="text-2xl sm:text-3xl font-extrabold text-white text-center font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]">
                   {storyText}
                 </p>
               </div>
             )}
 
-            {/* Active Poll Overlay if enabled */}
+            {/* Sticker Preview Chips on Canvas */}
+            <div className="absolute top-20 left-4 right-4 z-10 flex flex-wrap gap-2 pointer-events-none">
+              {selectedMusic && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <Music className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span className="truncate max-w-[160px]">{selectedMusic.title}</span>
+                </span>
+              )}
+              {storyLocation.trim() && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{storyLocation.trim()}</span>
+                </span>
+              )}
+              {mentionHandle.trim() && (
+                <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                  <span>@{mentionHandle.trim().replace(/^@/, '')}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Active Poll Tool */}
             {activeTool === 'poll' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input aria-label="Ask a question..."
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Poll Sticker</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close poll editor"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  aria-label="Poll question"
                   type="text"
                   value={pollQuestion}
                   onChange={(e) => setPollQuestion(e.target.value)}
                   placeholder="Ask a question..."
-                  className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 mb-3 outline-none text-center"
+                  className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
                 />
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={pollOption1}
-                    onChange={(e) => setPollOption1(e.target.value)}
-                    placeholder="Option 1"
-                    aria-label="Poll option 1"
-                    className="w-full p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10 outline-none focus:border-white/40"
-                  />
-                  <input
-                    type="text"
-                    value={pollOption2}
-                    onChange={(e) => setPollOption2(e.target.value)}
-                    placeholder="Option 2"
-                    aria-label="Poll option 2"
-                    className="w-full p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10 outline-none focus:border-white/40"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={pollOption1}
+                  onChange={(e) => setPollOption1(e.target.value)}
+                  placeholder="Option 1"
+                  aria-label="Poll option 1"
+                  className="w-full p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10 outline-none focus:border-white/40"
+                />
+                <input
+                  type="text"
+                  value={pollOption2}
+                  onChange={(e) => setPollOption2(e.target.value)}
+                  placeholder="Option 2"
+                  aria-label="Poll option 2"
+                  className="w-full p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10 outline-none focus:border-white/40"
+                />
               </div>
             )}
 
             {/* Active Music Picker */}
             {activeTool === 'music' && (
-              <div className="absolute bottom-24 inset-x-4 z-20 p-3 rounded-3xl bg-black/70 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+              <div className="absolute bottom-28 inset-x-4 z-20 p-3 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
                 <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300">
-                    Music
-                  </span>
-                  {selectedMusic && (
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/80">Soundtrack</span>
+                  <div className="flex items-center gap-2">
+                    {selectedMusic && (
+                      <button type="button" onClick={() => setSelectedMusic(null)} className="text-xs text-white/70 hover:text-white">
+                        Clear
+                      </button>
+                    )}
                     <button
-                      onClick={() => setSelectedMusic(null)}
-                      className="text-[11px] text-white/60 hover:text-white"
+                      type="button"
+                      onClick={() => setActiveTool(null)}
+                      aria-label="Close music picker"
+                      className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center"
                     >
-                      Clear
+                      <X className="w-4 h-4" />
                     </button>
-                  )}
+                  </div>
                 </div>
                 {musicLoading ? (
                   <p className="text-xs text-white/60 px-1 py-2">Loading tracks…</p>
                 ) : musicError ? (
-                  <p className="text-xs text-red-400 px-1 py-2">
-                    {musicError}
-                  </p>
+                  <p className="text-xs text-red-400 px-1 py-2">{musicError}</p>
                 ) : musicTracks.length === 0 ? (
-                  <p className="text-xs text-white/60 px-1 py-2">
-                    No tracks available yet.
-                  </p>
+                  <p className="text-xs text-white/60 px-1 py-2">No tracks available yet.</p>
                 ) : (
                   <div className="max-h-40 overflow-y-auto space-y-1">
                     {musicTracks.slice(0, 20).map((track) => (
                       <button
+                        type="button"
                         key={track.id}
-                        onClick={() => setSelectedMusic(track)}
+                        onClick={() => { setSelectedMusic(track); setActiveTool(null); }}
                         className={cn(
-                          "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs transition-colors",
+                          "w-full min-h-[40px] flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs transition-colors",
                           selectedMusic?.id === track.id
-                            ? "bg-violet-600/60 text-white"
+                            ? "text-white font-semibold"
                             : "text-white/80 hover:bg-white/10"
                         )}
+                        style={selectedMusic?.id === track.id ? { background: BRAND_GRADIENT } : undefined}
                       >
-                        <Music className="w-3.5 h-3.5 flex-shrink-0" />
+                        <Music className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                         <span className="truncate">
                           {track.title || 'Untitled'}
                           {track.artist ? ` — ${track.artist}` : ''}
@@ -519,13 +744,25 @@ export default function CreateStory() {
             )}
 
             {/* Text tool */}
-            {activeTool === 'text' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input aria-label="Type your text…"
+            {activeTool === 'text' && !isTextMode && (
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Caption Overlay</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close text tool"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  aria-label="Overlay text"
                   type="text"
                   value={storyText}
                   onChange={(e) => setStoryText(e.target.value)}
-                  placeholder="Type your text…"
+                  placeholder="Type caption overlay..."
                   className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
                 />
               </div>
@@ -533,9 +770,9 @@ export default function CreateStory() {
 
             {/* GIF / Stickers */}
             {(activeTool === 'gif' || activeTool === 'stickers') && (
-              <div className="absolute bottom-24 inset-x-4 z-20">
+              <div className="absolute bottom-28 inset-x-4 z-20">
                 <GIFPicker
-                  onSelect={(url, gif) => setSelectedGif({ url, title: gif?.title || 'GIF' })}
+                  onSelect={(url, gif) => { setSelectedGif({ url, title: gif?.title || 'GIF' }); setActiveTool(null); }}
                   onClose={() => setActiveTool(null)}
                 />
               </div>
@@ -543,35 +780,49 @@ export default function CreateStory() {
 
             {/* Link sticker */}
             {activeTool === 'link' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input aria-label="https://…"
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Link Sticker</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close link editor"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  aria-label="Link URL"
                   type="url"
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
                   placeholder="https://…"
                   className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none"
                 />
-                {linkUrl.trim() && (
-                  <a
-                    href={linkUrl.trim()}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block mt-3 px-3 py-2 rounded-full bg-white text-black text-xs font-bold text-center"
-                  >
-                    Link preview
-                  </a>
-                )}
               </div>
             )}
 
             {/* Location sticker */}
             {activeTool === 'location' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input aria-label="Add a location"
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Location Sticker</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close location editor"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  aria-label="Add a location"
                   type="text"
                   value={storyLocation}
                   onChange={(e) => setStoryLocation(e.target.value)}
-                  placeholder="Add a location"
+                  placeholder="City, venue, or landmark"
                   className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
                 />
               </div>
@@ -579,8 +830,20 @@ export default function CreateStory() {
 
             {/* Mention sticker */}
             {activeTool === 'mention' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input aria-label="@username"
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Mention Creator</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close mention editor"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  aria-label="Mention username"
                   type="text"
                   value={mentionHandle}
                   onChange={(e) => setMentionHandle(e.target.value)}
@@ -590,30 +853,54 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Question sticker */}
+            {/* Q&A Question sticker (dedicated state, isolated from poll) */}
             {activeTool === 'question' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
-                <input aria-label="Ask me a question…"
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Q&amp;A Sticker</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close Q&A editor"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  aria-label="Ask me a question"
                   type="text"
-                  value={pollQuestion}
-                  onChange={(e) => setPollQuestion(e.target.value)}
-                  placeholder="Ask me a question…"
+                  value={questionPrompt}
+                  onChange={(e) => setQuestionPrompt(e.target.value)}
+                  placeholder="Ask me anything…"
                   className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
                 />
               </div>
             )}
 
-            {/* Timer sticker */}
+            {/* Countdown Timer sticker */}
             {activeTool === 'timer' && (
-              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Countdown Sticker</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    aria-label="Close countdown editor"
+                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
                 <div className="flex items-center justify-center gap-2">
-                  <Timer className="w-4 h-4 text-violet-300" />
-                  <input aria-label="Timer duration in seconds"
+                  <Timer className="w-4 h-4 text-white/70" aria-hidden="true" />
+                  <input
+                    aria-label="Countdown duration in seconds"
                     type="number"
                     min="0"
                     max="86400"
                     value={storyTimer}
-                    onChange={(e) => setStoryTimer(Number(e.target.value) || 0)}
+                    onChange={(e) => setStoryTimer(Math.max(0, Math.min(86400, Number(e.target.value) || 0)))}
                     className="w-24 text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
                   />
                   <span className="text-xs text-white/70">seconds</span>
@@ -623,103 +910,92 @@ export default function CreateStory() {
 
             {/* Selected GIF preview */}
             {selectedGif && (
-              <div className="absolute top-20 right-4 z-10 w-24 rounded-2xl overflow-hidden border-2 border-white/40">
+              <div className="absolute top-20 right-4 z-10 w-24 rounded-2xl overflow-hidden border border-white/40 bg-black/60">
                 <LazyImage src={selectedGif.url} alt={selectedGif.title} className="w-full h-auto" />
                 <button
+                  type="button"
                   onClick={() => setSelectedGif(null)}
-                  className="w-full py-1 bg-black/70 text-white text-[10px] font-bold"
+                  className="w-full py-1 bg-black/75 text-white text-[10px] font-bold"
                 >
                   Remove
                 </button>
               </div>
             )}
 
-            {/* Recording Indicator */}
+            {/* Recording Timer Pill */}
             {isRecording && (
-              <div className="absolute top-16 left-6 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-600 text-white text-xs font-bold animate-pulse">
+              <div className="absolute top-16 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold shadow-lg">
                 <span className="w-2.5 h-2.5 rounded-full bg-white" />
-                <span>00:{recordSeconds.toString().padStart(2, '0')}</span>
+                <span className="tabular-nums">00:{recordSeconds.toString().padStart(2, '0')}</span>
               </div>
             )}
           </div>
 
-          {/* In-Camera Top Controls */}
-          <div className="relative z-20 pt-10 px-5 flex items-center justify-between">
+          {/* Top Studio Bar */}
+          <div className="relative z-20 pt-4 px-4 flex items-center justify-between">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
+              aria-label="Close Vibes studio"
+              className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5 text-white" />
             </button>
 
-            <div className="flex items-center gap-3">
-              {/* Flash */}
+            <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleToggleFlash}
-                aria-label={`Flash: ${flashMode}`}
-                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
+                aria-label={`Flash mode: ${flashMode}`}
+                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer"
               >
                 <Zap className={cn("w-4 h-4", flashMode === 'on' ? "text-amber-400" : "text-white")} />
               </button>
 
-              {/* Flip */}
               <button
+                type="button"
                 onClick={handleFlipCamera}
-                aria-label="Flip camera"
-                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
+                aria-label="Switch camera"
+                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4 text-white" />
               </button>
 
-              {/* Settings */}
               <button
+                type="button"
                 onClick={() => setToolsExpanded((prev) => !prev)}
-                aria-label="Toggle camera tools"
-                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
+                aria-label="Toggle studio tools"
+                aria-expanded={toolsExpanded}
+                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer lg:hidden"
               >
                 <Sliders className="w-4 h-4 text-white" />
               </button>
             </div>
           </div>
 
-          {/* Left Arrow Creative Tools Pill Trigger */}
-          <div className="relative z-20 px-3 flex items-center">
-            <button
-              onClick={() => setToolsExpanded(!toolsExpanded)}
-              aria-label="Toggle creative tools"
-              aria-expanded={toolsExpanded}
-              className="p-2 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-colors lg:hidden"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Mobile Creative Tools Drawer — the desktop tool column is
-              `hidden lg:flex`, so on small screens there was no way to pick a
-              creative tool at all. This surfaces the same CREATIVE_TOOLS list
-              behind the toggle. */}
+          {/* Mobile Creative Tools Strip */}
           {toolsExpanded && (
-            <div className="relative z-20 px-3 lg:hidden">
-              <div className="bg-white/[0.06] border border-white/10 rounded-3xl p-2 backdrop-blur-xl shadow-2xl">
-                <div className="grid grid-cols-3 gap-1">
+            <div className="relative z-20 px-4 lg:hidden">
+              <div className="bg-black/55 border border-white/15 rounded-2xl p-2 backdrop-blur-xl">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                   {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
                     const Icon = tool.icon;
                     const isSelected = activeTool === tool.id;
                     return (
                       <button
+                        type="button"
                         key={tool.id}
                         onClick={() => {
                           setActiveTool(isSelected ? null : tool.id);
                           if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
                         }}
                         className={cn(
-                          "flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl text-[10px] font-semibold transition-all duration-200",
-                          isSelected
-                            ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                          "min-h-[40px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors",
+                          isSelected ? "text-white" : "text-white/80 hover:bg-white/10"
                         )}
+                        style={isSelected ? { background: BRAND_GRADIENT } : undefined}
                       >
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>{tool.label}</span>
                       </button>
                     );
@@ -729,101 +1005,137 @@ export default function CreateStory() {
             </div>
           )}
 
-          {/* Bottom Viewfinder Controls */}
-          <div className="relative z-20 pb-6 px-5 space-y-4">
-            
-            {/* Zoom Selector 0.5x, 1x, 2x */}
-            <div className="flex items-center justify-center gap-3">
-              {['0.5', '1x', '2'].map((z) => (
-                <button
-                  key={z}
-                  onClick={() => setZoomLevel(z)}
-                  className={cn(
-                    "w-8 h-8 rounded-full text-[11px] font-bold transition-all flex items-center justify-center backdrop-blur-md",
-                    zoomLevel === z
-                      ? "bg-white text-black ring-2 ring-violet-500 scale-110 shadow-lg"
-                      : "bg-black/40 text-white/80 hover:bg-black/60 border border-white/10"
-                  )}
-                >
-                  {z}
-                </button>
-              ))}
-            </div>
+          {/* Bottom Controls */}
+          <div className="relative z-20 pb-5 px-4 space-y-3">
+            {/* Background swatches in Text / Audio modes */}
+            {(isTextMode || mediaType === 'audio') && (
+              <div className="flex items-center justify-center gap-2">
+                {STORY_GRADIENTS.map((g) => (
+                  <button
+                    type="button"
+                    key={g.id}
+                    aria-label={`Select ${g.label} background`}
+                    onClick={() => setBackgroundGradient(g.gradient)}
+                    className={cn(
+                      "w-8 h-8 rounded-full border-2 transition-transform cursor-pointer",
+                      backgroundGradient === g.gradient ? "border-white scale-110" : "border-white/30"
+                    )}
+                    style={{ background: g.gradient }}
+                  />
+                ))}
+              </div>
+            )}
 
-            {/* Shutter Bar with Gallery & Flip */}
+            {/* Zoom Selector for Live Camera */}
+            {!capturedPreview && !isTextMode && activeMode !== 'AUDIO' && (
+              <div className="flex items-center justify-center gap-2">
+                {['0.5', '1x', '2'].map((z) => (
+                  <button
+                    type="button"
+                    key={z}
+                    onClick={() => setZoomLevel(z)}
+                    className={cn(
+                      "min-w-[36px] min-h-[36px] rounded-full text-[11px] font-bold transition-all flex items-center justify-center backdrop-blur-md cursor-pointer",
+                      zoomLevel === z
+                        ? "bg-white text-black scale-105 shadow-lg"
+                        : "bg-black/50 text-white/80 hover:bg-black/70 border border-white/15"
+                    )}
+                  >
+                    {z}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Shutter / Gallery Row */}
             <div className="flex items-center justify-between px-2">
-              {/* Gallery Thumbnail */}
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center gap-1 group"
+                aria-label="Open media gallery"
+                className="flex flex-col items-center gap-1 cursor-pointer"
               >
-                <div className="w-12 h-12 rounded-2xl overflow-hidden ring-2 ring-white/30 group-hover:ring-violet-400 transition-all flex items-center justify-center bg-white/10">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="m21 15-5-5L5 21" />
-                  </svg>
+                <div className="w-11 h-11 rounded-2xl border border-white/25 bg-black/50 backdrop-blur-md flex items-center justify-center hover:border-white/50 transition-colors">
+                  <ImageIcon className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
-                <span className="text-[10px] font-bold text-white/80">Gallery</span>
+                <span className="text-[10px] font-semibold text-white/80">Gallery</span>
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,audio/*"
                 onChange={handleFilePicked}
                 className="hidden"
               />
 
-              {/* Shutter Button (Glowing Halo) */}
-              <div className="relative flex items-center justify-center">
-                <div className="absolute w-24 h-24 rounded-full bg-arvdoul-gradient opacity-60 blur-md animate-pulse" />
+              {!isTextMode && (
                 <button
-                  onClick={handleShutterTap}
-                  onMouseDown={handleShutterMouseDown}
-                  onMouseUp={handleShutterMouseUp}
-                  onTouchStart={handleShutterMouseDown}
-                  onTouchEnd={handleShutterMouseUp}
-                  className="relative w-20 h-20 rounded-full bg-white p-1.5 shadow-[0_0_25px_rgba(255,255,255,0.8)] active:scale-95 transition-transform"
+                  type="button"
+                  onClick={handleShutterClick}
+                  onMouseDown={handleShutterHoldStart}
+                  onMouseUp={handleShutterHoldEnd}
+                  onTouchStart={handleShutterHoldStart}
+                  onTouchEnd={handleShutterHoldEnd}
+                  aria-label={
+                    capturedPreview
+                      ? 'Discard capture and retake'
+                      : isRecording
+                        ? 'Stop video recording'
+                        : activeMode === 'VIDEO'
+                          ? 'Start video recording'
+                          : 'Capture Vibe'
+                  }
+                  className="relative w-18 h-18 rounded-full p-1.5 shadow-xl active:scale-95 transition-transform cursor-pointer"
+                  style={{ background: isRecording ? '#E11D48' : BRAND_GRADIENT }}
                 >
-                  <div className="w-full h-full rounded-full border-4 border-black/10 bg-white flex items-center justify-center">
+                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
                     {capturedPreview ? (
-                      <Check className="w-8 h-8 text-violet-600" />
+                      <Check className="w-7 h-7 text-slate-900" aria-hidden="true" />
+                    ) : isRecording ? (
+                      <Square className="w-6 h-6 text-rose-600 fill-rose-600" aria-hidden="true" />
+                    ) : activeMode === 'VIDEO' ? (
+                      <Video className="w-6 h-6 text-rose-600" aria-hidden="true" />
+                    ) : activeMode === 'AUDIO' ? (
+                      <Mic className="w-6 h-6 text-slate-900" aria-hidden="true" />
                     ) : (
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-violet-100 to-white" />
+                      <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-300" />
                     )}
                   </div>
                 </button>
-              </div>
+              )}
 
-              {/* Flip Button */}
               <button
+                type="button"
                 onClick={handleFlipCamera}
-                className="flex flex-col items-center gap-1 group"
+                aria-label="Flip camera orientation"
+                className="flex flex-col items-center gap-1 cursor-pointer"
               >
-                <div className="w-12 h-12 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center group-hover:bg-black/60 transition-all">
-                  <RefreshCw className="w-5 h-5 text-white group-hover:rotate-180 transition-transform duration-500" />
+                <div className="w-11 h-11 rounded-2xl bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors">
+                  <RefreshCw className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
-                <span className="text-[10px] font-bold text-white/80">Flip</span>
+                <span className="text-[10px] font-semibold text-white/80">Flip</span>
               </button>
             </div>
 
-            {/* Modes Selector Carousel (STORY, TEXT, PHOTO, VIDEO, LAYOUT) */}
-            <div className="flex items-center justify-center gap-4 overflow-x-auto no-scrollbar pt-2">
+            {/* Capture Mode Selector */}
+            <div className="flex items-center justify-center gap-2 overflow-x-auto no-scrollbar pt-1">
               {CAPTURE_MODES.map((mode) => {
                 const isActive = activeMode === mode;
                 return (
                   <button
+                    type="button"
                     key={mode}
                     onClick={() => {
                       setActiveMode(mode);
-                      if (mode === 'TEXT') setStoryText('Write your thought...');
+                      if (mode === 'AUDIO' && !mediaFile) {
+                        fileInputRef.current?.click();
+                      }
                     }}
                     className={cn(
-                      "px-3.5 py-1.5 rounded-full text-xs font-black tracking-wider uppercase transition-all whitespace-nowrap",
-                      isActive
-                        ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/30 scale-105"
-                        : "text-white/60 hover:text-white"
+                      "px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all whitespace-nowrap cursor-pointer",
+                      isActive ? "text-white shadow-md" : "text-white/60 hover:text-white"
                     )}
+                    style={isActive ? { background: BRAND_GRADIENT } : undefined}
                   >
                     {mode}
                   </button>
@@ -831,176 +1143,115 @@ export default function CreateStory() {
               })}
             </div>
 
-            {/* If Preview Captured, show Publish / Share button */}
-            {capturedPreview && (
-              <div className="pt-2 space-y-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-white/60 mb-1.5">Who can see this Vibe</p>
-                  <div role="radiogroup" aria-label="Story audience" className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'public', label: 'Everyone', icon: Globe },
-                      { id: 'followers', label: 'Followers', icon: Users },
-                      { id: 'private', label: 'Only me', icon: Lock },
-                    ].map((opt) => {
-                      const Icon = opt.icon;
-                      const isActive = audience === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={isActive}
-                          onClick={() => setAudience(opt.id)}
-                          className={cn(
-                            'flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold border transition',
-                            isActive
-                              ? 'bg-white/15 border-white/40 text-white'
-                              : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                          )}
-                        >
-                          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+            {/* Audience + Publish CTA */}
+            {canPublish && (
+              <div className="pt-2 space-y-2.5">
+                <div role="radiogroup" aria-label="Vibe audience" className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'public', label: 'Everyone', icon: Globe },
+                    { id: 'followers', label: 'Followers', icon: Users },
+                    { id: 'private', label: 'Only me', icon: Lock },
+                  ].map((opt) => {
+                    const Icon = opt.icon;
+                    const isActive = audience === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={isActive}
+                        onClick={() => setAudience(opt.id)}
+                        className={cn(
+                          'min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl py-1.5 text-xs font-bold border transition cursor-pointer',
+                          isActive
+                            ? 'bg-white/20 border-white/50 text-white'
+                            : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                        )}
+                      >
+                        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
                 <button
+                  type="button"
                   onClick={handlePublishStory}
                   disabled={publishing}
-                  className="w-full py-3 rounded-2xl bg-arvdoul-gradient text-white font-extrabold text-sm shadow-arvdoul-glow flex items-center justify-center gap-2 active:scale-98 transition-transform disabled:opacity-50"
+                  className="w-full min-h-[46px] py-3 rounded-2xl text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50 cursor-pointer"
+                  style={{ background: BRAND_GRADIENT }}
                 >
                   {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {publishing ? 'Sharing Story...' : 'Share to Your Story 🌟'}
+                  {publishing ? 'Publishing Vibe…' : 'Publish Vibe'}
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Top Controls Breakdown, Capture Modes, Tips, Drafts */}
-        <div className="hidden lg:flex flex-col justify-between h-[820px] w-80 py-4">
+        {/* Right Column: Desktop Guide & Gradient Presets */}
+        <div className="hidden lg:flex flex-col justify-between h-[780px] w-80 py-2">
           <div className="space-y-6">
-            {/* Top Controls Guide */}
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-400 block mb-3">
-                Top Controls
-              </span>
-              <div className="space-y-2.5 text-xs text-white/80">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <X className="w-3.5 h-3.5 text-white/70" />
-                  </div>
-                  <span>Close</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  </div>
-                  <span>Flash (Auto / On / Off)</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-                  </div>
-                  <span>Switch Camera</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <Sliders className="w-3.5 h-3.5 text-pink-400" />
-                  </div>
-                  <span>Settings & HDR Presets</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Capture Modes List */}
-            <div>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-400 block mb-3">
-                Capture Modes
+              <span className="text-[11px] font-bold uppercase tracking-widest text-white/50 block mb-3">
+                Modes
               </span>
               <div className="space-y-1.5">
-                {[
-                  { mode: 'Story', active: activeMode === 'STORY' },
-                  { mode: 'Text', active: activeMode === 'TEXT' },
-                  { mode: 'Photo', active: activeMode === 'PHOTO' },
-                  { mode: 'Video', active: activeMode === 'VIDEO' },
-                  { mode: 'Layout', active: activeMode === 'LAYOUT' },
-                ].map((m) => (
-                  <button
-                    key={m.mode}
-                    onClick={() => setActiveMode(m.mode.toUpperCase())}
-                    className={cn(
-                      "w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between",
-                      m.active
-                        ? "bg-violet-600/20 text-violet-300 border border-violet-500/30"
-                        : "text-white/60 hover:bg-white/5 hover:text-white"
-                    )}
-                  >
-                    <span>{m.mode}</span>
-                    {m.active && <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />}
-                  </button>
-                ))}
+                {CAPTURE_MODES.map((mode) => {
+                  const active = activeMode === mode;
+                  return (
+                    <button
+                      type="button"
+                      key={mode}
+                      onClick={() => setActiveMode(mode)}
+                      className={cn(
+                        "w-full min-h-[40px] text-left px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border",
+                        active
+                          ? "bg-white/15 text-white border-white/30"
+                          : "text-white/60 border-transparent hover:bg-white/5 hover:text-white"
+                      )}
+                    >
+                      <span>{mode}</span>
+                      {active && <span className="w-2 h-2 rounded-full bg-white" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Tips Card */}
-            <div className="p-4 rounded-3xl bg-white/[0.04] border border-white/10 space-y-2 text-xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-violet-400 block">
-                Tips
+            <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 space-y-2 text-xs text-white/75">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/60 block">
+                Studio Guide
               </span>
-              <p className="text-white/70 flex items-center gap-2">
-                <span className="w-3.5 h-3.5 rounded-full border border-white/40 flex-shrink-0" />
-                Tap for photo
-              </p>
-              <p className="text-white/70 flex items-center gap-2">
-                <span className="w-3.5 h-3.5 rounded-full border border-dashed border-violet-400 flex-shrink-0" />
-                Hold for video
-              </p>
-              <p className="text-white/70 flex items-center gap-2">
-                <span className="w-3.5 h-3.5 rounded-full bg-violet-500/20 text-violet-300 flex items-center justify-center text-[9px] flex-shrink-0">↑</span>
-                Swipe up for editor
-              </p>
+              <p>Tap shutter for photo, or hold in Story mode for video.</p>
+              <p>Switch to TEXT mode for typography cards with custom gradients.</p>
+              <p>Add interactive Poll, Q&amp;A, Countdown, Mention, or Link stickers before publishing.</p>
             </div>
           </div>
 
-          {/* Bottom Drafts Strip */}
-          <div className="p-4 rounded-3xl bg-white/[0.04] border border-white/10 space-y-3">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="flex items-center gap-1.5 text-violet-300">
-                <Sparkles className="w-3.5 h-3.5" />
-                BACKGROUNDS
-              </span>
-              <span className="text-[10px] text-white/50">Backgrounds</span>
-            </div>
-            <p className="text-[11px] text-arvdoul-text-secondary">
-              Tap a gradient to use it as your story background.
-            </p>
+          <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 space-y-3">
+            <span className="text-xs font-bold text-white/80 block">Canvas Gradients</span>
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
               {STORY_GRADIENTS.map((d) => (
-                <div
+                <button
+                  type="button"
                   key={d.id}
                   onClick={() => {
-                    // Apply the gradient template as the story background
                     setBackgroundGradient(d.gradient);
-                    toast.success(`${d.label} background applied`);
+                    if (activeMode !== 'TEXT' && !mediaFile) setActiveMode('TEXT');
+                    toast.success(`${d.label} gradient applied`);
                   }}
-                  className="w-11 h-14 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-400 transition-all flex-shrink-0"
+                  aria-label={`Apply ${d.label} gradient`}
+                  className={cn(
+                    "w-11 h-14 rounded-xl border-2 transition-all flex-shrink-0 cursor-pointer",
+                    backgroundGradient === d.gradient ? "border-white scale-105" : "border-white/20 hover:border-white/50"
+                  )}
                   style={{ background: d.gradient }}
-                  role="button"
-                  aria-label={`Apply ${d.label} background`}
                 />
               ))}
-              <button
-                onClick={() => navigate('/stories')}
-                className="w-7 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:bg-white/10 flex-shrink-0"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

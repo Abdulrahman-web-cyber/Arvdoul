@@ -119,6 +119,19 @@ class AIStudioService {
     }
   }
 
+  async _buildGatewayHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const fb = await import('../firebase/firebase.js');
+      const auth = await fb.getAuthInstance?.();
+      const token = await auth?.currentUser?.getIdToken?.();
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch {
+      // Unauthenticated requests are rejected cleanly by the gateway
+    }
+    return headers;
+  }
+
   /**
    * Executing chat completion with budget enforcement, caching, and fallback.
    * @private
@@ -148,9 +161,10 @@ class AIStudioService {
     }
 
     const executeRequest = async () => {
+      const headers = await this._buildGatewayHeaders();
       const response = await fetch(gatewayUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ prompt, systemPrompt, capability: 'chat' }),
         credentials: 'include',
       });
@@ -379,9 +393,10 @@ class AIStudioService {
     if (isJest || !text?.trim()) return null;
 
     try {
+      const headers = await this._buildGatewayHeaders();
       const response = await fetch('/api/ai/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ text: text.trim(), voiceName, style, multiSpeaker, dialogue }),
         credentials: 'include',
       });
@@ -415,9 +430,10 @@ class AIStudioService {
     if (isJest || !audioBase64) return null;
 
     try {
+      const headers = await this._buildGatewayHeaders();
       const response = await fetch('/api/ai/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ audioBase64, mimeType, instruction }),
         credentials: 'include',
       });

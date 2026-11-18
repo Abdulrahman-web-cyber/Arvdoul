@@ -83,14 +83,11 @@ export default function PreviewCanvas({
     }
   };
 
-  // Keyboard shortcut for Play/Pause (Space)
+  // Keyboard shortcuts for frame stepping (Space is handled by VideoEditorScreen)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.code === 'Space') {
-        e.preventDefault();
-        onTogglePlay?.();
-      } else if (e.code === 'ArrowLeft') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (e.code === 'ArrowLeft') {
         e.preventDefault();
         onStepFrame?.(-1);
       } else if (e.code === 'ArrowRight') {
@@ -100,23 +97,31 @@ export default function PreviewCanvas({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onTogglePlay, onStepFrame]);
+  }, [onStepFrame]);
 
-  // Find active visible clips at current time
+  // Respect track & per-clip visibility
+  const hiddenTrackIds = new Set((tracks || []).filter((t) => t.visible === false).map((t) => t.id));
+  const isClipActive = (c) =>
+    c &&
+    c.visible !== false &&
+    !hiddenTrackIds.has(c.trackId) &&
+    currentTime >= c.startTime &&
+    currentTime <= (c.startTime + (c.duration || 0));
+
   const activeVideoClip = Object.values(clips).find(
-    (c) => c.type === 'video' && currentTime >= c.startTime && currentTime <= (c.startTime + c.duration)
+    (c) => (c.type === 'video' || (!c.type && c.trackId === 'track-video')) && isClipActive(c)
   );
 
   const activeOverlayClip = Object.values(clips).find(
-    (c) => c.type === 'overlay' && currentTime >= c.startTime && currentTime <= (c.startTime + c.duration)
+    (c) => c.type === 'overlay' && isClipActive(c)
   );
 
   const activeTextClips = Object.values(clips).filter(
-    (c) => c.type === 'text' && currentTime >= c.startTime && currentTime <= (c.startTime + c.duration)
+    (c) => (c.type === 'text' || (!c.type && c.trackId === 'track-text')) && isClipActive(c)
   );
 
   const activeStickers = Object.values(clips).filter(
-    (c) => c.type === 'sticker' && currentTime >= c.startTime && currentTime <= (c.startTime + c.duration)
+    (c) => (c.type === 'sticker' || (!c.type && c.trackId === 'track-stickers')) && isClipActive(c)
   );
 
   // Aspect ratio styling
@@ -363,7 +368,7 @@ export default function PreviewCanvas({
                 <Volume2 className="w-4 h-4" />
               )}
             </button>
-            <input aria-label=") : ("
+            <input aria-label="Preview volume"
               type="range"
               min="0"
               max="1"

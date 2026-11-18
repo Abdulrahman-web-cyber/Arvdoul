@@ -3,6 +3,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import AppBootstrap from './app/AppBootstrap.jsx';
+import { initI18n } from './i18n/index.js';
 import './styles/tailwind.css';
 
 // CRITICAL POLYFILL: window.matchMedia
@@ -85,9 +86,7 @@ const root = createRoot(rootElement);
 // Internationalization: resolves the browser language + RTL direction.
 // Non-blocking - the app renders immediately with the fallback locale and
 // re-renders once i18n is ready (react-i18next handles the re-render).
-import('./i18n/index.js')
-  .then(({ initI18n }) => initI18n())
-  .catch((err) => console.warn('⚠️ i18n init failed (fallback: English):', err.message));
+initI18n().catch((err) => console.warn('⚠️ i18n init failed (fallback: English):', err.message));
 
 // Remove the temporary loading spinner immediately when React starts rendering
 const removeLoadingSpinner = () => {

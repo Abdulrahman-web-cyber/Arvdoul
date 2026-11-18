@@ -19,6 +19,7 @@ import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.jsx";
 import { CreatePostSkeleton } from "../components/UI/SkeletonLoaders.jsx";
 import { callFunction, FUNCTIONS } from "../services/callableService.js";
+import { usePrompt } from "../components/Shared/ConfirmProvider.jsx";
 
 // Lazy‑loaded editors
 const CreateText = lazy(() => import("./CreatePost/CreateText"));
@@ -548,7 +549,16 @@ function reducer(state, action) {
         if (draft.mediaItems.length + newItems.length > MEDIA_LIMITS.maxTotalMediaCount) { toast.error(`Maximum ${MEDIA_LIMITS.maxTotalMediaCount} media items`); return; }
         draft.mediaItems.push(...newItems); draft.isDirty = true; pushHistory = true; break;
       }
-      case "UPDATE_MEDIA_ITEM": { const idx = draft.mediaItems.findIndex(m => m.id === action.payload.id); if (idx !== -1) { draft.mediaItems[idx] = { ...draft.mediaItems[idx], ...action.payload.updates }; pushHistory = true; } break; }
+      case "UPDATE_MEDIA_ITEM": {
+        const idx = action.payload?.id !== undefined
+          ? draft.mediaItems.findIndex(m => m.id === action.payload.id)
+          : (typeof action.payload?.index === "number" ? action.payload.index : -1);
+        if (idx >= 0 && idx < draft.mediaItems.length) {
+          draft.mediaItems[idx] = { ...draft.mediaItems[idx], ...action.payload.updates };
+          pushHistory = true;
+        }
+        break;
+      }
       case "REMOVE_MEDIA_ITEM": draft.mediaItems.splice(action.payload, 1); draft.isDirty = true; pushHistory = true; break;
       case "REORDER_MEDIA": { const [removed] = draft.mediaItems.splice(action.payload.from, 1); draft.mediaItems.splice(action.payload.to, 0, removed); draft.isDirty = true; pushHistory = true; break; }
       case "SET_VISIBILITY": draft.visibility = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -653,6 +663,7 @@ function CreatePostProvider({ children }) {
   const communityIdParam = searchParams.get('community') || null;
   const { theme } = useTheme();
   const { user } = useAuth();
+  const promptDialog = usePrompt();
   const { setCurrentUser } = useAppStore();
   const isDark = theme === "dark";
   const prefersReducedMotion = useReducedMotion();
@@ -897,12 +908,17 @@ function CreatePostProvider({ children }) {
 
   const saveAsTemplate = useCallback(async () => {
     if (!dbRef.current || !stateRef.current.postType) return;
-    const name = prompt("Enter template name:");
-    if (!name) return;
-    const template = { id: uuidv4(), name, postType: stateRef.current.postType, data: stateRef.current, createdAt: Date.now() };
+    const name = await promptDialog({
+      title: "Save as Template",
+      message: "Enter a name for this reusable post template:",
+      placeholder: "e.g. Weekly Highlight",
+      confirmText: "Save Template",
+    });
+    if (!name || !name.trim()) return;
+    const template = { id: uuidv4(), name: name.trim(), postType: stateRef.current.postType, data: stateRef.current, createdAt: Date.now() };
     await dbRef.current.put(TEMPLATES_STORE, template);
     toast.success("Template saved");
-  }, []);
+  }, [promptDialog]);
 
   const loadTemplate = useCallback(async (templateId) => {
     if (!dbRef.current) return;

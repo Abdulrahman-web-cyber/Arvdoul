@@ -31,6 +31,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: TypeScript check
+        run: npx --no-install tsc --noEmit
+
   # ========== BUILD ==========
   build:
     name: Build Application

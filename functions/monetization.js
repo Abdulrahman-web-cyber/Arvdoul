@@ -796,21 +796,31 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     );
     if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins (some may be locked).');
 
-    const lastWithdrawalCompletedAt = userData.lastWithdrawalCompletedAt?.toMillis() || 0;
+    const lastCompletedTs = userData.lastWithdrawalCompletedAt;
+    const lastWithdrawalCompletedAt =
+      typeof lastCompletedTs?.toMillis === 'function'
+        ? lastCompletedTs.toMillis()
+        : (Number(lastCompletedTs) || 0);
     if (Date.now() - lastWithdrawalCompletedAt < WITHDRAWAL_COOLDOWN_MS) {
       throw new functions.https.HttpsError('failed-precondition', 'Please wait before requesting another withdrawal.');
     }
 
     const today = getTodayKey();
     const dailyDocRef = admin.firestore().collection('fraud_limits').doc(`wd_${uid}_${today}`);
-    await admin.firestore().runTransaction(async (t) => {
-      const snap = await t.get(dailyDocRef);
-      const count = snap.exists ? (snap.data().count || 0) : 0;
-      if (count >= MAX_DAILY_WITHDRAWAL_REQUESTS) throw new Error('DAILY_LIMIT');
-      t.set(dailyDocRef, { count: admin.firestore.FieldValue.increment(1), expireAt: new Date(Date.now() + 48 * 60 * 60 * 1000) }, { merge: true });
-    }).catch(() => {
-      throw new functions.https.HttpsError('resource-exhausted', 'Daily withdrawal request limit reached.');
-    });
+    try {
+      await admin.firestore().runTransaction(async (t) => {
+        const snap = await t.get(dailyDocRef);
+        const count = snap.exists ? (snap.data().count || 0) : 0;
+        if (count >= MAX_DAILY_WITHDRAWAL_REQUESTS) throw new Error('DAILY_LIMIT');
+        t.set(dailyDocRef, { count: admin.firestore.FieldValue.increment(1), expireAt: new Date(Date.now() + 48 * 60 * 60 * 1000) }, { merge: true });
+      });
+    } catch (err) {
+      if (err instanceof functions.https.HttpsError) throw err;
+      if (err?.message === 'DAILY_LIMIT') {
+        throw new functions.https.HttpsError('resource-exhausted', 'Daily withdrawal request limit reached.');
+      }
+      throw new functions.https.HttpsError('internal', 'Could not verify daily withdrawal limit.');
+    }
 
     const requiresReview = amount > MANUAL_REVIEW_THRESHOLD;
     const key = generateIdempotencyKey(idempotencyKey);

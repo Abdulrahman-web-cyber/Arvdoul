@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,95 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
+
+function resolveFirebaseProjectId(): string | undefined {
+  try {
+    const cfgPath = path.resolve(__dirname, 'firebase-applet-config.json');
+    if (fs.existsSync(cfgPath)) {
+      const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      if (typeof parsed?.projectId === 'string' && parsed.projectId.trim()) {
+        return parsed.projectId.trim();
+      }
+    }
+  } catch {
+    // Fall back to environment variables
+  }
+  return (
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.FIREBASE_PROJECT_ID ||
+    undefined
+  );
+}
+
+let cachedAuthVerifier: ((token: string) => Promise<string | null>) | null | undefined;
+async function verifyFirebaseIdToken(token: string): Promise<string | null> {
+  if (!token) return null;
+  if (cachedAuthVerifier === undefined) {
+    try {
+      const [{ getApps, initializeApp }, { getAuth }] = await Promise.all([
+        import('firebase-admin/app'),
+        import('firebase-admin/auth'),
+      ]);
+      const projectId = resolveFirebaseProjectId();
+      if (!getApps().length) {
+        initializeApp(projectId ? { projectId } : undefined);
+      }
+      const auth = getAuth();
+      cachedAuthVerifier = async (idToken: string) => {
+        try {
+          const decoded = await auth.verifyIdToken(idToken);
+          return decoded?.uid || null;
+        } catch {
+          return null;
+        }
+      };
+    } catch {
+      cachedAuthVerifier = null;
+    }
+  }
+  return cachedAuthVerifier ? cachedAuthVerifier(token) : null;
+}
+
+const aiRateWindows = new Map<string, { count: number; resetAt: number }>();
+const AI_RATE_LIMIT_MAX = 30;
+const AI_RATE_LIMIT_WINDOW_MS = 60_000;
+
+function checkAiRateLimit(uid: string): boolean {
+  const now = Date.now();
+  if (aiRateWindows.size > 5000) {
+    for (const [k, v] of aiRateWindows.entries()) {
+      if (now > v.resetAt) aiRateWindows.delete(k);
+    }
+  }
+  const entry = aiRateWindows.get(uid);
+  if (!entry || now > entry.resetAt) {
+    aiRateWindows.set(uid, { count: 1, resetAt: now + AI_RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= AI_RATE_LIMIT_MAX) return false;
+  entry.count += 1;
+  return true;
+}
+
+async function requireAuthenticatedUser(req: Request, res: Response): Promise<string | null> {
+  const authHeader = String(req.headers.authorization || '');
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    res.status(401).json({ error: 'Authentication required (missing Bearer ID token).', code: 'unauthenticated' });
+    return null;
+  }
+  const uid = await verifyFirebaseIdToken(token);
+  if (!uid) {
+    res.status(401).json({ error: 'Invalid or expired Firebase ID token.', code: 'unauthenticated' });
+    return null;
+  }
+  if (!checkAiRateLimit(uid)) {
+    res.status(429).json({ error: 'AI rate limit exceeded. Please try again in a minute.', code: 'resource-exhausted' });
+    return null;
+  }
+  return uid;
+}
 
 // Lazy shared Gemini client (never exposed to browser, User-Agent header set per telemetry spec)
 let aiClient: GoogleGenAI | null = null;
@@ -138,6 +228,8 @@ async function startServer() {
   // Compatible with both structured studio requests and aiStudioService._callOpenAI
   // -------------------------------------------------------------------------
   app.post('/api/ai/generate', async (req: Request, res: Response) => {
+    const uid = await requireAuthenticatedUser(req, res);
+    if (!uid) return;
     const ai = getGeminiClient();
     if (!ai) {
       res.status(503).json({
@@ -206,6 +298,8 @@ async function startServer() {
   // Gemini Audio Transcription endpoint (gemini-3.5-transcribe)
   // -------------------------------------------------------------------------
   app.post('/api/ai/transcribe', async (req: Request, res: Response) => {
+    const uid = await requireAuthenticatedUser(req, res);
+    if (!uid) return;
     const ai = getGeminiClient();
     if (!ai) {
       res.status(503).json({ error: 'Gemini server API key is not configured.' });
@@ -271,6 +365,8 @@ async function startServer() {
   // Gemini TTS Voiceover endpoint (gemini-3.8-flash-lite-tts / gemini-3.8-flash-tts)
   // -------------------------------------------------------------------------
   app.post('/api/ai/tts', async (req: Request, res: Response) => {
+    const uid = await requireAuthenticatedUser(req, res);
+    if (!uid) return;
     const ai = getGeminiClient();
     if (!ai) {
       res.status(503).json({ error: 'Gemini server API key is not configured.' });
@@ -414,34 +510,7 @@ async function startServer() {
   const SELF_MUTABLE_ROLES = new Set(['listener', 'viewer']);
   const ROOM_ID_RE = /^[A-Za-z0-9:_-]{1,140}$/;
   const MAX_ROOM_PEERS = 250;
-
-  let cachedAuthVerifier: ((token: string) => Promise<string | null>) | null | undefined;
-  async function verifyOptionalFirebaseToken(token: string): Promise<string | null> {
-    if (!token) return null;
-    if (cachedAuthVerifier === undefined) {
-      try {
-        const [{ getApps, initializeApp }, { getAuth }] = await Promise.all([
-          import('firebase-admin/app'),
-          import('firebase-admin/auth'),
-        ]);
-        if (!getApps().length) {
-          initializeApp();
-        }
-        const auth = getAuth();
-        cachedAuthVerifier = async (idToken: string) => {
-          try {
-            const decoded = await auth.verifyIdToken(idToken);
-            return decoded?.uid || null;
-          } catch {
-            return null;
-          }
-        };
-      } catch {
-        cachedAuthVerifier = null;
-      }
-    }
-    return cachedAuthVerifier ? cachedAuthVerifier(token) : null;
-  }
+  const MAX_ROOMS = 500;
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
@@ -551,14 +620,27 @@ async function startServer() {
           return;
         }
 
-        if (typeof msg.authToken === 'string' && msg.authToken.trim()) {
-          verifiedUid = await verifyOptionalFirebaseToken(msg.authToken.trim());
+        const authToken = typeof msg.authToken === 'string' ? msg.authToken.trim() : '';
+        const uid = authToken ? await verifyFirebaseIdToken(authToken) : null;
+        if (!uid) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', code: 'unauthenticated', message: 'Valid authToken is required to join a room.' }));
+            ws.close(4001, 'unauthenticated');
+          }
+          return;
         }
+        verifiedUid = uid;
 
         const requestedRole = String(msg.role || 'listener').trim().toLowerCase();
         const safeRole = ALLOWED_WS_ROLES.has(requestedRole) ? requestedRole : 'listener';
 
         if (!rooms.has(roomId)) {
+          if (rooms.size >= MAX_ROOMS) {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'error', code: 'capacity-reached', message: 'Server room capacity reached.' }));
+            }
+            return;
+          }
           rooms.set(roomId, new Map());
         }
         const room = rooms.get(roomId)!;
@@ -571,7 +653,7 @@ async function startServer() {
 
         const entry: PeerEntry = {
           peerId,
-          userId: verifiedUid || String(msg.userId || '').slice(0, 128),
+          userId: verifiedUid,
           displayName: String(msg.displayName || 'Participant').slice(0, 80),
           role: safeRole,
           ws,
@@ -612,7 +694,16 @@ async function startServer() {
         return;
       }
 
-      if (!joinedRoomId || !joinedPeerId) return;
+      if (!joinedRoomId || !joinedPeerId || !verifiedUid) return;
+
+      const {
+        fromPeerId: _ignoredFromPeer,
+        fromUserId: _ignoredFromUser,
+        senderId: _ignoredSender,
+        userId: _ignoredUser,
+        roster: _ignoredRoster,
+        ...safePayload
+      } = msg;
 
       // Direct peer-to-peer WebRTC signaling (offer / answer / ice-candidate)
       if (msg.targetPeerId && typeof msg.targetPeerId === 'string') {
@@ -621,8 +712,9 @@ async function startServer() {
         if (target && target.ws.readyState === WebSocket.OPEN) {
           target.ws.send(
             JSON.stringify({
-              ...msg,
+              ...safePayload,
               fromPeerId: joinedPeerId,
+              fromUserId: verifiedUid,
             }),
           );
         }
@@ -647,9 +739,10 @@ async function startServer() {
       broadcastToRoom(
         joinedRoomId,
         {
-          ...msg,
+          ...safePayload,
           roomId: joinedRoomId,
           fromPeerId: joinedPeerId,
+          fromUserId: verifiedUid,
           roster: getRoomRoster(joinedRoomId),
         },
         joinedPeerId,

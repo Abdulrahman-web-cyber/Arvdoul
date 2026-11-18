@@ -7,6 +7,8 @@
 //   - Multi-peer WebRTC signaling (rtc-offer / rtc-answer / rtc-ice) for Live video & Spaces audio
 //   - Ephemeral low-latency room events (live-comment, space-reaction, speaking-level)
 
+import { getAuthInstance } from '../firebase/firebase.js';
+
 const ICE_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -197,7 +199,7 @@ export function createRealtimeRoomClient() {
   };
 
   return {
-    joinRoom(roomId, { userId = '', displayName = 'Participant', role = 'listener', stream = null } = {}) {
+    async joinRoom(roomId, { userId = '', displayName = 'Participant', role = 'listener', stream = null } = {}) {
       if (typeof window === 'undefined' || typeof WebSocket === 'undefined' || !roomId) return;
 
       this.leaveRoom();
@@ -205,6 +207,15 @@ export function createRealtimeRoomClient() {
       localRole = role;
       localMediaStream = stream;
       localPeerId = `peer_${userId || 'anon'}_${Date.now().toString(36)}`;
+
+      let authToken = '';
+      try {
+        const auth = await getAuthInstance();
+        authToken = (await auth?.currentUser?.getIdToken?.()) || '';
+      } catch {
+        authToken = '';
+      }
+      if (!activeRoomId || activeRoomId !== roomId) return;
 
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const url = `${proto}//${window.location.host}/ws`;
@@ -222,6 +233,7 @@ export function createRealtimeRoomClient() {
           userId,
           displayName,
           role: localRole,
+          authToken,
         });
         pingTimer = setInterval(() => {
           sendJson({ type: 'ping' });
