@@ -19,6 +19,7 @@ import { getUserService } from '../../services/userService';
 import { pickDisplayName, pickHandle } from '../../services/profileReadModel.js';
 import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
 import { LEVEL_GATES, XP_RULES } from '../../shared/levelConfig.cjs';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const CATEGORIES = [
   'Content Creator / Artist',
@@ -149,7 +150,7 @@ export const ProfileVerificationModal = memo(({
       });
 
       if (res.success) {
-        toast.success('🎉 Application submitted successfully! Our verification council will review it.', { id: toastId });
+        toast.success('Application submitted successfully! Our verification council will review it.', { id: toastId });
         setPendingApplication({
           status: 'pending',
           category,
@@ -206,7 +207,7 @@ export const ProfileVerificationModal = memo(({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -252,7 +253,8 @@ export const ProfileVerificationModal = memo(({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
+                style={{ background: BRAND_GRADIENT }}
+                className="w-full py-2.5 min-h-[44px] rounded-xl hover:opacity-95 text-white font-bold text-xs transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
                 Close
               </button>
@@ -297,7 +299,8 @@ export const ProfileVerificationModal = memo(({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
+                    style={{ background: BRAND_GRADIENT }}
+                    className="w-full py-2.5 min-h-[44px] rounded-xl hover:opacity-95 text-white font-bold text-xs transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     Got It
                   </button>
@@ -331,8 +334,8 @@ export const ProfileVerificationModal = memo(({
                     <div className="space-y-1">
                       <div className="w-full bg-slate-200 dark:bg-white/10 h-2 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-gradient-to-r from-purple-600 to-cyan-500 rounded-full transition-all duration-500"
-                          style={{ width: `${standingProgress}%` }}
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${standingProgress}%`, background: BRAND_GRADIENT }}
                         />
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 font-medium">
@@ -350,7 +353,8 @@ export const ProfileVerificationModal = memo(({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
+                    style={{ background: BRAND_GRADIENT }}
+                    className="w-full py-2.5 min-h-[44px] rounded-xl hover:opacity-95 text-white font-bold text-xs transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     Got It
                   </button>
@@ -459,7 +463,7 @@ export const ProfileVerificationModal = memo(({
                       onClick={onClose}
                       disabled={submitting}
                       className={cn(
-                        "flex-1 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer",
+                        "flex-1 py-2.5 min-h-[44px] rounded-xl text-xs font-bold border transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                         isDark 
                           ? "border-white/10 hover:bg-white/5 text-slate-300" 
                           : "border-slate-200 hover:bg-slate-50 text-slate-700"
@@ -471,7 +475,8 @@ export const ProfileVerificationModal = memo(({
                     <button
                       type="submit"
                       disabled={submitting || !statement.trim()}
-                      className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      style={{ background: BRAND_GRADIENT }}
+                      className="flex-1 py-2.5 min-h-[44px] rounded-xl hover:opacity-95 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                     >
                       {submitting ? (
                         <>

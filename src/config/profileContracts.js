@@ -401,7 +401,11 @@ export function validateProfileUpdate(rawUpdates = {}) {
                   id: item.id || `link_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
                   title: itemTitle,
                   url: cleanUrl,
-                  icon: typeof item.icon === 'string' ? item.icon.slice(0, 30) : 'globe'
+                  icon: typeof item.icon === 'string' ? item.icon.slice(0, 30) : 'globe',
+                  ...(typeof item.platform === 'string' && item.platform.trim()
+                    ? { platform: item.platform.trim().slice(0, 30) }
+                    : {}),
+                  ...(typeof item.isPrimary === 'boolean' ? { isPrimary: item.isPrimary } : {}),
                 });
               }
             }

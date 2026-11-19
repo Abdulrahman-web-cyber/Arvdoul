@@ -18,6 +18,7 @@ const ProfileFeaturedSection = memo(({
   theme = 'dark',
   isOwner = false,
   onPostClick,
+  onViewAll,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -70,8 +71,11 @@ const ProfileFeaturedSection = memo(({
 
         <button
           type="button"
-          onClick={() => navigate(`/profile/${profile?.id || profile?.uid || 'user'}/posts`)}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer shrink-0"
+          onClick={() => {
+            if (onViewAll) onViewAll();
+            else navigate(`/profile/${profile?.id || profile?.uid || 'me'}?tab=posts`);
+          }}
+          className="min-h-[44px] px-2 -mr-2 inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer shrink-0"
         >
           <span>See all</span>
           <ChevronRight className="w-3.5 h-3.5" />

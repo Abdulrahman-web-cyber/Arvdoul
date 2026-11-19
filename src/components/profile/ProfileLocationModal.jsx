@@ -16,25 +16,26 @@ import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 // Popular curated global cities for 1-tap selection
 const POPULAR_LOCATIONS = [
-  { city: 'New York', country: 'United States', flag: '🇺🇸' },
-  { city: 'London', country: 'United Kingdom', flag: '🇬🇧' },
-  { city: 'Tokyo', country: 'Japan', flag: '🇯🇵' },
-  { city: 'Paris', country: 'France', flag: '🇫🇷' },
-  { city: 'Dubai', country: 'United Arab Emirates', flag: '🇦🇪' },
-  { city: 'Lagos', country: 'Nigeria', flag: '🇳🇬' },
-  { city: 'Toronto', country: 'Canada', flag: '🇨🇦' },
-  { city: 'Berlin', country: 'Germany', flag: '🇩🇪' },
-  { city: 'Sydney', country: 'Australia', flag: '🇦🇺' },
-  { city: 'Singapore', country: 'Singapore', flag: '🇸🇬' },
-  { city: 'São Paulo', country: 'Brazil', flag: '🇧🇷' },
-  { city: 'Seoul', country: 'South Korea', flag: '🇰🇷' },
-  { city: 'Mumbai', country: 'India', flag: '🇮🇳' },
-  { city: 'Amsterdam', country: 'Netherlands', flag: '🇳🇱' },
-  { city: 'Cairo', country: 'Egypt', flag: '🇪🇬' },
-  { city: 'Nairobi', country: 'Kenya', flag: '🇰🇪' },
+  { city: 'New York', country: 'United States', code: 'US' },
+  { city: 'London', country: 'United Kingdom', code: 'GB' },
+  { city: 'Tokyo', country: 'Japan', code: 'JP' },
+  { city: 'Paris', country: 'France', code: 'FR' },
+  { city: 'Dubai', country: 'United Arab Emirates', code: 'AE' },
+  { city: 'Lagos', country: 'Nigeria', code: 'NG' },
+  { city: 'Toronto', country: 'Canada', code: 'CA' },
+  { city: 'Berlin', country: 'Germany', code: 'DE' },
+  { city: 'Sydney', country: 'Australia', code: 'AU' },
+  { city: 'Singapore', country: 'Singapore', code: 'SG' },
+  { city: 'São Paulo', country: 'Brazil', code: 'BR' },
+  { city: 'Seoul', country: 'South Korea', code: 'KR' },
+  { city: 'Mumbai', country: 'India', code: 'IN' },
+  { city: 'Amsterdam', country: 'Netherlands', code: 'NL' },
+  { city: 'Cairo', country: 'Egypt', code: 'EG' },
+  { city: 'Nairobi', country: 'Kenya', code: 'KE' },
 ];
 
 const ProfileLocationModal = memo(({
@@ -209,7 +210,7 @@ const ProfileLocationModal = memo(({
       }
 
       toast.success(finalLocation ? `Location updated to "${finalLocation}"!` : 'Location set to private');
-      if (onLocationUpdated) onLocationUpdated(finalLocation);
+      if (onLocationUpdated) onLocationUpdated(finalLocation, privacy);
       onClose();
     } catch (err) {
       console.error('Failed to save location:', err);
@@ -245,15 +246,18 @@ const ProfileLocationModal = memo(({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+          className="absolute top-3 right-3 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Header */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/25 shrink-0">
+        <div className="flex items-center gap-3 mb-5 pr-8">
+          <div
+            style={{ background: BRAND_GRADIENT }}
+            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-arvdoul-purple/25 shrink-0"
+          >
             <MapPin className="w-6 h-6" />
           </div>
           <div>
@@ -270,14 +274,14 @@ const ProfileLocationModal = memo(({
           onClick={handleDetectGPS}
           disabled={isDetecting}
           className={cn(
-            "w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all mb-4 group text-left cursor-pointer",
+            "w-full min-h-[44px] flex items-center justify-between p-3.5 rounded-2xl border transition-all mb-4 group text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
-              ? "bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 text-purple-300"
+              ? "bg-arvdoul-purple/10 border-arvdoul-purple/30 hover:bg-arvdoul-purple/20 text-purple-300"
               : "bg-purple-50 border-purple-200 hover:bg-purple-100 text-purple-700"
           )}
         >
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/30 shrink-0">
+            <div style={{ background: BRAND_GRADIENT }} className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md shrink-0">
               {isDetecting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
@@ -287,14 +291,14 @@ const ProfileLocationModal = memo(({
             <div>
               <div className="text-xs font-bold flex items-center gap-1.5">
                 <span>Detect via GPS</span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-500 dark:text-purple-400 font-semibold">Auto</span>
+                <span className="text-[10px] font-semibold opacity-75">• Automatic</span>
               </div>
               <div className="text-[11px] opacity-80">
                 {isDetecting ? 'Determining coordinates...' : 'Use device sensor to fetch your current city'}
               </div>
             </div>
           </div>
-          <Sparkles className="w-4 h-4 text-purple-400 opacity-60 group-hover:opacity-100" />
+          <Sparkles className="w-4 h-4 text-arvdoul-purple opacity-60 group-hover:opacity-100" />
         </button>
 
         {/* 2. Manual Custom Input */}
@@ -304,23 +308,25 @@ const ProfileLocationModal = memo(({
           </label>
           <div className="relative">
             <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input aria-label="e.g., Tokyo, Japan or London, UK"
+            <input
+              aria-label="Location Name"
               type="text"
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
               placeholder="e.g., Tokyo, Japan or London, UK"
               className={cn(
-                "w-full pl-10 pr-9 py-2.5 rounded-2xl text-xs sm:text-sm font-medium border outline-none transition-all",
+                "w-full pl-10 pr-12 py-2.5 min-h-[44px] rounded-2xl text-xs sm:text-sm font-medium border outline-none transition-all focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark 
-                  ? "bg-white/5 border-white/10 focus:border-purple-500 text-white placeholder-slate-500" 
-                  : "bg-slate-50 border-slate-200 focus:border-purple-600 text-slate-900 placeholder-slate-400"
+                  ? "bg-white/5 border-white/10 focus:border-arvdoul-purple text-white placeholder-slate-500" 
+                  : "bg-slate-50 border-slate-200 focus:border-arvdoul-purple text-slate-900 placeholder-slate-400"
               )}
             />
             {selectedLocation && (
               <button
                 type="button"
                 onClick={handleClearLocation}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                aria-label="Clear location"
+                className="absolute right-1 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 title="Clear"
               >
                 <X className="w-3.5 h-3.5" />
@@ -340,13 +346,14 @@ const ProfileLocationModal = memo(({
 
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-            <input aria-label="Tap to select"
+            <input
+              aria-label="Search cities"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search cities..."
               className={cn(
-                "w-full pl-8 pr-3 py-1.5 rounded-xl text-xs border outline-none",
+                "w-full pl-8 pr-3 py-2 min-h-[40px] rounded-xl text-xs border outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark ? "bg-white/5 border-white/10 text-white" : "bg-slate-100 border-slate-200 text-slate-900"
               )}
             />
@@ -362,16 +369,22 @@ const ProfileLocationModal = memo(({
                   key={fullStr}
                   type="button"
                   onClick={() => setSelectedLocation(fullStr)}
+                  style={isSelected ? { background: BRAND_GRADIENT } : undefined}
                   className={cn(
-                    "flex items-center gap-2 p-2 rounded-xl text-xs font-medium border text-left transition-all",
+                    "flex items-center gap-2 p-2 min-h-[44px] rounded-xl text-xs font-medium border text-left transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isSelected
-                      ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+                      ? "text-white border-transparent shadow-sm"
                       : isDark
                         ? "bg-white/5 border-white/5 hover:bg-white/10 text-slate-300"
                         : "bg-slate-50 border-slate-200/80 hover:bg-slate-100 text-slate-700"
                   )}
                 >
-                  <span className="text-sm">{item.flag}</span>
+                  <span className={cn(
+                    "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0",
+                    isSelected ? "bg-white/20 text-white" : isDark ? "bg-white/10 text-slate-300" : "bg-slate-200/80 text-slate-600"
+                  )}>
+                    {item.code}
+                  </span>
                   <div className="truncate flex-1">
                     <div className="font-semibold truncate">{item.city}</div>
                     <div className="text-[10px] opacity-70 truncate">{item.country}</div>
@@ -386,10 +399,10 @@ const ProfileLocationModal = memo(({
         {/* 4. Privacy Scope Selector */}
         <div className="space-y-1.5 mb-5 pt-1 border-t border-slate-200 dark:border-white/10">
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5 pt-2">
-            <Shield className="w-3.5 h-3.5 text-purple-500" />
+            <Shield className="w-3.5 h-3.5 text-arvdoul-purple" />
             <span>Privacy Setting</span>
           </label>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Location privacy setting">
             {[
               { id: 'public', label: 'City & Country', desc: 'Visible to all' },
               { id: 'country_only', label: 'Country Only', desc: 'General region' },
@@ -400,11 +413,12 @@ const ProfileLocationModal = memo(({
                 <button
                   key={p.id}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => setPrivacy(p.id)}
                   className={cn(
-                    "p-2 rounded-xl text-left border transition-all flex flex-col justify-between",
+                    "p-2 min-h-[44px] rounded-xl text-left border transition-all flex flex-col justify-between cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     active
-                      ? "bg-purple-500/10 border-purple-500 text-purple-600 dark:text-purple-400 font-bold"
+                      ? "bg-arvdoul-purple/10 border-arvdoul-purple text-arvdoul-purple dark:text-[#C896FF] font-bold"
                       : isDark
                         ? "bg-white/5 border-white/5 text-slate-400 hover:text-white"
                         : "bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900"
@@ -424,7 +438,7 @@ const ProfileLocationModal = memo(({
             type="button"
             onClick={onClose}
             className={cn(
-              "flex-1 py-2.5 rounded-2xl text-xs font-semibold border transition-all",
+              "flex-1 py-2.5 min-h-[44px] rounded-2xl text-xs font-semibold border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
               isDark ? "bg-white/5 border-white/10 hover:bg-white/10 text-white" : "bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700"
             )}
           >
@@ -434,7 +448,8 @@ const ProfileLocationModal = memo(({
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex-1 py-2.5 rounded-2xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/25 hover:opacity-95 transition-all flex items-center justify-center gap-1.5"
+            style={{ background: BRAND_GRADIENT }}
+            className="flex-1 py-2.5 min-h-[44px] rounded-2xl text-xs font-bold text-white shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
           >
             {isSaving ? (
               <>

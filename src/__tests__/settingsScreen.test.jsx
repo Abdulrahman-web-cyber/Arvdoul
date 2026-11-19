@@ -68,6 +68,16 @@ jest.mock('../services/levelSystemService.js', () => ({
   },
 }));
 
+const mockUpdateUserProfile = jest.fn(async () => ({ success: true }));
+jest.mock('../services/userService.js', () => ({
+  getUserService: () => ({
+    updateUserProfile: mockUpdateUserProfile,
+  }),
+  default: {
+    updateUserProfile: mockUpdateUserProfile,
+  },
+}));
+
 const { default: SettingsScreen } = require('../screens/SettingsScreen.jsx');
 
 expect.extend(toHaveNoViolations);
@@ -157,6 +167,11 @@ const renderScreen = () =>
   );
 
 describe('SettingsScreen', () => {
+  beforeEach(() => {
+    mockUpdateSetting.mockClear();
+    mockUpdateUserProfile.mockClear();
+  });
+
   test('renders content after loading (level card + sections)', async () => {
     renderScreen();
     expect(await screen.findByText('Level & Progress')).toBeInTheDocument();
@@ -173,6 +188,65 @@ describe('SettingsScreen', () => {
     fireEvent.click(pushToggle);
     await waitFor(() => {
       expect(mockUpdateSetting).toHaveBeenCalledWith('u1', 'notifications.push', false);
+    });
+  });
+
+  test('granular notification, privacy, and Vibes & Stories controls persist through settingsService', async () => {
+    renderScreen();
+    const dmSwitch = await screen.findByRole('switch', { name: 'Direct messages' });
+    fireEvent.click(dmSwitch);
+    await waitFor(() => {
+      expect(mockUpdateSetting).toHaveBeenCalledWith('u1', 'notifications.directMessages', false);
+    });
+
+    const callGroup = screen.getByRole('group', { name: 'Who can call you' });
+    const callFriendsBtn = callGroup.querySelector('button:nth-child(3)');
+    fireEvent.click(callFriendsBtn);
+    await waitFor(() => {
+      expect(mockUpdateSetting).toHaveBeenCalledWith('u1', 'privacy.whoCanCall', 'friends');
+    });
+
+    const vibesActivitySwitch = screen.getByRole('switch', { name: 'Show Vibe viewer activity' });
+    fireEvent.click(vibesActivitySwitch);
+    await waitFor(() => {
+      expect(mockUpdateSetting).toHaveBeenCalledWith('u1', 'vibes.showViewingActivity', false);
+    });
+  });
+
+  test('atomic profile privacy scope batch preserves prior selections across rapid updates', async () => {
+    renderScreen();
+    const graphGroup = await screen.findByRole('group', { name: 'Followers and Following List visibility' });
+    const followersBtn = Array.from(graphGroup.querySelectorAll('button')).find((b) => b.textContent === 'Followers');
+    fireEvent.click(followersBtn);
+
+    await waitFor(() => {
+      expect(mockUpdateUserProfile).toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({
+          privacy: expect.objectContaining({
+            followersList: 'followers',
+            followingList: 'followers',
+          }),
+        })
+      );
+    });
+
+    const commGroup = screen.getByRole('group', { name: 'Communities and Collections visibility' });
+    const connectionsBtn = Array.from(commGroup.querySelectorAll('button')).find((b) => b.textContent === 'Connections');
+    fireEvent.click(connectionsBtn);
+
+    await waitFor(() => {
+      expect(mockUpdateUserProfile).toHaveBeenLastCalledWith(
+        'u1',
+        expect.objectContaining({
+          privacy: expect.objectContaining({
+            followersList: 'followers',
+            followingList: 'followers',
+            communities: 'connections',
+            collections: 'connections',
+          }),
+        })
+      );
     });
   });
 

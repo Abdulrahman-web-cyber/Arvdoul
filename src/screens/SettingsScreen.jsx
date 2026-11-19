@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap, Gauge, Monitor, Smartphone, Check, Coins } from "lucide-react";
+import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap, Gauge, Monitor, Smartphone, Check, Coins, Phone, Users, Gift, MessageSquare, AtSign, Crown, Calendar } from "lucide-react";
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -22,6 +22,7 @@ import { settingsService, DEFAULT_SETTINGS } from '../services/settingsService.j
 import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES } from '../services/levelSystemService.js';
 import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
+import { VIBE_POLICY_SCOPES, VIBE_POLICY_SCOPE_OPTIONS } from '../config/vibeContracts.js';
 import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
 import { getAdaptiveTuning, setLiteModePreference, getDeviceCapabilities } from '../utils/deviceCapabilities.js';
@@ -101,7 +102,7 @@ function OptionPill({ label, active, onClick }) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'px-3 py-1.5 rounded-full text-xs font-semibold transition-all min-h-[36px]',
+        'px-3.5 py-2 rounded-full text-xs font-semibold transition-all min-h-[44px] cursor-pointer',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
         active
           ? 'bg-arvdoul-gradient text-white shadow'
@@ -169,6 +170,7 @@ export default function SettingsScreen() {
 
   const storeProfile = useProfileStore((state) => state.profile);
   const [profilePrivacy, setProfilePrivacy] = useState(DEFAULT_PROFILE_PRIVACY);
+  const profilePrivacyRef = useRef(DEFAULT_PROFILE_PRIVACY);
   const [profileIsPrivate, setProfileIsPrivate] = useState(false);
 
   useEffect(() => {
@@ -185,7 +187,9 @@ export default function SettingsScreen() {
         setLevelInfo(level);
         // Initialize profile privacy from storeProfile or loaded doc
         if (storeProfile?.privacy) {
-          setProfilePrivacy({ ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy });
+          const merged = { ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy };
+          profilePrivacyRef.current = merged;
+          setProfilePrivacy(merged);
         }
         // Profile privacy is owned by the user profile (`users/{uid}.isPrivate`),
         // never by the settings document - read it from the profile store only.
@@ -366,26 +370,27 @@ export default function SettingsScreen() {
     }
   }, [uid, t]);
 
-  const handleUpdateProfilePrivacyScope = useCallback(async (scopeKey, scopeVal) => {
-    setProfilePrivacy((cur) => {
-      const next = { ...cur, [scopeKey]: scopeVal };
-      return next;
-    });
+  const handleUpdateProfilePrivacyScopes = useCallback(async (patch) => {
+    const previous = profilePrivacyRef.current;
+    const updatedPrivacy = { ...previous, ...patch };
+    profilePrivacyRef.current = updatedPrivacy;
+    setProfilePrivacy(updatedPrivacy);
     if (!uid) return;
     try {
       const { getUserService } = await import('../services/userService.js');
       const userService = getUserService();
-      const updatedPrivacy = { ...profilePrivacy, [scopeKey]: scopeVal };
       await userService.updateUserProfile(uid, { privacy: updatedPrivacy });
       useProfileStore.setState((s) => ({
         profile: s.profile ? { ...s.profile, privacy: updatedPrivacy } : s.profile
       }));
       toast.success('Audience privacy updated');
     } catch (err) {
+      profilePrivacyRef.current = previous;
+      setProfilePrivacy(previous);
       console.warn('Failed to update privacy scope:', err);
       toast.error('Failed to update privacy settings');
     }
-  }, [uid, profilePrivacy]);
+  }, [uid]);
 
   const handleReduceMotion = (value) => {
     document.documentElement.classList.toggle('arvdoul-reduce-motion', value);
@@ -746,6 +751,76 @@ export default function SettingsScreen() {
             disabled={dnd.loading || dndBusy}
             onChange={handleToggleDnd}
           />
+          <ToggleRow
+            icon={MessageSquare}
+            label="Direct messages"
+            description="Alerts for new one-to-one messages"
+            checked={settings?.notifications?.directMessages !== false}
+            onChange={(v) => updateSetting('notifications.directMessages', v)}
+          />
+          <ToggleRow
+            icon={Users}
+            label="Group messages"
+            description="Alerts for group chats and spaces"
+            checked={settings?.notifications?.groupMessages !== false}
+            onChange={(v) => updateSetting('notifications.groupMessages', v)}
+          />
+          <ToggleRow
+            icon={AtSign}
+            label="Mentions & replies"
+            description="When someone mentions or replies to you"
+            checked={settings?.notifications?.mentions !== false}
+            onChange={(v) => updateSetting('notifications.mentions', v)}
+          />
+          <ToggleRow
+            icon={Phone}
+            label="Incoming calls"
+            description="Voice and video call alerts"
+            checked={settings?.notifications?.callNotifications !== false}
+            onChange={(v) => updateSetting('notifications.callNotifications', v)}
+          />
+          <ToggleRow
+            icon={Gift}
+            label="Coins & gifts received"
+            description="Tips, patronage, and coin transfers"
+            checked={settings?.notifications?.giftNotifications !== false}
+            onChange={(v) => updateSetting('notifications.giftNotifications', v)}
+          />
+          <ToggleRow
+            icon={Users}
+            label="Community activity"
+            description="New discussions and replies in your communities"
+            checked={settings?.notifications?.communityActivity !== false}
+            onChange={(v) => updateSetting('notifications.communityActivity', v)}
+          />
+          <ToggleRow
+            icon={Bell}
+            label="Community announcements"
+            description="Pinned broadcasts from community admins"
+            checked={settings?.notifications?.communityAnnouncements !== false}
+            onChange={(v) => updateSetting('notifications.communityAnnouncements', v)}
+          />
+          <ToggleRow
+            icon={Calendar}
+            label="Events & reminders"
+            description="Upcoming live streams and community events"
+            checked={settings?.notifications?.eventNotifications !== false}
+            onChange={(v) => updateSetting('notifications.eventNotifications', v)}
+          />
+          <ToggleRow
+            icon={Sparkles}
+            label="Creator requests"
+            description="Collaboration invites and creator verification updates"
+            checked={settings?.notifications?.creatorRequests !== false}
+            onChange={(v) => updateSetting('notifications.creatorRequests', v)}
+          />
+          <ToggleRow
+            icon={Crown}
+            label="Royal & civic announcements"
+            description="Platform governance notices and civic rank milestones"
+            checked={settings?.notifications?.royalAnnouncements !== false}
+            onChange={(v) => updateSetting('notifications.royalAnnouncements', v)}
+          />
         </Section>
 
         {/* ============ PRIVACY & AUDIENCE GOVERNANCE ============ */}
@@ -765,23 +840,8 @@ export default function SettingsScreen() {
             onClick={() => navigate('/settings/blocked')}
           />
 
-          <ToggleRow
-            icon={Sparkles}
-            label="Save expired Vibes to Archive"
-            description="Automatically store published Vibes in your private Archive after 24 hours"
-            checked={settings?.vibes?.autoArchive !== false}
-            onChange={(v) => updateSetting('vibes.autoArchive', v)}
-          />
-
-          <NavRow
-            icon={Sparkles}
-            label="Vibes Archive & Highlights"
-            description="Manage saved Vibes and profile Highlights collections"
-            onClick={() => navigate('/vibes?archive=open')}
-          />
-
           {/* Granular Scope Selectors */}
-          <div className="w-full py-3.5 space-y-3 border-t border-gray-100 dark:border-white/5">
+          <div className="w-full py-3.5 space-y-4 border-t border-gray-100 dark:border-white/5">
             <p className="text-xs font-bold uppercase tracking-wider text-purple-400">Audience &amp; Visibility Permissions</p>
 
             {/* Profile Discovery Scope */}
@@ -790,9 +850,10 @@ export default function SettingsScreen() {
                 <p className="font-bold text-sm">Profile Discovery</p>
                 <p className="text-xs text-gray-400 mt-0.5">Who can view your full bio and public identity card</p>
               </div>
-              <div className="flex flex-wrap gap-1.5" role="group">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Profile Discovery visibility">
                 {[
                   { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
                   { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
                   { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
                 ].map((s) => (
@@ -800,7 +861,7 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.profileInfo || VISIBILITY_SCOPES.EVERYONE) === s.id}
-                    onClick={() => handleUpdateProfilePrivacyScope('profileInfo', s.id)}
+                    onClick={() => handleUpdateProfilePrivacyScopes({ profileInfo: s.id })}
                   />
                 ))}
               </div>
@@ -812,7 +873,7 @@ export default function SettingsScreen() {
                 <p className="font-bold text-sm">Live Online Presence</p>
                 <p className="text-xs text-gray-400 mt-0.5">Who can see when you are active on the platform</p>
               </div>
-              <div className="flex flex-wrap gap-1.5" role="group">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Live Online Presence visibility">
                 {[
                   { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
                   { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
@@ -823,7 +884,7 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.presence || VISIBILITY_SCOPES.FOLLOWERS) === s.id}
-                    onClick={() => handleUpdateProfilePrivacyScope('presence', s.id)}
+                    onClick={() => handleUpdateProfilePrivacyScopes({ presence: s.id })}
                   />
                 ))}
               </div>
@@ -835,9 +896,10 @@ export default function SettingsScreen() {
                 <p className="font-bold text-sm">Followers &amp; Following List</p>
                 <p className="text-xs text-gray-400 mt-0.5">Who can inspect your follower and following social graph</p>
               </div>
-              <div className="flex flex-wrap gap-1.5" role="group">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Followers and Following List visibility">
                 {[
                   { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
                   { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
                   { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
                 ].map((s) => (
@@ -845,10 +907,10 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.followersList || VISIBILITY_SCOPES.EVERYONE) === s.id}
-                    onClick={() => {
-                      handleUpdateProfilePrivacyScope('followersList', s.id);
-                      handleUpdateProfilePrivacyScope('followingList', s.id);
-                    }}
+                    onClick={() => handleUpdateProfilePrivacyScopes({
+                      followersList: s.id,
+                      followingList: s.id,
+                    })}
                   />
                 ))}
               </div>
@@ -860,7 +922,7 @@ export default function SettingsScreen() {
                 <p className="font-bold text-sm">Civic Badges &amp; Milestones</p>
                 <p className="text-xs text-gray-400 mt-0.5">Who can view your earned badges, level, and accomplishments</p>
               </div>
-              <div className="flex flex-wrap gap-1.5" role="group">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Civic Badges and Milestones visibility">
                 {[
                   { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
                   { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
@@ -871,10 +933,82 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.activity || VISIBILITY_SCOPES.EVERYONE) === s.id}
-                    onClick={() => {
-                      handleUpdateProfilePrivacyScope('activity', s.id);
-                      handleUpdateProfilePrivacyScope('achievements', s.id);
-                    }}
+                    onClick={() => handleUpdateProfilePrivacyScopes({
+                      activity: s.id,
+                      achievements: s.id,
+                    })}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Links Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Custom Links</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can view your curated portfolio and external links</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Custom Links visibility">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.links || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScopes({ links: s.id })}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Civic Titles Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Civic Titles</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can view your earned civic titles and heraldic provenance</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Civic Titles visibility">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.titles || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScopes({ titles: s.id })}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Communities & Collections Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Communities &amp; Collections</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can inspect your communities and saved collections</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Communities and Collections visibility">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.communities || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScopes({
+                      communities: s.id,
+                      collections: s.id,
+                    })}
                   />
                 ))}
               </div>
@@ -886,7 +1020,7 @@ export default function SettingsScreen() {
                 <p className="font-bold text-sm">Large Coin Treasury Card Display</p>
                 <p className="text-xs text-gray-400 mt-0.5">Showcase total coin treasury proudly or keep confidential</p>
               </div>
-              <div className="flex flex-wrap gap-1.5" role="group">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Large Coin Treasury Card Display">
                 {[
                   { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me (Confidential)' },
                   { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
@@ -896,7 +1030,7 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME) === s.id}
-                    onClick={() => handleUpdateProfilePrivacyScope('economicStatus', s.id)}
+                    onClick={() => handleUpdateProfilePrivacyScopes({ economicStatus: s.id })}
                   />
                 ))}
               </div>
@@ -908,7 +1042,7 @@ export default function SettingsScreen() {
                 <p className="font-bold text-sm">Creator Suite</p>
                 <p className="text-xs text-gray-400 mt-0.5">Who can see your creator discipline, business contact and patronage note</p>
               </div>
-              <div className="flex flex-wrap gap-1.5" role="group">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Creator Suite visibility">
                 {[
                   { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
                   { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
@@ -919,7 +1053,7 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.creatorInfo || VISIBILITY_SCOPES.EVERYONE) === s.id}
-                    onClick={() => handleUpdateProfilePrivacyScope('creatorInfo', s.id)}
+                    onClick={() => handleUpdateProfilePrivacyScopes({ creatorInfo: s.id })}
                   />
                 ))}
               </div>
@@ -940,12 +1074,193 @@ export default function SettingsScreen() {
                 <OptionPill
                   key={opt}
                   label={t(`settings.dmOption.${opt}`)}
-                  active={settings.privacy.allowDMs === opt}
+                  active={(settings?.privacy?.allowDMs ?? 'everyone') === opt}
                   onClick={() => updateSetting('privacy.allowDMs', opt)}
                 />
               ))}
             </div>
           </div>
+
+          <div className="w-full py-3.5">
+            <div className="flex items-start gap-3 mb-2">
+              <Phone className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
+              <div>
+                <p className="font-bold text-sm">Who can call you</p>
+                <p className="text-xs text-gray-400 mt-0.5">Control voice and video call invitations</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label="Who can call you">
+              {[
+                { id: 'everyone', label: 'Everyone' },
+                { id: 'followers', label: 'Followers' },
+                { id: 'friends', label: 'Friends' },
+                { id: 'none', label: 'No one' },
+              ].map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.label}
+                  active={(settings?.privacy?.whoCanCall ?? 'everyone') === opt.id}
+                  onClick={() => updateSetting('privacy.whoCanCall', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full py-3.5">
+            <div className="flex items-start gap-3 mb-2">
+              <Users className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
+              <div>
+                <p className="font-bold text-sm">Who can add you to groups</p>
+                <p className="text-xs text-gray-400 mt-0.5">Control who can invite you directly into group chats</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label="Who can add you to groups">
+              {[
+                { id: 'everyone', label: 'Everyone' },
+                { id: 'followers', label: 'Followers' },
+                { id: 'friends', label: 'Friends' },
+                { id: 'none', label: 'No one' },
+              ].map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.label}
+                  active={(settings?.privacy?.whoCanAddToGroups ?? 'everyone') === opt.id}
+                  onClick={() => updateSetting('privacy.whoCanAddToGroups', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full py-3.5">
+            <div className="flex items-start gap-3 mb-2">
+              <Gift className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
+              <div>
+                <p className="font-bold text-sm">Who can send you gifts</p>
+                <p className="text-xs text-gray-400 mt-0.5">Choose who can send coin tips and virtual gifts</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label="Who can send you gifts">
+              {[
+                { id: 'everyone', label: 'Everyone' },
+                { id: 'friends', label: 'Friends' },
+                { id: 'none', label: 'No one' },
+              ].map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.label}
+                  active={(settings?.privacy?.whoCanSendGifts ?? 'everyone') === opt.id}
+                  onClick={() => updateSetting('privacy.whoCanSendGifts', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* ============ VIBES & STORIES ============ */}
+        <Section id="settings-vibes" icon={Sparkles} title="Vibes & Stories">
+          <ToggleRow
+            icon={Sparkles}
+            label="Save expired Vibes to Archive"
+            description="Automatically store published Vibes in your private Archive after 24 hours"
+            checked={settings?.vibes?.autoArchive !== false}
+            onChange={(v) => updateSetting('vibes.autoArchive', v)}
+          />
+
+          <NavRow
+            icon={Sparkles}
+            label="Vibes Archive & Highlights"
+            description="Manage saved Vibes and profile Highlights collections"
+            onClick={() => navigate('/vibes?archive=open')}
+          />
+
+          <div className="w-full py-3.5">
+            <p className="font-bold text-sm">Who can react to your Vibes</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-2">Control emoji and reaction interactions on your stories</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Who can react to your Vibes">
+              {VIBE_POLICY_SCOPE_OPTIONS.map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.shortLabel}
+                  active={(settings?.vibes?.whoCanReact ?? VIBE_POLICY_SCOPES.EVERYONE) === opt.id}
+                  onClick={() => updateSetting('vibes.whoCanReact', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full py-3.5">
+            <p className="font-bold text-sm">Who can reply to your Vibes</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-2">Choose who can send direct replies from a Vibe</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Who can reply to your Vibes">
+              {VIBE_POLICY_SCOPE_OPTIONS.map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.shortLabel}
+                  active={(settings?.vibes?.whoCanReply ?? VIBE_POLICY_SCOPES.EVERYONE) === opt.id}
+                  onClick={() => updateSetting('vibes.whoCanReply', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full py-3.5">
+            <p className="font-bold text-sm">Who can share your Vibes</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-2">Control resharing and forwarding to chats or feeds</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Who can share your Vibes">
+              {VIBE_POLICY_SCOPE_OPTIONS.map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.shortLabel}
+                  active={(settings?.vibes?.whoCanShare ?? VIBE_POLICY_SCOPES.FOLLOWERS) === opt.id}
+                  onClick={() => updateSetting('vibes.whoCanShare', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full py-3.5">
+            <p className="font-bold text-sm">Who can send gifts on your Vibes</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-2">Patronage gifts sent while viewing your Vibes</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Who can send gifts on your Vibes">
+              {VIBE_POLICY_SCOPE_OPTIONS.map((opt) => (
+                <OptionPill
+                  key={opt.id}
+                  label={opt.shortLabel}
+                  active={(settings?.vibes?.whoCanSendGifts ?? VIBE_POLICY_SCOPES.EVERYONE) === opt.id}
+                  onClick={() => updateSetting('vibes.whoCanSendGifts', opt.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <ToggleRow
+            icon={Eye}
+            label="Show Vibe reaction breakdown"
+            description="Display reaction counts and details on your Vibes"
+            checked={settings?.vibes?.showReactionDetails !== false}
+            onChange={(v) => updateSetting('vibes.showReactionDetails', v)}
+          />
+          <ToggleRow
+            icon={Activity}
+            label="Show Vibe viewer activity"
+            description="Track and display who viewed your active Vibes"
+            checked={settings?.vibes?.showViewingActivity !== false}
+            onChange={(v) => updateSetting('vibes.showViewingActivity', v)}
+          />
+          <ToggleRow
+            icon={Bell}
+            label="Vibe activity notifications"
+            description="Alerts for Vibe replies, mentions, and reactions"
+            checked={settings?.vibes?.vibeNotifications !== false}
+            onChange={(v) => updateSetting('vibes.vibeNotifications', v)}
+          />
+          <ToggleRow
+            icon={Gift}
+            label="Vibe gift notifications"
+            description="Alerts when someone sends a gift on a Vibe"
+            checked={settings?.vibes?.giftNotifications !== false}
+            onChange={(v) => updateSetting('vibes.giftNotifications', v)}
+          />
         </Section>
 
         {/* ============ PLAYBACK ============ */}

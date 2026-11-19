@@ -14,8 +14,16 @@ import {
   Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle
 } from 'lucide-react';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
-const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light', capabilities }) => {
+const REPORT_PRESETS = [
+  'Harassment or bullying',
+  'Spam or scam',
+  'Impersonation',
+  'Inappropriate content',
+];
+
+const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light', capabilities, onRelationshipChange }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [busy, setBusy] = useState(null);
@@ -65,7 +73,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
   }, [showReportDialog, onClose]);
 
   const itemCls = cn(
-    'w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer active:scale-[0.99]',
+    'w-full min-h-[44px] flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
     isDark
       ? 'text-white hover:bg-white/[0.07] border border-transparent hover:border-white/10'
       : 'text-slate-800 hover:bg-slate-100 border border-transparent hover:border-slate-200 shadow-sm hover:shadow'
@@ -106,10 +114,12 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
       if (blocked) {
         await svc.unblockUser(user.uid, userId);
         setBlocked(false);
+        onRelationshipChange?.({ type: 'block', value: false });
         toast.success('User unblocked.');
       } else {
         await svc.blockUser(user.uid, userId);
         setBlocked(true);
+        onRelationshipChange?.({ type: 'block', value: true });
         toast.success('User blocked.');
       }
       onClose?.();
@@ -118,7 +128,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
     } finally {
       setBusy(null);
     }
-  }, [user?.uid, userId, blocked, busy, onClose]);
+  }, [user?.uid, userId, blocked, busy, onClose, onRelationshipChange]);
 
   const handleMute = useCallback(async () => {
     if (!user?.uid || busy) return;
@@ -129,10 +139,12 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
       if (muted) {
         await svc.unmuteUser(user.uid, userId);
         setMuted(false);
+        onRelationshipChange?.({ type: 'mute', value: false });
         toast.success('User unmuted.');
       } else {
         await svc.muteUser(user.uid, userId);
         setMuted(true);
+        onRelationshipChange?.({ type: 'mute', value: true });
         toast.success('User muted.');
       }
       onClose?.();
@@ -141,7 +153,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
     } finally {
       setBusy(null);
     }
-  }, [user?.uid, userId, muted, busy, onClose]);
+  }, [user?.uid, userId, muted, busy, onClose, onRelationshipChange]);
 
   const handleRestrict = useCallback(async () => {
     if (!user?.uid || busy) return;
@@ -152,10 +164,12 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
       if (restricted) {
         await svc.unrestrictUser(user.uid, userId);
         setRestricted(false);
+        onRelationshipChange?.({ type: 'restrict', value: false });
         toast.success('Restriction removed.');
       } else {
         await svc.restrictUser(user.uid, userId);
         setRestricted(true);
+        onRelationshipChange?.({ type: 'restrict', value: true });
         toast.success('User restricted.');
       }
       onClose?.();
@@ -164,7 +178,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
     } finally {
       setBusy(null);
     }
-  }, [user?.uid, userId, restricted, busy, onClose]);
+  }, [user?.uid, userId, restricted, busy, onClose, onRelationshipChange]);
 
   const handleSubmitReport = useCallback(async (e) => {
     e?.preventDefault();
@@ -210,9 +224,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
-          style={{
-            background: "linear-gradient(90deg, var(--arv-brand-pink) 0%, var(--arv-brand-violet) 34%, var(--arv-brand-indigo) 66%, var(--arv-brand-cyan) 100%)",
-          }}
+          style={{ background: BRAND_GRADIENT }}
         />
 
         {/* Dialog Header */}
@@ -233,7 +245,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
             onClick={onClose}
             aria-label="Close menu"
             className={cn(
-              "p-1.5 rounded-full transition-colors cursor-pointer",
+              "min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
               isDark ? "hover:bg-white/10 text-slate-400 hover:text-white" : "hover:bg-slate-100 text-slate-500 hover:text-slate-900"
             )}
           >
@@ -284,6 +296,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               <div className={cn("my-2 h-px", isDark ? "bg-white/[0.08]" : "bg-slate-100")} />
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -302,6 +315,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               </button>
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -317,6 +331,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               </button>
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -332,6 +347,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               </button>
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -347,6 +363,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               </button>
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -362,6 +379,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               </button>
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -383,6 +401,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               <div className={cn("my-2 h-px", isDark ? "bg-white/[0.08]" : "bg-slate-100")} />
 
               <button
+                type="button"
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
@@ -397,7 +416,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 </div>
               </button>
 
-              <button className={itemCls} onClick={handleMute}>
+              <button type="button" className={itemCls} onClick={handleMute}>
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
                     {busy === 'mute' ? <Loader2 className="w-4 h-4 animate-spin" /> : muted ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
@@ -406,7 +425,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 </div>
               </button>
 
-              <button className={itemCls} onClick={handleRestrict}>
+              <button type="button" className={itemCls} onClick={handleRestrict}>
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
                     {busy === 'restrict' ? <Loader2 className="w-4 h-4 animate-spin" /> : restricted ? <BadgeCheck className="w-4 h-4 text-emerald-400" /> : <ShieldMinus className="w-4 h-4" />}
@@ -415,7 +434,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 </div>
               </button>
 
-              <button className={itemCls} onClick={handleBlock}>
+              <button type="button" className={itemCls} onClick={handleBlock}>
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
                     {busy === 'block' ? <Loader2 className="w-4 h-4 animate-spin" /> : blocked ? <BadgeCheck className="w-4 h-4 text-emerald-400" /> : <UserX className="w-4 h-4" />}
@@ -425,6 +444,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               </button>
 
               <button
+                type="button"
                 className={cn(itemCls, "text-rose-400 hover:text-rose-300")}
                 onClick={() => setShowReportDialog(true)}
               >
@@ -464,7 +484,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               <button
                 type="button"
                 onClick={() => setShowReportDialog(false)}
-                className="p-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 aria-label="Close report dialog"
               >
                 <X className="w-4 h-4" />
@@ -473,15 +493,38 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
               Why are you reporting @{profile?.username || profile?.displayName || 'this user'}?
             </p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {REPORT_PRESETS.map((preset) => {
+                const selected = reportReason === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setReportReason(preset)}
+                    className={cn(
+                      "px-2.5 py-1.5 min-h-[36px] rounded-lg text-[11px] font-semibold border transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                      selected
+                        ? "border-amber-500 bg-amber-500/15 text-amber-500"
+                        : isDark
+                          ? "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                    )}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+            </div>
             <form onSubmit={handleSubmitReport} className="space-y-3">
-              <textarea aria-label="Spam, harassment, inappropriate content, impersonation..."
+              <textarea
+                aria-label="Report reason"
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 placeholder="Spam, harassment, inappropriate content, impersonation..."
                 rows={3}
                 maxLength={300}
                 className={cn(
-                  "w-full p-3 text-sm rounded-2xl border resize-none focus:outline-none focus:ring-2 focus:ring-amber-500",
+                  "w-full p-3 text-sm rounded-2xl border resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark ? "bg-black/20 border-white/10 text-white placeholder-slate-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"
                 )}
               />
@@ -490,7 +533,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                   type="button"
                   onClick={() => setShowReportDialog(false)}
                   className={cn(
-                    "px-4 py-2 rounded-2xl text-xs font-semibold cursor-pointer",
+                    "px-4 py-2 min-h-[44px] rounded-2xl text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark ? "bg-white/10 text-slate-300 hover:bg-white/15" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                   )}
                 >
@@ -499,7 +542,7 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 <button
                   type="submit"
                   disabled={busy === 'report' || !reportReason.trim()}
-                  className="px-4 py-2 rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2 min-h-[44px] rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black flex items-center gap-1.5 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 >
                   {busy === 'report' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Submit Report

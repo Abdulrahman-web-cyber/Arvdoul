@@ -311,6 +311,37 @@ export default function ProfileMyScreen() {
 
   const isDark = theme === 'dark';
 
+  if (!currentUserId) {
+    return (
+      <div className={cn(
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="font-display text-xl font-bold">Sign in to view your profile</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Access your Arvdoul identity, progression, creations, and settings by signing in.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading && !profile && !currentUser) {
     return (
       <div className="w-full pb-20">
@@ -472,9 +503,11 @@ export default function ProfileMyScreen() {
               {activeTab === 'posts' && (
                 <ProfilePinnedPosts
                   posts={posts}
+                  profileId={currentUserId}
                   isOwner={viewAs === 'owner'}
                   theme={theme}
                   onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  onViewAll={() => setActiveTab('posts')}
                 />
               )}
 
@@ -579,7 +612,14 @@ export default function ProfileMyScreen() {
                 const toastId = toast.loading('Uploading avatar...');
                 try {
                   const { getUserService } = await import('../../services/userService.js');
-                  await getUserService().uploadAvatar(currentUserId, croppedFile);
+                  const uploadRes = await getUserService().uploadAvatar(currentUserId, croppedFile);
+                  const nextUrl = typeof uploadRes === 'string' ? uploadRes : (uploadRes?.photoURL || uploadRes?.url || null);
+                  if (nextUrl) {
+                    const appUser = useAppStore.getState().currentUser;
+                    if (appUser && (appUser.uid === currentUserId || appUser.id === currentUserId)) {
+                      useAppStore.getState().setCurrentUser({ ...appUser, photoURL: nextUrl });
+                    }
+                  }
                   toast.success('Avatar updated successfully!', { id: toastId });
                   setShowAvatarModal(false);
                   useProfileStore.getState().loadProfile(currentUserId, currentUserId);
@@ -593,6 +633,10 @@ export default function ProfileMyScreen() {
                 try {
                   const { getUserService } = await import('../../services/userService.js');
                   await getUserService().updateUserProfile(currentUserId, { photoURL: '' });
+                  const appUser = useAppStore.getState().currentUser;
+                  if (appUser && (appUser.uid === currentUserId || appUser.id === currentUserId)) {
+                    useAppStore.getState().setCurrentUser({ ...appUser, photoURL: '' });
+                  }
                   toast.success('Avatar removed', { id: toastId });
                   setShowAvatarModal(false);
                   useProfileStore.getState().loadProfile(currentUserId, currentUserId);

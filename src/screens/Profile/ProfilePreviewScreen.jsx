@@ -29,6 +29,15 @@ import {
   projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { shareProfile } from '../../utils/shareUtils';
+import { toast } from 'sonner';
+
+const PERSPECTIVES = [
+  { id: 'owner', label: 'Owner', desc: 'Your full private profile experience.' },
+  { id: 'public', label: 'Public', desc: 'Simulating how strangers and public search visitors see your profile.' },
+  { id: 'follower', label: 'Follower', desc: 'Simulating how approved followers see your profile.' },
+  { id: 'connection', label: 'Connection', desc: 'Simulating how mutual friends and close connections see your profile.' },
+];
 
 /**
  * ProfilePreviewScreen Component
@@ -49,11 +58,10 @@ export default function ProfilePreviewScreen({
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
   const storeHighlights = useProfileStore((state) => state.highlights);
-  const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const loadProfile = useProfileStore((state) => state.loadProfile);
 
   const [activeTab, setActiveTab] = useState('posts');
-  const [viewPerspective, setViewPerspective] = useState('owner'); // 'owner' | 'visitor'
+  const [viewPerspective, setViewPerspective] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
   const [viewMode, setViewMode] = useState(() => {
     try {
       return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
@@ -114,19 +122,20 @@ export default function ProfilePreviewScreen({
   const capabilities = useMemo(() => {
     const isOwnerView = viewPerspective === 'owner';
     return resolveCapabilities({
-      viewer: authUser,
+      viewer: isOwnerView ? authUser : { uid: `preview_${viewPerspective}_visitor` },
       target: effectiveProfile,
       relationship: isOwnerView
         ? { isOwner: true }
         : {
-            isFollowing: Boolean(storeFollowStatus?.isFollowing),
-            isFollower: Boolean(storeFollowStatus?.isFollower),
-            isMutualFriend: Boolean(storeFollowStatus?.isMutualFriend),
-            requestStatus: storeFollowStatus?.requestStatus ?? null,
+            isOwner: false,
+            isFollowing: viewPerspective === 'follower' || viewPerspective === 'connection',
+            isFollower: viewPerspective === 'follower' || viewPerspective === 'connection',
+            isMutualFriend: viewPerspective === 'connection',
+            requestStatus: null,
           },
-      viewAs: isOwnerView ? null : 'public',
+      viewAs: isOwnerView ? null : viewPerspective,
     });
-  }, [authUser, effectiveProfile, viewPerspective, storeFollowStatus]);
+  }, [authUser, effectiveProfile, viewPerspective]);
 
   // Apply the capability decision once; the view layer never re-derives it.
   const projectedProfile = useMemo(
@@ -145,6 +154,18 @@ export default function ProfilePreviewScreen({
   const handleEdit = () => {
     navigate('/profile/edit');
   };
+
+  const handleShare = useCallback(async () => {
+    try {
+      const target = projectedProfile || { id: currentUserId, uid: currentUserId };
+      const result = await shareProfile(target);
+      if (result?.copied) {
+        toast.success('Profile link copied to clipboard');
+      }
+    } catch {
+      toast.error('Could not share profile');
+    }
+  }, [projectedProfile, currentUserId]);
 
   if (propLoading || (!effectiveProfile && currentUserId)) {
     return (
@@ -193,34 +214,33 @@ export default function ProfilePreviewScreen({
             )}
 
             {/* Perspective Toggle */}
-            <div className={cn(
-              'flex items-center gap-1 p-1 rounded-2xl border',
-              isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-100/90 border-slate-200/80'
-            )}>
-              <button
-                type="button"
-                onClick={() => setViewPerspective('owner')}
-                className={cn(
-                  "min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  viewPerspective === 'owner'
-                    ? "bg-arvdoul-gradient text-white shadow-sm"
-                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-                )}
-              >
-                Owner View
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewPerspective('visitor')}
-                className={cn(
-                  "min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  viewPerspective === 'visitor'
-                    ? "bg-arvdoul-gradient text-white shadow-sm"
-                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-                )}
-              >
-                Visitor View
-              </button>
+            <div
+              role="group"
+              aria-label="Preview perspective"
+              className={cn(
+                'flex items-center gap-1 p-1 rounded-2xl border overflow-x-auto no-scrollbar',
+                isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-100/90 border-slate-200/80'
+              )}
+            >
+              {PERSPECTIVES.map((p) => {
+                const active = viewPerspective === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setViewPerspective(p.id)}
+                    className={cn(
+                      "min-h-[40px] px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                      active
+                        ? "bg-arvdoul-gradient text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
 
             <button
@@ -236,14 +256,14 @@ export default function ProfilePreviewScreen({
 
         {/* Main Preview Container */}
         <div className="max-w-[1160px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
-          {/* Banner notification for Visitor Mode */}
-          {viewPerspective === 'visitor' && (
+          {/* Banner notification for Non-Owner Perspectives */}
+          {viewPerspective !== 'owner' && (
             <div className={cn(
               "px-4 py-2.5 rounded-2xl border text-xs font-medium flex items-center gap-2",
               isDark ? "bg-amber-500/10 border-amber-500/25 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-800"
             )}>
               <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Simulating how your profile appears to the public and potential followers.</span>
+              <span>{PERSPECTIVES.find((p) => p.id === viewPerspective)?.desc}</span>
             </div>
           )}
 
@@ -255,6 +275,7 @@ export default function ProfilePreviewScreen({
             theme={theme}
             onBack={hasTopAppBar ? undefined : handleBack}
             onEditProfile={handleEdit}
+            onShare={handleShare}
             capabilities={capabilities}
           />
 

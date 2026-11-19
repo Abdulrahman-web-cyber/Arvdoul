@@ -404,6 +404,10 @@ export const useProfileStore = create(
             state.profile.photoURL = newPhotoURL;
           }
         });
+        const appCurrentUser = useAppStore.getState().currentUser;
+        if (newPhotoURL && appCurrentUser && (appCurrentUser.uid === userId || appCurrentUser.id === userId)) {
+          useAppStore.getState().setCurrentUser({ ...appCurrentUser, photoURL: newPhotoURL });
+        }
         toast.success('Avatar updated successfully!');
         return newPhotoURL;
       } catch (error) {
@@ -808,9 +812,11 @@ export const useProfileStore = create(
      */
     follow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
-      // Idempotent: a double-tap while already following must not increment
-      // the optimistic counter a second time.
+      // Idempotent & concurrency-safe: ignore double-taps while loading,
+      // already following, or with a pending private follow request.
+      if (get().followLoading) return;
       if (get().followStatus?.isFollowing === true) return;
+      if (get().followStatus?.requestStatus === 'pending') return;
 
       // Snapshot before the optimistic write so rollback restores the
       // real previous state instead of a hard-coded guess. Immer copy-on-writes
@@ -872,6 +878,7 @@ export const useProfileStore = create(
      */
     unfollow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
+      if (get().followLoading) return;
       // Idempotent: a double-tap while not following must not decrement the
       // optimistic counter a second time.
       if (get().followStatus?.isFollowing === false) return;
@@ -947,6 +954,7 @@ export const useProfileStore = create(
      */
     cancelFollowRequest: async (fromUserId, toUserId) => {
       if (!fromUserId || !toUserId) return;
+      if (get().followLoading) return;
       if (get().followStatus?.requestStatus !== 'pending') return;
       const previousFollowStatus = get().followStatus;
       set((state) => {

@@ -55,15 +55,18 @@ import {
   VISIBILITY_SCOPES, 
   DEFAULT_PROFILE_PRIVACY, 
   PROFILE_CONSTRAINTS, 
+  sanitizeProfileUrl,
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
 import { isPlaceholderHandle, resolveCreatorFlag, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
+import { Dialog } from '../../components/UI/Dialog.jsx';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import { useAppStore } from '../../store/appStore';
 
 const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
 
@@ -125,20 +128,18 @@ export default function EditProfileScreen() {
     displayName: '',
     username: '',
     bio: '',
+    tagline: '',
     location: '',
     locationPrivacy: 'public',
     website: '',
     pronouns: '',
     profession: '',
+    education: '',
+    gender: '',
     isPrivate: false,
     links: [],
     privacy: {
-      profileInfo: DEFAULT_PROFILE_PRIVACY.profileInfo,
-      creatorInfo: DEFAULT_PROFILE_PRIVACY.creatorInfo,
-      presence: DEFAULT_PROFILE_PRIVACY.presence,
-      followersList: DEFAULT_PROFILE_PRIVACY.followersList,
-      activity: DEFAULT_PROFILE_PRIVACY.activity,
-      economicStatus: DEFAULT_PROFILE_PRIVACY.economicStatus,
+      ...DEFAULT_PROFILE_PRIVACY,
     },
     // Creator Suite
     creatorCategory: '',
@@ -155,6 +156,8 @@ export default function EditProfileScreen() {
   });
 
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -163,8 +166,19 @@ export default function EditProfileScreen() {
   const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
   const [activeSection, setActiveSection] = useState('all');
 
-  // Prevent background snapshot pulses from wiping unsaved edits
+  // Prevent background snapshot pulses from wiping unsaved edits & track dirty state
   const initializedUidRef = useRef(null);
+  const initialSnapshotRef = useRef(null);
+  const avatarObjectUrlRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+        avatarObjectUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // Profile completeness calculation
   const completeness = useMemo(() => {
@@ -182,6 +196,16 @@ export default function EditProfileScreen() {
     return { score, checks };
   }, [avatarPreview, formData.displayName, formData.username, formData.bio, formData.location, formData.website, formData.links]);
 
+  const isDirty = useMemo(() => {
+    if (avatarFile) return true;
+    if (!initialSnapshotRef.current) return false;
+    try {
+      return JSON.stringify(formData) !== initialSnapshotRef.current;
+    } catch {
+      return false;
+    }
+  }, [formData, avatarFile]);
+
   // Initialize form data once per distinct account
   useEffect(() => {
     if ((userProfile || user) && currentUid && initializedUidRef.current !== currentUid) {
@@ -196,24 +220,31 @@ export default function EditProfileScreen() {
         initialUsername = fromEmail || fromName || '';
       }
 
-      setFormData({
+      const hydratedForm = {
         displayName: src.displayName || '',
         username: initialUsername,
         bio: src.bio || '',
+        tagline: src.tagline || '',
         location: src.location || '',
         locationPrivacy: src.locationPrivacy || 'public',
         website: src.website || '',
         pronouns: src.pronouns || '',
         profession: src.profession || '',
+        education: src.education || '',
+        gender: src.gender || '',
         isPrivate: Boolean(src.isPrivate),
         links: Array.isArray(src.links) ? src.links : [],
         privacy: {
-          profileInfo: p.profileInfo || (p.profileVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.profileVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
+          ...DEFAULT_PROFILE_PRIVACY,
+          ...p,
+          profileInfo: p.profileInfo || (p.profileVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.profileVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : DEFAULT_PROFILE_PRIVACY.profileInfo),
           creatorInfo: p.creatorInfo || DEFAULT_PROFILE_PRIVACY.creatorInfo,
-          presence: p.presence || (p.onlinePresence === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.onlinePresence === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : p.onlinePresence === 'public' ? VISIBILITY_SCOPES.EVERYONE : VISIBILITY_SCOPES.FOLLOWERS),
-          followersList: p.followersList || (p.followersVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.followersVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
-          activity: p.activity || (p.activityVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.activityVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
-          economicStatus: p.economicStatus || VISIBILITY_SCOPES.ONLY_ME,
+          presence: p.presence || (p.onlinePresence === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.onlinePresence === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : p.onlinePresence === 'public' ? VISIBILITY_SCOPES.EVERYONE : DEFAULT_PROFILE_PRIVACY.presence),
+          followersList: p.followersList || (p.followersVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.followersVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : DEFAULT_PROFILE_PRIVACY.followersList),
+          followingList: p.followingList || p.followersList || (p.followersVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.followersVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : DEFAULT_PROFILE_PRIVACY.followingList),
+          activity: p.activity || (p.activityVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.activityVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : DEFAULT_PROFILE_PRIVACY.activity),
+          achievements: p.achievements || p.activity || (p.activityVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.activityVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : DEFAULT_PROFILE_PRIVACY.achievements),
+          economicStatus: p.economicStatus || DEFAULT_PROFILE_PRIVACY.economicStatus,
         },
         creatorCategory: src.creatorCategory || '',
         inquiriesEmail: src.inquiriesEmail || '',
@@ -224,7 +255,14 @@ export default function EditProfileScreen() {
         showReputation: src.showReputation !== false,
         showStreak: src.showStreak !== false,
         defaultTab: src.defaultTab || 'posts',
-      });
+      };
+
+      setFormData(hydratedForm);
+      try {
+        initialSnapshotRef.current = JSON.stringify(hydratedForm);
+      } catch {
+        initialSnapshotRef.current = null;
+      }
 
       const safePhoto = getSafeAvatarUrl(src.photoURL, src.displayName, currentUid);
       setAvatarPreview(safePhoto);
@@ -298,6 +336,7 @@ export default function EditProfileScreen() {
   // Input Handlers
   const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    setFieldErrors(prev => (prev[field] ? { ...prev, [field]: null } : prev));
   }, []);
 
   const handlePrivacyChange = useCallback((key, value) => {
@@ -306,6 +345,16 @@ export default function EditProfileScreen() {
       privacy: {
         ...(prev.privacy || {}),
         [key]: value,
+      },
+    }));
+  }, []);
+
+  const handlePrivacyBatchChange = useCallback((patch) => {
+    setFormData(prev => ({
+      ...prev,
+      privacy: {
+        ...(prev.privacy || {}),
+        ...patch,
       },
     }));
   }, []);
@@ -335,6 +384,7 @@ export default function EditProfileScreen() {
       updated[index] = { ...updated[index], [field]: value };
       return { ...prev, links: updated };
     });
+    setFieldErrors(prev => (prev.links ? { ...prev, links: null } : prev));
   }, []);
 
   const handleRemoveLink = useCallback((index) => {
@@ -357,74 +407,117 @@ export default function EditProfileScreen() {
   // Avatar Handlers
   const handleAvatarCropped = useCallback(async (file) => {
     if (!file) return;
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+    }
     setAvatarFile(file);
     const objectUrl = URL.createObjectURL(file);
+    avatarObjectUrlRef.current = objectUrl;
     setAvatarPreview(objectUrl);
   }, []);
 
   const handleRemoveAvatar = useCallback(async () => {
     if (!currentUid) return;
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+      avatarObjectUrlRef.current = null;
+    }
     const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || null, currentUid);
     setAvatarFile(null);
     setAvatarPreview(defaultAvatar);
-    if (userService?.updateUserProfile) {
-      await userService.updateUserProfile(currentUid, { photoURL: defaultAvatar });
+    if (updateUserProfile) {
+      await updateUserProfile({ photoURL: '' });
+    } else if (userService?.updateUserProfile) {
+      await userService.updateUserProfile(currentUid, { photoURL: '' });
+    }
+    useProfileStore.setState((s) => ({
+      profile: s.profile ? { ...s.profile, photoURL: '' } : s.profile,
+    }));
+    const appUser = useAppStore.getState().currentUser;
+    if (appUser && (appUser.uid === currentUid || appUser.id === currentUid)) {
+      useAppStore.getState().setCurrentUser({ ...appUser, photoURL: '' });
     }
     toast.success('Avatar reset to default citizen monogram');
-  }, [currentUid, formData.displayName, userService]);
+  }, [currentUid, formData.displayName, updateUserProfile, userService]);
 
   // Save changes handler
   const handleSave = useCallback(async () => {
+    const nextErrors = {};
     const rawUser = formData.username?.trim().toLowerCase();
     if (!rawUser) {
-      toast.error('Username cannot be empty');
-      return;
+      nextErrors.username = 'Username cannot be empty';
+    } else if (!/^[a-z0-9._]{3,30}$/.test(rawUser)) {
+      nextErrors.username = 'Username must be 3-30 characters (letters, numbers, dots, or underscores)';
+    } else if (usernameAvailability === 'taken') {
+      nextErrors.username = `@${rawUser} is taken. Choose another or click Auto-Generate.`;
     }
-    if (!/^[a-z0-9._]{3,30}$/.test(rawUser)) {
-      toast.error('Username must be 3-30 characters (letters, numbers, dots, or underscores)');
+
+    if (!formData.displayName?.trim()) {
+      nextErrors.displayName = 'Display name is required';
+    }
+
+    let cleanWebsite = formData.website?.trim() || '';
+    if (cleanWebsite) {
+      const sanitizedSite = sanitizeProfileUrl(cleanWebsite);
+      if (!sanitizedSite) {
+        nextErrors.website = 'Enter a valid web address (e.g. https://yourdomain.com)';
+      } else {
+        cleanWebsite = sanitizedSite;
+      }
+    }
+
+    if (formData.inquiriesEmail?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.inquiriesEmail.trim())) {
+      nextErrors.inquiriesEmail = 'Enter a valid business email address';
+    }
+
+    const cleanedLinks = [];
+    for (const l of formData.links || []) {
+      const rawUrl = l.url?.trim();
+      if (!rawUrl) continue;
+      const safeLinkUrl = sanitizeProfileUrl(rawUrl);
+      if (!safeLinkUrl) {
+        nextErrors.links = `Invalid URL in Custom Links: "${rawUrl}"`;
+        break;
+      }
+      cleanedLinks.push({
+        ...l,
+        url: safeLinkUrl,
+        title: (l.title || 'Link').trim().slice(0, PROFILE_CONSTRAINTS.LINKS.TITLE_MAX_LENGTH),
+      });
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      const firstErr = Object.values(nextErrors)[0];
+      toast.error(firstErr);
       return;
     }
 
-    if (usernameAvailability === 'taken') {
-      toast.error(`@${rawUser} is taken. Please choose another or click Auto-Generate.`);
-      return;
-    }
-
+    setFieldErrors({});
     setSaving(true);
     try {
       if (rawUser !== userProfile?.username && userService?.checkUsernameAvailability) {
         const check = await userService.checkUsernameAvailability(rawUser);
         if (!check.available) {
+          setFieldErrors({ username: `@${rawUser} is already taken.` });
           toast.error(`@${rawUser} is already taken. Please choose another.`);
           setSaving(false);
           return;
         }
       }
 
-      // Clean links
-      const cleanedLinks = (formData.links || [])
-        .filter(l => l.url && l.url.trim().length > 0)
-        .map(l => ({
-          ...l,
-          url: l.url.trim().startsWith('http') ? l.url.trim() : `https://${l.url.trim()}`,
-          title: (l.title || 'Link').trim().slice(0, 30),
-        }));
-
-      // Sanitize website
-      let cleanWebsite = formData.website?.trim() || '';
-      if (cleanWebsite && !cleanWebsite.startsWith('http')) {
-        cleanWebsite = `https://${cleanWebsite}`;
-      }
-
       const rawUpdates = {
         displayName: formData.displayName?.trim() || '',
         username: rawUser,
         bio: formData.bio?.trim() || '',
+        tagline: formData.tagline?.trim() || '',
         location: formData.location?.trim() || '',
         locationPrivacy: formData.locationPrivacy || 'public',
         website: cleanWebsite,
         pronouns: formData.pronouns?.trim() || '',
         profession: formData.profession?.trim() || '',
+        education: formData.education?.trim() || '',
+        gender: formData.gender?.trim() || '',
         isPrivate: Boolean(formData.isPrivate),
         links: cleanedLinks,
         privacy: formData.privacy,
@@ -477,7 +570,13 @@ export default function EditProfileScreen() {
           await loadStoreProfile(currentUid, currentUid);
         }
 
-        toast.success('Profile updated successfully!');
+        try {
+          initialSnapshotRef.current = JSON.stringify({ ...formData, links: cleanedLinks, website: cleanWebsite });
+        } catch {
+          /* ignore */
+        }
+        setAvatarFile(null);
+        toast.success('Profile updated successfully');
         navigate('/profile/me');
       } catch (backendError) {
         useProfileStore.setState({ profile: previousStoreProfile });
@@ -492,8 +591,12 @@ export default function EditProfileScreen() {
   }, [formData, usernameAvailability, avatarFile, currentUid, userService, updateUserProfile, loadStoreProfile, navigate, userProfile?.username]);
 
   const handleCancel = useCallback(() => {
+    if (isDirty && !saving) {
+      setShowUnsavedDialog(true);
+      return;
+    }
     navigate(-1);
-  }, [navigate]);
+  }, [isDirty, saving, navigate]);
 
   return (
     <div className={cn(
@@ -853,6 +956,10 @@ export default function EditProfileScreen() {
                   )}
                 />
               </div>
+              {/* Display Name error + input check */}
+              {fieldErrors.username && (
+                <p className="text-xs text-rose-500 font-medium">{fieldErrors.username}</p>
+              )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Letters, numbers, periods, and underscores. 3 to 30 characters.
               </p>
@@ -862,7 +969,7 @@ export default function EditProfileScreen() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-indigo-400" />
+                  <User className="w-4 h-4 text-arvdoul-purple" />
                   <span>Display Name</span>
                 </label>
                 <span className="text-[11px] text-slate-400 font-mono">
@@ -876,10 +983,41 @@ export default function EditProfileScreen() {
                 placeholder="Citizen Name"
                 maxLength={PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
                 className={cn(
-                  "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                  "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  fieldErrors.displayName
+                    ? "border-rose-500 bg-rose-500/5"
+                    : isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
+                )}
+              />
+              {fieldErrors.displayName && (
+                <p className="text-xs text-rose-500 font-medium">{fieldErrors.displayName}</p>
+              )}
+            </div>
+
+            {/* Tagline / Subtitle Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-arvdoul-purple" />
+                  <span>Tagline / Status</span>
+                </label>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {formData.tagline.length}/{PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH}
+                </span>
+              </div>
+              <input aria-label="Tagline or Status"
+                type="text"
+                value={formData.tagline}
+                onChange={(e) => handleInputChange('tagline', e.target.value)}
+                placeholder="e.g. Building soundscapes & open-source tools"
+                maxLength={PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH}
+                className={cn(
+                  "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                 )}
               />
             </div>
@@ -888,7 +1026,7 @@ export default function EditProfileScreen() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
-                  Bio & Civic Manifesto
+                  Bio &amp; Civic Manifesto
                 </label>
                 <span className="text-[11px] text-slate-400 font-mono">
                   {formData.bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
@@ -901,10 +1039,10 @@ export default function EditProfileScreen() {
                 rows={3}
                 maxLength={PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
                 className={cn(
-                  "w-full px-4 py-2.5 rounded-2xl text-sm font-normal outline-none transition-all border resize-none leading-relaxed",
+                  "w-full px-4 py-2.5 rounded-2xl text-sm font-normal outline-none transition-all border resize-none leading-relaxed focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-arvdoul-purple/20"
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                 )}
               />
             </div>
@@ -922,9 +1060,9 @@ export default function EditProfileScreen() {
                       type="button"
                       onClick={() => handleInputChange('pronouns', p === 'other' ? '' : p)}
                       className={cn(
-                        "px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                        "min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                         formData.pronouns === p
-                          ? "bg-purple-500/20 border-purple-500 text-purple-300 font-bold"
+                          ? "bg-arvdoul-purple/20 border-arvdoul-purple text-arvdoul-purple dark:text-purple-300 font-bold"
                           : isDark
                           ? "bg-white/[0.03] border-white/10 text-slate-400 hover:text-white"
                           : "bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900"
@@ -934,17 +1072,17 @@ export default function EditProfileScreen() {
                     </button>
                   ))}
                 </div>
-                <input aria-label="e.g. they/them"
+                <input aria-label="Pronouns"
                   type="text"
                   value={formData.pronouns}
                   onChange={(e) => handleInputChange('pronouns', e.target.value)}
                   placeholder="e.g. they/them"
                   maxLength={PROFILE_CONSTRAINTS.PRONOUNS.MAX_LENGTH}
                   className={cn(
-                    "w-full px-4 py-2 rounded-2xl text-xs outline-none transition-all border mt-1.5",
+                    "w-full px-4 py-2 min-h-[44px] rounded-2xl text-xs outline-none transition-all border mt-1.5 focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
-                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500"
-                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500"
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
               </div>
@@ -953,17 +1091,58 @@ export default function EditProfileScreen() {
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
                   Profession / Role
                 </label>
-                <input aria-label="e.g. Creator, Builder, Artist"
+                <input aria-label="Profession or Role"
                   type="text"
                   value={formData.profession}
                   onChange={(e) => handleInputChange('profession', e.target.value)}
                   placeholder="e.g. Creator, Builder, Artist"
                   maxLength={PROFILE_CONSTRAINTS.PROFESSION.MAX_LENGTH}
                   className={cn(
-                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
-                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-arvdoul-purple/20"
-                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-arvdoul-purple/20"
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Education & Gender Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Education
+                </label>
+                <input aria-label="Education"
+                  type="text"
+                  value={formData.education}
+                  onChange={(e) => handleInputChange('education', e.target.value)}
+                  placeholder="e.g. Royal College of Art, Self-taught"
+                  maxLength={PROFILE_CONSTRAINTS.EDUCATION.MAX_LENGTH}
+                  className={cn(
+                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
+                  )}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Gender Identity
+                </label>
+                <input aria-label="Gender Identity"
+                  type="text"
+                  value={formData.gender}
+                  onChange={(e) => handleInputChange('gender', e.target.value)}
+                  placeholder="Optional"
+                  maxLength={PROFILE_CONSTRAINTS.GENDER.MAX_LENGTH}
+                  className={cn(
+                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-arvdoul-purple"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
               </div>
@@ -983,7 +1162,7 @@ export default function EditProfileScreen() {
         )}>
           <div>
             <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
-              Civic Coordinates & Website
+              Civic Coordinates &amp; Website
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Connect your digital nation passport with your geographic territory and digital flagship.
@@ -992,8 +1171,8 @@ export default function EditProfileScreen() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            {/* Location with Interactive Modal Trigger */}
-            <div className="space-y-1.5">
+            {/* Location with Interactive Modal Trigger & Location Privacy */}
+            <div className="space-y-2">
               <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-emerald-400" />
@@ -1002,7 +1181,7 @@ export default function EditProfileScreen() {
                 <button
                   type="button"
                   onClick={() => setShowLocationModal(true)}
-                  className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline cursor-pointer"
+                  className="min-h-[32px] px-2 text-xs text-arvdoul-purple dark:text-[#C896FF] hover:underline cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 >
                   Interactive Map
                 </button>
@@ -1016,12 +1195,29 @@ export default function EditProfileScreen() {
                   placeholder="e.g. Neo Tokyo, Global, London"
                   maxLength={PROFILE_CONSTRAINTS.LOCATION.MAX_LENGTH}
                   className={cn(
-                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark
                       ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-emerald-500"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-emerald-500"
                   )}
                 />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">Location Precision</span>
+                <select
+                  aria-label="Location Precision"
+                  value={formData.locationPrivacy || 'public'}
+                  onChange={(e) => handleInputChange('locationPrivacy', e.target.value)}
+                  className={cn(
+                    "px-2.5 py-1.5 min-h-[36px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value="public">City &amp; Country</option>
+                  <option value="country_only">Country Only</option>
+                  <option value="hidden">Keep Hidden</option>
+                </select>
               </div>
             </div>
 
@@ -1037,12 +1233,17 @@ export default function EditProfileScreen() {
                 onChange={(e) => handleInputChange('website', e.target.value)}
                 placeholder="https://yourdomain.com"
                 className={cn(
-                  "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
-                  isDark
-                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-cyan-500"
-                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500"
+                  "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  fieldErrors.website
+                    ? "border-rose-500 bg-rose-500/5"
+                    : isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-cyan-500"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500"
                 )}
               />
+              {fieldErrors.website && (
+                <p className="text-xs text-rose-500 font-medium">{fieldErrors.website}</p>
+              )}
             </div>
 
           </div>
@@ -1105,7 +1306,7 @@ export default function EditProfileScreen() {
                     value={link.platform || 'website'}
                     onChange={(e) => handleUpdateLink(idx, 'platform', e.target.value)}
                     className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                      "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                       isDark 
                         ? "bg-slate-900 border-white/10 text-white" 
                         : "bg-white border-slate-200 text-slate-800"
@@ -1120,22 +1321,23 @@ export default function EditProfileScreen() {
                     type="text"
                     value={link.title || ''}
                     onChange={(e) => handleUpdateLink(idx, 'title', e.target.value)}
+                    maxLength={PROFILE_CONSTRAINTS.LINKS.TITLE_MAX_LENGTH}
                     placeholder="Link Title (e.g. My Portfolio)"
                     className={cn(
-                      "sm:w-44 px-3 py-1.5 rounded-xl text-xs font-medium outline-none border",
+                      "sm:w-44 px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-medium outline-none border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                       isDark 
                         ? "bg-black/30 border-white/10 text-white" 
                         : "bg-white border-slate-200 text-slate-800"
                     )}
                   />
 
-                  <input aria-label="https://..."
+                  <input aria-label="Link URL"
                     type="text"
                     value={link.url || ''}
                     onChange={(e) => handleUpdateLink(idx, 'url', e.target.value)}
                     placeholder="https://..."
                     className={cn(
-                      "flex-1 px-3 py-1.5 rounded-xl text-xs font-mono outline-none border",
+                      "flex-1 px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-mono outline-none border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                       isDark 
                         ? "bg-black/30 border-white/10 text-white" 
                         : "bg-white border-slate-200 text-slate-800"
@@ -1145,9 +1347,10 @@ export default function EditProfileScreen() {
                   <div className="flex items-center gap-1 justify-end">
                     <button
                       type="button"
+                      aria-label={link.isPrimary ? "Primary Link" : "Make Primary"}
                       onClick={() => handleTogglePrimaryLink(idx)}
                       className={cn(
-                        "p-2 rounded-xl transition-all cursor-pointer",
+                        "min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                         link.isPrimary 
                           ? "text-amber-400 bg-amber-400/10" 
                           : "text-slate-400 hover:text-amber-400"
@@ -1158,8 +1361,9 @@ export default function EditProfileScreen() {
                     </button>
                     <button
                       type="button"
+                      aria-label="Remove Link"
                       onClick={() => handleRemoveLink(idx)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                      className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-400 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                       title="Remove Link"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1167,6 +1371,9 @@ export default function EditProfileScreen() {
                   </div>
                 </div>
               ))}
+              {fieldErrors.links && (
+                <p className="text-xs text-rose-500 font-medium">{fieldErrors.links}</p>
+              )}
             </div>
           )}
         </section>
@@ -1237,12 +1444,17 @@ export default function EditProfileScreen() {
                   placeholder="creator.mgmt@domain.com"
                   maxLength={100}
                   className={cn(
-                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
-                    isDark
-                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-amber-400"
-                      : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"
+                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    fieldErrors.inquiriesEmail
+                      ? "border-rose-500 bg-rose-500/5"
+                      : isDark
+                        ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-amber-400"
+                        : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"
                   )}
                 />
+                {fieldErrors.inquiriesEmail && (
+                  <p className="text-xs text-rose-500 font-medium">{fieldErrors.inquiriesEmail}</p>
+                )}
               </div>
             </div>
 
@@ -1531,17 +1743,39 @@ export default function EditProfileScreen() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs sm:text-sm font-semibold">Profile Discovery</div>
-                  <div className="text-[11px] text-slate-400">Who can view your profile info</div>
+                  <div className="text-[11px] text-slate-400">Who can view your bio, tagline, education, and identity details</div>
                 </div>
                 <select aria-label="Who can view your profile info"
                   value={formData.privacy.profileInfo}
                   onChange={(e) => handlePrivacyChange('profileInfo', e.target.value)}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+                </select>
+              </div>
+
+              {/* Custom Links */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Custom Links</div>
+                  <div className="text-[11px] text-slate-400">Who can see your curated external links</div>
+                </div>
+                <select aria-label="Custom Links visibility"
+                  value={formData.privacy.links || VISIBILITY_SCOPES.EVERYONE}
+                  onChange={(e) => handlePrivacyChange('links', e.target.value)}
+                  className={cn(
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
                   <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
                   <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
                 </select>
@@ -1557,7 +1791,7 @@ export default function EditProfileScreen() {
                   value={formData.privacy.presence}
                   onChange={(e) => handlePrivacyChange('presence', e.target.value)}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
@@ -1568,7 +1802,7 @@ export default function EditProfileScreen() {
                 </select>
               </div>
 
-              {/* Followers List */}
+              {/* Followers & Following Graph */}
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs sm:text-sm font-semibold">Social Graph</div>
@@ -1576,35 +1810,81 @@ export default function EditProfileScreen() {
                 </div>
                 <select aria-label="Social Graph"
                   value={formData.privacy.followersList}
-                  onChange={(e) => {
-                    handlePrivacyChange('followersList', e.target.value);
-                    handlePrivacyChange('followingList', e.target.value);
-                  }}
+                  onChange={(e) => handlePrivacyBatchChange({
+                    followersList: e.target.value,
+                    followingList: e.target.value,
+                  })}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
                   <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
                   <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
                   <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
                 </select>
               </div>
 
-              {/* Activity & Badges */}
+              {/* Activity & Achievements */}
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs sm:text-sm font-semibold">Civic Standing & Badges</div>
+                  <div className="text-xs sm:text-sm font-semibold">Civic Standing &amp; Badges</div>
                   <div className="text-[11px] text-slate-400">Who can view your badges and achievements</div>
                 </div>
-                <select aria-label="Civic Standing &amp; Badges"
+                <select aria-label="Civic Standing & Badges"
                   value={formData.privacy.activity}
-                  onChange={(e) => {
-                    handlePrivacyChange('activity', e.target.value);
-                    handlePrivacyChange('achievements', e.target.value);
-                  }}
+                  onChange={(e) => handlePrivacyBatchChange({
+                    activity: e.target.value,
+                    achievements: e.target.value,
+                  })}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+                </select>
+              </div>
+
+              {/* Civic Titles */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Civic Titles</div>
+                  <div className="text-[11px] text-slate-400">Who can see your active title and noble provenance</div>
+                </div>
+                <select aria-label="Civic Titles visibility"
+                  value={formData.privacy.titles || VISIBILITY_SCOPES.EVERYONE}
+                  onChange={(e) => handlePrivacyChange('titles', e.target.value)}
+                  className={cn(
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+                </select>
+              </div>
+
+              {/* Communities & Collections */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Communities &amp; Collections</div>
+                  <div className="text-[11px] text-slate-400">Who can view your joined communities and curated collections</div>
+                </div>
+                <select aria-label="Communities & Collections visibility"
+                  value={formData.privacy.communities || VISIBILITY_SCOPES.EVERYONE}
+                  onChange={(e) => handlePrivacyBatchChange({
+                    communities: e.target.value,
+                    collections: e.target.value,
+                  })}
+                  className={cn(
+                    "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
                 >
@@ -1639,13 +1919,13 @@ export default function EditProfileScreen() {
                     value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
                     onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
                     className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-bold outline-none border cursor-pointer",
+                      "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-bold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                       isDark ? "bg-slate-900 border-amber-500/40 text-amber-300" : "bg-white border-amber-300 text-amber-900"
                     )}
                   >
-                    <option value={VISIBILITY_SCOPES.ONLY_ME}>🔒 Only Me (Private Treasury)</option>
-                    <option value={VISIBILITY_SCOPES.CONNECTIONS}>👥 Connections Only</option>
-                    <option value={VISIBILITY_SCOPES.EVERYONE}>🌐 Everyone (Public Treasury)</option>
+                    <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me (Private Treasury)</option>
+                    <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                    <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone (Public Showcase)</option>
                   </select>
                 </div>
 
@@ -1673,7 +1953,7 @@ export default function EditProfileScreen() {
             type="button"
             onClick={handleCancel}
             className={cn(
-              "px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer",
+              "min-h-[44px] px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
               isDark ? "hover:bg-white/[0.05] text-slate-300" : "hover:bg-slate-200 text-slate-700"
             )}
           >
@@ -1684,7 +1964,7 @@ export default function EditProfileScreen() {
             type="button"
             onClick={handleSave}
             disabled={saving || usernameAvailability === 'taken'}
-            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-[0_4px_16px_rgba(68,49,247,0.35)] hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-[0_4px_16px_rgba(68,49,247,0.35)] hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             style={{
               background: BRAND_GRADIENT
             }}
@@ -1721,12 +2001,49 @@ export default function EditProfileScreen() {
           currentPrivacy={formData.locationPrivacy}
           userId={currentUid}
           theme={theme}
-          onLocationUpdated={(newLoc) => {
-            setFormData(prev => ({ ...prev, location: newLoc }));
+          onLocationUpdated={(newLoc, newPrivacy) => {
+            setFormData(prev => ({
+              ...prev,
+              location: newLoc,
+              ...(newPrivacy ? { locationPrivacy: newPrivacy } : {}),
+            }));
             setShowLocationModal(false);
           }}
         />
       )}
+
+      {/* Unsaved Changes Confirmation Dialog */}
+      <Dialog
+        isOpen={showUnsavedDialog}
+        onClose={() => setShowUnsavedDialog(false)}
+        title="Discard unsaved changes?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            You have unsaved changes to your profile. Leaving now will discard them.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowUnsavedDialog(false)}
+              className="flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-semibold border border-slate-300 dark:border-white/15 hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
+            >
+              Keep Editing
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowUnsavedDialog(false);
+                navigate(-1);
+              }}
+              className="flex-1 min-h-[44px] py-2.5 rounded-xl text-sm font-bold bg-rose-600 hover:bg-rose-500 text-white cursor-pointer"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

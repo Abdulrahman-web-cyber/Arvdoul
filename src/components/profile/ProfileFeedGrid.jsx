@@ -7,9 +7,24 @@ import { Heart, MessageCircle, Play, Pause, Film, Image as ImageIcon, Bookmark, 
 import { cn } from '../../lib/utils';
 import { getPerksForLevel } from '../../services/levelSystemService';
 import { pickDisplayName, resolveAvatarUrl } from '../../services/profileReadModel.js';
+import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import ProfileCitizenshipCard from './ProfileCitizenshipCard';
 import { LazyImage } from '../../components/Shared/LazyImage';
+
+function formatSafeDate(raw, options) {
+  if (!raw) return null;
+  try {
+    let d;
+    if (typeof raw?.toDate === 'function') d = raw.toDate();
+    else if (typeof raw?.seconds === 'number') d = new Date(raw.seconds * 1000);
+    else d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, options);
+  } catch {
+    return null;
+  }
+}
 
 const ProfileFeedGrid = memo(({
   posts = [],
@@ -325,16 +340,21 @@ const ProfileFeedGrid = memo(({
                 <Globe className="w-4 h-4 text-blue-500 shrink-0" />
                 <span>
                   Website:{' '}
-                  {profile?.website ? (
-                    <a
-                      href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-500 hover:underline"
-                    >
-                      {profile.website}
-                    </a>
-                  ) : (
+                  {profile?.website ? (() => {
+                    const safeHref = sanitizeProfileUrl(profile.website);
+                    return safeHref ? (
+                      <a
+                        href={safeHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-500 hover:underline"
+                      >
+                        {profile.website}
+                      </a>
+                    ) : (
+                      <span>{profile.website}</span>
+                    );
+                  })() : (
                     'Not specified'
                   )}
                 </span>
@@ -343,9 +363,7 @@ const ProfileFeedGrid = memo(({
                 <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>
                   Citizen Since:{' '}
-                  {profile?.createdAt
-                    ? new Date(profile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
-                    : 'Not available'}
+                  {formatSafeDate(profile?.createdAt, { year: 'numeric', month: 'long' }) || 'Not available'}
                 </span>
               </div>
             </div>
@@ -590,20 +608,10 @@ const ProfileFeedGrid = memo(({
           const hasAudio = Boolean(item.audioURL || item.audioUrl || item.soundUrl);
 
           return (
-            <div
+            <article
               key={item.id || idx}
-              role="button"
-              tabIndex={0}
-              onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
-              onKeyDown={(e) => {
-                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                  e.preventDefault();
-                  if (onPostClick) onPostClick(item);
-                  else navigate(`/post/${item.id}`);
-                }
-              }}
               className={cn(
-                "rounded-2xl p-4 border transition-colors cursor-pointer group flex flex-col justify-between gap-3",
+                "rounded-2xl p-4 border transition-colors group flex flex-col justify-between gap-3",
                 isDark
                   ? "bg-[#080F2E]/85 border-white/[0.08] hover:border-arvdoul-purple/50 hover:bg-[#0D1742]"
                   : "bg-white border-slate-200/90 hover:border-arvdoul-purple/50 shadow-sm"
@@ -617,18 +625,22 @@ const ProfileFeedGrid = memo(({
                   disabled={!hasAudio}
                   aria-label={isPlaying ? "Pause track" : "Play track"}
                   className={cn(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md transition-all",
+                    "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     !hasAudio && "opacity-40 cursor-not-allowed",
                     isPlaying
                       ? "bg-gradient-to-tr from-pink-500 to-indigo-600 text-white animate-pulse"
-                      : "bg-indigo-600 text-white group-hover:scale-105"
+                      : "bg-indigo-600 text-white group-hover:scale-105 cursor-pointer"
                   )}
                 >
                   {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
                 </button>
 
-                {/* Track Details */}
-                <div className="min-w-0 flex-1">
+                {/* Track Details (opens post) */}
+                <button
+                  type="button"
+                  onClick={() => (onPostClick ? onPostClick(item) : navigate(`/post/${item.id}`))}
+                  className="min-w-0 flex-1 text-left cursor-pointer rounded-xl py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                >
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-400 transition-colors">
                     {trackTitle}
                   </h4>
@@ -646,7 +658,7 @@ const ProfileFeedGrid = memo(({
                       <span>{hasAudio ? 'Audio track' : 'No audio attached'}</span>
                     )}
                   </div>
-                </div>
+                </button>
 
                 {/* Open in Audio Studio Button */}
                 <button
@@ -656,7 +668,7 @@ const ProfileFeedGrid = memo(({
                     navigate('/audio-editor', { state: { audioUrl: item.audioURL || item.audioUrl || item.soundUrl || '', trackId: item.id, title: trackTitle } });
                   }}
                   aria-label="Open in Audio Studio"
-                  className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   title="Open in Audio Studio"
                 >
                   <Sliders className="w-4 h-4" />
@@ -690,9 +702,11 @@ const ProfileFeedGrid = memo(({
                   <button
                     type="button"
                     data-testid={`like-button-${item.id}`}
+                    aria-pressed={Boolean(likedPosts[item.id])}
+                    aria-label={likedPosts[item.id] ? "Unlike track" : "Like track"}
                     onClick={(e) => handleQuickLike(e, item)}
                     className={cn(
-                      "flex items-center gap-1 hover:text-rose-500 transition-colors",
+                      "min-h-[36px] px-1.5 flex items-center gap-1 hover:text-rose-500 transition-colors cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                       likedPosts[item.id] && "text-rose-500"
                     )}
                   >
@@ -711,7 +725,7 @@ const ProfileFeedGrid = memo(({
                     onClick={(e) => handleQuickBookmark(e, item)}
                     aria-label={savedMap[item.id] ? "Remove bookmark" : "Bookmark track"}
                     title={savedMap[item.id] ? "Remove bookmark" : "Bookmark track"}
-                    className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                    className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <Bookmark className={cn("w-3.5 h-3.5", savedMap[item.id] && "fill-indigo-500 text-indigo-500")} />
                   </button>
@@ -720,13 +734,13 @@ const ProfileFeedGrid = memo(({
                     onClick={(e) => handleQuickShare(e, item)}
                     aria-label="Share track"
                     title="Share track"
-                    className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                    className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <Share2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
@@ -753,86 +767,83 @@ const ProfileFeedGrid = memo(({
           const isVid = item.type === 'video' || item.type === 'reel' || Boolean(item.duration);
           const isReel = isReelsTab || item.type === 'reel';
           const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
+          const formattedDate = formatSafeDate(item.createdAt, { month: 'short', day: 'numeric' });
+          const openPost = () => (onPostClick ? onPostClick(item) : navigate(isReel ? `/reels?reelId=${item.id}` : `/post/${item.id}`));
 
           return (
-            <div
+            <article
               key={item.id || idx}
-              role="button"
-              tabIndex={0}
-              onClick={() => onPostClick?.(item) || (isReel ? navigate(`/reels?reelId=${item.id}`) : navigate(`/post/${item.id}`))}
-              onKeyDown={(e) => {
-                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                  e.preventDefault();
-                  if (onPostClick) onPostClick(item);
-                  else navigate(isReel ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
-                }
-              }}
               className={cn(
-                "group relative rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer border transition-transform hover:scale-[1.015]",
+                "group relative rounded-xl sm:rounded-2xl overflow-hidden border transition-transform hover:scale-[1.015]",
                 isDark ? "border-white/[0.08] bg-[#080F2E]" : "border-slate-200/80 bg-white",
                 isReel ? "aspect-[9/16]" : "aspect-square"
               )}
             >
-              {mediaUrl ? (
-                <LazyImage
-                  src={mediaUrl}
-                  alt={item.title || item.caption || item.text || 'Media item'}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className={cn(
-                  "w-full h-full flex flex-col justify-between p-4 text-left",
-                  isDark
-                    ? "bg-[#080F2E] text-slate-100"
-                    : "bg-white text-slate-800"
-                )}>
-                  <span className="text-xs font-medium line-clamp-5 leading-relaxed">
-                    {item.content || item.caption || item.text || item.title || 'Post'}
-                  </span>
-                  <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
-                    <div className="flex items-center gap-2.5 sm:hidden tabular-nums">
-                      <span className="inline-flex items-center gap-1">
-                        <Heart className="w-3 h-3" />
-                        {likeCount(item)}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <MessageCircle className="w-3 h-3" />
-                        {commentCount(item)}
-                      </span>
-                    </div>
-                    <span className="hidden sm:inline capitalize">{item.type || 'post'}</span>
-                    <span className="tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</span>
-                  </div>
-                </div>
-              )}
-
-              {isVid && (
-                <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold">
-                  {isReel ? <Film className="w-3 h-3" /> : <Play className="w-3 h-3 fill-white" />}
-                  <span>{item.duration || (isReel ? 'Reel' : 'Video')}</span>
-                </div>
-              )}
-
-              {/* Tag indicator on tagged tab */}
-              {activeTab === 'tagged' && (
-                <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-indigo-600/80 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold">
-                  <Tag className="w-3 h-3" />
-                  <span>Tagged</span>
-                </div>
-              )}
-
-              {/* Engagement & Tip Overlay (always reachable bottom bar on touch media tiles, centered hover on sm+) */}
-              <div
-                className={cn(
-                  "absolute inset-0 transition-opacity flex flex-col text-white",
-                  mediaUrl
-                    ? "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent sm:bg-none sm:bg-black/60 sm:backdrop-blur-[2px] justify-end sm:justify-center items-stretch sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-4"
-                    : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-[2px] justify-center items-center gap-3 p-4"
-                )}
+              <button
+                type="button"
+                onClick={openPost}
+                aria-label={item.title || item.caption || item.text || 'Open post'}
+                className="w-full h-full block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
-                <div className="flex items-center justify-between sm:justify-center gap-3 sm:gap-4 w-full">
+                {mediaUrl ? (
+                  <LazyImage
+                    src={mediaUrl}
+                    alt={item.title || item.caption || item.text || 'Media item'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className={cn(
+                    "w-full h-full flex flex-col justify-between p-4 text-left",
+                    isDark
+                      ? "bg-[#080F2E] text-slate-100"
+                      : "bg-white text-slate-800"
+                  )}>
+                    <span className="text-xs font-medium line-clamp-5 leading-relaxed">
+                      {item.content || item.caption || item.text || item.title || 'Post'}
+                    </span>
+                    <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                      <div className="flex items-center gap-2.5 sm:hidden tabular-nums">
+                        <span className="inline-flex items-center gap-1">
+                          <Heart className="w-3 h-3" />
+                          {likeCount(item)}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <MessageCircle className="w-3 h-3" />
+                          {commentCount(item)}
+                        </span>
+                      </div>
+                      <span className="hidden sm:inline capitalize">{item.type || 'post'}</span>
+                      <span className="tabular-nums">{formattedDate || ''}</span>
+                    </div>
+                  </div>
+                )}
+
+                {isVid && (
+                  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold pointer-events-none">
+                    {isReel ? <Film className="w-3 h-3" /> : <Play className="w-3 h-3 fill-white" />}
+                    <span>{item.duration || (isReel ? 'Reel' : 'Video')}</span>
+                  </div>
+                )}
+
+                {/* Tag indicator on tagged tab */}
+                {activeTab === 'tagged' && (
+                  <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-indigo-600/80 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold pointer-events-none">
+                    <Tag className="w-3 h-3" />
+                    <span>Tagged</span>
+                  </div>
+                )}
+
+                {/* Engagement Overlay (non-interactive counters inside card button) */}
+                <div
+                  className={cn(
+                    "absolute inset-0 pointer-events-none transition-opacity flex flex-col text-white",
+                    mediaUrl
+                      ? "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent sm:bg-none sm:bg-black/60 sm:backdrop-blur-[2px] justify-end sm:justify-center items-stretch sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-4"
+                      : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-[2px] justify-center items-center gap-3 p-4"
+                  )}
+                >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold tabular-nums">
                       <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white text-white" />
@@ -843,37 +854,24 @@ const ProfileFeedGrid = memo(({
                       <span>{commentCount(item)}</span>
                     </div>
                   </div>
-
-                  {onOpenTipModal && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenTipModal();
-                      }}
-                      className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/25 text-amber-200 text-[11px] font-semibold border border-amber-400/35 cursor-pointer active:scale-95"
-                    >
-                      <Coins className="w-3 h-3 text-amber-300" />
-                      <span>Tip</span>
-                    </button>
-                  )}
                 </div>
+              </button>
 
-                {onOpenTipModal && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenTipModal();
-                    }}
-                    className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-semibold border border-amber-400/30 transition-all cursor-pointer active:scale-95"
-                  >
-                    <Coins className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Tip</span>
-                  </button>
-                )}
-              </div>
-            </div>
+              {onOpenTipModal && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenTipModal();
+                  }}
+                  aria-label="Tip creator"
+                  className="absolute bottom-2 right-2 z-10 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 text-[11px] font-semibold border border-amber-400/35 cursor-pointer active:scale-95 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                >
+                  <Coins className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Tip</span>
+                </button>
+              )}
+            </article>
           );
         })}
       </div>
@@ -893,62 +891,62 @@ const ProfileFeedGrid = memo(({
           const isVid = item.type === 'video' || item.type === 'reel';
           const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
           const isLiked = Boolean(likedPosts[item.id]);
+          const openPost = () => (onPostClick ? onPostClick(item) : navigate(item.type === 'reel' ? `/reels?reelId=${item.id}` : `/post/${item.id}`));
 
           return (
-            <div
+            <article
               key={item.id || idx}
-              role="button"
-              tabIndex={0}
-              onClick={() => onPostClick?.(item) || (item.type === 'reel' ? navigate(`/reels?reelId=${item.id}`) : navigate(`/post/${item.id}`))}
-              onKeyDown={(e) => {
-                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                  e.preventDefault();
-                  if (onPostClick) onPostClick(item);
-                  else navigate(item.type === 'reel' ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
-                }
-              }}
               className={cn(
-                "break-inside-avoid rounded-2xl overflow-hidden cursor-pointer border transition-all duration-200 hover:shadow-lg group",
+                "break-inside-avoid rounded-2xl overflow-hidden border transition-all duration-200 hover:shadow-lg group",
                 isDark ? "bg-[#080F2E]/90 border-white/[0.08] hover:border-white/20" : "bg-white border-slate-200 hover:border-slate-300"
               )}
             >
-              {mediaUrl && (
-                <div className="relative overflow-hidden bg-slate-900">
-                  <LazyImage
-                    src={mediaUrl}
-                    alt={item.title || item.caption || item.text || 'Media'}
-                    className="w-full object-cover max-h-96 group-hover:scale-102 transition-transform duration-300"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                  {isVid && (
-                    <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold">
-                      <Play className="w-3 h-3 fill-white" />
-                      <span>{item.duration || 'Video'}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="p-3.5 space-y-2.5">
-                {(item.content || item.caption || item.text) && (
-                  <p className={cn(
-                    "text-xs leading-relaxed line-clamp-3",
-                    isDark ? "text-slate-200" : "text-slate-800"
-                  )}>
-                    {item.content || item.caption || item.text}
-                  </p>
+              <button
+                type="button"
+                onClick={openPost}
+                className="w-full text-left block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+              >
+                {mediaUrl && (
+                  <div className="relative overflow-hidden bg-slate-900">
+                    <LazyImage
+                      src={mediaUrl}
+                      alt={item.title || item.caption || item.text || 'Media'}
+                      className="w-full object-cover max-h-96 group-hover:scale-102 transition-transform duration-300"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                    {isVid && (
+                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold">
+                        <Play className="w-3 h-3 fill-white" />
+                        <span>{item.duration || 'Video'}</span>
+                      </div>
+                    )}
+                  </div>
                 )}
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-white/5">
+                {(item.content || item.caption || item.text) && (
+                  <div className="px-3.5 pt-3.5 pb-2">
+                    <p className={cn(
+                      "text-xs leading-relaxed line-clamp-3",
+                      isDark ? "text-slate-200" : "text-slate-800"
+                    )}>
+                      {item.content || item.caption || item.text}
+                    </p>
+                  </div>
+                )}
+              </button>
+
+              <div className="px-3.5 pb-3 pt-1.5">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-100 dark:border-white/5">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       data-testid={`like-button-${item.id}`}
                       aria-pressed={isLiked}
+                      aria-label={isLiked ? "Unlike post" : "Like post"}
                       onClick={(e) => handleQuickLike(e, item)}
                       className={cn(
-                        "flex items-center gap-1 hover:text-rose-500 transition-colors",
+                        "min-h-[36px] px-1.5 flex items-center gap-1 hover:text-rose-500 transition-colors cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                         isLiked && "text-rose-500"
                       )}
                     >
@@ -969,7 +967,7 @@ const ProfileFeedGrid = memo(({
                           e.stopPropagation();
                           onOpenTipModal();
                         }}
-                        className="min-h-[36px] px-2 flex items-center gap-1 rounded-lg text-[11px] font-semibold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        className="min-h-[36px] px-2 flex items-center gap-1 rounded-lg text-[11px] font-semibold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                         title="Tip creator"
                       >
                         <Coins className="w-3.5 h-3.5" />
@@ -982,7 +980,7 @@ const ProfileFeedGrid = memo(({
                       onClick={(e) => handleQuickBookmark(e, item)}
                       aria-label={savedMap[item.id] ? "Remove bookmark" : "Bookmark post"}
                       className={cn(
-                        "min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                        "min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                         savedMap[item.id] ? "text-indigo-500" : "text-slate-400"
                       )}
                       title={savedMap[item.id] ? "Remove bookmark" : "Bookmark post"}
@@ -994,7 +992,7 @@ const ProfileFeedGrid = memo(({
                       type="button"
                       onClick={(e) => handleQuickShare(e, item)}
                       aria-label="Share post"
-                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                       title="Share"
                     >
                       <Share2 className="w-3.5 h-3.5" />
@@ -1002,7 +1000,7 @@ const ProfileFeedGrid = memo(({
                   </div>
                 </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
@@ -1024,89 +1022,87 @@ const ProfileFeedGrid = memo(({
         const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: null })
           || `user ${String(profile?.id || profile?.uid || item.authorId || '').slice(0, 6)}`;
         const authorAvatar = resolveAvatarUrl(profile?.photoURL || item.authorAvatar, authorName, profile?.id || profile?.uid || item.authorId);
-        const handle = profile?.username ? `@${profile.username}` : '';
+        const formattedFeedDate = formatSafeDate(item.createdAt, { month: 'short', day: 'numeric' });
+        const openPost = () => (onPostClick ? onPostClick(item) : navigate(`/post/${item.id}`));
 
         return (
-          <div
+          <article
             key={item.id || idx}
-            role="button"
-            tabIndex={0}
-            onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
-            onKeyDown={(e) => {
-              if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                e.preventDefault();
-                if (onPostClick) onPostClick(item);
-                else navigate(`/post/${item.id}`);
-              }
-            }}
             className={cn(
-              "rounded-2xl border transition-all duration-200 overflow-hidden cursor-pointer",
+              "rounded-2xl border transition-all duration-200 overflow-hidden",
               isDark ? "bg-[#080F2E]/90 border-white/[0.08] hover:border-white/20" : "bg-white border-slate-200 hover:border-slate-300"
             )}
           >
-            {/* Header: Author Info */}
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-white/10 shrink-0">
-                  {authorAvatar ? (
-                    <LazyImage src={authorAvatar} alt={authorName} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center font-bold text-sm text-purple-400">
-                      {authorName.charAt(0)}
+            {/* Clickable Header + Body Button */}
+            <button
+              type="button"
+              onClick={openPost}
+              className="w-full text-left block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+            >
+              {/* Header: Author Info */}
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-white/10 shrink-0">
+                    {authorAvatar ? (
+                      <LazyImage src={authorAvatar} alt={authorName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-sm text-purple-400">
+                        {authorName.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                      {authorName}
+                    </h4>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{handle}</span>
+                      {formattedFeedDate && (
+                        <>
+                          <span>·</span>
+                          <span>{formattedFeedDate}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {profile?.isVerified && (
+                    <ShieldCheck className="w-4 h-4 text-blue-500" />
+                  )}
+                </div>
+              </div>
+
+              {/* Post Text Caption */}
+              {(item.content || item.caption || item.text) && (
+                <div className="px-4 pb-3">
+                  <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                    {item.content || item.caption || item.text}
+                  </p>
+                </div>
+              )}
+
+              {/* Media Body */}
+              {mediaUrl && (
+                <div className="relative w-full bg-black max-h-[520px] overflow-hidden flex items-center justify-center">
+                  <LazyImage
+                    src={mediaUrl}
+                    alt={item.title || 'Post media'}
+                    className="w-full max-h-[520px] object-contain"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                  {isVid && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors">
+                      <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-lg">
+                        <Play className="w-6 h-6 fill-white ml-0.5" />
+                      </div>
                     </div>
                   )}
                 </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                    {authorName}
-                  </h4>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <span>{handle}</span>
-                    {item.createdAt && (
-                      <>
-                        <span>·</span>
-                        <span>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {profile?.isVerified && (
-                  <ShieldCheck className="w-4 h-4 text-blue-500" />
-                )}
-              </div>
-            </div>
-
-            {/* Post Text Caption */}
-            {(item.content || item.caption || item.text) && (
-              <div className="px-4 pb-3">
-                <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-200">
-                  {item.content || item.caption || item.text}
-                </p>
-              </div>
-            )}
-
-            {/* Media Body */}
-            {mediaUrl && (
-              <div className="relative w-full bg-black max-h-[520px] overflow-hidden flex items-center justify-center">
-                <LazyImage
-                  src={mediaUrl}
-                  alt={item.title || 'Post media'}
-                  className="w-full max-h-[520px] object-contain"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-                {isVid && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                    <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-lg">
-                      <Play className="w-6 h-6 fill-white ml-0.5" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </button>
 
             {/* Footer Actions */}
             <div className="p-4 flex items-center justify-between border-t border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-400">
@@ -1118,7 +1114,7 @@ const ProfileFeedGrid = memo(({
                   aria-label={isLiked ? "Unlike post" : "Like post"}
                   onClick={(e) => handleQuickLike(e, item)}
                   className={cn(
-                    "flex items-center gap-1.5 text-xs font-semibold hover:text-rose-500 transition-colors",
+                    "min-h-[36px] px-1.5 flex items-center gap-1.5 text-xs font-semibold hover:text-rose-500 transition-colors cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     isLiked && "text-rose-500"
                   )}
                 >
@@ -1140,7 +1136,7 @@ const ProfileFeedGrid = memo(({
                       e.stopPropagation();
                       onOpenTipModal();
                     }}
-                    className="min-h-[36px] px-2.5 flex items-center gap-1 rounded-lg text-xs font-semibold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                    className="min-h-[36px] px-2.5 flex items-center gap-1 rounded-lg text-xs font-semibold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                     title="Tip creator"
                   >
                     <Coins className="w-4 h-4" />
@@ -1153,7 +1149,7 @@ const ProfileFeedGrid = memo(({
                   onClick={(e) => handleQuickBookmark(e, item)}
                   aria-label={savedMap[item.id] ? "Remove from saved" : "Bookmark post"}
                   className={cn(
-                    "min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    "min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     savedMap[item.id] ? "text-indigo-500" : "text-slate-400"
                   )}
                   title={savedMap[item.id] ? "Remove from saved" : "Bookmark post"}
@@ -1165,14 +1161,14 @@ const ProfileFeedGrid = memo(({
                   type="button"
                   onClick={(e) => handleQuickShare(e, item)}
                   aria-label="Share post"
-                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   title="Share post"
                 >
                   <Share2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
-          </div>
+          </article>
         );
       })}
     </div>

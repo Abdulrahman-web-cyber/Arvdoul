@@ -41,7 +41,8 @@ import {
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickHandle, deriveHandle, pickDisplayName, resolveRoyalFlag } from '../../services/profileReadModel.js';
+import { pickHandle, deriveHandle, pickDisplayName, resolveRoyalFlag, resolveCreatorFlag } from '../../services/profileReadModel.js';
+import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
@@ -158,19 +159,12 @@ export const ProfileLevelProgressCard = memo(({
   if (!levelInfo) {
     const handleOpenCitizenship = () => (onOpenRoadmap ? onOpenRoadmap('citizenship') : navigate?.(passportUrl));
     return (
-      <div
-        onClick={handleOpenCitizenship}
-        onKeyDown={(e) => {
-          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            handleOpenCitizenship();
-          }
-        }}
-        className={cn(cardSurface, "cursor-pointer group/levelcard hover:border-arvdoul-purple/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple")}
-        role="button"
-        tabIndex={0}
-      >
-        <div className="flex items-center gap-2.5">
+      <div className={cardSurface}>
+        <button
+          type="button"
+          onClick={handleOpenCitizenship}
+          className="flex items-center gap-2.5 text-left w-full rounded-xl p-1 -m-1 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+        >
           <div className={cn(
             "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
             isDark ? "bg-purple-500/15 text-purple-300" : "bg-purple-50 text-purple-700"
@@ -181,16 +175,13 @@ export const ProfileLevelProgressCard = memo(({
             <div className="text-xs font-semibold truncate">Civic Standing</div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Initialize citizenship</div>
           </div>
-        </div>
+        </button>
 
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate?.(passportUrl);
-          }}
+          onClick={() => navigate?.(passportUrl)}
           className={cn(
-            "w-full min-h-[40px] py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+            "w-full min-h-[44px] py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
               ? "bg-white/[0.05] hover:bg-white/[0.09] border-white/10 text-slate-100"
               : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
@@ -212,23 +203,13 @@ export const ProfileLevelProgressCard = memo(({
   const handleOpenLevels = () => (onOpenRoadmap ? onOpenRoadmap('levels') : navigate?.(passportUrl));
 
   return (
-    <div
-      onClick={handleOpenLevels}
-      onKeyDown={(e) => {
-        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          handleOpenLevels();
-        }
-      }}
-      className={cn(
-        cardSurface,
-        "cursor-pointer group/levelcard hover:border-arvdoul-purple/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-      )}
-      role="button"
-      tabIndex={0}
-      title="View Level Progression & Citizenship Roadmap"
-    >
-      <div className="flex items-center justify-between gap-2.5">
+    <div className={cardSurface}>
+      <button
+        type="button"
+        onClick={handleOpenLevels}
+        title="View Level Progression & Citizenship Roadmap"
+        className="flex items-center justify-between gap-2.5 text-left w-full rounded-xl p-1 -m-1 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+      >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -254,17 +235,14 @@ export const ProfileLevelProgressCard = memo(({
             </div>
           </div>
         </div>
-      </div>
+      </button>
 
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate?.(passportUrl);
-          }}
+          onClick={() => navigate?.(passportUrl)}
           className={cn(
-            "flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+            "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
               ? "bg-white/[0.05] hover:bg-white/[0.1] text-slate-100 border-white/10"
               : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200"
@@ -275,16 +253,19 @@ export const ProfileLevelProgressCard = memo(({
           <span className="truncate">Passport</span>
         </button>
 
-        <span
+        <button
+          type="button"
+          onClick={handleOpenLevels}
           className={cn(
-            "min-h-[38px] px-2.5 py-1.5 rounded-xl text-[11px] font-semibold inline-flex items-center justify-center border shrink-0 transition-colors",
+            "min-h-[44px] px-3 py-1.5 rounded-xl text-[11px] font-semibold inline-flex items-center justify-center border shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
-              ? "border-purple-500/25 bg-purple-500/10 text-purple-300 group-hover/levelcard:bg-purple-500/20"
-              : "border-purple-200 bg-purple-50 text-arvdoul-purple group-hover/levelcard:bg-purple-100/80"
+              ? "border-purple-500/25 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
+              : "border-purple-200 bg-purple-50 text-arvdoul-purple hover:bg-purple-100/80"
           )}
+          title="View Level Progression Roadmap"
         >
           Roadmap
-        </span>
+        </button>
       </div>
     </div>
   );
@@ -365,8 +346,9 @@ export const ProfileHeroSection = memo(({
   const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || null;
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
 
+  const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
   const isVerified = Boolean(profile?.isVerified === true);
-  const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
+  const isCreator = resolveCreatorFlag(profile || {}, {}, userLevel);
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
   const creatorBadgeLabel = useMemo(
@@ -374,7 +356,6 @@ export const ProfileHeroSection = memo(({
     [profile?.level, isCreator],
   );
 
-  const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
   const verificationLevelGate = LevelModule.LEVEL_GATES?.verifiedPriority ?? null;
   const isLevelEligibleForVerification = userLevel !== null && verificationLevelGate !== null && userLevel >= verificationLevelGate;
   const sovereignGate = LevelModule.LEVEL_GATES?.sovereign ?? null;
@@ -516,7 +497,7 @@ export const ProfileHeroSection = memo(({
                   "w-full h-full rounded-full overflow-hidden ring-2 block relative cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark ? "bg-[#080F2E] ring-[#03071B]" : "bg-slate-100 ring-[#F6F8FC]"
                 )}
-                aria-label="Profile Avatar"
+                aria-label={isOwner ? "Update profile avatar" : "Profile Avatar"}
               >
                 <LazyImage
                   src={avatarUrl}
@@ -544,18 +525,15 @@ export const ProfileHeroSection = memo(({
                 />
               )}
               {isOwner && !isOnline && (
-                <button
-                  type="button"
-                  onClick={onAvatarClick}
-                  aria-label="Update profile photo"
-                  title="Update profile photo"
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    "sm:hidden absolute bottom-0.5 right-0.5 w-7 h-7 rounded-full flex items-center justify-center border shadow-md cursor-pointer",
+                    "pointer-events-none sm:hidden absolute bottom-0.5 right-0.5 w-7 h-7 rounded-full flex items-center justify-center border shadow-md",
                     isDark ? "bg-[#0B1438] border-white/15 text-white" : "bg-white border-slate-200 text-slate-700"
                   )}
                 >
-                  <Camera className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
+                  <Camera className="w-3.5 h-3.5" />
+                </span>
               )}
             </div>
           </div>
@@ -737,17 +715,25 @@ export const ProfileHeroSection = memo(({
                   </button>
                 ) : null}
 
-                {website ? (
-                  <a
-                    href={website.startsWith('http') ? website : `https://${website}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-arvdoul-purple dark:text-purple-400 hover:underline font-medium"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>{website.replace(/^https?:\/\//, '')}</span>
-                  </a>
-                ) : isOwner && onOpenQuickEdit ? (
+                {website ? (() => {
+                  const safeHref = sanitizeProfileUrl(website);
+                  return safeHref ? (
+                    <a
+                      href={safeHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-arvdoul-purple dark:text-purple-400 hover:underline font-medium"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>{website.replace(/^https?:\/\//, '')}</span>
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>{website}</span>
+                    </span>
+                  );
+                })() : isOwner && onOpenQuickEdit ? (
                   <button
                     type="button"
                     onClick={() => onOpenQuickEdit('website')}

@@ -108,6 +108,7 @@ import { getAnalyticsService } from '../services/analyticsService.js';
 
 import ProfilePublicScreen from '../screens/Profile/ProfilePublicScreen';
 import ProfileMyScreen from '../screens/Profile/ProfileMyScreen';
+import ProfilePreviewScreen from '../screens/Profile/ProfilePreviewScreen';
 import AboutScreen from '../screens/Profile/AboutScreen';
 import EditProfileScreen from '../screens/Profile/EditProfileScreen';
 import ProfileFeedGrid from '../components/profile/ProfileFeedGrid';
@@ -312,7 +313,7 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
     expect(relSpy).not.toHaveBeenCalled();
   });
 
-  test('EditProfileScreen renders Creator Suite cleanly (Palette icon) with accessible form controls', async () => {
+  test('EditProfileScreen renders Creator Suite cleanly (Palette icon) with accessible field labels', async () => {
     render(
       <MemoryRouter initialEntries={['/profile/edit']}>
         <EditProfileScreen />
@@ -323,9 +324,50 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
     expect(screen.getByLabelText('Unique Username')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change profile photo' })).toBeInTheDocument();
   });
+
+  test('EditProfileScreen persists all 12 privacy scopes plus tagline/education/gender/locationPrivacy and confirms unsaved Cancel', async () => {
+    render(
+      <MemoryRouter initialEntries={['/profile/edit']}>
+        <EditProfileScreen />
+      </MemoryRouter>
+    );
+
+    const taglineInput = await screen.findByLabelText('Tagline / Status');
+    fireEvent.change(taglineInput, { target: { value: 'Building Arvdoul' } });
+    fireEvent.change(screen.getByLabelText('Education'), { target: { value: 'B.Sc. Systems' } });
+    fireEvent.change(screen.getByLabelText('Gender Identity'), { target: { value: 'Non-binary' } });
+    fireEvent.change(screen.getByLabelText('Location Privacy'), { target: { value: 'connections' } });
+    fireEvent.change(screen.getByLabelText('Custom Links visibility'), { target: { value: 'followers' } });
+    fireEvent.change(screen.getByLabelText('Civic Titles visibility'), { target: { value: 'connections' } });
+    fireEvent.change(screen.getByLabelText('Communities & Collections visibility'), { target: { value: 'only_me' } });
+
+    // Triggering Cancel while dirty opens unsaved-changes confirmation dialog
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Keep Editing/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
+    await waitFor(() => {
+      expect(mockUpdateUserProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tagline: 'Building Arvdoul',
+          education: 'B.Sc. Systems',
+          gender: 'Non-binary',
+          locationPrivacy: 'connections',
+          privacy: expect.objectContaining({
+            links: 'followers',
+            titles: 'connections',
+            communities: 'only_me',
+            collections: 'only_me',
+          }),
+        })
+      );
+    });
+  });
 });
 
-describe('Redesigned Profile Hero, Highlights, and Owner Screen', () => {
+describe('Redesigned Profile Hero, Highlights, Preview, and Owner Screen', () => {
   test('ProfileHeroSection displays Requested / Following / Follow states and wired Share + Options actions', () => {
     const onShare = jest.fn();
     const onOpenOptions = jest.fn();
@@ -391,6 +433,41 @@ describe('Redesigned Profile Hero, Highlights, and Owner Screen', () => {
     await waitFor(() => {
       expect(screen.queryByText('Old Trip')).toBeNull();
     });
+  });
+
+  test('ProfilePreviewScreen switches between Owner, Public, Follower, and Connection perspectives', async () => {
+    render(
+      <MemoryRouter initialEntries={['/profile/preview']}>
+        <ProfilePreviewScreen
+          profile={{
+            id: 'viewer-1',
+            uid: 'viewer-1',
+            username: 'viewer_handle',
+            displayName: 'Viewer One',
+            level: 5,
+            isCreator: true,
+          }}
+        />
+      </MemoryRouter>
+    );
+
+    const group = await screen.findByRole('group', { name: 'Preview perspective' });
+    expect(group).toBeInTheDocument();
+    const publicBtn = screen.getByRole('button', { name: 'Public' });
+    const followerBtn = screen.getByRole('button', { name: 'Follower' });
+    const connectionBtn = screen.getByRole('button', { name: 'Connection' });
+
+    fireEvent.click(publicBtn);
+    expect(publicBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/strangers and public search visitors/i)).toBeInTheDocument();
+
+    fireEvent.click(followerBtn);
+    expect(followerBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/approved followers/i)).toBeInTheDocument();
+
+    fireEvent.click(connectionBtn);
+    expect(connectionBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/mutual friends and close connections/i)).toBeInTheDocument();
   });
 
   test('ProfileMyScreen renders owner actions and switches tabs cleanly', async () => {

@@ -9,10 +9,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Edit3, Shield, Sparkles, Mail, HeartHandshake, Palette, RefreshCw } from "lucide-react";
+import { ArrowLeft, Edit3, Shield, Sparkles, Mail, HeartHandshake, Palette, RefreshCw, Zap } from "lucide-react";
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { Skeleton } from '../../components/UI/Skeleton';
 import { getStoredUid, getStoredUser } from '../../utils/security';
@@ -34,6 +35,7 @@ export default function AboutScreen() {
   const navigate = useNavigate();
   const { userId } = useParams();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
   const { user: authUser } = useAuth();
@@ -148,22 +150,30 @@ export default function AboutScreen() {
     )}>
       {/* Top Bar */}
       <header className={cn(
-        'sticky top-0 z-30 border-b backdrop-blur-xl transition-colors',
-        isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-white/90 border-slate-200'
+        hasTopAppBar
+          ? 'max-w-3xl mx-auto px-4 pt-3'
+          : cn('sticky top-0 z-30 border-b backdrop-blur-xl transition-colors', isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-white/90 border-slate-200')
       )}>
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+        <div className={cn(
+          'flex items-center justify-between gap-3',
+          hasTopAppBar
+            ? cn('px-4 py-3 rounded-2xl border backdrop-blur-xl', isDark ? 'bg-[#080F2E]/85 border-white/[0.08]' : 'bg-white/90 border-slate-200/90 shadow-xs')
+            : 'max-w-3xl mx-auto px-4 h-14'
+        )}>
           <div className="flex items-center gap-2.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className={cn(
-                'p-2 rounded-xl transition-colors cursor-pointer shrink-0',
-                isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
-              )}
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+            {!hasTopAppBar && (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className={cn(
+                  'min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+                )}
+                aria-label="Go back"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <div className="min-w-0">
               <h1 className="text-sm sm:text-base font-bold truncate">
                 About {displayedProfile?.displayName || 'Profile'}
@@ -180,7 +190,7 @@ export default function AboutScreen() {
             <button
               type="button"
               onClick={handleEdit}
-              className="px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer bg-arvdoul-gradient text-white hover:opacity-95 active:scale-95 shrink-0 whitespace-nowrap"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer bg-arvdoul-gradient text-white hover:opacity-95 active:scale-95 shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>Edit Profile</span>
@@ -203,7 +213,7 @@ export default function AboutScreen() {
               type="button"
               onClick={() => targetId && loadProfile(targetId, currentUserId)}
               className={cn(
-                "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer",
+                "min-h-[40px] px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
               )}
             >
@@ -297,7 +307,7 @@ export default function AboutScreen() {
                 <button
                   type="button"
                   onClick={() => navigate('/progress')}
-                  className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                  className="min-h-[40px] px-2.5 rounded-xl text-xs font-semibold text-arvdoul-purple dark:text-[#C896FF] hover:underline cursor-pointer shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 >
                   View System
                 </button>
@@ -307,7 +317,7 @@ export default function AboutScreen() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 border-t border-slate-200 dark:border-white/10">
                   {perks.slice(0, 4).map((perk, i) => (
                     <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/70 dark:border-white/8">
-                      <span className="text-sm mt-0.5">{perk.icon || '⚡'}</span>
+                      <Zap className="w-4 h-4 text-arvdoul-purple shrink-0 mt-0.5" aria-hidden="true" />
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 dark:text-white">{perk.title}</p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{perk.description}</p>

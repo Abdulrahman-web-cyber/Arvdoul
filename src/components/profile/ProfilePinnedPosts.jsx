@@ -15,8 +15,10 @@ import { LazyImage } from '../../components/Shared/LazyImage';
 const ProfilePinnedPosts = memo(({
   posts = [],
   isOwner = false,
+  profileId = null,
   theme = 'light',
   onPostClick,
+  onViewAll,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -79,8 +81,11 @@ const ProfilePinnedPosts = memo(({
 
         <button
           type="button"
-          onClick={() => navigate('/profile')}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer"
+          onClick={() => {
+            if (onViewAll) onViewAll();
+            else navigate(isOwner ? '/profile' : profileId ? `/profile/${profileId}` : '/profile');
+          }}
+          className="min-h-[44px] px-2 -mr-2 inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer"
         >
           <span>View all</span>
           <ChevronRight className="w-3.5 h-3.5" />

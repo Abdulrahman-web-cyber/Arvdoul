@@ -251,8 +251,13 @@ export default function ProfilePublicScreen() {
       await useProfileStore.getState().follow(currentUserId, targetUid);
       // The service may have created a pending request instead of an edge; read
       // the store's truthful post-call state rather than assuming "following".
-      const next = useProfileStore.getState().followStatus;
+      const store = useProfileStore.getState();
+      const next = store.followStatus;
       setRelationship(prev => prev ? { ...prev, isFollowing: Boolean(next?.isFollowing), requestStatus: next?.requestStatus ?? null } : null);
+      if (next?.isFollowing) {
+        store.loadPosts(targetUid, { limit: 30 });
+        store.loadHighlights(targetUid);
+      }
     }
   }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, routeUserId, navigate]);
 
@@ -758,8 +763,9 @@ export default function ProfilePublicScreen() {
               <div className="pt-2 flex justify-center">
                 <button
                   type="button"
+                  disabled={followLoading}
                   onClick={handleFollowToggle}
-                  className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
+                  className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
@@ -797,6 +803,7 @@ export default function ProfilePublicScreen() {
                 theme={theme}
                 isOwner={false}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
+                onViewAll={() => setActiveTab('posts')}
               />
 
               {/* 6. Sticky Underline Tabs Bar with Multi-View Switcher */}
@@ -822,9 +829,11 @@ export default function ProfilePublicScreen() {
               {activeTab === 'posts' && (
                 <ProfilePinnedPosts
                   posts={posts}
+                  profileId={targetUid}
                   isOwner={false}
                   theme={theme}
                   onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  onViewAll={() => setActiveTab('posts')}
                 />
               )}
 
@@ -883,6 +892,19 @@ export default function ProfilePublicScreen() {
             isOwner={false}
             theme={theme}
             capabilities={capabilities}
+            onRelationshipChange={({ type, value }) => {
+              setRelationship((prev) => ({
+                ...(prev || {}),
+                ...(type === 'block'
+                  ? { isBlocking: value }
+                  : type === 'mute'
+                    ? { isMuted: value }
+                    : { isRestricted: value }),
+              }));
+              if (type === 'block' && value === false) {
+                loadPublicProfile();
+              }
+            }}
             onClose={() => setShowOptionsMenu(false)}
           />
         )}

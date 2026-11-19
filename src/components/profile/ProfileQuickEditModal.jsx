@@ -5,12 +5,13 @@
  * @component
  */
 
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useRef } from "react";
 import { X, User, Edit3, Globe, AlignLeft, Sparkles, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';
 import { PROFILE_CONSTRAINTS, isValidWebUrl } from '../../config/profileContracts.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 
@@ -32,6 +33,10 @@ export const ProfileQuickEditModal = memo(({
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const displayNameRef = useRef(null);
+  const bioRef = useRef(null);
+  const websiteRef = useRef(null);
+
   // Keyed on `isOpen` and the target id — never the whole profile object. A
   // realtime snapshot replaces the object identity mid-edit, and an effect
   // keyed on `profile` would then wipe the user's in-progress typing
@@ -44,9 +49,15 @@ export const ProfileQuickEditModal = memo(({
       setTagline(profile?.tagline || '');
       setWebsite(profile?.website || '');
       setErrors({});
+      const timer = setTimeout(() => {
+        if (initialField === 'bio') bioRef.current?.focus();
+        else if (initialField === 'website') websiteRef.current?.focus();
+        else if (initialField === 'displayName') displayNameRef.current?.focus();
+      }, 40);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, profileId]);
+  }, [isOpen, profileId, initialField]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -111,7 +122,13 @@ export const ProfileQuickEditModal = memo(({
 
       await userService.updateUserProfile(userId, updates);
 
-      // Refresh stores
+      // Refresh stores immediately
+      useProfileStore.setState((state) => {
+        if (state.profile && (state.profile.uid === userId || state.profile.id === userId)) {
+          return { profile: { ...state.profile, ...updates } };
+        }
+        return state;
+      });
       useProfileStore.getState().loadProfile(userId, userId);
       const appStoreUser = useAppStore.getState().currentUser;
       if (appStoreUser && (appStoreUser.id === userId || appStoreUser.uid === userId)) {
@@ -124,7 +141,7 @@ export const ProfileQuickEditModal = memo(({
         });
       }
 
-      toast.success('🎉 Profile updated successfully!', { id: toastId });
+      toast.success('Profile updated successfully', { id: toastId });
       onProfileUpdated?.(updates);
       onClose();
     } catch (err) {
@@ -174,7 +191,7 @@ export const ProfileQuickEditModal = memo(({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -187,22 +204,24 @@ export const ProfileQuickEditModal = memo(({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-purple-500" />
+                <User className="w-3.5 h-3.5 text-arvdoul-purple" />
                 <span>Display Name</span>
               </label>
               <span className="text-[10px] text-slate-400">
                 {displayName.length}/{PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
               </span>
             </div>
-            <input aria-label="Display Name"
+            <input
+              ref={displayNameRef}
+              aria-label="Display Name"
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
               placeholder="Your full or display name"
               className={cn(
-                "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition",
-                errors.displayName ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-purple-500" : "bg-white border-slate-200 text-slate-900 focus:border-purple-600")
+                "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                errors.displayName ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
               )}
             />
             {errors.displayName && (
@@ -221,14 +240,16 @@ export const ProfileQuickEditModal = memo(({
                 {bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
               </span>
             </div>
-            <textarea aria-label="Bio"
+            <textarea
+              ref={bioRef}
+              aria-label="Bio"
               rows={4}
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, PROFILE_CONSTRAINTS.BIO.MAX_LENGTH))}
               placeholder="Tell the community about yourself, your creative passions, or what you build..."
               className={cn(
-                "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition resize-none",
-                errors.bio ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-purple-500" : "bg-white border-slate-200 text-slate-900 focus:border-purple-600")
+                "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition resize-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                errors.bio ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
               )}
             />
             {errors.bio && (
@@ -240,7 +261,7 @@ export const ProfileQuickEditModal = memo(({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                <Sparkles className="w-3.5 h-3.5 text-arvdoul-purple" />
                 <span>Tagline / Status</span>
               </label>
               <span className="text-[10px] text-slate-400">
@@ -253,8 +274,8 @@ export const ProfileQuickEditModal = memo(({
               onChange={(e) => setTagline(e.target.value.slice(0, PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH))}
               placeholder="e.g. Building audio synths & exploring Web3"
               className={cn(
-                "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition",
-                errors.tagline ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-purple-500" : "bg-white border-slate-200 text-slate-900 focus:border-purple-600")
+                "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                errors.tagline ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
               )}
             />
           </div>
@@ -263,18 +284,20 @@ export const ProfileQuickEditModal = memo(({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-purple-500" />
+                <Globe className="w-3.5 h-3.5 text-arvdoul-purple" />
                 <span>Website / Link</span>
               </label>
             </div>
-            <input aria-label="Website / Link"
+            <input
+              ref={websiteRef}
+              aria-label="Website / Link"
               type="text"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
               placeholder="e.g. yourwebsite.com or https://..."
               className={cn(
-                "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition",
-                errors.website ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-purple-500" : "bg-white border-slate-200 text-slate-900 focus:border-purple-600")
+                "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                errors.website ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
               )}
             />
             {errors.website && (
@@ -289,7 +312,7 @@ export const ProfileQuickEditModal = memo(({
               onClick={onClose}
               disabled={isSaving}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer",
+                "flex-1 py-2.5 min-h-[44px] rounded-xl text-xs font-bold border transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark 
                   ? "border-white/10 hover:bg-white/5 text-slate-300" 
                   : "border-slate-200 hover:bg-slate-50 text-slate-700"
@@ -301,7 +324,8 @@ export const ProfileQuickEditModal = memo(({
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              style={{ background: BRAND_GRADIENT }}
+              className="flex-1 py-2.5 min-h-[44px] rounded-xl hover:opacity-95 text-white font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               {isSaving ? (
                 <>

@@ -15,6 +15,7 @@ import { cn } from '../../lib/utils';
 import { getCroppedImg } from '../../utils/cropImage';
 import { toast } from 'sonner';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const AvatarUploadModal = memo(({
   isOpen,
@@ -149,7 +150,7 @@ const AvatarUploadModal = memo(({
             <button
               type="button"
               onClick={handleClose}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               aria-label="Close modal"
             >
               <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
@@ -196,7 +197,7 @@ const AvatarUploadModal = memo(({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors flex items-center gap-1.5"
+                    className="px-4 py-2.5 min-h-[44px] rounded-full text-xs font-semibold bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Choose Different</span>
@@ -206,7 +207,7 @@ const AvatarUploadModal = memo(({
                     <button
                       type="button"
                       onClick={handleClose}
-                      className="px-4 py-2.5 rounded-full text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                      className="px-4 py-2.5 min-h-[44px] rounded-full text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                     >
                       Cancel
                     </button>
@@ -214,7 +215,8 @@ const AvatarUploadModal = memo(({
                       type="button"
                       onClick={handleSaveCrop}
                       disabled={isProcessing}
-                      className="px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-1.5 disabled:opacity-50"
+                      style={{ background: BRAND_GRADIENT }}
+                      className="px-5 py-2.5 min-h-[44px] rounded-full text-xs font-semibold text-white hover:opacity-90 shadow-md transition-opacity flex items-center gap-1.5 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                     >
                       {isProcessing ? (
                         <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -229,7 +231,7 @@ const AvatarUploadModal = memo(({
             ) : (
               /* Initial Selection View */
               <div className="space-y-4 text-center py-2">
-                <div className="relative w-32 h-32 mx-auto rounded-full overflow-hidden p-1 bg-gradient-to-tr from-arvdoul-purple via-arvdoul-blue to-arvdoul-glow-cyan shadow-xl">
+                <div className="relative w-32 h-32 mx-auto rounded-full overflow-hidden p-1 shadow-xl" style={{ background: BRAND_GRADIENT }}>
                   <div className="w-full h-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                     {currentAvatarUrl ? (
                       <LazyImage
@@ -254,7 +256,8 @@ const AvatarUploadModal = memo(({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full py-3 px-4 rounded-2xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-95 shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2"
+                    style={{ background: BRAND_GRADIENT }}
+                    className="w-full py-3 min-h-[44px] px-4 rounded-2xl font-semibold text-sm text-white hover:opacity-95 shadow-lg shadow-arvdoul-purple/25 transition-all flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <Upload className="w-4 h-4" />
                     <span>Select from Device</span>
@@ -265,7 +268,7 @@ const AvatarUploadModal = memo(({
                       type="button"
                       onClick={handleRemove}
                       disabled={isProcessing}
-                      className="w-full py-2.5 px-4 rounded-2xl text-xs font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 min-h-[44px] px-4 rounded-2xl text-xs font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Revert to Default Avatar</span>
