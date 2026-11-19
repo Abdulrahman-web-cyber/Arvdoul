@@ -1,6 +1,14 @@
 // src/screens/StoriesScreen.jsx
+//
+// Arvdoul Vibes Directory + Fullscreen Accessible Viewer (Part 1 Core Experience):
+//   - Creator-grouped Vibes grid with search, category filters, cursor pagination,
+//     scroll restoration, offline/cached indicator, and ?archive=open deep link
+//   - Fullscreen accessible Viewer powered by shared <VibeRenderer /> (identical 1:1 to Studio Preview)
+//   - Real video playback + buffering-aware progress, computed text duration, pause/play,
+//     keyboard arrows/space/escape, hold-to-pause, swipe-down close, nearby-only preloading
+//   - Safe creator delete confirmation modal, Highlights saver, and Archive memories manager
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -11,17 +19,23 @@ import {
   Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X,
   Sparkles, Music, Users, Loader2, Trash2, Share2, Bookmark, RefreshCw,
   MapPin, Link2, AtSign, Timer, HelpCircle, ChevronLeft, ChevronRight,
-  ExternalLink, Type, Video
-} from "lucide-react";
+  ExternalLink, Type, Video, Pause, Play, WifiOff, Shield
+} from 'lucide-react';
 import { getStoryService } from '../services/storyService';
+import { getSocialGraphService } from '../services/socialGraphService.js';
 import { getMonetizationService } from '../services/monetizationService';
 import { pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { copyToClipboard } from '../utils/shareUtils.js';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import { calculateVibeDuration, getAudienceMeta, isVibeExpired } from '../config/vibeContracts.js';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { LazyImage } from '../components/Shared/LazyImage';
+import VibeRenderer from '../components/vibes/VibeRenderer.jsx';
+import VibeArchiveModal from '../components/vibes/VibeArchiveModal.jsx';
+
+const GRID_SCROLL_KEY = 'arvdoul_vibes_grid_scroll';
 
 // Only categories with a real backing model are offered.
 const CATEGORY_TABS = [
@@ -33,12 +47,18 @@ const CATEGORY_TABS = [
 
 const QUICK_EMOJIS = ['❤️', '🔥', '👏', '😮', '😂', '💎'];
 
+function toMs(val) {
+  if (!val) return 0;
+  if (typeof val?.toDate === 'function') return val.toDate().getTime();
+  if (typeof val === 'object' && typeof val.seconds === 'number') return val.seconds * 1000;
+  const ms = new Date(val).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 function relativeTime(createdAt) {
   if (!createdAt) return null;
-  const ms = typeof createdAt.toDate === 'function'
-    ? createdAt.toDate().getTime()
-    : new Date(createdAt).getTime();
-  if (!Number.isFinite(ms)) return null;
+  const ms = toMs(createdAt);
+  if (!ms) return null;
   const diff = Date.now() - ms;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Just now';
@@ -60,23 +80,31 @@ export default function StoriesScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { highlightId: routeHighlightId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
 
-  // Navigation / Filter State
+  // Navigation / Filter / Feed State
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [archive, setArchive] = useState({ loading: false, error: null, items: [] });
+  const [isOffline, setIsOffline] = useState(
+    () => typeof navigator !== 'undefined' && navigator.onLine === false
+  );
+  const [feedCached, setFeedCached] = useState(false);
+  const [feedHasMore, setFeedHasMore] = useState(false);
+  const [feedLastDocId, setFeedLastDocId] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Viewer State
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [storyProgress, setStoryProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isVideoBuffering, setIsVideoBuffering] = useState(false);
   const [isHoldingChromeHidden, setIsHoldingChromeHidden] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -88,6 +116,7 @@ export default function StoriesScreen() {
   const [storiesError, setStoriesError] = useState(null);
   const [storiesNonce, setStoriesNonce] = useState(0);
   const [highlightGroup, setHighlightGroup] = useState(null);
+  const [archivedPreviewGroup, setArchivedPreviewGroup] = useState(null);
 
   // Viewers & Delete & Highlights Sheets
   const [viewersOpen, setViewersOpen] = useState(false);
@@ -103,12 +132,141 @@ export default function StoriesScreen() {
   const [savingHighlight, setSavingHighlight] = useState(false);
   const [countdownNow, setCountdownNow] = useState(() => Date.now());
 
-  const progressIntervalRef = useRef(null);
+  const progressRafRef = useRef(null);
   const storyAudioRef = useRef(null);
   const stageVideoRef = useRef(null);
   const viewedIdsRef = useRef(new Set());
   const gestureStartRef = useRef(null);
   const holdTimerRef = useRef(null);
+  const preloadedUrlsRef = useRef(new Set());
+
+  // Online / offline status listener
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => {
+      setIsOffline(false);
+      setStoriesNonce((n) => n + 1);
+    };
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
+  // Scroll position save / restore
+  useEffect(() => {
+    if (storiesLoading) return;
+    try {
+      const saved = Number(sessionStorage.getItem(GRID_SCROLL_KEY) || 0);
+      if (Number.isFinite(saved) && saved > 0) {
+        window.scrollTo({ top: saved, behavior: 'auto' });
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [storiesLoading]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      try {
+        sessionStorage.setItem(GRID_SCROLL_KEY, String(window.scrollY || 0));
+      } catch {
+        // Ignore storage quota errors
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const hydrateCreatorGroups = useCallback(async (groups = []) => {
+    if (!groups.length) return [];
+    const graph = getSocialGraphService();
+    const creatorIds = [...new Set(groups.map((g) => g.userId).filter(Boolean))];
+    let creators = new Map();
+    let follows = new Map();
+    try {
+      const [profiles, edges] = await Promise.all([
+        graph.hydrateProfiles(creatorIds, { viewerId: user?.uid || null }),
+        user?.uid ? graph.getEdgeSet(user.uid, creatorIds) : Promise.resolve(new Map()),
+      ]);
+      creators = new Map(profiles.map((p) => [p.id, p]));
+      follows = edges;
+    } catch {
+      toast.error('Some creator details could not be loaded.');
+    }
+
+    return groups
+      .map((g) => {
+        const rawArr = (g.stories || []).filter((st) => !isVibeExpired(st));
+        const storiesArr = rawArr.length ? rawArr : (g.stories || []);
+        const profile = creators.get(g.userId) || null;
+        const edge = follows.get(g.userId) || null;
+        const name = resolveActorName([profile?.displayName, profile?.name], g.userId);
+        const latestMs = Math.max(...storiesArr.map((s) => toMs(s.createdAt)), 0);
+        return {
+          id: g.userId,
+          user: {
+            id: g.userId,
+            name,
+            username: pickHandle([profile?.username]) || deriveHandle(name) || '',
+            avatar: getSafeAvatarUrl(profile?.photoURL, name, g.userId),
+            verified: Boolean(profile?.isVerified),
+            category: edge?.isMutualFriend ? 'Friends' : edge?.isFollowing ? 'Following' : 'Discover',
+          },
+          hasUnseen: storiesArr.some((s) => !s.seen),
+          timeAgo: relativeTime(storiesArr[0]?.createdAt),
+          latestMs,
+          itemsCount: storiesArr.length,
+          activeItemIndex: 0,
+          mediaType: storiesArr[0]?.type || 'image',
+          badgeType: storiesArr[0]?.type || 'image',
+          mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
+          coverUrl: storiesArr[0]?.mediaEdits?.coverUrl || null,
+          backgroundColor: storiesArr[0]?.backgroundColor || '#0c0f24',
+          textColor: storiesArr[0]?.textColor || '#FFFFFF',
+          caption: storiesArr[0]?.content || '',
+          viewsCount: typeof storiesArr[0]?.stats?.views === 'number' ? String(storiesArr[0].stats.views) : null,
+          isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
+          ctaText: storiesArr[0]?.ctaText || '',
+          ctaUrl: storiesArr[0]?.ctaUrl || '',
+          items: storiesArr.map((st) => ({
+            id: st.id,
+            url: st.media?.url || st.content || '',
+            type: st.type || 'image',
+            caption: st.content || '',
+            duration: calculateVibeDuration(st),
+            backgroundColor: st.backgroundColor || '#0c0f24',
+            textColor: st.textColor || '#FFFFFF',
+            font: st.font || st.textStyle?.font || 'display',
+            textStyle: st.textStyle || null,
+            mediaEdits: st.mediaEdits || null,
+            textOverlays: st.textOverlays || null,
+            drawingPaths: st.drawingPaths || null,
+            visibility: st.visibility || 'public',
+            location: st.location || null,
+            linkUrl: st.linkUrl || st.ctaUrl || null,
+            taggedUsers: st.taggedUsers || [],
+            seen: Boolean(st.seen),
+            views: typeof st.stats?.views === 'number' ? String(st.stats.views) : null,
+            ctaText: st.ctaText || '',
+            ctaUrl: st.ctaUrl || '',
+            music: st.music || null,
+            stickers: st.stickers || null,
+          })),
+        };
+      })
+      .filter((g) => g.items.length > 0)
+      .sort((a, b) => {
+        if (user?.uid) {
+          if (a.id === user.uid && b.id !== user.uid) return -1;
+          if (b.id === user.uid && a.id !== user.uid) return 1;
+        }
+        if (a.hasUnseen !== b.hasUnseen) return Number(b.hasUnseen) - Number(a.hasUnseen);
+        return b.latestMs - a.latestMs;
+      });
+  }, [user?.uid]);
 
   // Load Vibes from storyService (Firestore-backed feed)
   useEffect(() => {
@@ -117,79 +275,16 @@ export default function StoriesScreen() {
       try {
         setStoriesLoading(true);
         setStoriesError(null);
-        const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
+        const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 24 });
         if (cancelled) return;
         const groups = feed?.groups || [];
-
-        const { getSocialGraphService } = await import('../services/socialGraphService.js');
-        const graph = getSocialGraphService();
-        const creatorIds = [...new Set(groups.map((g) => g.userId).filter(Boolean))];
-        let creators = new Map();
-        let follows = new Map();
-        try {
-          const [profiles, edges] = await Promise.all([
-            graph.hydrateProfiles(creatorIds, { viewerId: user?.uid || null }),
-            user?.uid ? graph.getEdgeSet(user.uid, creatorIds) : Promise.resolve(new Map()),
-          ]);
-          creators = new Map(profiles.map((p) => [p.id, p]));
-          follows = edges;
-        } catch (err) {
-          toast.error('Some creator details could not be loaded.');
-        }
+        const mapped = await hydrateCreatorGroups(groups);
         if (cancelled) return;
 
-        const mapped = groups.map((g) => {
-          const storiesArr = g.stories || [];
-          const profile = creators.get(g.userId) || null;
-          const edge = follows.get(g.userId) || null;
-          const name = resolveActorName([profile?.displayName, profile?.name], g.userId);
-          return {
-            id: g.userId,
-            user: {
-              id: g.userId,
-              name,
-              username: pickHandle([profile?.username]) || deriveHandle(name) || '',
-              avatar: getSafeAvatarUrl(profile?.photoURL, name, g.userId),
-              verified: Boolean(profile?.isVerified),
-              category: edge?.isMutualFriend ? 'Friends' : edge?.isFollowing ? 'Following' : 'Discover',
-            },
-            hasUnseen: storiesArr.some((s) => !s.seen),
-            timeAgo: relativeTime(storiesArr[0]?.createdAt),
-            itemsCount: storiesArr.length,
-            activeItemIndex: 0,
-            mediaType: storiesArr[0]?.type || 'image',
-            badgeType: storiesArr[0]?.type || 'image',
-            mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
-            backgroundColor: storiesArr[0]?.backgroundColor || '#0c0f24',
-            textColor: storiesArr[0]?.textColor || '#FFFFFF',
-            caption: storiesArr[0]?.content || '',
-            viewsCount: typeof storiesArr[0]?.stats?.views === 'number' ? String(storiesArr[0].stats.views) : null,
-            isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
-            ctaText: storiesArr[0]?.ctaText || '',
-            ctaUrl: storiesArr[0]?.ctaUrl || '',
-            items: storiesArr.map((st) => ({
-              id: st.id,
-              url: st.media?.url || st.content || '',
-              type: st.type || 'image',
-              caption: st.content || '',
-              duration: st.duration || (st.type === 'video' ? 15 : 5),
-              backgroundColor: st.backgroundColor || '#0c0f24',
-              textColor: st.textColor || '#FFFFFF',
-              font: st.font || 'default',
-              location: st.location || null,
-              linkUrl: st.linkUrl || st.ctaUrl || null,
-              taggedUsers: st.taggedUsers || [],
-              seen: Boolean(st.seen),
-              views: typeof st.stats?.views === 'number' ? String(st.stats.views) : null,
-              ctaText: st.ctaText || '',
-              ctaUrl: st.ctaUrl || '',
-              music: st.music || null,
-              stickers: st.stickers || null,
-            })),
-          };
-        }).sort((a, b) => Number(b.hasUnseen) - Number(a.hasUnseen));
-
         setStories(mapped);
+        setFeedCached(Boolean(feed?.cached));
+        setFeedHasMore(Boolean(feed?.hasMore));
+        setFeedLastDocId(feed?.lastDocId || null);
       } catch (err) {
         if (!cancelled) setStoriesError(err?.message || 'Could not load Vibes.');
         if (!cancelled) setStories([]);
@@ -199,7 +294,29 @@ export default function StoriesScreen() {
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid, storiesNonce]);
+  }, [user?.uid, storiesNonce, hydrateCreatorGroups]);
+
+  const handleLoadMoreFeed = async () => {
+    if (!feedHasMore || loadingMore || !feedLastDocId) return;
+    setLoadingMore(true);
+    try {
+      const next = await getStoryService().getStoriesFeed(user?.uid || '', {
+        cacheFirst: false,
+        limit: 24,
+        lastDocId: feedLastDocId,
+      });
+      const existingIds = new Set(stories.map((s) => s.id));
+      const freshGroups = (next?.groups || []).filter((g) => !existingIds.has(g.userId));
+      const mapped = await hydrateCreatorGroups(freshGroups);
+      setStories((prev) => [...prev, ...mapped]);
+      setFeedHasMore(Boolean(next?.hasMore));
+      setFeedLastDocId(next?.lastDocId || null);
+    } catch (err) {
+      toast.error(err?.message || 'Could not load more Vibes.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // Highlight deep links: /highlight/:highlightId or /stories?highlight=<id>
   useEffect(() => {
@@ -216,9 +333,15 @@ export default function StoriesScreen() {
           url: st.media?.url || st.content || '',
           type: st.type || 'image',
           caption: st.content || '',
-          duration: st.duration || (st.type === 'video' ? 15 : 5),
+          duration: calculateVibeDuration(st),
           backgroundColor: st.backgroundColor || '#0c0f24',
           textColor: st.textColor || '#FFFFFF',
+          font: st.font || st.textStyle?.font || 'display',
+          textStyle: st.textStyle || null,
+          mediaEdits: st.mediaEdits || null,
+          textOverlays: st.textOverlays || null,
+          drawingPaths: st.drawingPaths || null,
+          visibility: st.visibility || 'public',
           ctaText: st.ctaText || '',
           ctaUrl: st.ctaUrl || '',
           music: st.music || null,
@@ -258,8 +381,32 @@ export default function StoriesScreen() {
     return () => { cancelled = true; };
   }, [routeHighlightId, searchParams]);
 
+  const handleOpenArchive = useCallback(async () => {
+    setIsCalendarOpen(true);
+    if (!user?.uid) return;
+    setArchive({ loading: true, error: null, items: [] });
+    try {
+      const res = await getStoryService().getArchivedStories(user.uid, { limit: 30 });
+      const items = Array.isArray(res) ? res : (res?.stories || []);
+      setArchive({ loading: false, error: null, items });
+    } catch (err) {
+      setArchive({ loading: false, error: err?.message || 'Could not load your archive.', items: [] });
+    }
+  }, [user?.uid]);
+
+  // Open Archive directly if navigated from Settings (?archive=open)
+  useEffect(() => {
+    if (searchParams.get('archive') === 'open' && user?.uid) {
+      handleOpenArchive();
+      const next = new URLSearchParams(searchParams);
+      next.delete('archive');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams, user?.uid, handleOpenArchive]);
+
   const filteredStories = useMemo(() => {
-    const source = highlightGroup ? [highlightGroup, ...stories] : stories;
+    const base = highlightGroup ? [highlightGroup, ...stories] : stories;
+    const source = archivedPreviewGroup ? [archivedPreviewGroup, ...base] : base;
     return source.filter((story) => {
       if (activeCategory === 'sponsored' && !story.isSponsored) return false;
       if (activeCategory === 'friends' && story.user.category !== 'Friends') return false;
@@ -275,7 +422,7 @@ export default function StoriesScreen() {
       }
       return true;
     });
-  }, [stories, highlightGroup, activeCategory, searchQuery]);
+  }, [stories, highlightGroup, archivedPreviewGroup, activeCategory, searchQuery]);
 
   // Deep link from Home Vibes strip or Notifications: jump directly to a creator's Vibe sequence
   useEffect(() => {
@@ -291,6 +438,7 @@ export default function StoriesScreen() {
   }, [location.state?.vibeUserId, filteredStories]);
 
   const handleOpenStory = (index) => {
+    setArchivedPreviewGroup(null);
     setActiveStoryIndex(index);
     setActiveItemIndex(0);
     setStoryProgress(0);
@@ -302,15 +450,17 @@ export default function StoriesScreen() {
     if (location.state?.vibeUserId) {
       navigate(location.pathname, { replace: true, state: null });
     }
+    setArchivedPreviewGroup(null);
     setActiveStoryIndex(null);
     setActiveItemIndex(0);
     setStoryProgress(0);
     setViewersOpen(false);
     setHighlightSheetOpen(false);
     setIsPaused(false);
+    setIsVideoBuffering(false);
     setIsHoldingChromeHidden(false);
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
+    if (progressRafRef.current) {
+      cancelAnimationFrame(progressRafRef.current);
     }
   }, [location.pathname, location.state?.vibeUserId, navigate]);
 
@@ -326,10 +476,30 @@ export default function StoriesScreen() {
   const activeLocationText = currentItem?.location || locationSticker?.data?.name || null;
   const activeLinkUrl = currentItem?.linkUrl || currentItem?.ctaUrl || null;
 
-  // Report view & mark item seen in state once per opened item
+  // Nearby preloading ONLY (next 1-2 slides' images; zero bulk prefetching)
+  useEffect(() => {
+    if (activeStoryIndex === null || !currentStory) return;
+    const candidates = [];
+    const items = currentStory.items || [];
+    if (items[activeItemIndex + 1]) candidates.push(items[activeItemIndex + 1]);
+    if (items[activeItemIndex + 2]) candidates.push(items[activeItemIndex + 2]);
+    else if (filteredStories[activeStoryIndex + 1]?.items?.[0]) {
+      candidates.push(filteredStories[activeStoryIndex + 1].items[0]);
+    }
+    for (const slide of candidates.slice(0, 2)) {
+      if (slide?.type === 'image' && slide.url && !preloadedUrlsRef.current.has(slide.url)) {
+        preloadedUrlsRef.current.add(slide.url);
+        const img = new Image();
+        img.referrerPolicy = 'no-referrer';
+        img.src = slide.url;
+      }
+    }
+  }, [activeStoryIndex, activeItemIndex, currentStory, filteredStories]);
+
+  // Report view & mark item seen in state once per opened active item
   useEffect(() => {
     const storyId = currentItem?.id;
-    if (activeStoryIndex === null || !storyId || !user?.uid) return;
+    if (activeStoryIndex === null || !storyId || !user?.uid || archivedPreviewGroup) return;
     if (viewedIdsRef.current.has(storyId)) return;
     viewedIdsRef.current.add(storyId);
 
@@ -342,7 +512,7 @@ export default function StoriesScreen() {
     getStoryService()
       .reportStoryView(storyId, user.uid)
       .catch((err) => console.warn('[Vibes] view report failed:', err?.message || err));
-  }, [activeStoryIndex, currentItem?.id, currentStory?.id, user?.uid]);
+  }, [activeStoryIndex, currentItem?.id, currentStory?.id, user?.uid, archivedPreviewGroup]);
 
   // Countdown ticker when countdown sticker is active
   useEffect(() => {
@@ -378,6 +548,8 @@ export default function StoriesScreen() {
       const prev = filteredStories[activeStoryIndex - 1];
       setActiveItemIndex((prev?.items?.length || 1) - 1);
       setStoryProgress(0);
+    } else {
+      setStoryProgress(0);
     }
   }, [activeItemIndex, activeStoryIndex, filteredStories]);
 
@@ -398,18 +570,6 @@ export default function StoriesScreen() {
       setStoryProgress(0);
     }
   }, [activeStoryIndex]);
-
-  // Sync HTML5 video playback for video Vibes
-  useEffect(() => {
-    const vid = stageVideoRef.current;
-    if (!vid || currentItem?.type !== 'video' || activeStoryIndex === null) return;
-    vid.muted = isMuted;
-    if (isPaused) {
-      vid.pause();
-    } else {
-      vid.play().catch((err) => console.warn('[Vibes] video autoplay blocked:', err?.message));
-    }
-  }, [currentItem?.id, currentItem?.type, activeStoryIndex, isPaused, isMuted]);
 
   const handleDeleteStory = async () => {
     const storyId = currentItem?.id;
@@ -435,18 +595,63 @@ export default function StoriesScreen() {
     }
   };
 
-  const handleOpenArchive = useCallback(async () => {
-    setIsCalendarOpen(true);
-    if (!user?.uid) return;
-    setArchive({ loading: true, error: null, items: [] });
+  const handleDeleteArchivedItem = async (storyId) => {
     try {
-      const res = await getStoryService().getArchivedStories(user.uid, { limit: 24 });
-      const items = Array.isArray(res) ? res : (res?.stories || []);
-      setArchive({ loading: false, error: null, items });
+      await getStoryService().deleteArchivedStory(storyId);
+      setArchive((prev) => ({
+        ...prev,
+        items: (prev.items || []).filter((it) => (it.storyId || it.id) !== storyId),
+      }));
+      toast.success('Archived Vibe deleted.');
     } catch (err) {
-      setArchive({ loading: false, error: err?.message || 'Could not load your archive.', items: [] });
+      toast.error(err?.message || 'Could not delete archived Vibe.');
     }
-  }, [user?.uid]);
+  };
+
+  const handlePreviewArchivedItem = (st) => {
+    const id = st.storyId || st.id;
+    setIsCalendarOpen(false);
+    setArchivedPreviewGroup({
+      id: `archive_${id}`,
+      user: {
+        id: user?.uid || '',
+        name: user?.displayName || 'Your Archive',
+        username: user?.username || '',
+        avatar: getSafeAvatarUrl(user?.photoURL, user?.displayName || 'You', user?.uid),
+        verified: Boolean(user?.isVerified),
+        category: 'Archive',
+      },
+      hasUnseen: false,
+      timeAgo: relativeTime(st.createdAt || st.archivedAt),
+      itemsCount: 1,
+      mediaType: st.type || 'image',
+      badgeType: st.type || 'image',
+      mediaUrl: st.media?.url || st.mediaUrl || st.content || '',
+      isSponsored: false,
+      items: [
+        {
+          id,
+          url: st.media?.url || st.mediaUrl || st.content || '',
+          type: st.type || 'image',
+          caption: st.content || '',
+          duration: calculateVibeDuration(st),
+          backgroundColor: st.backgroundColor || '#0c0f24',
+          textColor: st.textColor || '#FFFFFF',
+          font: st.font || st.textStyle?.font || 'display',
+          textStyle: st.textStyle || null,
+          mediaEdits: st.mediaEdits || null,
+          textOverlays: st.textOverlays || null,
+          drawingPaths: st.drawingPaths || null,
+          visibility: st.visibility || 'private',
+          seen: true,
+        },
+      ],
+    });
+    setActiveStoryIndex(0);
+    setActiveItemIndex(0);
+    setStoryProgress(0);
+    setIsPaused(false);
+  };
 
   const handleOpenViewers = async () => {
     const storyId = currentItem?.id;
@@ -544,7 +749,7 @@ export default function StoriesScreen() {
     }
   };
 
-  // Load the current item's poll
+  // Load current item's poll
   const currentPollSticker = (currentItem?.stickers || []).find((s) => s.type === 'poll' && s.data?.pollId);
   const currentPollId = currentPollSticker?.data?.pollId || null;
   useEffect(() => {
@@ -578,44 +783,51 @@ export default function StoriesScreen() {
       await getStoryService().voteOnPoll(currentItem.id, pollId, optionIndex);
     } catch (err) {
       toast.error(err?.message || 'Could not record your vote.');
-      const res = await getStoryService().getPoll(currentItem.id, pollId).catch((e) => {
-        console.warn('[Vibes] poll refresh failed:', e?.message);
-        return null;
-      });
+      const res = await getStoryService().getPoll(currentItem.id, pollId).catch(() => null);
       if (res) setPoll({ loading: false, data: res.poll, voted: res.voted, error: null });
     }
   };
 
-  // Story playback timer
+  // Smooth RAF playback clock for non-video slides (videos drive progress via VibeRenderer onVideoProgress)
   useEffect(() => {
-    if (activeStoryIndex === null || !currentStory || isPaused) {
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-      return;
+    if (activeStoryIndex === null || !currentStory || isPaused || isVideoBuffering) {
+      if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current);
+      return undefined;
     }
-    // Video Vibes advance smoothly via timer capped by video duration (or video onEnded)
-    const duration = (currentItem?.duration || 5) * 1000;
-    const intervalTime = 50;
-    const step = (intervalTime / duration) * 100;
+    if (currentItem?.type === 'video') {
+      // Video duration and progress are driven directly by real <video> element telemetry
+      return undefined;
+    }
 
-    progressIntervalRef.current = setInterval(() => {
-      setStoryProgress((prev) => {
-        if (prev + step >= 100) {
-          if (currentItem?.id) {
-            getStoryService().reportStoryCompletion(currentItem.id).catch((e) => {
-              console.warn('[Vibes] completion not reported:', e?.message);
-            });
-          }
-          advanceItemOrGroup();
-          return 0;
+    const durationMs = Math.max(3000, (currentItem?.duration || calculateVibeDuration(currentItem)) * 1000);
+    let lastTs = performance.now();
+    let elapsedMs = (storyProgress / 100) * durationMs;
+
+    const tick = (now) => {
+      const delta = Math.max(0, Math.min(100, now - lastTs));
+      lastTs = now;
+      elapsedMs += delta;
+      const pct = Math.min(100, (elapsedMs / durationMs) * 100);
+      setStoryProgress(pct);
+      if (pct >= 100) {
+        if (currentItem?.id) {
+          getStoryService().reportStoryCompletion(currentItem.id).catch((e) => {
+            console.warn('[Vibes] completion not reported:', e?.message);
+          });
         }
-        return prev + step;
-      });
-    }, intervalTime);
-
-    return () => {
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        advanceItemOrGroup();
+        return;
+      }
+      progressRafRef.current = requestAnimationFrame(tick);
     };
-  }, [activeStoryIndex, activeItemIndex, isPaused, currentStory, currentItem, advanceItemOrGroup]);
+
+    progressRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current);
+    };
+    // Intentionally depend on slide change / pause / buffering, not storyProgress itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStoryIndex, activeItemIndex, isPaused, isVideoBuffering, currentStory?.id, currentItem?.id, currentItem?.type, advanceItemOrGroup]);
 
   // Background music or standalone audio Vibe playback
   useEffect(() => {
@@ -805,11 +1017,15 @@ export default function StoriesScreen() {
     }
   };
 
+  const currentAudienceLabel = currentItem?.visibility && currentItem.visibility !== 'public'
+    ? getAudienceMeta(currentItem.visibility).shortLabel
+    : null;
+
   return (
     <div
       className={cn(
         'min-h-screen w-full select-none transition-colors duration-300 pb-24',
-        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-gray-900'
+        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
       )}
     >
       {/* ==================== TOP APP HEADER ==================== */}
@@ -817,19 +1033,27 @@ export default function StoriesScreen() {
         className={cn(
           'sticky top-0 z-30 px-4 pt-4 pb-3 flex items-center justify-between backdrop-blur-xl border-b transition-all',
           isDark
-            ? 'bg-[#03071B]/90 border-white/5 shadow-2xl'
-            : 'bg-white/90 border-gray-200/80 shadow-sm'
+            ? 'bg-[#03071B]/90 border-white/10 shadow-2xl'
+            : 'bg-white/90 border-slate-200 shadow-sm'
         )}
       >
         <div className="flex items-center gap-3">
           <ArvdoulLogo size={32} showWordmark={false} />
           <div className="flex flex-col">
-            <h1 className={cn(
-              "text-2xl font-black tracking-tight font-display",
-              isDark ? "text-white" : "text-slate-900"
-            )}>
-              Vibes
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className={cn('text-2xl font-black tracking-tight font-display', isDark ? 'text-white' : 'text-slate-900')}>
+                Vibes
+              </h1>
+              {(isOffline || feedCached) && (
+                <span className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
+                  isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-100 text-amber-800'
+                )}>
+                  {isOffline && <WifiOff className="w-3 h-3" aria-hidden="true" />}
+                  <span>{isOffline ? 'Offline' : 'Cached'}</span>
+                </span>
+              )}
+            </div>
             <div className="w-10 h-1 rounded-full mt-0.5" style={{ background: BRAND_GRADIENT }} />
           </div>
         </div>
@@ -840,13 +1064,13 @@ export default function StoriesScreen() {
             onClick={() => setStoriesNonce((n) => n + 1)}
             aria-label="Refresh Vibes feed"
             className={cn(
-              'w-10 h-10 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
+              'w-11 h-11 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
               isDark
                 ? 'bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10'
-                : 'bg-gray-100 border border-gray-200 text-gray-700 hover:text-black hover:bg-gray-200'
+                : 'bg-slate-100 border border-slate-200 text-slate-700 hover:text-black hover:bg-slate-200'
             )}
           >
-            <RefreshCw className={cn("w-4 h-4", storiesLoading && "animate-spin")} />
+            <RefreshCw className={cn('w-4 h-4', storiesLoading && 'animate-spin')} />
           </button>
 
           <button
@@ -854,10 +1078,10 @@ export default function StoriesScreen() {
             onClick={() => setIsSearchOpen((prev) => !prev)}
             aria-label="Search Vibes"
             className={cn(
-              'w-10 h-10 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
+              'w-11 h-11 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
               isDark
                 ? 'bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10'
-                : 'bg-gray-100 border border-gray-200 text-gray-700 hover:text-black hover:bg-gray-200'
+                : 'bg-slate-100 border border-slate-200 text-slate-700 hover:text-black hover:bg-slate-200'
             )}
           >
             <Search className="w-5 h-5" />
@@ -868,10 +1092,10 @@ export default function StoriesScreen() {
             onClick={() => navigate('/create-story')}
             aria-label="Create new Vibe"
             className={cn(
-              'w-10 h-10 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
+              'w-11 h-11 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
               isDark
                 ? 'bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10'
-                : 'bg-gray-100 border border-gray-200 text-gray-700 hover:text-black hover:bg-gray-200'
+                : 'bg-slate-100 border border-slate-200 text-slate-700 hover:text-black hover:bg-slate-200'
             )}
           >
             <Camera className="w-5 h-5" />
@@ -882,10 +1106,10 @@ export default function StoriesScreen() {
             onClick={handleOpenArchive}
             aria-label="Vibe memories archive"
             className={cn(
-              'w-10 h-10 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
+              'w-11 h-11 rounded-2xl flex items-center justify-center transition-colors cursor-pointer',
               isDark
                 ? 'bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10'
-                : 'bg-gray-100 border border-gray-200 text-gray-700 hover:text-black hover:bg-gray-200'
+                : 'bg-slate-100 border border-slate-200 text-slate-700 hover:text-black hover:bg-slate-200'
             )}
           >
             <Calendar className="w-5 h-5" />
@@ -907,7 +1131,7 @@ export default function StoriesScreen() {
                 'flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border transition-all',
                 isDark
                   ? 'bg-white/5 border-white/10 focus-within:border-white/40'
-                  : 'bg-white border-gray-300 focus-within:border-slate-500 shadow-sm'
+                  : 'bg-white border-slate-300 focus-within:border-slate-500 shadow-sm'
               )}
             >
               <Search className="w-4 h-4 text-slate-400" aria-hidden="true" />
@@ -947,12 +1171,12 @@ export default function StoriesScreen() {
               key={tab.id}
               onClick={() => setActiveCategory(tab.id)}
               className={cn(
-                'min-h-[38px] px-4 py-2 rounded-xl text-xs font-semibold tracking-wide whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer',
+                'min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold tracking-wide whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer',
                 isActive
                   ? 'text-white shadow-md'
                   : isDark
                     ? 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
-                    : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 shadow-sm'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm'
               )}
               style={isActive ? { background: BRAND_GRADIENT } : undefined}
             >
@@ -988,9 +1212,22 @@ export default function StoriesScreen() {
             Add Vibe
           </span>
           <span className={cn('text-[11px] mt-0.5', isDark ? 'text-slate-400' : 'text-slate-500')}>
-            Share a moment
+            Share a 24h moment
           </span>
         </motion.button>
+
+        {/* Loading Skeletons */}
+        {storiesLoading &&
+          [0, 1, 2, 3, 4, 5].map((idx) => (
+            <div
+              key={idx}
+              aria-hidden="true"
+              className={cn(
+                'aspect-[3/4.5] rounded-3xl animate-pulse border',
+                isDark ? 'bg-white/5 border-white/10' : 'bg-slate-200/70 border-slate-200'
+              )}
+            />
+          ))}
 
         {storiesError && !storiesLoading && (
           <div className="col-span-2 sm:col-span-3">
@@ -1007,19 +1244,19 @@ export default function StoriesScreen() {
             'col-span-1 sm:col-span-2 lg:col-span-3 aspect-[3/4.5] sm:aspect-auto rounded-3xl p-6 flex flex-col items-center justify-center text-center border',
             isDark ? 'bg-white/[0.03] border-white/10 text-slate-400' : 'bg-white border-slate-200 text-slate-500 shadow-sm'
           )}>
-            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
+            <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center mb-3', isDark ? 'bg-white/10' : 'bg-slate-100')}>
               <Sparkles className="w-6 h-6" aria-hidden="true" />
             </div>
             <p className={cn('text-sm font-bold', isDark ? 'text-white' : 'text-slate-800')}>
               No Vibes in feed yet
             </p>
-            <p className="text-xs mt-1 max-w-[220px] leading-relaxed">
-              Vibes stay active for 24 hours. Share yours to start the wave.
+            <p className="text-xs mt-1 max-w-[240px] leading-relaxed">
+              Vibes stay active for 24 hours. Share a photo, video, or text Vibe to start the wave.
             </p>
           </div>
         )}
 
-        {filteredStories.map((story, index) => (
+        {!storiesLoading && filteredStories.map((story, index) => (
           <motion.div
             key={story.id}
             role="button"
@@ -1038,7 +1275,7 @@ export default function StoriesScreen() {
               'relative aspect-[3/4.5] rounded-3xl p-3 flex flex-col justify-between cursor-pointer transition-all group overflow-hidden border shadow-lg',
               isDark
                 ? 'bg-[#0B112A] border-white/10 hover:border-white/30'
-                : 'bg-white border-gray-200 hover:border-slate-400 shadow-sm'
+                : 'bg-white border-slate-200 hover:border-slate-400 shadow-sm'
             )}
           >
             {/* Card Background Thumbnail by Media Type */}
@@ -1061,6 +1298,23 @@ export default function StoriesScreen() {
                   <p className="text-xs font-semibold text-white/90 text-center line-clamp-2">{story.caption}</p>
                 )}
               </div>
+            ) : story.mediaType === 'video' ? (
+              story.coverUrl ? (
+                <LazyImage
+                  src={story.coverUrl}
+                  alt={story.caption || story.user.name}
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              ) : (
+                <video
+                  src={story.mediaUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              )
             ) : (
               <LazyImage
                 src={story.mediaUrl}
@@ -1077,8 +1331,8 @@ export default function StoriesScreen() {
               <div className="flex items-center gap-1.5 min-w-0">
                 <div
                   className={cn(
-                    "relative p-0.5 rounded-full shrink-0",
-                    !story.hasUnseen && "bg-white/30"
+                    'relative p-0.5 rounded-full shrink-0',
+                    !story.hasUnseen && 'bg-white/30'
                   )}
                   style={story.hasUnseen ? { background: BRAND_GRADIENT } : undefined}
                 >
@@ -1093,7 +1347,7 @@ export default function StoriesScreen() {
                 <div className="flex flex-col leading-tight min-w-0">
                   <div className="flex items-center gap-1">
                     <span className="text-xs font-bold text-white truncate">
-                      {story.user.name}
+                      {story.user.id === user?.uid ? 'Your Vibe' : story.user.name}
                     </span>
                     {story.user.verified && (
                       <CheckCircle2 className="w-3 h-3 text-sky-400 shrink-0" aria-hidden="true" />
@@ -1142,6 +1396,25 @@ export default function StoriesScreen() {
         ))}
       </div>
 
+      {/* Pagination Load More */}
+      {!storiesLoading && feedHasMore && (
+        <div className="mt-6 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={handleLoadMoreFeed}
+            disabled={loadingMore}
+            className={cn(
+              'min-h-[44px] px-6 py-2.5 rounded-2xl text-xs font-bold border transition-colors cursor-pointer disabled:opacity-60',
+              isDark
+                ? 'bg-white/5 border-white/15 text-white hover:bg-white/10'
+                : 'bg-white border-slate-300 text-slate-900 hover:bg-slate-100 shadow-sm'
+            )}
+          >
+            {loadingMore ? 'Loading more Vibes…' : 'Load more Vibes'}
+          </button>
+        </div>
+      )}
+
       {/* ==================== FULLSCREEN IMMERSIVE VIBE VIEWER ==================== */}
       <AnimatePresence>
         {activeStoryIndex !== null && currentStory && (
@@ -1149,8 +1422,11 @@ export default function StoriesScreen() {
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.97 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.16 }}
             className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Viewing Vibes by ${currentStory.user.name}`}
           >
             {/* Desktop Previous Creator Button */}
             {activeStoryIndex > 0 && !isHoldingChromeHidden && (
@@ -1181,8 +1457,8 @@ export default function StoriesScreen() {
 
               {/* Segmented Progress Bars */}
               <div className={cn(
-                "absolute top-0 left-0 right-0 z-30 p-3 pt-4 flex gap-1.5 transition-opacity duration-150",
-                isHoldingChromeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
+                'absolute top-0 left-0 right-0 z-30 p-3 pt-4 flex gap-1.5 transition-opacity duration-150',
+                isHoldingChromeHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
               )}>
                 {currentStory.items?.map((item, idx) => {
                   const isPast = idx < activeItemIndex;
@@ -1193,7 +1469,7 @@ export default function StoriesScreen() {
                       className="h-1 flex-1 bg-white/25 rounded-full overflow-hidden"
                     >
                       <div
-                        className="h-full bg-white transition-all ease-linear"
+                        className="h-full bg-white"
                         style={{
                           width: isPast ? '100%' : isCurrent ? `${storyProgress}%` : '0%',
                         }}
@@ -1205,14 +1481,14 @@ export default function StoriesScreen() {
 
               {/* Top Navigation Bar */}
               <div className={cn(
-                "absolute top-7 left-0 right-0 z-30 px-4 flex items-center justify-between gap-2 transition-opacity duration-150",
-                isHoldingChromeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
+                'absolute top-7 left-0 right-0 z-30 px-3 flex items-center justify-between gap-2 transition-opacity duration-150',
+                isHoldingChromeHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
               )}>
                 <button
                   type="button"
                   onClick={() => {
                     handleCloseStory();
-                    navigate(`/profile/${currentStory.user.id}`);
+                    if (currentStory.user.id) navigate(`/profile/${currentStory.user.id}`);
                   }}
                   className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer"
                 >
@@ -1234,22 +1510,35 @@ export default function StoriesScreen() {
                         <span className="text-xs text-white/75 shrink-0">• {currentStory.timeAgo}</span>
                       )}
                     </div>
-                    {activeLocationText && (
-                      <span className="text-[11px] text-white/80 flex items-center gap-1 truncate">
-                        <MapPin className="w-3 h-3 shrink-0" aria-hidden="true" />
-                        {activeLocationText}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 min-w-0">
+                      {currentStory.user.username && (
+                        <span className="text-[11px] font-mono text-white/75 truncate">
+                          @{currentStory.user.username}
+                        </span>
+                      )}
+                      {currentAudienceLabel && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/15 text-[10px] font-semibold text-white shrink-0">
+                          <Shield className="w-2.5 h-2.5" aria-hidden="true" />
+                          <span>{currentAudienceLabel}</span>
+                        </span>
+                      )}
+                      {activeLocationText && (
+                        <span className="text-[11px] text-white/80 flex items-center gap-1 truncate">
+                          <MapPin className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          {activeLocationText}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {isOwnStory && (
+                <div className="flex items-center gap-1 shrink-0">
+                  {isOwnStory && !archivedPreviewGroup && (
                     <button
                       type="button"
                       onClick={handleOpenViewers}
                       aria-label="See who viewed this Vibe"
-                      className="h-9 px-3 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center gap-1.5 text-white cursor-pointer"
+                      className="h-11 px-3 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center gap-1.5 text-white cursor-pointer"
                     >
                       <Users className="w-4 h-4" />
                       <span className="text-xs font-bold">{currentItem?.views ?? currentStory.viewsCount ?? '—'}</span>
@@ -1260,26 +1549,34 @@ export default function StoriesScreen() {
                       type="button"
                       onClick={handleOpenHighlightSheet}
                       aria-label="Save Vibe to Highlight"
-                      className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+                      className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
                     >
                       <Bookmark className="w-4 h-4" />
                     </button>
                   )}
-                  {isOwnStory && (
+                  {isOwnStory && !archivedPreviewGroup && (
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteStory(true)}
                       aria-label="Delete this Vibe"
-                      className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:text-red-400 cursor-pointer"
+                      className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:text-red-400 cursor-pointer"
                     >
                       {deletingStory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   )}
                   <button
                     type="button"
+                    onClick={() => setIsPaused((p) => !p)}
+                    aria-label={isPaused ? 'Resume Vibe' : 'Pause Vibe'}
+                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+                  >
+                    {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleShareStory}
                     aria-label="Share this Vibe"
-                    className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -1287,7 +1584,7 @@ export default function StoriesScreen() {
                     type="button"
                     onClick={() => setIsMuted((m) => !m)}
                     aria-label={isMuted ? 'Unmute Vibe' : 'Mute Vibe'}
-                    className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
                   >
                     {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                   </button>
@@ -1295,51 +1592,36 @@ export default function StoriesScreen() {
                     type="button"
                     onClick={handleCloseStory}
                     aria-label="Close Vibes viewer"
-                    className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
 
-              {/* Interactive Multi-Media Stage */}
+              {/* Interactive Multi-Media Stage powered by shared VibeRenderer */}
               <div
                 onMouseDown={handleStagePointerDown}
                 onMouseUp={handleStagePointerEnd}
                 onTouchStart={handleStagePointerDown}
                 onTouchEnd={handleStagePointerEnd}
-                className="relative w-full h-full flex items-center justify-center cursor-pointer"
-                style={currentItem?.type === 'text' || currentItem?.type === 'audio' ? { background: currentItem.backgroundColor || BRAND_GRADIENT } : undefined}
+                className="relative w-full h-full cursor-pointer"
               >
-                {currentItem?.type === 'text' ? (
-                  <div className="px-8 text-center max-w-md">
-                    <p
-                      className="text-2xl sm:text-3xl font-extrabold leading-snug drop-shadow-md"
-                      style={{ color: currentItem.textColor || '#FFFFFF' }}
-                    >
-                      {currentItem.caption}
-                    </p>
+                {!currentItem ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center px-6 text-center bg-[#060918] text-white" role="status">
+                    <p className="font-semibold">Vibe unavailable</p>
                   </div>
-                ) : currentItem?.type === 'audio' ? (
-                  <div className="flex flex-col items-center justify-center px-8 text-center gap-4">
-                    <div className="w-24 h-24 rounded-3xl bg-white/15 border border-white/25 backdrop-blur-xl flex items-center justify-center">
-                      <Music className="w-10 h-10 text-white" aria-hidden="true" />
-                    </div>
-                    {currentItem.caption && (
-                      <p className="text-lg font-bold text-white max-w-xs">{currentItem.caption}</p>
-                    )}
-                    <span className="text-xs font-medium text-white/75">
-                      {isMuted ? 'Muted — tap speaker to hear' : 'Playing Audio Vibe'}
-                    </span>
-                  </div>
-                ) : currentItem?.type === 'video' && (currentItem?.url || currentStory.mediaUrl) ? (
-                  <video
-                    ref={stageVideoRef}
-                    src={currentItem?.url || currentStory.mediaUrl}
-                    playsInline
-                    autoPlay
-                    muted={isMuted}
-                    onEnded={() => {
+                ) : (
+                  <VibeRenderer
+                    vibe={currentItem}
+                    interactiveMode="viewer"
+                    isPaused={isPaused}
+                    isMuted={isMuted}
+                    videoRef={stageVideoRef}
+                    hideChrome={isHoldingChromeHidden}
+                    onVideoBuffering={setIsVideoBuffering}
+                    onVideoProgress={({ progressPercent }) => setStoryProgress(progressPercent)}
+                    onVideoEnded={() => {
                       if (currentItem?.id) {
                         getStoryService().reportStoryCompletion(currentItem.id).catch((e) => {
                           console.warn('[Vibes] completion not reported:', e?.message);
@@ -1347,221 +1629,188 @@ export default function StoriesScreen() {
                       }
                       advanceItemOrGroup();
                     }}
-                    className="max-h-full max-w-full w-full h-full object-contain"
-                  />
-                ) : currentItem?.url || currentStory.mediaUrl ? (
-                  <LazyImage
-                    src={currentItem?.url || currentStory.mediaUrl}
-                    alt={currentItem?.caption ? `Vibe by ${currentStory.user.name}: ${currentItem.caption}` : `Vibe by ${currentStory.user.name}`}
-                    referrerPolicy="no-referrer"
-                    className="max-h-full max-w-full object-contain"
-                  />
-                ) : (
-                  <div className="text-center px-6" role="status">
-                    <p className="text-white font-semibold mb-1">Vibe unavailable</p>
-                    <p className="text-white/60 text-sm">
-                      This Vibe has expired or is no longer available.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleCloseStory(); }}
-                      className="mt-4 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold"
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
+                    onCloseUnavailable={handleCloseStory}
+                  >
+                  {/* GIF Sticker Overlay */}
+                  {gifSticker?.data?.url && (
+                    <div className="absolute top-24 right-4 z-20 w-24 rounded-2xl overflow-hidden border border-white/30 shadow-xl pointer-events-none">
+                      <LazyImage src={gifSticker.data.url} alt={gifSticker.data.title || 'GIF sticker'} className="w-full h-auto" />
+                    </div>
+                  )}
 
-                {/* GIF Sticker Overlay */}
-                {gifSticker?.data?.url && (
-                  <div className="absolute top-24 right-4 z-20 w-24 rounded-2xl overflow-hidden border border-white/30 shadow-xl pointer-events-none">
-                    <LazyImage src={gifSticker.data.url} alt={gifSticker.data.title || 'GIF sticker'} className="w-full h-auto" />
-                  </div>
-                )}
+                  {/* Countdown Sticker */}
+                  {countdownSticker && (() => {
+                    const endsAt = countdownSticker.data?.endsAt || (Date.now() + (countdownSticker.data?.seconds || 0) * 1000);
+                    const secsLeft = Math.max(0, Math.floor((endsAt - countdownNow) / 1000));
+                    return (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-28 left-1/2 -translate-x-1/2 z-20 px-4 py-2.5 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white text-center shadow-xl"
+                      >
+                        <div className="flex items-center justify-center gap-1.5 text-[11px] uppercase tracking-wider text-white/75 font-bold">
+                          <Timer className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Countdown</span>
+                        </div>
+                        <p className="text-lg font-black tabular-nums mt-0.5">{formatCountdown(secsLeft)}</p>
+                      </div>
+                    );
+                  })()}
 
-                {/* Countdown Sticker */}
-                {countdownSticker && (() => {
-                  const endsAt = countdownSticker.data?.endsAt || (Date.now() + (countdownSticker.data?.seconds || 0) * 1000);
-                  const secsLeft = Math.max(0, Math.floor((endsAt - countdownNow) / 1000));
-                  return (
+                  {/* Interactive Poll Sticker */}
+                  {pollSticker && (
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute top-28 left-1/2 -translate-x-1/2 z-20 px-4 py-2.5 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white text-center shadow-xl"
+                      className="absolute bottom-40 left-4 right-4 z-20"
                     >
-                      <div className="flex items-center justify-center gap-1.5 text-[11px] uppercase tracking-wider text-white/75 font-bold">
-                        <Timer className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>Countdown</span>
-                      </div>
-                      <p className="text-lg font-black tabular-nums mt-0.5">{formatCountdown(secsLeft)}</p>
-                    </div>
-                  );
-                })()}
-
-                {/* Interactive Poll Sticker */}
-                {pollSticker && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute bottom-40 left-4 right-4 z-20"
-                  >
-                    <div className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl">
-                      {poll.loading ? (
-                        <div className="space-y-2">
-                          <div className="h-4 w-3/4 rounded bg-white/10" />
-                          <div className="h-9 rounded-xl bg-white/10" />
-                        </div>
-                      ) : poll.error ? (
-                        <p className="text-xs text-red-300">{poll.error}</p>
-                      ) : poll.data ? (
-                        <>
-                          <p className="text-sm font-bold mb-2.5 text-center">{poll.data.question}</p>
+                      <div className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl">
+                        {poll.loading ? (
                           <div className="space-y-2">
-                            {poll.data.options.map((opt, i) => {
-                              const total = (poll.data.votes || []).reduce((a, b) => a + (b || 0), 0);
-                              const count = poll.data.votes?.[i] || 0;
-                              const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-                              const revealed = poll.voted !== null;
-                              return (
-                                <button
-                                  type="button"
-                                  key={i}
-                                  onClick={(e) => { e.stopPropagation(); handleVotePoll(i); }}
-                                  disabled={revealed}
-                                  className={cn(
-                                    'relative w-full text-left rounded-xl px-3 py-2 text-xs font-semibold overflow-hidden border transition-colors cursor-pointer',
-                                    revealed
-                                      ? (poll.voted === i ? 'border-white bg-white/20' : 'border-white/10 bg-white/5')
-                                      : 'border-white/20 bg-white/10 hover:bg-white/20'
-                                  )}
-                                >
-                                  {revealed && (
-                                    <span
-                                      className="absolute inset-y-0 left-0 opacity-30"
-                                      style={{ width: `${pct}%`, background: BRAND_GRADIENT }}
-                                      aria-hidden="true"
-                                    />
-                                  )}
-                                  <span className="relative flex items-center justify-between">
-                                    <span>{opt}{poll.voted === i ? ' ✓' : ''}</span>
-                                    {revealed && <span className="text-white/80 tabular-nums">{pct}%</span>}
-                                  </span>
-                                </button>
-                              );
-                            })}
+                            <div className="h-4 w-3/4 rounded bg-white/10" />
+                            <div className="h-9 rounded-xl bg-white/10" />
                           </div>
-                        </>
-                      ) : null}
+                        ) : poll.error ? (
+                          <p className="text-xs text-red-300">{poll.error}</p>
+                        ) : poll.data ? (
+                          <>
+                            <p className="text-sm font-bold mb-2.5 text-center">{poll.data.question}</p>
+                            <div className="space-y-2">
+                              {poll.data.options.map((opt, i) => {
+                                const total = (poll.data.votes || []).reduce((a, b) => a + (b || 0), 0);
+                                const count = poll.data.votes?.[i] || 0;
+                                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                                const revealed = poll.voted !== null;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={i}
+                                    onClick={(e) => { e.stopPropagation(); handleVotePoll(i); }}
+                                    disabled={revealed}
+                                    className={cn(
+                                      'relative w-full text-left rounded-xl px-3 py-2 text-xs font-semibold overflow-hidden border transition-colors cursor-pointer',
+                                      revealed
+                                        ? (poll.voted === i ? 'border-white bg-white/20' : 'border-white/10 bg-white/5')
+                                        : 'border-white/20 bg-white/10 hover:bg-white/20'
+                                    )}
+                                  >
+                                    {revealed && (
+                                      <span
+                                        className="absolute inset-y-0 left-0 opacity-30"
+                                        style={{ width: `${pct}%`, background: BRAND_GRADIENT }}
+                                        aria-hidden="true"
+                                      />
+                                    )}
+                                    <span className="relative flex items-center justify-between">
+                                      <span>{opt}{poll.voted === i ? ' ✓' : ''}</span>
+                                      {revealed && <span className="text-white/80 tabular-nums">{pct}%</span>}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Interactive Q&A Sticker */}
-                {questionSticker && !pollSticker && (
+                  {/* Interactive Q&A Sticker */}
+                  {questionSticker && !pollSticker && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute bottom-40 left-4 right-4 z-20"
+                    >
+                      <form
+                        onSubmit={handleSubmitQuestionAnswer}
+                        className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl space-y-2.5"
+                      >
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-white/80">
+                          <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{questionSticker.data.prompt}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            aria-label="Answer Q&A prompt"
+                            value={questionAnswer}
+                            onChange={(e) => setQuestionAnswer(e.target.value)}
+                            placeholder="Type your answer..."
+                            className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!questionAnswer.trim() || submittingQuestion}
+                            className="min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
+                            style={{ background: BRAND_GRADIENT }}
+                          >
+                            {submittingQuestion ? '…' : 'Send'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Mention, Music, & Link Pills */}
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute bottom-40 left-4 right-4 z-20"
+                    className={cn(
+                      'absolute bottom-28 left-4 right-4 z-20 flex flex-wrap items-center gap-2 transition-opacity',
+                      isHoldingChromeHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                    )}
                   >
-                    <form
-                      onSubmit={handleSubmitQuestionAnswer}
-                      className="bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 p-3.5 text-white shadow-xl space-y-2.5"
-                    >
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-white/80">
-                        <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>{questionSticker.data.prompt}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          aria-label="Answer Q&A prompt"
-                          value={questionAnswer}
-                          onChange={(e) => setQuestionAnswer(e.target.value)}
-                          placeholder="Type your answer..."
-                          className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!questionAnswer.trim() || submittingQuestion}
-                          className="min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
-                          style={{ background: BRAND_GRADIENT }}
-                        >
-                          {submittingQuestion ? '…' : 'Send'}
-                        </button>
-                      </div>
-                    </form>
+                    {currentItem?.music?.title && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
+                        <Music className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span className="truncate max-w-[160px]">{currentItem.music.title}</span>
+                      </span>
+                    )}
+                    {mentionSticker?.data?.handle && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCloseStory();
+                          navigate(`/profile/${mentionSticker.data.handle}`);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-xs font-bold text-white cursor-pointer"
+                      >
+                        <AtSign className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>{mentionSticker.data.handle}</span>
+                      </button>
+                    )}
+                    {activeLinkUrl && (
+                      <a
+                        href={activeLinkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-950 text-xs font-bold shadow-lg"
+                      >
+                        <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Open link</span>
+                        <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                      </a>
+                    )}
                   </div>
-                )}
 
-                {/* Mention, Music, & Link Pills */}
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "absolute bottom-28 left-4 right-4 z-20 flex flex-wrap items-center gap-2 transition-opacity",
-                    isHoldingChromeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
-                  )}
-                >
-                  {currentItem?.music?.title && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-xs font-semibold text-white">
-                      <Music className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span className="truncate max-w-[160px]">{currentItem.music.title}</span>
-                    </span>
-                  )}
-                  {mentionSticker?.data?.handle && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleCloseStory();
-                        navigate(`/profile/${mentionSticker.data.handle}`);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-xs font-bold text-white cursor-pointer"
+                  {/* Flying Reactions */}
+                  {flyingParticles.map((particle) => (
+                    <motion.div
+                      key={particle.id}
+                      initial={{ opacity: 1, y: 100, scale: 1 }}
+                      animate={{ opacity: 0, y: -380, scale: 1.8 }}
+                      transition={{ duration: 1.1, ease: 'easeOut' }}
+                      className="absolute bottom-20 text-4xl pointer-events-none z-40"
+                      style={{ left: `${particle.x}%` }}
                     >
-                      <AtSign className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>{mentionSticker.data.handle}</span>
-                    </button>
-                  )}
-                  {activeLinkUrl && (
-                    <a
-                      href={activeLinkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-950 text-xs font-bold shadow-lg"
-                    >
-                      <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Open link</span>
-                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                    </a>
-                  )}
-                </div>
-
-                {/* Caption Overlay (Non-text Vibes) */}
-                {currentItem?.type !== 'text' && currentItem?.caption && (
-                  <div className={cn(
-                    "absolute bottom-20 left-4 right-4 z-20 transition-opacity",
-                    isHoldingChromeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
-                  )}>
-                    <div className="bg-black/60 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-white text-xs sm:text-sm">
-                      {currentItem.caption}
-                    </div>
-                  </div>
+                      {particle.emoji}
+                    </motion.div>
+                  ))}
+                  </VibeRenderer>
                 )}
-
-                {/* Flying Reactions */}
-                {flyingParticles.map((particle) => (
-                  <motion.div
-                    key={particle.id}
-                    initial={{ opacity: 1, y: 100, scale: 1 }}
-                    animate={{ opacity: 0, y: -380, scale: 1.8 }}
-                    transition={{ duration: 1.1, ease: 'easeOut' }}
-                    className="absolute bottom-20 text-4xl pointer-events-none z-40"
-                    style={{ left: `${particle.x}%` }}
-                  >
-                    {particle.emoji}
-                  </motion.div>
-                ))}
               </div>
 
               {/* Bottom Action Rail */}
               <div className={cn(
-                "absolute bottom-0 left-0 right-0 z-30 p-3.5 bg-gradient-to-t from-black via-black/85 to-transparent flex flex-col gap-2.5 transition-opacity",
-                isHoldingChromeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
+                'absolute bottom-0 left-0 right-0 z-30 p-3.5 bg-gradient-to-t from-black via-black/85 to-transparent flex flex-col gap-2.5 transition-opacity',
+                isHoldingChromeHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
               )}>
                 {currentStory?.isSponsored && (
                   <div className="flex items-center justify-between p-2.5 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-xl">
@@ -1594,52 +1843,56 @@ export default function StoriesScreen() {
                 )}
 
                 {/* Quick Reactions & Gift */}
-                <div className="flex items-center justify-between px-1">
-                  {QUICK_EMOJIS.map((emoji) => (
-                    <button
-                      type="button"
-                      key={emoji}
-                      aria-label={`React with ${emoji}`}
-                      onClick={() => handleSendReaction(emoji)}
-                      className="text-2xl hover:scale-125 active:scale-95 transition-transform cursor-pointer"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                  {!isOwnStory && (
-                    <button
-                      type="button"
-                      onClick={handleGiftCoin}
-                      disabled={gifting}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-bold text-slate-950 flex items-center gap-1 shadow-lg disabled:opacity-60 cursor-pointer"
-                    >
-                      <span>{gifting ? 'Sending…' : 'Gift 250'}</span>
-                    </button>
-                  )}
-                </div>
+                {!archivedPreviewGroup && (
+                  <>
+                    <div className="flex items-center justify-between px-1">
+                      {QUICK_EMOJIS.map((emoji) => (
+                        <button
+                          type="button"
+                          key={emoji}
+                          aria-label={`React with ${emoji}`}
+                          onClick={() => handleSendReaction(emoji)}
+                          className="min-w-[36px] min-h-[36px] text-2xl hover:scale-125 active:scale-95 transition-transform cursor-pointer"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      {!isOwnStory && (
+                        <button
+                          type="button"
+                          onClick={handleGiftCoin}
+                          disabled={gifting}
+                          className="min-h-[36px] px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-bold text-slate-950 flex items-center gap-1 shadow-lg disabled:opacity-60 cursor-pointer"
+                        >
+                          <span>{gifting ? 'Sending…' : 'Gift 250'}</span>
+                        </button>
+                      )}
+                    </div>
 
-                {/* Reply Bar */}
-                <form onSubmit={handleSendReply} className="flex items-center gap-2">
-                  <input
-                    aria-label="Send a reply"
-                    type="text"
-                    placeholder={`Reply to ${currentStory.user.name}...`}
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onFocus={() => setIsPaused(true)}
-                    onBlur={() => setIsPaused(false)}
-                    className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!replyText.trim() || replying}
-                    aria-label="Send reply"
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg cursor-pointer"
-                    style={{ background: BRAND_GRADIENT }}
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
+                    {/* Reply Bar */}
+                    <form onSubmit={handleSendReply} className="flex items-center gap-2">
+                      <input
+                        aria-label="Send a reply"
+                        type="text"
+                        placeholder={`Reply to ${currentStory.user.name}...`}
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onFocus={() => setIsPaused(true)}
+                        onBlur={() => setIsPaused(false)}
+                        className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/60 focus:outline-none focus:border-white/50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!replyText.trim() || replying}
+                        aria-label="Send reply"
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-white disabled:opacity-40 transition-opacity shadow-lg cursor-pointer"
+                        style={{ background: BRAND_GRADIENT }}
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </form>
+                  </>
+                )}
               </div>
 
               {/* Owner-only Viewers Sheet */}
@@ -1665,7 +1918,7 @@ export default function StoriesScreen() {
                         type="button"
                         onClick={() => { setViewersOpen(false); setIsPaused(false); }}
                         aria-label="Close viewers"
-                        className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer"
+                        className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1743,7 +1996,7 @@ export default function StoriesScreen() {
                         type="button"
                         onClick={() => { setHighlightSheetOpen(false); setIsPaused(false); }}
                         aria-label="Close save to highlight"
-                        className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer"
+                        className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1762,7 +2015,7 @@ export default function StoriesScreen() {
                         <button
                           type="submit"
                           disabled={!newHighlightTitle.trim() || savingHighlight}
-                          className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
+                          className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50 cursor-pointer"
                           style={{ background: BRAND_GRADIENT }}
                         >
                           {savingHighlight ? 'Saving…' : 'Create'}
@@ -1783,7 +2036,7 @@ export default function StoriesScreen() {
                               key={hl.id}
                               disabled={savingHighlight}
                               onClick={() => handleSaveToExistingHighlight(hl.id)}
-                              className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 text-left text-sm text-white transition-colors cursor-pointer"
+                              className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 text-left text-sm text-white transition-colors cursor-pointer"
                             >
                               <span className="font-semibold truncate">{hl.title || hl.name || 'Highlight'}</span>
                               <Plus className="w-4 h-4 text-white/60 shrink-0" />
@@ -1801,98 +2054,19 @@ export default function StoriesScreen() {
       </AnimatePresence>
 
       {/* ==================== MEMORIES / ARCHIVE MODAL ==================== */}
-      <AnimatePresence>
-        {isCalendarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, y: 16 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.94, y: 16 }}
-              className={cn(
-                'w-full max-w-md rounded-3xl p-6 border shadow-2xl',
-                isDark ? 'bg-[#0A102D] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'
-              )}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5" aria-hidden="true" />
-                  <h3 className="text-lg font-bold">Vibe Memories &amp; Archive</h3>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Close Vibe archive"
-                  onClick={() => setIsCalendarOpen(false)}
-                  className="p-2 rounded-full hover:bg-white/10 text-slate-400 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <p className="text-xs text-slate-400 mb-4">
-                Your saved Vibes, preserved past their 24-hour feed window.
-              </p>
-
-              {archive.loading ? (
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="aspect-square rounded-2xl bg-white/5" />
-                  ))}
-                </div>
-              ) : archive.error ? (
-                <div className="mb-4 text-center py-6">
-                  <p className="text-xs text-red-400 mb-2">{archive.error}</p>
-                  <button
-                    type="button"
-                    onClick={handleOpenArchive}
-                    className="text-xs font-bold px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : archive.items.length === 0 ? (
-                <div className="mb-4 text-center py-6">
-                  <p className="text-xs text-slate-400">No archived Vibes yet.</p>
-                  <p className="text-[11px] text-slate-500 mt-1">Vibes you publish are saved here automatically.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 mb-4 max-h-56 overflow-y-auto">
-                  {archive.items.slice(0, 12).map((st) => {
-                    const url = st.media?.url || st.mediaUrl;
-                    return (
-                      <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-white/5">
-                        {url ? (
-                          <LazyImage src={url} alt={st.content || 'Archived Vibe'} loading="lazy" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 px-1 text-center">
-                            {st.content || 'Text Vibe'}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCalendarOpen(false);
-                  navigate('/profile/highlights');
-                }}
-                className="w-full min-h-[44px] py-3 rounded-2xl text-white font-bold text-sm shadow-lg active:scale-95 transition-transform cursor-pointer"
-                style={{ background: BRAND_GRADIENT }}
-              >
-                Manage Profile Highlights
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <VibeArchiveModal
+        open={isCalendarOpen}
+        isDark={isDark}
+        archive={archive}
+        onClose={() => setIsCalendarOpen(false)}
+        onRetry={handleOpenArchive}
+        onDeleteArchived={handleDeleteArchivedItem}
+        onPreviewArchived={handlePreviewArchivedItem}
+        onManageHighlights={() => {
+          setIsCalendarOpen(false);
+          navigate('/profile/highlights');
+        }}
+      />
 
       {/* Owner-only delete confirmation */}
       <AnimatePresence>
@@ -1911,17 +2085,23 @@ export default function StoriesScreen() {
               onClick={(e) => e.stopPropagation()}
               role="alertdialog"
               aria-label="Delete Vibe confirmation"
-              className="w-full max-w-sm rounded-3xl p-6 border bg-[#0A102D] border-white/10 text-white shadow-2xl"
+              className={cn(
+                'w-full max-w-sm rounded-3xl p-6 border shadow-2xl',
+                isDark ? 'bg-[#0A102D] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
+              )}
             >
               <h3 className="text-lg font-bold">Delete this Vibe?</h3>
-              <p className="text-sm text-white/60 mt-1.5">
-                This removes the Vibe from your feed and deletes its media. This cannot be undone.
+              <p className={cn('text-sm mt-1.5', isDark ? 'text-white/65' : 'text-slate-600')}>
+                This removes the Vibe from your active feed immediately.
               </p>
               <div className="flex gap-3 mt-5">
                 <button
                   type="button"
                   onClick={() => setConfirmDeleteStory(false)}
-                  className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/20 font-bold text-sm cursor-pointer"
+                  className={cn(
+                    'flex-1 min-h-[44px] py-3 rounded-2xl font-bold text-sm cursor-pointer',
+                    isDark ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-900'
+                  )}
                 >
                   Cancel
                 </button>
@@ -1929,7 +2109,7 @@ export default function StoriesScreen() {
                   type="button"
                   onClick={async () => { setConfirmDeleteStory(false); await handleDeleteStory(); }}
                   disabled={deletingStory}
-                  className="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-500 font-bold text-sm disabled:opacity-50 cursor-pointer"
+                  className="flex-1 min-h-[44px] py-3 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm disabled:opacity-50 cursor-pointer"
                 >
                   Delete
                 </button>

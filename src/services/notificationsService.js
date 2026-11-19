@@ -211,13 +211,17 @@ const NOTIFICATIONS_CONFIG = {
     AD_REVENUE: 'ad_revenue',
     LIVE_GIFT: 'live_gift',
     POST_MONETIZED: 'post_monetized',
+    VIBE_REACTION: 'vibe_reaction',
+    VIBE_REPLY: 'vibe_reply',
+    VIBE_SHARE: 'vibe_share',
+    VIBE_MILESTONE: 'vibe_milestone',
   },
   INTELLIGENCE: {
     GROUPING: { ENABLED: true, TIME_WINDOW: 300000, MAX_GROUP_SIZE: 10 },
     RATE_LIMITING: { ENABLED: true, MAX_PER_MINUTE: 10, MAX_PER_HOUR: 50, COOLDOWN_SECONDS: 60 },
     RANKING: {
       ENABLED: true,
-      WEIGHTS: { message: 100, mention: 90, comment: 80, reply: 80, follow: 70, gift: 65, coin: 60, like: 50, share: 40, system: 30 }
+      WEIGHTS: { message: 100, mention: 90, vibe_reply: 85, comment: 80, reply: 80, follow: 70, gift: 65, vibe_milestone: 65, coin: 60, vibe_share: 55, like: 50, vibe_reaction: 50, share: 40, system: 30 }
     },
     DIGEST: { ENABLED: true, INTERVAL_HOURS: 6, MAX_DIGEST_ITEMS: 10 }
   },

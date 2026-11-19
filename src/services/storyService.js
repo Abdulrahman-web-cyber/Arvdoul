@@ -14,6 +14,20 @@ import {
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getMessagingService } from './messagesService.js';
 
+import {
+  VIBE_AUDIENCES,
+  VIBE_LIMITS,
+  VIBE_UPLOAD_STATES,
+  VIBE_POLICY_SCOPES,
+  VIBE_DEFAULT_SETTINGS,
+  normalizeVibeReactionKey,
+  buildVibeDeepLink,
+  calculateVibeDuration,
+  sanitizeTextOverlays,
+  sanitizeDrawingPaths,
+  createVibeIdempotencyKey,
+} from '../config/vibeContracts.js';
+
 //  CONFIGURATION – tuned for global scale
 const STORY_CONFIG = {
   EXPIRY_HOURS: 24,
@@ -23,9 +37,12 @@ const STORY_CONFIG = {
   MAX_AUDIO_SIZE_MB: 25,
   ALLOWED_MEDIA_TYPES: ['image', 'video', 'audio', 'text', 'event'],
   VISIBILITY: {
-    PUBLIC: 'public',
-    FOLLOWERS: 'followers',
-    PRIVATE: 'private',
+    PUBLIC: VIBE_AUDIENCES.PUBLIC,
+    FOLLOWERS: VIBE_AUDIENCES.FOLLOWERS,
+    CONNECTIONS: VIBE_AUDIENCES.CONNECTIONS,
+    CLOSE_CIRCLE: VIBE_AUDIENCES.CLOSE_CIRCLE,
+    SELECTED: VIBE_AUDIENCES.SELECTED,
+    PRIVATE: VIBE_AUDIENCES.PRIVATE,
   },
   REACTION_TYPES: ['❤️', '🔥', '😂', '😢', '😮', '👍'],
   FEED: {
@@ -71,8 +88,8 @@ const STORY_CONFIG = {
   IMAGE_COMPRESSION: {
     ENABLED: true,
     MAX_WIDTH: 1080,
-    MAX_HEIGHT: 1080,
-    QUALITY: 0.8,
+    MAX_HEIGHT: 1920,
+    QUALITY: 0.85,
   },
   ARCHIVE: {
     ENABLED: true,
@@ -232,6 +249,7 @@ class UltimateStoryService {
     };
 
     this.feedListeners = new Map();
+    this.activeUploads = new Map();
 
     // Cross‑tab invalidation (with cleanup)
     try {
@@ -347,6 +365,10 @@ class UltimateStoryService {
   //  PUBLIC API (existing methods, all fixed)
 
   async createStory(storyData, options = {}) {
+    const emitState = (state, extra = {}) => {
+      try { options.onStateChange?.(state, extra); } catch (e) { logger.debug('[Vibes] onStateChange error', { error: e?.message }); }
+    };
+
     await this.ensureInitialized();
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       await this.uploadQueue.add(storyData, options);
@@ -356,23 +378,58 @@ class UltimateStoryService {
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Authentication required');
     await this.rateLimiter.checkLimit(currentUser.uid, 'CREATE_STORY');
 
+    emitState(VIBE_UPLOAD_STATES.PREPARING);
     const mod = this._moderateContent(storyData);
-    if (!mod.passed) throw new Error(`Content violates guidelines: ${mod.reason}`);
+    if (!mod.passed) {
+      emitState(VIBE_UPLOAD_STATES.FAILED, { reason: mod.reason });
+      throw new Error(`Content violates guidelines: ${mod.reason}`);
+    }
 
     const valid = this._validateStory(storyData);
-    if (!valid.valid) throw new Error(`Invalid story: ${valid.errors.join(', ')}`);
+    if (!valid.valid) {
+      emitState(VIBE_UPLOAD_STATES.FAILED, { reason: valid.errors.join(', ') });
+      throw new Error(`Invalid story: ${valid.errors.join(', ')}`);
+    }
 
-    let mediaInfo = null;
-    if (storyData.mediaFile && ['image','video','audio'].includes(storyData.type)) {
+    const storiesRef = this.fs.collection(this.firestore, 'stories');
+    const storyId = storyData.storyId || this.fs.doc(storiesRef).id;
+    const visibility = storyData.visibility || STORY_CONFIG.VISIBILITY.PUBLIC;
+    const selectedUserIds = Array.isArray(storyData.selectedUserIds)
+      ? [...new Set(storyData.selectedUserIds.map((id) => String(id || '').trim()).filter((id) => id && id !== currentUser.uid))].slice(0, VIBE_LIMITS.MAX_SELECTED_USERS)
+      : [];
+    const idempotencyKey = options.idempotencyKey || storyData.idempotencyKey || createVibeIdempotencyKey(currentUser.uid);
+
+    let mediaInfo = storyData.uploadedMedia || null;
+    if (!mediaInfo && storyData.mediaFile && ['image', 'video', 'audio'].includes(storyData.type)) {
+      emitState(VIBE_UPLOAD_STATES.UPLOADING, { progress: 0 });
       let file = storyData.mediaFile;
       if (storyData.type === 'image' && STORY_CONFIG.IMAGE_COMPRESSION.ENABLED) {
         file = await this._safeCompressImage(file);
       }
-      mediaInfo = await this._uploadStoryMedia(file, currentUser.uid, storyData.type, options.onProgress);
+      mediaInfo = await this._uploadStoryMedia(file, currentUser.uid, storyData.type, options.onProgress, {
+        storyId,
+        visibility,
+        uploadId: idempotencyKey,
+        abortSignal: options.abortSignal,
+        onUploadHandle: options.onUploadHandle,
+      });
+      if (storyData.media?.duration) {
+        mediaInfo.duration = storyData.media.duration;
+      }
     }
 
+    // Check cancellation after upload before publishing doc
+    if (options.abortSignal?.aborted) {
+      await this.deleteAbandonedMedia(mediaInfo?.path);
+      emitState(VIBE_UPLOAD_STATES.CANCELLED);
+      const cancelErr = enhanceError({ code: 'cancelled' }, 'Upload cancelled');
+      throw cancelErr;
+    }
+
+    emitState(VIBE_UPLOAD_STATES.PROCESSING);
+
     // AI caption after upload using reachable HTTPS URL if enabled and no caption supplied
-    if (STORY_CONFIG.AI_CAPTION.ENABLED && storyData.type === 'image' && !storyData.content && mediaInfo?.url) {
+    if (STORY_CONFIG.AI_CAPTION.ENABLED && storyData.type === 'image' && !storyData.content && mediaInfo?.url && storyData.enableAiCaption === true) {
       try {
         const { callFunction, FUNCTIONS } = await import('./callableService.js');
         const data = await callFunction(FUNCTIONS.GENERATE_CAPTION_FOR_IMAGE, {
@@ -382,13 +439,41 @@ class UltimateStoryService {
       } catch (err) { logger.warn('// AI caption failed', err); }
     }
 
-    const storiesRef = this.fs.collection(this.firestore, 'stories');
-    const storyId = this.fs.doc(storiesRef).id;
-    const expiresAt = new Date(Date.now() + STORY_CONFIG.EXPIRY_HOURS * 3600000);
-    const now = this.fs.serverTimestamp();
-    const hashtags = (storyData.content || '').match(/#\w+/g) || [];
+    const sanitizedOverlays = sanitizeTextOverlays(storyData.textOverlays || []);
+    const sanitizedDrawing = sanitizeDrawingPaths(storyData.drawingPaths || []);
+    const computedDuration = Number(storyData.duration) > 0
+      ? Math.min(Number(storyData.duration), STORY_CONFIG.MAX_DURATION_SECONDS)
+      : calculateVibeDuration({ ...storyData, media: mediaInfo || storyData.media });
 
-    // Interactive stickers
+    // Read user Vibes settings & policy defaults
+    let shouldAutoArchive = STORY_CONFIG.ARCHIVE.ENABLED;
+    let userVibeSettings = { ...VIBE_DEFAULT_SETTINGS };
+    try {
+      const { settingsService } = await import('./settingsService.js');
+      const userSettings = await settingsService.getSettings(currentUser.uid);
+      if (userSettings?.vibes) {
+        userVibeSettings = { ...VIBE_DEFAULT_SETTINGS, ...userSettings.vibes };
+      }
+      if (userSettings?.vibes?.autoArchive === false) {
+        shouldAutoArchive = false;
+      }
+    } catch (e) {
+      logger.debug('[StoryService] settings read skipped; using default vibe settings', { error: e?.message });
+    }
+
+    const validPolicyScopes = new Set(Object.values(VIBE_POLICY_SCOPES));
+    const pickPolicy = (val, fallback) => (validPolicyScopes.has(val) ? val : fallback);
+    const whoCanReact = pickPolicy(storyData.whoCanReact, pickPolicy(userVibeSettings.whoCanReact, VIBE_POLICY_SCOPES.EVERYONE));
+    const whoCanReply = pickPolicy(storyData.whoCanReply, pickPolicy(userVibeSettings.whoCanReply, VIBE_POLICY_SCOPES.EVERYONE));
+    const whoCanShare = pickPolicy(storyData.whoCanShare, pickPolicy(userVibeSettings.whoCanShare, VIBE_POLICY_SCOPES.EVERYONE));
+    const whoCanSendGifts = pickPolicy(storyData.whoCanSendGifts, pickPolicy(userVibeSettings.whoCanSendGifts, VIBE_POLICY_SCOPES.EVERYONE));
+    const allowReactions = storyData.allowReactions !== false && whoCanReact !== VIBE_POLICY_SCOPES.OFF;
+    const allowComments = storyData.allowComments !== false && whoCanReply !== VIBE_POLICY_SCOPES.OFF;
+    const allowGifts = storyData.allowGifts !== false && whoCanSendGifts !== VIBE_POLICY_SCOPES.OFF;
+
+    emitState(VIBE_UPLOAD_STATES.PUBLISHING);
+
+    // Interactive stickers / poll support
     let stickers = null;
     if (storyData.stickers) {
       stickers = storyData.stickers.map(s => ({
@@ -398,69 +483,70 @@ class UltimateStoryService {
       }));
     }
 
-    // A poll is a real subcollection document (`stories/{id}/polls/{pollId}`)
-    // that viewers vote on via `voteOnPoll`; rules only allow the owner to
-    // create it. Persisting it here is what makes the CreateStory poll tool a
-    // working feature instead of a control that collected input nothing read.
     let pollSticker = null;
     if (storyData.poll?.question && Array.isArray(storyData.poll.options) && storyData.poll.options.length >= 2) {
-      const options = storyData.poll.options.filter(o => typeof o === 'string' && o.trim());
-      if (options.length >= 2) {
+      const pollOptions = storyData.poll.options.filter(o => typeof o === 'string' && o.trim());
+      if (pollOptions.length >= 2) {
         pollSticker = {
           pollId: this.fs.doc(this.fs.collection(this.firestore, 'stories', storyId, 'polls')).id,
           question: storyData.poll.question,
-          options,
-          votes: options.map(() => 0),
+          options: pollOptions,
+          votes: pollOptions.map(() => 0),
           userVotes: [],
         };
-        stickers = [...(stickers || []), { type: 'poll', data: { pollId: pollSticker.pollId, question: pollSticker.question, options }, position: { x: 0.5, y: 0.7 } }];
+        stickers = [...(stickers || []), { type: 'poll', data: { pollId: pollSticker.pollId, question: pollSticker.question, options: pollOptions }, position: { x: 0.5, y: 0.7 } }];
       }
     }
 
-    // Collaboration
     let collaborators = [];
     if (STORY_CONFIG.COLLABORATION.ENABLED && storyData.collaborators?.length) {
       collaborators = storyData.collaborators;
     }
 
+    const hashtags = (storyData.content || '').match(/#\w+/g) || [];
+    const expiresAt = new Date(Date.now() + STORY_CONFIG.EXPIRY_HOURS * 3600000);
+    const now = this.fs.serverTimestamp();
+
     const story = {
       id: storyId,
       userId: currentUser.uid,
-      // Lifecycle state machine (spec §4): draft -> published -> active ->
-      // expired/removed -> archived. The server rules treat anything without
-      // status 'published' as unavailable; expiry is enforced by rules
-      // (expiresAt > request.time), never by a client timer.
       status: 'published',
       processingState: 'done',
       type: storyData.type,
       content: storyData.content || '',
       hashtags,
       media: mediaInfo,
-      duration: Number(storyData.duration) > 0
-        ? Math.min(Number(storyData.duration), STORY_CONFIG.MAX_DURATION_SECONDS)
-        : (storyData.type === 'video' ? 15 : 5),
-      visibility: storyData.visibility || STORY_CONFIG.VISIBILITY.PUBLIC,
-      allowReactions: storyData.allowReactions !== false,
-      allowComments: storyData.allowComments !== false,
+      mediaEdits: storyData.mediaEdits || null,
+      textOverlays: sanitizedOverlays,
+      drawingPaths: sanitizedDrawing,
+      textStyle: storyData.textStyle || null,
+      duration: computedDuration,
+      visibility,
+      selectedUserIds,
+      allowReactions,
+      allowComments,
+      allowGifts,
+      whoCanReact,
+      whoCanReply,
+      whoCanShare,
+      whoCanSendGifts,
       music: storyData.music || null,
       location: storyData.location || null,
       taggedUsers: storyData.taggedUsers || [],
       backgroundColor: storyData.backgroundColor || '#000000',
       textColor: storyData.textColor || '#FFFFFF',
-      font: storyData.font || 'default',
+      font: storyData.font || 'display',
       isSponsored: storyData.isSponsored || false,
       moderationStatus: 'pending',
       stickers,
       collaborators,
-      linkUrl: storyData.linkUrl || null, // link sticker
+      linkUrl: storyData.linkUrl || null,
       templateId: storyData.templateId || null,
       stats: {
-        // Only counters a real writer maintains are seeded. `viewerCount` and
-        // `likes` had no writer (story reactions live in `reaction_shards` ->
-        // `stats.reactions`; viewers are the owner-only `viewers` list), so a
-        // seeded `0` advertised an unmeasured metric as a measured zero.
-        views: 0, comments: 0, shares: 0, replies: 0,
-        reactions: STORY_CONFIG.REACTION_TYPES.reduce((acc, r) => ({ ...acc, [r]: 0 }), {}),
+        views: 0, uniqueViewers: 0, completions: 0, replays: 0,
+        comments: 0, shares: 0, replies: 0, gifts: 0, giftCoins: 0,
+        totalReactions: 0,
+        reactions: {},
       },
       createdAt: now,
       updatedAt: now,
@@ -468,41 +554,107 @@ class UltimateStoryService {
       isDeleted: false,
     };
 
-    await this.fs.setDoc(this.fs.doc(this.firestore, 'stories', storyId), story);
+    let serverPublished = false;
+    try {
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const serverRes = await callFunction(FUNCTIONS.PUBLISH_VIBE, {
+        storyId,
+        idempotencyKey,
+        type: story.type,
+        content: story.content,
+        media: story.media,
+        mediaEdits: story.mediaEdits,
+        textOverlays: story.textOverlays,
+        drawingPaths: story.drawingPaths,
+        textStyle: story.textStyle,
+        duration: story.duration,
+        visibility: story.visibility,
+        selectedUserIds: story.selectedUserIds,
+        allowReactions: story.allowReactions,
+        allowComments: story.allowComments,
+        allowGifts: story.allowGifts,
+        whoCanReact: story.whoCanReact,
+        whoCanReply: story.whoCanReply,
+        whoCanShare: story.whoCanShare,
+        whoCanSendGifts: story.whoCanSendGifts,
+        music: story.music,
+        location: story.location,
+        taggedUsers: story.taggedUsers,
+        backgroundColor: story.backgroundColor,
+        textColor: story.textColor,
+        font: story.font,
+        stickers: story.stickers,
+        collaborators: story.collaborators,
+        linkUrl: story.linkUrl,
+        templateId: story.templateId,
+      });
+      if (serverRes?.success && serverRes.storyId) {
+        serverPublished = true;
+        story.id = serverRes.storyId;
+        if (serverRes.expiresAtMs) {
+          story.expiresAt = this.fs.Timestamp.fromMillis(serverRes.expiresAtMs);
+        }
+      }
+    } catch (callableErr) {
+      const code = String(callableErr?.code || '');
+      const isUnavailable =
+        code.includes('not-found') ||
+        code.includes('unimplemented') ||
+        code.includes('unavailable') ||
+        code.includes('internal');
+      if (!isUnavailable) {
+        await this.deleteAbandonedMedia(mediaInfo?.path);
+        emitState(VIBE_UPLOAD_STATES.FAILED, { error: callableErr?.message });
+        throw callableErr;
+      }
+      logger.warn('[StoryService] publishVibe callable unavailable; falling back to rule-gated Firestore create', {
+        code,
+        error: callableErr?.message,
+      });
+    }
+
+    if (!serverPublished) {
+      try {
+        await this.fs.setDoc(this.fs.doc(this.firestore, 'stories', storyId), story);
+      } catch (writeErr) {
+        await this.deleteAbandonedMedia(mediaInfo?.path);
+        emitState(VIBE_UPLOAD_STATES.FAILED, { error: writeErr?.message });
+        throw writeErr;
+      }
+    }
 
     if (pollSticker) {
       const { pollId, ...pollData } = pollSticker;
-      await this.fs.setDoc(this.fs.doc(this.firestore, 'stories', storyId, 'polls', pollId), pollData);
+      await this.fs.setDoc(this.fs.doc(this.firestore, 'stories', story.id, 'polls', pollId), pollData);
     }
 
     this._invalidateFeedCache(currentUser.uid);
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
 
-    // Self-archive a copy at creation so the story survives the 24h expiry
-    // (the cleanup job deletes `stories` and its media). `archived_stories` is
-    // what the Memories/Archive surface and highlight creation read — without
-    // this the archive stayed permanently empty. Best-effort: a failed archive
-    // must not fail a published story.
-    try {
-      await this.archiveStory(storyId, currentUser.uid);
-    } catch (e) {
-      logger.warn('Story archive failed; Memories will not show this story', { storyId, error: e?.message });
+    if (!serverPublished && shouldAutoArchive) {
+      try {
+        await this.archiveStory(storyId, currentUser.uid);
+      } catch (e) {
+        logger.warn('Story archive failed; Memories will not show this story', { storyId, error: e?.message });
+      }
+    } else if (shouldAutoArchive) {
+      this.archivedStoriesCache.delete(currentUser.uid);
     }
 
-    if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
+    if (storyData.taggedUsers?.length) this._notifyTaggedUsers(story.id, currentUser.uid, storyData.taggedUsers);
     this.metrics.storiesCreated++;
-    auditLogger.log('story.created', { userId: currentUser.uid, meta: { storyId, type: storyData.type || null } });
-    // Best-effort XP; the story is already published, so a failure must not
-    // fail creation. `source` makes the award idempotent server-side.
+    auditLogger.log('story.created', { userId: currentUser.uid, meta: { storyId: story.id, type: storyData.type || null } });
     try {
       const { levelSystemService } = await import('./levelSystemService.js');
       levelSystemService
-        .awardExperience({ userId: currentUser.uid, action: 'story_created', source: storyId })
-        .catch((err) => logger.warn('Story XP award failed', { storyId, error: err?.message }));
+        .awardExperience({ userId: currentUser.uid, action: 'story_created', source: story.id })
+        .catch((err) => logger.warn('Story XP award failed', { storyId: story.id, error: err?.message }));
     } catch (e) {
-      logger.warn('Story XP award failed', { storyId, error: e?.message });
+      logger.warn('Story XP award failed', { storyId: story.id, error: e?.message });
     }
-    return { success: true, storyId, story };
+
+    emitState(VIBE_UPLOAD_STATES.PUBLISHED, { storyId: story.id });
+    return { success: true, storyId: story.id, story };
   }
 
   /**
@@ -554,15 +706,28 @@ class UltimateStoryService {
       .filter(e => !hiddenAuthors.has(e.ownerId));
 
     const storyIds = feedEntries.map(e => e.storyId).filter(s => s);
-    // Batch fetch stories in parallel (fixed)
     const batchSize = STORY_CONFIG.BATCH_SIZE.STORY_FETCH;
     const stories = [];
+    const seenStoryIds = new Set();
+
+    // Always include creator's own active Vibes on first page (including private/selected)
+    if (!lastDocId) {
+      const ownStories = await this.getUserStories(userId, { limit: 20 }).catch(() => []);
+      ownStories.forEach((s) => {
+        if (s?.id && !s.isDeleted && s.moderationStatus !== 'rejected' && !this._isStoryExpired(s) && !seenStoryIds.has(s.id)) {
+          seenStoryIds.add(s.id);
+          stories.push(s);
+        }
+      });
+    }
+
     for (let i = 0; i < storyIds.length; i += batchSize) {
       const chunk = storyIds.slice(i, i + batchSize);
       const storyPromises = chunk.map(sid => this.getStory(sid, userId).catch(() => null));
       const storyResults = await Promise.all(storyPromises);
       storyResults.forEach(res => {
-        if (res?.success && res.story && !res.story.isDeleted && res.story.moderationStatus !== 'rejected') {
+        if (res?.success && res.story && !res.story.isDeleted && res.story.moderationStatus !== 'rejected' && !seenStoryIds.has(res.story.id)) {
+          seenStoryIds.add(res.story.id);
           stories.push(res.story);
         }
       });
@@ -659,12 +824,31 @@ class UltimateStoryService {
     return { success: true, story };
   }
 
+  async recordVibeEngagement(storyId, eventType = 'view') {
+    await this.ensureInitialized();
+    const uid = this.auth.currentUser?.uid;
+    if (!uid || !storyId) return { success: false };
+    try {
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const res = await callFunction(FUNCTIONS.RECORD_VIBE_ENGAGEMENT, {
+        vibeId: storyId,
+        eventType,
+      });
+      return { success: true, ...(res || {}) };
+    } catch (err) {
+      logger.warn('[StoryService] recordVibeEngagement failed', { storyId, eventType, error: err?.message });
+      return { success: false, error: err?.message };
+    }
+  }
+
   async reportStoryView(storyId, viewerId = null) {
     await this.ensureInitialized();
     const uid = viewerId || this.auth.currentUser?.uid;
     if (!uid || !storyId) return { success: false };
     await this._markStorySeen(uid, storyId);
     try {
+      const res = await this.recordVibeEngagement(storyId, 'view');
+      if (res?.success) return res;
       const storyDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'stories', storyId));
       if (storyDoc.exists() && storyDoc.data().userId !== uid && STORY_CONFIG.VIEW_TRACKING.ENABLED) {
         await this._recordStoryViewSharded(storyId, uid);
@@ -730,39 +914,26 @@ class UltimateStoryService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
     await this.rateLimiter.checkLimit(currentUser.uid, 'REACT');
-    if (!STORY_CONFIG.REACTION_TYPES.includes(reactionType)) throw new Error('Invalid reaction');
 
-    // Rules forbid non-creators from updating the story doc — reactions live
-    // ONLY in the per-user reactions/{uid} subcollection (writer = reactor)
-    // plus the creator-writable reaction_shards (aggregated server-side).
-    const reactionDocRef = this.fs.doc(this.firestore, 'stories', storyId, 'reactions', currentUser.uid);
-    const existingSnap = await this.fs.getDoc(reactionDocRef);
-
-    let actionResult;
-    if (existingSnap.exists()) {
-      const oldReaction = existingSnap.data().reaction;
-      if (oldReaction === reactionType) {
-        await this.fs.deleteDoc(reactionDocRef);
-        await this._recordReactionShard(storyId, oldReaction, -1);
-        actionResult = { success: true, action: 'removed', reaction: oldReaction };
-      } else {
-        await this.fs.updateDoc(reactionDocRef, { reaction: reactionType, updatedAt: serverTimestamp() });
-        await this._recordReactionShard(storyId, oldReaction, -1);
-        await this._recordReactionShard(storyId, reactionType, 1);
-        actionResult = { success: true, action: 'changed', from: oldReaction, to: reactionType };
-      }
-    } else {
-      await this.fs.setDoc(reactionDocRef, {
-        userId: currentUser.uid,
-        reaction: reactionType,
-        createdAt: serverTimestamp(),
-      });
-      await this._recordReactionShard(storyId, reactionType, 1);
-      actionResult = { success: true, action: 'added', reaction: reactionType };
+    const normalized = reactionType == null || reactionType === 'remove'
+      ? null
+      : normalizeVibeReactionKey(reactionType);
+    if (reactionType != null && reactionType !== 'remove' && !normalized) {
+      throw new Error('Invalid reaction');
     }
+
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const actionResult = await callFunction(FUNCTIONS.REACT_TO_VIBE, {
+      vibeId: storyId,
+      reaction: normalized,
+    });
+
     this.storyCache.delete(storyId);
-    auditLogger.log('story.reacted', { userId: currentUser.uid, meta: { storyId, reactionType, action: actionResult.action } });
-    return actionResult;
+    auditLogger.log('story.reacted', {
+      userId: currentUser.uid,
+      meta: { storyId, reactionType: normalized, action: actionResult?.action || 'updated' },
+    });
+    return { success: true, ...(actionResult || {}) };
   }
 
   async commentOnStory(storyId, content, options = {}) {
@@ -785,32 +956,22 @@ class UltimateStoryService {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
+    const cleanText = String(message || '').trim();
+    if (!cleanText) throw new Error('Reply text cannot be empty');
 
-    const storyResult = await this.getStory(storyId, currentUser.uid);
-    if (!storyResult.success) throw new Error('Story not found');
-    const story = storyResult.story;
-
-    const messaging = getMessagingService();
-    await messaging.ensureInitialized();
-    const convResult = await messaging.createConversation(
-      [currentUser.uid, story.userId],
-      { type: 'direct' }
-    );
-    const conversationId = convResult.conversation.id;
-
-    const messagesService = await import('./messagesService.js');
-    const result = await messagesService.sendMessage(conversationId, {
-      type: 'text',
-      content: message,
-      metadata: { storyId, type: 'story_reply' },
-      ...options
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.REPLY_TO_VIBE, {
+      vibeId: storyId,
+      text: cleanText,
+      idempotencyKey: options.idempotencyKey || createVibeIdempotencyKey(currentUser.uid),
     });
 
-    // Rules forbid non-creators from updating the story doc — reply stats go
-    // into the owner-writable analytics shards (aggregated server-side).
-    await this._incrementAnalyticsShard(storyId, 'replies', 1);
-    await this._logStoryReply(storyId, currentUser.uid, story.userId);
-    return result;
+    this.storyCache.delete(storyId);
+    auditLogger.log('story.replied', {
+      userId: currentUser.uid,
+      meta: { storyId, conversationId: res?.conversationId || null },
+    });
+    return { success: true, ...(res || {}) };
   }
 
   async deleteStory(storyId) {
@@ -818,22 +979,38 @@ class UltimateStoryService {
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
 
-    const storyRef = this.fs.doc(this.firestore, 'stories', storyId);
-    const snap = await this.fs.getDoc(storyRef);
-    if (!snap.exists()) throw new Error('Story not found');
-    if (snap.data().userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'You can only delete your own stories');
-
-    if (snap.data().media?.path) {
-      try {
-        await this.st.deleteObject(this.st.ref(this.storage, snap.data().media.path));
-      } catch (e) {
-        // The story is soft-deleted below regardless, but a failed object delete
-        // leaves an orphan blob — log it for cleanup/observability.
-        logger.warn('Story media object delete failed; orphan may remain', { storyId, path: snap.data().media.path, error: e?.message });
+    let serverDeleted = false;
+    try {
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const res = await callFunction(FUNCTIONS.DELETE_VIBE, { storyId });
+      if (res?.success) serverDeleted = true;
+    } catch (callableErr) {
+      const code = String(callableErr?.code || '');
+      if (code.includes('permission-denied') || code.includes('not-found')) {
+        throw callableErr;
       }
+      logger.debug('[StoryService] deleteVibe callable fallback to client owner delete', { storyId, error: callableErr?.message });
     }
 
-    await this.fs.updateDoc(storyRef, { isDeleted: true });
+    if (!serverDeleted) {
+      const storyRef = this.fs.doc(this.firestore, 'stories', storyId);
+      const snap = await this.fs.getDoc(storyRef);
+      if (!snap.exists()) throw new Error('Story not found');
+      if (snap.data().userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'You can only delete your own stories');
+
+      const archiveSnap = await this.fs.getDoc(this.fs.doc(this.firestore, 'archived_stories', storyId)).catch(() => null);
+      const keepArchivedMedia = Boolean(archiveSnap && archiveSnap.exists());
+
+      if (!keepArchivedMedia && snap.data().media?.path) {
+        try {
+          await this.st.deleteObject(this.st.ref(this.storage, snap.data().media.path));
+        } catch (e) {
+          logger.warn('Story media object delete failed; orphan may remain', { storyId, path: snap.data().media.path, error: e?.message });
+        }
+      }
+
+      await this.fs.updateDoc(storyRef, { isDeleted: true, status: 'removed', updatedAt: serverTimestamp() });
+    }
 
     this.storyCache.delete(storyId);
     this._invalidateFeedCache(currentUser.uid);
@@ -843,15 +1020,177 @@ class UltimateStoryService {
     return { success: true };
   }
 
-  async trackShare(storyId) {
+  async deleteArchivedStory(storyId, userId = null) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
-    if (!currentUser) return;
-    await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-      'stats.shares': increment(1),
-      updatedAt: serverTimestamp()
+    const targetUserId = userId || currentUser?.uid;
+    if (!currentUser || currentUser.uid !== targetUserId) {
+      throw enhanceError({ code: 'permission-denied' }, 'You can only delete your own archived Vibes');
+    }
+
+    const archiveRef = this.fs.doc(this.firestore, 'archived_stories', storyId);
+    const snap = await this.fs.getDoc(archiveRef);
+    if (!snap.exists()) return { success: true, alreadyDeleted: true };
+    const archivedData = snap.data();
+    if (archivedData.userId !== currentUser.uid) {
+      throw enhanceError({ code: 'permission-denied' }, 'You can only delete your own archived Vibes');
+    }
+
+    await this.fs.deleteDoc(archiveRef);
+
+    // Clean Storage media only if active story no longer needs it
+    if (archivedData.media?.path) {
+      const activeSnap = await this.fs.getDoc(this.fs.doc(this.firestore, 'stories', storyId)).catch(() => null);
+      const activeNeedsMedia = Boolean(activeSnap && activeSnap.exists() && !activeSnap.data()?.isDeleted && !this._isStoryExpired(activeSnap.data()));
+      if (!activeNeedsMedia) {
+        try {
+          await this.st.deleteObject(this.st.ref(this.storage, archivedData.media.path));
+        } catch (e) {
+          logger.warn('Archived Vibe media delete failed', { storyId, path: archivedData.media.path, error: e?.message });
+        }
+      }
+    }
+
+    this.archivedStoriesCache.delete(targetUserId);
+    return { success: true };
+  }
+
+  async getCloseCircle(userId = null) {
+    await this.ensureInitialized();
+    const uid = userId || this.auth.currentUser?.uid;
+    if (!uid) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
+    const snap = await this.fs.getDocs(
+      this.fs.query(
+        this.fs.collection(this.firestore, 'users', uid, 'close_circle'),
+        this.fs.limit(200)
+      )
+    );
+    const memberIds = snap.docs.map((d) => d.id).filter(Boolean);
+    if (memberIds.length === 0) return { success: true, memberIds: [], members: [] };
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const members = await getSocialGraphService().hydrateProfiles(memberIds, { viewerId: uid });
+      return { success: true, memberIds, members };
+    } catch (err) {
+      logger.warn('[StoryService] Close Circle hydration failed', { error: err?.message });
+      return { success: true, memberIds, members: memberIds.map((id) => ({ id, uid: id })) };
+    }
+  }
+
+  async addToCloseCircle(ownerId, memberId) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser || currentUser.uid !== ownerId) {
+      throw enhanceError({ code: 'permission-denied' }, 'You can only manage your own Close Circle');
+    }
+    if (!memberId || memberId === ownerId) {
+      throw new Error('Invalid Close Circle member');
+    }
+    await this.fs.setDoc(
+      this.fs.doc(this.firestore, 'users', ownerId, 'close_circle', memberId),
+      { memberId, addedAt: serverTimestamp() },
+      { merge: true }
+    );
+    return { success: true };
+  }
+
+  async removeFromCloseCircle(ownerId, memberId) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser || currentUser.uid !== ownerId) {
+      throw enhanceError({ code: 'permission-denied' }, 'You can only manage your own Close Circle');
+    }
+    await this.fs.deleteDoc(this.fs.doc(this.firestore, 'users', ownerId, 'close_circle', memberId));
+    return { success: true };
+  }
+
+  async setCloseCircle(ownerId, memberIds = []) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser || currentUser.uid !== ownerId) {
+      throw enhanceError({ code: 'permission-denied' }, 'You can only manage your own Close Circle');
+    }
+    const existing = await this.getCloseCircle(ownerId);
+    const existingSet = new Set(existing.memberIds || []);
+    const targetSet = new Set((memberIds || []).filter((id) => id && id !== ownerId).slice(0, 200));
+
+    const batch = this.fs.writeBatch(this.firestore);
+    for (const id of existingSet) {
+      if (!targetSet.has(id)) {
+        batch.delete(this.fs.doc(this.firestore, 'users', ownerId, 'close_circle', id));
+      }
+    }
+    for (const id of targetSet) {
+      if (!existingSet.has(id)) {
+        batch.set(this.fs.doc(this.firestore, 'users', ownerId, 'close_circle', id), {
+          memberId: id,
+          addedAt: serverTimestamp(),
+        });
+      }
+    }
+    await batch.commit();
+    return { success: true, memberIds: [...targetSet] };
+  }
+
+  async cancelUpload(uploadId) {
+    const active = this.activeUploads.get(uploadId);
+    if (!active) return false;
+    active.cancelled = true;
+    try {
+      active.task?.cancel?.();
+    } catch (e) {
+      logger.debug('[StoryService] cancelUpload task error', { error: e?.message });
+    }
+    if (active.path) {
+      await this.deleteAbandonedMedia(active.path);
+    }
+    this.activeUploads.delete(uploadId);
+    return true;
+  }
+
+  async deleteAbandonedMedia(storagePath) {
+    if (!storagePath || !this.storage || !this.st?.deleteObject) return false;
+    try {
+      await this.st.deleteObject(this.st.ref(this.storage, storagePath));
+      return true;
+    } catch (err) {
+      logger.debug('[StoryService] deleteAbandonedMedia skipped', { storagePath, error: err?.message });
+      return false;
+    }
+  }
+
+  async shareVibe(vibeId, options = {}) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
+    const {
+      mode = 'link',
+      recipientIds = [],
+      conversationIds = [],
+      caption = '',
+    } = options || {};
+
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.SHARE_VIBE, {
+      vibeId,
+      mode,
+      recipientIds,
+      conversationIds,
+      caption,
     });
-    this._invalidateStoryCache(storyId);
+    this._invalidateStoryCache(vibeId);
+    return {
+      success: true,
+      shareUrl: buildVibeDeepLink(vibeId),
+      ...(res || {}),
+    };
+  }
+
+  async trackShare(storyId, options = {}) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser) return { success: false };
+    return this.shareVibe(storyId, { mode: options.mode || 'link', ...options });
   }
 
   async trackStoryAnalytics(storyId, eventType) {
@@ -866,9 +1205,10 @@ class UltimateStoryService {
 
   async reportStoryCompletion(storyId) {
     if (!STORY_CONFIG.ANALYTICS.TRACK_COMPLETION_RATE) return;
-    // Buffered completion — aggregated server-side into sharded counters;
-    // never a story-doc rewrite per completion (spec §58).
     this._analyticsBuffer.completions.set(storyId, (this._analyticsBuffer.completions.get(storyId) || 0) + 1);
+    this.recordVibeEngagement(storyId, 'completion').catch((err) => {
+      logger.warn('[StoryService] completion engagement failed', { storyId, error: err?.message });
+    });
   }
 
   async voteOnPoll(storyId, pollId, optionIndex) {
@@ -1235,14 +1575,40 @@ class UltimateStoryService {
     return { success: true };
   }
 
+  async reorderHighlights(orderedIds = []) {
+    await this.ensureInitialized();
+    const currentUser = this.auth.currentUser;
+    if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
+    const cleanIds = [...new Set((orderedIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+    if (!cleanIds.length) return { success: true, orderedIds: [] };
+
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.REORDER_HIGHLIGHTS, { orderedIds: cleanIds });
+    this.highlightsCache.delete(currentUser.uid);
+    return { success: true, ...(res || {}) };
+  }
+
   async getHighlights(userId, options = {}) {
     await this.ensureInitialized();
 
     const cacheKey = userId;
-    const cached = this.highlightsCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < STORY_CONFIG.CACHE.HIGHLIGHTS_TTL) {
-      return { success: true, highlights: cached.data, cached: true };
+    if (!options.bypassCache) {
+      const cached = this.highlightsCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < STORY_CONFIG.CACHE.HIGHLIGHTS_TTL) {
+        return { success: true, highlights: cached.data, cached: true };
+      }
     }
+
+    const sortHighlights = (list) => {
+      return [...list].sort((a, b) => {
+        const orderA = Number.isFinite(Number(a?.sortOrder)) ? Number(a.sortOrder) : Number.MAX_SAFE_INTEGER;
+        const orderB = Number.isFinite(Number(b?.sortOrder)) ? Number(b.sortOrder) : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        const tA = a?.createdAt?.toMillis?.() || new Date(a?.createdAt || 0).getTime() || 0;
+        const tB = b?.createdAt?.toMillis?.() || new Date(b?.createdAt || 0).getTime() || 0;
+        return tB - tA;
+      });
+    };
 
     try {
       const q = this.fs.query(
@@ -1252,7 +1618,7 @@ class UltimateStoryService {
         this.fs.limit(options.limit || 50)
       );
       const snap = await this.fs.getDocs(q);
-      const highlights = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const highlights = sortHighlights(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       this.highlightsCache.set(cacheKey, { data: highlights, timestamp: Date.now() });
       return { success: true, highlights };
     } catch (err) {
@@ -1264,12 +1630,10 @@ class UltimateStoryService {
           this.fs.limit(options.limit || 50)
         );
         const snap = await this.fs.getDocs(fallbackQ);
-        const highlights = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const highlights = sortHighlights(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         return { success: true, highlights };
       } catch (innerErr) {
         logger.warn('[StoryService] getHighlights query note', innerErr);
-        // Fail closed: an empty list that claims success would render as "no
-        // highlights" and hide a real query failure.
         return { success: false, highlights: [], error: innerErr?.message || 'highlights-failed' };
       }
     }
@@ -1285,11 +1649,6 @@ class UltimateStoryService {
         this.fs.limit(options.limit || 30)
       );
       const snap = await this.fs.getDocs(q);
-      // The rules' list branch admits the owner's own stories regardless of
-      // expiry, so this returns expired docs too. Expired content must never be
-      // offered as a pickable "active" story (the Highlights create modal reads
-      // this), so drop anything past its expiry here (spec §6 — expiry enforced
-      // in the data-access path, not just hidden by the UI).
       return snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(s => !this._isStoryExpired(s));
@@ -1299,14 +1658,6 @@ class UltimateStoryService {
     }
   }
 
-  /**
-   * Single source of truth for story expiry. `expiresAt` is a Firestore
-   * Timestamp on documents read from the server but a raw Date/ISO string on
-   * documents built client-side before the write commits, so both shapes are
-   * handled. A story with no `expiresAt` is treated as not expired here; the
-   * rules (`vibeIsActive` requires `expiresAt > request.time`) remain the
-   * authoritative gate on read.
-   */
   _isStoryExpired(story, now = Date.now()) {
     if (!story?.expiresAt) return false;
     const ms = story.expiresAt?.toDate
@@ -1323,6 +1674,27 @@ class UltimateStoryService {
     const highlightRef = this.fs.doc(this.firestore, 'highlights', highlightId);
     const highlightSnap = await this.fs.getDoc(highlightRef);
     if (!highlightSnap.exists()) throw new Error('Highlight not found');
+    const highlightData = highlightSnap.data();
+    const ownerId = highlightData.userId;
+    const isOwner = ownerId === currentUser.uid;
+
+    let edge = null;
+    if (!isOwner && ownerId) {
+      try {
+        const { getSocialGraphService } = await import('./socialGraphService.js');
+        edge = await getSocialGraphService().getRelationship(currentUser.uid, ownerId);
+        if (edge?.isBlocking || edge?.isBlockedBy) {
+          return { success: false, error: 'Unavailable', stories: [] };
+        }
+        const ownerSnap = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', ownerId));
+        if (ownerSnap.exists() && ownerSnap.data()?.isPrivate && !edge?.isFollowing) {
+          return { success: false, error: 'Private account', stories: [] };
+        }
+      } catch (err) {
+        logger.warn('[StoryService] Highlight relationship check failed; failing closed', { highlightId, error: err?.message });
+        return { success: false, error: 'Access check failed', stories: [] };
+      }
+    }
 
     const q = this.fs.query(
       this.fs.collection(this.firestore, 'highlights', highlightId, 'highlightStories'),
@@ -1330,14 +1702,66 @@ class UltimateStoryService {
       this.fs.limit(options.limit || 50)
     );
     const snap = await this.fs.getDocs(q);
-    const stories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    return { success: true, stories };
+    const rawItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Filter deleted/rejected or visibility-restricted Vibes for non-owners
+    const visibleStories = [];
+    for (const item of rawItems) {
+      if (item.isDeleted || item.moderationStatus === 'rejected') continue;
+      if (!isOwner) {
+        const sid = item.originalStoryId || item.storyId || item.id;
+        try {
+          const sourceSnap = await this.fs.getDoc(this.fs.doc(this.firestore, 'stories', sid));
+          if (sourceSnap.exists()) {
+            const src = sourceSnap.data();
+            if (src.isDeleted || src.status === 'removed' || src.moderationStatus === 'rejected') continue;
+            const vis = src.visibility || item.visibility || STORY_CONFIG.VISIBILITY.PUBLIC;
+            if (vis === STORY_CONFIG.VISIBILITY.PRIVATE) continue;
+            if (vis === STORY_CONFIG.VISIBILITY.SELECTED && !(Array.isArray(src.selectedUserIds) && src.selectedUserIds.includes(currentUser.uid))) continue;
+            if (vis === STORY_CONFIG.VISIBILITY.CLOSE_CIRCLE) {
+              const ccSnap = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', ownerId, 'close_circle', currentUser.uid)).catch(() => null);
+              if (!ccSnap?.exists?.()) continue;
+            }
+            if (vis === STORY_CONFIG.VISIBILITY.FOLLOWERS && !edge?.isFollowing) continue;
+            if (vis === STORY_CONFIG.VISIBILITY.CONNECTIONS && !(edge?.isMutualFriend || (edge?.isFollowing && edge?.isFollower))) continue;
+          }
+        } catch (err) {
+          logger.debug('[StoryService] Highlight item check failed', { sid, error: err?.message });
+          continue;
+        }
+      }
+      visibleStories.push(item);
+    }
+
+    return { success: true, stories: visibleStories };
   }
 
   async getStoryInsights(storyId) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
     if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
+
+    try {
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const res = await callFunction(FUNCTIONS.GET_VIBE_INSIGHTS, { vibeId: storyId });
+      if (res?.success && res.insights) {
+        return {
+          success: true,
+          insights: {
+            ...res.insights,
+            comments: unknownNumber(res.insights.comments),
+            backTaps: unknownNumber(res.insights.backTaps),
+          },
+        };
+      }
+    } catch (err) {
+      const code = String(err?.code || '');
+      if (code.includes('permission-denied') || code.includes('not-found')) {
+        throw err;
+      }
+      logger.warn('[StoryService] getVibeInsights callable fallback to read-only stats', { storyId, error: err?.message });
+    }
+
     const storyResult = await this.getStory(storyId, currentUser.uid);
     if (!storyResult.success || storyResult.story.userId !== currentUser.uid) throw new Error('Not allowed');
 
@@ -1351,9 +1775,6 @@ class UltimateStoryService {
       insights: {
         views: realViews,
         reactions: reactionCounts,
-        // Counters the story document never wrote are unknown (null), never a
-        // fabricated 0 — an insight panel must not claim a measured zero
-        // interaction for a story whose `stats` block is absent.
         comments: unknownNumber(story.stats?.comments),
         shares: unknownNumber(story.stats?.shares),
         replies: unknownNumber(story.stats?.replies),
@@ -1365,6 +1786,58 @@ class UltimateStoryService {
         type: story.type,
       }
     };
+  }
+
+  async reportStory(storyId, reason, details = '') {
+    await this.ensureInitialized();
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.REPORT_STORY, {
+      targetId: storyId,
+      storyId,
+      reason,
+      details,
+    });
+    return { success: true, ...(res || {}) };
+  }
+
+  async reportVibeReply(replyId, reason, details = '') {
+    await this.ensureInitialized();
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.REPORT_VIBE_REPLY, {
+      targetId: replyId,
+      replyId,
+      reason,
+      details,
+    });
+    return { success: true, ...(res || {}) };
+  }
+
+  async getStoryByIdForDeepLink(storyId, viewerId = null) {
+    await this.ensureInitialized();
+    const currentUserId = viewerId || this.auth.currentUser?.uid;
+    if (!currentUserId) return { success: false, story: null, unavailableReason: 'unauthenticated' };
+    try {
+      const snap = await this.fs.getDoc(this.fs.doc(this.firestore, 'stories', storyId));
+      if (!snap.exists()) return { success: false, story: null, unavailableReason: 'not_found' };
+      const story = { id: snap.id, ...snap.data() };
+      if (story.isDeleted || story.status === 'removed' || story.moderationStatus === 'rejected') {
+        return { success: false, story: null, unavailableReason: 'deleted' };
+      }
+      if (this._isStoryExpired(story)) {
+        return { success: false, story: null, unavailableReason: 'expired' };
+      }
+      const allowed = await this._canViewStory(story, currentUserId);
+      if (!allowed) {
+        return { success: false, story: null, unavailableReason: 'restricted' };
+      }
+      return { success: true, story, unavailableReason: null };
+    } catch (err) {
+      const msg = String(err?.code || err?.message || '').toLowerCase();
+      if (msg.includes('permission') || msg.includes('denied')) {
+        return { success: false, story: null, unavailableReason: 'restricted' };
+      }
+      return { success: false, story: null, unavailableReason: 'not_found' };
+    }
   }
 
   subscribeToInsights(storyId, callback) {
@@ -1521,21 +1994,30 @@ class UltimateStoryService {
     const now = Date.now();
     const followMap = new Map();
 
-    // Batch-check follow relationships once for all unique creators.
+    // Batch-check follow relationships via socialGraphService (no N+1 getDoc loop)
     const creatorIds = [...new Set(stories.map((s) => s.userId).filter(Boolean))];
-    await Promise.all(creatorIds.map(async (cid) => {
-      if (cid === userId) { followMap.set(cid, true); return; }
+    const missingIds = [];
+    for (const cid of creatorIds) {
+      if (cid === userId) { followMap.set(cid, true); continue; }
       if (this.followedUsersCache.has(cid)) {
         followMap.set(cid, this.followedUsersCache.get(cid));
-        return;
+      } else {
+        missingIds.push(cid);
       }
+    }
+    if (missingIds.length > 0 && userId) {
       try {
-        const followDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'follows', `${userId}_${cid}`));
-        const follows = followDoc.exists();
-        this.followedUsersCache.set(cid, follows);
-        followMap.set(cid, follows);
-      } catch { followMap.set(cid, false); }
-    }));
+        const { getSocialGraphService } = await import('./socialGraphService.js');
+        const edgeMap = await getSocialGraphService().getEdgeSet(userId, missingIds, { include: ['follow'] });
+        for (const cid of missingIds) {
+          const follows = Boolean(edgeMap.get(cid)?.isFollowing);
+          this.followedUsersCache.set(cid, follows);
+          followMap.set(cid, follows);
+        }
+      } catch {
+        for (const cid of missingIds) followMap.set(cid, false);
+      }
+    }
 
     const EXPIRY_MS = STORY_CONFIG.EXPIRY_HOURS * 3600000;
     const scored = stories.map((s) => {
@@ -1795,20 +2277,62 @@ class UltimateStoryService {
     return { passed: true };
   }
 
-  async _uploadStoryMedia(file, userId, type, onProgress) {
+  async _uploadStoryMedia(file, userId, type, onProgress, uploadOptions = {}) {
     const maxSize = type === 'image' ? STORY_CONFIG.MAX_IMAGE_SIZE_MB * 1024 * 1024
                   : type === 'video' ? STORY_CONFIG.MAX_VIDEO_SIZE_MB * 1024 * 1024
                   : STORY_CONFIG.MAX_AUDIO_SIZE_MB * 1024 * 1024;
     if (file.size > maxSize) throw new Error(`File too large.`);
     const ext = file.name.split('.').pop() || 'bin';
-    const path = `stories/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const stampName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const vis = uploadOptions.visibility || STORY_CONFIG.VISIBILITY.PUBLIC;
+    const storyId = uploadOptions.storyId;
+    const path = vis === STORY_CONFIG.VISIBILITY.PRIVATE && storyId
+      ? `stories/${userId}/private/${storyId}/${stampName}`
+      : (['followers', 'connections', 'close_circle', 'selected'].includes(vis) && storyId)
+        ? `stories/${userId}/audience/${storyId}/${stampName}`
+        : `stories/${userId}/${stampName}`;
     const fileRef = this.st.ref(this.storage, path);
-    const uploadTask = this.st.uploadBytesResumable(fileRef, file, { contentType: file.type, customMetadata: { userId, storyType: type } });
+    const uploadTask = this.st.uploadBytesResumable(fileRef, file, {
+      contentType: file.type,
+      customMetadata: { userId, storyType: type, visibility: vis },
+    });
+    const uploadId = uploadOptions.uploadId || stampName;
+    const handle = { task: uploadTask, path, cancelled: false, cancel: () => this.cancelUpload(uploadId) };
+    this.activeUploads.set(uploadId, handle);
+    try { uploadOptions.onUploadHandle?.(handle); } catch (e) { logger.debug('[Vibes] onUploadHandle failed', { error: e?.message }); }
+
+    const abortHandler = () => { this.cancelUpload(uploadId); };
+    if (uploadOptions.abortSignal) {
+      if (uploadOptions.abortSignal.aborted) {
+        await this.cancelUpload(uploadId);
+        throw enhanceError({ code: 'cancelled' }, 'Upload cancelled');
+      }
+      uploadOptions.abortSignal.addEventListener('abort', abortHandler, { once: true });
+    }
+
     return new Promise((resolve, reject) => {
       uploadTask.on('state_changed',
-        (snapshot) => { const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100; onProgress?.(progress, snapshot); },
-        (error) => reject(enhanceError(error, 'Upload failed')),
-        async () => { const url = await this.st.getDownloadURL(uploadTask.snapshot.ref); resolve({ url, path, size: file.size, type: file.type, name: file.name }); }
+        (snapshot) => {
+          const total = snapshot.totalBytes || file.size || 1;
+          const progress = Math.min(100, Math.round((snapshot.bytesTransferred / total) * 100));
+          onProgress?.(progress, snapshot);
+        },
+        (error) => {
+          this.activeUploads.delete(uploadId);
+          uploadOptions.abortSignal?.removeEventListener?.('abort', abortHandler);
+          reject(enhanceError(error, handle.cancelled ? 'Upload cancelled' : 'Upload failed'));
+        },
+        async () => {
+          this.activeUploads.delete(uploadId);
+          uploadOptions.abortSignal?.removeEventListener?.('abort', abortHandler);
+          if (handle.cancelled) {
+            await this.deleteAbandonedMedia(path);
+            reject(enhanceError({ code: 'cancelled' }, 'Upload cancelled'));
+            return;
+          }
+          const url = await this.st.getDownloadURL(uploadTask.snapshot.ref);
+          resolve({ url, path, size: file.size, type: file.type, name: file.name });
+        }
       );
     });
   }
@@ -1819,28 +2343,38 @@ class UltimateStoryService {
   }
 
   async _compressImage(file) {
-    // Use worker or library; for brevity, we keep simple compression
     return new Promise((resolve, reject) => {
       const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      const cleanupUrl = () => {
+        try { URL.revokeObjectURL(objectUrl); } catch { /* noop */ }
+      };
       img.onload = () => {
+        cleanupUrl();
         const canvas = document.createElement('canvas');
         let { width, height } = img;
         const { MAX_WIDTH, MAX_HEIGHT, QUALITY } = STORY_CONFIG.IMAGE_COMPRESSION;
         if (width > MAX_WIDTH || height > MAX_HEIGHT) {
           const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-          width *= ratio; height *= ratio;
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
         }
         canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob(
-          (blob) => { if (!blob) reject(new Error('Compression produced empty blob'));
-            resolve(new File([blob], file.name, { type: file.type, lastModified: Date.now() })); },
+          (blob) => {
+            if (!blob) return reject(new Error('Compression produced empty blob'));
+            resolve(new File([blob], file.name, { type: file.type, lastModified: Date.now() }));
+          },
           file.type, QUALITY
         );
       };
-      img.onerror = () => reject(new Error('Failed to load image for compression'));
-      img.src = URL.createObjectURL(file);
+      img.onerror = () => {
+        cleanupUrl();
+        reject(new Error('Failed to load image for compression'));
+      };
+      img.src = objectUrl;
     });
   }
 
@@ -1933,25 +2467,34 @@ class UltimateStoryService {
     // presents expired content as active (spec §6).
     if (this._isStoryExpired(story)) return false;
     if (story.userId === viewerId) return true;
-    // Blocked in either direction = no access (spec §28). Actor-scoped list
-    // read via the graph spine: a point read of an absent block edge is denied
-    // by the `resource.data` rule, which would silently skip the check (N033).
+    // Blocked in either direction = no access (spec §28).
+    let edge = null;
     try {
       const { getSocialGraphService } = await import('./socialGraphService.js');
-      const edge = await getSocialGraphService().getRelationship(viewerId, story.userId);
+      edge = await getSocialGraphService().getRelationship(viewerId, story.userId);
       if (edge.isBlocking || edge.isBlockedBy) return false;
     } catch {
-      // Fail closed: if the block edge cannot be resolved we cannot prove the
-      // viewer is allowed, so do not serve the story. Rules enforce the same
-      // condition authoritatively on read.
       return false;
     }
     if (story.visibility === STORY_CONFIG.VISIBILITY.PUBLIC) return true;
     if (story.visibility === STORY_CONFIG.VISIBILITY.FOLLOWERS) {
+      return Boolean(edge?.isFollowing);
+    }
+    if (story.visibility === STORY_CONFIG.VISIBILITY.CONNECTIONS) {
+      return Boolean(edge?.isMutualFriend || (edge?.isFollowing && edge?.isFollower));
+    }
+    if (story.visibility === STORY_CONFIG.VISIBILITY.CLOSE_CIRCLE) {
       try {
-        const followDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'follows', `${viewerId}_${story.userId}`));
-        return followDoc.exists();
-      } catch { return false; }
+        const circleSnap = await this.fs.getDoc(
+          this.fs.doc(this.firestore, 'users', story.userId, 'close_circle', viewerId)
+        );
+        return circleSnap.exists();
+      } catch {
+        return false;
+      }
+    }
+    if (story.visibility === STORY_CONFIG.VISIBILITY.SELECTED) {
+      return Array.isArray(story.selectedUserIds) && story.selectedUserIds.includes(viewerId);
     }
     if (story.visibility === STORY_CONFIG.VISIBILITY.PRIVATE) {
       return false; // only the creator (handled above)
@@ -2011,17 +2554,23 @@ const storyService = {
   createStory: (...args) => getStoryService().createStory(...args),
   getStoriesFeed: (...args) => getStoryService().getStoriesFeed(...args),
   getStory: (...args) => getStoryService().getStory(...args),
+  getStoryByIdForDeepLink: (...args) => getStoryService().getStoryByIdForDeepLink(...args),
+  recordVibeEngagement: (...args) => getStoryService().recordVibeEngagement(...args),
   reportStoryView: (...args) => getStoryService().reportStoryView(...args),
   markStorySeen: (userId, storyId) => getStoryService()._markStorySeen(userId, storyId),
   getStoryViewers: (...args) => getStoryService().getStoryViewers(...args),
   reactToStory: (...args) => getStoryService().reactToStory(...args),
   commentOnStory: (...args) => getStoryService().commentOnStory(...args),
   replyToStory: (...args) => getStoryService().replyToStory(...args),
+  shareVibe: (...args) => getStoryService().shareVibe(...args),
   deleteStory: (...args) => getStoryService().deleteStory(...args),
+  reportStory: (...args) => getStoryService().reportStory(...args),
+  reportVibeReply: (...args) => getStoryService().reportVibeReply(...args),
   trackShare: (...args) => getStoryService().trackShare(...args),
   trackStoryAnalytics: (...args) => getStoryService().trackStoryAnalytics(...args),
   reportStoryCompletion: (...args) => getStoryService().reportStoryCompletion(...args),
   voteOnPoll: (...args) => getStoryService().voteOnPoll(...args),
+  getPoll: (...args) => getStoryService().getPoll(...args),
   answerQuiz: (...args) => getStoryService().answerQuiz(...args),
   updateCountdown: (...args) => getStoryService().updateCountdown(...args),
   recordEmojiSlider: (...args) => getStoryService().recordEmojiSlider(...args),
@@ -2035,8 +2584,18 @@ const storyService = {
   preloadStories: (...args) => getStoryService().preloadStories(...args),
   archiveStory: (...args) => getStoryService().archiveStory(...args),
   getArchivedStories: (...args) => getStoryService().getArchivedStories(...args),
+  deleteArchivedStory: (...args) => getStoryService().deleteArchivedStory(...args),
+  getCloseCircle: (...args) => getStoryService().getCloseCircle(...args),
+  addToCloseCircle: (...args) => getStoryService().addToCloseCircle(...args),
+  removeFromCloseCircle: (...args) => getStoryService().removeFromCloseCircle(...args),
+  setCloseCircle: (...args) => getStoryService().setCloseCircle(...args),
+  cancelUpload: (...args) => getStoryService().cancelUpload(...args),
+  deleteAbandonedMedia: (...args) => getStoryService().deleteAbandonedMedia(...args),
   getStoryInsights: (...args) => getStoryService().getStoryInsights(...args),
   createHighlight: (...args) => getStoryService().createHighlight(...args),
+  updateHighlight: (...args) => getStoryService().updateHighlight(...args),
+  deleteHighlight: (...args) => getStoryService().deleteHighlight(...args),
+  reorderHighlights: (...args) => getStoryService().reorderHighlights(...args),
   addToHighlight: (...args) => getStoryService().addToHighlight(...args),
   removeFromHighlight: (...args) => getStoryService().removeFromHighlight(...args),
   getHighlights: (...args) => getStoryService().getHighlights(...args),
@@ -2051,6 +2610,7 @@ const storyService = {
   destroy: () => getStoryService().destroy(),
   CONFIG: STORY_CONFIG,
   REACTION_TYPES: STORY_CONFIG.REACTION_TYPES,
+  VIBE_REACTIONS,
   VISIBILITY: STORY_CONFIG.VISIBILITY,
 };
 

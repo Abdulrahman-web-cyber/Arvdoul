@@ -142,8 +142,18 @@ export const FUNCTIONS = {
   WATERMARK_VIDEO: 'watermarkVideo',
   MODERATE_VIDEO: 'moderateVideo',
 
-  // Stories
+  // Stories / Vibes
   GENERATE_CAPTION_FOR_IMAGE: 'generateCaptionForImage',
+  PUBLISH_VIBE: 'publishVibe',
+  DELETE_VIBE: 'deleteVibe',
+  REACT_TO_VIBE: 'reactToVibe',
+  REPLY_TO_VIBE: 'replyToVibe',
+  SHARE_VIBE: 'shareVibe',
+  RECORD_VIBE_ENGAGEMENT: 'recordVibeEngagement',
+  GET_VIBE_INSIGHTS: 'getVibeInsights',
+  REORDER_HIGHLIGHTS: 'reorderHighlights',
+  REPORT_STORY: 'reportStory',
+  REPORT_VIBE_REPLY: 'reportVibeReply',
 
   // Feed
   GET_PERSONALIZED_FEED_ML: 'getPersonalizedFeedML',
@@ -153,6 +163,7 @@ export const FUNCTIONS = {
   SPEND_COINS: 'spendCoins',
   TRANSFER_COINS: 'transferCoins',
   SEND_GIFT: 'sendGift',
+  SEND_VIBE_GIFT: 'sendVibeGift',
   SEND_LIVE_GIFT: 'sendLiveGift',
   SEND_LIVE_TIP: 'sendLiveTip',
   BOOST_POST: 'boostPost',

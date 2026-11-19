@@ -1,0 +1,2645 @@
+### ARVDOUL VIBES — PART 1
+
+### Core Experience: Architecture, Interface, Creation, Publishing & Viewing
+
+PART 1 — IMPLEMENTATION SPECIFICATION
+
+Objective: Build the complete foundational Vibes experience for Arvdoul as a production-grade social media feature. This part covers everything required for users to create, publish, view, navigate, manage and control their Vibes.
+
+This is an implementation specification for Firebase AI Studio. It is deliberately restricted to Part 1. Social economy, advanced creator monetization, XP, levels, gifting and advanced creator features belong to subsequent parts.
+
+### 1\. Product definition
+
+Vibes is Arvdoul's ephemeral visual-sharing system, allowing users to publish temporary content that their audience can view through an immersive, full-screen experience.
+
+Vibes must feel like a native component of Arvdoul rather than an independent application embedded inside it.
+
+The experience consists of three primary environments:
+
+* Vibes Feed: Discover and access available Vibes.
+
+* Vibes Viewer: Watch and navigate published Vibes.
+
+* Vibes Studio: Create, edit, preview and publish Vibes.
+
+All three environments must share the existing Arvdoul design system, authentication, profile identity, media infrastructure, navigation and Firebase architecture.
+
+### Core product principles
+
+* Mobile-first, responsive implementation.
+
+* Premium, polished, flagship-native-app-quality UI.
+
+* Consistent light and dark themes.
+
+* Smooth transitions and gesture interactions.
+
+* Fast media loading and reliable playback.
+
+* Privacy-aware publishing.
+
+* Offline-tolerant creation and drafts.
+
+* Accessible controls and understandable interaction patterns.
+
+* Secure Firebase-backed data operations.
+
+* Reusable components and maintainable architecture.
+
+### 2\. Mandatory repository inspection
+
+Before implementation, inspect the existing Arvdoul repository.
+
+Do not immediately create files or replace existing components.
+
+### 2.1 Inspect the existing application
+
+Identify:
+
+* Application entry points.
+
+* Routing configuration.
+
+* Authentication and authorization.
+
+* User profile architecture.
+
+* Existing Stories/Vibes implementation, if any.
+
+* Post creation and publishing architecture.
+
+* Existing media upload services.
+
+* Firebase initialization and configuration.
+
+* Firestore collections and document schemas.
+
+* Cloud Functions.
+
+* Firebase Storage structure.
+
+* Security rules.
+
+* Firestore indexes.
+
+* Notification architecture, for future integration compatibility.
+
+* Existing design tokens and theme management.
+
+* Navigation components.
+
+* State management.
+
+* React Query configuration.
+
+* Existing reusable hooks and components.
+
+* Existing testing infrastructure.
+
+### 2.2 Identify existing functionality
+
+For every relevant existing feature, classify it as:
+
+| Status            | Meaning                                      |
+| ----------------- | -------------------------------------------- |
+| Reusable          | Already works and can be reused.             |
+| Needs improvement | Exists but requires modification.            |
+| Incomplete        | Partially implemented.                       |
+| Missing           | Does not exist.                              |
+| Broken            | Exists but fails its intended functionality. |
+
+### 2.3 Architecture preservation rules
+
+* Reuse existing Firebase initialization.
+
+* Reuse the existing authentication system.
+
+* Reuse the existing user profile schema.
+
+* Reuse existing media upload infrastructure where suitable.
+
+* Reuse existing design tokens and theme utilities.
+
+* Preserve current routing conventions.
+
+* Preserve existing working functionality.
+
+* Avoid unnecessary dependencies.
+
+* Avoid duplicate Firebase services.
+
+* Avoid creating parallel implementations of existing systems.
+
+Do not assume a feature is missing merely because its implementation is located somewhere unexpected.
+
+Deliverable: An architecture map identifying the files, services, schemas and components that Part 1 will reuse, modify or create.
+
+Do not spend the entire implementation phase producing documentation. Inspection must lead to actual implementation.
+
+### 3\. Vibes architecture
+
+Organize the feature around reusable, independently maintainable modules.
+
+The following is the logical architecture. Adapt its physical file locations to the existing repository rather than imposing a conflicting folder structure.
+
+```text
+Vibes
+│
+├── Feed
+│   ├── VibesFeed
+│   ├── VibesSection
+│   ├── VibeAvatar
+│   ├── VibeGroup
+│   ├── VibePreview
+│   └── VibesEmptyState
+│
+├── Viewer
+│   ├── VibesViewer
+│   ├── VibeRenderer
+│   ├── VibeProgress
+│   ├── ViewerControls
+│   ├── ViewerGestures
+│   ├── VibeNavigation
+│   └── ViewerMedia
+│
+├── Studio
+│   ├── VibesStudio
+│   ├── MediaPicker
+│   ├── CameraCapture
+│   ├── MediaEditor
+│   ├── TextEditor
+│   ├── DrawingTools
+│   ├── MediaAdjustments
+│   ├── VibePreview
+│   └── PublishControls
+│
+├── Management
+│   ├── VibeDrafts
+│   ├── VibeArchive
+│   ├── VibeHighlights
+│   └── VibeManagement
+│
+├── Privacy
+│   ├── AudienceSelector
+│   ├── VibeVisibility
+│   └── VibePrivacySettings
+│
+├── Components
+│   ├── VibeCard
+│   ├── VibeLoading
+│   ├── VibeError
+│   └── VibeSkeleton
+│
+├── Hooks
+│   ├── useVibes
+│   ├── useVibeViewer
+│   ├── useVibeUpload
+│   ├── useVibeDrafts
+│   └── useVibeAudience
+│
+├── Services
+│   ├── vibesService
+│   ├── vibeMediaService
+│   └── vibeDraftService
+│
+└── Types
+    └── Vibe models and validation
+```
+
+These names are architectural responsibilities, not instructions to create duplicate files if equivalent modules already exist.
+
+### Architectural boundaries
+
+Separate responsibilities:
+
+* UI components render interface and handle presentation.
+
+* Hooks coordinate UI state and lifecycle.
+
+* Services perform data operations.
+
+* Firebase infrastructure handles persistence and media storage.
+
+* Cloud Functions enforce trusted server-side operations.
+
+* Validation handles input constraints and schema consistency.
+
+* Privacy logic controls audience eligibility.
+
+* Media processing handles optimization and upload preparation.
+
+Avoid putting Firestore queries, media upload logic, permissions and complicated business rules directly inside large React components.
+
+### 4\. Vibes data architecture
+
+Create or adapt a consistent data model that supports the full Part 1 experience and future expansion.
+
+Do not create new collections until the existing schema has been inspected.
+
+### 4.1 Vibe document
+
+A Vibe should support the following logical fields:
+
+```ts
+interface Vibe {
+  id: string;
+
+  ownerId: string;
+
+  type: "image" | "video" | "text";
+
+  media?: {
+    storagePath: string;
+    downloadURL?: string;
+    thumbnailPath?: string;
+    thumbnailURL?: string;
+
+    mimeType?: string;
+    width?: number;
+    height?: number;
+
+    sizeBytes?: number;
+    durationMs?: number;
+  };
+
+  content?: {
+    text?: string;
+    background?: string;
+    textColor?: string;
+    fontFamily?: string;
+    textAlignment?: "left" | "center" | "right";
+  };
+
+  audience: {
+    visibility:
+      | "public"
+      | "followers"
+      | "connections"
+      | "close_circle"
+      | "selected"
+      | "private";
+
+    allowedUserIds?: string[];
+    excludedUserIds?: string[];
+  };
+
+  status:
+    | "draft"
+    | "processing"
+    | "published"
+    | "failed"
+    | "expired"
+    | "deleted";
+
+  createdAt: Timestamp;
+  publishedAt?: Timestamp;
+  expiresAt?: Timestamp;
+
+  updatedAt: Timestamp;
+}
+```
+
+This is a conceptual contract. Adapt field names, timestamp types and optional fields to Arvdoul's actual conventions.
+
+Do not store unnecessary duplicated user profile data in every Vibe.
+
+Do not treat client-supplied `ownerId`, timestamps or permissions as trusted authorization evidence.
+
+### 4.2 Media storage
+
+Use a predictable storage structure consistent with existing Arvdoul conventions.
+
+Example:
+
+```text
+vibes/
+  {userId}/
+    {vibeId}/
+      original
+      optimized
+      thumbnail
+```
+
+Requirements:
+
+* Validate file types.
+
+* Validate file sizes.
+
+* Generate safe storage paths.
+
+* Avoid publicly exposing private media.
+
+* Avoid trusting arbitrary download URLs supplied by clients.
+
+* Prevent users from overwriting other users' media.
+
+* Clean up abandoned uploads.
+
+* Delete media when its associated Vibe is permanently deleted.
+
+* Handle interrupted uploads and retries.
+
+* Avoid duplicate uploads when a request is retried.
+
+For private content, prefer authenticated media access or appropriately scoped Firebase download-token handling. Do not assume an unguessable URL provides sufficient privacy.
+
+### 4.3 Expiration
+
+Default Vibe lifetime:
+
+24 hours
+
+Requirements:
+
+* Every published Vibe receives a trusted expiration timestamp.
+
+* The expiration timestamp is calculated by trusted backend logic.
+
+* Expired Vibes must no longer appear in ordinary active feeds.
+
+* Expired Vibes must not be playable through stale client caches.
+
+* Archive behavior must be separated from active-feed visibility.
+
+* Expiration must be enforced by queries and authorization logic, not only by hiding expired cards.
+
+* Expired media cleanup must be handled safely and asynchronously.
+
+Use scheduled backend cleanup or an existing compatible expiration mechanism.
+
+Do not depend on a user's device clock to determine whether a Vibe is valid.
+
+### 4.4 Data access efficiency
+
+Avoid fetching the entire Vibes collection.
+
+Implement:
+
+* Paginated feed retrieval.
+
+* Cursor-based pagination.
+
+* Limited queries.
+
+* Appropriate composite indexes.
+
+* Batched reads where appropriate.
+
+* Efficient profile lookups.
+
+* Cached media metadata.
+
+* Deduplicated requests.
+
+* Controlled real-time subscriptions.
+
+Avoid unbounded Firestore listeners.
+
+### 5\. Vibes Feed
+
+![Modern Social Media App UI – Dark & Elegant Design by Mohammad Ali ✪ on Dribbble](https://images.openai.com/static-rsc-4/AaANzr3JPiBBumqNEgqTTOSX0HAyObS4hgDIG5HJowdYvX2wge6LTekg9qomM4eqB_wnd_4yt50T_X_XQ8RFIRzUqrlJ1NyUWnAbXJeTjahzNveRyREiVtuaZ5UOon7RDnFonm-dgsy9vr9_sRfYQCSoNZaC1CXZ0EdLiekYBh8mHPFhKr_qmmfAEx_9WfeW?purpose=fullsize)
+
+![AI Story & Chat App – Dark Glassmorphism UI by Sk Ashik on Dribbble](https://images.openai.com/static-rsc-4/O6CiN3PowGMvydYvxLezYtJHFzuTa_7U7Sj9ftidfTqfUyMU0qBKXaCBzqjKgm3HtvTzFRj311m_bCiodOKR-69VUvjbO7vjNX_WsxLfLMCsLuTScBZdtjBvr0m1Ezqo2JREIi5JB5ODfLlQ1sTwKQdh8kDFszc5dhXxDvUxZWrRM_QjRkr_X455hqrWj6dS?purpose=fullsize)
+
+![Streaming Mobile App And Development by Imran Jakir | Dribbble](https://images.openai.com/static-rsc-4/yrdCnt93y9WGU8kMEZDgoMu1RWDcXVnPvPkeSPb4wMfTDUiW-v-Vj4_WPLlYinxN8BgYngBXPI7ytjDWrL7VqG2DWEgNsn5r6Y4v8wYireKkQ3KN6E190-29jAlTBNONwswyWV27k3eiLBjCZog1-_uHyyWBV1NguP1JiUoCsoWHQ72lK4Fw0IvlxhjB7wIr?purpose=fullsize)
+
+The Vibes Feed is the entry point to the feature.
+
+It should feel integrated into Arvdoul's existing Home experience.
+
+### 5.1 Feed layout
+
+The feed should include:
+
+* Vibes section header.
+
+* Create Vibe entry point.
+
+* Your Vibe indicator.
+
+* Active Vibes from relevant users.
+
+* Unseen Vibe indicators.
+
+* Seen Vibe indicators.
+
+* Appropriate grouping.
+
+* Loading and empty states.
+
+Do not unnecessarily duplicate Vibes navigation or add another primary navigation bar.
+
+### 5.2 Vibe avatar
+
+Each Vibe avatar should support:
+
+* Profile image.
+
+* Default profile fallback.
+
+* Gradient or branded story ring.
+
+* Unseen state.
+
+* Seen state.
+
+* Multiple active Vibes.
+
+* User display name.
+
+* Accessible labels.
+
+* Loading state.
+
+* Failure fallback.
+
+Visual states:
+
+| State                | Appearance                               |
+| -------------------- | ---------------------------------------- |
+| Unseen               | Prominent brand-gradient ring            |
+| Seen                 | Muted neutral ring                       |
+| Your active Vibe     | Profile avatar with management indicator |
+| No active Vibe       | Create Vibe indicator                    |
+| Loading              | Avatar skeleton                          |
+| Failed profile image | Consistent fallback avatar               |
+
+Avoid using random gradients or arbitrary colors for individual users.
+
+Use the existing Arvdoul visual identity.
+
+### 5.3 Feed behavior
+
+* Prioritize relevant active Vibes.
+
+* Show the user's own Vibe first.
+
+* Group multiple Vibes from the same person.
+
+* Avoid duplicate user entries.
+
+* Distinguish unseen and previously seen Vibes.
+
+* Remove expired Vibes from active results.
+
+* Update the feed after publishing.
+
+* Handle deleted or unavailable content gracefully.
+
+* Maintain scroll position when returning from the viewer.
+
+* Support pagination when the feed grows.
+
+The initial feed should load quickly without waiting for every media file to download.
+
+### 5.4 Empty state
+
+When no Vibes are available:
+
+* Display a purposeful empty state.
+
+* Explain what Vibes are.
+
+* Provide a clear Create Vibe action.
+
+* Avoid a blank section or broken layout.
+
+### 5.5 Feed loading and failure
+
+Implement:
+
+* Skeleton loading.
+
+* Initial-load error state.
+
+* Retry action.
+
+* Pagination loading.
+
+* Empty state.
+
+* Offline state.
+
+* Stale cached data where appropriate.
+
+A failed feed request must not crash the Home screen.
+
+### 6\. Full-screen Vibes Viewer
+
+![Bemo :: Behance](https://images.openai.com/static-rsc-4/JmgCxD6D9Nj0ChJXujSUdmKSABfwfMTXdFJ_3wESacvOh2DruYA8BS-92Mcf1uYYhSu3qi-K-K0_pn5A8sX7v6shKWQmmY3pgBPmqPFuOx0_64fCYbmgMjtaloHkwf56ZJ_jZFFZgm64-owBVdLI_9TfcQ322pp256gUWMeoRGhBpsZ4HSQu0OS0TikL5rF2?purpose=fullsize)
+
+The Viewer is the central Vibes experience.
+
+It must be immersive, responsive and optimized for mobile devices.
+
+### 6.1 Viewer layout
+
+The Viewer should contain:
+
+Top area
+
+* Segmented progress indicators.
+
+* Profile avatar.
+
+* Display name.
+
+* Username or appropriate identity label.
+
+* Publishing time.
+
+* More/options control.
+
+* Close control.
+
+Center area
+
+* Image, video or text Vibe.
+
+* Media content.
+
+* Text overlays.
+
+* Background rendering.
+
+* Appropriate scaling and positioning.
+
+Bottom area
+
+* Content context where appropriate.
+
+* Creator-side management controls.
+
+* Viewer-side navigation or interaction affordances only where already supported by Part 1.
+
+Do not implement replies, reactions, gifting or messaging in this part. Those belong to Part 2.
+
+### 6.2 Navigation gestures
+
+Support:
+
+| Gesture      | Behavior                               |
+| ------------ | -------------------------------------- |
+| Tap right    | Next Vibe                              |
+| Tap left     | Previous Vibe                          |
+| Long press   | Pause playback                         |
+| Release      | Resume playback                        |
+| Swipe down   | Close Viewer                           |
+| Close button | Exit Viewer                            |
+| More button  | Open available Vibe management options |
+
+Requirements:
+
+* Gesture handling must not conflict with vertical scrolling or media controls.
+
+* Support touch and pointer input.
+
+* Provide accessible alternatives to gestures.
+
+* Avoid accidental closure.
+
+* Prevent duplicate gesture event handlers.
+
+* Clean up listeners when the Viewer closes.
+
+### 6.3 Playback engine
+
+Create a reliable playback controller.
+
+Image Vibes:
+
+* Use a configurable display duration.
+
+* Default to approximately 5 seconds.
+
+* Pause when the Viewer is not active.
+
+* Resume correctly after interruption.
+
+Video Vibes:
+
+* Use the actual media duration.
+
+* Support playback and pause.
+
+* Respect buffering.
+
+* Avoid advancing while media is buffering.
+
+* Handle media errors.
+
+* Release media resources when no longer needed.
+
+* Avoid unnecessary video preloading.
+
+Text Vibes:
+
+* Use a readable display duration.
+
+* Support manual navigation.
+
+* Avoid excessively short playback for long text.
+
+### 6.4 Progress indicators
+
+Implement segmented progress bars.
+
+Requirements:
+
+* One segment per Vibe in the current sequence.
+
+* Current segment reflects playback progress.
+
+* Previous segments are complete.
+
+* Future segments remain inactive.
+
+* Pause freezes progress.
+
+* Navigation updates progress correctly.
+
+* Buffering does not falsely advance video progress.
+
+* Segment changes do not cause visual flickering.
+
+### 6.5 Navigation logic
+
+Support:
+
+* Next Vibe from the same creator.
+
+* Previous Vibe from the same creator.
+
+* Next creator.
+
+* Previous creator.
+
+* End-of-sequence behavior.
+
+* Deleted Vibe handling.
+
+* Expired Vibe handling.
+
+* Empty sequence handling.
+
+* Reopening a creator's active Vibes.
+
+Do not load every Vibe in the entire application just to navigate between a small number of active Vibes.
+
+### 6.6 Media rendering
+
+Image rendering:
+
+* Preserve aspect ratio.
+
+* Avoid distortion.
+
+* Support portrait and landscape media.
+
+* Use appropriate background treatment.
+
+* Avoid unexpected cropping.
+
+Video rendering:
+
+* Use supported media formats.
+
+* Display a loading indicator.
+
+* Handle autoplay restrictions.
+
+* Handle mute/unmute state where appropriate.
+
+* Avoid playback continuing after navigation.
+
+* Handle interrupted playback.
+
+Text rendering:
+
+* Respect text formatting.
+
+* Support backgrounds.
+
+* Maintain readable contrast.
+
+* Prevent text overflow.
+
+* Support different screen sizes.
+
+### 6.7 Viewer performance
+
+* Preload only nearby content.
+
+* Avoid loading every video simultaneously.
+
+* Release unused media resources.
+
+* Prevent unnecessary component remounting.
+
+* Avoid excessive React state updates during playback.
+
+* Keep progress animation smooth.
+
+* Avoid layout shifts.
+
+* Handle low-memory mobile devices.
+
+### 7\. Vibes Studio — Creation Environment
+
+![Video Editor Mobile App UI Design by Ronas IT | UI/UX Team on Dribbble](https://images.openai.com/static-rsc-4/ovtSgKwb6gDwaYU9fII9_PYi3Cz1NZhMXuzVGVzAI5q-LpkGPkOxbRtgYzhyBfFjxkjiGd8D0v7RpErvzJHlSYk1PjF0tsTRfDSc_tV2S42cd0DOh-mRf9uR6D29e5dAt909Zat6nhbCD2k93z-ZStMHCbHhYdqSqR6WrrXB6LlrYIw5XJt3EjyEtVpFgyNM?purpose=fullsize)
+
+![Next-Gen UI/UX for Photo & Video Editing by Faruk Hossain on Dribbble](https://images.openai.com/static-rsc-4/Vali3XgXciqBbxRr1DchVQ_EAgfMXhB-ScpruJMLTiF0BcKDLddOJ93o8HUZB8dPPY987wa02nXUBr69i9HDo0ynQ0eldBQOasp8QHuYVpNrQRtJZ1Y9_PgIfnb_bFY4ME5u5r37iIZbJnh-jEuPCV_-kWL9fwa_PwsqUP7fjBGrwrymGNpGxQh8LGm4lJLz?purpose=fullsize)
+
+![Text Editor UI for Mobile Graphic Editor by Mari Chubina on Dribbble](https://images.openai.com/static-rsc-4/hHNOsFogo53fePEkr5Y-3d0rMsgHcI1il2uZfgLDht2uh42o3covgOvn9FYDGhflD1cfN9PrGUhSOuuzQ7wa3xmKjv0W050sb4fi-mIRJecDXhgtWBjdudBlPiZn-m9Q_S9JB_72ufkjRn4JCY-fpA_AJeEu4i6zSV8aIhjBT8bJs__xu9VOjrOh7lDJYfr1?purpose=fullsize)
+
+Vibes Studio must provide a straightforward creation experience without unnecessary complexity.
+
+It should allow users to produce high-quality Vibes directly within Arvdoul.
+
+### 7.1 Studio entry points
+
+Users should be able to open Studio from:
+
+* Their Vibe avatar.
+
+* The Vibes Feed.
+
+* An appropriate existing Create entry point.
+
+* A profile-related Vibe creation action where applicable.
+
+Reuse existing navigation and creation conventions.
+
+### 7.2 Creation options
+
+Support three foundational content types:
+
+* Image Vibe.
+
+* Video Vibe.
+
+* Text Vibe.
+
+### Image Vibes
+
+Support:
+
+* Gallery selection.
+
+* Image preview.
+
+* Image cropping.
+
+* Rotation.
+
+* Basic adjustments.
+
+* Text overlays.
+
+* Drawing overlays.
+
+* Stickers where already supported by the existing design and implementation.
+
+### Video Vibes
+
+Support:
+
+* Gallery selection.
+
+* Video preview.
+
+* Duration validation.
+
+* Trimming.
+
+* Muting.
+
+* Basic cover selection.
+
+* Text overlays.
+
+* Playback controls.
+
+### Text Vibes
+
+Support:
+
+* Text input.
+
+* Background selection.
+
+* Text color.
+
+* Alignment.
+
+* Font selection using available approved typography.
+
+* Text positioning.
+
+* Preview.
+
+Text Vibes must remain visually consistent with Arvdoul's design language.
+
+### 7.3 Media picker
+
+Implement a clean media-selection experience.
+
+Requirements:
+
+* Request permissions only when needed.
+
+* Explain denied permissions.
+
+* Allow retrying permissions.
+
+* Support image selection.
+
+* Support video selection.
+
+* Display thumbnails.
+
+* Show selected state.
+
+* Prevent invalid file selection.
+
+* Handle unavailable files.
+
+* Handle cancelled selection.
+
+* Handle large media gracefully.
+
+Do not introduce unnecessary permission requests during application startup.
+
+If the application runs as a web app, use browser-supported media and file-selection APIs rather than assuming native mobile gallery APIs exist.
+
+### 7.4 Camera capture
+
+Where the existing application environment supports camera access, provide:
+
+* Front camera.
+
+* Rear camera.
+
+* Capture photo.
+
+* Record video.
+
+* Camera permission handling.
+
+* Permission denial state.
+
+* Camera unavailable state.
+
+* Camera switching.
+
+* Recording indicators.
+
+* Capture preview.
+
+For browsers, implement using supported media APIs.
+
+Do not claim native camera capabilities that the current platform cannot provide.
+
+### 7.5 Editor interface
+
+The editor should use a clean full-screen workspace.
+
+Suggested structure:
+
+Top toolbar
+
+* Close.
+
+* Undo.
+
+* Redo.
+
+* Save draft.
+
+* Next or Continue.
+
+Main canvas
+
+* Media preview.
+
+* Editable text.
+
+* Overlays.
+
+* Positioning controls.
+
+* Scaling and rotation where supported.
+
+Bottom toolbar
+
+* Text.
+
+* Drawing.
+
+* Crop.
+
+* Adjustments.
+
+* Stickers.
+
+* Media-specific tools.
+
+Only show tools that are supported by the selected content type.
+
+Avoid introducing unnecessary buttons or clutter.
+
+### 7.6 Text overlays
+
+Support:
+
+* Multiple text elements.
+
+* Text editing.
+
+* Text positioning.
+
+* Text color.
+
+* Font style.
+
+* Alignment.
+
+* Size.
+
+* Background or highlight.
+
+* Layer ordering.
+
+* Deletion.
+
+* Undo and redo.
+
+Ensure overlays remain within the visible canvas.
+
+Text should remain readable across different background images and videos.
+
+### 7.7 Drawing tools
+
+Where feasible within the existing architecture, support:
+
+* Freehand drawing.
+
+* Brush size.
+
+* Color selection.
+
+* Eraser.
+
+* Undo.
+
+* Redo.
+
+* Clear drawing.
+
+Drawing should not damage the original uploaded media.
+
+Preserve editing state until the user discards the draft or publishes.
+
+### 7.8 Media adjustments
+
+Implement sensible foundational editing capabilities:
+
+* Crop.
+
+* Rotate.
+
+* Basic brightness.
+
+* Basic contrast.
+
+* Media positioning.
+
+* Fit and fill.
+
+* Video trimming.
+
+Avoid expensive processing operations on the main UI thread.
+
+Use suitable browser capabilities or existing media-processing infrastructure.
+
+### 8\. Vibe Preview
+
+Before publishing, users must be able to inspect exactly how their Vibe will appear.
+
+The preview must use the same rendering logic as the actual Viewer wherever possible.
+
+Validate:
+
+* Image positioning.
+
+* Video playback.
+
+* Text placement.
+
+* Text contrast.
+
+* Overlays.
+
+* Cropping.
+
+* Aspect ratio.
+
+* Audience selection.
+
+* Duration.
+
+* Media integrity.
+
+Users must be able to return to editing without losing their work.
+
+Previewing must not create a published Vibe or consume additional media uploads unnecessarily.
+
+### 9\. Audience selection and privacy
+
+![Currently : know who is doing what, around you right now!](https://images.openai.com/static-rsc-4/6t4eM08uqyDamonTwlIJFYK0d3WmPsoGXqhl-yp9xrjfITIOXbKTXVOBQ8zsHq-u_-_eP794CQo6H6cUHpbUKUVDn0aPmYPPRFkzAaokG-iJDYdmOUNF5tAX7Rgfblx59OZN4lbVZcb4rP4iXoj1oNan-RPStvQVvuvWDfRQ9QA4scxyNwsr9CQF8TxXsGfE?purpose=fullsize)
+
+Privacy is part of the core Vibes experience, not an optional advanced feature.
+
+### 9.1 Supported audiences
+
+Implement these audience options:
+
+| Audience     | Access                                                                    |
+| ------------ | ------------------------------------------------------------------------- |
+| Public       | Eligible users can view the Vibe.                                         |
+| Followers    | Users who follow the creator, subject to applicable privacy restrictions. |
+| Connections  | Users accepted as connections under Arvdoul's relationship model.         |
+| Close Circle | Explicitly selected close-circle members.                                 |
+| Selected     | Specific permitted users.                                                 |
+| Private      | Only the creator.                                                         |
+
+Adapt the relationship checks to Arvdoul's actual social graph.
+
+Do not assume that following and being connected are interchangeable.
+
+### 9.2 Audience selector
+
+The selector must include:
+
+* Clear audience labels.
+
+* Short descriptions.
+
+* Selected state.
+
+* Search for users when selecting individuals.
+
+* Close Circle selection.
+
+* Selection persistence during editing.
+
+* Ability to change the audience before publishing.
+
+* Accessible controls.
+
+### 9.3 Privacy enforcement
+
+The backend must independently verify whether a viewer is permitted to access a Vibe.
+
+Do not rely exclusively on frontend filtering.
+
+Enforce:
+
+* Owner authorization.
+
+* Audience eligibility.
+
+* Selected-user permissions.
+
+* Close Circle membership.
+
+* User blocking relationships.
+
+* Account restrictions.
+
+* Content deletion.
+
+* Expiration.
+
+* Private media access.
+
+A user must not be able to bypass privacy by guessing a Firestore document ID or reusing an old media URL.
+
+### 9.4 Privacy edge cases
+
+Handle:
+
+* Creator blocks viewer.
+
+* Viewer blocks creator.
+
+* Creator changes audience after publishing.
+
+* User is removed from Close Circle.
+
+* User account becomes restricted.
+
+* Selected audience changes.
+
+* Vibe expires while being viewed.
+
+* Creator deletes the Vibe.
+
+* Account becomes unavailable.
+
+The next authorization check must apply the latest permissions.
+
+### 10\. Publishing system
+
+Publishing must be reliable, recoverable and safe.
+
+### 10.1 Publishing workflow
+
+Implement this sequence:
+
+```mermaid
+
+flowchart TD
+    A[Create Vibe] --> B[Select Media or Text]
+    B --> C[Edit Content]
+    C --> D[Preview]
+    D --> E[Select Audience]
+    E --> F[Validate Content]
+    F --> G[Prepare Upload]
+    G --> H[Upload Media]
+    H --> I[Verify Upload]
+    I --> J[Trusted Publish Operation]
+    J --> K[Published]
+    K --> L[Refresh Vibes Feed]
+    F -->|Invalid| M[Show Validation Errors]
+    H -->|Failure| N[Retry or Resume]
+    J -->|Failure| O[Recoverable Publishing State]
+```
+
+### 10.2 Validation
+
+Validate:
+
+* Authenticated user.
+
+* Valid content type.
+
+* Valid media.
+
+* Media file size.
+
+* Media duration.
+
+* MIME type.
+
+* Text length.
+
+* Text formatting.
+
+* Audience selection.
+
+* Media ownership.
+
+* Required fields.
+
+* Content integrity.
+
+Client-side validation improves UX, but trusted backend validation is mandatory.
+
+### 10.3 Upload lifecycle
+
+Support these states:
+
+* Idle.
+
+* Preparing.
+
+* Uploading.
+
+* Processing.
+
+* Publishing.
+
+* Published.
+
+* Failed.
+
+* Cancelled.
+
+Provide:
+
+* Upload progress.
+
+* Retry.
+
+* Cancellation where safe.
+
+* Duplicate-submit prevention.
+
+* Recoverable failure.
+
+* Clear error messages.
+
+### 10.4 Publishing consistency
+
+Avoid creating published Vibes with missing media.
+
+Avoid creating multiple Vibes because a user tapped Publish repeatedly.
+
+Use a stable client-generated operation identifier or equivalent idempotency strategy.
+
+Use trusted backend operations to establish authoritative ownership, publishing timestamps and expiration.
+
+### 10.5 Post-publish behavior
+
+After successful publication:
+
+* Close or transition out of Studio.
+
+* Update the user's Vibes entry.
+
+* Refresh or invalidate relevant queries.
+
+* Make the published Vibe available to its authorized audience.
+
+* Show a clear success state.
+
+* Preserve the user's editing state only when appropriate.
+
+* Avoid requiring a full application reload.
+
+A failed publish must not display a false success state.
+
+### 11\. Draft management
+
+Drafts are essential for reliable content creation.
+
+### 11.1 Draft capabilities
+
+Support:
+
+* Save draft.
+
+* Automatic draft saving.
+
+* Resume editing.
+
+* Delete draft.
+
+* Preview draft.
+
+* Preserve selected audience.
+
+* Preserve editing state.
+
+* Preserve text overlays.
+
+* Preserve media references where available.
+
+### 11.2 Offline-first behavior
+
+When a user loses connectivity:
+
+* Preserve their current editing session.
+
+* Avoid losing selected media.
+
+* Save supported draft metadata locally.
+
+* Show offline status.
+
+* Prevent publishing from appearing successful while offline.
+
+* Resume supported uploads when connectivity returns.
+
+Use IndexedDB or an existing persistent storage mechanism appropriate to the current application.
+
+Do not store large media blobs in Firestore.
+
+### 11.3 Draft recovery
+
+Handle:
+
+* Browser refresh.
+
+* Application restart.
+
+* Unexpected navigation.
+
+* Failed upload.
+
+* Storage quota exceeded.
+
+* Expired local media references.
+
+* Missing original files.
+
+If original media is no longer accessible, explain the problem and allow the user to replace it.
+
+Do not silently discard drafts.
+
+### 12\. Vibe expiration, archive and management
+
+### 12.1 Active Vibes
+
+Creators must be able to:
+
+* View their active Vibes.
+
+* Open their own Vibes.
+
+* Identify remaining active content.
+
+* Delete individual Vibes.
+
+* Access appropriate management controls.
+
+### 12.2 Expiration
+
+After the configured lifetime:
+
+* Remove the Vibe from active discovery.
+
+* Prevent new playback.
+
+* Update its lifecycle state.
+
+* Preserve archive data when enabled.
+
+* Schedule media cleanup according to retention policy.
+
+### 12.3 Archive
+
+Provide a foundational archive system.
+
+Users should be able to:
+
+* View eligible expired Vibes.
+
+* Open archived content.
+
+* Delete archived content.
+
+* Understand archive availability.
+
+* Control whether future Vibes are retained.
+
+Do not assume all users want automatic archival.
+
+### 12.4 Highlights
+
+Provide a basic compatibility foundation for profile Highlights.
+
+Part 1 may implement basic highlight creation and management if the existing profile architecture supports it without significant scope expansion.
+
+Otherwise, preserve the required data and integration contracts for a later phase.
+
+Highlight capabilities should include:
+
+* User-selected archived Vibes.
+
+* Highlight title.
+
+* Cover selection.
+
+* Add or remove Vibes.
+
+* Delete highlight.
+
+* Access through the appropriate profile interface.
+
+Do not introduce cover photos for user profiles as part of this feature.
+
+### 13\. Vibes management controls
+
+Provide a management interface for the creator.
+
+Available actions in Part 1:
+
+* View own Vibes.
+
+* Delete Vibe.
+
+* Save or edit draft.
+
+* Change audience before publication.
+
+* Manage archive.
+
+* Manage highlights where implemented.
+
+* View publishing status.
+
+* Retry failed publishing operations.
+
+All destructive operations must provide an appropriate confirmation step.
+
+Deletion must be enforced by the backend.
+
+A deleted Vibe must not remain accessible through an ordinary active feed or viewer.
+
+### 14\. Design system and visual quality
+
+![AI Story & Chat App – Dark Glassmorphism UI by Sk Ashik on Dribbble](https://images.openai.com/static-rsc-4/O6CiN3PowGMvydYvxLezYtJHFzuTa_7U7Sj9ftidfTqfUyMU0qBKXaCBzqjKgm3HtvTzFRj311m_bCiodOKR-69VUvjbO7vjNX_WsxLfLMCsLuTScBZdtjBvr0m1Ezqo2JREIi5JB5ODfLlQ1sTwKQdh8kDFszc5dhXxDvUxZWrRM_QjRkr_X455hqrWj6dS?purpose=fullsize)
+
+![Social+ - Social Media Mobile App by F. Ferina Chung ✨ for Sogee on Dribbble](https://images.openai.com/static-rsc-4/TaEnmRYg5MGgJcY7UgqIpqLkUQ283Z3H0rp6BE1E0hvmQbH_8U7lidxjg5QOqx-j5dhxOMlxEoPQwFfv4-EEAMbNckej8_foQTixryD6Tx5TvxBi3uIjeSRB-GrT2BWY2vA5xiD6WfzI26S0-qPYAM79_oCVkYGP86JXdEn2W-ytxCFiVlAcktymWSBoVHBO?purpose=fullsize)
+
+![StorySDK: Open-Source SDK for In-App Video Stories and Onboarding](https://images.openai.com/static-rsc-4/LRBOuyoT8U6FsmxeNlqlN9Irx9VI3mp6wwwn4x-nJJVBLkquTyj-3WkkvXc5u7JSLCHMP9XjSb_jJvq5tkPN4kDwWoREv7S7ZcVTSMQHT_pWT3jK1XHpnDQ3xct7MoBv3zfkTTIHNS8DrNYhoeq2g2ax6prJ3hcQPTTXWlIiBQvHFvBcRkkKRF-zG6NMOLOv?purpose=fullsize)
+
+The Vibes experience must follow Arvdoul's established visual identity.
+
+### 14.1 Brand foundation
+
+| Token            | Value                       |
+| ---------------- | --------------------------- |
+| Dark background  | #03071B                     |
+| Light background | #F6F8FC                     |
+| Primary gradient | #8B1EF3 → #4431F7 → #055BFB |
+| Purple glow      | #C82BFF                     |
+| Blue glow        | #0088FF                     |
+| Dark surface     | rgba(255,255,255,0.06)      |
+| Light surface    | rgba(255,255,255,0.8)       |
+| Success          | #10B981                     |
+| Error            | #EF4444                     |
+| Warning          | #F59E0B                     |
+
+Use existing tokens if equivalent tokens already exist.
+
+Do not create competing brand colors.
+
+### 14.2 Visual language
+
+Use:
+
+* Premium glass surfaces.
+
+* Controlled translucency.
+
+* Subtle depth.
+
+* Refined gradients.
+
+* Consistent typography.
+
+* Smooth transitions.
+
+* Clear hierarchy.
+
+* Carefully balanced spacing.
+
+* Purposeful shadows.
+
+* Consistent iconography.
+
+Avoid:
+
+* Excessive glass effects.
+
+* Overuse of gradients.
+
+* Unnecessary glowing borders.
+
+* Generic dashboard layouts.
+
+* Oversized controls.
+
+* Random decorative elements.
+
+* Excessive animations.
+
+* Emoji-based interface icons.
+
+* Inconsistent corner radii.
+
+* Cluttered toolbars.
+
+### 14.3 Light theme
+
+Light mode must be intentionally designed.
+
+It must not simply invert the dark theme.
+
+Use:
+
+* Clean light surfaces.
+
+* Controlled shadows.
+
+* Readable typography.
+
+* Appropriate borders.
+
+* Brand accents.
+
+* Proper contrast.
+
+### 14.4 Dark theme
+
+Dark mode should use Arvdoul's deep navy identity.
+
+Avoid making every surface pure black.
+
+Use layered dark surfaces with carefully controlled contrast.
+
+### 14.5 Responsive design
+
+Support:
+
+* Small Android phones.
+
+* Standard Android phones.
+
+* Large Android phones.
+
+* iPhones.
+
+* Tablets.
+
+* Desktop browsers.
+
+Respect safe areas, device insets, viewport changes and virtual keyboards.
+
+Ensure Studio remains usable when the keyboard is visible.
+
+### 15\. Motion and interaction design
+
+Animations must communicate state and improve perceived quality.
+
+Implement:
+
+* Smooth Viewer opening and closing.
+
+* Progress transitions.
+
+* Avatar state transitions.
+
+* Studio entrance and exit.
+
+* Editor tool transitions.
+
+* Media loading transitions.
+
+* Button feedback.
+
+* Bottom-sheet transitions.
+
+* Gesture feedback.
+
+* Publishing progress transitions.
+
+Performance requirements:
+
+* Prefer compositor-friendly animations.
+
+* Avoid unnecessary layout recalculations.
+
+* Avoid excessive blur filters.
+
+* Avoid animation loops that continue off-screen.
+
+* Respect reduced-motion preferences.
+
+* Avoid blocking navigation with decorative animations.
+
+Every animation should have a purpose.
+
+### 16\. Accessibility
+
+Implement:
+
+* Semantic controls.
+
+* Accessible labels.
+
+* Keyboard navigation where applicable.
+
+* Visible focus states.
+
+* Screen-reader-friendly Viewer controls.
+
+* Sufficient color contrast.
+
+* Reduced-motion support.
+
+* Alternative controls for gestures.
+
+* Accessible progress descriptions.
+
+* Clear permission-denied messages.
+
+* Usable controls at appropriate touch sizes.
+
+Do not make essential functionality dependent exclusively on gestures or color.
+
+### 17\. Firebase backend and security
+
+This is a production system. UI implementation alone is not completion.
+
+### 17.1 Firestore
+
+Implement or adapt the necessary operations:
+
+* Create draft.
+
+* Update draft.
+
+* Publish Vibe.
+
+* Retrieve active Vibes.
+
+* Retrieve Vibe details.
+
+* Retrieve creator's Vibes.
+
+* Delete Vibe.
+
+* Retrieve archive.
+
+* Manage highlights where supported.
+
+* Verify audience eligibility.
+
+Use server-side trusted operations for sensitive state transitions.
+
+### 17.2 Firestore security rules
+
+Rules must enforce:
+
+* Authenticated access.
+
+* Owner-only draft access.
+
+* Owner-only editing.
+
+* Owner-only deletion.
+
+* Audience restrictions.
+
+* Selected-user permissions.
+
+* Close Circle eligibility.
+
+* Expiration restrictions.
+
+* Valid document fields.
+
+* Valid content types.
+
+* Immutable or trusted lifecycle fields.
+
+* Protection against unauthorized ownership changes.
+
+Do not allow arbitrary users to write directly to another user's Vibe documents.
+
+Do not assume Firestore queries can be used as authorization filters. Queries must be compatible with the security rules, and private content must be checked independently.
+
+### 17.3 Firebase Storage security
+
+Enforce:
+
+* Authenticated uploads.
+
+* Owner-scoped storage paths.
+
+* File type restrictions.
+
+* Size restrictions.
+
+* Upload authorization.
+
+* Read authorization.
+
+* Delete authorization.
+
+* Protection against path manipulation.
+
+Validate content metadata independently of client claims wherever possible.
+
+### 17.4 Cloud Functions
+
+Use Cloud Functions or the existing trusted backend architecture for operations requiring authoritative decisions:
+
+* Publish Vibe.
+
+* Calculate expiration.
+
+* Validate ownership.
+
+* Enforce publishing constraints.
+
+* Manage deletion.
+
+* Clean abandoned media.
+
+* Process eligible media.
+
+* Maintain lifecycle consistency.
+
+Do not introduce a large number of functions when a smaller, coherent service is sufficient.
+
+### 17.5 Firestore indexes
+
+Inspect existing indexes and add only the required indexes.
+
+Potential query dimensions:
+
+* Owner.
+
+* Status.
+
+* Expiration.
+
+* Publication timestamp.
+
+* Audience visibility.
+
+The actual index definitions must follow the final query design.
+
+Do not claim indexes are configured without verifying deployment.
+
+### 18\. Error handling and reliability
+
+Every major screen and operation must have complete state handling.
+
+| Area         | Required states                                           |
+| ------------ | --------------------------------------------------------- |
+| Feed         | Loading, loaded, empty, error, offline                    |
+| Viewer       | Loading, playing, paused, buffering, expired, unavailable |
+| Studio       | Idle, editing, saving, failed                             |
+| Media picker | Permission, selection, cancelled, failed                  |
+| Upload       | Preparing, uploading, retrying, failed                    |
+| Publishing   | Publishing, success, failed                               |
+| Drafts       | Loading, saved, unsaved, recovery failure                 |
+| Archive      | Loading, empty, loaded, error                             |
+| Privacy      | Loading, selected, denied, unavailable                    |
+
+Use consistent application-level error handling.
+
+Never silently swallow important errors.
+
+Do not expose internal Firebase errors, stack traces or sensitive implementation details to end users.
+
+Log operational failures safely without including private content or unnecessary personal data.
+
+### 19\. Performance and scalability
+
+Part 1 must be built with future growth in mind.
+
+### Frontend
+
+* Lazy-load Studio and Viewer modules where appropriate.
+
+* Keep initial Home bundle impact small.
+
+* Avoid unnecessary rerenders.
+
+* Memoize expensive rendering paths.
+
+* Virtualize large lists where appropriate.
+
+* Clean up subscriptions and listeners.
+
+* Cancel obsolete requests.
+
+* Avoid stale asynchronous updates.
+
+* Use appropriate image formats and sizes.
+
+* Avoid unnecessary video downloads.
+
+* Use responsive media delivery.
+
+### Firebase
+
+* Paginate all potentially large collections.
+
+* Avoid unbounded listeners.
+
+* Avoid repeated user profile reads.
+
+* Avoid duplicated writes.
+
+* Use appropriate caching.
+
+* Avoid unnecessary document updates.
+
+* Avoid excessive Storage operations.
+
+* Implement cleanup for orphaned media.
+
+* Monitor Firestore read/write consumption.
+
+### Media
+
+* Generate appropriate thumbnails.
+
+* Optimize uploaded images.
+
+* Avoid unnecessary re-encoding.
+
+* Preserve suitable media quality.
+
+* Use adaptive media sizing.
+
+* Handle failed thumbnail generation.
+
+* Release object URLs and media resources when no longer needed.
+
+### Network
+
+* Do not download all feed media upfront.
+
+* Prioritize visible content.
+
+* Preload only nearby Vibes.
+
+* Handle intermittent connections.
+
+* Retry safely.
+
+* Avoid duplicate requests.
+
+### 20\. Testing requirements
+
+Testing must verify real functionality.
+
+Do not use screenshots or a successful build as substitutes for behavioral tests.
+
+### 20.1 Unit tests
+
+Test:
+
+* Vibe validation.
+
+* Audience eligibility.
+
+* Expiration calculations.
+
+* Playback calculations.
+
+* Navigation boundaries.
+
+* Media validation.
+
+* Draft persistence.
+
+* Publishing state transitions.
+
+* Idempotency behavior.
+
+### 20.2 Component tests
+
+Test:
+
+* Vibes Feed.
+
+* Vibe avatar.
+
+* Viewer.
+
+* Progress indicators.
+
+* Media renderer.
+
+* Studio.
+
+* Media picker.
+
+* Audience selector.
+
+* Publishing controls.
+
+* Draft management.
+
+### 20.3 Integration tests
+
+Test:
+
+* Authentication to Vibes Feed.
+
+* Media selection to editing.
+
+* Editing to preview.
+
+* Preview to publishing.
+
+* Publishing to feed.
+
+* Feed to Viewer.
+
+* Viewer navigation.
+
+* Draft recovery.
+
+* Deletion.
+
+* Expiration.
+
+* Audience authorization.
+
+### 20.4 Security tests
+
+Verify that:
+
+* Anonymous users cannot access protected content.
+
+* Users cannot modify another user's Vibes.
+
+* Users cannot publish as another account.
+
+* Users cannot access private Vibes.
+
+* Unauthorized users cannot read private media.
+
+* Expired Vibes cannot be newly accessed.
+
+* Deleted Vibes cannot be reopened.
+
+* Audience restrictions cannot be bypassed.
+
+* Malformed uploads are rejected.
+
+### 20.5 Device and browser tests
+
+Test:
+
+* Small-screen Android.
+
+* Larger Android.
+
+* iOS Safari where supported.
+
+* Desktop browsers.
+
+* Slow network.
+
+* Offline mode.
+
+* Permission denial.
+
+* Backgrounding and resuming.
+
+* Keyboard visibility.
+
+* Media playback interruption.
+
+### 20.6 Regression testing
+
+Verify that Part 1 has not broken:
+
+* Authentication.
+
+* Home screen.
+
+* Profiles.
+
+* Existing post creation.
+
+* Existing media uploads.
+
+* Navigation.
+
+* Theme switching.
+
+* Existing Firebase operations.
+
+### 21\. Implementation task catalogue
+
+The following catalogue is the actual execution checklist for Part 1. Agents must execute each task, record evidence and verify its outcome.
+
+### Phase 1A — Repository and architecture
+
+* Inspect application entry points.
+
+* Inspect routing.
+
+* Inspect authentication.
+
+* Inspect profile schema.
+
+* Inspect existing Vibes or Stories code.
+
+* Inspect media services.
+
+* Inspect Firebase configuration.
+
+* Inspect Firestore rules.
+
+* Inspect Storage rules.
+
+* Inspect Cloud Functions.
+
+* Inspect existing indexes.
+
+* Inspect theme architecture.
+
+* Inspect reusable UI components.
+
+* Inspect state management.
+
+* Inspect testing infrastructure.
+
+* Produce an architecture map.
+
+* Identify reusable modules.
+
+* Identify broken and incomplete modules.
+
+* Identify required changes.
+
+* Approve the implementation plan.
+
+### Phase 1B — Core architecture
+
+* Define Vibe data contracts.
+
+* Define lifecycle states.
+
+* Define media metadata.
+
+* Define audience contracts.
+
+* Implement validation.
+
+* Implement service boundaries.
+
+* Implement reusable hooks.
+
+* Implement error handling.
+
+* Implement query management.
+
+* Establish stable operation identifiers.
+
+* Integrate existing Firebase infrastructure.
+
+### Phase 1C — Vibes Feed
+
+* Build Feed section.
+
+* Build Vibe avatar.
+
+* Build active Vibe grouping.
+
+* Build unseen indicator.
+
+* Build seen indicator.
+
+* Build own Vibe entry.
+
+* Build empty state.
+
+* Build loading state.
+
+* Build error state.
+
+* Build offline state.
+
+* Implement pagination.
+
+* Integrate profile identity.
+
+* Integrate Home navigation.
+
+* Verify expiration filtering.
+
+* Test feed performance.
+
+### Phase 1D — Viewer
+
+* Build full-screen Viewer.
+
+* Build Viewer header.
+
+* Build profile identity.
+
+* Build progress indicators.
+
+* Build image renderer.
+
+* Build video renderer.
+
+* Build text renderer.
+
+* Implement playback controller.
+
+* Implement image duration.
+
+* Implement video duration.
+
+* Implement pause and resume.
+
+* Implement tap navigation.
+
+* Implement long-press navigation behavior.
+
+* Implement swipe-to-close.
+
+* Implement next creator.
+
+* Implement previous creator.
+
+* Implement end-of-sequence behavior.
+
+* Implement expired-content handling.
+
+* Implement deleted-content handling.
+
+* Implement media cleanup.
+
+* Test Viewer on mobile devices.
+
+### Phase 1E — Studio
+
+* Build Studio entry points.
+
+* Build creation workspace.
+
+* Implement image selection.
+
+* Implement video selection.
+
+* Implement text creation.
+
+* Implement camera integration where supported.
+
+* Implement permission handling.
+
+* Implement media preview.
+
+* Implement image cropping.
+
+* Implement image rotation.
+
+* Implement video trimming.
+
+* Implement video mute.
+
+* Implement text overlays.
+
+* Implement text positioning.
+
+* Implement drawing tools.
+
+* Implement undo.
+
+* Implement redo.
+
+* Implement editor state persistence.
+
+* Implement media validation.
+
+* Implement editor error handling.
+
+### Phase 1F — Preview and privacy
+
+* Build Vibe Preview.
+
+* Reuse Viewer rendering logic.
+
+* Implement audience selector.
+
+* Implement Public audience.
+
+* Implement Followers audience.
+
+* Implement Connections audience.
+
+* Implement Close Circle audience.
+
+* Implement Selected audience.
+
+* Implement Private audience.
+
+* Implement user selection.
+
+* Implement audience persistence.
+
+* Implement backend authorization.
+
+* Implement block-related access restrictions.
+
+* Test unauthorized access.
+
+### Phase 1G — Publishing and drafts
+
+* Implement draft creation.
+
+* Implement automatic draft saving.
+
+* Implement draft recovery.
+
+* Implement upload preparation.
+
+* Implement media upload.
+
+* Implement upload progress.
+
+* Implement upload retry.
+
+* Implement upload cancellation where safe.
+
+* Implement trusted publishing.
+
+* Implement idempotency.
+
+* Implement expiration assignment.
+
+* Implement publishing success state.
+
+* Implement publishing failure state.
+
+* Implement feed refresh.
+
+* Implement offline draft persistence.
+
+* Implement abandoned upload cleanup.
+
+* Verify media and document consistency.
+
+### Phase 1H — Lifecycle and management
+
+* Implement active Vibe management.
+
+* Implement deletion.
+
+* Implement expiration.
+
+* Implement archive retrieval.
+
+* Implement archive settings.
+
+* Implement archive deletion.
+
+* Implement basic highlights if compatible.
+
+* Implement management confirmations.
+
+* Implement lifecycle synchronization.
+
+* Verify stale content cannot be accessed.
+
+### Phase 1I — Quality and integration
+
+* Complete dark theme.
+
+* Complete light theme.
+
+* Complete responsive layouts.
+
+* Complete accessibility.
+
+* Complete interaction animations.
+
+* Complete loading states.
+
+* Complete empty states.
+
+* Complete error states.
+
+* Optimize images.
+
+* Optimize videos.
+
+* Optimize Firestore queries.
+
+* Verify Firebase security rules.
+
+* Verify Storage security rules.
+
+* Verify Firestore indexes.
+
+* Run unit tests.
+
+* Run component tests.
+
+* Run integration tests.
+
+* Run security tests.
+
+* Run regression tests.
+
+* Run production build.
+
+* Review all changed files.
+
+* Resolve all critical issues.
+
+* Produce final implementation report.
+
+### 22\. Agent execution protocol
+
+If Firebase AI Studio or its available coding agents support multiple agents, divide the work by responsibility.
+
+Agents must not independently redesign the entire architecture or create competing implementations.
+
+| Agent   | Responsibility                         | Required evidence                                |
+| ------- | -------------------------------------- | ------------------------------------------------ |
+| Agent 1 | Repository inspection and architecture | File map, dependencies, existing implementations |
+| Agent 2 | Vibes data architecture and Firebase   | Schemas, services, rules, indexes, tests         |
+| Agent 3 | Feed and Viewer                        | Functional UI, navigation and playback tests     |
+| Agent 4 | Studio and media processing            | Working editing, validation and media handling   |
+| Agent 5 | Privacy and publishing                 | Authorization, upload and lifecycle tests        |
+| Agent 6 | Integration and quality assurance      | Regression results, build and security evidence  |
+
+If parallel agents are unavailable, execute the same responsibilities sequentially.
+
+### Agent coordination rules
+
+* One agreed architecture must govern all implementation.
+
+* Each agent must inspect relevant existing code before changing it.
+
+* Shared interfaces must be agreed upon before dependent modules are implemented.
+
+* Avoid simultaneous edits to the same critical files.
+
+* Each agent must report exact changed file paths.
+
+* Each agent must identify reused components and services.
+
+* Each agent must report tests actually executed.
+
+* Integration failures must be resolved before dependent tasks are marked complete.
+
+* No agent may declare another agent's work verified without inspecting it.
+
+* The integration owner must independently verify the finished feature.
+
+### 23\. Completion tracking and proof of work
+
+Every task must have one of these statuses:
+
+| Status      | Meaning                                                          |
+| ----------- | ---------------------------------------------------------------- |
+| NOT_STARTED | No implementation has begun.                                     |
+| IN_PROGRESS | Work is actively being performed.                                |
+| IMPLEMENTED | Code has been written.                                           |
+| INTEGRATED  | Connected to the intended application systems.                   |
+| VERIFIED    | Acceptance criteria have passed with evidence.                   |
+| BLOCKED     | Work cannot proceed because of a documented dependency or issue. |
+
+Only `VERIFIED` counts as completed.
+
+For each task, maintain:
+
+```text
+Task ID:
+Task name:
+Status:
+
+Existing implementation inspected:
+Files created:
+Files modified:
+Files reused:
+
+Implementation details:
+Integration points:
+
+Tests executed:
+Test results:
+
+Security checks:
+Performance checks:
+
+Known issues:
+Outstanding work:
+
+Evidence:
+Verification decision:
+```
+
+### Mandatory anti-false-completion rules
+
+Agents must never:
+
+* Tick a checkbox without implementing the functionality.
+
+* Mark a component complete because it renders.
+
+* Claim backend integration without verified backend operations.
+
+* Claim security without testing authorization.
+
+* Claim responsive support without testing different viewports.
+
+* Claim offline support without testing actual offline behavior.
+
+* Claim performance improvements without measurable evidence.
+
+* Claim media upload works without completing an actual upload.
+
+* Claim publishing works without verifying the resulting data.
+
+* Claim expiration works without testing the expired-content access path.
+
+* Hide failed tests.
+
+* Replace failing tests with weaker assertions to achieve a passing result.
+
+* Create placeholder services and call them production-ready.
+
+* Duplicate existing architecture to simplify implementation.
+
+Every `VERIFIED` task must have evidence that demonstrates its acceptance criteria.
+
+### 24\. Part 1 acceptance criteria
+
+Part 1 is complete only when all of the following are true.
+
+Functional acceptance
+
+* Users can open Vibes from Arvdoul.
+
+* Users can browse active Vibes.
+
+* Users can distinguish seen and unseen content.
+
+* Users can view image Vibes.
+
+* Users can view video Vibes.
+
+* Users can view text Vibes.
+
+* Viewer navigation works correctly.
+
+* Playback works correctly.
+
+* Users can create image Vibes.
+
+* Users can create video Vibes.
+
+* Users can create text Vibes.
+
+* Users can edit and preview Vibes.
+
+* Users can select an audience.
+
+* Users can publish Vibes.
+
+* Users can save and recover drafts.
+
+* Users can delete their Vibes.
+
+* Expiration is enforced.
+
+* Archive behavior works according to user settings.
+
+Security acceptance
+
+* Firestore authorization is verified.
+
+* Storage authorization is verified.
+
+* Private audiences are enforced.
+
+* Unauthorized users cannot access private content.
+
+* Users cannot modify other users' Vibes.
+
+* Expired content cannot be accessed through stale routes.
+
+* Publishing and deletion use trusted operations.
+
+Quality acceptance
+
+* Light theme is complete.
+
+* Dark theme is complete.
+
+* Mobile responsiveness is verified.
+
+* Accessibility requirements are tested.
+
+* Loading and failure states work.
+
+* Offline draft behavior is tested.
+
+* Media performance is acceptable.
+
+* No critical regressions are introduced.
+
+* Production build succeeds.
+
+* Relevant tests pass.
+
+Any incomplete acceptance criterion must remain documented as incomplete or blocked.
+
+Do not declare Part 1 finished simply because the implementation catalogue has been exhausted.
+
+### 25\. Explicit scope boundaries
+
+To prevent Firebase AI Studio from expanding the workload beyond this part, the following capabilities are not to be fully implemented in Part 1.
+
+| Feature                             | Assigned part         |
+| ----------------------------------- | --------------------- |
+| Vibes Feed                          | Part 1                |
+| Full-screen Viewer                  | Part 1                |
+| Vibes Studio                        | Part 1                |
+| Media creation and editing          | Part 1                |
+| Publishing                          | Part 1                |
+| Audience privacy                    | Part 1                |
+| Drafts                              | Part 1                |
+| Expiration and archive              | Part 1                |
+| Basic Highlights                    | Part 1, if compatible |
+| Reactions                           | Part 2                |
+| Replies                             | Part 2                |
+| Direct messaging integration        | Part 2                |
+| Group sharing integration           | Part 2                |
+| Notifications integration           | Part 2                |
+| Coins and gifting                   | Part 2                |
+| XP and levels                       | Part 2                |
+| Creator monetization                | Part 3                |
+| Sponsored Vibes                     | Part 3                |
+| Advanced analytics                  | Part 3                |
+| Collaborative Vibes and Vibe Chains | Part 3                |
+| Advanced discovery and ranking      | Part 3                |
+
+Do not implement deferred features as unfinished buttons, fake interactions or misleading placeholders.
+
+Preserve clean extension points where necessary, without implementing the future systems prematurely.
+
+### 26\. Final execution instruction for Firebase AI Studio
+
+Execute Arvdoul Vibes — Part 1: Core Experience against the existing Arvdoul repository.
+
+Your responsibility is to deliver a genuinely functional, integrated and verified implementation, not merely a visual redesign or a collection of placeholder components.
+
+Follow this exact execution order:
+
+* Inspect the existing repository and architecture.
+
+* Identify what already exists and what genuinely needs implementation.
+
+* Produce the implementation plan and dependency map.
+
+* Establish the Vibes data and service contracts.
+
+* Implement the Vibes Feed.
+
+* Implement the full-screen Viewer.
+
+* Implement Vibes Studio and media editing.
+
+* Implement preview and audience selection.
+
+* Implement publishing and drafts.
+
+* Implement expiration, archive and management.
+
+* Complete Firebase security and backend integration.
+
+* Complete responsive design, accessibility and performance.
+
+* Run the required tests and regression checks.
+
+* Verify every acceptance criterion.
+
+* Produce the final implementation report.
+
+Execution constraints:
+
+* Work incrementally.
+
+* Do not attempt to generate the entire feature in one enormous code change.
+
+* Do not rewrite unrelated Arvdoul systems.
+
+* Do not replace working implementations without a technical reason.
+
+* Do not introduce unnecessary dependencies.
+
+* Do not fabricate missing repository information.
+
+* Do not silently omit difficult requirements.
+
+* Do not mark work complete without evidence.
+
+* Do not compromise existing production functionality.
+
+* Do not begin Part 2 automatically.
+
+* If a task is blocked, document the exact reason and continue with independent tasks where safe.
+
+Final deliverable: A fully integrated, production-ready foundational Vibes experience that users can actually create, publish, view and manage within Arvdoul, with verified privacy, reliable media handling, polished UI and a maintainable architecture ready for Part 2.
+
+10
+
+13
+
+12
+
+10
+
+13
+
+12
+
+13
+
+13
+
+12
+
+12

@@ -226,6 +226,117 @@ exports.recordActiveDay = functions
     }
   });
 
+async function evaluateAchievementsForUser(uid) {
+  if (!uid) return { success: false, newlyEarnedCount: 0, newlyEarned: [], totalCount: 0 };
+  const userRef = db.doc(`users/${uid}`);
+  const achievementsCol = db.collection(`achievements/${uid}/items`);
+
+  const [userSnap, existingSnaps] = await Promise.all([
+    userRef.get(),
+    achievementsCol.get(),
+  ]);
+
+  if (!userSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'User not found');
+  }
+
+  const userData = userSnap.data() || {};
+  const existingIds = new Set(existingSnaps.docs.map((d) => d.id));
+
+  // The catalog criteria read metric fields (`commentsCount`,
+  // `pollVotesCount`, `profilesVisitedCount`, `giftsSentCount`,
+  // `hostedLive`, …) that no writer populates on `users/{uid}`, so without
+  // this the evaluator always saw 0 and those achievements were
+  // unearnable (N432). Compute the real values and overlay them on the
+  // stored doc; a metric that cannot be resolved stays absent (unmet).
+  const computed = await computeUserMetrics(uid);
+  const stats = { ...userData, ...computed };
+
+  const newlyEarned = [];
+  const batch = db.batch();
+
+  for (const ach of ACHIEVEMENTS_CATALOG) {
+    if (existingIds.has(ach.id)) continue;
+
+    let eligible = true;
+    const c = ach.criteria;
+
+    if (c.minLevel && (stats.level || 1) < c.minLevel) eligible = false;
+    if (c.minStreak && (stats.activeStreak || 0) < c.minStreak) eligible = false;
+    if (c.minPosts && (stats.postsCount || stats.postCount || 0) < c.minPosts) eligible = false;
+    if (c.minLikes && (stats.likesCount || 0) < c.minLikes) eligible = false;
+    if (c.minStories && (stats.storiesCount || 0) < c.minStories) eligible = false;
+    if (c.minVibeReactions && (stats.vibeReactionsCount || 0) < c.minVibeReactions) eligible = false;
+    if (c.minVibeReplies && (stats.vibeRepliesCount || 0) < c.minVibeReplies) eligible = false;
+    if (c.minVibeGiftsSent && (stats.vibeGiftsSentCount || 0) < c.minVibeGiftsSent) eligible = false;
+    if (c.minVibeViews && (stats.vibeViewsMax || 0) < c.minVibeViews) eligible = false;
+    if (c.isCreator && !stats.isCreator) eligible = false;
+    if (c.hostedLive && !stats.hostedLive) eligible = false;
+    if (c.pollVotes && (stats.pollVotesCount || 0) < c.pollVotes) eligible = false;
+    if (c.commentsCount && (stats.commentsCount || 0) < c.commentsCount) eligible = false;
+    if (c.profilesVisited && (stats.profilesVisitedCount || 0) < c.profilesVisited) eligible = false;
+    if (c.friendsCount && (stats.friendsCount || stats.mutualConnectionsCount || 0) < c.friendsCount) eligible = false;
+    if (c.giftsSent && (stats.giftsSentCount || 0) < c.giftsSent) eligible = false;
+    if (c.lifetimeCoinsEarned && (stats.lifetimeCoinsEarned || stats.totalEarned || 0) < c.lifetimeCoinsEarned) eligible = false;
+    if (c.hasPassport && !stats.hasPassport && !stats.passportCreated) eligible = false;
+    if (c.isRoyal && !stats.isRoyal && stats.primaryTitle !== 'Duke' && stats.primaryTitle !== 'King / Queen') eligible = false;
+    if (c.isPioneer && !stats.isPioneer) eligible = false;
+
+    if (eligible) {
+      const itemRef = achievementsCol.doc(ach.id);
+      batch.set(itemRef, {
+        id: ach.id,
+        category: ach.category,
+        title: ach.title,
+        description: ach.description,
+        icon: ach.icon,
+        points: ach.points,
+        rarity: ach.rarity,
+        criteriaVersion: ach.criteriaVersion,
+        earnedAt: admin.firestore.FieldValue.serverTimestamp(),
+        source: 'system_evaluation',
+      });
+      newlyEarned.push(ach);
+    }
+  }
+
+  if (newlyEarned.length > 0) {
+    batch.set(userRef, {
+      achievementsCount: admin.firestore.FieldValue.increment(newlyEarned.length),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await batch.commit();
+
+    try {
+      const { writeNotification } = require('./notificationWriter');
+      const first = newlyEarned[0];
+      await writeNotification(uid, {
+        type: 'achievement_unlocked',
+        title: newlyEarned.length === 1
+          ? `Achievement Unlocked: ${first.title}`
+          : `${newlyEarned.length} New Achievements Unlocked!`,
+        message: newlyEarned.length === 1
+          ? first.description || `You earned +${first.points || 0} pts.`
+          : `Unlocked ${newlyEarned.map((a) => a.title).slice(0, 3).join(', ')}.`,
+        metadata: {
+          achievementIds: newlyEarned.map((a) => a.id),
+          count: newlyEarned.length,
+          actionUrl: '/achievements',
+        },
+      });
+    } catch (notifErr) {
+      functions.logger.warn('achievement notification failed', { uid, error: notifErr.message });
+    }
+  }
+
+  return {
+    success: true,
+    newlyEarnedCount: newlyEarned.length,
+    newlyEarned: newlyEarned.map((a) => ({ id: a.id, title: a.title, icon: a.icon, points: a.points })),
+    totalCount: existingIds.size + newlyEarned.length,
+  };
+}
+
 /**
  * Server-authoritative achievement evaluation.
  * Validates user stats against ACHIEVEMENTS_CATALOG criteria and grants new achievements idempotently.
@@ -239,114 +350,16 @@ exports.evaluateAchievements = functions
     const uid = context.auth.uid;
     await checkRateLimit(uid, 'evaluateAchievements', 20, 60000);
 
-    const userRef = db.doc(`users/${uid}`);
-    const achievementsCol = db.collection(`achievements/${uid}/items`);
-
     try {
-      const [userSnap, existingSnaps] = await Promise.all([
-        userRef.get(),
-        achievementsCol.get(),
-      ]);
-
-      if (!userSnap.exists) {
-        throw new functions.https.HttpsError('not-found', 'User not found');
-      }
-
-      const userData = userSnap.data() || {};
-      const existingIds = new Set(existingSnaps.docs.map((d) => d.id));
-
-      // The catalog criteria read metric fields (`commentsCount`,
-      // `pollVotesCount`, `profilesVisitedCount`, `giftsSentCount`,
-      // `hostedLive`, …) that no writer populates on `users/{uid}`, so without
-      // this the evaluator always saw 0 and those achievements were
-      // unearnable (N432). Compute the real values and overlay them on the
-      // stored doc; a metric that cannot be resolved stays absent (unmet).
-      const computed = await computeUserMetrics(uid);
-      const stats = { ...userData, ...computed };
-
-      const newlyEarned = [];
-      const batch = db.batch();
-
-      for (const ach of ACHIEVEMENTS_CATALOG) {
-        if (existingIds.has(ach.id)) continue;
-
-        let eligible = true;
-        const c = ach.criteria;
-
-        if (c.minLevel && (stats.level || 1) < c.minLevel) eligible = false;
-        if (c.minStreak && (stats.activeStreak || 0) < c.minStreak) eligible = false;
-        if (c.minPosts && (stats.postsCount || stats.postCount || 0) < c.minPosts) eligible = false;
-        if (c.minLikes && (stats.likesCount || 0) < c.minLikes) eligible = false;
-        if (c.isCreator && !stats.isCreator) eligible = false;
-        if (c.hostedLive && !stats.hostedLive) eligible = false;
-        if (c.pollVotes && (stats.pollVotesCount || 0) < c.pollVotes) eligible = false;
-        if (c.commentsCount && (stats.commentsCount || 0) < c.commentsCount) eligible = false;
-        if (c.profilesVisited && (stats.profilesVisitedCount || 0) < c.profilesVisited) eligible = false;
-        if (c.friendsCount && (stats.friendsCount || stats.mutualConnectionsCount || 0) < c.friendsCount) eligible = false;
-        if (c.giftsSent && (stats.giftsSentCount || 0) < c.giftsSent) eligible = false;
-        if (c.lifetimeCoinsEarned && (stats.lifetimeCoinsEarned || stats.totalEarned || 0) < c.lifetimeCoinsEarned) eligible = false;
-        if (c.hasPassport && !stats.hasPassport && !stats.passportCreated) eligible = false;
-        if (c.isRoyal && !stats.isRoyal && stats.primaryTitle !== 'Duke' && stats.primaryTitle !== 'King / Queen') eligible = false;
-        if (c.isPioneer && !stats.isPioneer) eligible = false;
-
-        if (eligible) {
-          const itemRef = achievementsCol.doc(ach.id);
-          batch.set(itemRef, {
-            id: ach.id,
-            category: ach.category,
-            title: ach.title,
-            description: ach.description,
-            icon: ach.icon,
-            points: ach.points,
-            rarity: ach.rarity,
-            criteriaVersion: ach.criteriaVersion,
-            earnedAt: admin.firestore.FieldValue.serverTimestamp(),
-            source: 'system_evaluation',
-          });
-          newlyEarned.push(ach);
-        }
-      }
-
-      if (newlyEarned.length > 0) {
-        batch.set(userRef, {
-          achievementsCount: admin.firestore.FieldValue.increment(newlyEarned.length),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        await batch.commit();
-
-        try {
-          const { writeNotification } = require('./notificationWriter');
-          const first = newlyEarned[0];
-          await writeNotification(uid, {
-            type: 'achievement_unlocked',
-            title: newlyEarned.length === 1
-              ? `Achievement Unlocked: ${first.title}`
-              : `${newlyEarned.length} New Achievements Unlocked!`,
-            message: newlyEarned.length === 1
-              ? first.description || `You earned +${first.points || 0} pts.`
-              : `Unlocked ${newlyEarned.map((a) => a.title).slice(0, 3).join(', ')}.`,
-            metadata: {
-              achievementIds: newlyEarned.map((a) => a.id),
-              count: newlyEarned.length,
-              actionUrl: '/achievements',
-            },
-          });
-        } catch (notifErr) {
-          functions.logger.warn('achievement notification failed', { uid, error: notifErr.message });
-        }
-      }
-
-      return {
-        success: true,
-        newlyEarnedCount: newlyEarned.length,
-        newlyEarned: newlyEarned.map((a) => ({ id: a.id, title: a.title, icon: a.icon, points: a.points })),
-        totalCount: existingIds.size + newlyEarned.length,
-      };
+      return await evaluateAchievementsForUser(uid);
     } catch (err) {
+      if (err instanceof functions.https.HttpsError) throw err;
       functions.logger.error('evaluateAchievements failed', { uid, error: err.message });
       throw new functions.https.HttpsError('internal', 'Could not evaluate achievements');
     }
   });
+
+exports.evaluateAchievementsForUser = evaluateAchievementsForUser;
 
 /**
  * Claim an eligible title with provenance.

@@ -710,6 +710,21 @@ export default function SettingsScreen() {
             onClick={() => navigate('/settings/blocked')}
           />
 
+          <ToggleRow
+            icon={Sparkles}
+            label="Save expired Vibes to Archive"
+            description="Automatically store published Vibes in your private Archive after 24 hours"
+            checked={settings?.vibes?.autoArchive !== false}
+            onChange={(v) => updateSetting('vibes.autoArchive', v)}
+          />
+
+          <NavRow
+            icon={Sparkles}
+            label="Vibes Archive & Highlights"
+            description="Manage saved Vibes and profile Highlights collections"
+            onClick={() => navigate('/vibes?archive=open')}
+          />
+
           {/* Granular Scope Selectors */}
           <div className="w-full py-3.5 space-y-3 border-t border-gray-100 dark:border-white/5">
             <p className="text-xs font-bold uppercase tracking-wider text-purple-400">Audience &amp; Visibility Permissions</p>

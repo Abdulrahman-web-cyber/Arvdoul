@@ -57,6 +57,7 @@ const REPORT_TARGETS = {
   user: { collection: 'user_reports', contentField: 'reportedUserId', contentCollection: 'users' },
   video: { collection: 'video_reports', contentField: 'videoId', contentCollection: 'videos' },
   story: { collection: 'story_reports', contentField: 'storyId', contentCollection: 'stories' },
+  vibe_reply: { collection: 'vibe_reply_reports', contentField: 'replyId', contentCollection: 'story_replies' },
   // A reported chat message resolves to the *conversation* document (the
   // message shards live under `conversations/{id}/messages_*`, which is not a
   // single document the callable can fetch), so moderators still get the
@@ -164,6 +165,8 @@ exports.reportPost = reportAlias('post');
 exports.reportComment = reportAlias('comment');
 exports.reportVideo = reportAlias('video');
 exports.reportUser = reportAlias('user');
+exports.reportStory = reportAlias('story');
+exports.reportVibeReply = reportAlias('vibe_reply');
 
 // ----------------------------------------------------------------------
 //  2. getReports — moderation queue reader (admin only)

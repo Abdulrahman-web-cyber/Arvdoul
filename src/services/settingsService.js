@@ -37,6 +37,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
     reduceMotion: false,
     language: 'en',
   },
+  vibes: {
+    autoArchive: true,
+    whoCanReact: 'everyone',
+    whoCanReply: 'everyone',
+    whoCanShare: 'followers',
+    whoCanSendGifts: 'everyone',
+    showReactionDetails: true,
+    showViewingActivity: true,
+    vibeNotifications: true,
+    giftNotifications: true,
+  },
 });
 
 /** Deep-merge defaults so a partial/stale settings doc never breaks the UI. */

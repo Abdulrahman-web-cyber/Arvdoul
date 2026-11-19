@@ -305,6 +305,7 @@ class MonetizationService {
     this.cfSpendCoins = null;
     this.cfTransferCoins = null;
     this.cfSendGift = null;
+    this.cfSendVibeGift = null;
     this.cfBoostPost = null;
     this.cfRequestWithdrawal = null;
     this.cfRecordAdImpression = null;
@@ -336,6 +337,7 @@ class MonetizationService {
       this.cfSpendCoins = cf(FUNCTIONS.SPEND_COINS);
       this.cfTransferCoins = cf(FUNCTIONS.TRANSFER_COINS);
       this.cfSendGift = cf(FUNCTIONS.SEND_GIFT);
+      this.cfSendVibeGift = cf(FUNCTIONS.SEND_VIBE_GIFT);
       this.cfBoostPost = cf(FUNCTIONS.BOOST_POST);
       this.cfRequestWithdrawal = cf(FUNCTIONS.REQUEST_WITHDRAWAL);
       this.cfRecordAdImpression = cf(FUNCTIONS.RECORD_AD_IMPRESSION);
@@ -917,6 +919,26 @@ class MonetizationService {
     }
   }
 
+  async sendVibeGift(vibeId, giftType, idempotencyKey = null) {
+    await this._ensureInitialized();
+    const key = idempotencyKey || generateIdempotencyKey();
+
+    const giftConfig = (this.config?.GIFTS || DEFAULT_CONFIG.GIFTS).find(g => g.type === giftType);
+    if (!giftConfig) {
+      throw new Error(`Unknown gift type: ${giftType}`);
+    }
+
+    try {
+      const result = await retryOperation(() =>
+        this.cfSendVibeGift({ vibeId, giftType, idempotencyKey: key })
+      );
+      return result.data;
+    } catch (err) {
+      log.error('sendVibeGift callable failed (no client fallback):', err);
+      throw err;
+    }
+  }
+
   async boostPost(userId, postId, days = 1, idempotencyKey = null) {
     await this._ensureInitialized();
     const key = idempotencyKey || generateIdempotencyKey();
@@ -1002,6 +1024,8 @@ export const transferCoins = (fromUserId, toUserId, amount, reason, metadata, id
   getMonetizationService().transferCoins(fromUserId, toUserId, amount, reason, metadata, idempotencyKey);
 export const sendGift = (senderId, postId, giftType, idempotencyKey) =>
   getMonetizationService().sendGift(senderId, postId, giftType, idempotencyKey);
+export const sendVibeGift = (vibeId, giftType, idempotencyKey) =>
+  getMonetizationService().sendVibeGift(vibeId, giftType, idempotencyKey);
 export const boostPost = (userId, postId, days, idempotencyKey) =>
   getMonetizationService().boostPost(userId, postId, days, idempotencyKey);
 export const requestWithdrawal = (userId, amount, paymentMethod, paymentDetails, idempotencyKey, deviceMetadata) =>

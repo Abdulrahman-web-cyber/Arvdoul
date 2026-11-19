@@ -2233,6 +2233,281 @@ exports.sendLiveTip = functions.https.onCall(async (data, context) => {
   } catch (err) { throw handleError(err); }
 });
 
+// ----------------------------------------------------------------------
+// 16. sendVibeGift – server-authoritative coin gift on a Vibe
+// ----------------------------------------------------------------------
+async function isVibePairBlockedOrRestricted(uidA, uidB) {
+  if (!uidA || !uidB || uidA === uidB) return false;
+  const db = admin.firestore();
+  const [b1, b2, r1, r2] = await db.getAll(
+    db.doc(`blocks/${uidA}_${uidB}`),
+    db.doc(`blocks/${uidB}_${uidA}`),
+    db.doc(`restricts/${uidA}_${uidB}`),
+    db.doc(`restricts/${uidB}_${uidA}`),
+  );
+  return b1.exists || b2.exists || r1.exists || r2.exists;
+}
+
+async function satisfiesVibePolicyScope(ownerId, viewerId, scope, storyData = {}) {
+  if (!ownerId || !viewerId) return false;
+  if (ownerId === viewerId) return true;
+  const s = String(scope || 'everyone').toLowerCase();
+  if (s === 'nobody' || s === 'private') return false;
+  if (s === 'everyone' || s === 'public') return true;
+  if (s === 'selected') {
+    return Array.isArray(storyData.selectedUserIds) && storyData.selectedUserIds.includes(viewerId);
+  }
+  const db = admin.firestore();
+  if (s === 'followers') {
+    const f = await db.doc(`follows/${viewerId}_${ownerId}`).get();
+    return f.exists;
+  }
+  if (s === 'connections') {
+    const [f1, f2] = await db.getAll(
+      db.doc(`follows/${viewerId}_${ownerId}`),
+      db.doc(`follows/${ownerId}_${viewerId}`),
+    );
+    return f1.exists && f2.exists;
+  }
+  if (s === 'close_circle') {
+    const cc = await db.doc(`users/${ownerId}/close_circle/${viewerId}`).get();
+    return cc.exists;
+  }
+  return false;
+}
+
+exports.sendVibeGift = functions.https.onCall(async (data, context) => {
+  try {
+    const senderUid = getUserIdFromContext(context);
+    const { vibeId, giftType, idempotencyKey } = data || {};
+    if (!vibeId || typeof vibeId !== 'string' || !giftType || typeof giftType !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'vibeId and giftType are required.');
+    }
+
+    const rawGiftConfig = getRuntimeConfig('APP_GIFT_TYPES', 'app.gift_types');
+    const parsedGiftTypes = typeof rawGiftConfig === 'string'
+      ? (() => { try { return JSON.parse(rawGiftConfig); } catch { return {}; } })()
+      : (rawGiftConfig || {});
+    const giftConfig = { ...DEFAULT_GIFT_TYPES, ...parsedGiftTypes };
+    const giftValue = giftConfig[giftType];
+    if (!giftValue || typeof giftValue !== 'number' || giftValue <= 0) {
+      throw new functions.https.HttpsError('invalid-argument', `Unknown gift type: ${giftType}`);
+    }
+
+    await checkRateLimit(senderUid, 'sendVibeGift', 10, 60000);
+    await enforceDailyLimit(senderUid, giftValue, 'giftSent', 50000);
+    await checkNewAccountAbuse(senderUid, giftValue);
+
+    const db = admin.firestore();
+    const preStorySnap = await db.collection('stories').doc(vibeId).get();
+    if (!preStorySnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Vibe not found.');
+    }
+    const preStory = preStorySnap.data() || {};
+    const preCreatorUid = preStory.userId;
+    if (!preCreatorUid) {
+      throw new functions.https.HttpsError('internal', 'Vibe has no creator.');
+    }
+    if (preCreatorUid === senderUid) {
+      throw new functions.https.HttpsError('invalid-argument', 'You cannot gift your own Vibe.');
+    }
+    if (await isVibePairBlockedOrRestricted(senderUid, preCreatorUid)) {
+      throw new functions.https.HttpsError('permission-denied', 'You cannot send a gift to this user.');
+    }
+    await checkMutualTransfer(senderUid, preCreatorUid, giftValue);
+
+    // Pre-check audience and gift policy scopes outside the coin transaction.
+    const canViewVibe = await satisfiesVibePolicyScope(preCreatorUid, senderUid, preStory.visibility || 'public', preStory);
+    if (!canViewVibe) {
+      throw new functions.https.HttpsError('permission-denied', 'You do not have access to this Vibe.');
+    }
+    const giftPolicy = preStory.whoCanSendGifts || (preStory.allowGifts === false ? 'nobody' : 'everyone');
+    const canGiftVibe = await satisfiesVibePolicyScope(preCreatorUid, senderUid, giftPolicy, preStory);
+    if (!canGiftVibe) {
+      throw new functions.https.HttpsError('permission-denied', 'Gifts are restricted on this Vibe.');
+    }
+
+    const key = generateIdempotencyKey(idempotencyKey);
+    const ledgerRef = db.collection('idempotency_ledger').doc(key);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== senderUid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
+
+      const senderRef = db.collection('users').doc(senderUid);
+      const storyRef = db.collection('stories').doc(vibeId);
+      const [senderSnap, storySnap] = await Promise.all([t.get(senderRef), t.get(storyRef)]);
+      if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
+      if (!storySnap.exists) throw new functions.https.HttpsError('not-found', 'Vibe not found.');
+
+      const storyData = storySnap.data() || {};
+      const creatorUid = storyData.userId;
+      if (!creatorUid) throw new functions.https.HttpsError('internal', 'Vibe has no creator.');
+      if (creatorUid === senderUid) {
+        throw new functions.https.HttpsError('invalid-argument', 'You cannot gift your own Vibe.');
+      }
+      if (storyData.isDeleted || storyData.status === 'removed' || storyData.status === 'expired' || storyData.moderationStatus === 'rejected') {
+        throw new functions.https.HttpsError('failed-precondition', 'This Vibe is no longer active.');
+      }
+      const expiresMs = storyData.expiresAt?.toMillis?.() || 0;
+      if (expiresMs && expiresMs <= Date.now()) {
+        throw new functions.https.HttpsError('failed-precondition', 'This Vibe has expired.');
+      }
+      if (storyData.allowGifts === false || storyData.whoCanSendGifts === 'nobody') {
+        throw new functions.https.HttpsError('permission-denied', 'Gifts are disabled on this Vibe.');
+      }
+
+      const creatorRef = db.collection('users').doc(creatorUid);
+      const creatorSnap = await t.get(creatorRef);
+      if (!creatorSnap.exists) throw new functions.https.HttpsError('not-found', 'Creator not found.');
+
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
+      if (available < giftValue) {
+        throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
+      }
+
+      const creatorBal = await readCoinBalance(t, creatorUid, { fallbackToPublic: true });
+      const senderNewBalance = senderBal.coins - giftValue;
+      const creatorNewBalance = creatorBal.coins + giftValue;
+
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, creatorUid, { coins: creatorNewBalance });
+
+      t.update(storyRef, {
+        'stats.gifts': admin.firestore.FieldValue.increment(1),
+        'stats.giftCoins': admin.firestore.FieldValue.increment(giftValue),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const giftRecordRef = storyRef.collection('gifts').doc();
+      const senderData = senderSnap.data() || {};
+      t.set(giftRecordRef, {
+        senderId: senderUid,
+        senderName: senderData.displayName || senderData.username || null,
+        senderAvatar: senderData.photoURL || null,
+        recipientId: creatorUid,
+        vibeId,
+        giftType,
+        coins: giftValue,
+        idempotencyKey: key,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const giftTxRef = db.collection('gift_transactions').doc();
+      t.set(giftTxRef, {
+        senderId: senderUid,
+        receiverId: creatorUid,
+        storyId: vibeId,
+        vibeId,
+        giftContext: 'vibe',
+        giftType,
+        value: giftValue,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        idempotencyKey: key,
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+
+      const coinTxRef = db.collection('coin_transactions').doc();
+      t.set(coinTxRef, {
+        userId: senderUid,
+        type: 'debit',
+        amount: giftValue,
+        reason: 'vibe_gift',
+        relatedUserId: creatorUid,
+        metadata: { vibeId, giftType },
+        idempotencyKey: key,
+        balanceAfter: senderNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+
+      createLedgerEntry(t, `users:${senderUid}`, `users:${creatorUid}`, giftValue, {
+        reason: 'vibe_gift',
+        vibeId,
+        giftType,
+        transactionId: giftTxRef.id,
+      });
+
+      const resultData = {
+        success: true,
+        newBalance: senderNewBalance,
+        giftTxId: giftTxRef.id,
+        giftId: giftRecordRef.id,
+        receiverId: creatorUid,
+        vibeId,
+        giftType,
+        coinValue: giftValue,
+      };
+      t.set(ledgerRef, {
+        function: 'sendVibeGift',
+        userId: senderUid,
+        result: resultData,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      return { ...resultData, _freshCommit: true };
+    });
+
+    const isFresh = Boolean(result?._freshCommit);
+    if (isFresh) {
+      delete result._freshCommit;
+      const [senderUserSnap, creatorUserSnap] = await Promise.all([
+        db.collection('users').doc(senderUid).get().catch(() => null),
+        db.collection('users').doc(result.receiverId).get().catch(() => null),
+      ]);
+      const senderProfile = senderUserSnap?.exists ? senderUserSnap.data() : {};
+      const creatorProfile = creatorUserSnap?.exists ? creatorUserSnap.data() : {};
+      const senderName = senderProfile.displayName || senderProfile.username || `user ${String(senderUid).slice(0, 6)}`;
+      const giftNotifEnabled = creatorProfile?.settings?.vibes?.giftNotifications !== false;
+      const blocked = await isVibePairBlockedOrRestricted(senderUid, result.receiverId).catch(() => false);
+
+      if (giftNotifEnabled && !blocked) {
+        enqueuePush(result.receiverId, {
+          title: 'Vibe gift received',
+          body: `${senderName} sent a ${giftType} gift (${giftValue} coins)`,
+          type: 'gift_received',
+          data: { from: senderUid, vibeId, storyId: vibeId, giftType, actionUrl: `/stories?vibeId=${vibeId}` },
+        }).catch((e) => logger.warn('Vibe gift push failed', { error: e.message }));
+
+        await writeNotification(result.receiverId, {
+          type: 'gift_received',
+          title: 'Vibe gift received',
+          message: `${senderName} sent a ${giftType} gift (${giftValue} coins) on your Vibe.`,
+          senderId: senderUid,
+          senderName,
+          metadata: {
+            vibeId,
+            storyId: vibeId,
+            giftType,
+            cost: giftValue,
+            actionUrl: `/stories?vibeId=${vibeId}`,
+          },
+        }).catch((err) => logger.warn('Vibe gift notification failed', { error: err.message }));
+      }
+    }
+
+    logEvent('vibe_gift_sent', { sender: senderUid, receiver: result.receiverId, vibeId, giftType, value: giftValue });
+    await awardXpSafe(senderUid, 'gift_sent', { source: result.giftTxId });
+    if (result?.receiverId && result.receiverId !== senderUid) {
+      await awardXpSafe(result.receiverId, 'gift_received', { source: result.giftTxId });
+    }
+    try {
+      const { evaluateAchievementsForUser } = require('./levelSystem');
+      await evaluateAchievementsForUser(senderUid);
+    } catch (_) {
+      /* achievement evaluation is best-effort post-gift */
+    }
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
 // Shared internals exposed to sibling modules (admin.js) so the money-path
 // helpers exist exactly once: the single configured Stripe client and the
 // double-entry ledger writer. Not deployed as callables.

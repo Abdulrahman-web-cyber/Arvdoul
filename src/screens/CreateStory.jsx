@@ -1,6 +1,17 @@
 // src/screens/CreateStory.jsx
+//
+// Arvdoul Vibes Studio (Part 1 Core Experience):
+//   - Create Image, Video, Text (and Audio) Vibes
+//   - Lazy permission-aware camera (idle / requesting / granted / denied / unavailable)
+//   - Strict client validation via vibeContracts.js
+//   - Image editing (aspect crop, rotate, brightness, contrast, fit/fill)
+//   - Video editing (trim start/end <= 60s, mute toggle, cover frame picker)
+//   - Multi-element draggable/styled Text Overlays + non-destructive Brush/Eraser drawing
+//   - Shared-renderer inline Preview (<VibePreviewModal /> -> <VibeRenderer />)
+//   - 6-tier Audience + Close Circle & Selected Users picker (<VibeAudienceModal />)
+//   - IndexedDB Drafts & crash recovery (vibeDraftService) + honest Upload Lifecycle overlay
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -9,16 +20,41 @@ import { cn } from '../lib/utils';
 import {
   X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle,
   AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check,
-  Loader2, Globe, Users, Lock, Video, Square, Image as ImageIcon, Mic
-} from "lucide-react";
+  Video, Square, Image as ImageIcon, Mic, Camera, Eye, Scissors,
+  Brush, Shield, Save, FolderOpen, Trash2, AlignLeft, AlignCenter, AlignRight
+} from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import GIFPicker from '../components/Shared/GIFPicker';
 import { useFeatureFlag } from '../hooks/useFeatureFlag.js';
 import { LazyImage } from '../components/Shared/LazyImage';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import {
+  VIBE_AUDIENCES,
+  VIBE_TEXT_BACKGROUNDS,
+  VIBE_FONT_OPTIONS,
+  VIBE_LIMITS,
+  VIBE_UPLOAD_STATES,
+  getAudienceMeta,
+  getVibeFontCss,
+  validateVibeMedia,
+  validateVibeText,
+  validateAudienceSelection,
+  sanitizeTextOverlays,
+  sanitizeDrawingPaths,
+  createVibeIdempotencyKey,
+} from '../config/vibeContracts.js';
+import vibeDraftService from '../services/vibeDraftService.js';
+import { VibeDrawingStage, VibeDrawingToolbar } from '../components/vibes/studio/VibeDrawingCanvas.jsx';
+import VibeMediaEditorPanel, { bakeEditedImageFile } from '../components/vibes/studio/VibeMediaEditorPanel.jsx';
+import { VibeDraggableOverlaysStage, VibeTextOverlayPanel } from '../components/vibes/studio/VibeTextOverlayEditor.jsx';
+import VibeAudienceModal from '../components/vibes/studio/VibeAudienceModal.jsx';
+import { VibePreviewModal, VibePublishOverlay } from '../components/vibes/studio/VibePreviewAndPublishModals.jsx';
 
 const CREATIVE_TOOLS = [
-  { id: 'text', label: 'Text', icon: Type },
+  { id: 'adjust', label: 'Crop & Edit', icon: Scissors },
+  { id: 'overlays', label: 'Text Layer', icon: Type },
+  { id: 'freehand', label: 'Brush', icon: Brush },
+  { id: 'text', label: 'Caption', icon: Type },
   { id: 'stickers', label: 'Stickers', icon: Smile },
   { id: 'music', label: 'Music', icon: Music },
   { id: 'gif', label: 'GIF', icon: Sparkles },
@@ -32,13 +68,17 @@ const CREATIVE_TOOLS = [
 
 const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'AUDIO'];
 
-const STORY_GRADIENTS = [
-  { id: 'd1', gradient: 'linear-gradient(135deg, #FF512F, #F09819)', label: 'Sunset' },
-  { id: 'd2', gradient: 'linear-gradient(135deg, #0F2027, #2C5364)', label: 'City lights' },
-  { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Forest' },
-  { id: 'd4', gradient: 'linear-gradient(135deg, #41295a, #2F0743)', label: 'Midnight' },
-  { id: 'd5', gradient: 'linear-gradient(135deg, #0B0C10, #45A29E)', label: 'Deep sea' },
-];
+const DEFAULT_MEDIA_EDITS = {
+  aspectRatio: 'original',
+  rotation: 0,
+  brightness: 100,
+  contrast: 100,
+  fitMode: 'contain',
+  trimStart: 0,
+  trimEnd: null,
+  muted: false,
+  coverUrl: null,
+};
 
 function probeMediaDuration(url, kind) {
   return new Promise((resolve) => {
@@ -52,7 +92,7 @@ function probeMediaDuration(url, kind) {
       el.onloadedmetadata = () => {
         const dur = Number(el.duration);
         cleanup();
-        resolve(Number.isFinite(dur) && dur > 0 ? Math.min(60, Math.max(1, Math.round(dur))) : (kind === 'video' ? 15 : 10));
+        resolve(Number.isFinite(dur) && dur > 0 ? dur : (kind === 'video' ? 15 : 10));
       };
       el.onerror = () => {
         cleanup();
@@ -71,21 +111,44 @@ export default function CreateStory() {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
 
-  // Camera & Mode state
+  // Mode & Camera Permission State (lazy initialization — no surprise prompt on load)
   const [activeMode, setActiveMode] = useState('STORY');
   const [zoomLevel, setZoomLevel] = useState('1x');
   const [flashMode, setFlashMode] = useState('auto');
   const [facingMode, setFacingMode] = useState('user');
-  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState('idle'); // idle | requesting | granted | denied | unavailable
   const [torchSupported, setTorchSupported] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
-  // Creative Tool Overlays
+  // Content & Studio Editing State
   const [activeTool, setActiveTool] = useState(null);
   const [toolsExpanded, setToolsExpanded] = useState(true);
   const [storyText, setStoryText] = useState('');
-  const [backgroundGradient, setBackgroundGradient] = useState(STORY_GRADIENTS[3].gradient);
+  const [backgroundGradient, setBackgroundGradient] = useState(VIBE_TEXT_BACKGROUNDS[0].background);
+  const [textColor, setTextColor] = useState(VIBE_TEXT_BACKGROUNDS[0].textColor);
+  const [textFont, setTextFont] = useState('display');
+  const [textAlign, setTextAlign] = useState('center');
+
+  // Repositionable Overlays + Non-destructive Drawing State
+  const [textOverlays, setTextOverlays] = useState([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState(null);
+  const [drawingPaths, setDrawingPaths] = useState([]);
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
+  const [brushColor, setBrushColor] = useState('#FFFFFF');
+  const [brushSize, setBrushSize] = useState(8);
+  const [brushMode, setBrushMode] = useState('draw');
+
+  // Media File & Editor State
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaType, setMediaType] = useState('image');
+  const [mediaDuration, setMediaDuration] = useState(5);
+  const [nativeDuration, setNativeDuration] = useState(15);
+  const [capturedPreview, setCapturedPreview] = useState(null);
+  const [mediaEdits, setMediaEdits] = useState(DEFAULT_MEDIA_EDITS);
+
+  // Stickers & Extras
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOption1, setPollOption1] = useState('Yes');
   const [pollOption2, setPollOption2] = useState('No');
@@ -95,19 +158,29 @@ export default function CreateStory() {
   const [musicTracks, setMusicTracks] = useState([]);
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicError, setMusicError] = useState(null);
-  const [mediaFile, setMediaFile] = useState(null);
-  const [mediaType, setMediaType] = useState('image');
-  const [mediaDuration, setMediaDuration] = useState(5);
-  const [capturedPreview, setCapturedPreview] = useState(null);
   const [selectedGif, setSelectedGif] = useState(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [storyLocation, setStoryLocation] = useState('');
   const [mentionHandle, setMentionHandle] = useState('');
   const [storyTimer, setStoryTimer] = useState(0);
-  const [publishing, setPublishing] = useState(false);
+
+  // Audience & Preview & Publish State
   const [audience, setAudience] = useState('public');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [audienceModalOpen, setAudienceModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [uploadState, setUploadState] = useState(VIBE_UPLOAD_STATES.IDLE);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState(null);
+
+  // Drafts State
+  const [activeDraftId, setActiveDraftId] = useState(null);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => createVibeIdempotencyKey('user'));
+  const [savedDrafts, setSavedDrafts] = useState([]);
+  const [draftsDrawerOpen, setDraftsDrawerOpen] = useState(false);
 
   const videoRef = useRef(null);
+  const previewVideoRef = useRef(null);
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
   const recorderRef = useRef(null);
@@ -115,6 +188,10 @@ export default function CreateStory() {
   const recordedSecondsRef = useRef(0);
   const previewUrlRef = useRef(null);
   const holdActiveRef = useRef(false);
+  const activeUploadHandleRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
+  const cameraActive = cameraPermission === 'granted';
 
   const setPreviewSafely = useCallback((url) => {
     if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
@@ -124,12 +201,45 @@ export default function CreateStory() {
     setCapturedPreview(url);
   }, []);
 
+  const stopCameraStream = useCallback(() => {
+    const videoEl = videoRef.current;
+    if (videoEl && videoEl.srcObject) {
+      videoEl.srcObject.getTracks().forEach((track) => track.stop());
+      videoEl.srcObject = null;
+    }
+    setTorchSupported(false);
+  }, []);
+
   const clearPreview = useCallback(() => {
     setPreviewSafely(null);
     setMediaFile(null);
     setMediaType('image');
     setMediaDuration(5);
+    setNativeDuration(15);
+    setMediaEdits(DEFAULT_MEDIA_EDITS);
   }, [setPreviewSafely]);
+
+  const loadDraftsList = useCallback(async () => {
+    if (!user?.uid) return;
+    try {
+      const list = await vibeDraftService.listDrafts(user.uid);
+      setSavedDrafts(list);
+    } catch (err) {
+      console.warn('[CreateStory] failed to load saved drafts:', err?.message || err);
+      toast.error('Could not load saved drafts from this device.');
+      setSavedDrafts([]);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    loadDraftsList();
+  }, [loadDraftsList]);
+
+  useEffect(() => {
+    if (user?.uid && !activeDraftId) {
+      setIdempotencyKey(createVibeIdempotencyKey(user.uid));
+    }
+  }, [user?.uid, activeDraftId]);
 
   const loadMusicTracks = useCallback(async () => {
     setMusicLoading(true);
@@ -146,62 +256,66 @@ export default function CreateStory() {
     }
   }, [user?.uid]);
 
-  const initCamera = useCallback(async () => {
+  const requestCameraAccess = useCallback(async (overrideFacing = facingMode) => {
     if (activeMode === 'TEXT' || activeMode === 'AUDIO') {
-      setCameraActive(false);
+      stopCameraStream();
+      setCameraPermission('idle');
       return;
     }
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        let stream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
-            audio: activeMode === 'VIDEO',
-          });
-        } catch {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
-            audio: false,
-          });
-        }
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch((err) => console.warn('[CreateVibe] preview play:', err?.message));
-          setCameraActive(true);
-          const track = stream.getVideoTracks?.()[0];
-          const caps = track?.getCapabilities?.();
-          setTorchSupported(Boolean(caps?.torch));
-        }
-      }
-    } catch (err) {
-      console.warn('Camera access unavailable:', err?.message);
-      setCameraActive(false);
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraPermission('unavailable');
+      return;
     }
-  }, [facingMode, activeMode]);
-
-  useEffect(() => {
-    initCamera();
-    const videoEl = videoRef.current;
-    return () => {
-      if (videoEl && videoEl.srcObject) {
-        const stream = videoEl.srcObject;
-        stream.getTracks().forEach((track) => track.stop());
+    setCameraPermission('requesting');
+    stopCameraStream();
+    try {
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: overrideFacing, width: { ideal: 1080 }, height: { ideal: 1920 } },
+          audio: activeMode === 'VIDEO',
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: overrideFacing, width: { ideal: 1080 }, height: { ideal: 1920 } },
+          audio: false,
+        });
       }
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [initCamera]);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      const track = stream.getVideoTracks?.()[0];
+      const caps = track?.getCapabilities?.();
+      setTorchSupported(Boolean(caps?.torch));
+      setCameraPermission('granted');
+    } catch (err) {
+      const name = err?.name || '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        setCameraPermission('denied');
+      } else {
+        setCameraPermission('unavailable');
+      }
+    }
+  }, [activeMode, facingMode, stopCameraStream]);
 
+  // Cleanup camera & blob URLs on unmount
   useEffect(() => {
     return () => {
+      stopCameraStream();
+      if (timerRef.current) clearInterval(timerRef.current);
       if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrlRef.current);
       }
     };
-  }, []);
+  }, [stopCameraStream]);
 
   const handleFlipCamera = () => {
-    setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
+    const next = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(next);
+    if (cameraPermission === 'granted') {
+      requestCameraAccess(next);
+    }
   };
 
   const handleToggleFlash = async () => {
@@ -223,7 +337,7 @@ export default function CreateStory() {
     if (capturedPreview || isRecording) return;
     const stream = videoRef.current?.srcObject;
     if (!stream || typeof MediaRecorder === 'undefined') {
-      toast.error('Camera is not active. Enable camera access or choose a video from Gallery.');
+      toast.error('Enable camera access first or pick a video from Gallery.');
       return;
     }
     try {
@@ -243,13 +357,15 @@ export default function CreateStory() {
       recorder.onstop = () => {
         const finalType = mime || 'video/webm';
         const blob = new Blob(chunksRef.current, { type: finalType });
-        const secs = Math.max(1, Math.min(60, recordedSecondsRef.current || 1));
+        const secs = Math.max(1, Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, recordedSecondsRef.current || 1));
         if (blob.size > 0) {
           const file = new File([blob], `vibe-${Date.now()}.webm`, { type: finalType });
           const url = URL.createObjectURL(file);
           setMediaFile(file);
           setMediaType('video');
           setMediaDuration(secs);
+          setNativeDuration(secs);
+          setMediaEdits({ ...DEFAULT_MEDIA_EDITS, trimStart: 0, trimEnd: secs });
           setPreviewSafely(url);
           toast.success(`Video recorded (${secs}s)`);
         } else {
@@ -264,19 +380,18 @@ export default function CreateStory() {
         setRecordSeconds((sec) => {
           const next = sec + 1;
           recordedSecondsRef.current = next;
-          if (next >= 30) {
+          if (next >= VIBE_LIMITS.VIDEO_MAX_DURATION_SEC) {
             if (recorderRef.current && recorderRef.current.state !== 'inactive') {
               recorderRef.current.stop();
             }
             setIsRecording(false);
             clearInterval(timerRef.current);
-            return 30;
+            return VIBE_LIMITS.VIDEO_MAX_DURATION_SEC;
           }
           return next;
         });
       }, 1000);
-    } catch (err) {
-      console.error('Recording failed:', err);
+    } catch {
       toast.error('Could not start recording on this device.');
     }
   }, [capturedPreview, isRecording, setPreviewSafely]);
@@ -289,14 +404,14 @@ export default function CreateStory() {
       if (recorderRef.current && recorderRef.current.state !== 'inactive') {
         recorderRef.current.stop();
       }
-    } catch (err) {
-      console.error('Stop recording failed:', err);
+    } catch {
+      toast.error('Could not stop recording cleanly.');
     }
   }, [isRecording]);
 
   const handleCapturePhoto = useCallback(() => {
     if (!cameraActive || !videoRef.current) {
-      toast.error('Camera is not active. Enable camera access or pick media from Gallery.');
+      requestCameraAccess();
       return;
     }
     const canvas = document.createElement('canvas');
@@ -316,13 +431,14 @@ export default function CreateStory() {
         setMediaFile(file);
         setMediaType('image');
         setMediaDuration(5);
+        setMediaEdits(DEFAULT_MEDIA_EDITS);
         setPreviewSafely(url);
         toast.success('Photo captured');
       },
       'image/jpeg',
       0.92
     );
-  }, [cameraActive, setPreviewSafely]);
+  }, [cameraActive, requestCameraAccess, setPreviewSafely]);
 
   const handleShutterClick = () => {
     if (holdActiveRef.current) {
@@ -331,6 +447,10 @@ export default function CreateStory() {
     }
     if (capturedPreview) {
       clearPreview();
+      return;
+    }
+    if (!cameraActive) {
+      requestCameraAccess();
       return;
     }
     if (activeMode === 'VIDEO') {
@@ -342,7 +462,7 @@ export default function CreateStory() {
   };
 
   const handleShutterHoldStart = () => {
-    if (activeMode === 'VIDEO' || activeMode === 'TEXT' || activeMode === 'AUDIO' || capturedPreview) return;
+    if (activeMode === 'VIDEO' || activeMode === 'TEXT' || activeMode === 'AUDIO' || capturedPreview || !cameraActive) return;
     holdActiveRef.current = false;
     timerRef.current = setTimeout(() => {
       holdActiveRef.current = true;
@@ -363,20 +483,133 @@ export default function CreateStory() {
   const handleFilePicked = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isVid = file.type.startsWith('video/');
+    e.target.value = '';
+
     const isAud = file.type.startsWith('audio/');
-    const kind = isVid ? 'video' : isAud ? 'audio' : 'image';
-    const url = URL.createObjectURL(file);
-    setMediaFile(file);
-    setMediaType(kind);
-    setPreviewSafely(url);
-    if (kind === 'video' || kind === 'audio') {
-      const dur = await probeMediaDuration(url, kind);
-      setMediaDuration(dur);
-      if (kind === 'audio') setActiveMode('AUDIO');
-    } else {
-      setMediaDuration(5);
+    if (isAud) {
+      if (file.size > VIBE_LIMITS.AUDIO_MAX_BYTES) {
+        toast.error('Audio clip must be 25 MB or smaller.');
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const dur = await probeMediaDuration(url, 'audio');
+      setMediaFile(file);
+      setMediaType('audio');
+      setNativeDuration(dur);
+      setMediaDuration(Math.min(60, Math.round(dur)));
+      setActiveMode('AUDIO');
+      setMediaEdits(DEFAULT_MEDIA_EDITS);
+      setPreviewSafely(url);
+      return;
     }
+
+    const preCheck = validateVibeMedia(file);
+    if (!preCheck.valid) {
+      toast.error(preCheck.error);
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    if (preCheck.kind === 'video') {
+      const rawDur = await probeMediaDuration(url, 'video');
+      const clampedDur = Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, Math.max(1, Math.round(rawDur)));
+      setMediaFile(file);
+      setMediaType('video');
+      setNativeDuration(rawDur);
+      setMediaDuration(clampedDur);
+      setMediaEdits({ ...DEFAULT_MEDIA_EDITS, trimStart: 0, trimEnd: clampedDur });
+      setPreviewSafely(url);
+      if (rawDur > VIBE_LIMITS.VIDEO_MAX_DURATION_SEC) {
+        toast.info(`Video trimmed to first ${VIBE_LIMITS.VIDEO_MAX_DURATION_SEC}s. Adjust inside Crop & Edit.`);
+        setActiveTool('adjust');
+      }
+    } else {
+      setMediaFile(file);
+      setMediaType('image');
+      setMediaDuration(5);
+      setMediaEdits(DEFAULT_MEDIA_EDITS);
+      setPreviewSafely(url);
+    }
+  };
+
+  const handleCaptureVideoCover = () => {
+    const vid = previewVideoRef.current;
+    if (!vid || !vid.videoWidth || !vid.videoHeight) {
+      toast.error('Wait for the video frame to load first.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(720, vid.videoWidth);
+    canvas.height = Math.round((vid.videoHeight / vid.videoWidth) * canvas.width);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+    const coverDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    setMediaEdits((prev) => ({ ...prev, coverUrl: coverDataUrl }));
+    toast.success('Cover frame saved');
+  };
+
+  // Non-destructive drawing stack handlers
+  const handleDrawingChange = useCallback((nextPaths) => {
+    setUndoStack((prev) => [...prev.slice(-19), drawingPaths]);
+    setRedoStack([]);
+    setDrawingPaths(nextPaths);
+  }, [drawingPaths]);
+
+  const handleUndoDrawing = () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, drawingPaths]);
+    setDrawingPaths(previous);
+  };
+
+  const handleRedoDrawing = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, drawingPaths]);
+    setDrawingPaths(next);
+  };
+
+  const handleClearDrawing = () => {
+    if (drawingPaths.length === 0) return;
+    handleDrawingChange([]);
+  };
+
+  // Multi-element text overlay handlers
+  const handleAddOverlay = (text) => {
+    const id = `ov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const next = [
+      ...textOverlays.slice(0, VIBE_LIMITS.MAX_TEXT_OVERLAYS - 1),
+      {
+        id,
+        text,
+        x: 0.5,
+        y: 0.35 + (textOverlays.length % 3) * 0.12,
+        color: '#FFFFFF',
+        bgStyle: 'pill',
+        font: 'display',
+        align: 'center',
+        scale: 1,
+        rotation: 0,
+      },
+    ];
+    setTextOverlays(next);
+    setSelectedOverlayId(id);
+  };
+
+  const handleUpdateOverlay = (id, patch) => {
+    setTextOverlays((prev) => prev.map((ov) => (ov.id === id ? { ...ov, ...patch } : ov)));
+  };
+
+  const handleMoveOverlay = useCallback((id, x, y) => {
+    setTextOverlays((prev) => prev.map((ov) => (ov.id === id ? { ...ov, x, y } : ov)));
+  }, []);
+
+  const handleDeleteOverlay = (id) => {
+    setTextOverlays((prev) => prev.filter((ov) => ov.id !== id));
+    if (selectedOverlayId === id) setSelectedOverlayId(null);
   };
 
   const buildStickers = () => {
@@ -413,18 +646,170 @@ export default function CreateStory() {
   const isTextMode = activeMode === 'TEXT';
   const canPublish = isTextMode ? storyText.trim().length > 0 : Boolean(mediaFile);
 
+  const previewVibeObject = useMemo(() => ({
+    id: 'studio_preview',
+    type: isTextMode ? 'text' : mediaType,
+    url: isTextMode ? '' : (capturedPreview || ''),
+    caption: storyText.trim(),
+    content: storyText.trim(),
+    duration: isTextMode ? 6 : mediaDuration,
+    backgroundColor: backgroundGradient,
+    textColor,
+    textStyle: {
+      font: textFont,
+      align: textAlign,
+      background: backgroundGradient,
+      textColor,
+    },
+    mediaEdits,
+    textOverlays: sanitizeTextOverlays(textOverlays),
+    drawingPaths: sanitizeDrawingPaths(drawingPaths),
+    music: selectedMusic,
+  }), [
+    isTextMode,
+    mediaType,
+    capturedPreview,
+    storyText,
+    mediaDuration,
+    backgroundGradient,
+    textColor,
+    textFont,
+    textAlign,
+    mediaEdits,
+    textOverlays,
+    drawingPaths,
+    selectedMusic,
+  ]);
+
+  // Save draft to IndexedDB (never stores large Blobs in Firestore)
+  const handleSaveDraft = async ({ silent = false } = {}) => {
+    if (!user?.uid) {
+      if (!silent) toast.error('Sign in to save drafts.');
+      return null;
+    }
+    if (!canPublish && textOverlays.length === 0 && drawingPaths.length === 0) {
+      if (!silent) toast.error('Add media or text before saving a draft.');
+      return null;
+    }
+    try {
+      const saved = await vibeDraftService.saveDraft(user.uid, {
+        id: activeDraftId || undefined,
+        idempotencyKey,
+        type: isTextMode ? 'text' : mediaType,
+        content: storyText,
+        mediaBlob: isTextMode ? null : mediaFile,
+        mediaName: mediaFile?.name || null,
+        mediaType: mediaFile?.type || null,
+        duration: isTextMode ? 6 : mediaDuration,
+        nativeDuration,
+        backgroundColor: backgroundGradient,
+        textColor,
+        textStyle: { font: textFont, align: textAlign, background: backgroundGradient, textColor },
+        mediaEdits,
+        textOverlays,
+        drawingPaths,
+        visibility: audience,
+        selectedUsers,
+        location: storyLocation,
+        linkUrl,
+      });
+      setActiveDraftId(saved.id);
+      setIdempotencyKey(saved.idempotencyKey);
+      await loadDraftsList();
+      if (!silent) toast.success('Draft saved on this device');
+      return saved;
+    } catch (err) {
+      if (!silent) toast.error(err?.message || 'Could not save draft locally.');
+      return null;
+    }
+  };
+
+  const handleResumeDraft = async (draft) => {
+    if (!draft) return;
+    setActiveDraftId(draft.id);
+    setIdempotencyKey(draft.idempotencyKey || createVibeIdempotencyKey(user?.uid));
+    setStoryText(draft.content || '');
+    setBackgroundGradient(draft.backgroundColor || VIBE_TEXT_BACKGROUNDS[0].background);
+    setTextColor(draft.textColor || '#FFFFFF');
+    setTextFont(draft.textStyle?.font || 'display');
+    setTextAlign(draft.textStyle?.align || 'center');
+    setMediaEdits(draft.mediaEdits || DEFAULT_MEDIA_EDITS);
+    setTextOverlays(Array.isArray(draft.textOverlays) ? draft.textOverlays : []);
+    setDrawingPaths(Array.isArray(draft.drawingPaths) ? draft.drawingPaths : []);
+    setAudience(draft.visibility || 'public');
+    setSelectedUsers(Array.isArray(draft.selectedUsers) ? draft.selectedUsers : []);
+    setStoryLocation(draft.location || '');
+    setLinkUrl(draft.linkUrl || '');
+
+    if (draft.type === 'text' || !draft.mediaBlob) {
+      clearPreview();
+      setActiveMode('TEXT');
+    } else {
+      const restoredFile = draft.mediaBlob instanceof File
+        ? draft.mediaBlob
+        : new File([draft.mediaBlob], draft.mediaName || `draft-${Date.now()}`, { type: draft.mediaType || 'image/jpeg' });
+      const url = URL.createObjectURL(restoredFile);
+      setMediaFile(restoredFile);
+      setMediaType(draft.type || 'image');
+      setMediaDuration(draft.duration || 5);
+      setNativeDuration(draft.nativeDuration || draft.duration || 15);
+      setActiveMode(draft.type === 'video' ? 'VIDEO' : draft.type === 'audio' ? 'AUDIO' : 'STORY');
+      setPreviewSafely(url);
+    }
+    setDraftsDrawerOpen(false);
+    toast.success('Draft restored');
+  };
+
+  const handleDeleteDraft = async (draftId) => {
+    if (!user?.uid) return;
+    await vibeDraftService.deleteDraft(user.uid, draftId);
+    if (activeDraftId === draftId) setActiveDraftId(null);
+    await loadDraftsList();
+    toast.success('Draft deleted');
+  };
+
   const handlePublishStory = async () => {
-    if (!user?.uid || publishing) {
+    if (!user?.uid || uploadState === VIBE_UPLOAD_STATES.UPLOADING || uploadState === VIBE_UPLOAD_STATES.PUBLISHING) {
       if (!user?.uid) toast.error('Please sign in to publish a Vibe.');
       return;
     }
 
-    if (!canPublish) {
-      toast.error(isTextMode ? 'Write a message for your Text Vibe.' : 'Capture or select a photo, video, or audio clip.');
+    if (isTextMode) {
+      const textValidation = validateVibeText(storyText);
+      if (!textValidation.valid) {
+        toast.error(textValidation.error);
+        return;
+      }
+    } else {
+      if (!mediaFile) {
+        toast.error('Capture or select a photo, video, or audio clip.');
+        return;
+      }
+      if (mediaType !== 'audio') {
+        const mediaValidation = validateVibeMedia(mediaFile, { durationSec: mediaDuration });
+        if (!mediaValidation.valid) {
+          toast.error(mediaValidation.error);
+          return;
+        }
+      }
+    }
+
+    const selectedUserIds = selectedUsers.map((u) => u.id);
+    const audienceCheck = validateAudienceSelection(audience, selectedUserIds);
+    if (!audienceCheck.valid) {
+      toast.error(audienceCheck.error);
+      setAudienceModalOpen(true);
       return;
     }
 
-    setPublishing(true);
+    setPreviewOpen(false);
+    setUploadError(null);
+    setUploadProgress(6);
+    setUploadState(VIBE_UPLOAD_STATES.PREPARING);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const storyService = getStoryService();
       const targetType = isTextMode ? 'text' : mediaType;
@@ -432,13 +817,36 @@ export default function CreateStory() {
         ? { question: pollQuestion.trim(), options: [pollOption1.trim(), pollOption2.trim()] }
         : null;
 
+      let uploadFile = isTextMode ? null : mediaFile;
+      let normalizedEdits = { ...mediaEdits };
+      if (targetType === 'image' && uploadFile && capturedPreview) {
+        uploadFile = await bakeEditedImageFile(uploadFile, capturedPreview, mediaEdits);
+        normalizedEdits = {
+          ...mediaEdits,
+          rotation: 0,
+          brightness: 100,
+          contrast: 100,
+          aspectRatio: 'original',
+        };
+      }
+
+      const clippedDuration = targetType === 'video'
+        ? Math.max(1, Math.min(VIBE_LIMITS.VIDEO_MAX_DURATION_SEC, Math.round((mediaEdits.trimEnd ?? mediaDuration) - (mediaEdits.trimStart ?? 0))))
+        : isTextMode
+          ? 6
+          : mediaDuration;
+
       const storyPayload = {
         type: targetType,
         content: storyText.trim(),
-        mediaFile: isTextMode ? null : mediaFile,
-        duration: isTextMode ? 6 : mediaDuration,
+        mediaFile: uploadFile,
+        duration: clippedDuration,
         backgroundColor: backgroundGradient || '#0c0f24',
-        textColor: '#FFFFFF',
+        textColor,
+        textStyle: { font: textFont, align: textAlign, background: backgroundGradient, textColor },
+        mediaEdits: normalizedEdits,
+        textOverlays: sanitizeTextOverlays(textOverlays),
+        drawingPaths: sanitizeDrawingPaths(drawingPaths),
         poll: cleanPoll,
         music: selectedMusic || null,
         linkUrl: linkUrl.trim() || null,
@@ -446,23 +854,65 @@ export default function CreateStory() {
         taggedUsers: mentionHandle.trim() ? [mentionHandle.trim().replace(/^@/, '')] : [],
         stickers: buildStickers(),
         visibility: audience,
+        selectedUserIds: audienceCheck.selectedUserIds,
+        idempotencyKey,
       };
 
-      const res = await storyService.createStory(storyPayload);
+      const publishOptions = {
+        idempotencyKey,
+        abortSignal: abortController.signal,
+        onUploadHandle: (handle) => {
+          activeUploadHandleRef.current = handle;
+        },
+        onProgress: (pct) => {
+          if (typeof pct === 'number') setUploadProgress(pct);
+        },
+        onStateChange: (nextState, extra = {}) => {
+          if (typeof nextState === 'string') {
+            setUploadState(nextState);
+            if (typeof extra?.progress === 'number') setUploadProgress(extra.progress);
+          } else if (nextState && typeof nextState === 'object') {
+            if (nextState.state) setUploadState(nextState.state);
+            if (typeof nextState.progress === 'number') setUploadProgress(nextState.progress);
+          }
+        },
+      };
+
+      const res = await storyService.createStory(storyPayload, publishOptions);
       if (res?.success) {
+        if (activeDraftId) {
+          await vibeDraftService.deleteDraft(user.uid, activeDraftId).catch(() => {});
+        }
         toast.success('Vibe published!');
+        setUploadState(VIBE_UPLOAD_STATES.IDLE);
         navigate('/stories');
       } else if (res?.queued) {
         toast.info('Offline — saved as draft. Will publish when you are back online.');
+        setUploadState(VIBE_UPLOAD_STATES.IDLE);
         navigate('/stories');
       } else {
-        toast.error(res?.error || 'Failed to publish Vibe');
+        setUploadState(VIBE_UPLOAD_STATES.FAILED);
+        setUploadError(res?.error || 'Failed to publish Vibe');
       }
     } catch (err) {
-      toast.error(err?.message || 'Vibe publication failed');
+      if (err?.code === 'storage/canceled' || err?.name === 'AbortError') {
+        setUploadState(VIBE_UPLOAD_STATES.CANCELLED);
+        setUploadError('Upload cancelled before publishing.');
+      } else {
+        setUploadState(VIBE_UPLOAD_STATES.FAILED);
+        setUploadError(err?.message || 'Vibe publication failed');
+      }
     } finally {
-      setPublishing(false);
+      activeUploadHandleRef.current = null;
+      abortControllerRef.current = null;
     }
+  };
+
+  const handleCancelUpload = async () => {
+    abortControllerRef.current?.abort();
+    await getStoryService().cancelUpload(activeUploadHandleRef.current);
+    setUploadState(VIBE_UPLOAD_STATES.CANCELLED);
+    setUploadError('Upload cancelled before publishing.');
   };
 
   const liveVideoZoomStyle = {
@@ -470,14 +920,18 @@ export default function CreateStory() {
     transition: 'transform 200ms ease-out',
   };
 
+  const isBrushActive = activeTool === 'freehand';
+  const isEditingOverlays = activeTool === 'overlays' || textOverlays.length > 0;
+  const audienceMeta = getAudienceMeta(audience);
+
   return (
     <div className={cn(
-      "min-h-screen select-none relative overflow-x-hidden",
-      isDark ? "bg-[#060814] text-white" : "bg-slate-950 text-white"
+      'min-h-screen select-none relative overflow-x-hidden transition-colors duration-300',
+      isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
     )}>
-      <div className="max-w-7xl mx-auto min-h-screen flex flex-col lg:flex-row items-center justify-between p-4 lg:p-8 gap-6 lg:gap-8 relative z-10">
+      <div className="max-w-7xl mx-auto min-h-screen flex flex-col lg:flex-row items-center justify-between p-3 sm:p-4 lg:p-8 gap-5 lg:gap-8 relative z-10">
 
-        {/* Left Column: Branding & Creative Tools (Desktop) */}
+        {/* Left Column: Studio Header & Creative Tools (Desktop) */}
         <div className="hidden lg:flex flex-col justify-between h-[780px] w-72 py-2">
           <div>
             <div className="flex items-center gap-3">
@@ -491,34 +945,58 @@ export default function CreateStory() {
                 <h1 className="text-xl font-black font-display tracking-tight">
                   Vibes Studio
                 </h1>
-                <p className="text-xs font-semibold text-white/60">
-                  Capture, design &amp; publish
+                <p className={cn('text-xs font-semibold', isDark ? 'text-white/60' : 'text-slate-600')}>
+                  Capture, edit &amp; publish
                 </p>
               </div>
             </div>
 
-            {toolsExpanded && (
-              <div className="mt-8">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-white/50 block mb-3">
-                  Creative Tools
+            {savedDrafts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setDraftsDrawerOpen(true)}
+                className={cn(
+                  'mt-4 w-full min-h-[40px] px-3.5 py-2 rounded-2xl border flex items-center justify-between text-xs font-bold cursor-pointer',
+                  isDark ? 'bg-white/5 border-white/15 text-white hover:bg-white/10' : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
+                )}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4 text-indigo-400" aria-hidden="true" />
+                  <span>Saved Drafts ({savedDrafts.length})</span>
                 </span>
-                <div className="bg-white/[0.04] border border-white/10 rounded-3xl p-2.5 space-y-1 backdrop-blur-xl shadow-2xl">
+                <ChevronRight className="w-4 h-4 opacity-60" aria-hidden="true" />
+              </button>
+            )}
+
+            {toolsExpanded && (
+              <div className="mt-6">
+                <span className={cn('text-[11px] font-bold uppercase tracking-widest block mb-2.5', isDark ? 'text-white/50' : 'text-slate-500')}>
+                  Studio Tools
+                </span>
+                <div className={cn(
+                  'border rounded-3xl p-2 space-y-1 backdrop-blur-xl shadow-xl max-h-[460px] overflow-y-auto',
+                  isDark ? 'bg-white/[0.04] border-white/10' : 'bg-white border-slate-200'
+                )}>
                   {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
                     const Icon = tool.icon;
                     const isSelected = activeTool === tool.id;
+                    const disabledAdjust = tool.id === 'adjust' && (!capturedPreview || isTextMode || mediaType === 'audio');
                     return (
                       <button
                         type="button"
                         key={tool.id}
+                        disabled={disabledAdjust}
                         onClick={() => {
                           setActiveTool(isSelected ? null : tool.id);
                           if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
                         }}
                         className={cn(
-                          "w-full min-h-[40px] flex items-center gap-3 px-3.5 py-2 rounded-2xl text-xs font-semibold transition-all duration-150 cursor-pointer",
+                          'w-full min-h-[40px] flex items-center gap-3 px-3.5 py-2 rounded-2xl text-xs font-semibold transition-all duration-150 cursor-pointer disabled:opacity-35',
                           isSelected
-                            ? "text-white shadow-md"
-                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                            ? 'text-white shadow-md'
+                            : isDark
+                              ? 'text-white/80 hover:bg-white/10 hover:text-white'
+                              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                         )}
                         style={isSelected ? { background: BRAND_GRADIENT } : undefined}
                       >
@@ -535,27 +1013,37 @@ export default function CreateStory() {
           <button
             type="button"
             onClick={() => navigate('/stories')}
-            className="w-full min-h-[44px] rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-semibold text-white/80 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className={cn(
+              'w-full min-h-[44px] rounded-2xl border text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer',
+              isDark
+                ? 'border-white/15 bg-white/5 hover:bg-white/10 text-white/80'
+                : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-800 shadow-sm'
+            )}
           >
             <span>Browse Vibes Feed</span>
             <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Center: Clean Studio Canvas (No fake phone bezel) */}
-        <div className="relative w-full max-w-[420px] h-[calc(100vh-2rem)] max-h-[820px] min-h-[580px] rounded-3xl bg-black border border-white/15 shadow-2xl overflow-hidden flex flex-col justify-between">
+        {/* Center: Studio Canvas */}
+        <div className="relative w-full max-w-[430px] h-[calc(100vh-1.5rem)] max-h-[840px] min-h-[580px] rounded-3xl bg-[#060918] border border-white/15 shadow-2xl overflow-hidden flex flex-col justify-between text-white">
 
           {/* Media / Canvas Stage */}
-          <div className="absolute inset-0 z-0 bg-[#0c0f24]" style={isTextMode || mediaType === 'audio' ? { background: backgroundGradient } : undefined}>
+          <div
+            className="absolute inset-0 z-0 bg-[#0c0f24]"
+            style={isTextMode || mediaType === 'audio' ? { background: backgroundGradient } : undefined}
+          >
             {capturedPreview ? (
               mediaType === 'video' ? (
                 <video
+                  ref={previewVideoRef}
                   src={capturedPreview}
                   controls
                   autoPlay
                   loop
+                  muted={Boolean(mediaEdits.muted)}
                   playsInline
-                  className="w-full h-full object-cover"
+                  className={cn('w-full h-full', mediaEdits.fitMode === 'cover' ? 'object-cover' : 'object-contain')}
                 />
               ) : mediaType === 'audio' ? (
                 <div className="w-full h-full flex flex-col items-center justify-center px-6 gap-5 text-center">
@@ -568,25 +1056,45 @@ export default function CreateStory() {
                   <audio src={capturedPreview} controls className="w-full max-w-xs" />
                 </div>
               ) : (
-                <LazyImage
-                  src={capturedPreview}
-                  alt="Vibe capture preview"
-                  className="w-full h-full object-cover"
-                />
+                <div className="w-full h-full flex items-center justify-center overflow-hidden">
+                  <LazyImage
+                    src={capturedPreview}
+                    alt="Vibe capture preview"
+                    style={{
+                      filter: `brightness(${mediaEdits.brightness ?? 100}%) contrast(${mediaEdits.contrast ?? 100}%)`,
+                      transform: mediaEdits.rotation ? `rotate(${mediaEdits.rotation}deg)` : undefined,
+                    }}
+                    className={cn(
+                      mediaEdits.aspectRatio === '9:16'
+                        ? 'aspect-[9/16] w-full'
+                        : mediaEdits.aspectRatio === '4:5'
+                          ? 'aspect-[4/5] w-full'
+                          : mediaEdits.aspectRatio === '1:1'
+                            ? 'aspect-square w-full'
+                            : 'w-full h-full',
+                      mediaEdits.fitMode === 'cover' ? 'object-cover' : 'object-contain'
+                    )}
+                  />
+                </div>
               )
             ) : isTextMode ? (
-              <div className="w-full h-full flex flex-col items-center justify-center px-8 text-center">
+              <div className="w-full h-full flex flex-col items-center justify-center px-8">
                 <textarea
                   aria-label="Text Vibe content"
                   value={storyText}
                   onChange={(e) => setStoryText(e.target.value)}
                   placeholder="Write your Vibe..."
-                  rows={4}
-                  maxLength={280}
-                  className="w-full bg-transparent text-center text-2xl sm:text-3xl font-extrabold text-white placeholder:text-white/50 outline-none resize-none leading-snug"
+                  rows={5}
+                  maxLength={VIBE_LIMITS.TEXT_MAX_LENGTH}
+                  style={{
+                    color: textColor,
+                    fontFamily: getVibeFontCss(textFont),
+                    textAlign,
+                  }}
+                  className="w-full bg-transparent text-2xl sm:text-3xl font-extrabold placeholder:text-white/50 outline-none resize-none leading-snug"
                 />
-                <span className="text-[11px] font-medium text-white/60 mt-2">
-                  {storyText.length} / 280
+                <span className="text-[11px] font-medium text-white/70 mt-2">
+                  {storyText.length} / {VIBE_LIMITS.TEXT_MAX_LENGTH}
                 </span>
               </div>
             ) : cameraActive ? (
@@ -598,30 +1106,74 @@ export default function CreateStory() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center px-6 text-center bg-[#0c0f24] gap-3">
+              <div className="w-full h-full flex flex-col items-center justify-center px-6 text-center bg-[#0c0f24] gap-3.5">
                 <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center">
-                  <ImageIcon className="w-7 h-7 text-white/70" aria-hidden="true" />
+                  <ImageIcon className="w-7 h-7 text-white/75" aria-hidden="true" />
                 </div>
-                <p className="text-white/70 text-sm font-medium max-w-xs">
-                  Camera unavailable in this browser. Pick a photo, video, or audio clip from Gallery, or switch to TEXT mode.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-white cursor-pointer"
-                  style={{ background: BRAND_GRADIENT }}
-                >
-                  Choose Media
-                </button>
+                <div className="space-y-1 max-w-xs">
+                  <p className="text-white font-bold text-sm">
+                    {cameraPermission === 'denied'
+                      ? 'Camera permission blocked'
+                      : cameraPermission === 'unavailable'
+                        ? 'Camera unavailable on this browser'
+                        : 'Create a Vibe'}
+                  </p>
+                  <p className="text-white/65 text-xs leading-relaxed">
+                    {cameraPermission === 'denied'
+                      ? 'Allow camera access in browser settings, or pick a photo/video from Gallery.'
+                      : 'Choose media from your device, enable your camera, or compose a Text Vibe.'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold text-white cursor-pointer"
+                    style={{ background: BRAND_GRADIENT }}
+                  >
+                    Choose Media
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => requestCameraAccess()}
+                    disabled={cameraPermission === 'requesting'}
+                    className="min-h-[44px] px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Camera className="w-4 h-4" aria-hidden="true" />
+                    <span>{cameraPermission === 'requesting' ? 'Requesting…' : 'Enable Camera'}</span>
+                  </button>
+                </div>
               </div>
             )}
 
             <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
 
+            {/* Interactive Non-Destructive Drawing Stage */}
+            <VibeDrawingStage
+              active={isBrushActive}
+              paths={drawingPaths}
+              brushColor={brushColor}
+              brushSize={brushSize}
+              brushMode={brushMode}
+              onPathsChange={handleDrawingChange}
+            />
+
+            {/* Draggable Repositionable Multi-Text Overlays */}
+            <VibeDraggableOverlaysStage
+              overlays={textOverlays}
+              selectedId={selectedOverlayId}
+              editable={isEditingOverlays && !isBrushActive}
+              onSelect={(id) => {
+                setSelectedOverlayId(id);
+                setActiveTool('overlays');
+              }}
+              onMoveOverlay={handleMoveOverlay}
+            />
+
             {/* Overlay Text Caption when in Media mode */}
             {!isTextMode && storyText && (
-              <div className="absolute inset-0 flex items-center justify-center p-8 z-10 pointer-events-none">
-                <p className="text-2xl sm:text-3xl font-extrabold text-white text-center font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]">
+              <div className="absolute inset-x-6 bottom-44 flex items-center justify-center z-10 pointer-events-none">
+                <p className="text-lg font-extrabold text-white text-center px-3 py-1.5 rounded-xl bg-black/55 backdrop-blur-md drop-shadow">
                   {storyText}
                 </p>
               </div>
@@ -648,9 +1200,57 @@ export default function CreateStory() {
               )}
             </div>
 
-            {/* Active Poll Tool */}
+            {/* Active Tool Popovers */}
+            {activeTool === 'adjust' && capturedPreview && !isTextMode && mediaType !== 'audio' && (
+              <div className="absolute top-20 inset-x-4 z-30">
+                <VibeMediaEditorPanel
+                  mediaType={mediaType}
+                  mediaEdits={mediaEdits}
+                  nativeDuration={nativeDuration}
+                  onChangeEdits={(patch) => setMediaEdits((prev) => ({ ...prev, ...patch }))}
+                  onResetEdits={() => setMediaEdits(DEFAULT_MEDIA_EDITS)}
+                  onCaptureVideoCover={mediaType === 'video' ? handleCaptureVideoCover : null}
+                  onClose={() => setActiveTool(null)}
+                />
+              </div>
+            )}
+
+            {activeTool === 'overlays' && (
+              <div className="absolute top-20 inset-x-4 z-30">
+                <VibeTextOverlayPanel
+                  overlays={textOverlays}
+                  selectedId={selectedOverlayId}
+                  onSelect={setSelectedOverlayId}
+                  onAdd={handleAddOverlay}
+                  onUpdate={handleUpdateOverlay}
+                  onDelete={handleDeleteOverlay}
+                  onClose={() => setActiveTool(null)}
+                />
+              </div>
+            )}
+
+            {activeTool === 'freehand' && (
+              <div className="absolute top-20 inset-x-4 z-30">
+                <VibeDrawingToolbar
+                  brushColor={brushColor}
+                  onBrushColorChange={setBrushColor}
+                  brushSize={brushSize}
+                  onBrushSizeChange={setBrushSize}
+                  brushMode={brushMode}
+                  onBrushModeChange={setBrushMode}
+                  canUndo={undoStack.length > 0}
+                  canRedo={redoStack.length > 0}
+                  hasPaths={drawingPaths.length > 0}
+                  onUndo={handleUndoDrawing}
+                  onRedo={handleRedoDrawing}
+                  onClear={handleClearDrawing}
+                  onDone={() => setActiveTool(null)}
+                />
+              </div>
+            )}
+
             {activeTool === 'poll' && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2.5">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Poll Sticker</span>
                   <button
@@ -689,9 +1289,8 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Active Music Picker */}
             {activeTool === 'music' && (
-              <div className="absolute bottom-28 inset-x-4 z-20 p-3 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+              <div className="absolute bottom-28 inset-x-4 z-30 p-3 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
                 <div className="flex items-center justify-between mb-2 px-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/80">Soundtrack</span>
                   <div className="flex items-center gap-2">
@@ -724,10 +1323,10 @@ export default function CreateStory() {
                         key={track.id}
                         onClick={() => { setSelectedMusic(track); setActiveTool(null); }}
                         className={cn(
-                          "w-full min-h-[40px] flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs transition-colors",
+                          'w-full min-h-[40px] flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs transition-colors',
                           selectedMusic?.id === track.id
-                            ? "text-white font-semibold"
-                            : "text-white/80 hover:bg-white/10"
+                            ? 'text-white font-semibold'
+                            : 'text-white/80 hover:bg-white/10'
                         )}
                         style={selectedMusic?.id === track.id ? { background: BRAND_GRADIENT } : undefined}
                       >
@@ -743,11 +1342,10 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Text tool */}
             {activeTool === 'text' && !isTextMode && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Caption Overlay</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/70">Caption</span>
                   <button
                     type="button"
                     onClick={() => setActiveTool(null)}
@@ -758,19 +1356,18 @@ export default function CreateStory() {
                   </button>
                 </div>
                 <input
-                  aria-label="Overlay text"
+                  aria-label="Caption text"
                   type="text"
                   value={storyText}
                   onChange={(e) => setStoryText(e.target.value)}
-                  placeholder="Type caption overlay..."
+                  placeholder="Add a caption..."
                   className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
                 />
               </div>
             )}
 
-            {/* GIF / Stickers */}
             {(activeTool === 'gif' || activeTool === 'stickers') && (
-              <div className="absolute bottom-28 inset-x-4 z-20">
+              <div className="absolute bottom-28 inset-x-4 z-30">
                 <GIFPicker
                   onSelect={(url, gif) => { setSelectedGif({ url, title: gif?.title || 'GIF' }); setActiveTool(null); }}
                   onClose={() => setActiveTool(null)}
@@ -778,9 +1375,8 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Link sticker */}
             {activeTool === 'link' && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Link Sticker</span>
                   <button
@@ -803,9 +1399,8 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Location sticker */}
             {activeTool === 'location' && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Location Sticker</span>
                   <button
@@ -828,9 +1423,8 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Mention sticker */}
             {activeTool === 'mention' && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Mention Creator</span>
                   <button
@@ -853,9 +1447,8 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Q&A Question sticker (dedicated state, isolated from poll) */}
             {activeTool === 'question' && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Q&amp;A Sticker</span>
                   <button
@@ -878,9 +1471,8 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Countdown Timer sticker */}
             {activeTool === 'timer' && (
-              <div className="absolute top-1/4 inset-x-5 z-20 p-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
+              <div className="absolute top-20 inset-x-5 z-30 p-4 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-white/70">Countdown Sticker</span>
                   <button
@@ -908,7 +1500,6 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Selected GIF preview */}
             {selectedGif && (
               <div className="absolute top-20 right-4 z-10 w-24 rounded-2xl overflow-hidden border border-white/40 bg-black/60">
                 <LazyImage src={selectedGif.url} alt={selectedGif.title} className="w-full h-auto" />
@@ -922,7 +1513,6 @@ export default function CreateStory() {
               </div>
             )}
 
-            {/* Recording Timer Pill */}
             {isRecording && (
               <div className="absolute top-16 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold shadow-lg">
                 <span className="w-2.5 h-2.5 rounded-full bg-white" />
@@ -932,31 +1522,54 @@ export default function CreateStory() {
           </div>
 
           {/* Top Studio Bar */}
-          <div className="relative z-20 pt-4 px-4 flex items-center justify-between">
+          <div className="relative z-20 pt-3.5 px-3.5 flex items-center justify-between">
             <button
               type="button"
               onClick={() => navigate(-1)}
               aria-label="Close Vibes studio"
-              className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer"
+              className="w-11 h-11 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/75 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5 text-white" />
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {(canPublish || textOverlays.length > 0 || drawingPaths.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveDraft()}
+                  aria-label="Save draft locally"
+                  className="w-11 h-11 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/75 transition-colors cursor-pointer"
+                >
+                  <Save className="w-4 h-4 text-white" />
+                </button>
+              )}
+
+              {savedDrafts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDraftsDrawerOpen(true)}
+                  aria-label="Open saved drafts"
+                  className="lg:hidden h-11 px-3 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center gap-1 text-xs font-bold text-white cursor-pointer"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{savedDrafts.length}</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleToggleFlash}
                 aria-label={`Flash mode: ${flashMode}`}
-                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer"
+                className="w-11 h-11 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/75 transition-colors cursor-pointer"
               >
-                <Zap className={cn("w-4 h-4", flashMode === 'on' ? "text-amber-400" : "text-white")} />
+                <Zap className={cn('w-4 h-4', flashMode === 'on' ? 'text-amber-400' : 'text-white')} />
               </button>
 
               <button
                 type="button"
                 onClick={handleFlipCamera}
                 aria-label="Switch camera"
-                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer"
+                className="w-11 h-11 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/75 transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4 text-white" />
               </button>
@@ -966,7 +1579,7 @@ export default function CreateStory() {
                 onClick={() => setToolsExpanded((prev) => !prev)}
                 aria-label="Toggle studio tools"
                 aria-expanded={toolsExpanded}
-                className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors cursor-pointer lg:hidden"
+                className="w-11 h-11 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/75 transition-colors cursor-pointer lg:hidden"
               >
                 <Sliders className="w-4 h-4 text-white" />
               </button>
@@ -975,23 +1588,25 @@ export default function CreateStory() {
 
           {/* Mobile Creative Tools Strip */}
           {toolsExpanded && (
-            <div className="relative z-20 px-4 lg:hidden">
-              <div className="bg-black/55 border border-white/15 rounded-2xl p-2 backdrop-blur-xl">
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <div className="relative z-20 px-3 lg:hidden">
+              <div className="bg-black/60 border border-white/15 rounded-2xl p-1.5 backdrop-blur-xl">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                   {CREATIVE_TOOLS.filter((tool) => tool.id !== 'music' || musicLibraryEnabled).map((tool) => {
                     const Icon = tool.icon;
                     const isSelected = activeTool === tool.id;
+                    const disabledAdjust = tool.id === 'adjust' && (!capturedPreview || isTextMode || mediaType === 'audio');
                     return (
                       <button
                         type="button"
                         key={tool.id}
+                        disabled={disabledAdjust}
                         onClick={() => {
                           setActiveTool(isSelected ? null : tool.id);
                           if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
                         }}
                         className={cn(
-                          "min-h-[40px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors",
-                          isSelected ? "text-white" : "text-white/80 hover:bg-white/10"
+                          'min-h-[38px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors disabled:opacity-35',
+                          isSelected ? 'text-white' : 'text-white/80 hover:bg-white/10'
                         )}
                         style={isSelected ? { background: BRAND_GRADIENT } : undefined}
                       >
@@ -1006,28 +1621,75 @@ export default function CreateStory() {
           )}
 
           {/* Bottom Controls */}
-          <div className="relative z-20 pb-5 px-4 space-y-3">
-            {/* Background swatches in Text / Audio modes */}
+          <div className="relative z-20 pb-4 px-3.5 space-y-2.5">
+            {/* Rich Text Controls (Background + Font + Alignment) */}
             {(isTextMode || mediaType === 'audio') && (
-              <div className="flex items-center justify-center gap-2">
-                {STORY_GRADIENTS.map((g) => (
-                  <button
-                    type="button"
-                    key={g.id}
-                    aria-label={`Select ${g.label} background`}
-                    onClick={() => setBackgroundGradient(g.gradient)}
-                    className={cn(
-                      "w-8 h-8 rounded-full border-2 transition-transform cursor-pointer",
-                      backgroundGradient === g.gradient ? "border-white scale-110" : "border-white/30"
-                    )}
-                    style={{ background: g.gradient }}
-                  />
-                ))}
+              <div className="space-y-2 bg-black/45 backdrop-blur-md p-2.5 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-center gap-2">
+                  {VIBE_TEXT_BACKGROUNDS.map((g) => (
+                    <button
+                      type="button"
+                      key={g.id}
+                      aria-label={`Select ${g.label} background`}
+                      onClick={() => {
+                        setBackgroundGradient(g.background);
+                        setTextColor(g.textColor);
+                      }}
+                      className={cn(
+                        'w-7 h-7 rounded-full border-2 transition-transform cursor-pointer',
+                        backgroundGradient === g.background ? 'border-white scale-110' : 'border-white/30'
+                      )}
+                      style={{ background: g.background }}
+                    />
+                  ))}
+                </div>
+                {isTextMode && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-1">
+                      {VIBE_FONT_OPTIONS.map((f) => (
+                        <button
+                          type="button"
+                          key={f.id}
+                          onClick={() => setTextFont(f.id)}
+                          className={cn(
+                            'px-2 py-1 rounded-lg text-[10px] font-bold border cursor-pointer',
+                            textFont === f.id ? 'border-white bg-white/20 text-white' : 'border-white/15 text-white/70'
+                          )}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[
+                        { id: 'left', icon: AlignLeft },
+                        { id: 'center', icon: AlignCenter },
+                        { id: 'right', icon: AlignRight },
+                      ].map((al) => {
+                        const Icon = al.icon;
+                        return (
+                          <button
+                            type="button"
+                            key={al.id}
+                            aria-label={`Align text ${al.id}`}
+                            onClick={() => setTextAlign(al.id)}
+                            className={cn(
+                              'w-7 h-7 rounded-lg flex items-center justify-center border cursor-pointer',
+                              textAlign === al.id ? 'border-white bg-white/20 text-white' : 'border-white/15 text-white/70'
+                            )}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Zoom Selector for Live Camera */}
-            {!capturedPreview && !isTextMode && activeMode !== 'AUDIO' && (
+            {cameraActive && !capturedPreview && !isTextMode && activeMode !== 'AUDIO' && (
               <div className="flex items-center justify-center gap-2">
                 {['0.5', '1x', '2'].map((z) => (
                   <button
@@ -1035,10 +1697,10 @@ export default function CreateStory() {
                     key={z}
                     onClick={() => setZoomLevel(z)}
                     className={cn(
-                      "min-w-[36px] min-h-[36px] rounded-full text-[11px] font-bold transition-all flex items-center justify-center backdrop-blur-md cursor-pointer",
+                      'min-w-[36px] min-h-[36px] rounded-full text-[11px] font-bold transition-all flex items-center justify-center backdrop-blur-md cursor-pointer',
                       zoomLevel === z
-                        ? "bg-white text-black scale-105 shadow-lg"
-                        : "bg-black/50 text-white/80 hover:bg-black/70 border border-white/15"
+                        ? 'bg-white text-black scale-105 shadow-lg'
+                        : 'bg-black/50 text-white/80 hover:bg-black/70 border border-white/15'
                     )}
                   >
                     {z}
@@ -1055,7 +1717,7 @@ export default function CreateStory() {
                 aria-label="Open media gallery"
                 className="flex flex-col items-center gap-1 cursor-pointer"
               >
-                <div className="w-11 h-11 rounded-2xl border border-white/25 bg-black/50 backdrop-blur-md flex items-center justify-center hover:border-white/50 transition-colors">
+                <div className="w-11 h-11 rounded-2xl border border-white/25 bg-black/55 backdrop-blur-md flex items-center justify-center hover:border-white/50 transition-colors">
                   <ImageIcon className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
                 <span className="text-[10px] font-semibold text-white/80">Gallery</span>
@@ -1079,26 +1741,30 @@ export default function CreateStory() {
                   aria-label={
                     capturedPreview
                       ? 'Discard capture and retake'
-                      : isRecording
-                        ? 'Stop video recording'
-                        : activeMode === 'VIDEO'
-                          ? 'Start video recording'
-                          : 'Capture Vibe'
+                      : !cameraActive
+                        ? 'Enable camera'
+                        : isRecording
+                          ? 'Stop video recording'
+                          : activeMode === 'VIDEO'
+                            ? 'Start video recording'
+                            : 'Capture Vibe'
                   }
-                  className="relative w-18 h-18 rounded-full p-1.5 shadow-xl active:scale-95 transition-transform cursor-pointer"
+                  className="relative w-16 h-16 rounded-full p-1.5 shadow-xl active:scale-95 transition-transform cursor-pointer"
                   style={{ background: isRecording ? '#E11D48' : BRAND_GRADIENT }}
                 >
                   <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
                     {capturedPreview ? (
-                      <Check className="w-7 h-7 text-slate-900" aria-hidden="true" />
+                      <Check className="w-6 h-6 text-slate-900" aria-hidden="true" />
+                    ) : !cameraActive ? (
+                      <Camera className="w-6 h-6 text-slate-900" aria-hidden="true" />
                     ) : isRecording ? (
-                      <Square className="w-6 h-6 text-rose-600 fill-rose-600" aria-hidden="true" />
+                      <Square className="w-5 h-5 text-rose-600 fill-rose-600" aria-hidden="true" />
                     ) : activeMode === 'VIDEO' ? (
                       <Video className="w-6 h-6 text-rose-600" aria-hidden="true" />
                     ) : activeMode === 'AUDIO' ? (
                       <Mic className="w-6 h-6 text-slate-900" aria-hidden="true" />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-300" />
+                      <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-300" />
                     )}
                   </div>
                 </button>
@@ -1106,19 +1772,21 @@ export default function CreateStory() {
 
               <button
                 type="button"
-                onClick={handleFlipCamera}
-                aria-label="Flip camera orientation"
+                onClick={() => setAudienceModalOpen(true)}
+                aria-label="Choose Vibe audience"
                 className="flex flex-col items-center gap-1 cursor-pointer"
               >
-                <div className="w-11 h-11 rounded-2xl bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-black/70 transition-colors">
-                  <RefreshCw className="w-5 h-5 text-white" aria-hidden="true" />
+                <div className="w-11 h-11 rounded-2xl bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center hover:border-white/50 transition-colors">
+                  <Shield className="w-5 h-5 text-white" aria-hidden="true" />
                 </div>
-                <span className="text-[10px] font-semibold text-white/80">Flip</span>
+                <span className="text-[10px] font-semibold text-white/85 truncate max-w-[68px]">
+                  {audienceMeta.shortLabel}
+                </span>
               </button>
             </div>
 
             {/* Capture Mode Selector */}
-            <div className="flex items-center justify-center gap-2 overflow-x-auto no-scrollbar pt-1">
+            <div className="flex items-center justify-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
               {CAPTURE_MODES.map((mode) => {
                 const isActive = activeMode === mode;
                 return (
@@ -1132,8 +1800,8 @@ export default function CreateStory() {
                       }
                     }}
                     className={cn(
-                      "px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all whitespace-nowrap cursor-pointer",
-                      isActive ? "text-white shadow-md" : "text-white/60 hover:text-white"
+                      'px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wider uppercase transition-all whitespace-nowrap cursor-pointer',
+                      isActive ? 'text-white shadow-md' : 'text-white/60 hover:text-white'
                     )}
                     style={isActive ? { background: BRAND_GRADIENT } : undefined}
                   >
@@ -1143,57 +1811,37 @@ export default function CreateStory() {
               })}
             </div>
 
-            {/* Audience + Publish CTA */}
+            {/* Preview + Publish Bar */}
             {canPublish && (
-              <div className="pt-2 space-y-2.5">
-                <div role="radiogroup" aria-label="Vibe audience" className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'public', label: 'Everyone', icon: Globe },
-                    { id: 'followers', label: 'Followers', icon: Users },
-                    { id: 'private', label: 'Only me', icon: Lock },
-                  ].map((opt) => {
-                    const Icon = opt.icon;
-                    const isActive = audience === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={isActive}
-                        onClick={() => setAudience(opt.id)}
-                        className={cn(
-                          'min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl py-1.5 text-xs font-bold border transition cursor-pointer',
-                          isActive
-                            ? 'bg-white/20 border-white/50 text-white'
-                            : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                        )}
-                      >
-                        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="pt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(true)}
+                  aria-label="Preview Vibe"
+                  className="min-h-[46px] px-4 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4" aria-hidden="true" />
+                  <span>Preview</span>
+                </button>
                 <button
                   type="button"
                   onClick={handlePublishStory}
-                  disabled={publishing}
-                  className="w-full min-h-[46px] py-3 rounded-2xl text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50 cursor-pointer"
+                  className="flex-1 min-h-[46px] py-3 rounded-2xl text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-transform cursor-pointer"
                   style={{ background: BRAND_GRADIENT }}
                 >
-                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {publishing ? 'Publishing Vibe…' : 'Publish Vibe'}
+                  <Send className="w-4 h-4" aria-hidden="true" />
+                  <span>Publish Vibe</span>
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Desktop Guide & Gradient Presets */}
+        {/* Right Column: Desktop Guide, Audience Summary & Presets */}
         <div className="hidden lg:flex flex-col justify-between h-[780px] w-80 py-2">
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-white/50 block mb-3">
+              <span className={cn('text-[11px] font-bold uppercase tracking-widest block mb-2.5', isDark ? 'text-white/50' : 'text-slate-500')}>
                 Modes
               </span>
               <div className="space-y-1.5">
@@ -1205,10 +1853,14 @@ export default function CreateStory() {
                       key={mode}
                       onClick={() => setActiveMode(mode)}
                       className={cn(
-                        "w-full min-h-[40px] text-left px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border",
+                        'w-full min-h-[40px] text-left px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border',
                         active
-                          ? "bg-white/15 text-white border-white/30"
-                          : "text-white/60 border-transparent hover:bg-white/5 hover:text-white"
+                          ? isDark
+                            ? 'bg-white/15 text-white border-white/30'
+                            : 'bg-slate-900 text-white border-slate-900'
+                          : isDark
+                            ? 'text-white/60 border-transparent hover:bg-white/5 hover:text-white'
+                            : 'text-slate-700 border-slate-200 bg-white hover:bg-slate-50'
                       )}
                     >
                       <span>{mode}</span>
@@ -1219,40 +1871,163 @@ export default function CreateStory() {
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 space-y-2 text-xs text-white/75">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-white/60 block">
-                Studio Guide
-              </span>
-              <p>Tap shutter for photo, or hold in Story mode for video.</p>
-              <p>Switch to TEXT mode for typography cards with custom gradients.</p>
-              <p>Add interactive Poll, Q&amp;A, Countdown, Mention, or Link stickers before publishing.</p>
+            {/* Audience Selector Card */}
+            <div className={cn(
+              'p-4 rounded-2xl border space-y-2.5',
+              isDark ? 'bg-white/[0.04] border-white/10' : 'bg-white border-slate-200 shadow-sm'
+            )}>
+              <div className="flex items-center justify-between">
+                <span className={cn('text-[11px] font-bold uppercase tracking-wider', isDark ? 'text-white/60' : 'text-slate-500')}>
+                  Audience Privacy
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAudienceModalOpen(true)}
+                  className="text-xs font-bold text-indigo-400 hover:underline cursor-pointer"
+                >
+                  Change
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />
+                <span className="text-sm font-bold">{audienceMeta.label}</span>
+              </div>
+              <p className={cn('text-xs leading-relaxed', isDark ? 'text-white/65' : 'text-slate-600')}>
+                {audienceMeta.description}
+                {audience === VIBE_AUDIENCES.SELECTED && ` (${selectedUsers.length} selected)`}
+              </p>
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 space-y-3">
-            <span className="text-xs font-bold text-white/80 block">Canvas Gradients</span>
+          <div className={cn(
+            'p-4 rounded-2xl border space-y-3',
+            isDark ? 'bg-white/[0.04] border-white/10' : 'bg-white border-slate-200 shadow-sm'
+          )}>
+            <span className={cn('text-xs font-bold block', isDark ? 'text-white/80' : 'text-slate-800')}>
+              Text Card Themes
+            </span>
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {STORY_GRADIENTS.map((d) => (
+              {VIBE_TEXT_BACKGROUNDS.map((d) => (
                 <button
                   type="button"
                   key={d.id}
                   onClick={() => {
-                    setBackgroundGradient(d.gradient);
+                    setBackgroundGradient(d.background);
+                    setTextColor(d.textColor);
                     if (activeMode !== 'TEXT' && !mediaFile) setActiveMode('TEXT');
-                    toast.success(`${d.label} gradient applied`);
                   }}
                   aria-label={`Apply ${d.label} gradient`}
                   className={cn(
-                    "w-11 h-14 rounded-xl border-2 transition-all flex-shrink-0 cursor-pointer",
-                    backgroundGradient === d.gradient ? "border-white scale-105" : "border-white/20 hover:border-white/50"
+                    'w-10 h-12 rounded-xl border-2 transition-all flex-shrink-0 cursor-pointer',
+                    backgroundGradient === d.background ? 'border-white scale-105 ring-2 ring-indigo-500' : 'border-white/25 hover:border-white/60'
                   )}
-                  style={{ background: d.gradient }}
+                  style={{ background: d.background }}
                 />
               ))}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Audience & Close Circle Picker Modal */}
+      <VibeAudienceModal
+        open={audienceModalOpen}
+        isDark={isDark}
+        userId={user?.uid}
+        audience={audience}
+        selectedUsers={selectedUsers}
+        onSelectAudience={setAudience}
+        onChangeSelectedUsers={setSelectedUsers}
+        onClose={() => setAudienceModalOpen(false)}
+      />
+
+      {/* Inline Preview Modal using shared VibeRenderer */}
+      <VibePreviewModal
+        open={previewOpen}
+        previewVibe={previewVibeObject}
+        audience={audience}
+        selectedCount={selectedUsers.length}
+        onClose={() => setPreviewOpen(false)}
+        onPublish={handlePublishStory}
+      />
+
+      {/* Upload Lifecycle / Progress / Cancel / Retry Overlay */}
+      <VibePublishOverlay
+        state={uploadState}
+        progress={uploadProgress}
+        error={uploadError}
+        isDark={isDark}
+        onCancel={handleCancelUpload}
+        onRetry={handlePublishStory}
+        onSaveDraft={async () => {
+          await handleSaveDraft();
+          setUploadState(VIBE_UPLOAD_STATES.IDLE);
+        }}
+        onDismiss={() => setUploadState(VIBE_UPLOAD_STATES.IDLE)}
+      />
+
+      {/* Saved Drafts Drawer Modal */}
+      {draftsDrawerOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setDraftsDrawerOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Saved Vibe drafts"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'w-full max-w-md rounded-3xl p-5 border shadow-2xl space-y-3',
+              isDark ? 'bg-[#0A102D] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold">Saved Vibe Drafts</h3>
+              <button
+                type="button"
+                onClick={() => setDraftsDrawerOpen(false)}
+                aria-label="Close drafts"
+                className="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {savedDrafts.map((d) => (
+                <div
+                  key={d.id}
+                  className={cn(
+                    'flex items-center justify-between gap-2 p-3 rounded-2xl border',
+                    isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleResumeDraft(d)}
+                    className="flex-1 text-left min-w-0 cursor-pointer"
+                  >
+                    <p className="text-xs font-bold capitalize">
+                      {d.type} Vibe • {getAudienceMeta(d.visibility).shortLabel}
+                    </p>
+                    <p className={cn('text-[11px] truncate', isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      {d.content || d.mediaName || 'Saved local draft'}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDraft(d.id)}
+                    aria-label="Delete draft"
+                    className="w-9 h-9 rounded-xl hover:bg-rose-600/20 text-rose-400 flex items-center justify-center cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

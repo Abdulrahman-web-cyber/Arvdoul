@@ -2858,8 +2858,9 @@ class UltimateMessagingService {
     const validTypes = Object.values(MESSAGING_CONFIG.MESSAGE_TYPES);
     if (!validTypes.includes(data.type)) throw new Error(`Invalid type: ${data.type}`);
     if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
-      if (!data.content || !data.content.trim()) throw new Error('Message cannot be empty');
-      if (data.content.length > MESSAGING_CONFIG.TEXT_MAX_LENGTH) throw new Error(`Message too long (max ${MESSAGING_CONFIG.TEXT_MAX_LENGTH} characters)`);
+      const hasVibeAttachment = data.attachment?.type === 'vibe' && data.attachment?.vibeId;
+      if (!hasVibeAttachment && (!data.content || !data.content.trim())) throw new Error('Message cannot be empty');
+      if (data.content && data.content.length > MESSAGING_CONFIG.TEXT_MAX_LENGTH) throw new Error(`Message too long (max ${MESSAGING_CONFIG.TEXT_MAX_LENGTH} characters)`);
     }
     if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.GIF) {
       if (!data.media?.url && !data.media?.file && !data.content) throw new Error('GIF URL or file required');
@@ -2893,6 +2894,8 @@ class UltimateMessagingService {
       encrypted: !!encryptedPayload,
       encryptedData: encryptedPayload,
       media: mediaInfo,
+      attachment: validated.attachment || null,
+      metadata: validated.metadata || null,
       replyTo: validated.replyTo || null,
       forwardFrom: validated.forwardFrom || null,
       mentions: validated.mentions || [],
@@ -2914,6 +2917,12 @@ class UltimateMessagingService {
   }
 
   _getMessagePreview(msg) {
+    if (msg.attachment?.type === 'vibe') {
+      if (msg.metadata?.type === 'vibe_reply') {
+        return msg.content ? `Vibe reply: ${msg.content.slice(0, 40)}` : 'Replied to your Vibe';
+      }
+      return msg.content ? `Shared a Vibe: ${msg.content.slice(0, 40)}` : 'Shared a Vibe';
+    }
     if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
       if (msg.content) return msg.content.length > 50 ? msg.content.slice(0, 50) + '…' : msg.content;
       if (msg.encrypted) return '[Encrypted]';

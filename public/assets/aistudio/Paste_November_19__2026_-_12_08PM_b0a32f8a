@@ -1,0 +1,2224 @@
+ARVDOUL VIBES — PART 2
+
+Social Integration, Interactions, Messaging, Notifications, Coins, XP & Social Identity
+
+(PART 2 — IMPLEMENTATION SPECIFICATION)
+
+Objective: Transform the foundational Vibes experience delivered in Part 1 into a fully connected social experience within Arvdoul.
+
+Part 2 connects Vibes to Arvdoul's existing social graph, profiles, messaging, notifications, Coins, XP, levels, achievements and moderation systems.
+
+This is not a standalone social application. Vibes must operate as a native part of Arvdoul's existing ecosystem.
+
+The implementation must preserve Part 1 functionality and extend it through reusable, secure and maintainable integrations.
+
+
+---
+
+1. Product definition
+
+Part 1 established the foundational Vibes experience:
+
+- Vibes Feed.
+- Full-screen Viewer.
+- Vibes Studio.
+- Media creation and editing.
+- Publishing.
+- Audience privacy.
+- Drafts.
+- Expiration.
+- Archive.
+- Basic management.
+
+Part 2 builds the social layer around that foundation.
+
+Users should be able to interact with Vibes, share them, communicate with creators, manage relationships, receive relevant notifications and participate in Arvdoul's existing virtual economy and progression systems.
+
+1.1 Part 2 product objectives
+
+1. Make Vibes socially interactive.
+2. Connect Vibes with existing profiles.
+3. Integrate messaging and group conversations.
+4. Implement secure sharing.
+5. Connect Vibes to notifications.
+6. Integrate Coins and gifting.
+7. Integrate XP and levels.
+8. Support achievements and milestones.
+9. Enforce social relationship permissions.
+10. Provide creator-side engagement information.
+11. Prevent interaction abuse and economic manipulation.
+12. Maintain a consistent experience across Arvdoul.
+
+1.2 Product boundaries
+
+Part 2 must integrate with existing systems instead of rebuilding them.
+
+For example:
+
+- If Arvdoul already has a messaging service, extend it.
+- If Arvdoul already has a Coins wallet, integrate it.
+- If Arvdoul already has an XP engine, extend its event handling.
+- If Arvdoul already has notifications, add Vibes notification types.
+- If Arvdoul already has a social graph, use its authoritative relationship model.
+
+Do not create duplicate wallets, notification systems, messaging collections, profile databases or progression engines.
+
+
+---
+
+2. Mandatory repository inspection
+
+Before implementation, inspect the actual Part 1 implementation and all existing Arvdoul systems required for integration.
+
+Do not assume Part 1's conceptual architecture matches the final repository.
+
+2.1 Inspect Part 1
+
+Inspect:
+
+- Vibe data contracts.
+- Vibes services.
+- Vibes hooks.
+- Viewer implementation.
+- Feed implementation.
+- Publishing operations.
+- Audience authorization.
+- Expiration logic.
+- Archive implementation.
+- Storage paths.
+- Firestore security rules.
+- Existing tests.
+
+Identify the actual data structures and extension points.
+
+2.2 Inspect existing social systems
+
+Inspect:
+
+- User profiles.
+- Followers.
+- Connections and friend requests.
+- Close Circle.
+- Blocks.
+- Mutes.
+- Restrictions.
+- User privacy settings.
+- Account status.
+- Profile visibility.
+- Existing social interaction services.
+
+2.3 Inspect messaging
+
+Inspect:
+
+- Direct messages.
+- Group conversations.
+- Message schemas.
+- Conversation membership.
+- Message permissions.
+- Attachments.
+- Message delivery.
+- Read receipts.
+- Conversation previews.
+- Existing message notification handling.
+
+2.4 Inspect notifications
+
+Inspect:
+
+- Notification schema.
+- Notification creation.
+- Notification delivery.
+- In-app notification center.
+- Push notifications.
+- FCM token management.
+- Notification preferences.
+- Notification deduplication.
+- Read and unread states.
+
+2.5 Inspect Coins and economy
+
+Inspect:
+
+- Wallet schema.
+- Coin balances.
+- Transaction ledger.
+- Coin purchases.
+- Coin spending.
+- Transfers.
+- Gifts.
+- Refunds.
+- Revenue accounting.
+- Existing conversion rates.
+- Economy security rules.
+- Server-side transaction operations.
+
+Critical: Do not introduce a new conversion rate or currency model. Use the existing authoritative economic configuration. Identify and resolve any existing inconsistencies before integrating Vibes gifting.
+
+2.6 Inspect XP and progression
+
+Inspect:
+
+- XP schema.
+- User level calculation.
+- Experience history.
+- Achievement system.
+- Daily or activity progression.
+- Anti-abuse controls.
+- Existing rewards.
+- Level-up notifications.
+- Titles and profile identity.
+
+Do not create a second XP engine.
+
+2.7 Produce an integration map
+
+For each integration, document:
+
+System	Existing implementation	Required changes	Integration method
+
+Profiles	Inspect	Vibes identity and display	Reuse
+Social graph	Inspect	Audience and interaction checks	Reuse
+Messaging	Inspect	Vibe sharing and replies	Extend
+Notifications	Inspect	Vibes event types	Extend
+Coins	Inspect	Gifts and transactions	Extend
+XP	Inspect	Verified activity events	Extend
+Achievements	Inspect	Vibe milestones	Extend
+Moderation	Inspect	Vibe-specific reports	Extend
+
+
+Do not begin implementation until the integration boundaries are understood.
+
+
+---
+
+3. Part 2 architecture
+
+Part 2 should extend the existing Vibes modules with dedicated social capabilities.
+
+Suggested logical architecture:
+
+Vibes
+│
+├── Social
+│   ├── VibeReactions
+│   ├── VibeReplies
+│   ├── VibeSharing
+│   ├── VibeEngagement
+│   └── VibeInteractionPermissions
+│
+├── Messaging
+│   ├── VibeMessageComposer
+│   ├── VibeMessageAttachment
+│   ├── VibeSharePreview
+│   └── VibeConversationIntegration
+│
+├── Notifications
+│   ├── VibeNotificationEvents
+│   ├── VibeNotificationRenderer
+│   └── VibeNotificationPreferences
+│
+├── Economy
+│   ├── VibeGiftComposer
+│   ├── VibeGiftCatalog
+│   ├── VibeGiftTransactions
+│   └── VibeGiftHistory
+│
+├── Progression
+│   ├── VibeXPEvents
+│   ├── VibeAchievements
+│   ├── VibeMilestones
+│   └── VibeProgressionIntegration
+│
+├── Profile
+│   ├── VibeProfileIntegration
+│   ├── VibeHighlights
+│   └── VibeIdentity
+│
+├── Moderation
+│   ├── VibeReporting
+│   ├── VibeBlocking
+│   ├── VibeRestriction
+│   └── VibeSafety
+│
+└── Analytics
+    ├── VibeEngagementEvents
+    └── VibeCreatorInsights
+
+This is a logical separation of responsibilities, not a requirement to create every directory.
+
+Preserve existing folder conventions and service boundaries.
+
+3.1 Architectural rules
+
+- Keep interaction logic outside presentation components.
+- Use existing services where possible.
+- Use trusted backend operations for sensitive writes.
+- Separate social interactions from financial transactions.
+- Separate XP events from Coin transactions.
+- Use consistent identifiers across systems.
+- Make event processing idempotent.
+- Avoid duplicate notifications.
+- Avoid excessive Firestore listeners.
+- Keep future creator monetization extensible.
+- Preserve backward compatibility with Part 1.
+
+
+---
+
+4. Vibe reactions
+
+image_group{"query":["premium mobile social media story emoji reaction interface minimal dark UI","modern story viewer quick reactions floating reaction panel mobile interface","luxury mobile social application reaction selector glassmorphism"],"aspect_ratio":"5:4","layout":"carousel"}
+
+Reactions allow viewers to express a lightweight response to a Vibe.
+
+4.1 Reaction capabilities
+
+Support a curated reaction set, such as:
+
+- Like.
+- Love.
+- Laugh.
+- Celebrate.
+- Wow.
+- Support.
+- Sad.
+
+The exact visual assets must follow Arvdoul's iconography and design system.
+
+Avoid using arbitrary emoji as the entire UI design language.
+
+4.2 Reaction behavior
+
+Users should be able to:
+
+- React to a Vibe.
+- Change their reaction.
+- Remove their reaction.
+- See their own selected reaction.
+- See aggregate reaction counts where permitted.
+- View reaction details where the creator has access.
+- Avoid creating duplicate reactions.
+
+Each user should have at most one active reaction per Vibe unless the existing product model deliberately specifies otherwise.
+
+4.3 Reaction data
+
+Logical model:
+
+interface VibeReaction {
+  id: string;
+  vibeId: string;
+  ownerId: string;
+  userId: string;
+
+  type:
+    | "like"
+    | "love"
+    | "laugh"
+    | "celebrate"
+    | "wow"
+    | "support"
+    | "sad";
+
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+The backend must enforce reaction ownership and eligibility.
+
+Do not trust client-provided user IDs.
+
+4.4 Reaction aggregation
+
+Avoid repeatedly reading every reaction document just to display a count.
+
+Use appropriate aggregation or maintained counters.
+
+Requirements:
+
+- Counts remain consistent.
+- Duplicate submissions do not increase counts.
+- Reaction changes update the correct aggregate.
+- Reaction deletion decrements the correct aggregate.
+- Deleted Vibes cannot receive new reactions.
+- Unauthorized users cannot react.
+- Counter updates are safe under concurrent requests.
+
+Do not allow clients to write arbitrary reaction counts.
+
+4.5 Reaction notifications
+
+Create appropriate creator notifications.
+
+Rules:
+
+- Do not notify a creator about their own reaction.
+- Deduplicate repeated reaction notifications where appropriate.
+- Avoid sending excessive notifications for reaction changes.
+- Respect notification preferences.
+- Respect privacy and account restrictions.
+
+
+---
+
+5. Vibe replies
+
+Replies enable conversations around individual Vibes.
+
+5.1 Reply capabilities
+
+Users should be able to:
+
+- Send a text reply.
+- View permitted replies.
+- Edit their own reply where supported by Arvdoul's messaging conventions.
+- Delete their own reply.
+- Report inappropriate replies.
+- See reply timestamps.
+- See appropriate sender identity.
+
+Reply interactions must be available only when the creator's audience and interaction permissions allow them.
+
+5.2 Reply permissions
+
+Support configurable reply policies:
+
+- Everyone eligible to view.
+- Followers.
+- Connections.
+- Close Circle.
+- Nobody.
+
+The policy must be evaluated by the backend.
+
+Do not assume viewing permission automatically grants reply permission.
+
+5.3 Reply data
+
+Logical model:
+
+interface VibeReply {
+  id: string;
+  vibeId: string;
+
+  senderId: string;
+  recipientId: string;
+
+  text: string;
+
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+
+  status: "active" | "deleted" | "hidden";
+}
+
+Adapt this to the existing message architecture if Vibe replies are implemented as message objects.
+
+5.4 Reply experience
+
+The Viewer should provide a compact reply entry point.
+
+Design requirements:
+
+- Contextual reply field.
+- Appropriate keyboard behavior.
+- Clear send action.
+- Loading feedback.
+- Sending state.
+- Error recovery.
+- Character limit.
+- Accessible controls.
+- Safe-area support.
+- Smooth keyboard transitions.
+
+Do not allow the reply interface to obscure the Vibe unnecessarily.
+
+5.5 Messaging integration
+
+Vibe replies should connect to the creator's direct conversation with the viewer using the existing messaging architecture.
+
+The system should preserve:
+
+- Sender identity.
+- Recipient identity.
+- Vibe reference.
+- Reply content.
+- Timestamp.
+- Conversation context.
+
+If the creator cannot receive a message because of privacy or blocking restrictions, handle the reply action accordingly.
+
+Do not create a separate conversation system solely for Vibes.
+
+
+---
+
+6. Vibe sharing
+
+Sharing makes Vibes discoverable through Arvdoul's existing social graph.
+
+6.1 Sharing options
+
+Support:
+
+- Share to a direct conversation.
+- Share to a group conversation.
+- Share to eligible connections.
+- Copy a permitted Vibe link.
+- Use the existing system share mechanism where appropriate.
+
+Sharing must respect the Vibe's visibility rules.
+
+6.2 Share preview
+
+The preview should include:
+
+- Creator identity.
+- Vibe thumbnail where permitted.
+- Content type.
+- Appropriate expiration information.
+- Link to the Vibe where access is authorized.
+
+Do not expose private media through public preview metadata.
+
+6.3 Sharing rules
+
+- Private Vibes cannot be publicly forwarded.
+- Selected-audience Vibes cannot be shared with unauthorized recipients.
+- Expired Vibes cannot be opened through old shares.
+- Deleted Vibes cannot be opened through old shares.
+- Blocked users cannot use sharing to bypass restrictions.
+- Group members must be evaluated individually where necessary.
+
+A share record does not grant access to the underlying Vibe.
+
+6.4 Sharing data
+
+Logical model:
+
+interface VibeShare {
+  id: string;
+
+  vibeId: string;
+  senderId: string;
+
+  destinationType:
+    | "direct"
+    | "group"
+    | "link"
+    | "system";
+
+  destinationId?: string;
+
+  createdAt: Timestamp;
+}
+
+Use existing message attachment models when possible.
+
+6.5 External links
+
+If external Vibe links are supported:
+
+- Use unguessable identifiers.
+- Do not expose private media URLs.
+- Require authentication where appropriate.
+- Recheck current authorization on access.
+- Enforce expiration.
+- Enforce deletion.
+- Avoid permanent access tokens.
+- Apply abuse protection.
+
+
+---
+
+7. Messaging integration
+
+image_group{"query":["premium mobile chat interface dark glassmorphism conversation shared story card","luxury mobile messenger chat with social story preview interface","premium mobile messaging app conversation attachment composer minimal interface"],"aspect_ratio":"5:4","layout":"bento"}
+
+Vibes should be a first-class content type within Arvdoul messaging.
+
+7.1 Share Vibes in conversations
+
+Users should be able to share eligible Vibes in:
+
+- One-to-one conversations.
+- Group conversations.
+
+The message should render as a dedicated Vibe attachment, not as a generic URL.
+
+7.2 Message attachment model
+
+Logical model:
+
+interface VibeMessageAttachment {
+  type: "vibe";
+
+  vibeId: string;
+  ownerId: string;
+
+  thumbnailPath?: string;
+
+  expiresAt: Timestamp;
+}
+
+Do not duplicate original media inside every conversation.
+
+Reference the canonical Vibe document and media resources.
+
+7.3 Conversation rendering
+
+A Vibe attachment should display:
+
+- Creator avatar.
+- Creator name.
+- Vibe preview.
+- Content type.
+- Expiration state where relevant.
+- Appropriate access state.
+
+If the original Vibe is deleted, expired or no longer accessible, show an unavailable-content state rather than a broken media element.
+
+7.4 Reply-to-Vibe behavior
+
+When a viewer sends a reply:
+
+1. Validate the reply permission.
+2. Validate both user accounts.
+3. Validate the Vibe's active status.
+4. Validate audience eligibility.
+5. Check blocking and restrictions.
+6. Resolve or create the appropriate conversation using the existing service.
+7. Store the contextual reply.
+8. Update conversation previews.
+9. Create the appropriate notification.
+
+All operations must follow the existing messaging consistency model.
+
+7.5 Group sharing
+
+Group sharing must:
+
+- Verify sender membership.
+- Verify conversation permissions.
+- Prevent unauthorized attachment access.
+- Respect individual Vibe access.
+- Avoid exposing private content through cached previews.
+- Handle members joining or leaving.
+- Handle expired Vibes.
+
+A group conversation's membership must never automatically grant access to a private Vibe.
+
+
+---
+
+8. Social profile integration
+
+image_group{"query":["premium modern social media user profile dark navy glass UI avatar stats content tabs","luxury mobile social profile interface light theme minimal glass design","premium mobile creator profile story highlights circles UI"],"aspect_ratio":"5:4","layout":"carousel"}
+
+Vibes should be connected to the identity system already established by Arvdoul profiles.
+
+8.1 Profile Vibes section
+
+Integrate:
+
+- Active Vibes.
+- User's own Vibes.
+- Highlights.
+- Appropriate visibility indicators.
+- Creator identity.
+- Vibe archive access for the owner.
+
+Do not create a second profile screen.
+
+Extend the existing profile architecture.
+
+8.2 Profile avatar integration
+
+If a user has active Vibes:
+
+- Show the appropriate Vibe ring.
+- Distinguish unseen content.
+- Make the avatar entry point functional.
+- Respect profile visibility.
+- Avoid showing restricted Vibes to unauthorized viewers.
+
+If there are no active Vibes, use the existing profile avatar presentation.
+
+8.3 Highlights
+
+Extend Part 1's foundational Highlights capability.
+
+Support:
+
+- Highlight collections.
+- Custom titles.
+- Cover selection.
+- Reordering.
+- Adding archived Vibes.
+- Removing Vibes.
+- Deleting Highlights.
+- Public or appropriately restricted visibility.
+- Opening Highlight content.
+
+A Highlight must not make an otherwise unauthorized Vibe accessible.
+
+The system must preserve the original Vibe's access restrictions or apply a separately authorized Highlight visibility policy that never broadens access without explicit creator authorization.
+
+8.4 Profile display consistency
+
+Use the same:
+
+- Profile identity.
+- Avatar.
+- Username.
+- Display name.
+- Verification state.
+- Privacy model.
+- Relationship model.
+
+Do not introduce inconsistent copies of user identity data.
+
+
+---
+
+9. Social graph integration
+
+Vibes must understand Arvdoul's actual relationship model.
+
+9.1 Relationship types
+
+Integrate with existing:
+
+- Followers.
+- Connections.
+- Friend relationships.
+- Friend requests.
+- Close Circle.
+- Blocks.
+- Mutes.
+- Restrictions.
+
+Do not invent a new relationship system.
+
+9.2 Permission matrix
+
+Evaluate the relationship between creator and viewer for every sensitive operation.
+
+Relationship	View	Reply	Share
+
+Eligible public viewer	Subject to visibility	Subject to reply policy	Subject to sharing policy
+Follower	Subject to visibility	Subject to reply policy	Subject to sharing policy
+Connection	Subject to visibility	Subject to reply policy	Subject to sharing policy
+Close Circle member	Subject to visibility	Subject to reply policy	Subject to sharing policy
+Selected viewer	Only if selected	Subject to reply policy	Subject to sharing policy
+Blocked user	No	No	No
+Restricted user	According to restriction policy	Restricted	Restricted
+Creator	Own Vibes	Not applicable	Subject to sharing policy
+
+
+This table describes general behavior, not automatic permissions. The authoritative audience configuration and social graph must determine the final decision.
+
+9.3 Relationship changes
+
+Handle:
+
+- Follow/unfollow.
+- Connection request accepted.
+- Connection removed.
+- Close Circle membership added.
+- Close Circle membership removed.
+- Block.
+- Unblock.
+- Restriction.
+- Account suspension.
+- Account deletion.
+
+Permission changes must take effect without requiring users to reinstall the application.
+
+
+---
+
+10. Notifications integration
+
+image_group{"query":["premium mobile notifications center dark glassmorphism social application UI","luxury mobile social activity notification list light theme design","minimal premium mobile push notification interface dark navy"],"aspect_ratio":"5:4","layout":"carousel"}
+
+Vibes must integrate with Arvdoul's existing notification center.
+
+Do not build a separate notification platform.
+
+10.1 Notification events
+
+Support relevant events:
+
+Event	Recipient
+
+New Vibe reaction	Creator
+New Vibe reply	Creator
+Vibe shared with user	Recipient
+Vibe shared in group	Eligible group members
+Vibe milestone	Creator
+Coin gift received	Creator
+XP level-up	Relevant user
+Achievement unlocked	Relevant user
+Vibe management alert	Creator
+
+
+Notifications must only be generated when the underlying event is valid.
+
+10.2 Notification content
+
+Examples:
+
+- A user reacted to your Vibe.
+- A user replied to your Vibe.
+- A user shared a Vibe with you.
+- You received a Vibe gift.
+- You reached a new level.
+- You unlocked an achievement.
+
+Use appropriate identity and contextual information.
+
+Avoid revealing private Vibe content inside lock-screen notifications.
+
+10.3 Notification actions
+
+Where supported, users should be able to:
+
+- Open the relevant Vibe.
+- Open the relevant conversation.
+- Open the creator's profile.
+- Open their Coin transaction history.
+- Open their progression details.
+
+All deep links must revalidate authorization.
+
+10.4 Notification preferences
+
+Integrate Vibes into existing notification settings.
+
+Provide controls for:
+
+- Reactions.
+- Replies.
+- Shares.
+- Gifts.
+- Achievements.
+- Progression milestones.
+
+Respect global notification preferences, muted conversations and user-specific restrictions.
+
+10.5 Notification reliability
+
+Implement:
+
+- Server-side notification generation.
+- Event deduplication.
+- Appropriate batching.
+- Retry handling.
+- Read/unread state.
+- Expired-content handling.
+- Push delivery failure handling.
+
+Do not create duplicate notifications when backend events are retried.
+
+
+---
+
+11. Coins integration
+
+image_group{"query":["premium virtual coins gifting interface mobile dark glassmorphism gold blue design","luxury digital wallet mobile interface coin balance transaction history dark UI","premium social app virtual gift selection panel mobile interface"],"aspect_ratio":"5:4","layout":"bento"}
+
+Coins are Arvdoul's existing virtual currency.
+
+Part 2 integrates Vibe gifting with the existing economic system.
+
+Do not build a second wallet.
+
+11.1 Gift experience
+
+Allow viewers to send eligible Coins-based gifts to Vibe creators.
+
+The gift experience should be:
+
+- Accessible from the Viewer.
+- Simple to understand.
+- Visually polished.
+- Transparent about costs.
+- Protected against accidental spending.
+- Securely processed.
+
+11.2 Gift catalogue
+
+Integrate the existing gift catalogue if available.
+
+If no suitable catalogue exists, establish a small, extensible Vibe gift catalogue.
+
+Possible categories:
+
+- Basic appreciation gifts.
+- Premium gifts.
+- Special occasion gifts.
+- Exclusive visual gifts.
+
+Each gift should have:
+
+interface VibeGiftDefinition {
+  id: string;
+
+  name: string;
+  description?: string;
+
+  coinCost: number;
+
+  asset: string;
+
+  enabled: boolean;
+
+  sortOrder: number;
+}
+
+The catalogue's authoritative cost must come from trusted backend configuration.
+
+Do not accept arbitrary client-supplied gift prices.
+
+11.3 Gift transaction
+
+Logical transaction model:
+
+interface VibeGiftTransaction {
+  id: string;
+
+  vibeId: string;
+
+  senderId: string;
+  recipientId: string;
+
+  giftId: string;
+
+  coinAmount: number;
+
+  status:
+    | "pending"
+    | "completed"
+    | "failed"
+    | "refunded";
+
+  createdAt: Timestamp;
+  completedAt?: Timestamp;
+}
+
+Adapt this to the existing authoritative transaction ledger.
+
+11.4 Gift workflow
+
+flowchart TD
+    A[Viewer Opens Gift Panel] --> B[Select Gift]
+    B --> C[Show Coin Cost]
+    C --> D[Confirm Gift]
+    D --> E[Trusted Backend Validation]
+    E --> F{Valid Transaction?}
+    F -->|No| G[Reject and Explain]
+    F -->|Yes| H[Check Balance]
+    H --> I{Sufficient Coins?}
+    I -->|No| J[Insufficient Balance]
+    I -->|Yes| K[Atomic Economy Transaction]
+    K --> L[Record Ledger Entry]
+    L --> M[Update Wallets]
+    M --> N[Notify Recipient]
+    N --> O[Show Success]
+
+11.5 Financial security
+
+All economic operations must be trusted backend operations.
+
+Enforce:
+
+- Authenticated sender.
+- Valid recipient.
+- Active Vibe.
+- Eligible recipient.
+- Valid gift definition.
+- Authoritative gift price.
+- Sufficient balance.
+- Idempotency.
+- Atomic balance updates.
+- Ledger consistency.
+- Fraud protection.
+- Rate limiting.
+
+Never allow the client to directly modify wallet balances.
+
+Never trust client-calculated transaction totals.
+
+Never award gifts based solely on a client-side success callback.
+
+11.6 Economy consistency
+
+Use the existing Arvdoul Coins configuration.
+
+Before implementation:
+
+1. Identify the authoritative conversion rate.
+2. Identify the authoritative wallet schema.
+3. Identify the transaction ledger.
+4. Identify whether the recipient receives gross or net Coins.
+5. Identify any existing platform fees.
+6. Identify refund behavior.
+7. Identify purchase and transfer restrictions.
+
+Do not silently invent fees or revenue-sharing percentages.
+
+If the existing economy contains conflicting values, document the conflict and resolve it through the authoritative economy configuration before launching gifting.
+
+11.7 Gift presentation
+
+After a successful transaction:
+
+- Display an appropriate gift confirmation.
+- Show the gift in the creator's gift activity.
+- Update the recipient's wallet through trusted logic.
+- Create a notification.
+- Record the transaction.
+- Prevent duplicate rewards.
+
+Do not display an animation that implies successful payment before the backend confirms the transaction.
+
+
+---
+
+12. XP and levels integration
+
+XP represents progression and participation, not currency.
+
+Coins and XP must remain separate systems.
+
+12.1 XP objectives
+
+Vibes should contribute to meaningful platform activity.
+
+Possible qualifying actions:
+
+- Publishing an eligible Vibe.
+- Completing a meaningful Vibe interaction.
+- Receiving genuine engagement.
+- Maintaining legitimate creative activity.
+- Reaching verified participation milestones.
+
+Not every action should automatically generate XP.
+
+12.2 XP policy
+
+Do not reward:
+
+- Repeatedly opening the same Vibe.
+- Repeated self-interactions.
+- Spam publishing.
+- Artificial reaction loops.
+- Automated engagement.
+- Repeatedly creating and deleting content.
+- Duplicate event submissions.
+- Manipulated engagement.
+- Fake accounts.
+
+XP must be awarded according to a centralized progression policy.
+
+12.3 Suggested XP event architecture
+
+interface VibeXPEvent {
+  id: string;
+
+  userId: string;
+
+  vibeId?: string;
+
+  eventType:
+    | "vibe_published"
+    | "vibe_engagement_milestone"
+    | "vibe_creator_milestone"
+    | "vibe_activity_milestone";
+
+  xpAmount: number;
+
+  sourceEventId: string;
+
+  createdAt: Timestamp;
+
+  status:
+    | "pending"
+    | "approved"
+    | "rejected";
+}
+
+The actual XP amount must come from the existing progression engine.
+
+The event model must support idempotency and fraud controls.
+
+12.4 Publishing XP
+
+A legitimate publishing action may qualify for progression.
+
+However:
+
+- Apply rate limits.
+- Exclude spam.
+- Avoid rewarding repeated uploads of identical content.
+- Enforce meaningful participation conditions.
+- Prevent duplicate XP from retries.
+- Avoid creating an incentive to flood the Vibes Feed.
+
+12.5 Engagement XP
+
+If engagement contributes to creator XP, it must be based on qualified, authentic events.
+
+Do not award unlimited XP for every view.
+
+Use appropriate thresholds, eligibility rules and time windows.
+
+12.6 Level progression
+
+When users earn enough XP:
+
+- Update progression through the existing level engine.
+- Calculate the new level server-side.
+- Record the progression event.
+- Trigger the appropriate notification.
+- Update the user's profile identity.
+- Preserve historical progression.
+
+Do not calculate authoritative levels independently in multiple frontend components.
+
+
+---
+
+13. Achievements and milestones
+
+Vibes should integrate with Arvdoul's existing achievement system.
+
+Do not create an isolated badge system.
+
+13.1 Achievement categories
+
+Potential achievement categories:
+
+Publishing
+
+- First Vibe.
+- Consistent Creator.
+- Creative Milestone.
+
+Engagement
+
+- First Genuine Interaction.
+- Community Engagement.
+- Meaningful Participation.
+
+Social
+
+- Shared Moments.
+- Community Participation.
+- Connection Milestone.
+
+Creator development
+
+- Audience Milestone.
+- Sustained Creator Activity.
+- Content Milestone.
+
+13.2 Achievement rules
+
+Every achievement must have:
+
+- Unique identifier.
+- Name.
+- Description.
+- Qualification criteria.
+- Progress calculation.
+- Completion condition.
+- Reward configuration if applicable.
+- Visibility rules.
+- Duplicate-prevention logic.
+
+Do not create achievements that encourage spam or artificial engagement.
+
+13.3 Achievement presentation
+
+Display achievements through existing Arvdoul profile and progression interfaces.
+
+Use:
+
+- Appropriate icons.
+- Achievement title.
+- Short description.
+- Unlock date.
+- Progress indicator where relevant.
+
+Avoid interrupting the Vibes Viewer with excessive achievement popups.
+
+
+---
+
+14. Vibe engagement tracking
+
+Part 2 establishes the foundational engagement data required for social functionality.
+
+14.1 Engagement events
+
+Track relevant events:
+
+- Vibe opened.
+- Vibe viewed.
+- Vibe completed.
+- Vibe skipped.
+- Vibe replayed.
+- Reaction added.
+- Reaction removed.
+- Reply sent.
+- Vibe shared.
+- Gift sent.
+
+Only collect data necessary for the feature's operation and agreed product analytics.
+
+14.2 View definitions
+
+Distinguish:
+
+- Viewer opening.
+- Meaningful view.
+- Completed view.
+- Replay.
+- Unique viewer.
+
+Do not count every playback progress update as a separate view.
+
+Use stable event identifiers and suitable deduplication.
+
+14.3 Privacy-aware tracking
+
+- Respect audience restrictions.
+- Avoid exposing private viewing activity to unauthorized users.
+- Avoid collecting unnecessary device identifiers.
+- Apply data-retention policies.
+- Avoid unnecessary precise location collection.
+- Respect applicable privacy requirements.
+
+14.4 Creator-side engagement summary
+
+Part 2 may provide basic engagement information to the Vibe owner:
+
+- Total eligible views.
+- Unique viewers where supported.
+- Reactions.
+- Replies.
+- Shares.
+- Gifts received.
+
+Detailed creator analytics, retention graphs, advanced audience insights and monetization analytics belong to Part 3.
+
+
+---
+
+15. Moderation and safety integration
+
+image_group{"query":["premium mobile content reporting safety moderation settings interface clean dark glass UI"],"aspect_ratio":"16:9","layout":"carousel","num_per_query":1}
+
+Vibes must use Arvdoul's existing moderation and account-safety infrastructure.
+
+15.1 Reporting
+
+Allow eligible users to report:
+
+- A Vibe.
+- A reply.
+- A user.
+- An inappropriate gift interaction where relevant.
+
+Suggested report categories:
+
+- Harassment.
+- Hate or abuse.
+- Sexual exploitation.
+- Violence.
+- Self-harm content.
+- Spam.
+- Impersonation.
+- Copyright or intellectual-property concerns.
+- Scams or fraud.
+- Other.
+
+Use the existing moderation taxonomy where available.
+
+15.2 Report handling
+
+Implement:
+
+- Report submission.
+- Reason selection.
+- Optional explanation.
+- Report status.
+- Duplicate-report handling.
+- Moderation queue integration.
+- Appropriate confirmation.
+- Evidence preservation according to retention policy.
+
+Never expose the reporter's identity to the reported user unless a legitimate legal or policy requirement applies.
+
+15.3 Blocking and muting
+
+Integrate existing actions:
+
+- Block creator.
+- Unblock creator.
+- Mute creator.
+- Unmute creator.
+- Restrict interactions.
+- Hide or limit unwanted content.
+
+Apply these actions consistently across:
+
+- Feed.
+- Viewer.
+- Replies.
+- Messaging.
+- Notifications.
+- Sharing.
+- Gift eligibility.
+
+15.4 Safety enforcement
+
+A block or account restriction must not be bypassable by:
+
+- Sharing a Vibe link.
+- Using an old notification.
+- Opening a cached preview.
+- Accessing a Firestore document directly.
+- Accessing a Storage URL.
+- Opening a group message attachment.
+
+Every sensitive access path must recheck authorization.
+
+
+---
+
+16. Privacy and interaction settings
+
+Integrate the following Vibes settings into existing Arvdoul privacy controls.
+
+Setting	Purpose
+
+Who can react	Controls eligible reactions
+Who can reply	Controls Vibe replies
+Who can share	Controls forwarding
+Who can send gifts	Controls gifting eligibility
+Show reaction details	Controls detailed reaction visibility
+Show viewing activity	Controls permitted viewer information
+Vibe notifications	Controls relevant notifications
+Gift notifications	Controls gift alerts
+
+
+Settings must have clear descriptions.
+
+A setting must not promise behavior that the backend does not enforce.
+
+Where a setting is global, it must be applied consistently across all Vibes.
+
+
+---
+
+17. Vibe interaction design
+
+image_group{"query":["luxury mobile social story viewer bottom reaction reply gift controls premium UI","modern premium social app story interaction panel glassmorphism mobile","minimal dark mobile social story viewer with contextual interaction controls"],"aspect_ratio":"5:4","layout":"carousel"}
+
+Part 2 introduces additional Viewer interaction controls without compromising the immersive viewing experience.
+
+17.1 Viewer interaction hierarchy
+
+The Viewer should prioritize the Vibe itself.
+
+Suggested arrangement:
+
+Top
+
+- Existing Part 1 identity and progress controls.
+- More options.
+
+Bottom
+
+- Reply entry point.
+- Reaction control.
+- Share control.
+- Gift control.
+
+Only show controls the current user is authorized to use.
+
+17.2 Interaction behavior
+
+- Reactions should be lightweight.
+- Replies should open a contextual composer.
+- Sharing should open an appropriate destination selector.
+- Gifts should display clear Coin costs.
+- Controls should provide immediate interaction feedback.
+- Sensitive operations must wait for backend confirmation.
+- Failure states must allow recovery.
+
+17.3 Responsive behavior
+
+The interface must work across:
+
+- Small mobile screens.
+- Large mobile screens.
+- Tablets.
+- Desktop browsers.
+
+On small screens, prioritize essential interactions and avoid overcrowding the Viewer.
+
+
+---
+
+18. Data architecture and collection strategy
+
+Extend existing collections where appropriate.
+
+Do not create collections solely because a logical architecture diagram contains a module.
+
+Potential logical entities:
+
+vibes
+vibe_reactions
+vibe_replies
+vibe_shares
+vibe_engagement
+vibe_gifts
+vibe_highlights
+vibe_reports
+notifications
+conversations
+messages
+users
+wallets
+coin_transactions
+xp_events
+achievements
+
+Several of these may already exist.
+
+18.1 Data ownership
+
+Data	Authoritative owner
+
+Vibe content	Vibes system
+Reactions	Vibes social service
+Replies	Existing messaging architecture
+Shares	Existing messaging/share architecture
+Notification records	Existing notification system
+Wallet balance	Existing economy service
+Coin transactions	Existing economic ledger
+XP events	Existing progression engine
+Achievements	Existing achievement system
+Relationships	Existing social graph
+Reports	Existing moderation system
+
+
+18.2 Consistency requirements
+
+- Use canonical user IDs.
+- Use canonical Vibe IDs.
+- Reference original media.
+- Avoid duplicated profile records.
+- Avoid duplicated wallet balances.
+- Avoid multiple XP sources of truth.
+- Use server-side event processing.
+- Use idempotency identifiers.
+- Maintain appropriate audit records.
+
+
+---
+
+19. Backend event architecture
+
+Part 2 introduces multiple event-driven integrations.
+
+Use the existing event architecture if one exists.
+
+19.1 Event types
+
+Potential event names:
+
+type VibeEventType =
+  | "vibe.reaction.created"
+  | "vibe.reaction.removed"
+  | "vibe.reply.created"
+  | "vibe.shared"
+  | "vibe.gift.completed"
+  | "vibe.milestone.reached"
+  | "vibe.xp.qualified"
+  | "vibe.achievement.unlocked";
+
+19.2 Event processing requirements
+
+Every event processor must:
+
+- Validate the event.
+- Verify authorization.
+- Identify the source operation.
+- Prevent duplicate processing.
+- Handle retries.
+- Record failures.
+- Avoid exposing private data.
+- Preserve consistency.
+
+19.3 Avoid uncontrolled event chains
+
+For example:
+
+A reaction should not trigger repeated reactions, notifications, XP awards and achievement updates in an uncontrolled cycle.
+
+Separate:
+
+1. Source interaction.
+2. Event validation.
+3. Authoritative state update.
+4. Eligible notification.
+5. Eligible progression update.
+6. Analytics event.
+
+Use a clear event flow.
+
+19.4 Reliability
+
+Where multiple systems must be updated, use an appropriate transaction or transactional outbox pattern.
+
+Do not assume Firestore transactions can atomically cover external services such as FCM.
+
+Design retries and idempotency around external side effects.
+
+
+---
+
+20. Security requirements
+
+Security is mandatory across every integration.
+
+20.1 Authentication
+
+- Require authentication for protected interactions.
+- Verify account status.
+- Verify account permissions.
+- Validate session identity through trusted backend context.
+
+20.2 Authorization
+
+- Verify Vibe ownership.
+- Verify audience eligibility.
+- Verify reply permission.
+- Verify share permission.
+- Verify conversation membership.
+- Verify recipient eligibility.
+- Verify gift eligibility.
+- Verify relationship restrictions.
+
+20.3 Economic security
+
+- Never trust client balances.
+- Never trust client prices.
+- Never trust client transaction totals.
+- Never accept client-generated financial success claims.
+- Prevent duplicate transfers.
+- Prevent negative balances.
+- Maintain transaction ledger consistency.
+
+20.4 Progression security
+
+- Never trust client XP values.
+- Never trust client level values.
+- Prevent duplicate XP events.
+- Prevent artificial engagement farming.
+- Apply server-side limits.
+- Preserve progression history.
+
+20.5 Data security
+
+- Validate every request.
+- Enforce schema constraints.
+- Avoid public access to private interaction data.
+- Avoid leaking private viewing history.
+- Protect transaction records.
+- Protect notification metadata.
+- Apply appropriate retention policies.
+
+
+---
+
+21. Performance and scalability
+
+Part 2 adds more interactions and cross-system dependencies. The implementation must avoid making Vibes slower or more expensive.
+
+21.1 Frontend performance
+
+- Lazy-load interaction panels.
+- Avoid unnecessary Viewer rerenders.
+- Debounce appropriate search inputs.
+- Use optimistic updates only where safe.
+- Reconcile optimistic state with authoritative responses.
+- Avoid repeated profile lookups.
+- Avoid unnecessary listeners.
+- Paginate reaction and reply details.
+- Cache appropriate non-sensitive metadata.
+
+21.2 Firestore efficiency
+
+- Use bounded queries.
+- Avoid unbounded reaction reads.
+- Avoid unnecessary writes.
+- Batch appropriate updates.
+- Use aggregate counters carefully.
+- Avoid updating a highly contended document on every event.
+- Use sharding or alternative aggregation for high-volume counters when justified.
+- Design indexes around actual queries.
+- Monitor read/write costs.
+
+21.3 Messaging performance
+
+- Avoid duplicating Vibe media.
+- Store references rather than copies.
+- Paginate conversations.
+- Avoid repeated conversation lookups.
+- Handle unavailable attachments efficiently.
+
+21.4 Notification performance
+
+- Deduplicate events.
+- Batch where appropriate.
+- Avoid notification storms.
+- Respect user preferences before delivery.
+- Separate in-app persistence from push delivery.
+- Retry failed external delivery safely.
+
+21.5 Economy performance
+
+- Use authoritative transaction processing.
+- Avoid unnecessary wallet reads.
+- Avoid duplicate ledger entries.
+- Keep transaction operations minimal.
+- Monitor transaction failures and contention.
+
+
+---
+
+22. Testing requirements
+
+Every integration must be tested independently and together.
+
+22.1 Reaction tests
+
+- Add reaction.
+- Change reaction.
+- Remove reaction.
+- Duplicate reaction prevention.
+- Counter consistency.
+- Unauthorized reaction rejection.
+- Notification generation.
+- Deleted Vibe handling.
+
+22.2 Reply tests
+
+- Send reply.
+- Validate reply permission.
+- Reject unauthorized replies.
+- Preserve Vibe context.
+- Open correct conversation.
+- Handle blocked users.
+- Handle deleted Vibes.
+- Notification behavior.
+- Retry behavior.
+
+22.3 Sharing tests
+
+- Share to direct conversation.
+- Share to group.
+- Generate permitted link.
+- Reject private unauthorized sharing.
+- Reject expired content.
+- Reject deleted content.
+- Verify group membership.
+- Verify link authorization.
+
+22.4 Messaging tests
+
+- Render Vibe attachment.
+- Open valid attachment.
+- Handle expired attachment.
+- Handle deleted attachment.
+- Handle unavailable content.
+- Verify sender identity.
+- Verify recipient permissions.
+- Verify group membership changes.
+
+22.5 Notification tests
+
+- Generate valid notification.
+- Suppress self-notification.
+- Deduplicate repeated events.
+- Respect preferences.
+- Update unread state.
+- Handle expired content.
+- Handle failed push delivery.
+- Verify deep-link authorization.
+
+22.6 Coin tests
+
+- Valid gift.
+- Invalid gift.
+- Insufficient balance.
+- Duplicate request.
+- Concurrent transactions.
+- Unauthorized sender.
+- Ineligible recipient.
+- Incorrect price attempt.
+- Failed transaction.
+- Refund.
+- Ledger consistency.
+- Wallet consistency.
+
+22.7 XP tests
+
+- Valid publishing event.
+- Duplicate event.
+- Spam activity.
+- Self-interaction.
+- Repeated engagement.
+- Qualified milestone.
+- Level-up calculation.
+- Achievement unlock.
+- Invalid client-supplied XP.
+- Event retry.
+
+22.8 Moderation tests
+
+- Report Vibe.
+- Report reply.
+- Duplicate report.
+- Block creator.
+- Unblock creator.
+- Mute creator.
+- Restrict interaction.
+- Attempt access using old link.
+- Attempt access using cached attachment.
+- Attempt unauthorized media access.
+
+22.9 Regression tests
+
+Verify Part 1 still works:
+
+- Feed.
+- Viewer.
+- Studio.
+- Editing.
+- Publishing.
+- Audience selection.
+- Drafts.
+- Expiration.
+- Archive.
+- Deletion.
+- Light theme.
+- Dark theme.
+
+Also verify existing Arvdoul:
+
+- Authentication.
+- Profiles.
+- Messaging.
+- Notifications.
+- Coins.
+- XP.
+- Social relationships.
+- Navigation.
+
+
+---
+
+23. Implementation task catalogue
+
+The following is the execution catalogue for Part 2.
+
+Every task must be implemented, integrated and verified with evidence.
+
+Phase 2A — Repository inspection and integration planning
+
+- [ ] Inspect Part 1 implementation.
+- [ ] Inspect existing profile architecture.
+- [ ] Inspect social graph.
+- [ ] Inspect followers.
+- [ ] Inspect connections.
+- [ ] Inspect Close Circle.
+- [ ] Inspect blocking.
+- [ ] Inspect muting.
+- [ ] Inspect restrictions.
+- [ ] Inspect messaging architecture.
+- [ ] Inspect group conversations.
+- [ ] Inspect notification architecture.
+- [ ] Inspect FCM integration.
+- [ ] Inspect Coins wallet.
+- [ ] Inspect transaction ledger.
+- [ ] Inspect gift infrastructure.
+- [ ] Inspect XP engine.
+- [ ] Inspect level calculation.
+- [ ] Inspect achievements.
+- [ ] Inspect moderation.
+- [ ] Inspect existing analytics.
+- [ ] Map all integration dependencies.
+- [ ] Identify duplicate-system risks.
+- [ ] Approve the integration architecture.
+
+Phase 2B — Social interactions
+
+- [ ] Implement reaction contracts.
+- [ ] Implement reaction service.
+- [ ] Implement reaction authorization.
+- [ ] Implement reaction selection UI.
+- [ ] Implement reaction updates.
+- [ ] Implement reaction removal.
+- [ ] Implement reaction aggregation.
+- [ ] Implement reaction deduplication.
+- [ ] Implement reply permissions.
+- [ ] Implement reply creation.
+- [ ] Implement reply rendering.
+- [ ] Implement reply deletion.
+- [ ] Implement reply reporting.
+- [ ] Integrate replies with messaging.
+- [ ] Implement reaction and reply failure states.
+- [ ] Test interaction consistency.
+
+Phase 2C — Sharing and messaging
+
+- [ ] Implement Vibe share contracts.
+- [ ] Implement direct sharing.
+- [ ] Implement group sharing.
+- [ ] Implement permitted link sharing.
+- [ ] Implement share preview.
+- [ ] Implement Vibe message attachments.
+- [ ] Integrate conversation rendering.
+- [ ] Implement expired attachment states.
+- [ ] Implement deleted attachment states.
+- [ ] Validate conversation membership.
+- [ ] Validate recipient eligibility.
+- [ ] Integrate contextual replies.
+- [ ] Prevent privacy bypass through sharing.
+- [ ] Test direct and group sharing.
+
+Phase 2D — Profile and social graph
+
+- [ ] Integrate active Vibes with profiles.
+- [ ] Integrate Vibe avatar rings.
+- [ ] Implement unseen indicators.
+- [ ] Integrate profile Highlights.
+- [ ] Implement Highlight editing.
+- [ ] Implement Highlight reordering.
+- [ ] Implement Highlight deletion.
+- [ ] Integrate follower eligibility.
+- [ ] Integrate connection eligibility.
+- [ ] Integrate Close Circle.
+- [ ] Integrate blocking.
+- [ ] Integrate muting.
+- [ ] Integrate restrictions.
+- [ ] Handle relationship changes.
+- [ ] Verify profile visibility.
+- [ ] Test all relationship permission paths.
+
+Phase 2E — Notifications
+
+- [ ] Define Vibes notification events.
+- [ ] Extend existing notification service.
+- [ ] Implement reaction notifications.
+- [ ] Implement reply notifications.
+- [ ] Implement share notifications.
+- [ ] Implement gift notifications.
+- [ ] Implement achievement notifications.
+- [ ] Implement progression notifications.
+- [ ] Implement notification deduplication.
+- [ ] Implement notification preferences.
+- [ ] Integrate in-app notification rendering.
+- [ ] Integrate push notification delivery.
+- [ ] Implement deep-link routing.
+- [ ] Validate deep-link authorization.
+- [ ] Test notification failure and retry behavior.
+
+Phase 2F — Coins and gifting
+
+- [ ] Inspect existing economic configuration.
+- [ ] Confirm authoritative wallet schema.
+- [ ] Confirm authoritative transaction ledger.
+- [ ] Resolve existing conversion inconsistencies.
+- [ ] Define Vibe gift catalogue.
+- [ ] Implement gift selection interface.
+- [ ] Implement gift cost display.
+- [ ] Implement transaction validation.
+- [ ] Implement sender eligibility.
+- [ ] Implement recipient eligibility.
+- [ ] Implement atomic Coin processing.
+- [ ] Implement transaction idempotency.
+- [ ] Implement ledger entries.
+- [ ] Implement wallet consistency.
+- [ ] Implement gift history.
+- [ ] Implement gift confirmation.
+- [ ] Implement gift notifications.
+- [ ] Implement failure and refund handling.
+- [ ] Test concurrent transactions.
+- [ ] Verify economic integrity.
+
+Phase 2G — XP and achievements
+
+- [ ] Inspect existing progression rules.
+- [ ] Define eligible Vibe XP events.
+- [ ] Integrate Vibe publishing events.
+- [ ] Integrate qualified engagement events.
+- [ ] Implement XP deduplication.
+- [ ] Implement server-side qualification.
+- [ ] Implement anti-farming limits.
+- [ ] Integrate existing level calculations.
+- [ ] Integrate achievement rules.
+- [ ] Implement milestone detection.
+- [ ] Implement achievement presentation.
+- [ ] Implement level-up notifications.
+- [ ] Verify XP history.
+- [ ] Test abuse scenarios.
+
+Phase 2H — Engagement and creator information
+
+- [ ] Define engagement event contracts.
+- [ ] Implement unique view tracking.
+- [ ] Implement meaningful view rules.
+- [ ] Implement completion tracking.
+- [ ] Implement replay tracking.
+- [ ] Integrate reaction counts.
+- [ ] Integrate reply counts.
+- [ ] Integrate share counts.
+- [ ] Integrate gift summaries.
+- [ ] Implement basic creator engagement summary.
+- [ ] Implement appropriate data access restrictions.
+- [ ] Test event deduplication.
+
+Phase 2I — Moderation and safety
+
+- [ ] Integrate Vibe reporting.
+- [ ] Integrate reply reporting.
+- [ ] Integrate moderation queue.
+- [ ] Integrate blocking.
+- [ ] Integrate muting.
+- [ ] Integrate restrictions.
+- [ ] Implement privacy-aware sharing restrictions.
+- [ ] Implement interaction eligibility.
+- [ ] Implement spam protection.
+- [ ] Implement rate limits.
+- [ ] Implement abuse logging.
+- [ ] Test bypass attempts.
+
+Phase 2J — Final integration and verification
+
+- [ ] Complete Viewer interaction interface.
+- [ ] Complete reaction UI.
+- [ ] Complete reply UI.
+- [ ] Complete sharing UI.
+- [ ] Complete gift UI.
+- [ ] Complete messaging integration.
+- [ ] Complete profile integration.
+- [ ] Complete notification integration.
+- [ ] Complete Coins integration.
+- [ ] Complete XP integration.
+- [ ] Complete moderation integration.
+- [ ] Complete light theme.
+- [ ] Complete dark theme.
+- [ ] Complete responsive layouts.
+- [ ] Verify accessibility.
+- [ ] Verify security rules.
+- [ ] Verify Cloud Functions.
+- [ ] Verify Firestore indexes.
+- [ ] Run unit tests.
+- [ ] Run integration tests.
+- [ ] Run security tests.
+- [ ] Run economy tests.
+- [ ] Run progression tests.
+- [ ] Run regression tests.
+- [ ] Run production build.
+- [ ] Review every changed file.
+- [ ] Resolve critical issues.
+- [ ] Produce final implementation report.
+
+
+---
+
+24. Agent execution protocol
+
+If Firebase AI Studio supports multiple coding agents, assign work by system responsibility.
+
+Do not let every agent independently redesign the architecture.
+
+Agent	Responsibility	Deliverables
+
+Agent 1	Integration architecture	Repository inspection, dependency map, contracts
+Agent 2	Social interactions	Reactions, replies, interaction permissions
+Agent 3	Messaging and sharing	Direct sharing, groups, attachments, contextual replies
+Agent 4	Profile and social graph	Profile integration, Highlights, relationships
+Agent 5	Notifications	In-app notifications, FCM, deep links
+Agent 6	Coins and gifting	Secure gift catalogue, transactions, ledger integration
+Agent 7	XP and achievements	Progression events, milestones, anti-farming
+Agent 8	Moderation and QA	Reports, abuse prevention, security and regression tests
+
+
+If parallel agents are unavailable, execute the same responsibilities in controlled sequential batches.
+
+24.1 Shared architecture rules
+
+- Agree on shared contracts before implementation.
+- Maintain one authoritative source for every domain.
+- Reuse existing services.
+- Do not independently modify shared schemas without coordination.
+- Do not create competing event processors.
+- Do not introduce circular service dependencies.
+- Keep financial operations isolated from ordinary social writes.
+- Ensure every event is idempotent.
+- Coordinate changes to Firestore rules and indexes.
+
+24.2 Integration ownership
+
+One integration owner must verify that:
+
+- Every module uses the agreed contracts.
+- Every module is connected to the actual application.
+- Backend operations are real.
+- Security rules support the intended behavior.
+- The UI reflects authoritative backend state.
+- Failure handling is consistent.
+- No Part 1 functionality has regressed.
+
+
+---
+
+25. Proof-of-work and completion tracking
+
+Every task must use the following statuses:
+
+Status	Meaning
+
+NOT_STARTED	Not started.
+IN_PROGRESS	Implementation underway.
+IMPLEMENTED	Code exists.
+INTEGRATED	Connected to the required systems.
+VERIFIED	Acceptance criteria passed with evidence.
+BLOCKED	Cannot proceed; reason documented.
+
+
+Only VERIFIED counts as completed.
+
+Required task evidence
+
+Task ID:
+Task name:
+Status:
+
+Existing implementation inspected:
+
+Files created:
+Files modified:
+Files reused:
+
+Backend integration:
+Frontend integration:
+
+Security checks:
+Performance checks:
+
+Tests executed:
+Actual results:
+
+Known issues:
+Outstanding work:
+
+Evidence:
+Verification decision:
+
+Anti-false-completion rules
+
+Agents must never:
+
+- Mark a button complete because it renders.
+- Claim a reaction works without verifying persistence.
+- Claim a reply works without verifying conversation integration.
+- Claim sharing works without testing access restrictions.
+- Claim messaging integration without sending and opening actual attachments.
+- Claim notifications work without verifying event delivery.
+- Claim gifting works without verifying wallet and ledger consistency.
+- Claim XP works without verifying the authoritative progression engine.
+- Claim security works without testing unauthorized access.
+- Claim moderation works without testing actual enforcement.
+- Mark an item complete merely because another agent says it is complete.
+- Hide failed tests.
+- Replace real integration with mock data.
+- Create duplicate systems to avoid integrating with existing infrastructure.
+
+
+---
+
+26. Part 2 acceptance criteria
+
+Part 2 is complete only when the following conditions have been verified.
+
+Social interactions
+
+- [ ] Reactions work and persist.
+- [ ] Reaction counts remain consistent.
+- [ ] Replies work and respect permissions.
+- [ ] Replies preserve Vibe context.
+- [ ] Sharing respects privacy.
+- [ ] Deleted and expired Vibes cannot be reopened through old shares.
+
+
+---
+
+Messaging and profiles
+
+- [ ] Vibes can be shared in direct conversations.
+- [ ] Vibes can be shared in eligible group conversations.
+- [ ] Attachments render correctly.
+- [ ] Unavailable attachments display appropriate states.
+- [ ] Profile Vibes integrate with existing profiles.
+- [ ] Highlights work without bypassing privacy.
+- [ ] Relationship changes update access correctly.
+
+
+---
+
+Notifications
+
+- [ ] Valid reaction notifications are generated.
+- [ ] Valid reply notifications are generated.
+- [ ] Share notifications work.
+- [ ] Gift notifications work.
+- [ ] Progression notifications work.
+- [ ] Notification preferences are enforced.
+- [ ] Duplicate notifications are prevented.
+- [ ] Deep links revalidate authorization.
+
+
+---
+
+Coins and XP
+
+- [ ] Gifts use the existing authoritative wallet.
+- [ ] Gift transactions are processed securely.
+- [ ] Coin balances remain consistent.
+- [ ] Transaction ledger entries are correct.
+- [ ] Duplicate transactions are prevented.
+- [ ] XP uses the existing progression engine.
+- [ ] Duplicate XP events are prevented.
+- [ ] Anti-farming rules work.
+- [ ] Achievements unlock correctly.
+
+
+---
+
+Moderation and quality
+
+- [ ] Reporting integrates with moderation.
+- [ ] Blocking is enforced across Vibes.
+- [ ] Muting and restrictions are respected.
+- [ ] Unauthorized access attempts fail.
+- [ ] Privacy restrictions are enforced server-side.
+- [ ] All new interfaces support light and dark themes.
+- [ ] Responsive layouts are verified.
+- [ ] Accessibility is tested.
+- [ ] Performance is acceptable.
+- [ ] Existing Part 1 functionality remains intact.
+- [ ] Relevant tests pass.
+- [ ] Production build succeeds.
+
+A feature is not complete merely because its frontend, backend or database implementation exists independently. The complete user journey must work across all relevant systems.
+
+
+---
+
+27. Explicit scope boundaries
+
+To keep Part 2 manageable, the following advanced capabilities are reserved for Part 3.
+
+Feature	Assigned part
+
+Basic reactions	Part 2
+Basic replies	Part 2
+Direct and group sharing	Part 2
+Messaging integration	Part 2
+Notification integration	Part 2
+Basic Coin gifting	Part 2
+XP integration	Part 2
+Basic achievements	Part 2
+Basic engagement summaries	Part 2
+Reporting and safety	Part 2
+Advanced creator analytics	Part 3
+Audience retention analytics	Part 3
+Creator revenue dashboards	Part 3
+Premium and exclusive Vibes	Part 3
+Subscriptions and monetization	Part 3
+Sponsored Vibes	Part 3
+Advanced interactive Vibes	Part 3
+Collaborative Vibes	Part 3
+Vibe Chains	Part 3
+Community Vibes	Part 3
+Advanced discovery and ranking	Part 3
+Advanced recommendation systems	Part 3
+
+
+Do not implement Part 3 prematurely.
+
+Build only the necessary integration contracts and extension points.
+
+
+---
+
+28. Final execution instruction for Firebase AI Studio
+
+Execute Arvdoul Vibes — Part 2: Social Integration, Interactions, Messaging, Notifications, Coins, XP and Social Identity against the existing Arvdoul repository.
+
+Your responsibility is to extend the verified Part 1 implementation into a connected social experience.
+
+Do not rebuild Part 1.
+
+Do not create parallel versions of existing Arvdoul systems.
+
+Do not implement the entire Part 2 specification in one enormous code change.
+
+Follow this exact execution order:
+
+1. Inspect Part 1 and all existing integration systems.
+2. Produce the integration architecture and dependency map.
+3. Define shared data contracts and event interfaces.
+4. Implement reactions and replies.
+5. Implement sharing and messaging integration.
+6. Integrate profiles and the social graph.
+7. Integrate notifications.
+8. Integrate Coins and secure gifting.
+9. Integrate XP, levels and achievements.
+10. Implement engagement summaries.
+11. Integrate moderation and safety.
+12. Complete Viewer interaction UI.
+13. Complete backend security and event processing.
+14. Run all required integration and regression tests.
+15. Verify every acceptance criterion.
+16. Produce the final implementation report.
+
+Non-negotiable constraints
+
+- Preserve the Part 1 implementation.
+- Preserve Arvdoul's existing architecture.
+- Use existing authoritative services and schemas.
+- Never create duplicate wallets, messaging systems, notification systems or progression engines.
+- Never trust client-supplied financial or progression values.
+- Never bypass Vibe privacy through sharing, messaging or cached media.
+- Never mark untested functionality as verified.
+- Never silently skip a requirement.
+- Never compromise existing production functionality.
+- Document blockers and technical trade-offs.
+- Do not begin Part 3 automatically.
+
+Final deliverable: A fully integrated and verified Vibes social ecosystem where users can react, reply, share, communicate, receive notifications, send Coins-based gifts, earn legitimate XP, unlock achievements and interact safely through Arvdoul's existing social infrastructure.
+
+Part 2 must leave the foundational Vibes experience intact while establishing the reliable social, economic and progression integrations required for Part 3.

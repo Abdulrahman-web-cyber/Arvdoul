@@ -622,6 +622,11 @@ service cloud.firestore {
     match /users/{userId}/shared_posts/{postId} {
       allow read, create, update, delete: if isOwner(userId);
     }
+    match /users/{userId}/close_circle/{memberId} {
+      allow get: if isSignedIn() && (isOwner(userId) || memberId == uid());
+      allow list: if isOwner(userId);
+      allow create, update, delete: if isOwner(userId);
+    }
     match /users/{userId}/{subcollection}/{docId} {
       allow read, write: if isOwner(userId);
     }
@@ -930,13 +935,23 @@ service cloud.firestore {
           s.visibility == 'public' ||
           (s.visibility == 'followers' &&
             exists(/databases/$(database)/documents/follows/$(viewerId + '_' + s.userId))) ||
+          (s.visibility == 'connections' &&
+            exists(/databases/$(database)/documents/follows/$(viewerId + '_' + s.userId)) &&
+            exists(/databases/$(database)/documents/follows/$(s.userId + '_' + viewerId))) ||
+          (s.visibility == 'close_circle' &&
+            exists(/databases/$(database)/documents/users/$(s.userId)/close_circle/$(viewerId))) ||
+          (s.visibility == 'selected' &&
+            viewerId in s.get('selectedUserIds', [])) ||
           (s.visibility == 'private' && s.userId == viewerId)
         );
       }
       function vibeNotBlocked(s, viewerId) {
         return s != null &&
-          !exists(/databases/$(database)/documents/blocks/$(viewerId + '_' + s.userId)) &&
-          !exists(/databases/$(database)/documents/blocks/$(s.userId + '_' + viewerId));
+          (s.userId == viewerId || (
+            !exists(/databases/$(database)/documents/blocks/$(viewerId + '_' + s.userId)) &&
+            !exists(/databases/$(database)/documents/blocks/$(s.userId + '_' + viewerId)) &&
+            !exists(/databases/$(database)/documents/restricts/$(s.userId + '_' + viewerId))
+          ));
       }
       // Shard writes are BOUNDED AGGREGATION COUNTERS. A rule can see the
       // post-`increment()` value (`request.resource.data.<f>` is the resulting
@@ -1007,7 +1022,10 @@ service cloud.firestore {
       allow list: if isSignedIn() && resource.data.userId == uid();
       allow create: if isSignedIn() && authoredBy('userId') &&
         request.resource.data.status == 'published' &&
-        request.resource.data.moderationStatus == 'pending';
+        request.resource.data.moderationStatus == 'pending' &&
+        request.resource.data.isDeleted == false &&
+        request.resource.data.get('visibility', 'public') in ['public', 'followers', 'connections', 'close_circle', 'selected', 'private'] &&
+        request.resource.data.get('type', 'image') in ['image', 'video', 'text', 'audio', 'event'];
       // The owner may edit their own story (music, collaborators, tagged users,
       // visibility, lifecycle, share stats, soft-delete), but NOT the
       // moderation verdict. Without the exclusion the owner could clear
@@ -1111,6 +1129,13 @@ service cloud.firestore {
           vibeIsActive(vibeData()) &&
           vibeVisibleToViewer(vibeData(), uid());
         allow update, delete: if isSignedIn() && resource.data.userId == uid();
+      }
+      // Coins gifts sent on a Vibe: written exclusively server-side by `sendVibeGift`.
+      // Creator or the gift sender (or an admin) may read their own gift receipt.
+      match /gifts/{giftId} {
+        allow read: if isSignedIn() &&
+          (vibeData().userId == uid() || resource.data.senderId == uid() || isAdmin());
+        allow write: if false;
       }
       // Interactive stickers (poll / quiz / countdown / emoji slider). The
       // creator materialises these when the Vibe is published; viewers may
@@ -1520,6 +1545,9 @@ service cloud.firestore {
     match /idempotency_ledger/{key} {
       allow read, write: if false; // server-only
     }
+    match /vibe_idempotency/{key} {
+      allow read, write: if false; // server-only (publishVibe callable)
+    }
     // Double-entry ledger written by functions/monetization.js
     // `createLedgerEntry` (debit + credit entries per coin movement). It is
     // server-write-only; a client-writable ledger is not an accounting record.
@@ -1821,6 +1849,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     match /story_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /vibe_reply_reports/{reportId} {
       allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update, delete: if isAdmin();

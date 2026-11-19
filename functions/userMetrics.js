@@ -54,7 +54,19 @@ async function computeUserMetrics(uid) {
   if (!uid) return {};
   const metrics = {};
 
-  const [commentsCount, pollVotesCount, profilesVisitedCount, giftsSentCount, postsCount, likesCount] = await Promise.all([
+  const [
+    commentsCount,
+    pollVotesCount,
+    profilesVisitedCount,
+    giftsSentCount,
+    postsCount,
+    likesCount,
+    storiesCount,
+    vibeReactionsCount,
+    vibeRepliesCount,
+    vibeGiftsSentCount,
+    vibeStories100Views,
+  ] = await Promise.all([
     safeCount(db().collection('comments').where('userId', '==', uid)),
     safeCount(db().collection('poll_votes').where('userId', '==', uid)),
     safeCount(db().collection('profile_views').where('viewerId', '==', uid)),
@@ -64,6 +76,11 @@ async function computeUserMetrics(uid) {
     // number now that `aggregatePostCounters` mirrors the sharded counter onto
     // it (N433); before that it was a permanent 0.
     safeSum(db().collection('posts').where('authorId', '==', uid), 'stats.likes'),
+    safeCount(db().collection('stories').where('userId', '==', uid)),
+    safeCount(db().collectionGroup('reactions').where('userId', '==', uid).where('targetType', '==', 'vibe')),
+    safeCount(db().collection('story_replies').where('userId', '==', uid)),
+    safeCount(db().collection('gift_transactions').where('senderId', '==', uid).where('giftContext', '==', 'vibe')),
+    safeCount(db().collection('stories').where('userId', '==', uid).where('stats.views', '>=', 100)),
   ]);
 
   if (commentsCount !== undefined) metrics.commentsCount = commentsCount;
@@ -72,6 +89,11 @@ async function computeUserMetrics(uid) {
   if (giftsSentCount !== undefined) metrics.giftsSentCount = giftsSentCount;
   if (postsCount !== undefined) metrics.postsCount = postsCount;
   if (likesCount !== undefined) metrics.likesCount = likesCount;
+  if (storiesCount !== undefined) metrics.storiesCount = storiesCount;
+  if (vibeReactionsCount !== undefined) metrics.vibeReactionsCount = vibeReactionsCount;
+  if (vibeRepliesCount !== undefined) metrics.vibeRepliesCount = vibeRepliesCount;
+  if (vibeGiftsSentCount !== undefined) metrics.vibeGiftsSentCount = vibeGiftsSentCount;
+  if (vibeStories100Views !== undefined) metrics.vibeViewsMax = vibeStories100Views > 0 ? 100 : 0;
 
   try {
     const liveSnap = await db().collection('live_streams').where('userId', '==', uid).limit(1).get();

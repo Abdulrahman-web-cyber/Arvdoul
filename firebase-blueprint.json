@@ -243,6 +243,37 @@
         "shardIndex": { "type": "number" }
       },
       "required": ["count", "docPath", "field", "shardIndex"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "Ephemeral 24-hour Vibe (image, video, text, or audio) with audience privacy, overlays, and edit metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["image", "video", "text", "audio", "event"] },
+        "content": { "type": "string", "maxLength": 500 },
+        "visibility": { "type": "string", "enum": ["public", "followers", "connections", "close_circle", "selected", "private"] },
+        "selectedUserIds": { "type": "array" },
+        "textOverlays": { "type": "array" },
+        "drawingPaths": { "type": "array" },
+        "mediaEdits": { "type": "object" },
+        "textStyle": { "type": "object" },
+        "status": { "type": "string", "enum": ["published", "expired", "removed"] },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "visibility", "status"]
+    },
+    "CloseCircleMember": {
+      "title": "CloseCircleMember",
+      "description": "Owner-curated Close Circle recipient entry scoped to users/{userId}/close_circle/{memberId}.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "maxLength": 128 },
+        "addedAt": { "type": "string" }
+      },
+      "required": ["memberId"]
     }
   },
   "firestore": {
@@ -309,6 +340,14 @@
     "/counter_shards/{shardId}": {
       "schema": "CounterShard",
       "description": "Distributed counter shards for high-frequency writes"
+    },
+    "/stories/{storyId}": {
+      "schema": "Story",
+      "description": "24-hour ephemeral Vibes with server-enforced audience visibility"
+    },
+    "/users/{userId}/close_circle/{memberId}": {
+      "schema": "CloseCircleMember",
+      "description": "Curated Close Circle audience member records"
     }
   }
 }

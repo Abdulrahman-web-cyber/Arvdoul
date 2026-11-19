@@ -176,6 +176,7 @@ const REPORT_COLLECTIONS = {
   video: 'video_reports',
   post: 'post_reports',
   story: 'story_reports',
+  vibe_reply: 'vibe_reply_reports',
   ad: 'ad_reports',
   message: 'message_reports',
 };
