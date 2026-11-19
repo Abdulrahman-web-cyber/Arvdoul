@@ -37,29 +37,34 @@ export default function ProfileSkeleton({ theme = 'light' }) {
           </div>
 
           <div className={cn(
-            "w-full lg:w-64 shrink-0 pt-4 lg:pt-0 lg:pl-6 border-t lg:border-t-0 lg:border-l space-y-3",
-            isDark ? "border-white/[0.08]" : "border-slate-200/80"
+            "w-full lg:w-[272px] shrink-0 rounded-2xl border p-4 space-y-3",
+            isDark ? "border-white/[0.08] bg-white/[0.03]" : "border-slate-200/80 bg-white/80"
           )}>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="w-8 h-8 rounded-lg" />
-                <div className="space-y-1">
-                  <Skeleton className="h-3.5 w-16 rounded" />
-                  <Skeleton className="h-2.5 w-20 rounded" />
-                </div>
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <Skeleton className="h-3.5 w-24 rounded" />
+                <Skeleton className="h-2.5 w-32 rounded" />
               </div>
-              <Skeleton className="h-7 w-20 rounded-xl" />
             </div>
-            <Skeleton className="h-1.5 w-full rounded-full" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-9 flex-1 rounded-xl" />
+              <Skeleton className="h-9 w-20 rounded-xl" />
+            </div>
           </div>
         </div>
 
-        <div className="mt-6 flex items-center gap-2.5 flex-wrap">
-          <Skeleton className="h-10 w-36 rounded-xl" />
-          <Skeleton className="h-10 w-24 rounded-xl" />
-          <Skeleton className="h-10 w-24 rounded-xl" />
-          <Skeleton className="h-10 w-24 rounded-xl" />
-          <Skeleton className="h-10 w-10 rounded-xl" />
+        <div className="mt-6 flex items-center justify-between gap-2.5 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-11 w-32 rounded-2xl" />
+            <Skeleton className="h-11 w-24 rounded-2xl" />
+            <Skeleton className="h-11 w-24 rounded-2xl" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-11 w-11 rounded-2xl" />
+            <Skeleton className="h-11 w-11 rounded-2xl" />
+            <Skeleton className="h-11 w-11 rounded-2xl" />
+          </div>
         </div>
       </div>
 
@@ -68,12 +73,12 @@ export default function ProfileSkeleton({ theme = 'light' }) {
         "rounded-2xl border overflow-hidden",
         isDark ? "border-white/[0.08] bg-white/[0.06]" : "border-slate-200/90 bg-slate-200/75"
       )}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px">
+        <div className="grid grid-cols-3 lg:grid-cols-6 gap-px">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
               className={cn(
-                "px-4 py-4 space-y-2",
+                "min-h-[68px] sm:min-h-[76px] px-3 sm:px-4 py-3.5 space-y-2",
                 isDark ? "bg-[#080F2E]" : "bg-white"
               )}
             >

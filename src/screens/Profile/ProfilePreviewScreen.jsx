@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
@@ -40,6 +41,7 @@ export default function ProfilePreviewScreen({
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
   const { user: authUser } = useAuth();
@@ -161,34 +163,45 @@ export default function ProfilePreviewScreen({
         'min-h-screen pb-24 transition-colors',
         isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
       )}>
-        {/* Top Bar with Perspective Selector */}
+        {/* Perspective Selector Header (inline panel inside MainLayout, sticky header standalone) */}
         <header className={cn(
-          'sticky top-0 z-30 backdrop-blur-xl border-b transition-colors',
-          isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-white/90 border-slate-200'
+          hasTopAppBar
+            ? 'max-w-[1160px] mx-auto px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4'
+            : cn('sticky top-0 z-30 backdrop-blur-xl border-b transition-colors', isDark ? 'bg-[#03071B]/90 border-white/10' : 'bg-white/90 border-slate-200')
         )}>
-          <div className="max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleBack}
-              className={cn(
-                'inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0',
-                isDark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'
-              )}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Back</span>
-            </button>
+          <div className={cn(
+            'flex items-center justify-between gap-2.5 flex-wrap',
+            hasTopAppBar
+              ? cn(
+                  'px-3 sm:px-4 py-2.5 rounded-2xl border backdrop-blur-xl',
+                  isDark ? 'bg-[#080F2E]/85 border-white/[0.08]' : 'bg-white/90 border-slate-200/90 shadow-xs'
+                )
+              : 'max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-2'
+          )}>
+            {!hasTopAppBar && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className={cn(
+                  'min-h-[40px] inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'
+                )}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Back</span>
+              </button>
+            )}
 
             {/* Perspective Toggle */}
             <div className={cn(
-              'flex items-center gap-1 p-1 rounded-xl border',
-              isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'
+              'flex items-center gap-1 p-1 rounded-2xl border',
+              isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-100/90 border-slate-200/80'
             )}>
               <button
                 type="button"
                 onClick={() => setViewPerspective('owner')}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                  "min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   viewPerspective === 'owner'
                     ? "bg-arvdoul-gradient text-white shadow-sm"
                     : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
@@ -200,7 +213,7 @@ export default function ProfilePreviewScreen({
                 type="button"
                 onClick={() => setViewPerspective('visitor')}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                  "min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   viewPerspective === 'visitor'
                     ? "bg-arvdoul-gradient text-white shadow-sm"
                     : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
@@ -213,7 +226,7 @@ export default function ProfilePreviewScreen({
             <button
               type="button"
               onClick={handleEdit}
-              className="px-3.5 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm bg-arvdoul-gradient text-white hover:opacity-95 cursor-pointer shrink-0 whitespace-nowrap"
+              className="min-h-[40px] px-4 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm bg-arvdoul-gradient text-white hover:opacity-95 cursor-pointer shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>Edit Profile</span>
@@ -240,7 +253,7 @@ export default function ProfilePreviewScreen({
             isOwner={isOwnerMode}
             level={projectedProfile?.level ?? null}
             theme={theme}
-            onBack={handleBack}
+            onBack={hasTopAppBar ? undefined : handleBack}
             onEditProfile={handleEdit}
             capabilities={capabilities}
           />

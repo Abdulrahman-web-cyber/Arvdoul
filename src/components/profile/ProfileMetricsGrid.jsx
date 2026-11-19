@@ -118,18 +118,18 @@ const ProfileMetricsGrid = memo(({
         "w-full rounded-2xl border overflow-hidden",
         isDark
           ? "border-white/[0.08] bg-white/[0.07]"
-          : "border-slate-200/90 bg-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.03)]"
+          : "border-slate-200/90 bg-slate-200/80 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
       )}
     >
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-px">
         {stats.map((item) => {
           const Icon = item.icon;
           const isClickable = item.clickable;
 
           const cellClass = cn(
-            "px-4 py-3.5 sm:py-4 transition-colors flex flex-col justify-between gap-2 text-left select-none",
+            "min-h-[68px] sm:min-h-[76px] px-3 sm:px-4 py-3 sm:py-4 transition-colors flex flex-col justify-between gap-1.5 sm:gap-2 text-left select-none",
             isDark
-              ? "bg-[#080F2E] text-white"
+              ? "bg-[#080F2E]/95 text-white"
               : "bg-white text-slate-900",
             isClickable && (
               isDark
@@ -140,19 +140,19 @@ const ProfileMetricsGrid = memo(({
 
           const inner = (
             <>
-              <div className="flex items-center justify-between gap-2 w-full">
+              <div className="flex items-center justify-between gap-1.5 w-full">
                 <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
                   {item.label}
                 </span>
                 <Icon className={cn("w-3.5 h-3.5 shrink-0 opacity-85", item.accentClass)} />
               </div>
 
-              <div className="flex items-baseline justify-between gap-2 w-full">
-                <span className="font-display text-xl sm:text-[22px] font-bold tracking-tight tabular-nums text-slate-900 dark:text-white leading-none">
+              <div className="flex items-baseline justify-between gap-1.5 w-full">
+                <span className="font-display text-lg sm:text-[22px] font-bold tracking-tight tabular-nums text-slate-900 dark:text-white leading-none">
                   {item.value}
                 </span>
                 {item.trend && (
-                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
                     {item.trend}
                   </span>
                 )}

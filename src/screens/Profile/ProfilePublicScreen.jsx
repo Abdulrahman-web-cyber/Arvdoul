@@ -547,7 +547,7 @@ export default function ProfilePublicScreen() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               Back to Home
             </button>
@@ -629,7 +629,7 @@ export default function ProfilePublicScreen() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               Back to Home
             </button>
@@ -661,7 +661,7 @@ export default function ProfilePublicScreen() {
                 type="button"
                 onClick={() => loadPublicProfile()}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer",
+                  "min-h-[40px] px-3.5 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
                 )}
               >
@@ -673,7 +673,7 @@ export default function ProfilePublicScreen() {
         )}
 
         {/* Master Container */}
-        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-6">
+        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-5 sm:space-y-6">
           {/* 1. Master Identity Header */}
           <ProfileHeroSection
             profile={effectiveProfile}
@@ -681,6 +681,8 @@ export default function ProfilePublicScreen() {
             level={effectiveProfile.level}
             theme={theme}
             onBack={() => navigate(-1)}
+            onRefresh={() => loadPublicProfile()}
+            isRefreshing={localLoading}
             onOpenMessages={() => {
               if (capabilities && capabilities.canMessage === false) {
                 toast.error('This citizen does not accept direct messages based on their privacy settings.');

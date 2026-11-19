@@ -107,7 +107,7 @@ const ProfileProgression = memo(({
         <button
           type="button"
           onClick={() => navigate('/passport')}
-          className="shrink-0 inline-flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer self-start sm:self-center"
+          className="shrink-0 min-h-[40px] inline-flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer self-start sm:self-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
         >
           <span>View Passport</span>
           <ChevronRight className="w-3.5 h-3.5" />
@@ -178,7 +178,7 @@ const ProfileProgression = memo(({
         <button
           type="button"
           onClick={() => navigate('/passport')}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline cursor-pointer self-start sm:self-center shrink-0 whitespace-nowrap"
+          className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:bg-purple-500/10 transition-colors cursor-pointer self-start sm:self-center shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
         >
           <span>Digital Passport & Perks</span>
           <ChevronRight className="w-4 h-4" />

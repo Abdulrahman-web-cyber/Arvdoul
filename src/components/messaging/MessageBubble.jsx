@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { MESSAGING_CONFIG } from '../../services/messagesService.js';
 import {
   sanitizeExternalUrl,
@@ -88,6 +89,7 @@ const MessageBubble = React.memo(
   }) => {
     const [showReactions, setShowReactions] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
+    const [showQuickActions, setShowQuickActions] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
     const [isPlayingAudio, setIsPlayingAudio] = useState(false);
     const [audioProgress, setAudioProgress] = useState(0);
@@ -293,12 +295,12 @@ const MessageBubble = React.memo(
             </button>
           )}
 
-          <div className={cn('relative flex items-end gap-1', isOwn ? 'flex-row' : 'flex-row-reverse')}>
-            {/* Action triggers — visible for touch & keyboard users */}
+          <div className={cn('relative flex items-end gap-1.5', isOwn ? 'flex-row' : 'flex-row-reverse')}>
+            {/* Action triggers — revealed on hover, focus, tap-to-reveal, or active popover */}
             <div
               className={cn(
-                'opacity-70 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-0.5 shrink-0 pb-0.5',
-                showReactions || showMenu ? '!opacity-100' : ''
+                'opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-0.5 shrink-0 pb-0.5',
+                (showReactions || showMenu || showQuickActions) ? '!opacity-100' : 'pointer-events-none group-hover:pointer-events-auto focus-within:pointer-events-auto'
               )}
             >
               <button
@@ -308,7 +310,7 @@ const MessageBubble = React.memo(
                   setShowMenu(false);
                 }}
                 className={cn(
-                  'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  'min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark
                     ? 'hover:bg-white/10 text-slate-400 hover:text-white'
                     : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
@@ -325,7 +327,7 @@ const MessageBubble = React.memo(
                   setShowReactions(false);
                 }}
                 className={cn(
-                  'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  'min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark
                     ? 'hover:bg-white/10 text-slate-400 hover:text-white'
                     : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
@@ -339,16 +341,24 @@ const MessageBubble = React.memo(
 
             {/* Bubble content */}
             <div
+              onClick={(e) => {
+                if (e.target.closest('button, a, audio, video, input')) return;
+                setShowQuickActions((prev) => !prev);
+              }}
               className={cn(
-                'px-3.5 py-2.5 rounded-2xl break-words transition-colors relative overflow-hidden',
+                'px-3.5 py-2.5 rounded-[20px] break-words transition-all relative overflow-hidden cursor-pointer sm:cursor-default',
                 isOwn
-                  ? 'bg-arvdoul-gradient text-white rounded-br-sm shadow-sm'
-                  : isDark
-                    ? 'bg-[#0F1733] text-white border border-white/[0.08] rounded-bl-sm'
-                    : 'bg-white text-slate-900 border border-slate-200 shadow-xs rounded-bl-sm',
+                  ? cn('text-white shadow-sm', isGroupStart ? 'rounded-br-md' : 'rounded-r-md')
+                  : cn(
+                      isGroupStart ? 'rounded-bl-md' : 'rounded-l-md',
+                      isDark
+                        ? 'bg-[#11193B] text-white border border-white/[0.08] shadow-sm'
+                        : 'bg-white text-slate-900 border border-slate-200/80 shadow-xs'
+                    ),
                 _failed && 'ring-1 ring-red-400/70',
                 message.encrypted && 'flex items-center gap-2'
               )}
+              style={isOwn ? { background: BRAND_GRADIENT } : undefined}
             >
               {message.encrypted && (
                 <Lock className="w-3.5 h-3.5 text-emerald-300 shrink-0 inline mr-1" aria-hidden="true" />
@@ -576,11 +586,12 @@ const MessageBubble = React.memo(
                     type="button"
                     onClick={handleToggleAudio}
                     className={cn(
-                      'w-9 h-9 rounded-full flex items-center justify-center transition-transform active:scale-95 shadow-sm shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                      'min-w-[44px] min-h-[44px] sm:w-10 sm:h-10 sm:min-w-[40px] sm:min-h-[40px] rounded-full flex items-center justify-center transition-transform active:scale-95 shadow-sm shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                       isOwn
                         ? 'bg-white text-purple-700 hover:bg-white/90'
-                        : 'bg-arvdoul-gradient text-white hover:brightness-105'
+                        : 'text-white hover:brightness-105'
                     )}
+                    style={!isOwn ? { background: BRAND_GRADIENT } : undefined}
                     aria-label={isPlayingAudio ? 'Pause voice message' : 'Play voice message'}
                   >
                     {isPlayingAudio ? (
@@ -589,7 +600,7 @@ const MessageBubble = React.memo(
                       <Play className="w-4 h-4 fill-current ml-0.5" />
                     )}
                   </button>
-                  <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold flex items-center gap-1">
                         <Volume2 className="w-3.5 h-3.5 opacity-75" aria-hidden="true" />
@@ -605,8 +616,11 @@ const MessageBubble = React.memo(
                     </div>
                     <div className={cn('h-1.5 rounded-full overflow-hidden', isOwn ? 'bg-white/25' : isDark ? 'bg-white/10' : 'bg-slate-200')}>
                       <div
-                        className={cn('h-full rounded-full transition-all duration-150', isOwn ? 'bg-white' : 'bg-arvdoul-gradient')}
-                        style={{ width: `${audioProgress}%` }}
+                        className={cn('h-full rounded-full transition-all duration-150', isOwn ? 'bg-white' : '')}
+                        style={{
+                          width: `${audioProgress}%`,
+                          ...(!isOwn ? { background: BRAND_GRADIENT } : undefined),
+                        }}
                       />
                     </div>
                   </div>
@@ -615,7 +629,7 @@ const MessageBubble = React.memo(
                     onClick={handleCycleSpeed}
                     aria-label={`Playback speed ${playbackRate}x`}
                     className={cn(
-                      'px-1.5 py-0.5 rounded-md text-[10px] font-bold tabular-nums shrink-0 transition-colors',
+                      'min-h-[34px] px-2 rounded-lg text-[10px] font-bold tabular-nums shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                       isOwn ? 'bg-white/20 text-white hover:bg-white/30' : isDark ? 'bg-white/10 text-slate-200 hover:bg-white/15' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                     )}
                   >
@@ -812,10 +826,10 @@ const MessageBubble = React.memo(
               />
               <div
                 className={cn(
-                  'absolute z-50 p-1.5 rounded-2xl shadow-xl flex items-center gap-1 border',
+                  'absolute z-50 p-1.5 rounded-2xl shadow-2xl flex items-center gap-1 border backdrop-blur-2xl',
                   preferMenuBelow ? 'top-full mt-2' : 'bottom-full mb-2',
                   isOwn ? 'right-0' : 'left-0',
-                  isDark ? 'bg-[#0B1230] border-white/15' : 'bg-white border-slate-200'
+                  isDark ? 'bg-[#0B1230]/95 border-white/15' : 'bg-white/95 border-slate-200'
                 )}
               >
                 {REACTION_EMOJIS.map((emoji) => (
@@ -824,7 +838,7 @@ const MessageBubble = React.memo(
                     type="button"
                     onClick={() => handleReaction(emoji)}
                     aria-label={`React with ${emoji}`}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-lg hover:scale-110 transition-transform"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg hover:scale-110 active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     {emoji}
                   </button>
@@ -844,19 +858,19 @@ const MessageBubble = React.memo(
               />
               <div
                 className={cn(
-                  'absolute z-50 w-44 rounded-2xl shadow-xl overflow-hidden border p-1',
+                  'absolute z-50 w-48 rounded-2xl shadow-2xl overflow-hidden border p-1.5 backdrop-blur-2xl',
                   preferMenuBelow ? 'top-full mt-2' : 'bottom-full mb-2',
                   isOwn ? 'right-0' : 'left-0',
                   isDark
-                    ? 'bg-[#0B1230] border-white/15 text-slate-200'
-                    : 'bg-white border-slate-200 text-slate-800'
+                    ? 'bg-[#0B1230]/95 border-white/15 text-slate-200'
+                    : 'bg-white/95 border-slate-200 text-slate-800'
                 )}
               >
                 <button
                   type="button"
                   onClick={handleCopy}
                   className={cn(
-                    'w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors',
+                    'w-full min-h-[40px] text-left px-3 py-2 text-xs font-medium flex items-center gap-2.5 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                     isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
                   )}
                 >
@@ -1011,10 +1025,10 @@ const MessageBubble = React.memo(
             <button
               type="button"
               onClick={() => setPreviewImage(null)}
-              className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              className="absolute top-4 right-4 z-10 min-w-[44px] min-h-[44px] rounded-full bg-white/15 backdrop-blur-md text-white hover:bg-white/25 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               aria-label="Close image preview button"
             >
-              <X className="w-6 h-6" />
+              <X className="w-6 h-6" aria-hidden="true" />
             </button>
             <LazyImage
               src={previewImage}

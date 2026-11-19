@@ -550,7 +550,7 @@ const ProfileFeedGrid = memo(({
             <button
               type="button"
               onClick={currentEmpty.action}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-arvdoul-gradient text-white shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl bg-arvdoul-gradient text-white shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               <span>{currentEmpty.cta}</span>
             </button>
@@ -655,7 +655,8 @@ const ProfileFeedGrid = memo(({
                     e.stopPropagation();
                     navigate('/audio-editor', { state: { audioUrl: item.audioURL || item.audioUrl || item.soundUrl || '', trackId: item.id, title: trackTitle } });
                   }}
-                  className="p-2 rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+                  aria-label="Open in Audio Studio"
+                  className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   title="Open in Audio Studio"
                 >
                   <Sliders className="w-4 h-4" />
@@ -704,18 +705,22 @@ const ProfileFeedGrid = memo(({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={(e) => handleQuickBookmark(e, item)}
-                    className="p-1 text-slate-400 hover:text-indigo-500 transition-colors"
+                    aria-label={savedMap[item.id] ? "Remove bookmark" : "Bookmark track"}
+                    title={savedMap[item.id] ? "Remove bookmark" : "Bookmark track"}
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <Bookmark className={cn("w-3.5 h-3.5", savedMap[item.id] && "fill-indigo-500 text-indigo-500")} />
                   </button>
                   <button
                     type="button"
                     onClick={(e) => handleQuickShare(e, item)}
-                    className="p-1 text-slate-400 hover:text-indigo-500 transition-colors"
+                    aria-label="Share track"
+                    title="Share track"
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <Share2 className="w-3.5 h-3.5" />
                   </button>
@@ -956,7 +961,7 @@ const ProfileFeedGrid = memo(({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     {onOpenTipModal && (
                       <button
                         type="button"
@@ -964,7 +969,7 @@ const ProfileFeedGrid = memo(({
                           e.stopPropagation();
                           onOpenTipModal();
                         }}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-amber-500 hover:text-amber-400 transition-colors"
+                        className="min-h-[36px] px-2 flex items-center gap-1 rounded-lg text-[11px] font-semibold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                         title="Tip creator"
                       >
                         <Coins className="w-3.5 h-3.5" />
@@ -975,8 +980,9 @@ const ProfileFeedGrid = memo(({
                     <button
                       type="button"
                       onClick={(e) => handleQuickBookmark(e, item)}
+                      aria-label={savedMap[item.id] ? "Remove bookmark" : "Bookmark post"}
                       className={cn(
-                        "p-1 rounded hover:bg-slate-500/10 transition-colors",
+                        "min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                         savedMap[item.id] ? "text-indigo-500" : "text-slate-400"
                       )}
                       title={savedMap[item.id] ? "Remove bookmark" : "Bookmark post"}
@@ -987,7 +993,8 @@ const ProfileFeedGrid = memo(({
                     <button
                       type="button"
                       onClick={(e) => handleQuickShare(e, item)}
-                      className="p-1 rounded hover:bg-slate-500/10 transition-colors"
+                      aria-label="Share post"
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                       title="Share"
                     >
                       <Share2 className="w-3.5 h-3.5" />
@@ -1125,7 +1132,7 @@ const ProfileFeedGrid = memo(({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
                 {onOpenTipModal && (
                   <button
                     type="button"
@@ -1133,7 +1140,7 @@ const ProfileFeedGrid = memo(({
                       e.stopPropagation();
                       onOpenTipModal();
                     }}
-                    className="flex items-center gap-1 text-xs font-semibold text-amber-500 hover:text-amber-400 transition-colors"
+                    className="min-h-[36px] px-2.5 flex items-center gap-1 rounded-lg text-xs font-semibold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                     title="Tip creator"
                   >
                     <Coins className="w-4 h-4" />
@@ -1144,8 +1151,9 @@ const ProfileFeedGrid = memo(({
                 <button
                   type="button"
                   onClick={(e) => handleQuickBookmark(e, item)}
+                  aria-label={savedMap[item.id] ? "Remove from saved" : "Bookmark post"}
                   className={cn(
-                    "p-1.5 rounded-lg hover:bg-slate-500/10 transition-colors",
+                    "min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                     savedMap[item.id] ? "text-indigo-500" : "text-slate-400"
                   )}
                   title={savedMap[item.id] ? "Remove from saved" : "Bookmark post"}
@@ -1156,7 +1164,8 @@ const ProfileFeedGrid = memo(({
                 <button
                   type="button"
                   onClick={(e) => handleQuickShare(e, item)}
-                  className="p-1.5 rounded-lg hover:bg-slate-500/10 transition-colors"
+                  aria-label="Share post"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-slate-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   title="Share post"
                 >
                   <Share2 className="w-4 h-4" />

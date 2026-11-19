@@ -111,7 +111,7 @@ const ProfileCreatorDashboard = memo(({
         <button
           type="button"
           onClick={() => navigate('/progress')}
-          className="px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-md shrink-0 cursor-pointer hover:brightness-110 transition-all whitespace-nowrap"
+          className="min-h-[44px] px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-md shrink-0 cursor-pointer hover:brightness-110 transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
           style={{ background: BRAND_GRADIENT }}
         >
           Level Up Standing
@@ -229,7 +229,7 @@ const ProfileCreatorDashboard = memo(({
             type="button"
             onClick={() => navigate('/profile/analytics')}
             className={cn(
-              "text-xs font-semibold px-3 py-1.5 rounded-xl border inline-flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap",
+              "min-h-[38px] text-xs font-semibold px-3 py-1.5 rounded-xl border inline-flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
               isDark
                 ? "bg-white/[0.04] hover:bg-white/[0.08] text-purple-300 border-white/10"
                 : "bg-purple-50/70 hover:bg-purple-100/80 text-arvdoul-purple border-purple-200/80"
@@ -246,7 +246,7 @@ const ProfileCreatorDashboard = memo(({
               value={selectedTimeframe}
               onChange={handleSelectTimeframe}
               className={cn(
-                "appearance-none text-xs font-semibold pl-3 pr-7 py-1.5 rounded-xl border cursor-pointer transition-colors outline-none",
+                "min-h-[38px] appearance-none text-xs font-semibold pl-3 pr-7 py-1.5 rounded-xl border cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark
                   ? "bg-white/[0.04] border-white/10 text-slate-200 hover:bg-white/[0.08]"
                   : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"

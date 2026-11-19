@@ -47,6 +47,7 @@ import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
+import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
@@ -105,24 +106,35 @@ export const ProfileLevelProgressCard = memo(({
 
   const passportUrl = isOwner ? '/passport' : `/passport/${userId || 'user'}`;
 
+  const rankTitle = useMemo(() => {
+    if (!levelInfo?.level) return null;
+    try {
+      return LevelModule.getRankTitle?.(levelInfo.level) || null;
+    } catch {
+      return null;
+    }
+  }, [levelInfo?.level]);
+
+  const cardSurface = cn(
+    "w-full lg:w-[272px] shrink-0 rounded-2xl border p-3.5 sm:p-4 flex flex-col justify-between gap-3 transition-colors",
+    isDark
+      ? "bg-white/[0.03] border-white/[0.08] text-white"
+      : "bg-white/90 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.03)]"
+  );
+
   if (!showLevel && !isOwner) {
     return (
-      <div
-        className={cn(
-          "w-full lg:w-64 shrink-0 flex flex-col justify-between gap-3 pt-4 lg:pt-0 lg:pl-6 border-t lg:border-t-0 lg:border-l",
-          isDark ? "border-white/[0.08] text-white" : "border-slate-200/80 text-slate-900"
-        )}
-      >
+      <div className={cardSurface}>
         <div className="flex items-center gap-2.5">
           <div className={cn(
-            "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
+            "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
             isDark ? "bg-white/[0.05] text-slate-300" : "bg-slate-100 text-slate-600"
           )}>
             <Shield className="w-4 h-4" />
           </div>
-          <div>
-            <div className="text-xs font-semibold">Civic Standing</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">Hidden by owner</div>
+          <div className="min-w-0">
+            <div className="text-xs font-semibold truncate">Civic Standing</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Hidden by owner</div>
           </div>
         </div>
 
@@ -130,10 +142,10 @@ export const ProfileLevelProgressCard = memo(({
           type="button"
           onClick={() => navigate?.(passportUrl)}
           className={cn(
-            "w-full py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer",
+            "w-full min-h-[40px] py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
-              ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-200"
-              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-800"
+              ? "bg-white/[0.05] hover:bg-white/[0.09] border-white/10 text-slate-100"
+              : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
           )}
         >
           <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple" />
@@ -154,23 +166,20 @@ export const ProfileLevelProgressCard = memo(({
             handleOpenCitizenship();
           }
         }}
-        className={cn(
-          "w-full lg:w-64 shrink-0 flex flex-col justify-between gap-3 pt-4 lg:pt-0 lg:pl-6 border-t lg:border-t-0 lg:border-l cursor-pointer group/levelcard",
-          isDark ? "border-white/[0.08] text-white" : "border-slate-200/80 text-slate-900"
-        )}
+        className={cn(cardSurface, "cursor-pointer group/levelcard hover:border-arvdoul-purple/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple")}
         role="button"
         tabIndex={0}
       >
         <div className="flex items-center gap-2.5">
           <div className={cn(
-            "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
+            "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
             isDark ? "bg-purple-500/15 text-purple-300" : "bg-purple-50 text-purple-700"
           )}>
             <Shield className="w-4 h-4" />
           </div>
-          <div>
-            <div className="text-xs font-semibold">Civic Standing</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">Initialize citizenship</div>
+          <div className="min-w-0">
+            <div className="text-xs font-semibold truncate">Civic Standing</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Initialize citizenship</div>
           </div>
         </div>
 
@@ -181,10 +190,10 @@ export const ProfileLevelProgressCard = memo(({
             navigate?.(passportUrl);
           }}
           className={cn(
-            "w-full py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer",
+            "w-full min-h-[40px] py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
-              ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-200"
-              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-800"
+              ? "bg-white/[0.05] hover:bg-white/[0.09] border-white/10 text-slate-100"
+              : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
           )}
         >
           <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple" />
@@ -212,16 +221,16 @@ export const ProfileLevelProgressCard = memo(({
         }
       }}
       className={cn(
-        "w-full lg:w-64 shrink-0 flex flex-col justify-between gap-3 pt-4 lg:pt-0 lg:pl-6 border-t lg:border-t-0 lg:border-l cursor-pointer group/levelcard",
-        isDark ? "border-white/[0.08] text-white" : "border-slate-200/80 text-slate-900"
+        cardSurface,
+        "cursor-pointer group/levelcard hover:border-arvdoul-purple/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
       )}
       role="button"
       tabIndex={0}
       title="View Level Progression & Citizenship Roadmap"
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+      <div className="flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full">
               <polygon
                 points="50 3, 90 25, 90 75, 50 97, 10 75, 10 25"
@@ -229,23 +238,25 @@ export const ProfileLevelProgressCard = memo(({
                 strokeWidth="4"
               />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-white text-[11px] font-bold tabular-nums">
+            <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold tabular-nums">
               {currentLevel}
             </span>
           </div>
 
-          <div>
-            <div className="font-display text-sm font-bold text-slate-900 dark:text-white tabular-nums leading-tight">
-              Level {currentLevel}
+          <div className="min-w-0">
+            <div className="font-display text-sm font-bold text-slate-900 dark:text-white tabular-nums leading-tight truncate">
+              {rankTitle || `Level ${currentLevel}`}
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
               {isMaxLevel
-                ? `${currentXp.toLocaleString()} XP · Apex`
-                : `${currentXp.toLocaleString()} / ${levelSpan.toLocaleString()} XP`}
+                ? `Level ${currentLevel} · Apex`
+                : `Lv.${currentLevel} · ${currentXp.toLocaleString()}/${levelSpan.toLocaleString()} XP (${progressPercent}%)`}
             </div>
           </div>
         </div>
+      </div>
 
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={(e) => {
@@ -253,33 +264,27 @@ export const ProfileLevelProgressCard = memo(({
             navigate?.(passportUrl);
           }}
           className={cn(
-            "flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border transition-colors cursor-pointer shrink-0",
+            "flex-1 min-h-[38px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
             isDark
-              ? "bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border-white/10"
-              : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+              ? "bg-white/[0.05] hover:bg-white/[0.1] text-slate-100 border-white/10"
+              : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200"
           )}
           title="Open Digital Passport"
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple" />
-          <span>Passport</span>
+          <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple shrink-0" />
+          <span className="truncate">Passport</span>
         </button>
-      </div>
 
-      {/* Slim precision progress track */}
-      <div className="space-y-1">
-        <div className="w-full h-1.5 rounded-full bg-slate-200/90 dark:bg-white/10 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${progressPercent}%`,
-              background: 'linear-gradient(90deg, var(--arv-brand-violet) 0%, var(--arv-brand-cyan) 100%)',
-            }}
-          />
-        </div>
-        <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-          <span>Citizenship Roadmap</span>
-          <span>{progressPercent}%</span>
-        </div>
+        <span
+          className={cn(
+            "min-h-[38px] px-2.5 py-1.5 rounded-xl text-[11px] font-semibold inline-flex items-center justify-center border shrink-0 transition-colors",
+            isDark
+              ? "border-purple-500/25 bg-purple-500/10 text-purple-300 group-hover/levelcard:bg-purple-500/20"
+              : "border-purple-200 bg-purple-50 text-arvdoul-purple group-hover/levelcard:bg-purple-100/80"
+          )}
+        >
+          Roadmap
+        </span>
       </div>
     </div>
   );
@@ -329,6 +334,7 @@ export const ProfileHeroSection = memo(({
   isRefreshing = false,
 }) => {
   const navigate = useNavigate();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
   const callsEnabled = useFeatureFlag('messaging.calls');
   const [copiedHandle, setCopiedHandle] = useState(false);
@@ -433,18 +439,20 @@ export const ProfileHeroSection = memo(({
   const joinedDate = profile?.createdAt ? formatJoinedDate(profile.createdAt) : null;
 
   const secondaryBtnClass = cn(
-    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3.5 py-2 rounded-xl border text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0",
+    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3.5 py-2 rounded-2xl border text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
     isDark
       ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-100"
       : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-sm"
   );
 
   const iconBtnClass = cn(
-    "inline-flex items-center justify-center w-11 h-11 rounded-xl border transition-colors cursor-pointer shrink-0",
+    "inline-flex items-center justify-center w-11 h-11 rounded-2xl border transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
     isDark
       ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-200"
       : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-700 shadow-sm"
   );
+
+  const showInlineBack = Boolean(onBack && !hasTopAppBar);
 
   return (
     <section
@@ -454,25 +462,21 @@ export const ProfileHeroSection = memo(({
         isDark ? "border-white/[0.08] text-white" : "border-slate-200/80 text-slate-900"
       )}
     >
-      {/* Top Utility Row (Back navigation / Refresh trigger) */}
-      {(onBack || onRefresh) && (
+      {/* Top Utility Row (only rendered when inline Back is needed outside TopAppBar) */}
+      {showInlineBack && (
         <div className="flex items-center justify-between gap-2 mb-4">
-          {onBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              className={cn(
-                "inline-flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer",
-                isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
-              )}
-              aria-label="Go back"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Back</span>
-            </button>
-          ) : (
-            <span />
-          )}
+          <button
+            type="button"
+            onClick={onBack}
+            className={cn(
+              "inline-flex items-center gap-1.5 min-h-[40px] px-2.5 -ml-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+              isDark ? "text-slate-300 hover:text-white hover:bg-white/[0.06]" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            )}
+            aria-label="Go back"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Back</span>
+          </button>
 
           {onRefresh && (
             <button
@@ -482,7 +486,7 @@ export const ProfileHeroSection = memo(({
               aria-label="Refresh profile"
               title="Refresh profile"
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors cursor-pointer disabled:opacity-60",
+                "inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark
                   ? "border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.06]"
                   : "border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -496,20 +500,20 @@ export const ProfileHeroSection = memo(({
       )}
 
       {/* Main Editorial Identity Row */}
-      <div className="flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-8">
+      <div className="flex flex-col lg:flex-row items-start justify-between gap-5 lg:gap-8">
         {/* Left: Portrait + Typography & Metadata */}
-        <div className="flex flex-col sm:flex-row items-start gap-5 sm:gap-6 min-w-0 flex-1 w-full">
+        <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 min-w-0 flex-1 w-full">
           {/* Circular Portrait */}
           <div className="relative shrink-0">
             <div
-              className={cn("w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full p-[3px] relative transition-transform duration-300", crestAuraRing)}
+              className={cn("w-24 h-24 sm:w-28 sm:h-28 lg:w-[120px] lg:h-[120px] rounded-full p-[3px] relative transition-transform duration-300", crestAuraRing)}
               style={isDefaultAura ? { boxShadow: `0 12px 28px ${brandRgba(isDark ? 0.28 : 0.16)}` } : undefined}
             >
               <button
                 type="button"
                 onClick={onAvatarClick}
                 className={cn(
-                  "w-full h-full rounded-full overflow-hidden ring-2 block relative cursor-pointer group",
+                  "w-full h-full rounded-full overflow-hidden ring-2 block relative cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark ? "bg-[#080F2E] ring-[#03071B]" : "bg-slate-100 ring-[#F6F8FC]"
                 )}
                 aria-label="Profile Avatar"
@@ -528,15 +532,31 @@ export const ProfileHeroSection = memo(({
                 )}
               </button>
 
-              {/* Presence Dot */}
-              <div
-                className={cn(
-                  "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full ring-2",
-                  isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]",
-                  isOnline ? "bg-emerald-500" : "bg-slate-400"
-                )}
-                title={isOnline ? "Online" : "Offline"}
-              />
+              {/* Presence Dot (only shown when online) */}
+              {isOnline && (
+                <div
+                  className={cn(
+                    "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2",
+                    isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]"
+                  )}
+                  title="Online"
+                  aria-label="Online"
+                />
+              )}
+              {isOwner && !isOnline && (
+                <button
+                  type="button"
+                  onClick={onAvatarClick}
+                  aria-label="Update profile photo"
+                  title="Update profile photo"
+                  className={cn(
+                    "sm:hidden absolute bottom-0.5 right-0.5 w-7 h-7 rounded-full flex items-center justify-center border shadow-md cursor-pointer",
+                    isDark ? "bg-[#0B1438] border-white/15 text-white" : "bg-white border-slate-200 text-slate-700"
+                  )}
+                >
+                  <Camera className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -762,212 +782,264 @@ export const ProfileHeroSection = memo(({
         />
       </div>
 
-      {/* Primary Action Strip — clear hierarchy without boxed sub-cards */}
-      <div className="mt-6 flex items-center gap-2 sm:gap-2.5 flex-wrap">
+      {/* Primary Action Strip — iOS-aligned hierarchy */}
+      <div className="mt-5 sm:mt-6 flex items-center justify-between gap-2.5 flex-wrap">
         {isOwner ? (
           <>
-            <button
-              type="button"
-              onClick={onEditProfile || (() => navigate('/profile/edit'))}
-              className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap shrink-0"
-              style={{ background: BRAND_GRADIENT }}
-            >
-              <Edit3 className="w-4 h-4" />
-              <span>Edit Profile</span>
-            </button>
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0">
+              <button
+                type="button"
+                onClick={onEditProfile || (() => navigate('/profile/edit'))}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                style={{ background: BRAND_GRADIENT }}
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>Edit Profile</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={onShare}
-              className={secondaryBtnClass}
-            >
-              <Share2 className="w-4 h-4 text-arvdoul-purple" />
-              <span>Share</span>
-            </button>
+              <button
+                type="button"
+                onClick={onInsightsPress || (() => navigate('/profile/analytics'))}
+                className={cn(secondaryBtnClass, "flex-1 sm:flex-none")}
+              >
+                <BarChart2 className="w-4 h-4 text-arvdoul-blue" />
+                <span>Insights</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={onOpenQrCode}
-              className={secondaryBtnClass}
-            >
-              <QrCode className="w-4 h-4 text-arvdoul-purple" />
-              <span>QR Code</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => navigate('/coins')}
+                className={secondaryBtnClass}
+              >
+                <Coins className="w-4 h-4 text-amber-500" />
+                <span>Coins</span>
+              </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => navigate('/coins')}
-              className={secondaryBtnClass}
-            >
-              <Coins className="w-4 h-4 text-amber-500" />
-              <span>Coins</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={onShare}
+                  className={iconBtnClass}
+                  aria-label="Share Profile"
+                  title="Share Profile"
+                >
+                  <Share2 className="w-4 h-4 text-arvdoul-purple" />
+                </button>
+              )}
 
-            <button
-              type="button"
-              onClick={onInsightsPress || (() => navigate('/profile/analytics'))}
-              className={secondaryBtnClass}
-            >
-              <BarChart2 className="w-4 h-4 text-arvdoul-blue" />
-              <span>Insights</span>
-            </button>
+              {onOpenQrCode && (
+                <button
+                  type="button"
+                  onClick={onOpenQrCode}
+                  className={iconBtnClass}
+                  aria-label="Identity QR Code"
+                  title="Identity QR Code"
+                >
+                  <QrCode className="w-4 h-4 text-arvdoul-purple" />
+                </button>
+              )}
 
-            <button
-              type="button"
-              onClick={() => navigate('/settings')}
-              className={iconBtnClass}
-              aria-label="Settings"
-              title="Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                className={iconBtnClass}
+                aria-label="Settings"
+                title="Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+
+              {onRefresh && !showInlineBack && (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className={cn(iconBtnClass, "disabled:opacity-60")}
+                  aria-label="Refresh profile"
+                  title="Refresh profile"
+                >
+                  <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+                </button>
+              )}
+
+              {onOpenOptions && (
+                <button
+                  type="button"
+                  onClick={onOpenOptions}
+                  className={iconBtnClass}
+                  aria-label="Profile options"
+                  title="Profile options & View As"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </>
         ) : (
           <>
-            {/* Primary Follow CTA */}
-            <button
-              type="button"
-              onClick={onFollowToggle}
-              disabled={followLoading || !onFollowToggle}
-              aria-disabled={followLoading || !onFollowToggle}
-              title={!onFollowToggle ? 'Preview only — this is how your profile looks to others' : undefined}
-              className={cn(
-                "flex-1 sm:flex-none sm:min-w-[148px] min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap",
-                !onFollowToggle && "opacity-60 cursor-not-allowed",
-                isFollowing || requestStatus === 'pending'
-                  ? (isDark
-                      ? "bg-white/10 hover:bg-white/15 border border-white/15 text-white"
-                      : "bg-slate-200/80 hover:bg-slate-300/80 border border-slate-300 text-slate-900")
-                  : "text-white shadow-md hover:brightness-110"
-              )}
-              style={!(isFollowing || requestStatus === 'pending') ? { background: BRAND_GRADIENT } : undefined}
-            >
-              {isFollowing ? (
-                <>
-                  <UserCheck className="w-4 h-4" />
-                  <span>Following</span>
-                </>
-              ) : requestStatus === 'pending' ? (
-                <>
-                  <Clock className="w-4 h-4" />
-                  <span>Requested</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Follow</span>
-                </>
-              )}
-            </button>
-
-            {/* Message CTA */}
-            <button
-              type="button"
-              onClick={onOpenMessages}
-              disabled={!onOpenMessages}
-              aria-disabled={!onOpenMessages}
-              title={!onOpenMessages ? 'Preview only' : undefined}
-              className={cn(
-                secondaryBtnClass,
-                "flex-1 sm:flex-none px-4 py-2.5",
-                (!onOpenMessages || capabilities?.canMessage === false) && "opacity-60 cursor-not-allowed"
-              )}
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Message</span>
-            </button>
-
-            {/* Friend Request CTA */}
-            {onFriendRequestToggle && (
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial flex-wrap min-w-0">
+              {/* Primary Follow CTA */}
               <button
                 type="button"
-                onClick={friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle}
-                disabled={friendRequestLoading || friendshipStatus === 'friends'}
+                onClick={onFollowToggle}
+                disabled={followLoading || !onFollowToggle}
+                aria-disabled={followLoading || !onFollowToggle}
+                title={!onFollowToggle ? 'Preview only — this is how your profile looks to others' : undefined}
                 className={cn(
-                  "min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-[13px] border transition-colors whitespace-nowrap shrink-0",
-                  friendshipStatus === 'friends'
-                    ? (isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700")
-                    : friendshipStatus === 'received'
-                    ? "bg-emerald-600 hover:bg-emerald-500 border-transparent text-white shadow-sm cursor-pointer"
-                    : friendshipStatus === 'pending'
-                    ? (isDark ? "bg-white/5 hover:bg-red-500/10 border-white/10 hover:border-red-500/30 text-slate-300 hover:text-red-300 cursor-pointer" : "bg-white hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-700 hover:text-red-600 cursor-pointer")
-                    : cn(secondaryBtnClass, "py-2.5")
+                  "flex-1 sm:flex-none sm:min-w-[148px] min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  !onFollowToggle && "opacity-60 cursor-not-allowed",
+                  isFollowing || requestStatus === 'pending'
+                    ? (isDark
+                        ? "bg-white/10 hover:bg-white/15 border border-white/15 text-white"
+                        : "bg-slate-200/80 hover:bg-slate-300/80 border border-slate-300 text-slate-900")
+                    : "text-white shadow-md hover:brightness-110"
                 )}
+                style={!(isFollowing || requestStatus === 'pending') ? { background: BRAND_GRADIENT } : undefined}
               >
-                {friendshipStatus === 'friends' ? (
+                {isFollowing ? (
                   <>
                     <UserCheck className="w-4 h-4" />
-                    <span>Friends</span>
+                    <span>Following</span>
                   </>
-                ) : friendshipStatus === 'received' ? (
+                ) : requestStatus === 'pending' ? (
                   <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Accept Request</span>
-                  </>
-                ) : friendshipStatus === 'pending' ? (
-                  <>
-                    <X className="w-4 h-4" />
-                    <span>{onCancelFriendRequest ? 'Cancel Request' : 'Request Sent'}</span>
+                    <Clock className="w-4 h-4" />
+                    <span>Requested</span>
                   </>
                 ) : (
                   <>
                     <UserPlus className="w-4 h-4" />
-                    <span>Add Friend</span>
+                    <span>Follow</span>
                   </>
                 )}
               </button>
-            )}
 
-            {/* Utility Icon Actions */}
-            {callsEnabled && (
+              {/* Message CTA */}
               <button
                 type="button"
-                onClick={handleStartCall}
+                onClick={onOpenMessages}
                 disabled={!onOpenMessages}
                 aria-disabled={!onOpenMessages}
-                className={cn(iconBtnClass, !onOpenMessages && "opacity-60 cursor-not-allowed")}
-                title={onOpenMessages ? 'Audio Call' : 'Preview only'}
-                aria-label="Audio Call"
+                title={!onOpenMessages ? 'Preview only' : undefined}
+                className={cn(
+                  secondaryBtnClass,
+                  "flex-1 sm:flex-none px-4 py-2.5",
+                  (!onOpenMessages || capabilities?.canMessage === false) && "opacity-60 cursor-not-allowed"
+                )}
               >
-                <Phone className="w-4 h-4" />
+                <MessageSquare className="w-4 h-4" />
+                <span>Message</span>
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={onOpenTipModal}
-              disabled={!onOpenTipModal}
-              aria-disabled={!onOpenTipModal}
-              title={onOpenTipModal ? 'Send Gift / Tip Coins' : 'Preview only'}
-              className={cn(iconBtnClass, !onOpenTipModal && "opacity-60 cursor-not-allowed")}
-              aria-label="Send Gift"
-            >
-              <Gift className="w-4 h-4 text-arvdoul-purple" />
-            </button>
+              {/* Friend Request CTA */}
+              {onFriendRequestToggle && (
+                <button
+                  type="button"
+                  onClick={friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle}
+                  disabled={friendRequestLoading || friendshipStatus === 'friends'}
+                  className={cn(
+                    "min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl font-semibold text-xs sm:text-[13px] border transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    friendshipStatus === 'friends'
+                      ? (isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700")
+                      : friendshipStatus === 'received'
+                      ? "bg-emerald-600 hover:bg-emerald-500 border-transparent text-white shadow-sm cursor-pointer"
+                      : friendshipStatus === 'pending'
+                      ? (isDark ? "bg-white/5 hover:bg-red-500/10 border-white/10 hover:border-red-500/30 text-slate-300 hover:text-red-300 cursor-pointer" : "bg-white hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-700 hover:text-red-600 cursor-pointer")
+                      : cn(secondaryBtnClass, "py-2.5")
+                  )}
+                >
+                  {friendshipStatus === 'friends' ? (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      <span>Friends</span>
+                    </>
+                  ) : friendshipStatus === 'received' ? (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Accept Request</span>
+                    </>
+                  ) : friendshipStatus === 'pending' ? (
+                    <>
+                      <X className="w-4 h-4" />
+                      <span>{onCancelFriendRequest ? 'Cancel Request' : 'Request Sent'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Add Friend</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
-            {onShare && (
+            {/* Utility Icon Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              {callsEnabled && (
+                <button
+                  type="button"
+                  onClick={handleStartCall}
+                  disabled={!onOpenMessages}
+                  aria-disabled={!onOpenMessages}
+                  className={cn(iconBtnClass, !onOpenMessages && "opacity-60 cursor-not-allowed")}
+                  title={onOpenMessages ? 'Audio Call' : 'Preview only'}
+                  aria-label="Audio Call"
+                >
+                  <Phone className="w-4 h-4" />
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={onShare}
-                title="Share Profile"
-                className={iconBtnClass}
-                aria-label="Share Profile"
+                onClick={onOpenTipModal}
+                disabled={!onOpenTipModal}
+                aria-disabled={!onOpenTipModal}
+                title={onOpenTipModal ? 'Send Gift / Tip Coins' : 'Preview only'}
+                className={cn(iconBtnClass, !onOpenTipModal && "opacity-60 cursor-not-allowed")}
+                aria-label="Send Gift"
               >
-                <Share2 className="w-4 h-4" />
+                <Gift className="w-4 h-4 text-arvdoul-purple" />
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={onOpenOptions}
-              disabled={!onOpenOptions}
-              aria-disabled={!onOpenOptions}
-              title={onOpenOptions ? 'More Options' : 'Preview only'}
-              className={cn(iconBtnClass, !onOpenOptions && "opacity-60 cursor-not-allowed")}
-              aria-label="More Options"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={onShare}
+                  title="Share Profile"
+                  className={iconBtnClass}
+                  aria-label="Share Profile"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+              )}
+
+              {onRefresh && !showInlineBack && (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className={cn(iconBtnClass, "disabled:opacity-60")}
+                  aria-label="Refresh profile"
+                  title="Refresh profile"
+                >
+                  <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onOpenOptions}
+                disabled={!onOpenOptions}
+                aria-disabled={!onOpenOptions}
+                title={onOpenOptions ? 'More Options' : 'Preview only'}
+                className={cn(iconBtnClass, !onOpenOptions && "opacity-60 cursor-not-allowed")}
+                aria-label="More Options"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </div>
           </>
         )}
       </div>

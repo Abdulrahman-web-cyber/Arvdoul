@@ -345,7 +345,7 @@ export default function ProfileMyScreen() {
                 onClick={handleRefresh}
                 disabled={isRefreshing}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer",
+                  "min-h-[40px] px-3.5 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
                 )}
               >
@@ -357,7 +357,7 @@ export default function ProfileMyScreen() {
         )}
 
         {/* Master Container */}
-        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-6">
+        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-5 sm:space-y-6">
           {/* 1. Master Identity Card with Level Badge, Passport & Action Bar */}
           <ProfileHeroSection
             profile={displayedProfile}

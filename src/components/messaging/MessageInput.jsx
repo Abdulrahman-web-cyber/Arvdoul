@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { useAuth } from '../../context/AuthContext';
 import {
   Send,
@@ -429,16 +430,16 @@ const MessageInput = React.memo(
     return (
       <div
         className={cn(
-          'border-t px-3 py-2.5 space-y-2.5',
-          isDark ? 'border-white/[0.08] bg-[#050B24]' : 'border-slate-200 bg-white'
+          'border-t px-3 sm:px-4 py-2.5 space-y-2.5 backdrop-blur-2xl',
+          isDark ? 'border-white/[0.08] bg-[#03071B]/95' : 'border-slate-200/80 bg-[#F6F8FC]/95'
         )}
       >
         {/* Inline Edit Banner */}
         {editingMessage && (
           <div
             className={cn(
-              'flex items-center gap-2 rounded-xl border px-3 py-2',
-              isDark ? 'bg-[#090F2D] border-purple-500/40' : 'bg-purple-50 border-purple-200'
+              'flex items-center gap-2 rounded-2xl border px-3 py-2',
+              isDark ? 'bg-[#090F2D] border-arvdoul-purple/40' : 'bg-white border-arvdoul-purple/30 shadow-xs'
             )}
           >
             <Edit3 className="w-4 h-4 text-purple-400 shrink-0" aria-hidden="true" />
@@ -451,7 +452,7 @@ const MessageInput = React.memo(
               onClick={() => onCancelEdit?.()}
               aria-label="Cancel editing"
               className={cn(
-                'p-1.5 rounded-full transition-colors',
+                'min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                 isDark ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-slate-200 text-slate-600'
               )}
             >
@@ -464,8 +465,8 @@ const MessageInput = React.memo(
         {uploadProgress && (
           <div
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-xl border',
-              isDark ? 'bg-[#090F2D] border-white/10' : 'bg-slate-50 border-slate-200'
+              'flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border',
+              isDark ? 'bg-[#090F2D] border-white/10' : 'bg-white border-slate-200 shadow-xs'
             )}
           >
             <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" aria-hidden="true" />
@@ -478,8 +479,11 @@ const MessageInput = React.memo(
               </div>
               <div className={cn('h-1.5 rounded-full overflow-hidden', isDark ? 'bg-white/10' : 'bg-slate-200')}>
                 <div
-                  className="h-full bg-arvdoul-gradient transition-all duration-150"
-                  style={{ width: `${Math.min(100, Math.max(4, Math.round((uploadProgress.percent || 0) * 100)))}%` }}
+                  className="h-full transition-all duration-150"
+                  style={{
+                    width: `${Math.min(100, Math.max(4, Math.round((uploadProgress.percent || 0) * 100)))}%`,
+                    background: BRAND_GRADIENT,
+                  }}
                 />
               </div>
             </div>
@@ -488,7 +492,7 @@ const MessageInput = React.memo(
                 type="button"
                 onClick={onCancelUpload}
                 className={cn(
-                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors',
+                  'min-h-[36px] px-3 rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark ? 'text-red-300 hover:bg-red-500/20' : 'text-red-600 hover:bg-red-100'
                 )}
               >
@@ -503,17 +507,17 @@ const MessageInput = React.memo(
           <div
             role="alert"
             className={cn(
-              'flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-xs',
+              'flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border text-xs',
               isDark ? 'bg-red-950/35 border-red-800/50 text-red-200' : 'bg-red-50 border-red-200 text-red-800'
             )}
           >
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" aria-hidden="true" />
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" aria-hidden="true" />
             <p className="flex-1 min-w-0 leading-snug">{micError}</p>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={handleStartRecording}
-                className="px-2 py-1 rounded-lg bg-red-600 text-white text-[11px] font-semibold hover:bg-red-500"
+                className="min-h-[36px] px-3 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
                 Retry
               </button>
@@ -521,9 +525,9 @@ const MessageInput = React.memo(
                 type="button"
                 onClick={() => setMicError(null)}
                 aria-label="Dismiss microphone error"
-                className="p-1 rounded-lg opacity-75 hover:opacity-100"
+                className="min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center opacity-75 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
-                <X className="w-3.5 h-3.5" aria-hidden="true" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -537,8 +541,8 @@ const MessageInput = React.memo(
                 <div
                   key={`${file.name}-${index}`}
                   className={cn(
-                    'relative flex-shrink-0 rounded-xl overflow-hidden border',
-                    isDark ? 'bg-[#090F2D] border-white/10' : 'bg-slate-100 border-slate-200'
+                    'relative flex-shrink-0 rounded-2xl overflow-hidden border',
+                    isDark ? 'bg-[#090F2D] border-white/10' : 'bg-white border-slate-200'
                   )}
                 >
                   {file.type?.startsWith('image/') && previewUrls[index] ? (
@@ -555,9 +559,9 @@ const MessageInput = React.memo(
                     type="button"
                     aria-label={`Remove ${file.name}`}
                     onClick={() => removeAttachedFile(index)}
-                    className="absolute top-1 right-1 bg-black/75 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                    className="absolute top-1 right-1 w-7 h-7 bg-black/75 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
-                    <X className="w-3 h-3" aria-hidden="true" />
+                    <X className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -569,13 +573,14 @@ const MessageInput = React.memo(
                   onClick={() => setViewOnce((v) => !v)}
                   aria-pressed={viewOnce}
                   className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
+                    'min-h-[38px] inline-flex items-center gap-1.5 px-3.5 rounded-full text-xs font-semibold border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                     viewOnce
-                      ? 'bg-arvdoul-gradient text-white border-transparent shadow-sm'
+                      ? 'text-white border-transparent shadow-sm'
                       : isDark
                         ? 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                        : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                   )}
+                  style={viewOnce ? { background: BRAND_GRADIENT } : undefined}
                 >
                   <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{viewOnce ? 'View Once (1x) enabled' : 'Send as View Once'}</span>
@@ -589,7 +594,7 @@ const MessageInput = React.memo(
         {isRecording && (
           <div
             className={cn(
-              'flex items-center gap-3 px-3.5 py-2.5 rounded-xl border',
+              'flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border',
               isDark ? 'bg-red-950/30 border-red-800/40' : 'bg-red-50 border-red-200'
             )}
           >
@@ -607,7 +612,7 @@ const MessageInput = React.memo(
                 type="button"
                 onClick={handleCancelRecording}
                 className={cn(
-                  'px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                  'min-h-[40px] px-3 rounded-xl text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-200'
                 )}
               >
@@ -616,7 +621,7 @@ const MessageInput = React.memo(
               <button
                 type="button"
                 onClick={handleStopRecording}
-                className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-500 transition-colors"
+                className="min-h-[40px] px-3.5 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
                 Stop & Preview
               </button>
@@ -628,8 +633,8 @@ const MessageInput = React.memo(
         {!isRecording && recordedVoice && (
           <div
             className={cn(
-              'flex flex-col sm:flex-row sm:items-center gap-2.5 px-3.5 py-2.5 rounded-xl border',
-              isDark ? 'bg-[#090F2D] border-purple-500/35' : 'bg-purple-50/70 border-purple-200'
+              'flex flex-col sm:flex-row sm:items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border',
+              isDark ? 'bg-[#090F2D] border-arvdoul-purple/35' : 'bg-white border-arvdoul-purple/30 shadow-xs'
             )}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -643,8 +648,8 @@ const MessageInput = React.memo(
                 type="button"
                 onClick={clearRecordedVoice}
                 className={cn(
-                  'px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  isDark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-200'
+                  'min-h-[40px] px-3 rounded-xl text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-100'
                 )}
               >
                 Discard
@@ -653,8 +658,8 @@ const MessageInput = React.memo(
                 type="button"
                 onClick={handleStartRecording}
                 className={cn(
-                  'px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors',
-                  isDark ? 'bg-white/10 text-slate-200 hover:bg-white/15' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  'min-h-[40px] px-3 rounded-xl text-xs font-medium flex items-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'bg-white/10 text-slate-200 hover:bg-white/15' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
                 )}
               >
                 <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
@@ -664,7 +669,8 @@ const MessageInput = React.memo(
                 type="button"
                 onClick={handleSendRecordedVoice}
                 disabled={isSending || disabled}
-                className="px-3 py-1.5 rounded-lg bg-arvdoul-gradient text-white text-xs font-semibold flex items-center gap-1 hover:brightness-105 disabled:opacity-50"
+                className="min-h-[40px] px-3.5 rounded-xl text-white text-xs font-semibold flex items-center gap-1.5 hover:brightness-105 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                style={{ background: BRAND_GRADIENT }}
               >
                 {isSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 <span>Send</span>
@@ -673,8 +679,8 @@ const MessageInput = React.memo(
           </div>
         )}
 
-        {/* Composer controls row */}
-        <div className="flex items-end gap-1.5">
+        {/* Composer controls row — iOS capsule pill */}
+        <div className="flex items-end gap-2">
           {!editingMessage && (
             <button
               type="button"
@@ -685,12 +691,12 @@ const MessageInput = React.memo(
               }}
               disabled={disabled || isVoiceMode || isSending}
               className={cn(
-                'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                'min-h-[44px] min-w-[44px] rounded-full border flex items-center justify-center transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                 showAttachments
-                  ? 'bg-purple-500/15 text-purple-400'
+                  ? 'bg-arvdoul-purple/20 border-arvdoul-purple/40 text-purple-400'
                   : isDark
-                    ? 'hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-40'
-                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-40'
+                    ? 'bg-[#090F2D] border-white/10 hover:bg-white/10 text-slate-300 hover:text-white disabled:opacity-40'
+                    : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-40 shadow-xs'
               )}
               aria-label="Attach media"
               title="Attach media"
@@ -699,92 +705,104 @@ const MessageInput = React.memo(
             </button>
           )}
 
-          <textarea
-            aria-label={editingMessage ? 'Edit message' : 'Message'}
-            dir="auto"
-            maxLength={MESSAGING_PART1_LIMITS.TEXT_MAX_LENGTH}
-            ref={textInputRef}
-            value={text}
-            onChange={(e) => handleTypingChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape' && editingMessage) {
-                e.preventDefault();
-                onCancelEdit?.();
-                return;
-              }
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            placeholder={editingMessage ? 'Edit your message...' : placeholder}
-            disabled={disabled || isVoiceMode}
+          <div
             className={cn(
-              'flex-1 px-4 py-2.5 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple text-sm max-h-[120px] disabled:opacity-50 disabled:cursor-not-allowed',
+              'flex-1 flex items-end rounded-[24px] border transition-colors focus-within:ring-2 focus-within:ring-arvdoul-purple/60 min-w-0',
               isDark
-                ? 'bg-[#090F2D] text-white placeholder-slate-500 border border-white/10'
-                : 'bg-slate-100 text-slate-900 placeholder-slate-400 border border-slate-200'
+                ? 'bg-[#090F2D] border-white/10'
+                : 'bg-white border-slate-200/90 shadow-xs'
             )}
-            rows={1}
-            style={{
-              minHeight: '42px',
-              maxHeight,
-              overflowY: 'auto',
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowEmoji(!showEmoji);
-              setShowGIFPicker(false);
-              setShowAttachments(false);
-            }}
-            disabled={disabled || isVoiceMode}
-            className={cn(
-              'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-              showEmoji
-                ? 'bg-arvdoul-gradient text-white'
-                : isDark
-                  ? 'hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-40'
-                  : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-40'
-            )}
-            aria-label="Emoji"
-            title="Emoji"
           >
-            <Smile className="w-5 h-5" aria-hidden="true" />
-          </button>
-
-          {!editingMessage && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowGIFPicker(!showGIFPicker);
-                setShowEmoji(false);
-                setShowAttachments(false);
+            <textarea
+              aria-label={editingMessage ? 'Edit message' : 'Message'}
+              dir="auto"
+              maxLength={MESSAGING_PART1_LIMITS.TEXT_MAX_LENGTH}
+              ref={textInputRef}
+              value={text}
+              onChange={(e) => handleTypingChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && editingMessage) {
+                  e.preventDefault();
+                  onCancelEdit?.();
+                  return;
+                }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
               }}
+              placeholder={editingMessage ? 'Edit your message...' : placeholder}
               disabled={disabled || isVoiceMode}
               className={cn(
-                'min-h-[40px] px-2.5 rounded-full transition-colors text-xs font-bold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-                showGIFPicker
-                  ? 'bg-arvdoul-gradient text-white'
-                  : isDark
-                    ? 'hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-40'
-                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900 disabled:opacity-40'
+                'flex-1 bg-transparent pl-4 pr-2 py-2.5 resize-none focus:outline-none text-sm max-h-[120px] disabled:opacity-50 disabled:cursor-not-allowed min-w-0',
+                isDark
+                  ? 'text-white placeholder-slate-500'
+                  : 'text-slate-900 placeholder-slate-400'
               )}
-              aria-label="GIF Reactions"
-              title="GIF"
-            >
-              GIF
-            </button>
-          )}
+              rows={1}
+              style={{
+                minHeight: '44px',
+                maxHeight,
+                overflowY: 'auto',
+              }}
+            />
+
+            <div className="flex items-center pr-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEmoji(!showEmoji);
+                  setShowGIFPicker(false);
+                  setShowAttachments(false);
+                }}
+                disabled={disabled || isVoiceMode}
+                className={cn(
+                  'min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  showEmoji
+                    ? 'text-purple-400'
+                    : isDark
+                      ? 'hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-40'
+                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900 disabled:opacity-40'
+                )}
+                aria-label="Emoji"
+                title="Emoji"
+              >
+                <Smile className="w-5 h-5" aria-hidden="true" />
+              </button>
+
+              {!editingMessage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGIFPicker(!showGIFPicker);
+                    setShowEmoji(false);
+                    setShowAttachments(false);
+                  }}
+                  disabled={disabled || isVoiceMode}
+                  className={cn(
+                    'min-h-[44px] min-w-[44px] px-2 rounded-full transition-colors text-xs font-bold tracking-tight flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    showGIFPicker
+                      ? 'text-purple-400'
+                      : isDark
+                        ? 'hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-40'
+                        : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900 disabled:opacity-40'
+                  )}
+                  aria-label="GIF Reactions"
+                  title="GIF"
+                >
+                  GIF
+                </button>
+              )}
+            </div>
+          </div>
 
           {text.trim() || attachedFiles.length > 0 || editingMessage ? (
             <button
               type="button"
               onClick={handleSendMessage}
               disabled={disabled || isSending || (editingMessage && !text.trim())}
-              className="min-h-[40px] min-w-[40px] rounded-full transition-all text-white bg-arvdoul-gradient hover:brightness-105 flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+              className="min-h-[44px] min-w-[44px] rounded-full transition-all text-white hover:brightness-105 active:scale-95 flex items-center justify-center shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+              style={{ background: BRAND_GRADIENT }}
               aria-label={editingMessage ? 'Save edited message' : 'Send message'}
               title={editingMessage ? 'Save edit' : 'Send message'}
             >
@@ -800,9 +818,10 @@ const MessageInput = React.memo(
               onClick={isRecording ? handleStopRecording : handleStartRecording}
               disabled={disabled || Boolean(recordedVoice)}
               className={cn(
-                'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-all text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-                isRecording ? 'bg-red-600 hover:bg-red-500' : 'bg-arvdoul-gradient hover:brightness-105'
+                'min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-all text-white shadow-md shrink-0 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isRecording ? 'bg-red-600 hover:bg-red-500' : 'hover:brightness-105'
               )}
+              style={!isRecording ? { background: BRAND_GRADIENT } : undefined}
               aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
               title={isRecording ? 'Stop recording' : 'Record voice message'}
             >
@@ -819,16 +838,16 @@ const MessageInput = React.memo(
         {showAttachments && (
           <div
             className={cn(
-              'grid grid-cols-3 sm:grid-cols-6 gap-2 p-2.5 rounded-xl border',
-              isDark ? 'bg-[#090F2D] border-white/10' : 'bg-slate-50 border-slate-200'
+              'grid grid-cols-3 sm:grid-cols-6 gap-2 p-2.5 rounded-2xl border',
+              isDark ? 'bg-[#090F2D] border-white/10' : 'bg-white border-slate-200 shadow-sm'
             )}
           >
             <button
               type="button"
               onClick={() => mediaInputRef.current?.click()}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700'
+                'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-slate-200' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-700'
               )}
             >
               <ImageIcon className="w-5 h-5 text-blue-500" aria-hidden="true" />
@@ -838,8 +857,8 @@ const MessageInput = React.memo(
               type="button"
               onClick={() => mediaInputRef.current?.click()}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700'
+                'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-slate-200' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-700'
               )}
             >
               <Video className="w-5 h-5 text-red-500" aria-hidden="true" />
@@ -849,8 +868,8 @@ const MessageInput = React.memo(
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700'
+                'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-slate-200' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-700'
               )}
             >
               <File className="w-5 h-5 text-amber-500" aria-hidden="true" />
@@ -880,8 +899,8 @@ const MessageInput = React.memo(
                 }
               }}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700'
+                'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-slate-200' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-700'
               )}
             >
               <MapPin className="w-5 h-5 text-emerald-500" aria-hidden="true" />
@@ -906,8 +925,8 @@ const MessageInput = React.memo(
                 }
               }}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700'
+                'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-slate-200' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-700'
               )}
             >
               <User className="w-5 h-5 text-purple-400" aria-hidden="true" />
@@ -920,8 +939,8 @@ const MessageInput = React.memo(
                 setShowGIFPicker(true);
               }}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700'
+                'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-slate-200' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-slate-700'
               )}
             >
               <span className="h-5 flex items-center justify-center font-bold text-xs text-purple-400">
@@ -937,8 +956,8 @@ const MessageInput = React.memo(
                   onOpenGift();
                 }}
                 className={cn(
-                  'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-xs',
-                  isDark ? 'hover:bg-white/10 text-amber-300' : 'hover:bg-slate-200/70 text-amber-600'
+                  'min-h-[60px] flex flex-col items-center justify-center gap-1 p-2 rounded-xl border transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'border-white/[0.06] bg-white/[0.03] hover:bg-white/10 text-amber-300' : 'border-slate-200/80 bg-slate-50/70 hover:bg-slate-100 text-amber-600'
                 )}
               >
                 <Gift className="w-5 h-5" aria-hidden="true" />

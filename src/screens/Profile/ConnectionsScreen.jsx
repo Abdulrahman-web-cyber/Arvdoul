@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 import { cn } from '../../lib/utils';
 import {
   Search,
@@ -33,7 +34,6 @@ import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import { toast } from 'sonner';
 import { LazyImage } from '../../components/Shared/LazyImage';
 import { ListRowsSkeleton } from '../../components/UI/SkeletonLoaders';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { getUserService } from '../../services/userService.js';
 
 const PAGE_SIZE = 30;
@@ -43,6 +43,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
   const { user: authUser, userProfile } = useAuth();
@@ -55,6 +56,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
   const [targetProfile, setTargetProfile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   // Lists & cursor pagination state
   const [followers, setFollowers] = useState([]);
@@ -260,7 +262,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     return () => {
       isMounted = false;
     };
-  }, [targetUserId, currentUserId, isOwner, currentUser]);
+  }, [targetUserId, currentUserId, isOwner, currentUser, refreshNonce]);
 
   // Cursor-based Load More for active list tab
   const handleLoadMore = useCallback(async () => {
@@ -455,6 +457,42 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     ? resolveActorName([targetProfile.displayName, targetProfile.username], targetUserId)
     : null;
 
+  const activeTabLabel = useMemo(() => {
+    if (activeTab === 'followers') return 'Followers';
+    if (activeTab === 'following') return 'Following';
+    if (activeTab === 'discover') return 'Discover';
+    return isOwner ? 'Friends' : 'Mutual Friends';
+  }, [activeTab, isOwner]);
+
+  // Coordinate title, subtitle, search, and refresh with TopAppBar
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('arvdoul:network_header_state', {
+      detail: {
+        title: isOwner ? 'Citizen Network' : (targetDisplayName || 'Citizen Network'),
+        subtitle: loading
+          ? `${activeTabLabel} · Syncing…`
+          : `${activeTabLabel} · ${currentItems.length}`,
+        photoURL: !isOwner ? (targetProfile?.photoURL || null) : null,
+      },
+    }));
+  }, [isOwner, targetDisplayName, targetProfile?.photoURL, activeTabLabel, currentItems.length, loading]);
+
+  useEffect(() => {
+    const onSearchQuery = (e) => {
+      setSearchQuery(typeof e?.detail === 'string' ? e.detail : '');
+    };
+    const onRefresh = () => {
+      setRefreshNonce((n) => n + 1);
+    };
+    window.addEventListener('arvdoul:network_search_query', onSearchQuery);
+    window.addEventListener('arvdoul:network_refresh', onRefresh);
+    return () => {
+      window.removeEventListener('arvdoul:network_search_query', onSearchQuery);
+      window.removeEventListener('arvdoul:network_refresh', onRefresh);
+      window.dispatchEvent(new CustomEvent('arvdoul:network_header_state', { detail: null }));
+    };
+  }, []);
+
   return (
     <div className={cn(
       "min-h-screen pb-24 transition-colors duration-200",
@@ -462,14 +500,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ? "bg-[#03071B] text-white selection:bg-purple-500/30"
         : "bg-[#F6F8FC] text-slate-900 selection:bg-purple-500/20"
     )}>
-      <div className="max-w-3xl mx-auto px-4 pt-3 sm:pt-5 space-y-4">
-        {/* Underline Tab Navigation */}
+      <div className="max-w-3xl mx-auto px-4 pt-2 sm:pt-4 space-y-4">
+        {/* Segmented iOS Tab Switcher */}
         <div
           role="tablist"
           aria-label="Connection lists"
           className={cn(
-            "flex items-center overflow-x-auto no-scrollbar border-b",
-            isDark ? "border-white/[0.08]" : "border-slate-200"
+            "p-1 rounded-2xl border flex items-center gap-1 overflow-x-auto no-scrollbar",
+            isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-slate-200/60 border-slate-200/80"
           )}
         >
           {tabs.map((tab) => {
@@ -486,34 +524,32 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                   setSearchQuery('');
                 }}
                 className={cn(
-                  "relative flex-1 min-w-[92px] min-h-[44px] px-3 py-2.5 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer",
+                  "relative flex-1 min-w-[92px] min-h-[44px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 transition-all cursor-pointer",
                   active
-                    ? isDark ? "text-white" : "text-slate-950"
-                    : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                    ? isDark
+                      ? "bg-[#111C4A] text-white shadow-sm border border-white/[0.1]"
+                      : "bg-white text-slate-950 shadow-sm border border-slate-200/60"
+                    : isDark
+                      ? "text-slate-400 hover:text-slate-200"
+                      : "text-slate-600 hover:text-slate-900"
                 )}
               >
                 <Icon
                   className={cn(
                     "w-4 h-4 shrink-0",
-                    active && (tab.id === 'friends' ? "text-amber-500" : "text-purple-500")
+                    active && (tab.id === 'friends' ? "text-amber-500" : "text-arvdoul-purple")
                   )}
                   aria-hidden="true"
                 />
                 <span>{tab.label}</span>
                 <span className={cn(
-                  "text-xs tabular-nums",
+                  "px-1.5 py-0.5 rounded-md text-[11px] font-bold tabular-nums",
                   active
-                    ? isDark ? "text-slate-300" : "text-slate-700"
-                    : isDark ? "text-slate-500" : "text-slate-400"
+                    ? isDark ? "bg-white/10 text-slate-200" : "bg-slate-100 text-slate-700"
+                    : isDark ? "text-slate-500" : "text-slate-500"
                 )}>
                   {tab.count}
                 </span>
-                {active && (
-                  <span
-                    className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
-                    style={{ background: BRAND_GRADIENT }}
-                  />
-                )}
               </button>
             );
           })}
@@ -523,8 +559,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         <div className={cn(
           "px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs",
           isDark
-            ? "bg-[#080F2E]/70 border-white/[0.08] text-slate-300"
-            : "bg-white border-slate-200/80 text-slate-700"
+            ? "bg-[#080F2E]/75 border-white/[0.08] text-slate-300"
+            : "bg-white border-slate-200/80 text-slate-700 shadow-[0_1px_6px_rgba(15,23,42,0.03)]"
         )}>
           <div className="min-w-0">
             <span className={cn("font-semibold", isDark ? "text-white" : "text-slate-900")}>
@@ -543,7 +579,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               type="button"
               onClick={() => navigate('/perks')}
               className={cn(
-                "min-h-[36px] px-2 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer hover:underline",
+                "min-h-[40px] px-2.5 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer hover:underline",
                 isDark ? "text-purple-400" : "text-purple-700"
               )}
             >
@@ -552,41 +588,63 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           )}
         </div>
 
-        {/* Search Input */}
-        <div className={cn(
-          "flex items-center gap-2.5 px-3.5 min-h-[44px] rounded-2xl border transition-colors",
-          isDark
-            ? "bg-[#080F2E]/90 border-white/[0.08] focus-within:border-purple-500/50"
-            : "bg-white border-slate-200 focus-within:border-purple-400"
-        )}>
-          <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
-          <input
-            aria-label="Search connections"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${
-              activeTab === 'followers'
-                ? 'followers'
-                : activeTab === 'following'
-                  ? 'following'
-                  : activeTab === 'discover'
-                    ? 'suggested people'
-                    : 'mutual friends'
-            } by name or handle...`}
-            className="flex-1 bg-transparent text-xs sm:text-sm placeholder-slate-400 focus:outline-none py-2.5"
-          />
-          {searchQuery && (
+        {/* Search Input (shown inline only when TopAppBar is absent; otherwise TopAppBar owns search) */}
+        {!hasTopAppBar ? (
+          <div className={cn(
+            "flex items-center gap-2.5 px-3.5 min-h-[44px] rounded-2xl border transition-colors",
+            isDark
+              ? "bg-[#080F2E]/90 border-white/[0.08] focus-within:border-purple-500/50"
+              : "bg-white border-slate-200 focus-within:border-purple-400"
+          )}>
+            <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
+            <input
+              aria-label="Search connections"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${
+                activeTab === 'followers'
+                  ? 'followers'
+                  : activeTab === 'following'
+                    ? 'following'
+                    : activeTab === 'discover'
+                      ? 'suggested people'
+                      : 'mutual friends'
+              } by name or handle...`}
+              className="flex-1 bg-transparent text-xs sm:text-sm placeholder-slate-400 focus:outline-none py-2.5"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearchQuery('')}
+                className="min-w-[36px] min-h-[36px] rounded-lg flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ) : searchQuery.trim() ? (
+          <div className={cn(
+            "px-3.5 py-2 rounded-xl border flex items-center justify-between gap-2 text-xs",
+            isDark ? "bg-[#080F2E]/80 border-white/[0.08] text-slate-300" : "bg-white border-slate-200 text-slate-700"
+          )}>
+            <div className="flex items-center gap-2 min-w-0">
+              <Search className="w-3.5 h-3.5 text-arvdoul-purple shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                Showing matches for <span className="font-semibold">&ldquo;{searchQuery.trim()}&rdquo;</span>
+              </span>
+            </div>
             <button
               type="button"
-              aria-label="Clear search"
               onClick={() => setSearchQuery('')}
-              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+              aria-label="Clear connection filter"
+              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         {/* Loading State */}
         {loading ? (
@@ -753,7 +811,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                         onClick={() => handleFriendRequestToggle(rowId)}
                         disabled={isFriendBusy}
                         className={cn(
-                          "min-h-[40px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
+                          "min-h-[44px] sm:min-h-[40px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer disabled:opacity-60",
                           isFriendRequested
                             ? isDark
                               ? "bg-white/[0.06] border-white/15 text-slate-200 hover:bg-white/10"
@@ -784,7 +842,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                         type="button"
                         onClick={() => navigate(`/messages/new?to=${rowId}`)}
                         className={cn(
-                          "min-w-[40px] min-h-[40px] rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0",
+                          "min-w-[44px] min-h-[44px] sm:min-w-[40px] sm:min-h-[40px] rounded-xl border flex items-center justify-center transition-colors cursor-pointer shrink-0",
                           isDark
                             ? "bg-white/[0.05] hover:bg-white/10 border-white/10 text-slate-300 hover:text-white"
                             : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"

@@ -82,7 +82,7 @@ const ProfileTabsBar = memo(({
               aria-selected={isActive}
               onClick={() => onTabChange?.(tab.id)}
               className={cn(
-                "relative flex items-center gap-1.5 px-2.5 sm:px-3.5 py-3 text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer select-none whitespace-nowrap",
+                "relative min-h-[44px] flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer select-none whitespace-nowrap rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isActive
                   ? "text-slate-900 dark:text-white"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
@@ -104,7 +104,7 @@ const ProfileTabsBar = memo(({
               {isActive && (
                 <span
                   aria-hidden="true"
-                  className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full"
+                  className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-full"
                   style={{ background: BRAND_GRADIENT }}
                 />
               )}
@@ -116,8 +116,8 @@ const ProfileTabsBar = memo(({
       {/* View Mode Switcher */}
       {showViewToggle && (
         <div className={cn(
-          "flex items-center gap-0.5 p-0.5 rounded-xl border shrink-0 my-1.5",
-          isDark ? "bg-white/[0.04] border-white/10" : "bg-white border-slate-200"
+          "flex items-center gap-1 p-1 rounded-2xl border shrink-0 my-1.5",
+          isDark ? "bg-white/[0.04] border-white/10" : "bg-white border-slate-200 shadow-xs"
         )}>
           <button
             type="button"
@@ -126,13 +126,14 @@ const ProfileTabsBar = memo(({
             aria-label="Grid view"
             aria-pressed={viewMode === 'grid'}
             className={cn(
-              "p-1.5 rounded-lg transition-colors cursor-pointer",
+              "min-w-[38px] min-h-[38px] flex items-center justify-center rounded-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
               viewMode === 'grid'
-                ? "bg-arvdoul-purple text-white"
+                ? "text-white shadow-sm"
                 : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
             )}
+            style={viewMode === 'grid' ? { background: BRAND_GRADIENT } : undefined}
           >
-            <LayoutGrid className="w-3.5 h-3.5" />
+            <LayoutGrid className="w-4 h-4" />
           </button>
           <button
             type="button"
@@ -141,13 +142,14 @@ const ProfileTabsBar = memo(({
             aria-label="Feed view"
             aria-pressed={viewMode === 'feed'}
             className={cn(
-              "p-1.5 rounded-lg transition-colors cursor-pointer",
+              "min-w-[38px] min-h-[38px] flex items-center justify-center rounded-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
               viewMode === 'feed'
-                ? "bg-arvdoul-purple text-white"
+                ? "text-white shadow-sm"
                 : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
             )}
+            style={viewMode === 'feed' ? { background: BRAND_GRADIENT } : undefined}
           >
-            <Rows3 className="w-3.5 h-3.5" />
+            <Rows3 className="w-4 h-4" />
           </button>
         </div>
       )}

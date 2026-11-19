@@ -68,8 +68,6 @@ import { pickDisplayName } from '../services/profileReadModel.js';
 import { format, isSameDay } from "date-fns";
 import { LazyImage } from '../components/Shared/LazyImage';
 
-const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
-
 export default function ChatScreen() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
@@ -1379,13 +1377,13 @@ export default function ChatScreen() {
       )}>
       {/* Standalone Header — omitted when unified TopAppBar manages chat top chrome */}
       {!hasTopAppBar && (
-      <header className={cn('sticky top-0 z-20 backdrop-blur-xl border-b', isDark ? 'bg-[#050B24]/90 border-white/[0.08]' : 'bg-white/90 border-slate-200')}>
+      <header className={cn('sticky top-0 z-20 backdrop-blur-2xl border-b', isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F6F8FC]/90 border-slate-200/80')}>
         <div className="max-w-4xl mx-auto px-3 sm:px-4 h-16 flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => navigate('/messages')}
             aria-label="Back to conversations"
-            className={cn('lg:hidden min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
+            className={cn('lg:hidden min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700')}
           >
             <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -1428,7 +1426,7 @@ export default function ChatScreen() {
                 type="button"
                 onClick={() => navigate(`/call/${conversationId}?type=audio`)}
                 aria-label="Start voice call"
-                className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
+                className={cn('min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700')}
               >
                 <Phone className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1436,7 +1434,7 @@ export default function ChatScreen() {
                 type="button"
                 onClick={() => navigate(`/call/${conversationId}?type=video`)}
                 aria-label="Start video call"
-                className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
+                className={cn('min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700')}
               >
                 <Video className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1445,7 +1443,7 @@ export default function ChatScreen() {
                   type="button"
                   onClick={() => navigate(`/gift/${otherParticipants[0]}`)}
                   aria-label="Send gift"
-                  className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-purple-300' : 'hover:bg-slate-100 text-purple-600')}
+                  className={cn('min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-purple-300' : 'hover:bg-slate-200/70 text-purple-600')}
                 >
                   <Gift className="w-4 h-4" aria-hidden="true" />
                 </button>
@@ -1456,7 +1454,7 @@ export default function ChatScreen() {
             type="button"
             onClick={openInfoPanel}
             aria-label="Conversation info"
-            className={cn('min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-100 text-slate-700')}
+            className={cn('min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700')}
           >
             <Info className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -1468,14 +1466,14 @@ export default function ChatScreen() {
       {activePinnedId && (
         <div
           className={cn(
-            'border-b px-3 sm:px-5 py-2 flex items-center justify-between gap-2 max-w-4xl w-full mx-auto shrink-0',
-            isDark ? 'bg-[#08102D]/90 border-white/[0.08]' : 'bg-white/95 border-slate-200/80'
+            'border-b backdrop-blur-xl px-3 sm:px-5 py-2 flex items-center justify-between gap-2 max-w-4xl w-full mx-auto shrink-0',
+            isDark ? 'bg-[#090F2D]/90 border-white/[0.08]' : 'bg-white/95 border-slate-200/80'
           )}
         >
           <button
             type="button"
             onClick={() => jumpToMessage(activePinnedId)}
-            className="flex items-center gap-2.5 min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-lg"
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-xl"
           >
             <Pin className="w-3.5 h-3.5 text-purple-500 rotate-45 shrink-0" aria-hidden="true" />
             <div className="min-w-0 flex-1">
@@ -1487,14 +1485,14 @@ export default function ChatScreen() {
               </p>
             </div>
           </button>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {pinnedIds.length > 1 && (
               <button
                 type="button"
                 onClick={() => setPinnedBannerIndex((i) => (i + 1) % pinnedIds.length)}
                 className={cn(
-                  'px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors',
-                  isDark ? 'bg-white/10 text-slate-300 hover:bg-white/15' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  'min-h-[36px] px-2.5 rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'bg-white/10 text-slate-200 hover:bg-white/15' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 )}
               >
                 Next
@@ -1508,7 +1506,7 @@ export default function ChatScreen() {
               }}
               aria-label="View all pinned messages"
               className={cn(
-                'px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors',
+                'min-h-[36px] px-2.5 rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                 isDark ? 'text-purple-300 hover:bg-white/10' : 'text-purple-700 hover:bg-purple-50'
               )}
             >
@@ -1537,8 +1535,8 @@ export default function ChatScreen() {
               onClick={loadOlderMessages}
               disabled={loadingOlder}
               className={cn(
-                'px-4 py-2 rounded-full text-xs font-semibold disabled:opacity-50 transition-colors',
-                isDark ? 'bg-white/5 hover:bg-white/10 text-gray-300' : 'bg-gray-200/80 hover:bg-gray-300/80 text-gray-700'
+                'min-h-[40px] px-4 rounded-full text-xs font-semibold disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'bg-white/[0.06] hover:bg-white/10 text-slate-200 border border-white/[0.08]' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80 shadow-2xs'
               )}
             >
               {loadingOlder ? 'Loading…' : 'Load earlier messages'}
@@ -1551,8 +1549,8 @@ export default function ChatScreen() {
             return (
               <div key={`date-${item.date}`} className="flex items-center justify-center my-4" role="separator">
                 <span className={cn(
-                  'text-[10px] uppercase tracking-wider px-3 py-1 rounded-full',
-                  isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-200/70 text-gray-500'
+                  'text-[10px] font-semibold uppercase tracking-wider px-3 py-1 rounded-full',
+                  isDark ? 'bg-[#090F2D]/85 border border-white/[0.08] text-slate-300' : 'bg-white border border-slate-200/80 text-slate-600 shadow-2xs'
                 )}>
                   {item.label}
                 </span>
@@ -1622,10 +1620,11 @@ export default function ChatScreen() {
               setNewSinceScroll(0);
               setAtBottom(true);
             }}
-            className="sticky bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-arvdoul-gradient text-white text-xs font-bold shadow-lg hover:opacity-95 transition-opacity tabular-nums"
+            style={{ background: BRAND_GRADIENT }}
+            className="sticky bottom-3 left-1/2 -translate-x-1/2 z-10 min-h-[44px] flex items-center gap-1.5 px-4 rounded-full text-white text-xs font-bold shadow-xl hover:brightness-110 transition-all tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             aria-label={`Jump to ${newSinceScroll} new message${newSinceScroll > 1 ? 's' : ''}`}
           >
-            <ArrowDown className="w-3.5 h-3.5" />
+            <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
             {newSinceScroll} new
           </button>
         )}
@@ -1638,8 +1637,8 @@ export default function ChatScreen() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end" onClick={() => setShowInfoPanel(false)}>
           <div
             className={cn(
-              'w-full max-w-sm h-full overflow-y-auto p-4 border-l',
-              isDark ? 'bg-[#080E27] border-white/10' : 'bg-white border-gray-200'
+              'w-full max-w-sm h-full overflow-y-auto p-4 border-l backdrop-blur-2xl',
+              isDark ? 'bg-[#060B22]/98 border-white/[0.08] text-white' : 'bg-[#F6F8FC]/98 border-slate-200/80 text-slate-900'
             )}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
@@ -1651,7 +1650,7 @@ export default function ChatScreen() {
                 type="button"
                 onClick={() => setShowInfoPanel(false)}
                 aria-label="Close details"
-                className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-600')}
+                className={cn('min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-200/70 text-slate-700')}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1662,7 +1661,7 @@ export default function ChatScreen() {
               <div
                 className={cn(
                   'rounded-2xl border p-3.5 mb-4 space-y-3',
-                  isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                  isDark ? 'bg-white/[0.04] border-white/[0.08]' : 'bg-white border-slate-200/80 shadow-2xs'
                 )}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -1705,8 +1704,8 @@ export default function ChatScreen() {
                       navigate(`/profile/${otherParticipants[0]}`);
                     }}
                     className={cn(
-                      'flex-1 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors',
-                      isDark ? 'border-white/15 hover:bg-white/10 text-slate-200' : 'border-slate-200 hover:bg-white text-slate-800'
+                      'flex-1 min-h-[42px] rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                      isDark ? 'border-white/15 hover:bg-white/10 text-slate-200' : 'border-slate-200 hover:bg-slate-50 text-slate-800'
                     )}
                   >
                     <UserIcon className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1718,7 +1717,8 @@ export default function ChatScreen() {
                       setShowInfoPanel(false);
                       navigate(`/gift/${otherParticipants[0]}`);
                     }}
-                    className="flex-1 py-2 rounded-xl text-xs font-semibold bg-arvdoul-gradient text-white flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 transition-all"
+                    style={{ background: BRAND_GRADIENT }}
+                    className="flex-1 min-h-[42px] rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <Gift className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Send Gift</span>
@@ -1733,10 +1733,10 @@ export default function ChatScreen() {
                 type="button"
                 onClick={handleToggleConvPin}
                 className={cn(
-                  'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors',
+                  'min-h-[58px] py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isConversationPinned
                     ? 'border-purple-500/40 bg-purple-500/15 text-purple-400'
-                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                 )}
               >
                 <Pin className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1746,10 +1746,10 @@ export default function ChatScreen() {
                 type="button"
                 onClick={handleToggleConvMute}
                 className={cn(
-                  'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors',
+                  'min-h-[58px] py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isConversationMuted
                     ? 'border-purple-500/40 bg-purple-500/15 text-purple-400'
-                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                 )}
               >
                 {isConversationMuted ? <Bell className="w-3.5 h-3.5" aria-hidden="true" /> : <BellOff className="w-3.5 h-3.5" aria-hidden="true" />}
@@ -1759,10 +1759,10 @@ export default function ChatScreen() {
                 type="button"
                 onClick={handleToggleConvArchive}
                 className={cn(
-                  'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors',
+                  'min-h-[58px] py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isConversationArchived
                     ? 'border-purple-500/40 bg-purple-500/15 text-purple-400'
-                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                 )}
               >
                 <Archive className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1773,8 +1773,8 @@ export default function ChatScreen() {
                   type="button"
                   onClick={handleBlockPeer}
                   className={cn(
-                    'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors text-red-500',
-                    isDark ? 'border-white/10 hover:bg-red-500/15' : 'border-slate-200 hover:bg-red-50'
+                    'min-h-[58px] py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-colors text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    isDark ? 'border-white/10 hover:bg-red-500/15' : 'border-slate-200 bg-white hover:bg-red-50'
                   )}
                 >
                   <Ban className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1784,7 +1784,7 @@ export default function ChatScreen() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 p-1 rounded-xl mb-4 overflow-x-auto no-scrollbar" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
+            <div className="flex gap-1 p-1 rounded-xl mb-4 overflow-x-auto no-scrollbar" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)' }}>
               {[
                 { id: 'pinned', label: 'Pinned', icon: Pin },
                 { id: 'media', label: 'Media', icon: ImageIcon },
@@ -1801,14 +1801,15 @@ export default function ChatScreen() {
                     type="button"
                     onClick={() => setInfoTab(tab.id)}
                     aria-pressed={infoTab === tab.id}
+                    style={infoTab === tab.id ? { background: BRAND_GRADIENT } : undefined}
                     className={cn(
-                      'flex items-center justify-center gap-1 px-2.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all',
+                      'min-h-[38px] flex items-center justify-center gap-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                       infoTab === tab.id
-                        ? 'bg-arvdoul-gradient text-white shadow'
-                        : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                        ? 'text-white shadow'
+                        : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
                     )}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                     {tab.label}
                   </button>
                 );
@@ -1936,7 +1937,7 @@ export default function ChatScreen() {
                             href={fileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2 py-1 rounded-lg bg-purple-500/15 text-purple-400 font-semibold shrink-0"
+                            className="min-h-[36px] inline-flex items-center px-3 rounded-lg bg-purple-500/15 text-purple-400 font-semibold shrink-0 hover:bg-purple-500/25 transition-colors"
                           >
                             Open
                           </a>
@@ -2041,15 +2042,16 @@ export default function ChatScreen() {
                     placeholder="Search this conversation…"
                     aria-label="Search messages"
                     className={cn(
-                      'flex-1 px-3 py-2.5 rounded-xl text-sm outline-none border',
-                      isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                      'flex-1 min-h-[44px] px-3.5 rounded-xl text-sm outline-none border focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                      isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-400' : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400'
                     )}
                   />
                   <button
                     type="button"
                     onClick={runSearch}
                     disabled={searching || !searchQuery.trim()}
-                    className="px-4 py-2 rounded-xl bg-arvdoul-gradient text-white text-xs font-bold disabled:opacity-50"
+                    style={{ background: BRAND_GRADIENT }}
+                    className="min-h-[44px] px-4 rounded-xl text-white text-xs font-bold disabled:opacity-50 hover:brightness-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     {searching ? '…' : 'Search'}
                   </button>
@@ -2065,8 +2067,8 @@ export default function ChatScreen() {
                           type="button"
                           onClick={() => jumpToMessage(r.id)}
                           className={cn(
-                            'w-full text-left p-3 rounded-xl text-xs border',
-                            isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200'
+                            'w-full text-left p-3 rounded-xl text-xs border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                            isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-white border-slate-200 hover:border-purple-400'
                           )}
                         >
                           <span className="text-gray-500 dark:text-gray-400 block mb-0.5">
@@ -2090,7 +2092,7 @@ export default function ChatScreen() {
           <div
             className={cn(
               'w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border p-5 space-y-4 max-h-[85vh] overflow-y-auto',
-              isDark ? 'bg-[#0f172a] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
+              isDark ? 'bg-[#080E27] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
             )}
           >
             <div className="flex items-center justify-between">
@@ -2099,9 +2101,9 @@ export default function ChatScreen() {
                 type="button"
                 onClick={() => setReportTarget(null)}
                 aria-label="Close report dialog"
-                className={cn('p-2 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
+                className={cn('min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-100 text-slate-700')}
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <p className={cn('text-xs', isDark ? 'text-gray-400' : 'text-slate-500')}>
@@ -2115,9 +2117,9 @@ export default function ChatScreen() {
                   onClick={() => setReportReason(r.value)}
                   aria-pressed={reportReason === r.value}
                   className={cn(
-                    'w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors',
+                    'w-full min-h-[44px] text-left px-3.5 py-2.5 rounded-xl text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                     reportReason === r.value
-                      ? 'border-purple-500 bg-purple-500/10 text-purple-500'
+                      ? 'border-purple-500 bg-purple-500/15 text-purple-400'
                       : isDark ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'
                   )}
                 >
@@ -2131,15 +2133,15 @@ export default function ChatScreen() {
               rows={3}
               placeholder="Add details (optional)"
               className={cn(
-                'w-full rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-arvdoul-purple/50',
-                isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                'w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400'
               )}
             />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setReportTarget(null)}
-                className={cn('flex-1 py-2.5 rounded-xl text-sm font-semibold', isDark ? 'bg-white/10' : 'bg-slate-100')}
+                className={cn('flex-1 min-h-[44px] rounded-2xl text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'bg-white/10 hover:bg-white/15' : 'bg-slate-100 hover:bg-slate-200')}
               >
                 Cancel
               </button>
@@ -2147,7 +2149,7 @@ export default function ChatScreen() {
                 type="button"
                 onClick={submitReport}
                 disabled={submittingReport || !reportReason}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white disabled:opacity-50"
+                className="flex-1 min-h-[44px] rounded-2xl text-sm font-semibold bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
                 {submittingReport ? 'Submitting…' : 'Submit report'}
               </button>
@@ -2160,11 +2162,11 @@ export default function ChatScreen() {
       {requestNotice && (
         <div className="max-w-4xl mx-auto w-full px-3 pb-1">
           <div className={cn(
-            'flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs',
+            'flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-xs',
             isDark ? 'bg-purple-500/15 border-purple-500/30 text-purple-200' : 'bg-purple-50 border-purple-200 text-purple-800'
           )}>
             <span>{requestNotice}</span>
-            <button type="button" onClick={() => setRequestNotice(null)} aria-label="Dismiss notice" className="p-1 rounded-full hover:bg-black/10">
+            <button type="button" onClick={() => setRequestNotice(null)} aria-label="Dismiss notice" className="min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple">
               <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </div>
@@ -2175,7 +2177,7 @@ export default function ChatScreen() {
       {replyTo && (
         <div className={cn('max-w-4xl mx-auto w-full px-3')}>
           <div className={cn(
-            'flex items-center gap-2 rounded-t-xl border border-b-0 px-3 py-2',
+            'flex items-center gap-2 rounded-t-2xl border border-b-0 px-3 py-2',
             isDark ? 'bg-[#090F2D] border-purple-500/30' : 'bg-purple-50/70 border-purple-200'
           )}>
             <Reply className="w-4 h-4 text-purple-400 shrink-0" aria-hidden="true" />
@@ -2187,7 +2189,7 @@ export default function ChatScreen() {
               type="button"
               onClick={() => setReplyTo(null)}
               aria-label="Cancel reply"
-              className={cn('p-1.5 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-slate-200 text-slate-600')}
+              className={cn('min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-200 text-slate-600')}
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -2232,7 +2234,7 @@ export default function ChatScreen() {
           <div
             className={cn(
               'w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl border p-5 space-y-3',
-              isDark ? 'bg-[#0f172a] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
+              isDark ? 'bg-[#080E27] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2246,7 +2248,7 @@ export default function ChatScreen() {
                 disabled={deletingMessage}
                 onClick={() => setDeleteTarget(null)}
                 aria-label="Close delete dialog"
-                className={cn('p-1.5 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
+                className={cn('min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-100 text-slate-700')}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -2260,7 +2262,7 @@ export default function ChatScreen() {
                 disabled={deletingMessage}
                 onClick={() => handleConfirmDelete(false)}
                 className={cn(
-                  'w-full py-2.5 rounded-xl text-sm font-semibold border transition-colors',
+                  'w-full min-h-[44px] rounded-2xl text-sm font-semibold border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark ? 'border-white/15 hover:bg-white/10 text-slate-100' : 'border-slate-200 hover:bg-slate-100 text-slate-900'
                 )}
               >
@@ -2271,7 +2273,7 @@ export default function ChatScreen() {
                   type="button"
                   disabled={deletingMessage}
                   onClick={() => handleConfirmDelete(true)}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+                  className="w-full min-h-[44px] rounded-2xl text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                 >
                   Delete for everyone
                 </button>
@@ -2280,7 +2282,7 @@ export default function ChatScreen() {
                 type="button"
                 disabled={deletingMessage}
                 onClick={() => setDeleteTarget(null)}
-                className={cn('w-full py-2 rounded-xl text-xs font-medium', isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}
+                className={cn('w-full min-h-[44px] rounded-2xl text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}
               >
                 Cancel
               </button>
@@ -2301,7 +2303,7 @@ export default function ChatScreen() {
           <div
             className={cn(
               'w-full sm:max-w-md max-h-[75vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border p-5 space-y-3',
-              isDark ? 'bg-[#0f172a] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
+              isDark ? 'bg-[#080E27] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2314,7 +2316,7 @@ export default function ChatScreen() {
                 type="button"
                 onClick={() => setHistoryModal(null)}
                 aria-label="Close edit history"
-                className={cn('p-1.5 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
+                className={cn('min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-100 text-slate-700')}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -2357,7 +2359,7 @@ export default function ChatScreen() {
       {/* View-once ephemeral media modal */}
       {activeViewOnce && (
         <div
-          className="fixed inset-0 z-[70] bg-black/95 flex flex-col items-center justify-center p-4"
+          className="fixed inset-0 z-[70] bg-[#03071B]/95 backdrop-blur-md flex flex-col items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="View once media"
@@ -2371,7 +2373,7 @@ export default function ChatScreen() {
               type="button"
               onClick={() => setActiveViewOnce(null)}
               aria-label="Close view once media"
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="min-w-[44px] min-h-[44px] rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
             >
               <X className="w-5 h-5" aria-hidden="true" />
             </button>
@@ -2402,14 +2404,17 @@ export default function ChatScreen() {
 
       {/* Forward picker */}
       {forwardTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={() => !forwarding && setForwardTarget(null)}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4" onClick={() => !forwarding && setForwardTarget(null)}>
           <div
-            className={cn('w-full sm:max-w-md max-h-[70vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col', isDark ? 'bg-[#0B0F17] border border-white/10' : 'bg-white border border-gray-200')}
+            className={cn('w-full sm:max-w-md max-h-[70vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col border', isDark ? 'bg-[#080E27] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900')}
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Forward message"
           >
-            <div className={cn('flex items-center justify-between px-4 py-3 border-b', isDark ? 'border-white/10' : 'border-gray-200')}>
+            <div className={cn('flex items-center justify-between px-4 py-3 border-b', isDark ? 'border-white/10' : 'border-slate-200')}>
               <h3 className="font-bold text-sm">Forward to</h3>
-              <button type="button" onClick={() => setForwardTarget(null)} aria-label="Close" className={cn('p-1.5 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}>
+              <button type="button" onClick={() => setForwardTarget(null)} aria-label="Close" className={cn('min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10 text-slate-200' : 'hover:bg-slate-100 text-slate-700')}>
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
@@ -2426,9 +2431,12 @@ export default function ChatScreen() {
                       type="button"
                       disabled={forwarding}
                       onClick={() => handleForwardTo(c.id)}
-                      className={cn('w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}
+                      className={cn('w-full min-h-[48px] flex items-center gap-3 p-3 rounded-xl text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
                     >
-                      <div className="w-9 h-9 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white text-xs font-bold">
+                      <div
+                        style={{ background: BRAND_GRADIENT }}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                      >
                         {name.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-sm font-medium truncate">{name}</span>

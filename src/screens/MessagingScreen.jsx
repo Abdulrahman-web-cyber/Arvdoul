@@ -579,12 +579,12 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
         {/* Unified Inbox Header — title bar & search bar omitted when TopAppBar owns top chrome */}
         <header
           className={cn(
-            'sticky top-0 z-20 px-4 border-b backdrop-blur-xl',
-            hasTopAppBar && !sidebarMode ? 'pt-1.5 pb-2.5' : 'pt-3 pb-3',
+            'sticky top-0 z-20 px-4 border-b backdrop-blur-2xl',
+            hasTopAppBar && !sidebarMode ? 'pt-2 pb-2.5' : 'pt-3 pb-3',
             isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F6F8FC]/90 border-slate-200/80'
           )}
         >
-          {(!hasTopAppBar || sidebarMode) && (
+          {!hasTopAppBar && (
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-3 min-w-0">
                 <button
@@ -625,10 +625,41 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                 type="button"
                 aria-label="New message"
                 onClick={() => navigate('/messages/new')}
-                className="min-h-[40px] min-w-[40px] px-3 rounded-xl bg-arvdoul-gradient text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 active:scale-[0.98] transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                className="min-h-[44px] min-w-[44px] px-3.5 rounded-2xl text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 active:scale-[0.98] transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                style={{ background: BRAND_GRADIENT }}
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
-                <span className={sidebarMode ? 'sr-only' : 'hidden sm:inline'}>New</span>
+                <span className="hidden sm:inline">New</span>
+              </button>
+            </div>
+          )}
+
+          {hasTopAppBar && sidebarMode && (
+            <div className="flex items-center justify-between gap-2.5 mb-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-sm font-black tracking-tight truncate">Chats</h2>
+                <span
+                  className={cn(
+                    'text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums',
+                    totalUnread > 0
+                      ? 'bg-arvdoul-purple/20 text-purple-300'
+                      : isDark
+                        ? 'bg-white/[0.06] text-slate-400'
+                        : 'bg-slate-200/80 text-slate-600'
+                  )}
+                >
+                  {totalUnread > 0 ? `${totalUnread} unread` : activeThreadCount}
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="New message"
+                onClick={() => navigate('/messages/new')}
+                className="min-h-[40px] min-w-[40px] px-3 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 active:scale-[0.98] transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                style={{ background: BRAND_GRADIENT }}
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                <span className="sr-only">New conversation</span>
               </button>
             </div>
           )}
@@ -638,10 +669,10 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
           <div className="relative">
             <div
               className={cn(
-                'flex items-center gap-2 px-3 min-h-[40px] rounded-xl border transition-colors',
+                'flex items-center gap-2 px-3 min-h-[44px] rounded-2xl border transition-colors',
                 isDark
-                  ? 'bg-[#090F2D] border-white/10 focus-within:border-purple-500/60'
-                  : 'bg-white border-slate-200 focus-within:border-purple-500/60'
+                  ? 'bg-[#090F2D] border-white/10 focus-within:border-arvdoul-purple/70'
+                  : 'bg-white border-slate-200/90 focus-within:border-arvdoul-purple/70'
               )}
             >
               <Search
@@ -667,7 +698,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                   onClick={() => setSearchQuery('')}
                   aria-label="Clear search"
                   className={cn(
-                    'p-1 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    'min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                     isDark ? 'text-slate-400 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
                   )}
                 >
@@ -698,13 +729,14 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                   aria-selected={isActive}
                   onClick={() => setActiveFilter(tab.id)}
                   className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    'min-h-[40px] sm:min-h-[36px] px-3.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                     isActive
-                      ? 'bg-arvdoul-gradient text-white shadow-sm'
+                      ? 'text-white border-transparent shadow-sm'
                       : isDark
-                        ? 'bg-white/[0.05] text-slate-300 hover:bg-white/[0.1] hover:text-white'
-                        : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200 hover:text-slate-900'
+                        ? 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.09] hover:text-white'
+                        : 'bg-white border-slate-200/80 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                   )}
+                  style={isActive ? { background: BRAND_GRADIENT } : undefined}
                 >
                   <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{tab.label}</span>
@@ -712,7 +744,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                     <span
                       className={cn(
                         'tabular-nums text-[11px] font-bold',
-                        isActive ? 'text-white/90' : isDark ? 'text-purple-300' : 'text-purple-700'
+                        isActive ? 'text-white/95' : isDark ? 'text-purple-300' : 'text-purple-700'
                       )}
                     >
                       {totalUnread}
@@ -722,7 +754,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                     <span
                       className={cn(
                         'tabular-nums text-[11px] font-bold',
-                        isActive ? 'text-white/90' : isDark ? 'text-purple-300' : 'text-purple-700'
+                        isActive ? 'text-white/95' : isDark ? 'text-purple-300' : 'text-purple-700'
                       )}
                     >
                       {messageRequests.length}
@@ -984,7 +1016,8 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                         <button
                           type="button"
                           onClick={() => handleRequestResponse(req.id, true)}
-                          className="px-3 py-1.5 rounded-lg bg-arvdoul-gradient text-white text-xs font-semibold hover:brightness-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                          className="min-h-[40px] px-3.5 rounded-xl text-white text-xs font-bold hover:brightness-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                          style={{ background: BRAND_GRADIENT }}
                         >
                           Accept
                         </button>
@@ -992,7 +1025,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                           type="button"
                           onClick={() => handleRequestResponse(req.id, false)}
                           className={cn(
-                            'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                            'min-h-[40px] px-3.5 rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                             isDark
                               ? 'bg-white/10 text-slate-300 hover:bg-white/15'
                               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -1006,9 +1039,9 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                             onClick={() => handleBlockRequester(req)}
                             aria-label="Block requester"
                             title="Block user"
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                            className="min-w-[40px] min-h-[40px] rounded-xl flex items-center justify-center text-rose-500 hover:bg-rose-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                           >
-                            <Ban className="w-3.5 h-3.5" aria-hidden="true" />
+                            <Ban className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -1103,20 +1136,20 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                 <div
                   key={item.id}
                   className={cn(
-                    'relative p-2.5 rounded-xl border transition-colors flex items-center justify-between gap-2 group',
+                    'relative p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 group',
                     isCurrent
                       ? isDark
-                        ? 'bg-purple-500/15 border-purple-500/50'
-                        : 'bg-purple-50/80 border-purple-300'
+                        ? 'bg-arvdoul-purple/15 border-arvdoul-purple/50 shadow-sm'
+                        : 'bg-arvdoul-purple/[0.07] border-arvdoul-purple/40 shadow-sm'
                       : isDark
-                        ? 'bg-[#090F2D] border-white/[0.07] hover:border-purple-500/35 hover:bg-[#0D153C]'
-                        : 'bg-white border-slate-200/90 hover:border-purple-400/70 hover:bg-slate-50/60'
+                        ? 'bg-[#090F2D]/90 border-white/[0.08] hover:border-arvdoul-purple/40 hover:bg-[#0D153C]'
+                        : 'bg-white border-slate-200/90 hover:border-arvdoul-purple/40 hover:bg-slate-50/70'
                   )}
                 >
                   <button
                     type="button"
                     onClick={() => navigate(`/messages/${item.id}`)}
-                    className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                    className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
                   >
                     <div
                       className={cn('relative shrink-0 rounded-full', hasActiveVibe && 'p-[2px]')}
@@ -1405,7 +1438,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                   onClick={handleLoadMore}
                   disabled={loadingMore}
                   className={cn(
-                    'px-4 py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    'min-h-[42px] px-5 rounded-2xl text-xs font-semibold border transition-colors flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                     isDark
                       ? 'bg-[#090F2D] border-white/10 text-slate-300 hover:bg-white/10'
                       : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -1426,12 +1459,15 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
         <div
           className={cn(
             'hidden lg:flex flex-1 min-w-0 flex-col items-center justify-center p-10 text-center',
-            isDark ? 'bg-[#04091E]' : 'bg-white'
+            isDark ? 'bg-[#04091E]/75' : 'bg-white/80'
           )}
         >
-          <div className="max-w-sm space-y-4">
+          <div className={cn(
+            'max-w-sm rounded-3xl border p-8 space-y-4 backdrop-blur-xl',
+            isDark ? 'bg-[#090F2D]/70 border-white/[0.08]' : 'bg-white border-slate-200/80 shadow-sm'
+          )}>
             <div
-              className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-white shadow-sm"
+              className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-white shadow-lg"
               style={{ background: BRAND_GRADIENT }}
             >
               <MessageSquare className="w-8 h-8" aria-hidden="true" />
@@ -1443,7 +1479,8 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
             <button
               type="button"
               onClick={() => navigate('/messages/new')}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-arvdoul-gradient text-white text-sm font-semibold shadow-sm hover:brightness-105 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+              className="min-h-[44px] inline-flex items-center justify-center gap-2 px-5 rounded-2xl text-white text-sm font-bold shadow-sm hover:brightness-105 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+              style={{ background: BRAND_GRADIENT }}
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
               <span>New Conversation</span>

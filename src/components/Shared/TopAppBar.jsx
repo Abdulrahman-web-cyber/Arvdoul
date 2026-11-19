@@ -7,7 +7,7 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
@@ -274,8 +274,21 @@ export const TopAppBar = ({
   const [storiesSearchQuery, setStoriesSearchQuery] = useState("");
   const [chatHeaderState, setChatHeaderState] = useState(null);
   const [profileHeaderState, setProfileHeaderState] = useState(null);
+  const [notificationsHeaderState, setNotificationsHeaderState] = useState({
+    unreadCount: 0,
+    pendingNetworkCount: 0,
+    mainTab: "alerts",
+    filterActive: false,
+  });
+  const [notificationsSearchOpen, setNotificationsSearchOpen] = useState(false);
+  const [notificationsSearchQuery, setNotificationsSearchQuery] = useState("");
+  const [networkHeaderState, setNetworkHeaderState] = useState(null);
+  const [networkSearchOpen, setNetworkSearchOpen] = useState(false);
+  const [networkSearchQuery, setNetworkSearchQuery] = useState("");
   const inboxSearchInputRef = useRef(null);
   const storiesSearchInputRef = useRef(null);
+  const notificationsSearchInputRef = useRef(null);
+  const networkSearchInputRef = useRef(null);
 
   useEffect(() => {
     const onInboxState = (e) => {
@@ -300,6 +313,30 @@ export const TopAppBar = ({
         setProfileHeaderState(e.detail);
       }
     };
+    const onNotificationsState = (e) => {
+      if (e?.detail === null) {
+        setNotificationsHeaderState({
+          unreadCount: 0,
+          pendingNetworkCount: 0,
+          mainTab: "alerts",
+          filterActive: false,
+        });
+      } else if (e?.detail && typeof e.detail === "object") {
+        setNotificationsHeaderState({
+          unreadCount: Number(e.detail.unreadCount) || 0,
+          pendingNetworkCount: Number(e.detail.pendingNetworkCount) || 0,
+          mainTab: e.detail.mainTab || "alerts",
+          filterActive: Boolean(e.detail.filterActive),
+        });
+      }
+    };
+    const onNetworkState = (e) => {
+      if (e?.detail === null) {
+        setNetworkHeaderState(null);
+      } else if (e?.detail && typeof e.detail === "object") {
+        setNetworkHeaderState(e.detail);
+      }
+    };
     const onFocusInboxSearch = () => {
       setInboxSearchOpen(true);
       requestAnimationFrame(() => inboxSearchInputRef.current?.focus?.());
@@ -307,11 +344,15 @@ export const TopAppBar = ({
     window.addEventListener("arvdoul:inbox_header_state", onInboxState);
     window.addEventListener("arvdoul:chat_header_state", onChatState);
     window.addEventListener("arvdoul:profile_header_state", onProfileState);
+    window.addEventListener("arvdoul:notifications_header_state", onNotificationsState);
+    window.addEventListener("arvdoul:network_header_state", onNetworkState);
     window.addEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
     return () => {
       window.removeEventListener("arvdoul:inbox_header_state", onInboxState);
       window.removeEventListener("arvdoul:chat_header_state", onChatState);
       window.removeEventListener("arvdoul:profile_header_state", onProfileState);
+      window.removeEventListener("arvdoul:notifications_header_state", onNotificationsState);
+      window.removeEventListener("arvdoul:network_header_state", onNetworkState);
       window.removeEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
     };
   }, []);
@@ -421,6 +462,19 @@ export const TopAppBar = ({
       }
       return "contextual";
     }
+    if (path === "/notifications" || path.startsWith("/notifications/") || path.startsWith("/alerts")) {
+      return "notifications";
+    }
+    if (
+      path === "/network" ||
+      path.startsWith("/network/") ||
+      path.includes("/connections") ||
+      path.includes("/followers") ||
+      path.includes("/following") ||
+      path.includes("/friends")
+    ) {
+      return "network";
+    }
     if (path === "/profile" || path === "/profile/me")
       return "profile_me";
     if (path.startsWith("/profile/") || path.startsWith("/user/")) {
@@ -445,6 +499,15 @@ export const TopAppBar = ({
     if (currentMode !== "stories") {
       setStoriesSearchOpen(false);
       setStoriesSearchQuery("");
+    }
+    if (currentMode !== "notifications") {
+      setNotificationsSearchOpen(false);
+      setNotificationsSearchQuery("");
+    }
+    if (currentMode !== "network") {
+      setNetworkSearchOpen(false);
+      setNetworkSearchQuery("");
+      setNetworkHeaderState(null);
     }
     if (currentMode !== "profile_visitor") {
       setProfileHeaderState(null);
@@ -695,6 +758,289 @@ export const TopAppBar = ({
                     />
                   </div>
                 </div>
+              )}
+
+              {currentMode === "notifications" && (
+                notificationsSearchOpen ? (
+                  <div className="flex items-center gap-2">
+                    <CircularButton
+                      icon={ChevronLeft}
+                      label="Close notification search"
+                      theme={theme}
+                      onClick={() => {
+                        setNotificationsSearchOpen(false);
+                        setNotificationsSearchQuery("");
+                        window.dispatchEvent(new CustomEvent("arvdoul:notifications_search_query", { detail: "" }));
+                      }}
+                    />
+                    <div className="flex-1 relative flex items-center">
+                      <Search
+                        className="w-4 h-4 absolute left-3 pointer-events-none"
+                        style={{ color: tokens.iconSecondary }}
+                      />
+                      <input
+                        ref={notificationsSearchInputRef}
+                        aria-label="Search notifications and network"
+                        type="text"
+                        value={notificationsSearchQuery}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNotificationsSearchQuery(val);
+                          window.dispatchEvent(new CustomEvent("arvdoul:notifications_search_query", { detail: val }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setNotificationsSearchOpen(false);
+                            setNotificationsSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:notifications_search_query", { detail: "" }));
+                          }
+                        }}
+                        placeholder="Search notifications, people, gifts..."
+                        autoFocus
+                        className="w-full h-10 sm:h-11 rounded-full pl-9 pr-9 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        style={{
+                          background: tokens.surface,
+                          border: `1px solid ${tokens.border}`,
+                          color: tokens.textPrimary,
+                        }}
+                      />
+                      {notificationsSearchQuery && (
+                        <button
+                          type="button"
+                          aria-label="Clear notification search"
+                          onClick={() => {
+                            setNotificationsSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:notifications_search_query", { detail: "" }));
+                            notificationsSearchInputRef.current?.focus?.();
+                          }}
+                          className="absolute right-2.5 p-1 rounded-full opacity-75 hover:opacity-100"
+                          style={{ color: tokens.iconSecondary }}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <CircularButton
+                      icon={SlidersHorizontal}
+                      label="Filter notifications"
+                      theme={theme}
+                      active={notificationsHeaderState.filterActive}
+                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:notifications_toggle_filter", { detail: { source: "top_app_bar" } }))}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CircularButton
+                        icon={ChevronLeft}
+                        label="Back"
+                        theme={theme}
+                        onClick={handleBack}
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <h2
+                          className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                          style={{ color: tokens.textPrimary }}
+                        >
+                          Notifications
+                        </h2>
+                        <span
+                          className="text-[11px] font-medium tabular-nums truncate"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          {notificationsHeaderState.mainTab === "network"
+                            ? notificationsHeaderState.pendingNetworkCount > 0
+                              ? `${notificationsHeaderState.pendingNetworkCount} pending request${notificationsHeaderState.pendingNetworkCount === 1 ? "" : "s"}`
+                              : "Network & Friends"
+                            : notificationsHeaderState.unreadCount > 0
+                              ? `${notificationsHeaderState.unreadCount} unread`
+                              : "All caught up"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      <CircularButton
+                        icon={Search}
+                        label="Search notifications"
+                        theme={theme}
+                        active={Boolean(notificationsSearchQuery)}
+                        onClick={() => {
+                          setNotificationsSearchOpen(true);
+                          requestAnimationFrame(() => notificationsSearchInputRef.current?.focus?.());
+                        }}
+                      />
+                      <CircularButton
+                        icon={SlidersHorizontal}
+                        label="Filter notifications"
+                        theme={theme}
+                        active={notificationsHeaderState.filterActive}
+                        onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:notifications_toggle_filter", { detail: { source: "top_app_bar" } }))}
+                      />
+                      <CircularButton
+                        icon={CheckCircle2}
+                        label="Mark all as read"
+                        theme={theme}
+                        onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:notifications_mark_all_read", { detail: { source: "top_app_bar" } }))}
+                      />
+                      <div className="hidden sm:block">
+                        <CircularButton
+                          icon={Settings}
+                          label="Notification settings"
+                          theme={theme}
+                          onClick={() => navigate("/settings")}
+                        />
+                      </div>
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        onClick={() => {
+                          if (onOpenMenu) onOpenMenu();
+                          else navigate(ROUTES.menu);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
+
+              {currentMode === "network" && (
+                networkSearchOpen ? (
+                  <div className="flex items-center gap-2">
+                    <CircularButton
+                      icon={ChevronLeft}
+                      label="Close network search"
+                      theme={theme}
+                      onClick={() => {
+                        setNetworkSearchOpen(false);
+                        setNetworkSearchQuery("");
+                        window.dispatchEvent(new CustomEvent("arvdoul:network_search_query", { detail: "" }));
+                      }}
+                    />
+                    <div className="flex-1 relative flex items-center">
+                      <Search
+                        className="w-4 h-4 absolute left-3 pointer-events-none"
+                        style={{ color: tokens.iconSecondary }}
+                      />
+                      <input
+                        ref={networkSearchInputRef}
+                        aria-label="Search connections by name or handle"
+                        type="text"
+                        value={networkSearchQuery}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNetworkSearchQuery(val);
+                          window.dispatchEvent(new CustomEvent("arvdoul:network_search_query", { detail: val }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setNetworkSearchOpen(false);
+                            setNetworkSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:network_search_query", { detail: "" }));
+                          }
+                        }}
+                        placeholder="Search citizens by name or handle..."
+                        autoFocus
+                        className="w-full h-10 sm:h-11 rounded-full pl-9 pr-9 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        style={{
+                          background: tokens.surface,
+                          border: `1px solid ${tokens.border}`,
+                          color: tokens.textPrimary,
+                        }}
+                      />
+                      {networkSearchQuery && (
+                        <button
+                          type="button"
+                          aria-label="Clear network search"
+                          onClick={() => {
+                            setNetworkSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:network_search_query", { detail: "" }));
+                            networkSearchInputRef.current?.focus?.();
+                          }}
+                          className="absolute right-2.5 p-1 rounded-full opacity-75 hover:opacity-100"
+                          style={{ color: tokens.iconSecondary }}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <CircularButton
+                      icon={RefreshCw}
+                      label="Refresh network"
+                      theme={theme}
+                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:network_refresh", { detail: { source: "top_app_bar" } }))}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CircularButton
+                        icon={ChevronLeft}
+                        label="Back"
+                        theme={theme}
+                        onClick={handleBack}
+                      />
+                      {networkHeaderState?.photoURL && (
+                        <LazyImage
+                          src={networkHeaderState.photoURL}
+                          alt={networkHeaderState?.title || "Citizen Network"}
+                          className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/35 shrink-0"
+                        />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <h2
+                          className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                          style={{ color: tokens.textPrimary }}
+                        >
+                          {networkHeaderState?.title || "Citizen Network"}
+                        </h2>
+                        <span
+                          className="text-[11px] font-medium tabular-nums truncate"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          {networkHeaderState?.subtitle || (
+                            location.pathname.includes("/followers")
+                              ? "Followers"
+                              : location.pathname.includes("/following")
+                                ? "Following"
+                                : location.pathname.includes("/friends")
+                                  ? "Mutual Friends"
+                                  : "Affiliations & Citizens"
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      <CircularButton
+                        icon={Search}
+                        label="Search connections"
+                        theme={theme}
+                        active={Boolean(networkSearchQuery)}
+                        onClick={() => {
+                          setNetworkSearchOpen(true);
+                          requestAnimationFrame(() => networkSearchInputRef.current?.focus?.());
+                        }}
+                      />
+                      <CircularButton
+                        icon={RefreshCw}
+                        label="Refresh network"
+                        theme={theme}
+                        onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:network_refresh", { detail: { source: "top_app_bar" } }))}
+                      />
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        onClick={() => {
+                          if (onOpenMenu) onOpenMenu();
+                          else navigate(ROUTES.menu);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
               )}
 
               {currentMode === "messages_inbox" && (
