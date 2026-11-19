@@ -848,19 +848,20 @@ exports.sendMessageGift = functions.https.onCall(async (data, context) => {
       const settingsSnap = await admin.firestore().collection('user_settings').doc(recipientId).get();
       const prefs = settingsSnap.exists ? settingsSnap.data()?.notificationPreferences : null;
       if (prefs?.giftNotifications !== false) {
+        const safeSenderName = result.senderName || `user ${String(senderUid).slice(0, 6)}`;
         await writeNotification(recipientId, {
           type: 'gift_received',
           title: 'Chat gift received',
-          message: `${result.senderName || 'Someone'} sent you a ${giftType} gift (${giftValue} coins)`,
+          message: `${safeSenderName} sent you a ${giftType} gift (${giftValue} coins)`,
           senderId: senderUid,
-          senderName: result.senderName || 'Citizen',
+          senderName: safeSenderName,
           metadata: { conversationId, giftType, coins: giftValue, giftTxId: result.giftTxId },
         }).catch((err) => logger.warn('Chat gift notification failed', { error: err.message }));
 
         if (prefs?.push !== false) {
           await enqueuePush(recipientId, {
             title: 'Chat gift received',
-            body: `${result.senderName || 'Someone'} sent you a ${giftType} gift (${giftValue} coins)`,
+            body: `${safeSenderName} sent you a ${giftType} gift (${giftValue} coins)`,
             type: 'gift_received',
             conversationId,
             clickAction: `/messages/${conversationId}`,

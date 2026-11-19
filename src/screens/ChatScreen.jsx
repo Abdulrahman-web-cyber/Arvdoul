@@ -158,7 +158,7 @@ export default function ChatScreen() {
             media: p.data.media,
             createdAt: new Date(),
           }));
-        setMessages([...pending, ...serverMessages]);
+        setMessages([...serverMessages, ...pending]);
       }
     } catch (err) {
       setLoadError(err.message || 'Failed to load messages');
@@ -1350,7 +1350,7 @@ export default function ChatScreen() {
   // States
   if (loading) {
     return (
-      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900')}>
+      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
         <div className="max-w-4xl mx-auto px-4 pt-6 space-y-4">
           <Skeleton className="h-14 w-full rounded-2xl" />
           <Skeleton className="h-20 w-2/3 rounded-2xl" />
@@ -1363,7 +1363,7 @@ export default function ChatScreen() {
 
   if (loadError && !conversation) {
     return (
-      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900')}>
+      <div className={cn('min-h-[100dvh] w-full pb-24', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
         <div className="max-w-4xl mx-auto px-4 pt-6">
           <ErrorState title="Could not open conversation" message={loadError} onRetry={() => { setLoadError(null); setLoading(true); loadMessages().finally(() => setLoading(false)); }} />
         </div>
@@ -1372,10 +1372,10 @@ export default function ChatScreen() {
   }
 
   return (
-    <div className={cn('flex flex-col flex-1 min-h-0 h-full w-full', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900')}>
+    <div className={cn('flex flex-col flex-1 min-h-0 h-full w-full', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
       <div className={cn(
         'flex flex-col flex-1 min-h-0 w-full overflow-hidden',
-        isDark ? 'bg-[#04091E]' : 'bg-[#F8FAFC]'
+        isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
       {/* Standalone Header — omitted when unified TopAppBar manages chat top chrome */}
       {!hasTopAppBar && (
@@ -1546,7 +1546,7 @@ export default function ChatScreen() {
           </div>
         )}
 
-        {renderItems.map((item) => {
+        {renderItems.map((item, itemIdx) => {
           if (item.kind === 'date') {
             return (
               <div key={`date-${item.date}`} className="flex items-center justify-center my-4" role="separator">
@@ -1603,6 +1603,7 @@ export default function ChatScreen() {
               onReport={(m) => { setReportTarget(m); setReportReason(''); setReportDetails(''); }}
               isGroup={conversation?.participantCount > 2}
               isGroupStart={item.groupStart}
+              preferMenuBelow={itemIdx < 3}
               theme={isDark ? 'dark' : 'light'}
             />
             </div>
@@ -1638,7 +1639,7 @@ export default function ChatScreen() {
           <div
             className={cn(
               'w-full max-w-sm h-full overflow-y-auto p-4 border-l',
-              isDark ? 'bg-[#0B0F17] border-white/10' : 'bg-white border-gray-200'
+              isDark ? 'bg-[#080E27] border-white/10' : 'bg-white border-gray-200'
             )}
             onClick={(e) => e.stopPropagation()}
             role="dialog"

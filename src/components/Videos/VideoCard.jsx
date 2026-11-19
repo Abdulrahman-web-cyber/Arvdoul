@@ -5,7 +5,7 @@
 import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, Volume2, VolumeX, PictureInPicture2, Download, Bookmark, Flag, Heart, MessageCircle, Share2, Repeat, Maximize, Music, BadgeCheck, Plus, Check, Clock, Sparkles, MoreHorizontal, ChevronRight, Gift, ArrowUpCircle, MoveHorizontal, X } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, PictureInPicture2, Download, Bookmark, Flag, Heart, MessageCircle, Share2, Repeat, Maximize, Music, BadgeCheck, Plus, Check, Clock, Sparkles, MoreHorizontal, ChevronRight, Gift } from "lucide-react";
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -63,7 +63,6 @@ const VideoCard = memo(({
     setIsRequested(Boolean(requestPending));
   }, [followedByViewer, requestPending]);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
-  const [showGestureGuide, setShowGestureGuide] = useState(true);
 
   const { theme, isDark } = useTheme();
   const {
@@ -269,7 +268,7 @@ const VideoCard = memo(({
           toast.success('Follow request sent');
           onFollow?.(video?.creator, { isFollowing: false, requestStatus: 'pending' });
         } else {
-          toast.success(`Following ${handle}! 🎉`);
+          toast.success(`Following ${handle}`);
           onFollow?.(video?.creator, { isFollowing: true, requestStatus: null });
         }
       }
@@ -299,9 +298,10 @@ const VideoCard = memo(({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-full bg-black overflow-hidden select-none flex items-center justify-center ${className}`}
+      className={`relative w-full h-full bg-[#03071B] overflow-hidden select-none flex items-center justify-center lg:pt-16 lg:pb-4 lg:px-4 ${className}`}
       onClick={handleContainerClick}
     >
+      <div className="relative w-full h-full lg:max-w-[440px] lg:aspect-[9/16] lg:max-h-full lg:rounded-3xl lg:border lg:border-white/15 lg:shadow-2xl overflow-hidden bg-black flex items-center justify-center">
       {/* Video Stream Element */}
       <video
         ref={videoRef}
@@ -311,7 +311,7 @@ const VideoCard = memo(({
         // every loaded card, so an unconditional 'auto' preload pulled
         // full-resolution data for videos the viewer never reached.
         preload={isActive ? 'auto' : 'metadata'}
-        className="w-full h-full object-cover sm:object-contain"
+        className="w-full h-full object-cover"
         playsInline
         muted={isMuted}
         loop={isLooping}
@@ -394,7 +394,7 @@ const VideoCard = memo(({
             const targetId = video?.userId || video?.authorId || video?.creator?.id;
             if (targetId) navigate(`/profile/${targetId}/friends`);
           }}
-          className="absolute top-16 sm:top-18 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 shadow-lg hover:bg-black/60 transition-all group"
+          className="absolute top-16 sm:top-18 lg:top-4 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 min-h-[40px] rounded-full bg-black/45 backdrop-blur-xl border border-white/20 shadow-lg hover:bg-black/60 transition-all group"
         >
           <div className="flex -space-x-1.5 overflow-hidden">
             {video.mutualFriends.slice(0, 3).map((friend, i) => (
@@ -413,9 +413,9 @@ const VideoCard = memo(({
         </div>
       )}
 
-      {/* Right Floating Action Rail (Image 2) */}
+      {/* Right Floating Action Rail */}
       <aside
-        className="absolute right-3 sm:right-5 bottom-24 z-30 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto"
+        className="absolute right-3 sm:right-4 bottom-20 z-30 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Creator Avatar & Follow Button */}
@@ -716,9 +716,9 @@ const VideoCard = memo(({
         </div>
       </aside>
 
-      {/* Floating Left Creator Card (Image 2) */}
+      {/* Floating Left Creator Card */}
       <div
-        className="absolute bottom-22 sm:bottom-24 left-3 sm:left-6 max-w-[340px] sm:max-w-md z-20 pointer-events-auto bg-black/50 backdrop-blur-2xl border border-white/20 rounded-3xl p-3.5 sm:p-4 shadow-2xl flex flex-col gap-2.5 text-left"
+        className="absolute bottom-16 left-3 sm:left-4 right-20 max-w-[330px] z-20 pointer-events-auto bg-black/50 backdrop-blur-2xl border border-white/15 rounded-3xl p-3.5 shadow-2xl flex flex-col gap-2 text-left"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top row: Avatar, Name, Handle, Follow button */}
@@ -838,12 +838,12 @@ const VideoCard = memo(({
         ) : null}
       </div>
 
-      {/* Scrubber / Timeline Bar (Image 2) */}
+      {/* Scrubber / Timeline Bar */}
       <div
-        className="absolute bottom-13 sm:bottom-14 left-3 right-3 sm:left-6 sm:right-6 z-20 pointer-events-auto flex items-center gap-3 select-none"
+        className="absolute bottom-4 left-3 right-3 sm:left-4 sm:right-4 z-20 pointer-events-auto flex items-center gap-3 select-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <span className="text-white/90 text-xs font-mono font-bold shrink-0">
+        <span className="text-white/90 text-xs font-mono font-bold tabular-nums shrink-0">
           {formatDuration(currentTime)}
         </span>
 
@@ -878,59 +878,22 @@ const VideoCard = memo(({
           />
         </div>
 
-        <span className="text-white/90 text-xs font-mono font-bold shrink-0">
+        <span className="text-white/90 text-xs font-mono font-bold tabular-nums shrink-0">
           {formatDuration(duration)}
         </span>
 
         {/* Volume Mute/Unmute Toggle Button */}
         <button
+          type="button"
           onClick={toggleMute}
-          className="p-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all shrink-0"
+          className="min-w-[40px] min-h-[40px] rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-all shrink-0"
           title={isMuted ? 'Unmute' : 'Mute'}
+          aria-label={isMuted ? 'Unmute' : 'Mute'}
         >
           {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-white" />}
         </button>
       </div>
-
-      {/* Gesture Guidance Capsule (Image 2) */}
-      <AnimatePresence>
-        {showGestureGuide && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 15 }}
-            className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 pointer-events-auto w-[94%] max-w-md bg-black/70 backdrop-blur-2xl border border-white/20 rounded-full px-3.5 py-1.5 flex items-center justify-between text-white/90 text-[11px] sm:text-xs font-semibold shadow-2xl select-none"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Gesture 1: Double Tap */}
-            <div className="flex items-center gap-1.5">
-              <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />
-              <span>Double tap <span className="text-white/60 font-normal">to like</span></span>
-            </div>
-
-            {/* Gesture 2: Swipe Up */}
-            <div className="flex items-center gap-1.5">
-              <ArrowUpCircle className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Swipe up <span className="text-white/60 font-normal">for more</span></span>
-            </div>
-
-            {/* Gesture 3: Swipe Left/Right */}
-            <div className="flex items-center gap-1.5">
-              <MoveHorizontal className="w-3.5 h-3.5 text-purple-400" />
-              <span>Swipe <span className="text-white/60 font-normal">next video</span></span>
-            </div>
-
-            {/* Dismiss × button */}
-            <button
-              onClick={() => setShowGestureGuide(false)}
-              className="p-1 text-white/50 hover:text-white transition-colors"
-              title="Dismiss guide"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 });

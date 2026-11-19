@@ -79,8 +79,8 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
       {/* Card Header: National Sovereign Crest & Title */}
       <div className="p-5 sm:p-6 border-b border-amber-500/20 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold">
-            🛡️
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shrink-0">
+            <ShieldCheck className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-amber-500 dark:text-amber-400 block font-mono">
@@ -108,7 +108,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
           <div className={cn(
             "p-3 rounded-2xl border",
-            isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
+            isDark ? "bg-[#03071B]/70 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Rank Title</span>
             <span className="font-bold text-indigo-400 mt-0.5 block truncate">
@@ -118,7 +118,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
 
           <div className={cn(
             "p-3 rounded-2xl border",
-            isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
+            isDark ? "bg-[#03071B]/70 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Civic Level</span>
             <span className="font-bold text-amber-400 mt-0.5 block tabular-nums">
@@ -128,7 +128,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
 
           <div className={cn(
             "p-3 rounded-2xl border",
-            isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
+            isDark ? "bg-[#03071B]/70 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Active Days</span>
             <span className="font-bold text-emerald-400 mt-0.5 block tabular-nums">
@@ -138,7 +138,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
 
           <div className={cn(
             "p-3 rounded-2xl border",
-            isDark ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
+            isDark ? "bg-[#03071B]/70 border-white/[0.08]" : "bg-white border-slate-200"
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Visa Stamps</span>
             <span className="font-bold text-purple-400 mt-0.5 block tabular-nums">
@@ -189,7 +189,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
           <button
             type="button"
             onClick={() => navigate(isOwner ? '/passport' : `/passport/${userId}`)}
-            className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:flex-1 min-h-[44px] py-3 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Open Sovereign Passport Booklet</span>
@@ -200,8 +200,8 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
             type="button"
             onClick={() => navigate('/progress')}
             className={cn(
-              "w-full sm:w-auto py-3 px-4 rounded-2xl border text-xs font-semibold transition-colors cursor-pointer",
-              isDark ? "border-slate-800 hover:bg-slate-900 text-slate-300" : "border-slate-200 hover:bg-slate-100 text-slate-700"
+              "w-full sm:w-auto min-h-[44px] py-3 px-4 rounded-2xl border text-xs font-semibold transition-colors cursor-pointer",
+              isDark ? "border-white/10 hover:bg-white/[0.06] text-slate-200" : "border-slate-200 hover:bg-slate-100 text-slate-700"
             )}
           >
             <span>Progression Track</span>

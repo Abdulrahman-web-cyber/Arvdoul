@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, memo } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Video, Play, LayoutGrid, Smartphone, Flame } from "lucide-react";
+import { Video, Play, Smartphone, Flame, Search, Camera, Sparkles } from "lucide-react";
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useVideoStore } from '../store/videoStore';
@@ -132,18 +132,19 @@ const VideosScreen = () => {
     loadVideos(feedType);
   }, [loadVideos, feedType]);
 
-  // Initial load
+  // Initial load & URL tab sync
   useEffect(() => {
     if (videos.length === 0) {
       loadVideos(initialTab || feedType);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab]);
 
   return (
     <div
       className="h-full w-full overflow-hidden relative"
       style={{
-        background: isDark ? '#050510' : '#F8F9FA',
+        background: isDark ? '#03071B' : '#F6F8FC',
       }}
     >
       {/* Background sync progress bar */}
@@ -152,47 +153,6 @@ const VideosScreen = () => {
           <RouteProgressBar isAnimating={true} />
         )}
       </AnimatePresence>
-
-      {/* Floating View Switcher Button (Feed / Grid toggle) */}
-      <div className="absolute top-4 left-4 z-40 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setViewMode(prev => prev === 'feed' ? 'grid' : 'feed')}
-          className="px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105"
-          style={{
-            background: isDark ? 'rgba(0, 0, 0, 0.55)' : 'rgba(255, 255, 255, 0.85)',
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
-            color: isDark ? '#fff' : '#111',
-          }}
-          title="Toggle Grid / Feed view"
-        >
-          {viewMode === 'feed' ? (
-            <>
-              <LayoutGrid className="w-3.5 h-3.5 text-purple-400" />
-              <span>Grid</span>
-            </>
-          ) : (
-            <>
-              <Smartphone className="w-3.5 h-3.5 text-pink-400" />
-              <span>Sparks Feed</span>
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navigate('/reels')}
-          className={`px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 ${
-            isDark
-              ? 'bg-pink-500/20 text-pink-300 border-pink-500/30'
-              : 'bg-white/90 text-pink-600 border-pink-200'
-          }`}
-          title="Open Fullscreen Reels"
-        >
-          <Flame className="w-3.5 h-3.5 text-pink-500" />
-          <span>Reels</span>
-        </button>
-      </div>
 
       {/* Main View Display */}
       {viewMode === 'feed' ? (
@@ -207,6 +167,9 @@ const VideosScreen = () => {
           onFeedTypeChange={handleTabChange}
           onOpenSearch={() => navigate('/search')}
           onCreateVideo={() => navigate('/create-post')}
+          viewMode={viewMode}
+          onToggleViewMode={() => setViewMode('grid')}
+          onOpenReels={() => navigate('/reels')}
         />
       ) : (
         /* Discovery 4K Grid View */
@@ -217,6 +180,9 @@ const VideosScreen = () => {
           onRefresh={handleRefresh}
           feedType={feedType}
           onFeedTypeChange={handleTabChange}
+          onSwitchToFeed={() => setViewMode('feed')}
+          onOpenReels={() => navigate('/reels')}
+          onOpenSearch={() => navigate('/search')}
           onVideoClick={(video, index) => {
             setCurrentIndex(index);
             setViewMode('feed');
@@ -238,10 +204,13 @@ const GridView = memo(({
   onRefresh,
   feedType,
   onFeedTypeChange,
+  onSwitchToFeed,
+  onOpenReels,
+  onOpenSearch,
   onVideoClick,
   onCreateVideo,
 }) => {
-  const { isDark, gradient, spring } = useTheme();
+  const { isDark, spring } = useTheme();
 
   if (error && videos.length === 0) {
     return (
@@ -256,39 +225,96 @@ const GridView = memo(({
   }
 
   return (
-    <div className="h-full overflow-y-auto pt-16 pb-28 px-4 sm:px-6 max-w-7xl mx-auto select-none">
+    <div className="h-full overflow-y-auto pt-4 sm:pt-6 pb-28 px-4 sm:px-6 max-w-7xl mx-auto select-none">
       {/* Grid Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Explore Videos
-          </h1>
-          <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Discover trending visual creators and original soundscapes
-          </p>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Explore Videos
+            </h1>
+            <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Discover trending visual creators and original soundscapes
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onSwitchToFeed}
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                isDark
+                  ? 'bg-[#080E27] border-white/10 text-white hover:bg-white/10'
+                  : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
+              }`}
+            >
+              <Smartphone className="w-4 h-4 text-purple-400" />
+              <span>Sparks Feed</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenReels}
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                isDark
+                  ? 'bg-pink-500/15 border-pink-500/30 text-pink-300 hover:bg-pink-500/25'
+                  : 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100'
+              }`}
+            >
+              <Flame className="w-4 h-4 text-pink-500" />
+              <span>Reels</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              aria-label="Search Videos"
+              className={`min-h-[44px] min-w-[44px] rounded-xl border flex items-center justify-center transition-colors shrink-0 ${
+                isDark
+                  ? 'bg-[#080E27] border-white/10 text-white hover:bg-white/10'
+                  : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onCreateVideo}
+              aria-label="Create Video"
+              className="min-h-[44px] min-w-[44px] px-3 rounded-xl bg-arvdoul-gradient text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md hover:brightness-110 transition-all shrink-0"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">Create</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab Filters */}
-        <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-200/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 backdrop-blur-xl">
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl w-fit max-w-full overflow-x-auto bg-slate-200/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 backdrop-blur-xl">
           {[
-            { id: 'sparks', label: '⚡ Sparks' },
+            { id: 'sparks', label: 'Sparks', icon: Sparkles },
             { id: 'for_you', label: 'For You' },
             { id: 'trending', label: 'Trending' },
             { id: 'following', label: 'Following' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onFeedTypeChange?.(tab.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                feedType === tab.id
-                  ? 'bg-arvdoul-gradient text-white shadow-md'
-                  : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          ].map(tab => {
+            const TabIcon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => onFeedTypeChange?.(tab.id)}
+                className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                  feedType === tab.id
+                    ? 'bg-arvdoul-gradient text-white shadow-md'
+                    : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {TabIcon && <TabIcon className="w-3.5 h-3.5" aria-hidden="true" />}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -312,11 +338,11 @@ const GridView = memo(({
               type="button"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...spring.card, delay: index * 0.04 }}
+              transition={{ ...spring.card, delay: Math.min(index * 0.03, 0.3) }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onVideoClick(video, index)}
-              className="w-full text-left relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-gray-900 focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
+              className="w-full text-left relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-[#080E27] focus:outline-none focus:ring-2 focus:ring-arvdoul-purple"
             >
               <LazyImage
                 src={video.thumbnailUrl || video.thumbnail || '/assets/default-profile.png'}
@@ -328,15 +354,21 @@ const GridView = memo(({
               {/* Gradient Vignette */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
 
-              {/* Quality & Duration Badges */}
-              <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
-                <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-black text-cyan-300 border border-white/10 uppercase">
-                  {video.quality || '1080p'}
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white/90 border border-white/10 font-mono tabular-nums">
-                  {video.duration ? `${video.duration}s` : '0:30'}
-                </span>
-              </div>
+              {/* Quality & Real Duration Badges */}
+              {(video.quality || video.duration) && (
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                  {video.quality ? (
+                    <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-black text-cyan-300 border border-white/10 uppercase">
+                      {video.quality}
+                    </span>
+                  ) : <span />}
+                  {video.duration ? (
+                    <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white/90 border border-white/10 font-mono tabular-nums">
+                      {video.duration}s
+                    </span>
+                  ) : null}
+                </div>
+              )}
 
               {/* Play Button Icon on Hover */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -350,21 +382,25 @@ const GridView = memo(({
                 <div className="flex items-center gap-1.5">
                   <LazyImage
                     src={video.creator?.avatar || '/assets/default-profile.png'}
-                    alt={video.creator?.name}
+                    alt={video.creator?.name || 'Creator'}
                     className="w-5 h-5 rounded-full object-cover ring-1 ring-white/40"
                   />
-                  <span className="text-white text-xs font-bold truncate drop-shadow-md">
-                    @{video.creator?.username || 'user'}
-                  </span>
+                  {(video.creator?.username || video.creator?.name) && (
+                    <span className="text-white text-xs font-bold truncate drop-shadow-md">
+                      {video.creator?.username ? `@${video.creator.username}` : video.creator.name}
+                    </span>
+                  )}
                 </div>
 
-                <p className="text-white/90 text-xs font-semibold line-clamp-1 drop-shadow-md">
-                  {video.title || 'Untitled Story'}
-                </p>
+                {(video.title || video.description) && (
+                  <p className="text-white/90 text-xs font-semibold line-clamp-1 drop-shadow-md">
+                    {video.title || video.description}
+                  </p>
+                )}
 
-                <div className="flex items-center gap-2 text-[11px] text-white/70 font-medium tabular-nums">
+                <div className="flex items-center gap-2 text-[11px] text-white/75 font-medium tabular-nums">
                   <span>{video.likesFormatted || (video.likes == null ? '—' : video.likes.toLocaleString())} likes</span>
-                  <span>•</span>
+                  <span aria-hidden="true">·</span>
                   <span>{video.views == null ? '—' : video.views.toLocaleString()} views</span>
                 </div>
               </div>

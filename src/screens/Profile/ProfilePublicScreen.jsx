@@ -430,6 +430,41 @@ export default function ProfilePublicScreen() {
     }
   }, [effectiveProfile, userId, profileData?.username]);
 
+  // Sync visitor profile identity into TopAppBar
+  useEffect(() => {
+    const canExposeIdentity =
+      Boolean(effectiveProfile) &&
+      !capabilities?.isBlockedBy &&
+      capabilities?.canViewProfile !== false;
+
+    if (!canExposeIdentity) {
+      window.dispatchEvent(new CustomEvent('arvdoul:profile_header_state', { detail: null }));
+      return undefined;
+    }
+
+    window.dispatchEvent(new CustomEvent('arvdoul:profile_header_state', {
+      detail: {
+        userId: effectiveProfile.id || effectiveProfile.uid || routeUserId || null,
+        displayName: effectiveProfile.displayName || effectiveProfile.name || null,
+        username: effectiveProfile.username || null,
+        photoURL: effectiveProfile.photoURL || null,
+        isVerified: Boolean(effectiveProfile.isVerified),
+      },
+    }));
+    return undefined;
+  }, [
+    effectiveProfile,
+    capabilities?.isBlockedBy,
+    capabilities?.canViewProfile,
+    routeUserId,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(new CustomEvent('arvdoul:profile_header_state', { detail: null }));
+    };
+  }, []);
+
   // Cross-component event listeners for TopAppBar & Header actions
   useEffect(() => {
     const handleQrEvent = () => setShowQrModal(true);
@@ -474,14 +509,14 @@ export default function ProfilePublicScreen() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
             >
               Go Back
             </button>
             <button
               type="button"
               onClick={handleUnblock}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity cursor-pointer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity cursor-pointer"
             >
               Unblock Profile
             </button>
@@ -532,8 +567,8 @@ export default function ProfilePublicScreen() {
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
           isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
         )}>
-          <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center text-2xl font-bold">
-            {storeError ? <ShieldAlert className="w-8 h-8" /> : '?'}
+          <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
+            {storeError ? <ShieldAlert className="w-8 h-8" /> : <UserX className="w-8 h-8" />}
           </div>
           <h2 className="font-display text-xl font-bold">
             {storeError ? 'Could Not Load Profile' : 'Creator Profile Not Found'}
@@ -545,7 +580,7 @@ export default function ProfilePublicScreen() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity cursor-pointer"
             >
               Go Back
             </button>
@@ -553,7 +588,7 @@ export default function ProfilePublicScreen() {
               <button
                 type="button"
                 onClick={() => loadPublicProfile()}
-                className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity inline-flex items-center gap-2 cursor-pointer"
+                className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>Retry</span>
@@ -562,7 +597,7 @@ export default function ProfilePublicScreen() {
               <button
                 type="button"
                 onClick={() => navigate('/')}
-                className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity cursor-pointer"
+                className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity cursor-pointer"
               >
                 Discover Creators
               </button>
@@ -722,7 +757,7 @@ export default function ProfilePublicScreen() {
                 <button
                   type="button"
                   onClick={handleFollowToggle}
-                  className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
+                  className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>

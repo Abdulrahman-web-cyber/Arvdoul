@@ -504,9 +504,18 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
         el.focus?.();
       }
     };
+    const onInboxSearchQuery = (e) => {
+      if (!sidebarMode) {
+        setSearchQuery(typeof e?.detail === 'string' ? e.detail : '');
+      }
+    };
     window.addEventListener('arvdoul:focus_inbox_search', onFocusSearch);
-    return () => window.removeEventListener('arvdoul:focus_inbox_search', onFocusSearch);
-  }, []);
+    window.addEventListener('arvdoul:inbox_search_query', onInboxSearchQuery);
+    return () => {
+      window.removeEventListener('arvdoul:focus_inbox_search', onFocusSearch);
+      window.removeEventListener('arvdoul:inbox_search_query', onInboxSearchQuery);
+    };
+  }, [sidebarMode]);
 
   useEffect(() => {
     if (!user?.uid || sidebarMode) {
@@ -558,7 +567,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
     <div
       className={cn(
         'flex flex-1 min-h-0 w-full h-full overflow-hidden font-sans',
-        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F8FAFC] text-slate-900'
+        isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
       )}
     >
       {/* Left Conversation List / Sidebar Pane */}
@@ -567,11 +576,12 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
           ? 'w-full'
           : 'w-full lg:w-[360px] lg:flex-none xl:w-[392px] lg:border-r lg:border-slate-200/80 dark:lg:border-white/[0.08]'
       }`}>
-        {/* Unified Inbox Header — title bar omitted when TopAppBar owns top chrome */}
+        {/* Unified Inbox Header — title bar & search bar omitted when TopAppBar owns top chrome */}
         <header
           className={cn(
-            'sticky top-0 z-20 px-4 pt-3 pb-3 border-b backdrop-blur-xl',
-            isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F8FAFC]/90 border-slate-200/80'
+            'sticky top-0 z-20 px-4 border-b backdrop-blur-xl',
+            hasTopAppBar && !sidebarMode ? 'pt-1.5 pb-2.5' : 'pt-3 pb-3',
+            isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F6F8FC]/90 border-slate-200/80'
           )}
         >
           {(!hasTopAppBar || sidebarMode) && (
@@ -623,7 +633,8 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
             </div>
           )}
 
-          {/* Search Input */}
+          {/* Search Input (shown in split-pane sidebar or standalone mode; TopAppBar owns top-level inbox search) */}
+          {(!hasTopAppBar || sidebarMode) && (
           <div className="relative">
             <div
               className={cn(
@@ -665,10 +676,14 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
               )}
             </div>
           </div>
+          )}
 
           {/* Interactive Filter Tabs */}
           <div
-            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2.5"
+            className={cn(
+              'flex items-center gap-1.5 overflow-x-auto no-scrollbar',
+              (!hasTopAppBar || sidebarMode) ? 'pt-2.5' : 'pt-0.5'
+            )}
             role="tablist"
             aria-label="Filter conversations"
           >
@@ -1048,7 +1063,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
               </div>
             )}
 
-            {filteredConversations.map((item) => {
+            {filteredConversations.map((item, rowIdx) => {
               if (item.isAd) {
                 return (
                   <div
@@ -1247,7 +1262,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                     aria-expanded={isMenuOpen}
                     onClick={() => setOpenMenuId(isMenuOpen ? null : item.id)}
                     className={cn(
-                      'min-h-[36px] min-w-[36px] rounded-lg flex items-center justify-center shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                      'min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                       isDark
                         ? 'text-slate-400 hover:bg-white/10 hover:text-white'
                         : 'text-slate-500 hover:bg-slate-200/70 hover:text-slate-900'
@@ -1267,7 +1282,10 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                       <div
                         role="menu"
                         className={cn(
-                          'absolute right-2 top-12 z-40 w-44 rounded-xl border p-1 shadow-xl',
+                          'absolute right-2 z-40 w-44 rounded-xl border p-1 shadow-xl',
+                          rowIdx >= filteredConversations.length - 2 && filteredConversations.length > 2
+                            ? 'bottom-12'
+                            : 'top-12',
                           isDark
                             ? 'bg-[#0B1230] border-white/15 text-slate-200'
                             : 'bg-white border-slate-200 text-slate-800'

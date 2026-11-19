@@ -19,7 +19,7 @@ import {
   Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X,
   Sparkles, Music, Users, Loader2, Trash2, Share2, Bookmark, RefreshCw,
   MapPin, Link2, AtSign, Timer, HelpCircle, ChevronLeft, ChevronRight,
-  ExternalLink, Type, Video, Pause, Play, WifiOff, Shield
+  ExternalLink, Type, Video, Pause, Play, WifiOff, Shield, Check
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import { getSocialGraphService } from '../services/socialGraphService.js';
@@ -29,6 +29,7 @@ import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { copyToClipboard } from '../utils/shareUtils.js';
 import { BRAND_GRADIENT } from '../design-system/tokens.js';
 import { calculateVibeDuration, getAudienceMeta, isVibeExpired } from '../config/vibeContracts.js';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { LazyImage } from '../components/Shared/LazyImage';
@@ -83,6 +84,7 @@ export default function StoriesScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme !== 'light';
 
   // Navigation / Filter / Feed State
@@ -403,6 +405,27 @@ export default function StoriesScreen() {
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams, user?.uid, handleOpenArchive]);
+
+  // Listen to unified TopAppBar controls when TopAppBar owns top chrome
+  useEffect(() => {
+    const onSearchQuery = (e) => {
+      setSearchQuery(typeof e.detail === 'string' ? e.detail : '');
+    };
+    const onRefresh = () => {
+      setStoriesNonce((n) => n + 1);
+    };
+    const onOpenArchive = () => {
+      handleOpenArchive();
+    };
+    window.addEventListener('arvdoul:vibes_search_query', onSearchQuery);
+    window.addEventListener('arvdoul:vibes_refresh', onRefresh);
+    window.addEventListener('arvdoul:vibes_open_archive', onOpenArchive);
+    return () => {
+      window.removeEventListener('arvdoul:vibes_search_query', onSearchQuery);
+      window.removeEventListener('arvdoul:vibes_refresh', onRefresh);
+      window.removeEventListener('arvdoul:vibes_open_archive', onOpenArchive);
+    };
+  }, [handleOpenArchive]);
 
   const filteredStories = useMemo(() => {
     const base = highlightGroup ? [highlightGroup, ...stories] : stories;
@@ -1028,7 +1051,8 @@ export default function StoriesScreen() {
         isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900'
       )}
     >
-      {/* ==================== TOP APP HEADER ==================== */}
+      {/* ==================== TOP APP HEADER (standalone fallback only) ==================== */}
+      {!hasTopAppBar && (
       <header
         className={cn(
           'sticky top-0 z-30 px-4 pt-4 pb-3 flex items-center justify-between backdrop-blur-xl border-b transition-all',
@@ -1116,15 +1140,17 @@ export default function StoriesScreen() {
           </button>
         </div>
       </header>
+      )}
 
-      {/* ==================== EXPANDABLE SEARCH BAR ==================== */}
+      {/* ==================== EXPANDABLE SEARCH BAR (standalone fallback only) ==================== */}
+      {!hasTopAppBar && (
       <AnimatePresence>
         {isSearchOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-2 max-w-5xl mx-auto"
+            className="px-4 py-2 max-w-6xl mx-auto"
           >
             <div
               className={cn(
@@ -1158,37 +1184,51 @@ export default function StoriesScreen() {
           </motion.div>
         )}
       </AnimatePresence>
+      )}
 
       {/* ==================== CATEGORY FILTER TABS ==================== */}
-      <div className="px-4 py-3.5 overflow-x-auto no-scrollbar flex items-center gap-2 max-w-5xl mx-auto">
-        {CATEGORY_TABS.map((tab) => {
-          const isActive = activeCategory === tab.id;
-          const Icon = tab.icon;
+      <div className="px-4 pt-1 pb-3.5 overflow-x-auto no-scrollbar flex items-center justify-between gap-3 max-w-6xl mx-auto">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {CATEGORY_TABS.map((tab) => {
+            const isActive = activeCategory === tab.id;
+            const Icon = tab.icon;
 
-          return (
-            <button
-              type="button"
-              key={tab.id}
-              onClick={() => setActiveCategory(tab.id)}
-              className={cn(
-                'min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold tracking-wide whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer',
-                isActive
-                  ? 'text-white shadow-md'
-                  : isDark
-                    ? 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm'
-              )}
-              style={isActive ? { background: BRAND_GRADIENT } : undefined}
-            >
-              {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
-              {tab.label}
-            </button>
-          );
-        })}
+            return (
+              <button
+                type="button"
+                key={tab.id}
+                onClick={() => setActiveCategory(tab.id)}
+                className={cn(
+                  'min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold tracking-wide whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer',
+                  isActive
+                    ? 'text-white shadow-md'
+                    : isDark
+                      ? 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm'
+                )}
+                style={isActive ? { background: BRAND_GRADIENT } : undefined}
+              >
+                {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+        {hasTopAppBar && (isOffline || feedCached) && (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0',
+              isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-100 text-amber-800'
+            )}
+          >
+            {isOffline && <WifiOff className="w-3 h-3" aria-hidden="true" />}
+            <span>{isOffline ? 'Offline' : 'Cached'}</span>
+          </span>
+        )}
       </div>
 
       {/* ==================== VIBES GRID ==================== */}
-      <div className="px-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 max-w-5xl mx-auto">
+      <div className="px-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 md:gap-4 max-w-6xl mx-auto">
         {/* CREATE VIBE CARD */}
         <motion.button
           type="button"
@@ -1699,8 +1739,11 @@ export default function StoriesScreen() {
                                         aria-hidden="true"
                                       />
                                     )}
-                                    <span className="relative flex items-center justify-between">
-                                      <span>{opt}{poll.voted === i ? ' ✓' : ''}</span>
+                                    <span className="relative flex items-center justify-between gap-2">
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <span>{opt}</span>
+                                        {poll.voted === i && <Check className="w-3.5 h-3.5 text-white shrink-0" aria-hidden="true" />}
+                                      </span>
                                       {revealed && <span className="text-white/80 tabular-nums">{pct}%</span>}
                                     </span>
                                   </button>

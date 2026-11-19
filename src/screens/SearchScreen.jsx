@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   Video, Users, FileText, Image, Radio, Calendar, BarChart2, 
-  HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search, SlidersHorizontal, Mic
+  HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search, SlidersHorizontal, Mic,
+  Film, Flame, MessageSquare
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -291,7 +292,7 @@ const SearchScreen = memo(() => {
           toast.success('Follow request sent');
         } else {
           applyState(true, null);
-          toast.success('Following 🎉');
+          toast.success('Following');
         }
       }
     } catch (err) {
@@ -375,8 +376,8 @@ const SearchScreen = memo(() => {
       className={cn(
         'min-h-screen',
         isDark 
-          ? 'bg-gradient-to-br from-[#050510] via-[#0b0b20] to-[#050510]' 
-          : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
+          ? 'bg-[#03071B] text-white' 
+          : 'bg-[#F6F8FC] text-slate-900'
       )}
     >
       {/* Search Header Bar with Input (only when TopAppBar absent) & Category Pills */}
@@ -433,35 +434,35 @@ const SearchScreen = memo(() => {
             onClick={handleVoiceSearch}
             disabled={isListening}
             className={cn(
-              'p-2.5 rounded-2xl border transition-all flex items-center gap-1.5 justify-center shrink-0 cursor-pointer',
+              'min-h-[44px] min-w-[44px] px-3 rounded-2xl border transition-all flex items-center gap-1.5 justify-center shrink-0 cursor-pointer',
               isListening
                 ? 'bg-purple-600 text-white border-purple-500 animate-pulse'
                 : isDark
-                ? 'bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]'
+                ? 'bg-white/[0.06] border-white/10 text-slate-200 hover:bg-white/[0.10]'
                 : 'bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50'
             )}
             title={isListening ? 'Listening…' : 'Voice search'}
             aria-label="Search by voice"
           >
             <Mic className="w-4 h-4" />
-            {hasTopAppBar && <span className="text-xs font-medium hidden sm:inline">Voice</span>}
+            {hasTopAppBar && <span className="text-xs font-semibold hidden sm:inline">Voice</span>}
           </button>
           <button
             type="button"
             onClick={() => setShowFilters((prev) => !prev)}
             className={cn(
-              'p-2.5 rounded-2xl border transition-all flex items-center gap-1.5 justify-center shrink-0 cursor-pointer',
+              'min-h-[44px] min-w-[44px] px-3 rounded-2xl border transition-all flex items-center gap-1.5 justify-center shrink-0 cursor-pointer',
               showFilters
                 ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-500/25'
                 : isDark
-                ? 'bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]'
+                ? 'bg-white/[0.06] border-white/10 text-slate-200 hover:bg-white/[0.10]'
                 : 'bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50'
             )}
             title="Search Filters"
             aria-label="Search Filters"
           >
             <SlidersHorizontal className="w-4 h-4" />
-            {hasTopAppBar && <span className="text-xs font-medium hidden sm:inline">Filters</span>}
+            {hasTopAppBar && <span className="text-xs font-semibold hidden sm:inline">Filters</span>}
           </button>
         </div>
 
@@ -643,15 +644,27 @@ const ForYouSection = memo(({ isDark, onSelect }) => (
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10" />
-          <div className={cn(
-            "absolute inset-0 transition-transform duration-300 group-hover:scale-110",
-            item.key === 'videos' && "bg-gradient-to-br from-purple-600/80 to-pink-600/80",
-            item.key === 'users' && "bg-gradient-to-br from-cyan-600/80 to-blue-600/80",
-            item.key === 'posts' && "bg-gradient-to-br from-amber-600/80 to-orange-600/80",
-            item.key === 'communities' && "bg-gradient-to-br from-emerald-600/80 to-teal-600/80"
-          )} />
-          <div className="absolute inset-0 flex items-center justify-center z-10 text-3xl">
-            {item.key === 'videos' ? '🎬' : item.key === 'users' ? '⭐' : item.key === 'posts' ? '🔥' : '💬'}
+          <div
+            className={cn(
+              "absolute inset-0 transition-transform duration-300 group-hover:scale-110",
+              item.key === 'people' && "bg-gradient-to-br from-cyan-600/85 to-blue-700/85",
+              item.key === 'posts' && "bg-gradient-to-br from-amber-600/85 to-orange-600/85",
+              item.key === 'communities' && "bg-gradient-to-br from-emerald-600/85 to-teal-700/85"
+            )}
+            style={item.key === 'videos' ? { background: ARVDOUL_GRADIENT } : undefined}
+          />
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-lg">
+              {item.key === 'videos' ? (
+                <Film className="w-6 h-6" aria-hidden="true" />
+              ) : item.key === 'people' ? (
+                <Users className="w-6 h-6" aria-hidden="true" />
+              ) : item.key === 'posts' ? (
+                <Flame className="w-6 h-6" aria-hidden="true" />
+              ) : (
+                <MessageSquare className="w-6 h-6" aria-hidden="true" />
+              )}
+            </div>
           </div>
           <div className="absolute bottom-0 left-0 right-0 p-3 z-20">
             <h3 className="text-white font-bold text-sm">{item.title}</h3>

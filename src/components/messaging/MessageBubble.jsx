@@ -84,6 +84,7 @@ const MessageBubble = React.memo(
     theme,
     isGroup,
     isGroupStart = true,
+    preferMenuBelow = false,
   }) => {
     const [showReactions, setShowReactions] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
@@ -307,7 +308,7 @@ const MessageBubble = React.memo(
                   setShowMenu(false);
                 }}
                 className={cn(
-                  'min-h-[34px] min-w-[34px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark
                     ? 'hover:bg-white/10 text-slate-400 hover:text-white'
                     : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
@@ -324,7 +325,7 @@ const MessageBubble = React.memo(
                   setShowReactions(false);
                 }}
                 className={cn(
-                  'min-h-[34px] min-w-[34px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  'min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                   isDark
                     ? 'hover:bg-white/10 text-slate-400 hover:text-white'
                     : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
@@ -811,7 +812,8 @@ const MessageBubble = React.memo(
               />
               <div
                 className={cn(
-                  'absolute z-50 bottom-full mb-2 p-1.5 rounded-2xl shadow-xl flex items-center gap-1 border',
+                  'absolute z-50 p-1.5 rounded-2xl shadow-xl flex items-center gap-1 border',
+                  preferMenuBelow ? 'top-full mt-2' : 'bottom-full mb-2',
                   isOwn ? 'right-0' : 'left-0',
                   isDark ? 'bg-[#0B1230] border-white/15' : 'bg-white border-slate-200'
                 )}
@@ -842,7 +844,8 @@ const MessageBubble = React.memo(
               />
               <div
                 className={cn(
-                  'absolute z-50 bottom-full mb-2 w-44 rounded-2xl shadow-xl overflow-hidden border p-1',
+                  'absolute z-50 w-44 rounded-2xl shadow-xl overflow-hidden border p-1',
+                  preferMenuBelow ? 'top-full mt-2' : 'bottom-full mb-2',
                   isOwn ? 'right-0' : 'left-0',
                   isDark
                     ? 'bg-[#0B1230] border-white/15 text-slate-200'

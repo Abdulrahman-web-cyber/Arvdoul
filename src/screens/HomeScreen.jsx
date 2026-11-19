@@ -1162,11 +1162,11 @@ export default function HomeScreen() {
       activeRequestKeyRef.current = requestKey;
       return await wrappedPromise;
     },
-    [user?.uid, isOnline, authInitialized, getBlockedUserIds, tuning.feedPageSize]
+    [user?.uid, isOnline, authInitialized, getBlockedUserIds, tuning.feedPageSize, activeFeedTab]
   );
 
   const loadFeedRef = useRef(loadFeed);
-  useEffect(() => { loadFeedRef.current = loadFeed; }, [loadFeed]);
+  loadFeedRef.current = loadFeed;
 
   // Predictive preload via Virtuoso rangeChanged
   const handleRangeChanged = useCallback((range) => {

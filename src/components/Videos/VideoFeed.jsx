@@ -18,6 +18,7 @@ import settingsService from '../../services/settingsService';
 import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /**
  * VideoFeed - Vertical snap video feed with gesture navigation and rich overlays
@@ -33,6 +34,9 @@ const VideoFeed = memo(({
   onFeedTypeChange,
   onOpenSearch,
   onCreateVideo,
+  viewMode = 'feed',
+  onToggleViewMode,
+  onOpenReels,
 }) => {
   const containerRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -264,7 +268,7 @@ const VideoFeed = memo(({
     updateVideo(video.id, { isSaved: !wasSaved, saves: shiftSaves(knownSaves) });
     if (!wasSaved) {
       addToWatchLater(video);
-      toast.success('Saved to your collection! 🌟');
+      toast.success('Saved to your collection');
     } else {
       removeFromWatchLater(video.id);
       toast.info('Removed from saved');
@@ -297,13 +301,16 @@ const VideoFeed = memo(({
   }, []);
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden select-none">
+    <div className="relative w-full h-full bg-[#03071B] overflow-hidden select-none">
       {/* Floating Top Bar Navigation */}
       <VideoTopBar
         activeTab={feedType}
         onTabChange={onFeedTypeChange}
         onOpenSearch={onOpenSearch}
         onCreateVideo={onCreateVideo}
+        viewMode={viewMode}
+        onToggleViewMode={onToggleViewMode}
+        onOpenReels={onOpenReels}
       />
 
       {/* Main Snap Feed Container */}
@@ -364,7 +371,7 @@ const VideoFeed = memo(({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-[#070913] z-30 flex flex-col justify-between p-6 animate-pulse select-none"
+            className="absolute inset-0 bg-[#03071B] z-30 flex flex-col justify-between p-6 animate-pulse select-none"
           >
             {/* Top header skeleton */}
             <div className="flex items-center justify-between pt-2">
@@ -423,7 +430,8 @@ const VideoFeed = memo(({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={onRefresh}
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-sm shadow-xl shadow-purple-500/30"
+              className="flex items-center gap-2 px-6 py-3 min-h-[44px] rounded-full text-white font-bold text-sm shadow-xl shadow-purple-500/30"
+              style={{ background: BRAND_GRADIENT }}
             >
               <RefreshCw className="w-4 h-4" />
               Try Again
@@ -467,7 +475,7 @@ const VideoFeed = memo(({
 VideoFeed.displayName = 'VideoFeed';
 
 const EmptyState = memo(({ onRefresh }) => (
-  <div className="h-full flex flex-col items-center justify-center bg-black p-8 text-center">
+  <div className="h-full flex flex-col items-center justify-center bg-[#03071B] p-8 text-center">
     <div className="w-24 h-24 mb-6 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center shadow-2xl">
       <RefreshCw className="w-10 h-10 text-white/30" />
     </div>
@@ -478,7 +486,8 @@ const EmptyState = memo(({ onRefresh }) => (
     <motion.button
       whileTap={{ scale: 0.95 }}
       onClick={onRefresh}
-      className="px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-sm shadow-lg shadow-purple-500/25"
+      className="px-6 py-3 min-h-[44px] rounded-full text-white font-bold text-sm shadow-lg shadow-purple-500/25"
+      style={{ background: BRAND_GRADIENT }}
     >
       Refresh Feed
     </motion.button>
@@ -498,6 +507,9 @@ VideoFeed.propTypes = {
   onFeedTypeChange: PropTypes.func,
   onOpenSearch: PropTypes.func,
   onCreateVideo: PropTypes.func,
+  viewMode: PropTypes.string,
+  onToggleViewMode: PropTypes.func,
+  onOpenReels: PropTypes.func,
 };
 
 export default VideoFeed;

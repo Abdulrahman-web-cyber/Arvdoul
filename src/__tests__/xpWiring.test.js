@@ -49,6 +49,8 @@ describe('XP award wiring', () => {
     follow_received: ['src/services/userService.js'],
     answer_created: ['functions/questions.js'],
     answer_accepted: ['functions/questions.js'],
+    event_rsvp: ['functions/events.js'],
+    community_channel_contribution: ['functions/communities.js'],
   };
 
   test.each(Object.keys(triggers))('%s has a real trigger', (action) => {

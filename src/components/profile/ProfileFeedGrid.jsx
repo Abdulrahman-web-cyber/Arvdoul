@@ -787,7 +787,17 @@ const ProfileFeedGrid = memo(({
                     {item.content || item.caption || item.text || item.title || 'Post'}
                   </span>
                   <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
-                    <span className="capitalize">{item.type || 'post'}</span>
+                    <div className="flex items-center gap-2.5 sm:hidden tabular-nums">
+                      <span className="inline-flex items-center gap-1">
+                        <Heart className="w-3 h-3" />
+                        {likeCount(item)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <MessageCircle className="w-3 h-3" />
+                        {commentCount(item)}
+                      </span>
+                    </div>
+                    <span className="hidden sm:inline capitalize">{item.type || 'post'}</span>
                     <span className="tabular-nums">{item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</span>
                   </div>
                 </div>
@@ -808,17 +818,40 @@ const ProfileFeedGrid = memo(({
                 </div>
               )}
 
-              {/* Hover Overlay with Stats & Quick Actions */}
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 text-white">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 text-xs font-bold">
-                    <Heart className="w-4 h-4 fill-white text-white" />
-                    <span>{likeCount(item)}</span>
+              {/* Engagement & Tip Overlay (always reachable bottom bar on touch media tiles, centered hover on sm+) */}
+              <div
+                className={cn(
+                  "absolute inset-0 transition-opacity flex flex-col text-white",
+                  mediaUrl
+                    ? "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent sm:bg-none sm:bg-black/60 sm:backdrop-blur-[2px] justify-end sm:justify-center items-stretch sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-4"
+                    : "opacity-0 group-hover:opacity-100 bg-black/60 backdrop-blur-[2px] justify-center items-center gap-3 p-4"
+                )}
+              >
+                <div className="flex items-center justify-between sm:justify-center gap-3 sm:gap-4 w-full">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold tabular-nums">
+                      <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white text-white" />
+                      <span>{likeCount(item)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold tabular-nums">
+                      <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white text-white" />
+                      <span>{commentCount(item)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold">
-                    <MessageCircle className="w-4 h-4 fill-white text-white" />
-                    <span>{commentCount(item)}</span>
-                  </div>
+
+                  {onOpenTipModal && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenTipModal();
+                      }}
+                      className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/25 text-amber-200 text-[11px] font-semibold border border-amber-400/35 cursor-pointer active:scale-95"
+                    >
+                      <Coins className="w-3 h-3 text-amber-300" />
+                      <span>Tip</span>
+                    </button>
+                  )}
                 </div>
 
                 {onOpenTipModal && (
@@ -828,7 +861,7 @@ const ProfileFeedGrid = memo(({
                       e.stopPropagation();
                       onOpenTipModal();
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-semibold border border-amber-400/30 transition-all cursor-pointer active:scale-95"
+                    className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-semibold border border-amber-400/30 transition-all cursor-pointer active:scale-95"
                   >
                     <Coins className="w-3.5 h-3.5 text-amber-400" />
                     <span>Tip</span>

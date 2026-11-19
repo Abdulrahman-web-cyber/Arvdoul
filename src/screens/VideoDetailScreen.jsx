@@ -17,6 +17,7 @@ import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Volume2, VolumeX, Loader2, Play } from "lucide-react";
 import { LazyImage } from '../components/Shared/LazyImage';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 
 export default function VideoDetailScreen() {
   const { videoId } = useParams();
@@ -41,6 +42,7 @@ export default function VideoDetailScreen() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [watchNext, setWatchNext] = useState({ loading: false, items: [], error: null });
   const viewedRef = useRef(false);
+  const videoRef = useRef(null);
 
   useEffect(() => {
     const urlParam = searchParams.get('url');
@@ -168,7 +170,7 @@ export default function VideoDetailScreen() {
       const res = await videoService.likeVideo(video.id);
       const nowLiked = res?.data?.liked ?? !liked;
       setLiked(nowLiked);
-      setLikeCount((c) => Math.max(0, c + (nowLiked ? 1 : -1)));
+      setLikeCount((c) => (c === null ? null : Math.max(0, c + (nowLiked ? 1 : -1))));
     } catch (err) {
       toast.error(err?.message || 'Could not like video.');
     }
@@ -225,21 +227,19 @@ export default function VideoDetailScreen() {
     if (el.paused) { el.play(); setIsPlaying(true); } else { el.pause(); setIsPlaying(false); }
   };
 
-  const videoRef = useRef(null);
-
   const colors = {
-    bg: isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]',
-    card: isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white/90 border-gray-200',
-    text: isDark ? 'text-white' : 'text-gray-900',
-    secondary: isDark ? 'text-gray-400' : 'text-gray-600',
+    bg: isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]',
+    card: isDark ? 'bg-[#080F2E]/90 border-white/[0.08]' : 'bg-white border-slate-200/90 shadow-sm',
+    text: isDark ? 'text-white' : 'text-slate-900',
+    secondary: isDark ? 'text-slate-400' : 'text-slate-600',
   };
 
   return (
     <div className={cn('min-h-screen pb-16', colors.bg)}>
       {/* Header */}
-      <div className={cn('sticky top-0 z-30 border-b backdrop-blur-xl', colors.card, 'border')}>
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} aria-label="Back" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+      <div className={cn('sticky top-0 z-30 border-b backdrop-blur-xl', isDark ? 'bg-[#03071B]/90 border-white/[0.08]' : 'bg-[#F6F8FC]/90 border-slate-200/80')}>
+        <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3">
+          <button onClick={() => navigate(-1)} aria-label="Back" className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className={cn('font-bold truncate', colors.text)}>{video?.title || 'Video'}</h1>
@@ -312,10 +312,8 @@ export default function VideoDetailScreen() {
                 {user?.uid && video.userId === user.uid && (
                   <button
                     onClick={() => navigate('/video-analytics')}
-                    className={cn(
-                      'shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition',
-                      'bg-gradient-to-r from-violet-500 to-cyan-500 text-white hover:opacity-90'
-                    )}
+                    className="shrink-0 min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-white hover:opacity-90 transition"
+                    style={{ background: BRAND_GRADIENT }}
                   >
                     Analytics
                   </button>

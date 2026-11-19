@@ -433,7 +433,7 @@ export const ProfileHeroSection = memo(({
   const joinedDate = profile?.createdAt ? formatJoinedDate(profile.createdAt) : null;
 
   const secondaryBtnClass = cn(
-    "inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0",
+    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3.5 py-2 rounded-xl border text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0",
     isDark
       ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-100"
       : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-sm"
@@ -641,7 +641,7 @@ export const ProfileHeroSection = memo(({
                       className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-300 hover:underline cursor-pointer"
                       title="View Royal Family Privileges & Standing"
                     >
-                      <span>👑</span>
+                      <Crown className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Royal Family</span>
                     </button>
                   </>
@@ -769,7 +769,7 @@ export const ProfileHeroSection = memo(({
             <button
               type="button"
               onClick={onEditProfile || (() => navigate('/profile/edit'))}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap shrink-0"
               style={{ background: BRAND_GRADIENT }}
             >
               <Edit3 className="w-4 h-4" />
@@ -832,7 +832,7 @@ export const ProfileHeroSection = memo(({
               aria-disabled={followLoading || !onFollowToggle}
               title={!onFollowToggle ? 'Preview only — this is how your profile looks to others' : undefined}
               className={cn(
-                "flex-1 sm:flex-none sm:min-w-[148px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap",
+                "flex-1 sm:flex-none sm:min-w-[148px] min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap",
                 !onFollowToggle && "opacity-60 cursor-not-allowed",
                 isFollowing || requestStatus === 'pending'
                   ? (isDark
@@ -884,7 +884,7 @@ export const ProfileHeroSection = memo(({
                 onClick={friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle}
                 disabled={friendRequestLoading || friendshipStatus === 'friends'}
                 className={cn(
-                  "inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-[13px] border transition-colors whitespace-nowrap shrink-0",
+                  "min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-[13px] border transition-colors whitespace-nowrap shrink-0",
                   friendshipStatus === 'friends'
                     ? (isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700")
                     : friendshipStatus === 'received'

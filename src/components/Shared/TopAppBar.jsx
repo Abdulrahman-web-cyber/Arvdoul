@@ -7,7 +7,7 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2 } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
@@ -268,7 +268,14 @@ export const TopAppBar = ({
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [inboxHeaderState, setInboxHeaderState] = useState({ totalUnread: 0, activeCount: 0 });
+  const [inboxSearchOpen, setInboxSearchOpen] = useState(false);
+  const [inboxSearchQuery, setInboxSearchQuery] = useState("");
+  const [storiesSearchOpen, setStoriesSearchOpen] = useState(false);
+  const [storiesSearchQuery, setStoriesSearchQuery] = useState("");
   const [chatHeaderState, setChatHeaderState] = useState(null);
+  const [profileHeaderState, setProfileHeaderState] = useState(null);
+  const inboxSearchInputRef = useRef(null);
+  const storiesSearchInputRef = useRef(null);
 
   useEffect(() => {
     const onInboxState = (e) => {
@@ -286,11 +293,26 @@ export const TopAppBar = ({
         setChatHeaderState(e.detail);
       }
     };
+    const onProfileState = (e) => {
+      if (e?.detail === null) {
+        setProfileHeaderState(null);
+      } else if (e?.detail && typeof e.detail === "object") {
+        setProfileHeaderState(e.detail);
+      }
+    };
+    const onFocusInboxSearch = () => {
+      setInboxSearchOpen(true);
+      requestAnimationFrame(() => inboxSearchInputRef.current?.focus?.());
+    };
     window.addEventListener("arvdoul:inbox_header_state", onInboxState);
     window.addEventListener("arvdoul:chat_header_state", onChatState);
+    window.addEventListener("arvdoul:profile_header_state", onProfileState);
+    window.addEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
     return () => {
       window.removeEventListener("arvdoul:inbox_header_state", onInboxState);
       window.removeEventListener("arvdoul:chat_header_state", onChatState);
+      window.removeEventListener("arvdoul:profile_header_state", onProfileState);
+      window.removeEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
     };
   }, []);
 
@@ -381,6 +403,12 @@ export const TopAppBar = ({
     if (path === "/" || path === "/home" || path === "") return "brand";
     if (path.startsWith("/search")) return "search";
     if (
+      path.startsWith("/stories") ||
+      path.startsWith("/vibes") ||
+      path.startsWith("/highlight/")
+    )
+      return "stories";
+    if (
       path.startsWith("/create-post") ||
       path.startsWith("/create-story")
     )
@@ -409,6 +437,17 @@ export const TopAppBar = ({
   useEffect(() => {
     if (currentMode !== "messages_chat") {
       setChatHeaderState(null);
+    }
+    if (currentMode !== "messages_inbox") {
+      setInboxSearchOpen(false);
+      setInboxSearchQuery("");
+    }
+    if (currentMode !== "stories") {
+      setStoriesSearchOpen(false);
+      setStoriesSearchQuery("");
+    }
+    if (currentMode !== "profile_visitor") {
+      setProfileHeaderState(null);
     }
   }, [currentMode]);
 
@@ -502,7 +541,14 @@ export const TopAppBar = ({
         }
         className="fixed top-0 left-0 right-0 z-40 px-3 sm:px-6 pt-2 sm:pt-3 pointer-events-none"
       >
-        <div className="max-w-4xl mx-auto flex flex-col items-center gap-1.5 pointer-events-auto">
+        <div
+          className={cn(
+            "mx-auto flex flex-col items-center gap-1.5 pointer-events-auto",
+            currentMode === "messages_inbox" || currentMode === "messages_chat" || currentMode === "stories"
+              ? "max-w-6xl"
+              : "max-w-4xl"
+          )}
+        >
           {/* Glass pill with optical layers */}
           <div
             className={cn(
@@ -652,50 +698,65 @@ export const TopAppBar = ({
               )}
 
               {currentMode === "messages_inbox" && (
-                <div className="flex items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <button
-                      type="button"
-                      aria-label="Open my profile"
-                      onClick={() => navigate("/profile")}
-                      className="relative shrink-0 rounded-full p-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-                      style={{ background: BRAND_GRADIENT }}
-                    >
-                      <LazyImage
-                        src={userAvatarUrl}
-                        alt={userDisplayName}
-                        className={cn(
-                          "w-9 h-9 rounded-full object-cover border-2",
-                          isDark ? "border-[#03071B]" : "border-white"
-                        )}
-                      />
-                    </button>
-                    <div className="flex flex-col min-w-0">
-                      <h2
-                        className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
-                        style={{ color: tokens.textPrimary }}
-                      >
-                        Messages
-                      </h2>
-                      <span
-                        className="text-[11px] font-medium tabular-nums truncate"
-                        style={{ color: tokens.textSecondary }}
-                      >
-                        {inboxHeaderState.totalUnread > 0
-                          ? `${inboxHeaderState.totalUnread} unread`
-                          : `${inboxHeaderState.activeCount} conversation${inboxHeaderState.activeCount === 1 ? "" : "s"}`}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                inboxSearchOpen ? (
+                  <div className="flex items-center gap-2">
                     <CircularButton
-                      icon={Search}
-                      label="Search messages"
+                      icon={ChevronLeft}
+                      label="Close message search"
                       theme={theme}
                       onClick={() => {
-                        window.dispatchEvent(new CustomEvent("arvdoul:focus_inbox_search", { detail: { focus: true } }));
+                        setInboxSearchOpen(false);
+                        setInboxSearchQuery("");
+                        window.dispatchEvent(new CustomEvent("arvdoul:inbox_search_query", { detail: "" }));
                       }}
                     />
+                    <div className="flex-1 relative flex items-center">
+                      <Search
+                        className="w-4 h-4 absolute left-3 pointer-events-none"
+                        style={{ color: tokens.iconSecondary }}
+                      />
+                      <input
+                        ref={inboxSearchInputRef}
+                        aria-label="Search conversations"
+                        type="text"
+                        value={inboxSearchQuery}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInboxSearchQuery(val);
+                          window.dispatchEvent(new CustomEvent("arvdoul:inbox_search_query", { detail: val }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setInboxSearchOpen(false);
+                            setInboxSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:inbox_search_query", { detail: "" }));
+                          }
+                        }}
+                        placeholder="Search conversations, people, groups..."
+                        autoFocus
+                        className="w-full h-10 sm:h-11 rounded-full pl-9 pr-9 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        style={{
+                          background: tokens.surface,
+                          border: `1px solid ${tokens.border}`,
+                          color: tokens.textPrimary,
+                        }}
+                      />
+                      {inboxSearchQuery && (
+                        <button
+                          type="button"
+                          aria-label="Clear search"
+                          onClick={() => {
+                            setInboxSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:inbox_search_query", { detail: "" }));
+                            inboxSearchInputRef.current?.focus?.();
+                          }}
+                          className="absolute right-2.5 p-1 rounded-full opacity-75 hover:opacity-100"
+                          style={{ color: tokens.iconSecondary }}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                     <CircularButton
                       icon={Plus}
                       label="New conversation"
@@ -703,17 +764,212 @@ export const TopAppBar = ({
                       active
                       onClick={() => navigate("/messages/new")}
                     />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        aria-label="Open my profile"
+                        onClick={() => navigate("/profile")}
+                        className="relative shrink-0 rounded-full p-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        style={{ background: BRAND_GRADIENT }}
+                      >
+                        <LazyImage
+                          src={userAvatarUrl}
+                          alt={userDisplayName}
+                          className={cn(
+                            "w-9 h-9 rounded-full object-cover border-2",
+                            isDark ? "border-[#03071B]" : "border-white"
+                          )}
+                        />
+                      </button>
+                      <div className="flex flex-col min-w-0">
+                        <h2
+                          className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                          style={{ color: tokens.textPrimary }}
+                        >
+                          Messages
+                        </h2>
+                        <span
+                          className="text-[11px] font-medium tabular-nums truncate"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          {inboxHeaderState.totalUnread > 0
+                            ? `${inboxHeaderState.totalUnread} unread`
+                            : `${inboxHeaderState.activeCount} conversation${inboxHeaderState.activeCount === 1 ? "" : "s"}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <CircularButton
+                        icon={Search}
+                        label="Search messages"
+                        theme={theme}
+                        onClick={() => {
+                          setInboxSearchOpen(true);
+                          requestAnimationFrame(() => inboxSearchInputRef.current?.focus?.());
+                        }}
+                      />
+                      <CircularButton
+                        icon={Plus}
+                        label="New conversation"
+                        theme={theme}
+                        active
+                        onClick={() => navigate("/messages/new")}
+                      />
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        onClick={() => {
+                          if (onOpenMenu) onOpenMenu();
+                          else navigate(ROUTES.menu);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
+
+              {currentMode === "stories" && (
+                storiesSearchOpen ? (
+                  <div className="flex items-center gap-2">
                     <CircularButton
-                      icon={Menu}
-                      label="Menu"
+                      icon={ChevronLeft}
+                      label="Close Vibes search"
                       theme={theme}
                       onClick={() => {
-                        if (onOpenMenu) onOpenMenu();
-                        else navigate(ROUTES.menu);
+                        setStoriesSearchOpen(false);
+                        setStoriesSearchQuery("");
+                        window.dispatchEvent(new CustomEvent("arvdoul:vibes_search_query", { detail: "" }));
                       }}
                     />
+                    <div className="flex-1 relative flex items-center">
+                      <Search
+                        className="w-4 h-4 absolute left-3 pointer-events-none"
+                        style={{ color: tokens.iconSecondary }}
+                      />
+                      <input
+                        ref={storiesSearchInputRef}
+                        aria-label="Search creators, vibes, or moments"
+                        type="text"
+                        value={storiesSearchQuery}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStoriesSearchQuery(val);
+                          window.dispatchEvent(new CustomEvent("arvdoul:vibes_search_query", { detail: val }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setStoriesSearchOpen(false);
+                            setStoriesSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:vibes_search_query", { detail: "" }));
+                          }
+                        }}
+                        placeholder="Search creators, vibes, or moments..."
+                        autoFocus
+                        className="w-full h-10 sm:h-11 rounded-full pl-9 pr-9 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        style={{
+                          background: tokens.surface,
+                          border: `1px solid ${tokens.border}`,
+                          color: tokens.textPrimary,
+                        }}
+                      />
+                      {storiesSearchQuery && (
+                        <button
+                          type="button"
+                          aria-label="Clear Vibes search"
+                          onClick={() => {
+                            setStoriesSearchQuery("");
+                            window.dispatchEvent(new CustomEvent("arvdoul:vibes_search_query", { detail: "" }));
+                            storiesSearchInputRef.current?.focus?.();
+                          }}
+                          className="absolute right-2.5 p-1 rounded-full opacity-75 hover:opacity-100"
+                          style={{ color: tokens.iconSecondary }}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <CircularButton
+                      icon={Camera}
+                      label="Create Vibe"
+                      theme={theme}
+                      active
+                      onClick={() => navigate("/create-story")}
+                    />
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        window.dispatchEvent(new CustomEvent("arvdoul:vibes_refresh", { detail: { source: "top_app_bar" } }));
+                      }}
+                      className="flex items-center gap-2.5 min-w-0 text-left focus:outline-none group"
+                    >
+                      <ArvdoulEmblem
+                        size={32}
+                        theme={theme}
+                        animate={false}
+                        showPlate={false}
+                        className="group-hover:scale-105 transition-transform shrink-0"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <h2
+                          className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                          style={{ color: tokens.textPrimary }}
+                        >
+                          Vibes
+                        </h2>
+                        <BrandBaseline visible={!isHidden} gradient={tokens.brandLine} />
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="hidden sm:block">
+                        <CircularButton
+                          icon={RefreshCw}
+                          label="Refresh Vibes"
+                          theme={theme}
+                          onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:vibes_refresh", { detail: { source: "top_app_bar" } }))}
+                        />
+                      </div>
+                      <CircularButton
+                        icon={Search}
+                        label="Search Vibes"
+                        theme={theme}
+                        onClick={() => {
+                          setStoriesSearchOpen(true);
+                          requestAnimationFrame(() => storiesSearchInputRef.current?.focus?.());
+                        }}
+                      />
+                      <CircularButton
+                        icon={Camera}
+                        label="Create Vibe"
+                        theme={theme}
+                        active
+                        onClick={() => navigate("/create-story")}
+                      />
+                      <CircularButton
+                        icon={Calendar}
+                        label="Vibe memories archive"
+                        theme={theme}
+                        onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:vibes_open_archive", { detail: { source: "top_app_bar" } }))}
+                      />
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        onClick={() => {
+                          if (onOpenMenu) onOpenMenu();
+                          else navigate(ROUTES.menu);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
               )}
 
               {currentMode === "messages_chat" && (
@@ -866,8 +1122,8 @@ export const TopAppBar = ({
                         className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/50 group-hover:scale-105 transition-transform"
                       />
                       {Boolean(effectiveUser?.isVerified) && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center text-white text-[8px] font-bold">
-                          ✓
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center text-white">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" aria-hidden="true" />
                         </span>
                       )}
                     </div>
@@ -940,21 +1196,38 @@ export const TopAppBar = ({
                       onClick={handleBack}
                     />
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
-                        {contextualTitle.charAt(0).toUpperCase()}
-                      </div>
+                      {currentMode === "profile_visitor" && profileHeaderState?.photoURL ? (
+                        <LazyImage
+                          src={profileHeaderState.photoURL}
+                          alt={profileHeaderState.displayName || contextualTitle}
+                          className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/40 shrink-0 shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+                          {(profileHeaderState?.displayName || contextualTitle).charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div className="flex flex-col min-w-0">
-                        <span
-                          className="text-sm sm:text-base font-bold truncate leading-tight"
-                          style={{ color: tokens.textPrimary }}
-                        >
-                          {contextualTitle}
-                        </span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span
+                            className="text-sm sm:text-base font-bold truncate leading-tight"
+                            style={{ color: tokens.textPrimary }}
+                          >
+                            {currentMode === "profile_visitor" && profileHeaderState?.displayName
+                              ? profileHeaderState.displayName
+                              : contextualTitle}
+                          </span>
+                          {currentMode === "profile_visitor" && profileHeaderState?.isVerified && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
+                          )}
+                        </div>
                         <span
                           className="text-[11px] font-medium truncate"
                           style={{ color: tokens.textSecondary }}
                         >
-                          {propSubtitle || (currentMode === "profile_visitor" ? "Profile" : "Details")}
+                          {currentMode === "profile_visitor" && profileHeaderState?.username
+                            ? `@${profileHeaderState.username}`
+                            : (propSubtitle || (currentMode === "profile_visitor" ? "Citizen Profile" : "Details"))}
                         </span>
                       </div>
                     </div>

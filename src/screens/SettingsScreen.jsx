@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap, Gauge } from "lucide-react";
+import { Bell, BellOff, Shield, LogOut, Moon, Sun, Lock, Trash2, Volume2, Video, Sparkles, DollarSign, Database, Info, ChevronRight, AlertTriangle, Eye, User, ShieldCheck, ShieldOff, RefreshCw, Languages, Activity, Trophy, Zap, Gauge, Monitor, Smartphone, Check, Coins } from "lucide-react";
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { useProfileStore } from '../store/profileStore.js';
 import { settingsService, DEFAULT_SETTINGS } from '../services/settingsService.js';
 import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES } from '../services/levelSystemService.js';
+import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
 import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
@@ -137,6 +138,18 @@ export default function SettingsScreen() {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaLoadFailed, setMfaLoadFailed] = useState(false);
   const [showMfaDialog, setShowMfaDialog] = useState(false);
+  const [showDevicesDialog, setShowDevicesDialog] = useState(false);
+  const [deviceSessions, setDeviceSessions] = useState([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState(null);
+  const [revokingDeviceId, setRevokingDeviceId] = useState(null);
+  const currentDeviceId = useMemo(() => {
+    try {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem('arvdoul_device_id') : null;
+    } catch {
+      return null;
+    }
+  }, []);
   // Real Do Not Disturb state, read back from `user_settings` — the server
   // gates every dispatch on `doNotDisturb` but nothing ever set it.
   const [dnd, setDnd] = useState({ loading: true, enabled: false, until: null });
@@ -447,6 +460,41 @@ export default function SettingsScreen() {
     }
   };
 
+  const loadDeviceSessions = useCallback(async () => {
+    if (!uid) return;
+    setDevicesLoading(true);
+    setDevicesError(null);
+    try {
+      const res = await callFunction(FUNCTIONS.LIST_DEVICE_SESSIONS);
+      setDeviceSessions(Array.isArray(res?.sessions) ? res.sessions : []);
+    } catch (err) {
+      setDevicesError(err?.message || 'Could not load active device sessions.');
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, [uid]);
+
+  const handleOpenDevicesDialog = useCallback(() => {
+    setShowDevicesDialog(true);
+    loadDeviceSessions();
+  }, [loadDeviceSessions]);
+
+  const handleRevokeDeviceSession = useCallback(async (deviceId) => {
+    if (!deviceId || revokingDeviceId) return;
+    setRevokingDeviceId(deviceId);
+    try {
+      await callFunction(FUNCTIONS.REVOKE_DEVICE_SESSION, { deviceId });
+      setDeviceSessions((prev) =>
+        prev.map((s) => (s.deviceId === deviceId || s.id === deviceId ? { ...s, revoked: true } : s))
+      );
+      toast.success('Device session revoked');
+    } catch (err) {
+      toast.error(err?.message || 'Could not revoke device session.');
+    } finally {
+      setRevokingDeviceId(null);
+    }
+  }, [revokingDeviceId]);
+
   const toggleThemeSafe = useCallback(() => {
     try {
       toggleTheme?.();
@@ -457,7 +505,7 @@ export default function SettingsScreen() {
 
   if (loadError) {
     return (
-      <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+      <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
         <ErrorState
           title="Settings couldn't load"
           message={loadError}
@@ -469,7 +517,7 @@ export default function SettingsScreen() {
 
   if (!settings) {
     return (
-      <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+      <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
         <div className="max-w-3xl mx-auto px-4 pt-8 space-y-6">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-40 w-full rounded-3xl" />
@@ -481,7 +529,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
+    <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-slate-900')}>
       <main className="max-w-3xl mx-auto px-4 pt-4 sm:pt-6 space-y-6">
         {/* Page Heading & Summary */}
         <div className="pb-1">
@@ -552,7 +600,10 @@ export default function SettingsScreen() {
               </div>
               <div className="text-right shrink-0 hidden sm:block">
                 <p className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('level.rewardsEarned')}</p>
-                <p className="font-black text-amber-600 dark:text-amber-400 text-lg tabular-nums">+{getLifetimeRewards(levelInfo.level)} 🪙</p>
+                <p className="font-black text-amber-600 dark:text-amber-400 text-lg tabular-nums inline-flex items-center justify-end gap-1">
+                  <span>+{getLifetimeRewards(levelInfo.level)}</span>
+                  <Coins className="w-4 h-4" aria-hidden="true" />
+                </p>
               </div>
             </div>
 
@@ -562,9 +613,10 @@ export default function SettingsScreen() {
                 <span
                   key={perk.title}
                   title={perk.description}
-                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-gray-200"
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-gray-200 inline-flex items-center gap-1.5"
                 >
-                  <span aria-hidden="true">{perk.icon}</span> {perk.title}
+                  <Sparkles className="w-3 h-3 text-arvdoul-purple dark:text-purple-400 shrink-0" aria-hidden="true" />
+                  <span>{perk.title}</span>
                 </span>
               ))}
               {getPerksForLevel(levelInfo.level).length === 0 && (
@@ -585,11 +637,6 @@ export default function SettingsScreen() {
               <div className="flex flex-wrap gap-2">
                 {(() => {
                   const gates = LEVEL_GATES;
-                  // Only perks the platform actually honours are listed: the
-                  // "Top Creator" standing label (getIdentityBadge) and the
-                  // crest radiance applied by ProfileHeroSection. There is no
-                  // badge-colour picker or profile-accent control, so those are
-                  // not advertised here.
                   return (
                     <>
                       <span className={cn(
@@ -598,7 +645,8 @@ export default function SettingsScreen() {
                           ? "bg-blue-500/15 border-blue-500/30 text-blue-700 dark:text-blue-300"
                           : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
                       )}>
-                        <span>✅</span> Top Creator Standing {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}
+                        <Check className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        <span>Top Creator Standing {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}</span>
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5 tabular-nums",
@@ -606,7 +654,8 @@ export default function SettingsScreen() {
                           ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                           : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
                       )}>
-                        <span>💎</span> Crest Radiance {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}
+                        <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        <span>Crest Radiance {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}</span>
                       </span>
                     </>
                   );
@@ -625,6 +674,12 @@ export default function SettingsScreen() {
             label={mfaFactors.length > 0 ? t('settings.mfaEnabled') : t('settings.mfaTitle')}
             description={t('settings.mfaDesc')}
             onClick={() => { setMfaEnroll(null); setMfaCode(''); setShowMfaDialog(true); }}
+          />
+          <NavRow
+            icon={Monitor}
+            label="Active Devices & Sessions"
+            description="Review signed-in browsers and revoke unfamiliar sessions"
+            onClick={handleOpenDevicesDialog}
           />
           <NavRow icon={DollarSign} label={t('settings.wallet')} description={t('settings.walletDesc')} onClick={() => navigate('/coins')} />
           <NavRow icon={Activity} label={t('settings.dataUsage')} description={t('settings.dataUsageDesc')} onClick={() => navigate('/settings/data-usage')} />
@@ -833,9 +888,9 @@ export default function SettingsScreen() {
               </div>
               <div className="flex flex-wrap gap-1.5" role="group">
                 {[
-                  { id: VISIBILITY_SCOPES.ONLY_ME, label: '🔒 Only Me (Confidential)' },
-                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: '👥 Connections' },
-                  { id: VISIBILITY_SCOPES.EVERYONE, label: '🌐 Public Showcase' }
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me (Confidential)' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Public Showcase' }
                 ].map((s) => (
                   <OptionPill
                     key={s.id}
@@ -991,6 +1046,90 @@ export default function SettingsScreen() {
             t={t}
           />
         </Dialog>
+      {/* Active Devices & Sessions */}
+      <Dialog
+        isOpen={showDevicesDialog}
+        onClose={() => setShowDevicesDialog(false)}
+        title="Active Devices & Sessions"
+        size="md"
+      >
+        <div className="space-y-3">
+          {devicesLoading ? (
+            <div className="space-y-2.5">
+              <Skeleton className="h-16 w-full rounded-2xl" />
+              <Skeleton className="h-16 w-full rounded-2xl" />
+            </div>
+          ) : devicesError ? (
+            <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-xs flex items-center justify-between gap-3">
+              <span>{devicesError}</span>
+              <button
+                type="button"
+                onClick={loadDeviceSessions}
+                className="px-3 py-1.5 rounded-xl font-semibold bg-arvdoul-gradient text-white shrink-0 min-h-[36px]"
+              >
+                Retry
+              </button>
+            </div>
+          ) : deviceSessions.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+              No registered device sessions found for this account yet.
+            </p>
+          ) : (
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+              {deviceSessions.map((session) => {
+                const sid = session.deviceId || session.id;
+                const isCurrent = Boolean(currentDeviceId && sid === currentDeviceId);
+                const isMobile = /iphone|ipad|android/i.test(session.label || '');
+                const DeviceIcon = isMobile ? Smartphone : Monitor;
+                return (
+                  <div
+                    key={sid}
+                    className={cn(
+                      'p-3.5 rounded-2xl border flex items-center justify-between gap-3',
+                      isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-arvdoul-purple/15 text-arvdoul-purple dark:text-purple-300 flex items-center justify-center shrink-0">
+                        <DeviceIcon className="w-4 h-4" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="text-sm font-bold truncate">{session.label || 'Web Session'}</p>
+                          {isCurrent && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 shrink-0">
+                              This device
+                            </span>
+                          )}
+                          {session.revoked && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 shrink-0">
+                              Revoked
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate tabular-nums">
+                          {session.platform || 'web'}
+                          {session.lastSeenAt ? ` · Last active ${new Date(session.lastSeenAt).toLocaleString()}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    {!session.revoked && !isCurrent && (
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeDeviceSession(sid)}
+                        disabled={revokingDeviceId === sid}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold text-red-500 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50 min-h-[38px] shrink-0"
+                      >
+                        {revokingDeviceId === sid ? 'Revoking…' : 'Revoke'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Dialog>
       {/* Interactive Level Perks & Appearance Roadmap Modal */}
       {showRoadmapModal && (
         <ProfileSystemRoadmapModal
