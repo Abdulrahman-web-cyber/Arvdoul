@@ -603,6 +603,10 @@ exports.joinGroupViaInvite = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', 'Invite not found.');
     }
     const invite = inviteSnap.data();
+    if (invite.revoked === true) {
+      throw new functions.https.HttpsError('failed-precondition', 'Invite has been revoked.');
+    }
+
     const conversationId = invite.conversationId;
     if (!conversationId || typeof conversationId !== 'string') {
       throw new functions.https.HttpsError('failed-precondition', 'Invite is not linked to a conversation.');
@@ -617,6 +621,17 @@ exports.joinGroupViaInvite = functions.https.onCall(async (data, context) => {
     const participants = Array.isArray(conv.participants) ? conv.participants : [];
     const alreadyMember = participants.includes(uid);
 
+    const ownerUid = conv.ownerId || conv.createdBy;
+    if (ownerUid && ownerUid !== uid) {
+      const [b1, b2] = await Promise.all([
+        transaction.get(db.collection('blocks').doc(`${uid}_${ownerUid}`)),
+        transaction.get(db.collection('blocks').doc(`${ownerUid}_${uid}`)),
+      ]);
+      if (b1.exists || b2.exists) {
+        throw new functions.https.HttpsError('permission-denied', 'Cannot join a group hosted by a blocked account.');
+      }
+    }
+
     const expiresMs = invite.expiresAt && typeof invite.expiresAt.toDate === 'function'
       ? invite.expiresAt.toDate().getTime()
       : null;
@@ -627,31 +642,524 @@ exports.joinGroupViaInvite = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('failed-precondition', 'Invite has reached its maximum uses.');
     }
 
-    if (!alreadyMember) {
+    if (alreadyMember) {
+      return { conversationId, alreadyMember: true, pendingApproval: false };
+    }
+
+    if (conv.settings?.approvalRequired === true) {
       transaction.update(convRef, {
-        participants: FieldValue.arrayUnion(uid),
+        [`joinRequests.${uid}`]: {
+          userId: uid,
+          inviteId,
+          status: 'pending',
+          requestedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { conversationId, alreadyMember: false, pendingApproval: true };
+    }
+
+    transaction.update(convRef, {
+      participants: FieldValue.arrayUnion(uid),
+      [`roles.${uid}`]: 'member',
+      participantCount: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.update(inviteRef, { uses: FieldValue.increment(1) });
+
+    const msgRef = convRef.collection('messages').doc();
+    transaction.set(msgRef, {
+      id: msgRef.id,
+      conversationId,
+      type: 'system',
+      eventType: 'user_joined_via_invite',
+      eventData: { userId: uid },
+      senderId: 'system',
+      senderName: 'System',
+      createdAt: FieldValue.serverTimestamp(),
+      isSystem: true,
+    });
+
+    return { conversationId, alreadyMember: false, pendingApproval: false };
+  });
+
+  log('INFO', 'Group invite processed', { uid, inviteId, ...outcome });
+  return { success: true, ...outcome };
+});
+
+// ======================================================================
+//  PART 2: SERVER-AUTHORITATIVE GROUP GOVERNANCE, INVITES & MENTIONS
+// ======================================================================
+const crypto = require('node:crypto');
+const { getUserIdFromContext } = require('./auth');
+const { writeNotification } = require('./notificationWriter');
+
+const GROUP_ROLE_RANK = { owner: 4, admin: 3, moderator: 2, member: 1 };
+
+function resolveGroupRole(conv, uid) {
+  if (!conv || !uid) return null;
+  if (!(conv.participants || []).includes(uid) && conv.ownerId !== uid && conv.createdBy !== uid) {
+    return null;
+  }
+  if (conv.ownerId === uid || (!conv.ownerId && conv.createdBy === uid)) return 'owner';
+  if (conv.roles?.[uid] && GROUP_ROLE_RANK[conv.roles[uid]]) return conv.roles[uid];
+  if ((conv.admins || []).includes(uid)) return 'admin';
+  if ((conv.moderators || []).includes(uid)) return 'moderator';
+  return 'member';
+}
+
+async function isPairBlocked(a, b) {
+  if (!a || !b || a === b) return false;
+  const [ab, ba] = await Promise.all([
+    db.collection('blocks').doc(`${a}_${b}`).get(),
+    db.collection('blocks').doc(`${b}_${a}`).get(),
+  ]);
+  return ab.exists || ba.exists;
+}
+
+async function canAddTargetToGroup(actorUid, targetUid) {
+  if (actorUid === targetUid) return true;
+  if (await isPairBlocked(actorUid, targetUid)) return false;
+
+  const targetSnap = await db.collection('users').doc(targetUid).get();
+  if (!targetSnap.exists) return false;
+  const scope = targetSnap.data()?.settings?.privacy?.whoCanAddToGroups || 'everyone';
+  if (scope === 'none') return false;
+  if (scope === 'everyone') return true;
+  if (scope === 'friends') {
+    const [f1, f2] = await Promise.all([
+      db.collection('follows').doc(`${actorUid}_${targetUid}`).get(),
+      db.collection('follows').doc(`${targetUid}_${actorUid}`).get(),
+    ]);
+    return f1.exists && f2.exists;
+  }
+  if (scope === 'followers') {
+    const f = await db.collection('follows').doc(`${targetUid}_${actorUid}`).get();
+    return f.exists;
+  }
+  return true;
+}
+
+exports.createGroupConversation = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'createGroupConversation', 10, 60000);
+
+  const { name, description = '', photoURL = null, memberIds = [], settings = {} } = data || {};
+  const cleanedName = typeof name === 'string' ? name.trim().slice(0, 80) : '';
+  if (!cleanedName) {
+    throw new functions.https.HttpsError('invalid-argument', 'A group name is required.');
+  }
+
+  const candidateIds = [...new Set(
+    (Array.isArray(memberIds) ? memberIds : [])
+      .filter((id) => typeof id === 'string' && id.trim() && id !== uid)
+      .slice(0, 50)
+  )];
+
+  const allowedMembers = [uid];
+  const skippedInvitees = [];
+  for (const targetUid of candidateIds) {
+    const ok = await canAddTargetToGroup(uid, targetUid);
+    if (ok) allowedMembers.push(targetUid);
+    else skippedInvitees.push(targetUid);
+  }
+
+  const convRef = db.collection('conversations').doc();
+  const safeSettings = {
+    whoCanSend: ['everyone', 'moderators', 'admins'].includes(settings?.whoCanSend) ? settings.whoCanSend : 'everyone',
+    whoCanInvite: ['everyone', 'moderators', 'admins'].includes(settings?.whoCanInvite) ? settings.whoCanInvite : 'moderators',
+    whoCanEditInfo: ['everyone', 'moderators', 'admins'].includes(settings?.whoCanEditInfo) ? settings.whoCanEditInfo : 'admins',
+    whoCanModerate: ['moderators', 'admins'].includes(settings?.whoCanModerate) ? settings.whoCanModerate : 'moderators',
+    whoCanPin: ['everyone', 'moderators', 'admins'].includes(settings?.whoCanPin) ? settings.whoCanPin : 'moderators',
+    approvalRequired: settings?.approvalRequired === true,
+  };
+
+  const roles = { [uid]: 'owner' };
+  for (const m of allowedMembers) {
+    if (m !== uid) roles[m] = 'member';
+  }
+
+  const now = FieldValue.serverTimestamp();
+  const groupDoc = {
+    id: convRef.id,
+    type: 'group',
+    name: cleanedName,
+    description: typeof description === 'string' ? description.trim().slice(0, 500) : '',
+    photoURL: typeof photoURL === 'string' && photoURL.trim() ? photoURL.trim().slice(0, 500) : null,
+    ownerId: uid,
+    createdBy: uid,
+    participants: allowedMembers,
+    participantCount: allowedMembers.length,
+    admins: [uid],
+    moderators: [],
+    mutedMembers: [],
+    roles,
+    settings: safeSettings,
+    joinRequests: {},
+    isActive: true,
+    mutedBy: [],
+    pinnedBy: [],
+    archivedBy: [],
+    pinnedMessages: [],
+    lastRead: { [uid]: now },
+    createdAt: now,
+    updatedAt: now,
+    lastActivity: now,
+  };
+
+  await convRef.set(groupDoc);
+  const sysMsgRef = convRef.collection('messages').doc();
+  await sysMsgRef.set({
+    id: sysMsgRef.id,
+    conversationId: convRef.id,
+    type: 'system',
+    senderId: 'system',
+    senderName: 'System',
+    content: `Group "${cleanedName}" created`,
+    eventType: 'group_created',
+    isSystem: true,
+    createdAt: now,
+  });
+
+  await db.collection('last_messages').doc(convRef.id).set({
+    messageId: sysMsgRef.id,
+    senderId: 'system',
+    type: 'system',
+    text: `Group "${cleanedName}" created`,
+    timestamp: now,
+    updatedAt: now,
+  });
+
+  return {
+    success: true,
+    conversationId: convRef.id,
+    addedCount: allowedMembers.length,
+    skippedInvitees,
+  };
+});
+
+exports.manageGroupMember = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'manageGroupMember', 40, 60000);
+
+  const { conversationId, targetUserId, action, role = null, muted = null } = data || {};
+  const validActions = ['add', 'remove', 'leave', 'assignRole', 'toggleMuteMember'];
+  if (!conversationId || !validActions.includes(action)) {
+    throw new functions.https.HttpsError('invalid-argument', 'conversationId and valid action required.');
+  }
+
+  const targetUid = action === 'leave' ? uid : targetUserId;
+  if (!targetUid || typeof targetUid !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'targetUserId is required.');
+  }
+
+  const convRef = db.collection('conversations').doc(conversationId);
+  await db.runTransaction(async (tx) => {
+    const convSnap = await tx.get(convRef);
+    if (!convSnap.exists) throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+    const conv = convSnap.data();
+    if (conv.type !== 'group' && conv.type !== 'channel') {
+      throw new functions.https.HttpsError('failed-precondition', 'Only group/channel conversations support member management.');
+    }
+
+    const actorRole = resolveGroupRole(conv, uid);
+    if (!actorRole) throw new functions.https.HttpsError('permission-denied', 'You are not a member of this group.');
+    const actorRank = GROUP_ROLE_RANK[actorRole] || 0;
+    const targetRole = resolveGroupRole(conv, targetUid);
+    const targetRank = GROUP_ROLE_RANK[targetRole] || 0;
+
+    if (action === 'add') {
+      const invitePolicy = conv.settings?.whoCanInvite || 'moderators';
+      const minRank = invitePolicy === 'everyone' ? 1 : invitePolicy === 'admins' ? 3 : 2;
+      if (actorRank < minRank) {
+        throw new functions.https.HttpsError('permission-denied', 'You do not have permission to invite members.');
+      }
+      if ((conv.participants || []).includes(targetUid)) return;
+      const ok = await canAddTargetToGroup(uid, targetUid);
+      if (!ok) {
+        throw new functions.https.HttpsError('permission-denied', 'Recipient privacy settings or a block prevent adding them.');
+      }
+      tx.update(convRef, {
+        participants: FieldValue.arrayUnion(targetUid),
+        [`roles.${targetUid}`]: 'member',
         participantCount: FieldValue.increment(1),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      transaction.update(inviteRef, { uses: FieldValue.increment(1) });
-
-      const msgRef = convRef.collection('messages').doc();
-      transaction.set(msgRef, {
-        id: msgRef.id,
-        conversationId,
-        type: 'system',
-        eventType: 'user_joined_via_invite',
-        eventData: { userId: uid },
-        senderId: 'system',
-        senderName: 'System',
-        createdAt: FieldValue.serverTimestamp(),
-        isSystem: true,
+    } else if (action === 'leave') {
+      if (actorRole === 'owner') {
+        const remaining = (conv.participants || []).filter((p) => p !== uid);
+        if (remaining.length > 0) {
+          throw new functions.https.HttpsError('failed-precondition', 'Transfer ownership to another member before leaving.');
+        }
+      }
+      tx.update(convRef, {
+        participants: FieldValue.arrayRemove(uid),
+        admins: FieldValue.arrayRemove(uid),
+        moderators: FieldValue.arrayRemove(uid),
+        [`roles.${uid}`]: FieldValue.delete(),
+        participantCount: FieldValue.increment(-1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else if (action === 'remove') {
+      if (actorRank < 2 || targetUid === uid || actorRank <= targetRank) {
+        throw new functions.https.HttpsError('permission-denied', 'Cannot remove a member of equal or higher rank.');
+      }
+      tx.update(convRef, {
+        participants: FieldValue.arrayRemove(targetUid),
+        admins: FieldValue.arrayRemove(targetUid),
+        moderators: FieldValue.arrayRemove(targetUid),
+        mutedMembers: FieldValue.arrayRemove(targetUid),
+        [`roles.${targetUid}`]: FieldValue.delete(),
+        participantCount: FieldValue.increment(-1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else if (action === 'assignRole') {
+      if (!['owner', 'admin', 'moderator', 'member'].includes(role)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Valid role required.');
+      }
+      if (!targetRole) throw new functions.https.HttpsError('not-found', 'Target user is not in this group.');
+      if (actorRole !== 'owner' && (role === 'owner' || role === 'admin' || targetRank >= actorRank)) {
+        throw new functions.https.HttpsError('permission-denied', 'Only the group owner can promote/demote admins or transfer ownership.');
+      }
+      const patch = {
+        [`roles.${targetUid}`]: role,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (role === 'owner') {
+        patch.ownerId = targetUid;
+        patch[`roles.${uid}`] = 'admin';
+        patch.admins = FieldValue.arrayUnion(targetUid, uid);
+        patch.moderators = FieldValue.arrayRemove(targetUid);
+      } else if (role === 'admin') {
+        patch.admins = FieldValue.arrayUnion(targetUid);
+        patch.moderators = FieldValue.arrayRemove(targetUid);
+      } else if (role === 'moderator') {
+        patch.admins = FieldValue.arrayRemove(targetUid);
+        patch.moderators = FieldValue.arrayUnion(targetUid);
+      } else {
+        patch.admins = FieldValue.arrayRemove(targetUid);
+        patch.moderators = FieldValue.arrayRemove(targetUid);
+      }
+      tx.update(convRef, patch);
+    } else if (action === 'toggleMuteMember') {
+      if (actorRank < 2 || actorRank <= targetRank) {
+        throw new functions.https.HttpsError('permission-denied', 'Insufficient rank to mute/unmute this member.');
+      }
+      const shouldMute = muted !== null ? Boolean(muted) : !(conv.mutedMembers || []).includes(targetUid);
+      tx.update(convRef, {
+        mutedMembers: shouldMute ? FieldValue.arrayUnion(targetUid) : FieldValue.arrayRemove(targetUid),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
-
-    return { conversationId, alreadyMember };
   });
 
-  log('INFO', 'Group joined via invite', { uid, inviteId, conversationId: outcome.conversationId, alreadyMember: outcome.alreadyMember });
-  return { success: true, conversationId: outcome.conversationId, alreadyMember: outcome.alreadyMember };
+  return { success: true, conversationId, action, targetUserId: targetUid };
 });
+
+exports.updateGroupSettings = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'updateGroupSettings', 25, 60000);
+
+  const { conversationId, name, description, photoURL, settings } = data || {};
+  if (!conversationId) throw new functions.https.HttpsError('invalid-argument', 'conversationId is required.');
+
+  const convRef = db.collection('conversations').doc(conversationId);
+  const convSnap = await convRef.get();
+  if (!convSnap.exists) throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+  const conv = convSnap.data();
+
+  const role = resolveGroupRole(conv, uid);
+  const rank = GROUP_ROLE_RANK[role] || 0;
+  const editPolicy = conv.settings?.whoCanEditInfo || 'admins';
+  const minEditRank = editPolicy === 'everyone' ? 1 : editPolicy === 'moderators' ? 2 : 3;
+
+  if (rank < minEditRank && !settings) {
+    throw new functions.https.HttpsError('permission-denied', 'Insufficient permissions to edit group info.');
+  }
+
+  const patch = { updatedAt: FieldValue.serverTimestamp() };
+  if (typeof name === 'string' && name.trim()) patch.name = name.trim().slice(0, 80);
+  if (typeof description === 'string') patch.description = description.trim().slice(0, 500);
+  if (typeof photoURL === 'string') patch.photoURL = photoURL.trim().slice(0, 500) || null;
+
+  if (settings && typeof settings === 'object') {
+    if (rank < 3) {
+      throw new functions.https.HttpsError('permission-denied', 'Only group owners or admins can change group permissions.');
+    }
+    const existing = conv.settings || {};
+    patch.settings = {
+      whoCanSend: ['everyone', 'moderators', 'admins'].includes(settings.whoCanSend) ? settings.whoCanSend : (existing.whoCanSend || 'everyone'),
+      whoCanInvite: ['everyone', 'moderators', 'admins'].includes(settings.whoCanInvite) ? settings.whoCanInvite : (existing.whoCanInvite || 'moderators'),
+      whoCanEditInfo: ['everyone', 'moderators', 'admins'].includes(settings.whoCanEditInfo) ? settings.whoCanEditInfo : (existing.whoCanEditInfo || 'admins'),
+      whoCanModerate: ['moderators', 'admins'].includes(settings.whoCanModerate) ? settings.whoCanModerate : (existing.whoCanModerate || 'moderators'),
+      whoCanPin: ['everyone', 'moderators', 'admins'].includes(settings.whoCanPin) ? settings.whoCanPin : (existing.whoCanPin || 'moderators'),
+      approvalRequired: typeof settings.approvalRequired === 'boolean' ? settings.approvalRequired : Boolean(existing.approvalRequired),
+    };
+  }
+
+  await convRef.update(patch);
+  return { success: true, conversationId };
+});
+
+exports.createGroupInvite = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'createGroupInvite', 15, 60000);
+
+  const { conversationId, expiresInHours = 168, maxUses = 50 } = data || {};
+  if (!conversationId) throw new functions.https.HttpsError('invalid-argument', 'conversationId is required.');
+
+  const convSnap = await db.collection('conversations').doc(conversationId).get();
+  if (!convSnap.exists) throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+  const conv = convSnap.data();
+
+  const role = resolveGroupRole(conv, uid);
+  const rank = GROUP_ROLE_RANK[role] || 0;
+  const invitePolicy = conv.settings?.whoCanInvite || 'moderators';
+  const minRank = invitePolicy === 'everyone' ? 1 : invitePolicy === 'admins' ? 3 : 2;
+  if (rank < minRank) {
+    throw new functions.https.HttpsError('permission-denied', 'You do not have permission to generate group invite links.');
+  }
+
+  const clampedHours = Math.min(Math.max(1, Number(expiresInHours) || 168), 24 * 30);
+  const clampedUses = maxUses === null ? null : Math.min(Math.max(1, Number(maxUses) || 50), 5000);
+  const inviteCode = crypto.randomBytes(12).toString('base64url');
+
+  const inviteDoc = {
+    conversationId,
+    createdBy: uid,
+    uses: 0,
+    maxUses: clampedUses,
+    revoked: false,
+    expiresAt: Timestamp.fromMillis(Date.now() + clampedHours * 3600 * 1000),
+    createdAt: FieldValue.serverTimestamp(),
+  };
+
+  await db.collection('group_invites').doc(inviteCode).set(inviteDoc);
+  return {
+    success: true,
+    inviteId: inviteCode,
+    maxUses: clampedUses,
+    expiresAt: inviteDoc.expiresAt.toDate().toISOString(),
+  };
+});
+
+exports.revokeGroupInvite = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'revokeGroupInvite', 20, 60000);
+
+  const { inviteId } = data || {};
+  if (!inviteId) throw new functions.https.HttpsError('invalid-argument', 'inviteId is required.');
+
+  const inviteRef = db.collection('group_invites').doc(inviteId);
+  const inviteSnap = await inviteRef.get();
+  if (!inviteSnap.exists) throw new functions.https.HttpsError('not-found', 'Invite not found.');
+  const invite = inviteSnap.data();
+
+  const convSnap = await db.collection('conversations').doc(invite.conversationId).get();
+  const conv = convSnap.exists ? convSnap.data() : {};
+  const rank = GROUP_ROLE_RANK[resolveGroupRole(conv, uid)] || 0;
+  if (invite.createdBy !== uid && rank < 2) {
+    throw new functions.https.HttpsError('permission-denied', 'Only the creator or a group moderator/admin can revoke this invite.');
+  }
+
+  await inviteRef.update({
+    revoked: true,
+    revokedBy: uid,
+    revokedAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true, inviteId };
+});
+
+exports.respondGroupJoinRequest = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'respondGroupJoinRequest', 30, 60000);
+
+  const { conversationId, requesterId, decision } = data || {};
+  if (!conversationId || !requesterId || !['approve', 'reject'].includes(decision)) {
+    throw new functions.https.HttpsError('invalid-argument', 'conversationId, requesterId, and decision (approve|reject) required.');
+  }
+
+  const convRef = db.collection('conversations').doc(conversationId);
+  await db.runTransaction(async (tx) => {
+    const convSnap = await tx.get(convRef);
+    if (!convSnap.exists) throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+    const conv = convSnap.data();
+    const rank = GROUP_ROLE_RANK[resolveGroupRole(conv, uid)] || 0;
+    if (rank < 2) {
+      throw new functions.https.HttpsError('permission-denied', 'Moderator or admin permission required to review join requests.');
+    }
+
+    const patch = {
+      [`joinRequests.${requesterId}`]: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (decision === 'approve' && !(conv.participants || []).includes(requesterId)) {
+      patch.participants = FieldValue.arrayUnion(requesterId);
+      patch[`roles.${requesterId}`] = 'member';
+      patch.participantCount = FieldValue.increment(1);
+    }
+
+    tx.update(convRef, patch);
+  });
+
+  if (decision === 'approve') {
+    await writeNotification(requesterId, {
+      type: 'group_message',
+      title: 'Join request approved',
+      message: 'Your request to join the group has been approved.',
+      senderId: uid,
+      senderName: 'Group Admin',
+      metadata: { conversationId },
+    }).catch((err) => log('WARN', 'Join approval notification failed', { requesterId, error: err.message }));
+  }
+
+  return { success: true, conversationId, requesterId, decision };
+});
+
+exports.sendMentionNotifications = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'sendMentionNotifications', 30, 60000);
+
+  const { conversationId, messageId, mentionedUserIds = [], snippet = '' } = data || {};
+  if (!conversationId || !Array.isArray(mentionedUserIds) || mentionedUserIds.length === 0) {
+    return { success: true, notified: 0 };
+  }
+
+  const convSnap = await db.collection('conversations').doc(conversationId).get();
+  if (!convSnap.exists) throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+  const conv = convSnap.data();
+  const participants = Array.isArray(conv.participants) ? conv.participants : [];
+  if (!participants.includes(uid)) {
+    throw new functions.https.HttpsError('permission-denied', 'Not a participant in this conversation.');
+  }
+
+  const senderInfo = await getUserDisplayInfo(uid);
+  const mutedBy = Array.isArray(conv.mutedBy) ? conv.mutedBy : [];
+  const targets = [...new Set(mentionedUserIds)]
+    .filter((id) => id !== uid && participants.includes(id) && !mutedBy.includes(id))
+    .slice(0, 15);
+
+  let notified = 0;
+  await Promise.allSettled(
+    targets.map(async (targetId) => {
+      if (await isPairBlocked(uid, targetId)) return;
+      const settingsSnap = await db.collection('user_settings').doc(targetId).get();
+      const prefs = settingsSnap.exists ? settingsSnap.data()?.notificationPreferences : null;
+      if (prefs?.mentions === false) return;
+
+      await writeNotification(targetId, {
+        type: 'mention',
+        title: `${senderInfo.displayName} mentioned you`,
+        message: String(snippet || 'Mentioned you in a group chat').slice(0, 120),
+        senderId: uid,
+        senderName: senderInfo.displayName,
+        metadata: { conversationId, messageId: messageId || null },
+      });
+      notified += 1;
+    })
+  );
+
+  return { success: true, notified };
+});
+

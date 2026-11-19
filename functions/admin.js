@@ -179,6 +179,10 @@ const REPORT_COLLECTIONS = {
   vibe_reply: 'vibe_reply_reports',
   ad: 'ad_reports',
   message: 'message_reports',
+  group: 'group_reports',
+  community: 'community_reports',
+  channel: 'channel_reports',
+  call: 'call_reports',
 };
 
 exports.resolveUserReport = functions.https.onCall(async (data, context) => {

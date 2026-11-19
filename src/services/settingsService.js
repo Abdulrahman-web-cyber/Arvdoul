@@ -25,10 +25,23 @@ export const DEFAULT_SETTINGS = Object.freeze({
     push: true,
     email: true,
     soundFx: true,
+    directMessages: true,
+    groupMessages: true,
+    mentions: true,
+    communityAnnouncements: true,
+    communityActivity: true,
+    callNotifications: true,
+    giftNotifications: true,
+    creatorRequests: true,
+    royalAnnouncements: true,
+    eventNotifications: true,
   },
   privacy: {
     // Profile visibility (`isPrivate`) lives on the user profile, not here.
     allowDMs: 'everyone', // 'everyone' | 'friends' | 'none'
+    whoCanCall: 'everyone', // 'everyone' | 'friends' | 'followers' | 'none'
+    whoCanAddToGroups: 'everyone', // 'everyone' | 'friends' | 'followers' | 'none'
+    whoCanSendGifts: 'everyone', // 'everyone' | 'friends' | 'none'
   },
   playback: {
     autoPlayVideos: true,
@@ -164,8 +177,18 @@ class SettingsService {
     }
 
     try {
-      const { fstore, ref } = await this._settingsRef(userId);
+      const { fstore, ref, db } = await this._settingsRef(userId);
       await fstore.setDoc(ref, { settings: updated }, { merge: true });
+      if (path.startsWith('notifications.')) {
+        const key = path.slice('notifications.'.length);
+        await fstore.setDoc(
+          fstore.doc(db, 'user_settings', userId),
+          { notificationPreferences: { [key]: value } },
+          { merge: true }
+        ).catch((syncErr) => {
+          logger.warn('[Settings] notificationPreferences sync skipped:', { error: syncErr?.message, key });
+        });
+      }
       return { success: true, settings: updated };
     } catch (err) {
       // Roll back the optimistic update so the UI never lies.

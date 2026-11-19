@@ -1246,6 +1246,8 @@ service cloud.firestore {
         isConvAdmin() ||
         (request.resource.data.admins == resource.data.admins &&
          request.resource.data.roles == resource.data.roles &&
+         request.resource.data.get('moderators', []) == resource.data.get('moderators', []) &&
+         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
          request.resource.data.createdBy == resource.data.createdBy &&
          (
            request.resource.data.participants == resource.data.participants ||
@@ -1302,6 +1304,8 @@ service cloud.firestore {
         allow create: if isSignedIn() &&
           isMessageShardCollection(messageShardCollection) &&
           uid() in convParticipants() &&
+          !(request.resource.data.get('type', 'text') in ['gift_message', 'royal_announcement']) &&
+          request.resource.data.get('giftTransactionId', null) == null &&
           (
             request.resource.data.senderId == uid() ||
             (
@@ -1327,14 +1331,32 @@ service cloud.firestore {
         // array — forging another member's read receipt or wiping the evidence
         // that someone read. The only permitted difference is the caller's own
         // uid, so pin it with removeAll([uid()]).
-        allow update, delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
-          resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
+        // Receipt and delete-for-me updates:
+        // - Senders may edit/soft-delete/hard-delete their own message without
+        //   mutating `senderId`, `conversationId`, or `createdAt`.
+        // - Any participant may append their own uid to `readBy`/`deliveredTo`
+        //   OR to `deletedFor` ("Delete for me"), pinned with removeAll([uid()]).
+        allow delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
+          resource.data.senderId == uid() || isConvModerator() || isAdmin()
+        );
+        allow update: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
+          (
+            (resource.data.senderId == uid() || isConvModerator() || isAdmin()) &&
+            request.resource.data.senderId == resource.data.senderId &&
+            request.resource.data.conversationId == resource.data.conversationId &&
+            request.resource.data.createdAt == resource.data.createdAt
+          ) ||
           (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo']) &&
             request.resource.data.get('readBy', []).removeAll([uid()]) ==
               resource.data.get('readBy', []).removeAll([uid()]) &&
             request.resource.data.get('deliveredTo', []).removeAll([uid()]) ==
               resource.data.get('deliveredTo', []).removeAll([uid()])
+          ) ||
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedFor', 'updatedAt']) &&
+            request.resource.data.get('deletedFor', []).removeAll([uid()]) ==
+              resource.data.get('deletedFor', []).removeAll([uid()])
           )
         );
         // Reactions are per-user docs — no message-doc rewrites (spec §26).
@@ -1691,6 +1713,14 @@ service cloud.firestore {
         (isSignedIn() && uid() in resource.data.members) ||
         isAdmin();
       allow write: if false; // server-verified
+      match /channels/{channelId} {
+        allow read: if communityPrivacyOpen(communityId);
+        allow write: if false; // server-verified via functions/communities.js
+        match /messages/{messageId} {
+          allow read: if communityPrivacyOpen(communityId);
+          allow write: if false; // server-verified via sendChannelMessage / moderateChannelMessage
+        }
+      }
       match /{subcollection}/{docId} {
         // Subcollection content (join requests, pending members, ...) follows
         // the parent community's visibility: only a non-secret community or a
@@ -1698,8 +1728,11 @@ service cloud.firestore {
         // parent, so a missing parent denies the read.
         allow read: if communityPrivacyOpen(communityId);
         // Members may create their own content; only the author (or admin) may edit/delete.
-        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
-        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
+        // Channels are excluded and enforced server-side above.
+        allow create: if isSignedIn() && subcollection != 'channels' &&
+          (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && subcollection != 'channels' &&
+          (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
       }
     }
 
@@ -1861,6 +1894,26 @@ service cloud.firestore {
     // Ad reports are written by the reportAd callable (Admin SDK) and read by
     // the reporter or a moderator, matching the other report queues.
     match /ad_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /group_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /community_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /channel_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /call_reports/{reportId} {
       allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update, delete: if isAdmin();
@@ -2419,6 +2472,12 @@ service cloud.firestore {
     // "already seen" de-duplication and "not interested" demotion were dead.
     match /user_sessions/{userId} {
       allow read, write: if isOwner(userId);
+    }
+    match /user_devices/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+      match /sessions/{deviceId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
 
     // ==================== DAILY UPLOAD COUNTERS (owner-scoped shards) ====================

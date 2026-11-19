@@ -1,0 +1,3774 @@
+ARVDOUL — PART 1: CORE MESSAGING EXPERIENCE
+
+Complete Production Implementation Specification for Firebase AI Studio
+
+MASTER EXECUTION PROMPT · PART 1 OF 3 · CORE FOUNDATION
+
+
+---
+
+1. MISSION AND DELIVERY STANDARD
+
+You are working on Arvdoul — The Digital Nation, an ambitious, production-grade social platform.
+
+Your assignment is to implement Part 1: Core Messaging Experience of Arvdoul's messaging ecosystem.
+
+This is not a messaging prototype, visual demonstration, isolated chat component, or temporary MVP. It is the foundational direct-messaging system that future communication capabilities will extend.
+
+The objective is to deliver a complete, reliable, secure, responsive, accessible, highly polished one-to-one messaging experience that can serve real users and scale with Arvdoul.
+
+The implementation must feel like a carefully engineered native messaging product while remaining consistent with Arvdoul's existing architecture, brand identity, navigation, social graph, authentication, profile system, and Firebase infrastructure.
+
+The quality target is an exceptional product combining the strongest usability characteristics of WhatsApp, Messenger, Snapchat, Instagram Direct and modern communication applications, while maintaining a distinctive Arvdoul identity.
+
+Do not copy these products. Build a better, coherent Arvdoul messaging experience.
+
+1.1 Primary objective
+
+Deliver a complete direct-messaging foundation covering:
+
+- Messaging inbox and conversation discovery.
+- One-to-one conversations.
+- Message composition and sending.
+- Real-time message synchronization.
+- Text messaging.
+- Image and video messaging.
+- Audio attachments and voice notes.
+- Document and file attachments.
+- Shared Arvdoul content.
+- Message replies, reactions, forwarding, editing and deletion.
+- Message delivery and read states.
+- Message requests.
+- Conversation search.
+- Message search.
+- Shared media and conversation information.
+- Drafts and reliable offline handling.
+- Privacy and communication permissions.
+- Blocking, reporting and appropriate moderation.
+- Notification integration.
+- Profile and social graph integration.
+- Production-grade Firebase integration and security.
+- Comprehensive responsive UI and accessibility.
+- Automated tests, integration tests and verified acceptance evidence.
+
+Every included feature must be functional, integrated and tested.
+
+A screen that looks finished but does not perform its advertised function is not complete.
+
+
+---
+
+2. NON-NEGOTIABLE EXECUTION RULES
+
+These instructions apply to every implementation task, file modification, service, component, database operation and integration.
+
+2.1 Inspect before changing anything
+
+Before writing code:
+
+1. Inspect the existing repository structure.
+2. Inspect the existing application architecture.
+3. Identify the current routing and navigation systems.
+4. Identify the current authentication implementation.
+5. Identify the existing Firebase configuration.
+6. Inspect Firestore initialization and repository patterns.
+7. Inspect Firebase security rules and indexes.
+8. Identify existing Cloud Functions.
+9. Inspect existing notification and FCM infrastructure.
+10. Inspect profile and social graph services.
+11. Inspect media upload and Firebase Storage services.
+12. Inspect existing application state management.
+13. Inspect design tokens, theme configuration and component conventions.
+14. Identify existing messaging-related implementations, including partially completed or disconnected code.
+15. Identify reusable components, utilities, hooks, services, tests and existing database collections.
+
+Do not assume that an existing feature is absent simply because its implementation is not immediately visible.
+
+Search for existing implementations, their imports, their consumers, their routes, their database dependencies and their actual runtime integration.
+
+Inspect the complete dependency chain before replacing anything.
+
+2.2 Preserve the existing application
+
+You must preserve all working Arvdoul functionality.
+
+Do not:
+
+- Replace the application architecture without sufficient justification.
+- Recreate existing Firebase initialization.
+- Create duplicate authentication systems.
+- Create another profile system.
+- Create another relationship or friendship system.
+- Create another notification system.
+- Create another media-upload system.
+- Create another online-presence system if one already exists.
+- Introduce competing message stores.
+- Create duplicate user collections.
+- Replace existing navigation unnecessarily.
+- Remove existing application features to simplify implementation.
+- Replace mature services with smaller temporary implementations.
+- Introduce hardcoded demonstration data.
+- introduce fake users or fake conversations.
+- Create non-functional placeholder buttons.
+- use local state as a substitute for persistent backend functionality.
+- silently change established database schemas.
+- introduce breaking changes without a migration plan.
+
+When a change is necessary, explain the existing limitation, the proposed change, the migration impact and the reason the change is justified.
+
+Prefer extending existing services and components over introducing competing implementations.
+
+2.3 No superficial task completion
+
+You must not mark a task complete merely because:
+
+- A component has been created.
+- A screen exists.
+- A button appears.
+- A service has been written.
+- A Firestore collection has been defined.
+- A Firebase function has been created.
+- A test file exists.
+- A build succeeds.
+- A TypeScript or JavaScript file compiles.
+- A checkbox has been selected.
+- A developer claims that something works.
+
+A task is complete only when its implementation is integrated, its actual behavior has been tested, its relevant security rules have been validated and its acceptance criteria have been demonstrated.
+
+Never report a successful test that was not executed.
+
+Never invent screenshots, test results, Firebase deployment results, security verification or performance measurements.
+
+2.4 Production implementation only
+
+Every feature must include the states and failure handling appropriate to its behavior.
+
+Consider:
+
+- Loading.
+- Empty.
+- Success.
+- Failure.
+- Retry.
+- Offline.
+- Reconnecting.
+- Permission denied.
+- Authentication expired.
+- Invalid input.
+- Missing data.
+- Deleted content.
+- Blocked users.
+- Restricted users.
+- Upload interruption.
+- Duplicate submission.
+- Network timeout.
+- Rate limiting.
+- Insufficient storage permissions.
+- Unavailable referenced content.
+
+A feature must not silently fail or leave the user with a misleading interface.
+
+2.5 Maintainability
+
+Use the existing architecture's conventions.
+
+Prefer:
+
+- Reusable domain services.
+- Feature-oriented modules.
+- Clear data ownership.
+- Typed interfaces where the project supports TypeScript.
+- Consistent naming.
+- Small, focused components.
+- Reusable hooks.
+- Explicit validation.
+- Centralized error handling.
+- Well-defined service boundaries.
+- Testable business logic.
+- Idempotent backend operations.
+- Documented architectural decisions.
+
+Do not build a monolithic chat component containing the entire messaging system.
+
+
+---
+
+3. STRICT SCOPE: PART 1 ONLY
+
+Part 1 must be comprehensive, but it must remain implementable as a single defined delivery phase.
+
+3.1 Features included in Part 1
+
+Implement:
+
+1. Messaging foundation and existing application integration.
+2. Messaging inbox.
+3. One-to-one conversations.
+4. Real-time conversation updates.
+5. Text messages.
+6. Image messages.
+7. Video messages.
+8. Audio attachments.
+9. Voice notes.
+10. Document and supported file attachments.
+11. Link messages and safe link previews where supported.
+12. Shared Arvdoul content references.
+13. Replying to messages.
+14. Message reactions.
+15. Forwarding messages.
+16. Editing messages.
+17. Deleting messages.
+18. Message delivery and read states.
+19. Unread indicators.
+20. Conversation search.
+21. Message search.
+22. Message requests.
+23. Conversation details.
+24. Shared-media browsing.
+25. Draft persistence.
+26. Offline-aware sending and retry.
+27. Conversation mute, pin and archive where appropriate.
+28. Basic conversation privacy controls.
+29. Blocking and reporting integration.
+30. Core messaging notifications.
+31. Profile and social graph integration.
+32. Existing Posts, Vibes and Sparks sharing integration.
+33. Dark and light themes.
+34. Responsive mobile, tablet and desktop experiences.
+35. Accessibility and localization foundations.
+36. Firebase backend, database, security and performance implementation.
+37. Automated and manual verification.
+
+3.2 Features explicitly excluded from Part 1
+
+Do not implement these advanced systems in this phase:
+
+- Group conversations.
+- Group administration.
+- Communities and channels.
+- Royal Family communication channels.
+- Voice and video calls.
+- Meetings and screen sharing.
+- Advanced multi-device device-management interfaces.
+- Premium messaging customization.
+- Coins and message gifting.
+- XP rewards for messaging.
+- Messaging-based level progression.
+- Creator messaging monetization.
+- Paid reach-outs.
+- Advanced Royal Family privileges.
+- Advanced disappearing-message systems.
+- Scheduled messaging.
+- Advanced organizational communication.
+- Advanced end-to-end encryption implementation.
+- Advanced communication analytics.
+
+These are future extensions, not incomplete features that should be approximated in Part 1.
+
+Do not add buttons, menus, decorative badges or UI controls pretending these systems already exist.
+
+Do not create fake calls, fake XP rewards, fake coin transfers, fake encryption labels or fake group functionality.
+
+3.3 Future compatibility requirement
+
+Although advanced features are excluded, Part 1 must establish clean extension points so later phases can integrate without rebuilding the core.
+
+The architecture should not assume that direct conversations are the only possible communication type forever.
+
+However, do not implement a generic group engine prematurely.
+
+Build a reliable direct-conversation domain model with explicit boundaries that can be extended later.
+
+
+---
+
+4. PHASE ZERO: REPOSITORY AND ARCHITECTURE AUDIT
+
+This phase is mandatory.
+
+Do not begin large-scale implementation before completing the audit.
+
+4.1 Repository inventory
+
+Inspect the existing source tree and identify:
+
+Area	Required investigation
+
+Application architecture	Main entry points, feature organization and dependency structure
+Routing	Existing messaging paths, route guards and navigation integration
+Authentication	Current Firebase Auth implementation and account lifecycle
+User profiles	Authoritative profile schema and services
+Social graph	Friends, followers, relationships, restrictions and privacy
+Firestore	Existing collections, document ownership and repository patterns
+Storage	Existing upload services, security rules and media conventions
+Cloud Functions	Existing callable functions, triggers and shared utilities
+Notifications	FCM registration, preferences and notification delivery
+Presence	Whether reliable online and last-seen functionality exists
+State management	Existing Zustand, React Query or other state conventions
+UI system	Components, design tokens, typography, layout and theme handling
+Offline support	Existing persistence, draft storage and retry mechanisms
+Testing	Existing unit, integration, security and end-to-end testing infrastructure
+
+
+4.2 Messaging code discovery
+
+Search the entire repository for:
+
+- Messages.
+- Messaging.
+- Chat.
+- Conversation.
+- Inbox.
+- Message requests.
+- Direct messages.
+- Attachments.
+- Voice notes.
+- Message notifications.
+- Message reactions.
+- Read receipts.
+- Delivery receipts.
+- Chat settings.
+- Messaging routes.
+- Firestore message collections.
+- Messaging services.
+- Messaging hooks.
+- Messaging components.
+
+Identify:
+
+- Existing working implementations.
+- Partially completed implementations.
+- Dead code.
+- Duplicate implementations.
+- Unused services.
+- Duplicate collections.
+- Inconsistent data structures.
+- Existing integrations.
+- Security gaps.
+- Broken imports.
+- Missing exports.
+- Unconnected frontend and backend code.
+
+Do not delete apparently unused code until its actual consumers and compatibility implications have been investigated.
+
+4.3 Audit deliverable
+
+Produce an internal implementation report before making substantial changes.
+
+The report must include:
+
+1. Existing messaging architecture.
+2. Existing reusable infrastructure.
+3. Existing Firestore collections.
+4. Existing Storage paths.
+5. Existing backend functions.
+6. Existing authentication and authorization patterns.
+7. Existing profile and relationship contracts.
+8. Existing notification contracts.
+9. Existing design-system conventions.
+10. Identified architectural conflicts.
+11. Identified security problems.
+12. Identified performance risks.
+13. Files that should be extended.
+14. Files that genuinely need modification.
+15. New modules that are demonstrably necessary.
+16. Migration requirements, if any.
+17. A dependency graph for the implementation.
+
+Do not invent repository findings.
+
+The report must distinguish verified facts from assumptions and unresolved questions.
+
+
+---
+
+5. CORE ARCHITECTURE
+
+Build messaging as an integrated Arvdoul feature, not an isolated application within the application.
+
+5.1 Architectural boundaries
+
+Separate the messaging system into coherent layers.
+
+Presentation layer
+
+Responsible for screens, components, accessible interactions, UI state and visual behavior.
+
+Application layer
+
+Responsible for user actions and orchestration, including creating conversations, sending messages, uploading media, searching messages and managing requests.
+
+Domain layer
+
+Responsible for conversation rules, participant permissions, message types, delivery states, conversation policies and validation.
+
+Data layer
+
+Responsible for Firestore reads and writes, pagination, listeners, caching and persistence.
+
+Infrastructure layer
+
+Responsible for Firebase Auth, Firestore, Storage, Cloud Functions, FCM, network handling and observability.
+
+Maintain the existing project conventions. These are architectural responsibilities, not a demand to introduce unnecessary abstraction layers.
+
+5.2 Suggested feature organization
+
+Use this as a logical organization, adapting it to the actual repository:
+
+messaging/
+├── components/
+│   ├── inbox/
+│   ├── conversation/
+│   ├── composer/
+│   ├── messages/
+│   ├── attachments/
+│   ├── requests/
+│   ├── search/
+│   └── shared-media/
+├── screens/
+│   ├── MessagingInboxScreen
+│   ├── DirectConversationScreen
+│   ├── MessageRequestsScreen
+│   └── ConversationDetailsScreen
+├── hooks/
+├── services/
+├── repositories/
+├── domain/
+├── state/
+├── validation/
+├── utils/
+├── types/
+└── tests/
+
+Do not create every directory merely to imitate this structure. Introduce modules that provide an actual architectural benefit.
+
+5.3 Core service responsibilities
+
+The messaging feature should expose clear responsibilities for:
+
+- Conversation retrieval and creation.
+- Message sending and retrieval.
+- Message editing and deletion.
+- Message reactions.
+- Message delivery and read tracking.
+- Attachment uploading and validation.
+- Message requests.
+- Inbox state and unread counters.
+- Conversation settings.
+- Search.
+- Shared-content resolution.
+- Notification integration.
+- Moderation and reporting integration.
+
+Reuse existing services when they already perform these responsibilities.
+
+Do not create two services that claim ownership of the same business operation.
+
+5.4 Consistent domain model
+
+Establish explicit, documented message types and state transitions.
+
+At minimum, distinguish:
+
+Conversation
+
+- Unique identity.
+- Exactly two authorized participants.
+- Creation metadata.
+- Conversation status.
+- Last-message summary.
+- Relevant privacy metadata.
+- Timestamps.
+
+Conversation membership
+
+- User ID.
+- Participation status.
+- Last-read position.
+- Last-delivered position.
+- Relevant per-user settings.
+
+Message
+
+- Unique message ID.
+- Conversation ID.
+- Sender ID.
+- Message type.
+- Content or attachment reference.
+- Creation timestamp.
+- Optional edit timestamp.
+- Optional reply reference.
+- Optional forwarding provenance.
+- Optional shared-content reference.
+- Server-controlled state.
+- Appropriate moderation metadata.
+
+User conversation inbox state
+
+- Conversation ID.
+- Other participant reference.
+- Last-message preview.
+- Last-message timestamp.
+- Unread count.
+- Pinned state.
+- Archived state.
+- Muted state.
+- Per-user visibility state.
+
+Message request
+
+- Sender.
+- Recipient.
+- Request state.
+- Initial message reference or request conversation reference.
+- Creation and response timestamps.
+- Relevant abuse-prevention metadata.
+
+Do not embed unbounded messages, attachments, reactions, membership history or other growing arrays inside one Firestore document.
+
+
+---
+
+6. FIRESTORE DATA ARCHITECTURE
+
+The final database design must follow the existing repository and Firestore architecture.
+
+The following is a logical reference model, not permission to create duplicate collections if equivalent systems already exist.
+
+6.1 Recommended logical structure
+
+conversations/{conversationId}
+    members/{userId}
+    messages/{messageId}
+        reactions/{reactionId}
+        deliveryReceipts/{userId}
+
+users/{userId}/messageInbox/{conversationId}
+
+users/{userId}/messageRequests/{requestId}
+
+users/{userId}/messageDrafts/{draftId}
+
+users/{userId}/messageViews/{viewId}
+
+Adapt the structure to existing collection conventions.
+
+Avoid unnecessary duplication between users, conversations, messages and existing notification or social graph collections.
+
+6.2 Conversation identity
+
+One-to-one conversations must not be created repeatedly for the same two users.
+
+Use a deterministic, server-validated identity strategy based on the two authenticated user IDs.
+
+The backend must canonicalize participant ordering before generating or resolving the conversation identity.
+
+The creation operation must be idempotent.
+
+Two concurrent attempts to create the same direct conversation must resolve to one authorized conversation rather than two separate conversations.
+
+Never accept a client-supplied participant list as sufficient authorization.
+
+6.3 Conversation document
+
+A logical conversation may contain:
+
+interface DirectConversation {
+  id: string;
+  type: "direct";
+  participantIds: [string, string];
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  lastMessageAt?: Timestamp;
+  lastMessageId?: string;
+  lastMessagePreview?: string;
+  status: "active" | "restricted" | "closed";
+}
+
+Adjust this interface to the existing project language, serialization conventions and actual Firestore schema.
+
+Do not copy unnecessary private profile data into conversation documents.
+
+Any denormalized display information must be treated as a disposable, refreshable UI snapshot rather than the authoritative profile record.
+
+6.4 Conversation membership
+
+Keep per-user conversation state separate from shared conversation data.
+
+A logical membership record can contain:
+
+interface DirectConversationMember {
+  userId: string;
+  status: "active" | "blocked" | "left";
+  joinedAt: Timestamp;
+  lastReadAt?: Timestamp;
+  lastReadMessageId?: string;
+  lastDeliveredAt?: Timestamp;
+  lastDeliveredMessageId?: string;
+}
+
+Do not let users assign themselves arbitrary roles, identities or permissions.
+
+Users must not be able to modify another user's membership state.
+
+6.5 Message model
+
+Use an explicit message type.
+
+Example logical structure:
+
+type MessageType =
+  | "text"
+  | "image"
+  | "video"
+  | "audio"
+  | "voice_note"
+  | "document"
+  | "link"
+  | "shared_content"
+  | "system";
+
+interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  type: MessageType;
+  text?: string;
+  attachment?: MessageAttachment;
+  replyToMessageId?: string;
+  sharedContent?: SharedContentReference;
+  forwardedFrom?: ForwardedMessageReference;
+  createdAt: Timestamp;
+  editedAt?: Timestamp;
+  deletedAt?: Timestamp;
+}
+
+Use a discriminated model where appropriate so each message type has its own validated payload.
+
+A message cannot contain an arbitrary mixture of unrelated payload fields.
+
+A text message must not be accepted as a malformed video message.
+
+A shared-content message must not be accepted without a valid reference and content type.
+
+6.6 Inbox summaries
+
+A user's inbox should not require downloading every historical message.
+
+Maintain efficient per-user conversation summaries.
+
+Update summaries through a trusted, idempotent backend pipeline or another properly validated existing architecture.
+
+Do not let a client arbitrarily manipulate unread counters, conversation ordering or last-message metadata.
+
+Inbox summaries must remain consistent with the canonical conversation and message records.
+
+6.7 Message pagination
+
+Implement cursor-based pagination.
+
+Requirements:
+
+- Fetch a bounded initial message page.
+- Load older messages on demand.
+- Preserve chronological ordering.
+- Avoid repeatedly loading existing messages.
+- Avoid loading an entire conversation history.
+- Preserve scroll position when earlier messages load.
+- Avoid unnecessary listeners for old messages.
+- Unsubscribe from listeners when switching conversations or leaving the screen.
+
+Select page sizes based on actual application behavior and performance measurements. A reasonable starting point is approximately 30–50 messages per page.
+
+Do not use unbounded Firestore queries.
+
+6.8 Data consistency
+
+Handle:
+
+- Duplicate sends.
+- Concurrent sends.
+- Rapid repeated actions.
+- Out-of-order event delivery.
+- Stale inbox summaries.
+- Interrupted uploads.
+- Deleted referenced messages.
+- Deleted referenced posts or Vibes.
+- Duplicate Cloud Function invocations.
+- Network retries.
+- User account changes.
+
+Message creation, inbox summary updates and notification processing must have clearly defined consistency responsibilities.
+
+Use transactions, atomic operations or idempotency keys wherever the operation requires them.
+
+Do not rely on client timestamps as the authoritative ordering mechanism when a server-generated timestamp is available.
+
+
+---
+
+7. MESSAGE SENDING AND REAL-TIME DELIVERY
+
+This is the central messaging capability.
+
+It must be dependable.
+
+7.1 Sending pipeline
+
+Implement a clearly defined sending lifecycle:
+
+1. User composes a message.
+2. Validate content locally.
+3. Create a stable client-generated operation or message ID.
+4. Display an optimistic sending state.
+5. Submit the message through the chosen secure persistence pipeline.
+6. Validate authorization and message content.
+7. Persist the canonical message.
+8. Update relevant conversation and inbox summaries.
+9. Trigger notification processing when appropriate.
+10. Confirm server acceptance.
+11. Update the displayed status.
+12. Retry safely if a recoverable failure occurs.
+
+The same user action must not create multiple canonical messages because of repeated submission or retry.
+
+7.2 Backend sending strategy
+
+Inspect the existing application before choosing between validated client-side Firestore writes and callable backend sending.
+
+Prefer a trusted server-controlled message creation pipeline where strong rate limiting, centralized validation, idempotency or abuse prevention requires it.
+
+For a callable pipeline:
+
+- Require Firebase Authentication.
+- Enforce App Check where configured and supported.
+- Validate the caller.
+- Validate both participants.
+- Verify the conversation exists or create it through an authorized operation.
+- Verify that the caller is a member.
+- Verify the recipient is the other authorized participant.
+- Check blocking and communication permissions.
+- Validate message type and payload.
+- Validate attachment ownership and association.
+- Apply appropriate request limits.
+- Use idempotency.
+- Write the canonical message.
+- Update trusted metadata consistently.
+- Return a clearly defined result.
+
+For a direct Firestore write architecture:
+
+- Enforce equivalent authorization through Firestore Security Rules.
+- Restrict message fields and field types.
+- Prevent users from impersonating another sender.
+- Prevent arbitrary participant injection.
+- Prevent clients from modifying protected delivery state.
+- Validate attachment paths and message ownership.
+- Use backend processing for actions that Security Rules cannot safely enforce.
+
+Choose the simplest architecture that actually satisfies the security, reliability and offline requirements.
+
+Document the decision.
+
+Do not implement two competing message-send pipelines.
+
+7.3 Message status model
+
+The interface must accurately distinguish:
+
+Status	Meaning
+
+Queued	Waiting for a connection or local submission
+Sending	Submission is in progress
+Sent	The server has accepted and persisted the message
+Delivered	The recipient has acknowledged receipt on a device
+Read	The recipient's read position has advanced past the message
+Failed	Submission failed and requires an action or retry
+
+
+Do not display a message as delivered merely because it exists in Firestore.
+
+Do not display a message as read because the sender opened the conversation.
+
+Do not display fake online or delivery states.
+
+Use a consistent delivery model across the inbox and conversation interface.
+
+For efficiency, use per-member delivery and read cursors where appropriate instead of creating excessive per-message receipt writes.
+
+7.4 Real-time synchronization
+
+Implement:
+
+- New message updates.
+- Conversation metadata updates.
+- Unread counter changes.
+- Read-position updates.
+- Delivery-position updates.
+- Message edits.
+- Deletions.
+- Reactions.
+- Request state changes.
+
+Avoid creating several redundant listeners for the same information.
+
+Listeners must be:
+
+- Scoped.
+- Bounded where applicable.
+- Properly unsubscribed.
+- Protected against stale callbacks.
+- Stable across React renders.
+- Safe during rapid route changes.
+- Resilient to reconnection.
+
+7.5 Race-condition handling
+
+Test:
+
+- Sending two messages rapidly.
+- Opening a conversation while a message arrives.
+- Reading a conversation on another active session.
+- Switching conversations during a pending upload.
+- Editing a message while another action affects it.
+- Retrying a failed message.
+- Receiving duplicate backend events.
+- Losing connectivity during sending.
+- Regaining connectivity after multiple queued messages.
+
+Message ordering must remain stable.
+
+A late response must not overwrite newer state.
+
+
+---
+
+8. MESSAGING INBOX
+
+Build a complete inbox, not merely a list of conversation links.
+
+8.1 Main inbox structure
+
+The inbox should include:
+
+- Messaging header.
+- User identity or relevant current-user context.
+- Conversation search.
+- Message request entry point.
+- Conversation list.
+- Unread indicators.
+- Relevant filtering controls.
+- Loading state.
+- Empty state.
+- Failure and retry state.
+
+Respect the existing application navigation and header conventions.
+
+Do not create a competing navigation system.
+
+8.2 Conversation list item
+
+Each conversation row should provide:
+
+- Other participant's profile image.
+- Display name.
+- Verified or relevant identity indicator when supported by the authoritative profile system.
+- Last-message preview.
+- Last-message time.
+- Unread count or indicator.
+- Muted indicator where applicable.
+- Pinned indicator where applicable.
+- Relevant message status for the current user's last outgoing message.
+- Appropriate accessibility labels.
+
+Do not invent verification badges, presence states or identity information.
+
+8.3 Conversation ordering
+
+Use a consistent sorting strategy based on canonical conversation activity.
+
+Pinned conversations should be handled separately from ordinary recency ordering.
+
+Archived conversations should not unexpectedly appear in the main inbox.
+
+Unread state must remain accurate.
+
+8.4 Inbox filters
+
+Implement useful filtering without creating excessive UI complexity.
+
+At minimum, support:
+
+- All.
+- Unread.
+- Requests as a separate destination or clearly distinguished section.
+
+Only add further filters when they have an actual backend and interaction.
+
+Do not introduce decorative filters that do nothing.
+
+8.5 Conversation actions
+
+Support appropriate per-conversation actions:
+
+- Pin or unpin.
+- Mute or unmute.
+- Archive or restore.
+- Open conversation details.
+- Mark as unread where the data model supports it.
+- Delete or hide from the current user's inbox.
+
+Conversation deletion must respect two-person conversation ownership.
+
+Removing a conversation from one user's inbox must not accidentally erase the other participant's history.
+
+Define the actual deletion semantics and communicate them accurately.
+
+
+---
+
+9. ONE-TO-ONE CONVERSATION EXPERIENCE
+
+The direct conversation interface must be one of the most carefully designed and implemented screens in Arvdoul.
+
+9.1 Conversation header
+
+Include:
+
+- Back navigation.
+- Participant avatar.
+- Participant display name.
+- Relevant verification indicator.
+- Accurate presence or last-seen information only when supported and privacy-permitted.
+- Conversation information action.
+- Relevant navigation to the participant's profile.
+
+Do not add call buttons in Part 1.
+
+Do not show fake online indicators.
+
+9.2 Message timeline
+
+Support:
+
+- Incoming messages.
+- Outgoing messages.
+- Date separators.
+- Message grouping.
+- Timestamps.
+- Edited markers.
+- Reply context.
+- Reactions.
+- Attachment previews.
+- Loading placeholders.
+- Sending indicators.
+- Failed message state.
+- Read and delivery indicators.
+- Deleted-message treatment.
+- System events when genuinely necessary.
+
+Message grouping should improve readability without hiding important timestamps or statuses.
+
+Maintain appropriate visual distinction between incoming and outgoing messages.
+
+Avoid unnecessarily wide message bubbles.
+
+Support long text, URLs, Unicode, emoji characters, RTL scripts and different font scales.
+
+Do not use emoji as a replacement for actual interface icons.
+
+9.3 Scroll behavior
+
+Implement proper chat scrolling.
+
+Requirements:
+
+- Scroll to the latest message when the conversation is opened, subject to preserving an intentional prior position.
+- Avoid snapping the user to the bottom when reading older messages.
+- Show an unobtrusive new-message indicator when appropriate.
+- Support loading older messages without losing scroll position.
+- Keep the composer visible when the mobile keyboard opens.
+- Handle viewport resizing.
+- Avoid scroll jumps when images or videos load.
+- Avoid scroll jumps when message reactions update.
+
+9.4 Empty conversation
+
+When a conversation has no messages:
+
+- Display an intentional empty conversation state.
+- Provide participant context.
+- Display useful contextual guidance.
+- Allow the user to compose the first message.
+
+Do not show fabricated previous messages.
+
+9.5 Conversation details
+
+Provide a conversation details view or appropriately designed sheet.
+
+Include:
+
+- Participant profile and identity.
+- Profile navigation.
+- Shared media.
+- Shared files.
+- Shared links where available.
+- Mute settings.
+- Conversation privacy controls.
+- Report action.
+- Block action.
+- Current-user conversation management actions.
+
+Show only information the current user is authorized to access.
+
+
+---
+
+10. MESSAGE COMPOSER
+
+The composer must be polished, reliable and functional.
+
+10.1 Composer capabilities
+
+Include the appropriate controls for:
+
+- Text input.
+- Attachment selection.
+- Image selection.
+- Video selection.
+- Voice-note recording.
+- Document selection.
+- Sending.
+- Reply context.
+- Upload progress.
+- Attachment removal.
+- Retry after failure.
+
+Avoid placing every possible action visibly around the composer.
+
+Use a thoughtful progressive-disclosure approach.
+
+Preserve accessibility and discoverability.
+
+10.2 Text entry
+
+Support:
+
+- Multiline input.
+- Dynamic height within reasonable limits.
+- Keyboard-aware layout.
+- Correct Enter and modifier-key behavior.
+- Send-button state.
+- Draft persistence.
+- Unicode.
+- Long text.
+- RTL text.
+- Whitespace handling.
+- Safe rendering.
+- Input validation.
+
+Avoid accidental message sending while the user intends to create a new line.
+
+On mobile, respect native keyboard expectations.
+
+10.3 Drafts
+
+Drafts must persist appropriately.
+
+Support:
+
+- Temporary navigation away from a conversation.
+- Returning to an existing draft.
+- Preserving text after recoverable errors.
+- Handling more than one conversation's draft.
+- Cleaning up drafts after successful sending where appropriate.
+- Logout and account-switch cleanup.
+
+Do not store one global text draft and accidentally display it in every conversation.
+
+Do not silently lose unsent content.
+
+Clearly distinguish a draft from a sent message.
+
+10.4 Attachment preview
+
+Before sending an attachment, show:
+
+- Preview when supported.
+- File name.
+- File type.
+- Relevant file size.
+- Upload state.
+- Remove action.
+- Validation errors.
+- Retry action.
+
+Do not allow an attachment to be sent when its upload failed or its authorization is invalid.
+
+10.5 Double-submission protection
+
+Prevent multiple message sends caused by:
+
+- Rapid button taps.
+- Keyboard submission.
+- Repeated event handlers.
+- React rerenders.
+- Slow network responses.
+- Retried function calls.
+
+Use a stable operation ID or idempotency mechanism.
+
+
+---
+
+11. IMAGES, VIDEO, AUDIO AND FILE ATTACHMENTS
+
+Implement a secure, reliable media pipeline.
+
+11.1 Images
+
+Support:
+
+- Image selection.
+- Preview.
+- Upload progress.
+- Appropriate image format validation.
+- Image rendering.
+- Thumbnail or preview generation when existing infrastructure supports it.
+- Full-screen image viewing.
+- Multiple-image sending within sensible application limits.
+- Retry after upload interruption.
+- Error placeholders.
+- Media removal according to authorization.
+
+Do not load original high-resolution media unnecessarily in conversation lists.
+
+Use appropriate thumbnail and display sizes.
+
+Preserve image aspect ratios.
+
+11.2 Video
+
+Support:
+
+- Video selection.
+- Preview.
+- Video format validation.
+- Duration validation.
+- File-size validation.
+- Upload progress.
+- Playback controls.
+- Loading and playback errors.
+- Appropriate video thumbnails where supported.
+- Full-screen playback.
+
+Do not automatically play every video in the message timeline.
+
+Avoid downloading full video files simply to render a small preview.
+
+Do not treat a video as uploaded before the upload has actually completed.
+
+11.3 Audio attachments
+
+Support normal audio-file attachments where appropriate.
+
+Show:
+
+- File name.
+- Audio type.
+- Playback state.
+- Duration when available.
+- Error state.
+- Download or save behavior only when supported.
+
+11.4 Voice notes
+
+Voice notes are an important Part 1 feature.
+
+Implement:
+
+- Microphone permission request.
+- Permission-denied state.
+- Recording start.
+- Recording stop.
+- Recording cancellation.
+- Duration display.
+- Recording feedback.
+- Audio preview before sending.
+- Playback preview.
+- Upload progress.
+- Failed upload handling.
+- Retry.
+- Safe cancellation.
+- Cleanup of temporary recordings.
+- Accessible controls.
+
+Do not leave microphone recording active after the user exits or cancels the recording flow.
+
+Do not claim that a voice note has been sent before persistence is confirmed.
+
+Support the device/browser capabilities available to the current application.
+
+Handle unsupported browsers gracefully.
+
+Do not silently fall back to a fake recording interface.
+
+11.5 Documents and supported files
+
+Support carefully selected file types.
+
+Validate:
+
+- MIME type.
+- File extension.
+- File size.
+- Upload destination.
+- Ownership.
+- Conversation authorization.
+- Associated message.
+- Download authorization.
+
+Client-side validation is for user experience, not a security boundary.
+
+Validate again on the trusted backend where required.
+
+Prevent arbitrary executable content from being treated as a harmless document.
+
+Do not provide unsafe automatic file execution or preview behavior.
+
+11.6 Upload reliability
+
+Use the project's existing Firebase Storage integration where possible.
+
+Implement:
+
+- Resumable upload where supported.
+- Progress reporting.
+- Cancellation.
+- Retry.
+- Upload timeout handling.
+- Network interruption recovery.
+- Temporary-file cleanup.
+- Orphaned-upload cleanup.
+- Attachment ownership verification.
+
+Use a logical ownership-aware path, adapted to existing conventions, such as:
+
+messages/{conversationId}/{messageId}/{attachmentId}
+
+Only authorized conversation participants should be able to read protected media.
+
+A user must not gain access to an attachment simply by guessing its URL or Storage path.
+
+Do not expose unprotected permanent media URLs as a substitute for authorization.
+
+Do not claim antivirus scanning or advanced content analysis unless an actual integrated security service performs it.
+
+11.7 Resource management
+
+Prevent:
+
+- Unreleased object URLs.
+- Unreleased MediaRecorder instances.
+- Persistent microphone activity.
+- Unnecessary memory retention.
+- Unbounded video playback.
+- Large media downloads in background lists.
+- Duplicate upload listeners.
+- Stale upload callbacks after navigation.
+
+Clean up every resource correctly.
+
+
+---
+
+12. MESSAGE INTERACTIONS
+
+All message actions must be contextually appropriate and genuinely operational.
+
+12.1 Reply
+
+Allow users to reply to a specific message.
+
+Display:
+
+- Original sender.
+- Safe message preview.
+- Appropriate media indicator.
+- Navigation to the original message when available.
+
+If the original message has been deleted, preserve a clear, non-misleading reply state.
+
+Do not duplicate the entire original message inside every reply.
+
+Use an authorized reference to the original message.
+
+12.2 Reactions
+
+Implement message reactions.
+
+Requirements:
+
+- Show available reactions.
+- Add a reaction.
+- Change a reaction.
+- Remove a reaction.
+- Show aggregate reaction counts.
+- Show the current user's reaction.
+- Update in real time.
+- Prevent duplicate reactions from one user where the product policy permits only one reaction per user per message.
+
+Use a data model that does not create excessive document reads.
+
+Do not assume a user can react to a message they cannot access.
+
+12.3 Forwarding
+
+Allow a user to forward supported messages.
+
+Requirements:
+
+- Select an authorized target conversation.
+- Preserve original content attribution where appropriate.
+- Enforce access permissions.
+- Preserve attachment access rules.
+- Avoid copying unauthorized media.
+- Prevent forwarding prohibited message types when applicable.
+- Show appropriate forwarded context.
+
+Forwarding must create a new authorized message action, not duplicate another user's entire database record or bypass their privacy settings.
+
+12.4 Editing
+
+Allow editing of eligible outgoing text messages.
+
+Requirements:
+
+- Only the original sender can edit.
+- Enforce an explicit, documented edit policy.
+- Validate edited content.
+- Store edit metadata.
+- Prevent unauthorized modification.
+- Update the interface in real time.
+- Display an edited indicator.
+- Preserve consistency with message replies and search.
+
+Do not allow an unrestricted client to edit arbitrary messages.
+
+12.5 Deleting
+
+Distinguish between:
+
+Delete for me
+
+- Hides the message from the current user's view using a user-specific state model.
+- Does not unintentionally erase the recipient's copy.
+
+Delete for everyone
+
+- Must be authorized by the original sender.
+- Must follow a documented server-enforced deletion policy.
+- Must leave a safe tombstone or equivalent consistent state when required.
+- Must not allow arbitrary deletion of another user's content.
+
+Define these behaviors clearly.
+
+Do not silently delete the shared conversation history when the user only intends to hide one message.
+
+12.6 Additional actions
+
+Include only actions that have real implementation and appropriate user value.
+
+Contextual actions may include:
+
+- Copy text.
+- Select text.
+- Reply.
+- React.
+- Forward.
+- Edit.
+- Delete.
+- Report.
+
+Do not overload the message action menu.
+
+Respect touch targets, accessibility and platform interaction expectations.
+
+
+---
+
+13. SHARING ARVDOUL CONTENT
+
+Messaging must connect naturally to Arvdoul's content ecosystem.
+
+This Part 1 integration covers existing supported content types only.
+
+13.1 Supported content references
+
+Integrate sharing for existing:
+
+- Posts.
+- Vibes.
+- Sparks.
+
+Before implementing an adapter, inspect each content system and discover its actual:
+
+- Entity ID.
+- Author ID.
+- Content type.
+- Visibility rules.
+- Deletion behavior.
+- Access policy.
+- Canonical route or deep link.
+- Media representation.
+- Existing share service.
+
+Do not invent new content identifiers or duplicate content records.
+
+13.2 Share by reference
+
+When sharing a Post, Vibe or Spark, create a message containing a validated content reference.
+
+Do not copy the full original media and content into the message database.
+
+The reference must point to the authoritative source.
+
+A logical shared-content payload may contain:
+
+interface SharedContentReference {
+  contentType: "post" | "vibe" | "spark";
+  contentId: string;
+  authorId: string;
+  createdAt?: Timestamp;
+}
+
+Adapt it to the actual content systems.
+
+13.3 Permission-aware rendering
+
+Before displaying shared content:
+
+- Verify the current user's access.
+- Resolve the authoritative content.
+- Respect privacy settings.
+- Respect blocking and restrictions.
+- Handle removed content.
+- Handle expired content.
+- Handle unavailable content.
+- Handle changed visibility.
+- Handle deleted authors or unavailable profiles.
+
+If content is unavailable, display an appropriate unavailable-content state.
+
+Do not display private content merely because a user possesses its identifier.
+
+13.4 Sharing flow
+
+A user should be able to share supported content into an existing direct conversation through an intentional share experience.
+
+The flow must:
+
+1. Open a recipient selection experience.
+2. Show eligible recipients.
+3. Allow conversation selection.
+4. Validate permissions.
+5. Create the appropriate shared-content message.
+6. Confirm the result accurately.
+7. Provide a route to the shared conversation when appropriate.
+
+Do not add recipient-selection screens that duplicate an existing Arvdoul share system.
+
+Reuse existing infrastructure where possible.
+
+
+---
+
+14. MESSAGE REQUESTS AND COMMUNICATION PERMISSIONS
+
+Message requests must be part of the real social graph and privacy architecture.
+
+They must not become a separate, competing relationship system.
+
+14.1 Communication eligibility
+
+Use the existing social graph and privacy model.
+
+Inspect the current meanings of:
+
+- Friends.
+- Followers.
+- Connections.
+- Blocked users.
+- Muted users.
+- Restricted users.
+- Other existing relationship states.
+
+Do not invent new relationship categories if the existing system already defines them.
+
+14.2 Message privacy settings
+
+Integrate messaging with the existing privacy settings system.
+
+Support clear choices appropriate to the actual Arvdoul relationship model, such as:
+
+- People permitted by the existing relationship rules.
+- People who can send message requests.
+- More restrictive messaging permissions.
+
+Only expose settings that are actually enforced by the backend.
+
+Client-side button visibility is not authorization.
+
+A user must not be able to bypass another user's messaging preferences through a direct function call or fabricated Firestore request.
+
+14.3 Request experience
+
+The recipient must be able to:
+
+- View a request.
+- See the sender's permitted profile information.
+- Preview the initial message.
+- Accept the request.
+- Decline the request.
+- Block the sender.
+- Report the request.
+
+The sender must receive an accurate representation of the request state.
+
+Do not expose private recipient information before the recipient accepts the request.
+
+Do not allow rejected or blocked users to bypass restrictions by repeatedly creating new conversations.
+
+14.4 Abuse prevention
+
+Introduce reasonable protections against:
+
+- Request flooding.
+- Repeated unsolicited messages.
+- Automated submission.
+- Duplicate requests.
+- Malformed payloads.
+- Unusual message volume.
+- Attempts to circumvent blocks.
+
+Use trusted backend enforcement where necessary.
+
+Do not rely exclusively on client-side cooldowns.
+
+Do not introduce arbitrary restrictions that conflict with existing product policies without documenting them.
+
+
+---
+
+15. BLOCKING, REPORTING AND MODERATION
+
+Integrate with Arvdoul's existing trust and safety architecture.
+
+15.1 Blocking
+
+Blocking must be enforced across the actual messaging data paths.
+
+A blocked user must not bypass the block through:
+
+- Existing conversation IDs.
+- Direct Firestore reads or writes.
+- Callable functions.
+- Attachment URLs or paths.
+- Message requests.
+- Forwarding.
+- Shared-content messages.
+- Previously opened conversation screens.
+
+The UI must react appropriately when a block occurs.
+
+Do not assume hiding a conversation prevents further communication.
+
+15.2 Reporting
+
+Provide a report flow with:
+
+- Report reason.
+- Optional additional details.
+- Relevant conversation or message reference.
+- Submission state.
+- Confirmation.
+- Error and retry handling.
+
+Only collect the information necessary for the existing moderation process.
+
+A report must not automatically expose the reporter's entire conversation history beyond what the user deliberately submits or what the platform's documented safety policy authorizes.
+
+Prevent duplicate report abuse where appropriate.
+
+15.3 Moderation integration
+
+Reuse existing moderation infrastructure.
+
+Do not create another independent moderation database or administration system.
+
+Respect the existing moderation lifecycle and permission model.
+
+If no appropriate messaging moderation backend exists, implement the minimum necessary integration and document the remaining operational requirements.
+
+Do not claim that content is reviewed by human moderators unless that actual process exists.
+
+
+---
+
+16. CONVERSATION SEARCH AND MESSAGE SEARCH
+
+Search must be useful, accurate and secure.
+
+16.1 Inbox search
+
+Allow users to locate conversations by:
+
+- Participant display name.
+- Username.
+- Supported profile identity fields.
+
+Use the existing profile search or indexing service where appropriate.
+
+Do not download every user's profile to perform client-side search.
+
+16.2 Message search
+
+Support searching messages in conversations the user is authorized to access.
+
+Search behavior should include:
+
+- Query validation.
+- Pagination.
+- Loading state.
+- Empty state.
+- Error state.
+- Result previews.
+- Conversation identification.
+- Result timestamps.
+- Safe navigation to the relevant message.
+
+Preserve permission boundaries.
+
+Do not leak messages from conversations that the user cannot access.
+
+16.3 Search architecture
+
+Inspect whether the application already has a search infrastructure capable of securely supporting messaging.
+
+Firestore alone is not a full-text search engine.
+
+Do not pretend that a limited substring query is equivalent to scalable full-text search.
+
+If an existing search service is available, extend it.
+
+If no suitable service exists, implement a clearly scoped, efficient Part 1 search strategy and document its limitations.
+
+Do not add an expensive external search platform without justification.
+
+16.4 Search indexing and deletion
+
+Ensure edited and deleted messages do not leave misleading search results.
+
+Indexing must not become an authorization bypass.
+
+Respect retention and privacy rules.
+
+
+---
+
+17. SHARED MEDIA AND CONVERSATION CONTENT
+
+The conversation details experience should provide a useful view of exchanged content.
+
+Support appropriate sections for:
+
+- Media.
+- Videos.
+- Audio and voice notes.
+- Documents.
+- Shared links.
+- Shared Arvdoul content.
+
+Requirements:
+
+- Paginated retrieval.
+- Appropriate filters.
+- Responsive grid or list.
+- Permission-aware access.
+- Deleted-content handling.
+- Preview states.
+- Download or open actions where authorized.
+- Loading and empty states.
+
+Do not scan and download all messages just to build a shared-media screen.
+
+Use a query and indexing strategy appropriate to the chosen Firestore model.
+
+Avoid creating an unnecessary duplicate media database.
+
+
+---
+
+18. NOTIFICATION INTEGRATION
+
+Integrate with Arvdoul's existing notification system.
+
+Do not build a second notification center.
+
+18.1 Messaging notifications
+
+Support appropriate notification events for:
+
+- Incoming direct messages.
+- Incoming message requests.
+- Request acceptance or relevant status changes.
+- Other essential messaging events.
+
+Avoid generating redundant notifications for every minor internal event.
+
+18.2 Notification accuracy
+
+Notifications must:
+
+- Reference the correct conversation.
+- Use the correct sender identity.
+- Navigate to the authorized destination.
+- Respect notification preferences.
+- Respect mute settings.
+- Respect account state and privacy.
+- Avoid duplicate delivery where possible.
+- Handle expired or deleted content.
+
+18.3 Push notification privacy
+
+Provide sensible message-preview privacy behavior.
+
+Do not expose message text unnecessarily in lock-screen notifications.
+
+Respect user notification preferences.
+
+When content is sensitive or privacy settings require it, send a generic notification instead of the message body.
+
+Do not include private content in analytics events or diagnostic logs.
+
+18.4 Notification architecture
+
+Use existing FCM registration and token-management infrastructure.
+
+Process message notifications through a trusted backend path.
+
+Handle:
+
+- Duplicate Cloud Function events.
+- Stale device tokens.
+- Invalid destinations.
+- Muted conversations.
+- Blocked users.
+- Rejected requests.
+- Notification preference changes.
+
+Do not let a client directly impersonate a trusted notification sender.
+
+
+---
+
+19. OFFLINE-FIRST AND NETWORK RELIABILITY
+
+Messaging must remain useful under unstable mobile network conditions.
+
+This is particularly important for users accessing Arvdoul through mobile devices and inconsistent connectivity.
+
+19.1 Offline behavior
+
+Support:
+
+- Opening previously cached conversations.
+- Viewing previously loaded messages.
+- Writing drafts.
+- Queuing eligible outgoing messages.
+- Detecting network state.
+- Retrying failed operations.
+- Resuming appropriate interrupted uploads.
+- Synchronizing when connectivity returns.
+
+19.2 Local outbox
+
+If Firestore's offline persistence is insufficient for the selected sending architecture, implement a local outbox.
+
+Each queued operation must have:
+
+- Stable operation ID.
+- Conversation ID.
+- Message payload.
+- Creation timestamp.
+- Retry state.
+- Failure information.
+- Idempotency information.
+
+Do not create duplicate messages when processing the same queued operation more than once.
+
+Do not mark messages as sent before the canonical backend accepts them.
+
+19.3 Reconnection
+
+When the connection returns:
+
+1. Re-establish required listeners.
+2. Reconcile optimistic messages with canonical records.
+3. Retry eligible queued operations.
+4. Preserve message ordering.
+5. Update delivery states.
+6. Reconcile unread counts.
+7. Restore appropriate upload state.
+8. Surface permanent failures accurately.
+
+Avoid a sudden flood of duplicate notifications or repeated failed retries.
+
+19.4 Account switching
+
+Prevent cached information belonging to one account from appearing in another account's session.
+
+On logout or account switch:
+
+- Detach user-specific listeners.
+- Clear user-scoped in-memory state.
+- Clear sensitive account-specific drafts or apply the existing account-retention policy.
+- Clean up temporary upload state.
+- Prevent pending actions from executing under a different authenticated user.
+
+Do not delete server-side conversation history as a side effect of logout.
+
+
+---
+
+20. SECURITY AND FIREBASE HARDENING
+
+Security is a core acceptance requirement.
+
+A polished interface cannot compensate for an insecure messaging backend.
+
+20.1 Authentication
+
+Every protected messaging operation must use an authenticated user identity.
+
+Never trust a client-supplied user ID as proof of identity.
+
+Validate the authenticated UID against the operation and requested resources.
+
+Handle expired or invalid authentication safely.
+
+20.2 Firestore Security Rules
+
+Inspect and improve existing security rules without overwriting unrelated application permissions.
+
+Rules must enforce:
+
+- Authenticated access.
+- Valid conversation membership.
+- Exactly two participants for Part 1 direct conversations.
+- No arbitrary participant injection.
+- No sender impersonation.
+- No unauthorized message reads.
+- No unauthorized message writes.
+- Correct message ownership.
+- Restricted edits.
+- Restricted deletion.
+- Correct reaction ownership.
+- Protected read and delivery cursors.
+- Protected inbox summary updates.
+- Protected request transitions.
+- Protected conversation settings.
+- Valid document fields and expected types.
+
+Users must not update another user's inbox or membership record.
+
+Users must not set arbitrary delivery or read states.
+
+Users must not modify authoritative last-message metadata if it is server-controlled.
+
+Test the security rules with authenticated and unauthenticated scenarios.
+
+20.3 Storage Security Rules
+
+Enforce:
+
+- Authenticated access.
+- Valid path ownership.
+- Conversation membership.
+- Attachment association.
+- File size limits.
+- Allowed content types.
+- Correct authorization for reads.
+- Correct authorization for deletes.
+- No arbitrary user-to-user data access.
+
+Do not rely on client-side file validation.
+
+Do not allow someone to upload an arbitrary file and assign it to a message they do not own.
+
+20.4 Cloud Functions security
+
+For every messaging-related backend function:
+
+- Validate authentication.
+- Validate inputs.
+- Validate resource ownership.
+- Validate participant permissions.
+- Apply appropriate rate limiting.
+- Use idempotency where needed.
+- Avoid trusting client-supplied counters.
+- Avoid trusting client timestamps for authoritative state.
+- Avoid logging message content.
+- Return safe, structured errors.
+- Avoid exposing internal infrastructure details.
+- Keep secrets in approved secret-management mechanisms.
+
+20.5 Abuse and rate limiting
+
+Introduce appropriate limits for:
+
+- Message creation.
+- Message requests.
+- Attachment uploads.
+- Message edits.
+- Reports.
+- Search requests.
+- Expensive operations.
+
+Choose thresholds based on the product's usage model and observed behavior.
+
+Do not invent limits that make normal communication unusable.
+
+Critical enforcement must happen on a trusted backend.
+
+20.6 Privacy and encryption
+
+Part 1 must not claim to provide end-to-end encryption unless it actually implements and verifies a genuine E2EE protocol.
+
+Firebase encryption at rest is not end-to-end encryption.
+
+Do not display fake encrypted-chat badges, fake private-key indicators or misleading encryption claims.
+
+Use the existing platform's supported transport security and Firebase security controls.
+
+Design the data model and service boundaries so a future independently reviewed encryption architecture can be introduced without rewriting the presentation layer.
+
+Do not implement custom cryptography.
+
+20.7 Screenshot limitations
+
+Do not claim that the application prevents screenshots or guarantees that private content cannot be copied.
+
+Implement only controls that the actual platform supports and explain their limitations if exposed to the user.
+
+
+---
+
+21. UI/UX AND VISUAL DESIGN
+
+This is an Arvdoul feature. It must look and feel like Arvdoul.
+
+Do not introduce a generic chat template that clashes with the rest of the platform.
+
+21.1 Design identity
+
+Preserve the established Arvdoul design direction.
+
+Dark theme
+
+- Main background: #03071B.
+- Surface: rgba(255,255,255,0.06).
+
+Light theme
+
+- Main background: #F6F8FC.
+- Surface: rgba(255,255,255,0.8).
+
+Brand gradient
+
+- #8B1EF3
+- #4431F7
+- #055BFB
+
+Brand glow references
+
+- #C82BFF
+- #0088FF
+
+Status colors
+
+- Success: #10B981 and #059669.
+- Error: #EF4444 and #DC2626.
+- Warning: #F59E0B and #D97706.
+
+Use existing theme tokens when they already represent these values.
+
+Do not scatter raw values across components when the project's design-token architecture provides a better approach.
+
+21.2 Visual direction
+
+Messaging should feel:
+
+- Premium.
+- Modern.
+- Precise.
+- Distinctive.
+- Calm.
+- Fast.
+- Comfortable for prolonged use.
+- Consistent with the Arvdoul brand.
+
+Use refined glass surfaces where appropriate.
+
+Use controlled depth, subtle borders, restrained shadows and purposeful gradients.
+
+Use the liquid-glass and premium surface language already established in Arvdoul.
+
+Do not overuse blur, glow or gradients.
+
+Do not create a visually noisy screen full of decorative elements.
+
+Do not use excessive animations.
+
+Do not make every element glow.
+
+21.3 Inbox visual hierarchy
+
+The inbox should immediately communicate:
+
+1. Where the user is.
+2. Who has communicated with them.
+3. Which conversations require attention.
+4. What the last interaction was.
+5. How to find a conversation.
+6. How to access message requests.
+
+Avoid overcrowding the header.
+
+Maintain clean alignment and clear hierarchy.
+
+21.4 Chat visual hierarchy
+
+The conversation screen should prioritize:
+
+1. Message readability.
+2. Participant identity.
+3. Conversation context.
+4. Composer accessibility.
+5. Message status.
+6. Attachment clarity.
+7. Contextual interactions.
+
+Message bubbles should have refined sizing, spacing and visual rhythm.
+
+Avoid excessively rounded shapes if they make messages look oversized or generic.
+
+Maintain consistent incoming and outgoing treatment across all message types.
+
+21.5 Responsive behavior
+
+Design mobile-first, then adapt to larger layouts.
+
+Mobile
+
+- Use a full-screen conversation experience.
+- Keep composer access intuitive.
+- Respect the system keyboard.
+- Use appropriate touch targets.
+- Avoid unnecessary horizontal scrolling.
+- Preserve comfortable message width.
+- Avoid overlays covering essential navigation.
+
+Tablet
+
+- Use additional horizontal space appropriately.
+- Support split-view where beneficial.
+- Maintain touch-friendly controls.
+- Avoid merely stretching mobile components.
+
+Desktop
+
+- Use a two-pane messaging layout where appropriate.
+- Keep conversation navigation accessible.
+- Allow comfortable message reading width.
+- Support mouse and keyboard interaction.
+- Use available space without making text lines excessively long.
+
+Switch layouts intentionally using responsive breakpoints.
+
+Do not create three unrelated applications with inconsistent behavior.
+
+21.6 Light and dark themes
+
+Every messaging component must support both themes.
+
+Check:
+
+- Main background.
+- Surface color.
+- Message bubbles.
+- Text contrast.
+- Secondary text.
+- Timestamps.
+- Icons.
+- Input borders.
+- Focus rings.
+- Hover states.
+- Menus.
+- Popovers.
+- Dialogs.
+- Attachment previews.
+- Loading skeletons.
+- Error states.
+- Empty states.
+- Scrollbars where customized.
+
+No invisible icons, illegible secondary text or dark-theme assumptions.
+
+21.7 Motion and interaction design
+
+Use animation where it improves comprehension or feedback.
+
+Examples:
+
+- Composer expansion.
+- Sending-state transitions.
+- Message insertion.
+- Reaction feedback.
+- Sheet transitions.
+- Attachment preview presentation.
+- Search-state transitions.
+- Unread indicator transitions.
+
+Respect reduced-motion preferences.
+
+Avoid animations that delay core operations.
+
+Do not animate large message histories unnecessarily.
+
+21.8 Typography
+
+Use Arvdoul's established font system.
+
+Do not introduce a new font solely for messaging without proving the need.
+
+Ensure:
+
+- Clear message readability.
+- Appropriate name emphasis.
+- Comfortable line height.
+- Readable timestamps.
+- Scalable text.
+- Correct RTL support.
+
+21.9 Iconography
+
+Use the established icon library and icon conventions.
+
+Avoid emoji navigation and emoji as replacements for functional interface icons.
+
+Icons must have accessible names when their meaning is not otherwise presented.
+
+21.10 Accessibility
+
+Implement:
+
+- Semantic structure.
+- Keyboard navigation.
+- Visible focus states.
+- Screen-reader labels.
+- Appropriate dialog semantics.
+- Accessible button names.
+- Accessible message-status announcements.
+- Touch target sizing.
+- Sufficient contrast.
+- Reduced-motion support.
+- Error messaging that is not color-only.
+- Correct focus restoration after dialogs close.
+- Logical focus order.
+
+Do not assume accessibility is satisfied by using native buttons alone.
+
+
+---
+
+22. REQUIRED SCREEN INVENTORY
+
+Implement the following screen experiences within the existing routing and navigation architecture.
+
+Do not create duplicate routes if equivalent screens already exist.
+
+ID	Screen	Required capability
+
+MSG-UI-01	Messaging Inbox	Conversation discovery and management
+MSG-UI-02	Direct Conversation	Real-time one-to-one messaging
+MSG-UI-03	Message Requests	View, accept, reject, block and report
+MSG-UI-04	Conversation Details	Participant information and settings
+MSG-UI-05	Shared Media	Browse authorized conversation attachments
+MSG-UI-06	Conversation Search	Find participants and conversations
+MSG-UI-07	Message Search Results	Find messages within authorized conversations
+MSG-UI-08	Attachment Preview	Inspect selected media before sending
+MSG-UI-09	Voice Note Recording	Record, preview, cancel and send
+MSG-UI-10	Report Flow	Submit supported abuse reports
+
+
+These may be implemented as full pages, nested views, dialogs, bottom sheets or responsive panels according to the application's existing design system.
+
+Do not force every entry into a separate full-page route.
+
+
+---
+
+23. PROFILE AND SOCIAL GRAPH INTEGRATION
+
+Messaging must use Arvdoul's existing identity and relationship architecture.
+
+23.1 Profile integration
+
+Support opening a conversation from:
+
+- A participant's profile.
+- Existing permitted profile actions.
+- Relevant existing social interactions.
+
+Use existing profile identity and profile navigation.
+
+Do not make messaging responsible for maintaining profile information.
+
+23.2 Starting a conversation
+
+The direct-message action should respect:
+
+- Existing relationship state.
+- Recipient messaging privacy.
+- Blocking.
+- Restrictions.
+- Message-request requirements.
+- Existing user-account status.
+
+A valid action must lead to the correct existing conversation or request flow.
+
+Repeated taps must not create duplicate conversations.
+
+23.3 Participant identity
+
+Use the authoritative profile service for:
+
+- Display name.
+- Username.
+- Profile image.
+- Verification status.
+- Relevant public identity information.
+
+Do not trust a sender-supplied display name or avatar as authoritative participant identity.
+
+Handle unavailable or changed profile information gracefully.
+
+
+---
+
+24. PERFORMANCE AND SCALABILITY
+
+Design for real usage, not a handful of test conversations.
+
+24.1 Firestore performance
+
+Avoid:
+
+- Unbounded message queries.
+- Repeated reads of the same profile.
+- Repeated full conversation fetches.
+- Excessive real-time listeners.
+- Unnecessary per-message receipt writes.
+- Large documents.
+- Growing arrays.
+- Duplicate notification queries.
+- Excessive writes caused by UI state changes.
+
+Use:
+
+- Bounded queries.
+- Cursor pagination.
+- Appropriate indexes.
+- Minimal listener scope.
+- Efficient inbox summaries.
+- Local caching where safe.
+- Server timestamps.
+- Batched operations where appropriate.
+- Transactions for operations requiring atomicity.
+- Idempotent backend functions.
+
+24.2 Firestore indexes
+
+Inspect existing indexes.
+
+Add only indexes required by real queries.
+
+Ensure indexes cover:
+
+- Conversation inbox queries.
+- Conversation message timelines.
+- Message search strategy where applicable.
+- Message requests.
+- Shared-media queries.
+- Other implemented query patterns.
+
+Do not claim indexes were deployed unless deployment was actually performed.
+
+24.3 React performance
+
+Avoid:
+
+- Rendering the entire message history.
+- Recreating expensive listeners on every render.
+- Updating every message bubble when one message changes.
+- Unnecessary global state subscriptions.
+- Excessive context updates.
+- Unnecessary media decoding.
+- Large components doing unrelated work.
+- Memory leaks from listeners and media resources.
+
+Use the existing state management architecture.
+
+Apply memoization and virtualization where measurement or data volume justifies them.
+
+Do not add virtualization complexity to small components without a clear need.
+
+24.4 Media performance
+
+Use:
+
+- Appropriate image variants.
+- Lazy loading.
+- Thumbnail previews.
+- Correct media sizing.
+- Controlled video playback.
+- Efficient caching.
+- Resource cleanup.
+
+Never download original media unnecessarily just to render a small inbox preview.
+
+24.5 Cost awareness
+
+Evaluate the cost impact of:
+
+- Firestore reads.
+- Firestore writes.
+- Storage operations.
+- Cloud Function invocations.
+- FCM requests.
+- Listener fan-out.
+- Search operations.
+
+Do not introduce a feature that generates multiple writes for every small UI action without justification.
+
+Document important cost trade-offs.
+
+
+---
+
+25. ERROR HANDLING AND OBSERVABILITY
+
+The system must be diagnosable.
+
+25.1 Structured errors
+
+Define predictable error handling for:
+
+- Authentication.
+- Authorization.
+- Missing conversations.
+- Blocked participants.
+- Invalid message payloads.
+- Upload failures.
+- Network failures.
+- Rate limits.
+- Storage access.
+- Search failures.
+- Function failures.
+- Permission denial.
+
+Present user-friendly error messages.
+
+Do not show raw internal exceptions to users.
+
+25.2 Logging
+
+Use the existing logging and observability infrastructure.
+
+Capture useful events such as:
+
+- Message-send outcome.
+- Upload failure category.
+- Permission failure.
+- Retry attempts.
+- Backend processing failure.
+- Notification processing failure.
+
+Do not log:
+
+- Plaintext private message bodies.
+- Authentication secrets.
+- Private attachment tokens.
+- Sensitive user data.
+- Entire request payloads containing personal content.
+
+25.3 Recovery
+
+For recoverable errors:
+
+- Preserve user input.
+- Keep useful local state.
+- Show a retry action.
+- Avoid duplicating operations.
+- Explain what happened.
+- Restore the intended interface after recovery.
+
+For permanent errors, provide a clear next step when one exists.
+
+
+---
+
+26. DATA MIGRATION AND BACKWARD COMPATIBILITY
+
+Do not casually modify existing user or application schemas.
+
+Before a migration:
+
+1. Inspect the current schema.
+2. Identify all existing readers and writers.
+3. Identify all dependent Cloud Functions.
+4. Identify relevant security rules.
+5. Determine whether old clients may still access the database.
+6. Define the migration sequence.
+7. Make the migration idempotent.
+8. Define rollback or compatibility behavior.
+9. Test with existing and migrated records.
+10. Document the expected operational impact.
+
+If a new messaging schema is necessary, prefer additive and backward-compatible changes.
+
+Do not delete existing collections merely to achieve a cleaner design.
+
+Do not introduce a migration that requires every existing user to log in simultaneously.
+
+
+---
+
+27. TASK EXECUTION CATALOGUE
+
+Execute these tasks in dependency order.
+
+Every task has a unique identifier. Use these identifiers in implementation reports and verification evidence.
+
+A task must not be marked VERIFIED until all its acceptance criteria have been demonstrated.
+
+Foundation
+
+MSG-001 — Full repository discovery
+
+Work
+
+Inspect the application, identify current messaging code and map all related dependencies.
+
+Acceptance
+
+- Repository structure inspected.
+- Existing messaging implementation identified.
+- Relevant Firebase services identified.
+- Existing routing and navigation identified.
+- Duplicate implementations documented.
+- Existing integration contracts documented.
+- No unnecessary code has been deleted.
+
+Evidence
+
+Repository paths, relevant imports, dependency references and an audit report.
+
+MSG-002 — Architecture and integration plan
+
+Work
+
+Design the messaging implementation around the actual repository.
+
+Acceptance
+
+- Presentation, domain, data and infrastructure responsibilities documented.
+- Existing services selected for reuse.
+- Data ownership established.
+- Firestore model documented.
+- Security boundaries documented.
+- Migration impact documented.
+- Scope exclusions recorded.
+
+Evidence
+
+Architecture decision record and dependency map.
+
+MSG-003 — Messaging domain contracts
+
+Work
+
+Implement or extend the required conversation, message, attachment, request and state contracts.
+
+Acceptance
+
+- Message types are explicit.
+- Invalid message combinations are rejected.
+- Direct conversation constraints are enforced.
+- Delivery states have precise meanings.
+- Shared-content references are defined.
+- Existing project conventions are followed.
+
+Evidence
+
+Contract definitions, validation tests and relevant integration references.
+
+MSG-004 — Firebase messaging infrastructure
+
+Work
+
+Implement the required Firestore, Storage and backend integrations.
+
+Acceptance
+
+- Existing Firebase initialization reused.
+- Required services integrated.
+- Correct authorization boundaries implemented.
+- Appropriate indexes identified.
+- No duplicate infrastructure introduced.
+
+Evidence
+
+Actual backend implementation, rules, indexes and tests.
+
+Core conversations
+
+MSG-005 — Direct conversation creation and lookup
+
+Work
+
+Implement idempotent, permission-aware one-to-one conversation creation and retrieval.
+
+Acceptance
+
+- One conversation per authorized participant pair.
+- Concurrent creation handled.
+- Existing conversation reused.
+- Blocked or unauthorized participants rejected.
+- Participant identities validated by trusted logic.
+
+Evidence
+
+Automated tests covering normal, repeated, concurrent and unauthorized creation.
+
+MSG-006 — Inbox data and pagination
+
+Work
+
+Implement efficient per-user conversation retrieval.
+
+Acceptance
+
+- Bounded queries.
+- Correct ordering.
+- Correct unread summaries.
+- Pinned and archived state.
+- Pagination or incremental loading where needed.
+- No unbounded reads.
+
+Evidence
+
+Query implementation, integration tests and performance observations.
+
+MSG-007 — Real-time conversation subscriptions
+
+Work
+
+Implement scoped real-time updates.
+
+Acceptance
+
+- New messages appear in the correct conversation.
+- Conversation summaries update.
+- Read and delivery state updates.
+- Subscriptions unsubscribe correctly.
+- Stale callbacks do not corrupt the active screen.
+
+Evidence
+
+Subscription lifecycle tests and verified two-session behavior where available.
+
+MSG-008 — Core message creation
+
+Work
+
+Implement the secure message sending pipeline.
+
+Acceptance
+
+- Authenticated sender.
+- Authorized recipient.
+- Valid payload.
+- Stable operation ID.
+- Duplicate prevention.
+- Canonical server acceptance.
+- Correct failure states.
+
+Evidence
+
+Backend tests and actual frontend-to-backend sending.
+
+MSG-009 — Message history and pagination
+
+Work
+
+Implement conversation timeline retrieval.
+
+Acceptance
+
+- Recent messages load first.
+- Older messages load incrementally.
+- Ordering is stable.
+- Scroll position is preserved.
+- Listeners remain bounded.
+
+Evidence
+
+Pagination tests and visual interaction testing.
+
+MSG-010 — Message delivery and read states
+
+Work
+
+Implement accurate delivery and read cursors.
+
+Acceptance
+
+- Sent is distinct from delivered.
+- Delivered is distinct from read.
+- Read state is tied to recipient behavior.
+- Unauthorized clients cannot manipulate another participant's status.
+- Duplicate updates do not produce incorrect states.
+
+Evidence
+
+Two-account tests and security tests.
+
+Composition and media
+
+MSG-011 — Composer and text messages
+
+Work
+
+Implement the complete composer and text sending experience.
+
+Acceptance
+
+- Multiline text entry.
+- Correct keyboard behavior.
+- Validation.
+- Draft support.
+- No duplicate sends.
+- Accurate sending and failure states.
+- Responsive layout.
+
+Evidence
+
+Component tests and actual browser/device interaction.
+
+MSG-012 — Image messaging
+
+Work
+
+Implement image selection, upload, sending and viewing.
+
+Acceptance
+
+- Validated files.
+- Secure uploads.
+- Upload progress.
+- Correct message association.
+- Preview and viewing.
+- Error and retry handling.
+
+Evidence
+
+Storage rules, upload tests and verified real upload.
+
+MSG-013 — Video messaging
+
+Work
+
+Implement video attachments and playback.
+
+Acceptance
+
+- Validated video files.
+- Upload progress.
+- Preview.
+- Stable playback.
+- Error handling.
+- Controlled resource usage.
+
+Evidence
+
+Tested uploads and playback on supported devices.
+
+MSG-014 — Audio attachments
+
+Work
+
+Implement normal audio-file attachments.
+
+Acceptance
+
+- Validated format.
+- Secure upload.
+- Appropriate playback.
+- Error handling.
+- Correct authorization.
+
+Evidence
+
+Upload and playback tests.
+
+MSG-015 — Voice notes
+
+Work
+
+Implement complete voice-note recording and sending.
+
+Acceptance
+
+- Permission handling.
+- Recording start and stop.
+- Cancellation.
+- Preview.
+- Upload.
+- Playback.
+- Cleanup.
+- Failure and retry states.
+
+Evidence
+
+Real recording tests on supported hardware or an appropriate browser test environment.
+
+MSG-016 — Document attachments
+
+Work
+
+Implement supported document attachment handling.
+
+Acceptance
+
+- File validation.
+- Secure Storage paths.
+- Authorization.
+- File information.
+- Safe opening behavior.
+- Failure handling.
+
+Evidence
+
+Allowed and rejected file tests plus Storage authorization tests.
+
+MSG-017 — Attachment reliability
+
+Work
+
+Implement interruption handling, cancellation, retry and cleanup.
+
+Acceptance
+
+- Interrupted operations handled.
+- Duplicate uploads prevented where possible.
+- Orphaned files managed.
+- Temporary resources cleaned.
+- Navigation during upload handled.
+- Account switching handled.
+
+Evidence
+
+Failure-injection tests and lifecycle testing.
+
+Message interactions
+
+MSG-018 — Reply functionality
+
+Work
+
+Implement reply references and presentation.
+
+Acceptance
+
+- Correct original message reference.
+- Correct preview.
+- Authorized navigation.
+- Deleted-message handling.
+- No duplicated original payload.
+
+Evidence
+
+Reply integration tests.
+
+MSG-019 — Message reactions
+
+Work
+
+Implement reaction management and live updates.
+
+Acceptance
+
+- Add, change and remove reactions.
+- Correct ownership.
+- No unauthorized access.
+- Correct aggregate counts.
+- No accidental duplicate reactions.
+
+Evidence
+
+Reaction behavior and security tests.
+
+MSG-020 — Message forwarding
+
+Work
+
+Implement permission-aware forwarding.
+
+Acceptance
+
+- Authorized target selection.
+- Correct provenance.
+- Attachment permission checks.
+- No access-control bypass.
+- Correct destination message.
+
+Evidence
+
+Forwarding tests for text and supported attachment types.
+
+MSG-021 — Message editing
+
+Work
+
+Implement authorized editing with a documented policy.
+
+Acceptance
+
+- Original sender only.
+- Policy enforcement.
+- Edit metadata.
+- Real-time update.
+- Search consistency.
+- Safe error handling.
+
+Evidence
+
+Authorization and behavior tests.
+
+MSG-022 — Message deletion
+
+Work
+
+Implement delete-for-me and delete-for-everyone semantics.
+
+Acceptance
+
+- Correct ownership.
+- Documented policy.
+- Appropriate tombstone behavior.
+- Recipient consistency.
+- Search consistency.
+- No accidental conversation-wide deletion.
+
+Evidence
+
+Two-account tests and security tests.
+
+Requests, privacy and content integration
+
+MSG-023 — Message requests
+
+Work
+
+Implement request creation, presentation and resolution.
+
+Acceptance
+
+- Recipient privacy respected.
+- Accept and decline work.
+- Block and report work.
+- Unauthorized requests rejected.
+- Duplicate requests handled.
+- Sender and recipient states remain consistent.
+
+Evidence
+
+End-to-end tests using two accounts.
+
+MSG-024 — Social graph and blocking
+
+Work
+
+Integrate existing profile and relationship permission systems.
+
+Acceptance
+
+- Correct participant identity.
+- Existing relationship rules respected.
+- Blocking enforced in all relevant operations.
+- Existing profile behavior preserved.
+- No duplicate relationship service introduced.
+
+Evidence
+
+Integration and authorization tests.
+
+MSG-025 — Posts, Vibes and Sparks sharing
+
+Work
+
+Implement permission-aware sharing of existing Arvdoul content references.
+
+Acceptance
+
+- Supported content resolves correctly.
+- Content is shared by reference.
+- Original access controls are respected.
+- Deleted or private content is handled correctly.
+- No duplicate content is created.
+
+Evidence
+
+One integration test for every supported content type that exists in the repository.
+
+MSG-026 — Conversation details and shared media
+
+Work
+
+Implement details and shared-content navigation.
+
+Acceptance
+
+- Correct participant information.
+- Correct conversation settings.
+- Paginated media browsing.
+- Authorized access.
+- Deleted-content handling.
+- Responsive design.
+
+Evidence
+
+UI and backend integration tests.
+
+Search, notifications and reliability
+
+MSG-027 — Inbox search
+
+Work
+
+Implement conversation and participant discovery.
+
+Acceptance
+
+- Correct results.
+- Search states.
+- Efficient queries.
+- No private-profile leakage.
+- Appropriate navigation.
+
+Evidence
+
+Search tests and permission checks.
+
+MSG-028 — Message search
+
+Work
+
+Implement authorized message search.
+
+Acceptance
+
+- Correct query handling.
+- Paginated results.
+- Conversation context.
+- Navigation to result.
+- Deleted and edited message consistency.
+- Permission boundaries.
+
+Evidence
+
+Search integration tests and query documentation.
+
+MSG-029 — Messaging notifications
+
+Work
+
+Integrate messaging events with existing notification infrastructure.
+
+Acceptance
+
+- Correct recipient.
+- Correct navigation.
+- Mute preferences respected.
+- Private preview settings respected.
+- Duplicate events handled.
+- Stale tokens handled.
+
+Evidence
+
+Function tests and FCM integration evidence.
+
+MSG-030 — Draft persistence and offline support
+
+Work
+
+Implement offline-friendly drafts, outbox and synchronization.
+
+Acceptance
+
+- Offline draft retention.
+- Reliable eligible message queueing.
+- Idempotent retries.
+- Correct reconnect handling.
+- Account isolation.
+- No false delivery states.
+
+Evidence
+
+Offline and reconnect tests.
+
+MSG-031 — Error handling and observability
+
+Work
+
+Implement structured errors and safe diagnostics.
+
+Acceptance
+
+- Important failure cases covered.
+- No message-body logging.
+- Recoverable errors can be retried.
+- Permanent errors are explained.
+- Diagnostic events are useful and privacy-conscious.
+
+Evidence
+
+Error tests and logging review.
+
+Interface and quality
+
+MSG-032 — Inbox visual implementation
+
+Work
+
+Complete the production inbox UI.
+
+Acceptance
+
+- Required content and actions.
+- Loading, empty and error states.
+- Dark and light themes.
+- Correct responsive behavior.
+- Accessibility.
+
+Evidence
+
+Actual rendered screens and interaction tests.
+
+MSG-033 — Conversation visual implementation
+
+Work
+
+Complete the direct chat experience.
+
+Acceptance
+
+- Correct message rendering.
+- Correct scroll behavior.
+- Composer integration.
+- Status indicators.
+- Attachment support.
+- Loading, empty and error states.
+- Dark and light themes.
+
+Evidence
+
+Actual rendered screens and functional interaction tests.
+
+MSG-034 — Requests and details UI
+
+Work
+
+Complete message request and conversation details interfaces.
+
+Acceptance
+
+- Real request actions.
+- Real privacy controls.
+- Real report and block integration.
+- Shared media navigation.
+- Appropriate responsive presentation.
+
+Evidence
+
+Functional UI tests.
+
+MSG-035 — Accessibility and localization
+
+Work
+
+Review and implement accessibility and localization foundations.
+
+Acceptance
+
+- Keyboard navigation.
+- Screen-reader labels.
+- Contrast.
+- Focus handling.
+- Reduced motion.
+- RTL handling.
+- Unicode support.
+- Responsive typography.
+
+Evidence
+
+Accessibility test results and manual review.
+
+MSG-036 — Firebase security verification
+
+Work
+
+Test Firestore Rules, Storage Rules and backend authorization.
+
+Acceptance
+
+- Unauthorized access denied.
+- Participant isolation enforced.
+- Sender identity protected.
+- Protected fields validated.
+- Attachment access controlled.
+- Blocking enforced.
+- Request state transitions protected.
+
+Evidence
+
+Automated security-rule tests and backend authorization test results.
+
+MSG-037 — Performance and cost verification
+
+Work
+
+Evaluate messaging resource usage.
+
+Acceptance
+
+- Bounded queries.
+- Controlled listeners.
+- Correct pagination.
+- No significant render bottlenecks.
+- Appropriate media loading.
+- No obvious excessive writes.
+- Cost-sensitive operations documented.
+
+Evidence
+
+Measured or test-derived observations, query review and relevant profiling results.
+
+MSG-038 — Final end-to-end verification
+
+Work
+
+Verify the complete Part 1 messaging system as one integrated product.
+
+Acceptance
+
+- Real accounts can communicate.
+- Message types work.
+- Requests work.
+- Delivery and read states are accurate.
+- Attachments work.
+- Profile integration works.
+- Blocking and reporting work.
+- Notifications work where configured.
+- Offline handling works.
+- Security tests pass.
+- No critical regressions are introduced.
+
+Evidence
+
+A reproducible verification report with test results, affected files and unresolved limitations.
+
+
+---
+
+28. TESTING REQUIREMENTS
+
+Testing must validate actual behavior, not simply confirm that components render.
+
+28.1 Unit tests
+
+Test:
+
+- Message validation.
+- Conversation ID canonicalization.
+- Permission decisions.
+- Message type parsing.
+- Request state transitions.
+- Delivery-state transitions.
+- Read cursor calculations.
+- Attachment validation.
+- Idempotency logic.
+- Search query handling.
+- Draft management.
+- Formatting utilities.
+
+28.2 Service tests
+
+Test:
+
+- Conversation creation.
+- Message submission.
+- Duplicate submission.
+- Message editing.
+- Message deletion.
+- Reactions.
+- Forwarding.
+- Message requests.
+- Inbox summary updates.
+- Search.
+- Notification orchestration.
+- Upload lifecycle.
+
+Mock external dependencies only when testing the isolated behavior requires it.
+
+Do not mock away the behavior being claimed as verified.
+
+28.3 Firebase security tests
+
+Test at least:
+
+1. Unauthenticated user cannot access protected conversations.
+2. Authenticated non-member cannot read a conversation.
+3. Authenticated non-member cannot write to a conversation.
+4. Sender cannot impersonate another user.
+5. User cannot add unauthorized participants.
+6. User cannot change another participant's read state.
+7. User cannot change another participant's inbox state.
+8. User cannot attach an unauthorized Storage object.
+9. User cannot retrieve unauthorized message media.
+10. Blocked users cannot continue sending messages.
+11. Rejected requests cannot be bypassed.
+12. Users cannot modify protected conversation metadata.
+
+Test both successful and rejected access.
+
+28.4 Integration tests
+
+Verify:
+
+- Authentication to inbox.
+- Profile to conversation.
+- Conversation to Firestore.
+- Message sending to inbox summary.
+- Message sending to FCM orchestration.
+- Storage upload to message attachment.
+- Shared content to existing Post/Vibe/Spark.
+- Request acceptance to conversation access.
+- Blocking to message authorization.
+- Read state to unread count.
+
+28.5 End-to-end tests
+
+Use two genuinely separate authenticated test accounts.
+
+Verify:
+
+Scenario A: Existing authorized relationship
+
+1. Account A opens Account B's profile.
+2. Account A starts a conversation.
+3. Account A sends a text message.
+4. Account B receives the message.
+5. Account B replies.
+6. Account A sees the reply.
+7. Delivery and read states update correctly.
+
+Scenario B: Message request
+
+1. Account A attempts to contact Account B.
+2. Existing privacy policy requires a request.
+3. Account A submits the request.
+4. Account B sees the request.
+5. Account B accepts it.
+6. Both accounts can communicate according to the resulting permissions.
+
+Scenario C: Media
+
+1. Account A selects an image.
+2. The image uploads.
+3. The message references the uploaded media.
+4. Account B opens the image.
+5. Unauthorized access is rejected.
+
+Repeat with supported video and audio formats.
+
+Scenario D: Offline
+
+1. Account A opens an existing conversation.
+2. Network connectivity is interrupted.
+3. Account A writes an eligible message.
+4. The interface accurately shows its queued state.
+5. Network access returns.
+6. The message is submitted once.
+7. Account B receives one canonical message.
+
+Scenario E: Blocking
+
+1. Account A and Account B have an active conversation.
+2. Account B blocks Account A.
+3. Account A attempts another send.
+4. The backend rejects unauthorized communication.
+5. Account A cannot bypass the restriction by using the old conversation ID.
+
+Scenario F: Message actions
+
+Verify reply, reaction, forwarding, editing and each supported deletion behavior, including authorization failures.
+
+
+---
+
+29. VISUAL QUALITY ASSURANCE
+
+Do not declare the UI finished after one successful build.
+
+Inspect the actual rendered application.
+
+Test at minimum:
+
+- Small mobile viewport.
+- Typical modern mobile viewport.
+- Large mobile viewport.
+- Tablet portrait.
+- Tablet landscape.
+- Desktop viewport.
+
+Inspect both dark and light themes.
+
+Review:
+
+- Header spacing.
+- Content hierarchy.
+- Inbox density.
+- Avatar alignment.
+- Message-bubble sizing.
+- Attachment scaling.
+- Composer placement.
+- Keyboard interaction.
+- Bottom navigation interaction.
+- Scroll behavior.
+- Dialog sizing.
+- Touch targets.
+- Text wrapping.
+- Long names.
+- Long messages.
+- Empty states.
+- Failure states.
+- Accessibility contrast.
+
+Check for:
+
+- Horizontal overflow.
+- Clipped messages.
+- Overlapping controls.
+- Broken responsive layout.
+- Inconsistent corner radii.
+- Inconsistent typography.
+- Unread badges covering important content.
+- Composer covering the final message.
+- Modals extending beyond the viewport.
+- Incorrect theme surfaces.
+- Loading states that look like broken layouts.
+
+Correct actual defects before marking the UI verified.
+
+
+---
+
+30. REGRESSION PROTECTION
+
+Messaging must not damage the rest of Arvdoul.
+
+Before completion, verify that existing:
+
+- Authentication.
+- Signup.
+- Login.
+- Onboarding.
+- Home.
+- Navigation.
+- Profiles.
+- Create Post.
+- Posts.
+- Vibes.
+- Sparks.
+- Existing notifications.
+- Existing settings.
+- Existing privacy controls.
+- Theme switching.
+- Firebase functionality.
+
+continue to operate.
+
+Run the relevant existing test suites.
+
+Do not modify unrelated features simply to make messaging easier.
+
+If an unrelated issue is discovered, document it and distinguish it from messaging regressions.
+
+
+---
+
+31. AGENT EXECUTION AND ACCOUNTABILITY PROTOCOL
+
+This protocol exists because task completion must reflect real engineering work, not checkbox activity.
+
+Every implementation task must be executed and evidenced.
+
+31.1 Required task report
+
+For each task, report:
+
+TASK ID:
+TASK NAME:
+
+STATUS:
+NOT STARTED / IN PROGRESS / BLOCKED / VERIFIED
+
+1. Repository discovery
+   - Existing implementation inspected:
+   - Relevant files:
+   - Existing services reused:
+
+2. Implementation
+   - Files created:
+   - Files modified:
+   - Backend changes:
+   - Frontend changes:
+   - Database changes:
+   - Security changes:
+   - Integrations:
+
+3. Functional verification
+   - Tests executed:
+   - Actual behavior verified:
+   - Failure scenarios tested:
+
+4. Security verification
+   - Authorization tested:
+   - Security rules tested:
+   - Privacy implications checked:
+
+5. Performance verification
+   - Query behavior:
+   - Listener behavior:
+   - Memory/resource behavior:
+   - Cost implications:
+
+6. Acceptance criteria
+   - Demonstrated:
+   - Not demonstrated:
+   - Evidence:
+
+7. Remaining work
+   - Known defects:
+   - Dependencies:
+   - Blockers:
+
+FINAL STATUS:
+NOT STARTED / IN PROGRESS / BLOCKED / VERIFIED
+
+31.2 Status definitions
+
+NOT STARTED
+
+No implementation work has been completed.
+
+IN PROGRESS
+
+Implementation exists, but one or more acceptance criteria remain unverified.
+
+BLOCKED
+
+A real dependency, permission, infrastructure limitation or unresolved architecture issue prevents completion.
+
+A blocker must identify the exact reason and evidence.
+
+VERIFIED
+
+All relevant acceptance criteria have been tested, the implementation is integrated, security requirements have been checked and supporting evidence is available.
+
+Do not mark partial work VERIFIED.
+
+31.3 Evidence requirements
+
+A claim such as "message requests complete" must be supported by evidence showing:
+
+- The request interface exists.
+- The request is persisted.
+- The recipient can retrieve it.
+- The accept and reject operations work.
+- Authorization is enforced.
+- Duplicate requests are handled.
+- Tests verify both accepted and rejected paths.
+
+A claim such as "offline messaging complete" must be supported by an actual offline/reconnect test.
+
+A claim such as "secure messaging complete" must be supported by actual security tests.
+
+A claim such as "responsive UI complete" must be supported by inspection at relevant viewport sizes.
+
+A passing build alone does not prove any of these.
+
+31.4 No false completion
+
+Never:
+
+- Mark tasks complete to satisfy a progress target.
+- Substitute placeholder buttons for functionality.
+- Substitute mock data for Firebase integration.
+- Substitute mocked tests for real integration verification.
+- Ignore failing tests.
+- Hide known defects.
+- Claim deployment without deploying.
+- Claim security without testing.
+- Claim performance without measurement or documented review.
+- Report fabricated evidence.
+
+If a feature cannot be verified, report it as IN PROGRESS or BLOCKED.
+
+31.5 Work sequencing
+
+Respect task dependencies.
+
+Do not implement every screen simultaneously while the underlying data model is unresolved.
+
+Do not build UI controls for nonexistent APIs.
+
+Do not build APIs for speculative UI elements.
+
+Implement the underlying behavior and its interface together where practical, with stable contracts between them.
+
+Keep the application in a working state throughout execution.
+
+
+---
+
+32. DELIVERY GATES
+
+Part 1 must pass all five gates.
+
+Gate 1 — Architecture
+
+- [ ] Existing architecture audited.
+- [ ] Existing messaging code assessed.
+- [ ] Reusable infrastructure identified.
+- [ ] Data ownership documented.
+- [ ] Security boundaries documented.
+- [ ] Implementation plan approved internally.
+
+Gate condition: The implementation is built on the actual repository rather than an invented parallel architecture.
+
+Gate 2 — Core functionality
+
+- [ ] Direct conversations work.
+- [ ] Inbox works.
+- [ ] Text messaging works.
+- [ ] Real-time updates work.
+- [ ] Message states work.
+- [ ] Message requests work.
+- [ ] Required attachments work.
+- [ ] Message interactions work.
+- [ ] Profile integration works.
+
+Gate condition: Two separate authenticated accounts can complete real communication workflows.
+
+Gate 3 — Security and reliability
+
+- [ ] Firestore security validated.
+- [ ] Storage security validated.
+- [ ] Backend authorization validated.
+- [ ] Blocking enforced.
+- [ ] Message duplication controlled.
+- [ ] Offline behavior verified.
+- [ ] Upload failure handling verified.
+- [ ] Privacy controls enforced.
+
+Gate condition: Unauthorized access and common failure scenarios have been tested and correctly handled.
+
+Gate 4 — Product quality
+
+- [ ] Inbox visual quality verified.
+- [ ] Conversation UI verified.
+- [ ] Light theme verified.
+- [ ] Dark theme verified.
+- [ ] Mobile responsive behavior verified.
+- [ ] Tablet responsive behavior verified.
+- [ ] Desktop behavior verified.
+- [ ] Accessibility reviewed.
+- [ ] Loading, empty and error states verified.
+
+Gate condition: The messaging experience is visually coherent, usable and accessible across supported layouts.
+
+Gate 5 — Final integration
+
+- [ ] Existing application behavior preserved.
+- [ ] Notifications integrated.
+- [ ] Posts integration verified where available.
+- [ ] Vibes integration verified where available.
+- [ ] Sparks integration verified where available.
+- [ ] Performance reviewed.
+- [ ] Relevant tests pass.
+- [ ] Remaining risks documented.
+- [ ] Final evidence report produced.
+
+Gate condition: Part 1 is integrated into Arvdoul rather than functioning as an isolated feature.
+
+
+---
+
+33. FINAL DELIVERABLES
+
+At the end of Part 1, provide the following.
+
+33.1 Implemented product
+
+A working, integrated direct-messaging system inside Arvdoul with the complete Part 1 scope.
+
+33.2 Architecture documentation
+
+Document:
+
+- Messaging architecture.
+- Service boundaries.
+- Firestore data model.
+- Storage structure.
+- Message lifecycle.
+- Delivery and read-state semantics.
+- Security and authorization.
+- Offline strategy.
+- Search strategy.
+- Notification integration.
+- Existing services reused.
+- Future extension points.
+
+33.3 Changed-file report
+
+Provide an accurate list of:
+
+- Files created.
+- Files modified.
+- Files removed, if any.
+- Firebase functions changed.
+- Security rules changed.
+- Indexes added.
+- Migration files.
+- Configuration changes.
+
+Explain why each important change was necessary.
+
+33.4 Testing report
+
+Include:
+
+- Tests discovered.
+- Tests added.
+- Tests executed.
+- Passing tests.
+- Failing tests.
+- Skipped tests.
+- Security-rule verification.
+- Integration verification.
+- End-to-end verification.
+- Responsive and visual QA.
+- Performance observations.
+
+Do not invent test counts or claim tests were run when they were not.
+
+33.5 Remaining defects
+
+List every known:
+
+- Bug.
+- Security limitation.
+- Performance issue.
+- Missing integration.
+- Incomplete feature.
+- Operational dependency.
+- Deployment blocker.
+
+Do not conceal unfinished work.
+
+33.6 Final task status
+
+Provide a complete MSG-001 through MSG-038 status table.
+
+Every task must be labeled:
+
+- NOT STARTED.
+- IN PROGRESS.
+- BLOCKED.
+- VERIFIED.
+
+A final completion percentage may be reported only after calculating it from the actual verified tasks. Do not count unchecked, partially implemented or untested work as complete.
+
+
+---
+
+34. FINAL ENGINEERING DIRECTIVE
+
+You are not being asked to produce a visually convincing messaging screen and call the work finished.
+
+You are being asked to engineer the foundation of Arvdoul's communication ecosystem.
+
+The implementation must be:
+
+- Functionally complete within Part 1.
+- Integrated into the existing Arvdoul architecture.
+- Secure by design.
+- Correct under concurrent operations.
+- Reliable under unstable network conditions.
+- Efficient with Firestore and Firebase Storage.
+- Maintainable as the application grows.
+- Consistent with the existing social graph and identity system.
+- Visually exceptional in both dark and light themes.
+- Responsive across mobile, tablet and desktop.
+- Accessible.
+- Verified through actual tests and demonstrated behavior.
+
+Do not rush through the catalogue.
+
+Do not blindly execute every instruction without inspecting dependencies.
+
+Do not create unnecessary infrastructure.
+
+Do not simplify away important functionality.
+
+Do not break existing application features.
+
+Do not disguise incomplete functionality with polished visuals.
+
+Do not introduce future-phase functionality prematurely.
+
+Do not claim that Part 1 is finished just because all 38 task identifiers have been addressed.
+
+The quality of the implementation, the correctness of the architecture, the security of the system and the evidence of actual working behavior determine completion.
+
+Build Part 1 as a production-grade Arvdoul messaging foundation. Preserve the architecture, reuse authoritative systems, integrate real functionality, test the complete experience and document every remaining limitation honestly.
+
+Execute Part 1 only.

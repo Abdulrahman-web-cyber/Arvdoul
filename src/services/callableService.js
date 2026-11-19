@@ -45,6 +45,13 @@ export const FUNCTIONS = {
   COMMUNITY_MODERATE: 'communityModerate',
   CREATE_COMMUNITY_POST: 'createCommunityPost',
   GET_MY_COMMUNITIES: 'getMyCommunities',
+  GET_COMMUNITY_CHANNELS: 'getCommunityChannels',
+  CREATE_COMMUNITY_CHANNEL: 'createCommunityChannel',
+  UPDATE_COMMUNITY_CHANNEL: 'updateCommunityChannel',
+  DELETE_COMMUNITY_CHANNEL: 'deleteCommunityChannel',
+  GET_CHANNEL_MESSAGES: 'getChannelMessages',
+  SEND_CHANNEL_MESSAGE: 'sendChannelMessage',
+  MODERATE_CHANNEL_MESSAGE: 'moderateChannelMessage',
   // Events (server-authoritative participation; see functions/events.js)
   REGISTER_FOR_EVENT: 'registerForEvent',
   CANCEL_EVENT_REGISTRATION: 'cancelEventRegistration',
@@ -78,6 +85,10 @@ export const FUNCTIONS = {
   EXPORT_USER_DATA: 'exportUserData',
   REPORT_COMMENT: 'reportComment',
   REPORT_POST: 'reportPost',
+  REPORT_GROUP: 'reportGroup',
+  REPORT_COMMUNITY: 'reportCommunity',
+  REPORT_CHANNEL: 'reportChannel',
+  REPORT_CALL: 'reportCall',
   GET_MUX_PLAYBACK_URL: 'getMuxPlaybackUrl',
   GENERATE_AI_CAPTION: 'generateAICaption',
   GENERATE_AI_HASHTAGS: 'generateAIHashtags',
@@ -85,9 +96,12 @@ export const FUNCTIONS = {
   PREDICT_POST_PERFORMANCE: 'predictPostPerformance',
   SCRAPE_LINK: 'scrapeLink',
 
-  // Social graph
+  // Social graph & multi-device sessions
   GET_MUTUAL_FRIENDS: 'getMutualFriends',
   GENERATE_FRIEND_RECOMMENDATIONS: 'generateFriendRecommendations',
+  REGISTER_DEVICE_SESSION: 'registerDeviceSession',
+  LIST_DEVICE_SESSIONS: 'listDeviceSessions',
+  REVOKE_DEVICE_SESSION: 'revokeDeviceSession',
 
   // Privacy: rewrite the denormalised posts.authorIsPrivate flag when the
   // owner toggles privacy (and one-off backfill for legacy posts).
@@ -123,6 +137,19 @@ export const FUNCTIONS = {
   // Messaging
   SEARCH_MESSAGES: 'searchMessages',
   JOIN_GROUP_VIA_INVITE: 'joinGroupViaInvite',
+  CREATE_GROUP_CONVERSATION: 'createGroupConversation',
+  MANAGE_GROUP_MEMBER: 'manageGroupMember',
+  UPDATE_GROUP_SETTINGS: 'updateGroupSettings',
+  CREATE_GROUP_INVITE: 'createGroupInvite',
+  REVOKE_GROUP_INVITE: 'revokeGroupInvite',
+  RESPOND_GROUP_JOIN_REQUEST: 'respondGroupJoinRequest',
+  SEND_MENTION_NOTIFICATIONS: 'sendMentionNotifications',
+
+  // Voice & video calls (see functions/calls.js)
+  INITIATE_CALL: 'initiateCall',
+  RESPOND_TO_CALL: 'respondToCall',
+  UPDATE_CALL_SESSION_STATE: 'updateCallSessionState',
+  GET_CALL_HISTORY: 'getCallHistory',
 
   // Video
   CREATE_MUX_UPLOAD: 'createMuxUpload',
@@ -163,6 +190,7 @@ export const FUNCTIONS = {
   SPEND_COINS: 'spendCoins',
   TRANSFER_COINS: 'transferCoins',
   SEND_GIFT: 'sendGift',
+  SEND_MESSAGE_GIFT: 'sendMessageGift',
   SEND_VIBE_GIFT: 'sendVibeGift',
   SEND_LIVE_GIFT: 'sendLiveGift',
   SEND_LIVE_TIP: 'sendLiveTip',

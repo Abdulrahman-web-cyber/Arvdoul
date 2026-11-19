@@ -23,10 +23,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { usePrompt } from '../components/Shared/ConfirmProvider.jsx';
 import { useTheme } from '../context/ThemeContext';
 import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { getMessagingService, MESSAGING_CONFIG } from '../services/messagesService.js';
+import { resolveSharedContentRoute, sanitizeExternalUrl } from '../config/messagingContracts.js';
 import MessageInput from '../components/messaging/MessageInput.jsx';
 import MessageBubble from '../components/messaging/MessageBubble.jsx';
 import { Skeleton } from '../components/UI/Skeleton.jsx';
@@ -53,6 +53,15 @@ import {
   EyeOff,
   CheckCircle2,
   User as UserIcon,
+  FileText,
+  Globe,
+  Sparkles,
+  Bell,
+  BellOff,
+  Archive,
+  Ban,
+  Clock,
+  Trash2,
 } from "lucide-react";
 import { REPORT_REASONS } from '../utils/videoUtils';
 import { pickDisplayName } from '../services/profileReadModel.js';
@@ -62,7 +71,6 @@ import { LazyImage } from '../components/Shared/LazyImage';
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 export default function ChatScreen() {
-  const prompt = usePrompt();
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,10 +87,6 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
-  // 1:1 counterpart presence, read from the scope-gated `user_presence/{uid}`
-  // via the social-graph spine. The old Realtime-Database `status/` path this
-  // screen subscribed to was never written by any code (N458), so the header's
-  // "Online / Last seen" could never render.
   const [presence, setPresence] = useState(null);
   const [peerMeta, setPeerMeta] = useState(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -94,7 +98,11 @@ export default function ChatScreen() {
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [pinnedBannerIndex, setPinnedBannerIndex] = useState(0);
   const [sharedMedia, setSharedMedia] = useState([]);
-  const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search | saved
+  const [sharedFiles, setSharedFiles] = useState([]);
+  const [sharedLinks, setSharedLinks] = useState([]);
+  const [sharedContentItems, setSharedContentItems] = useState([]);
+  const [loadingSharedTab, setLoadingSharedTab] = useState(false);
+  const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | files | links | shared | saved | search
   const [infoPanelError, setInfoPanelError] = useState(null);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -103,6 +111,12 @@ export default function ChatScreen() {
   const [openedViewOnceIds, setOpenedViewOnceIds] = useState({});
   const [activeViewOnce, setActiveViewOnce] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingMessage, setDeletingMessage] = useState(false);
+  const [historyModal, setHistoryModal] = useState(null); // { message, entries, loading, error }
+  const [requestNotice, setRequestNotice] = useState(null);
   const [forwardTarget, setForwardTarget] = useState(null);
   const [forwardConversations, setForwardConversations] = useState([]);
   const [forwarding, setForwarding] = useState(false);
@@ -119,6 +133,7 @@ export default function ChatScreen() {
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const reloadTimerRef = useRef(null);
+  const uploadTaskRef = useRef(null);
 
   // Conversation load + realtime subscription
   const loadMessages = useCallback(async () => {
@@ -164,6 +179,11 @@ export default function ChatScreen() {
     setMessages([]);
     setTypingUsers({});
     setReplyTo(null);
+    setEditingMessage(null);
+    setUploadProgress(null);
+    setDeleteTarget(null);
+    setHistoryModal(null);
+    setRequestNotice(null);
     setShowInfoPanel(false);
     setSearchQuery('');
     setSearchResults(null);
@@ -171,6 +191,9 @@ export default function ChatScreen() {
     setPinnedBannerIndex(0);
     setPinnedIds([]);
     setSharedMedia([]);
+    setSharedFiles([]);
+    setSharedLinks([]);
+    setSharedContentItems([]);
     setSavedIds({});
     setSavedMessages([]);
     setOpenedViewOnceIds({});
@@ -179,6 +202,14 @@ export default function ChatScreen() {
     setAtBottom(true);
     pendingRef.current.clear();
     localToServerRef.current.clear();
+    if (uploadTaskRef.current?.cancel) {
+      try {
+        uploadTaskRef.current.cancel();
+      } catch {
+        /* noop */
+      }
+      uploadTaskRef.current = null;
+    }
 
     (async () => {
       if (!conversationId || !uid) {
@@ -211,15 +242,46 @@ export default function ChatScreen() {
           } else if (event.type === 'typing_update') {
             setTypingUsers((prev) => ({ ...prev, ...(event.typing || {}) }));
           } else if (event.type === 'new_message') {
-            // Debounced reload: getMessages decrypts E2EE content server-side.
-            if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-            reloadTimerRef.current = setTimeout(() => {
-              loadMessages();
-              const incomingId = event.message?.id;
-              if (incomingId && pendingRef.current.has(incomingId)) {
-                pendingRef.current.delete(incomingId);
+            const incoming = event.message;
+            if (incoming?.encrypted) {
+              if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+              reloadTimerRef.current = setTimeout(() => {
+                loadMessages();
+                if (incoming?.id && pendingRef.current.has(incoming.id)) {
+                  pendingRef.current.delete(incoming.id);
+                }
+              }, 300);
+              return;
+            }
+            if (incoming && (!Array.isArray(incoming.deletedFor) || !incoming.deletedFor.includes(uid))) {
+              if (incoming.id && pendingRef.current.has(incoming.id)) {
+                pendingRef.current.delete(incoming.id);
               }
-            }, 300);
+              setMessages((prev) => {
+                const idx = prev.findIndex(
+                  (m) => m.id === incoming.id || localToServerRef.current.get(m.id) === incoming.id
+                );
+                if (idx >= 0) {
+                  const next = [...prev];
+                  next[idx] = { ...prev[idx], ...incoming, _local: false, _pending: false, _failed: false, _queued: false };
+                  return next;
+                }
+                return [...prev, incoming];
+              });
+              if (incoming.senderId && incoming.senderId !== uid) {
+                svc.markConversationDelivered?.(conversationId, uid)?.catch?.(() => {});
+              }
+            }
+          } else if (event.type === 'message_updated' && event.message) {
+            const updated = event.message;
+            setMessages((prev) => {
+              if (Array.isArray(updated.deletedFor) && updated.deletedFor.includes(uid)) {
+                return prev.filter((m) => m.id !== updated.id);
+              }
+              return prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m));
+            });
+          } else if (event.type === 'message_removed' && event.messageId) {
+            setMessages((prev) => prev.filter((m) => m.id !== event.messageId));
           }
         });
       } catch (err) {
@@ -313,14 +375,21 @@ export default function ChatScreen() {
   // the realtime channel a moment later. An offline-queued send stays pending
   // until the queue drains.
   const reconcileSentMessage = useCallback((localId, res) => {
-    if (res?.offlineQueued) return;
+    if (res?.offlineQueued) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === localId ? { ...m, _pending: false, _queued: true, _failed: false } : m
+        )
+      );
+      return;
+    }
     pendingRef.current.delete(localId);
     const serverId = res?.messageId || res?.message?.id || null;
     if (serverId) localToServerRef.current.set(localId, serverId);
     setMessages((prev) =>
       prev.map((m) =>
         m.id === localId
-          ? { ...m, id: serverId || m.id, _local: false, _pending: false, _failed: false }
+          ? { ...m, id: serverId || m.id, _local: false, _pending: false, _queued: false, _failed: false }
           : m
       )
     );
@@ -328,10 +397,40 @@ export default function ChatScreen() {
 
   const handleSendMessage = useCallback(
     async (data) => {
+      if (data?.type === 'edit_commit') {
+        const trimmed = String(data.content || '').trim();
+        if (!conversationId || !uid || !data.messageId || !trimmed) return;
+        const msg = { id: data.messageId };
+        await getMessagingService().editMessage(msg.id, conversationId, uid, trimmed);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msg.id ? { ...m, content: trimmed, isEdited: true } : m))
+        );
+        setEditingMessage(null);
+        toastSuccess('Message updated');
+        return;
+      }
+
       const msgType = data?.type || 'text';
       const hasBody = Boolean(data?.content?.trim?.() || data?.media?.url || data?.location);
       if (!conversationId || !uid || !hasBody) return;
       const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const payload = {
+        type: msgType,
+        content: data.content,
+        ...(data.media ? { media: data.media } : {}),
+        ...(data.location ? { location: data.location } : {}),
+        ...(replyTo
+          ? {
+              replyTo: {
+                messageId: replyTo.id,
+                senderId: replyTo.senderId,
+                senderName: replyTo.senderName,
+                contentPreview: (replyTo.content || '').slice(0, 80),
+              },
+            }
+          : {}),
+      };
+
       pendingRef.current.set(localId, { conversationId, data: { ...data, type: msgType } });
       setMessages((prev) => [
         ...prev,
@@ -343,42 +442,44 @@ export default function ChatScreen() {
           type: msgType,
           content: data.content,
           media: data.media || null,
-          replyTo: replyTo ? { senderName: replyTo.senderName, content: replyTo.content } : null,
+          replyTo: replyTo ? { messageId: replyTo.id, senderName: replyTo.senderName, content: replyTo.content } : null,
           createdAt: new Date(),
         },
       ]);
       try {
-        const payload = {
-          type: msgType,
-          content: data.content,
-          ...(data.media ? { media: data.media } : {}),
-          ...(data.location ? { location: data.location } : {}),
-          ...(replyTo
-            ? {
-                replyTo: {
-                  messageId: replyTo.id,
-                  senderId: replyTo.senderId,
-                  senderName: replyTo.senderName,
-                  contentPreview: (replyTo.content || '').slice(0, 80),
-                },
-              }
-            : {}),
-        };
         const res = await getMessagingService().sendMessage(conversationId, payload);
         reconcileSentMessage(localId, res);
         setReplyTo(null);
       } catch (err) {
-        toastError(err.message || 'Failed to send message');
-        // Roll back the optimistic message so the UI never lies
         pendingRef.current.delete(localId);
-        setMessages((prev) => prev.filter((m) => m.id !== localId));
+        if (err?.code === 'messaging/request-sent') {
+          setMessages((prev) => prev.filter((m) => m.id !== localId));
+          setRequestNotice('Message request sent. It will deliver once accepted.');
+          toastSuccess('Message request sent');
+          return;
+        }
+        toastError(err.message || 'Failed to send message');
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === localId
+              ? {
+                  ...m,
+                  _pending: false,
+                  _failed: true,
+                  _error: err?.message || 'Failed to send',
+                  _retryPayload: payload,
+                  _retryIdempotencyKey: localId,
+                }
+              : m
+          )
+        );
       }
     },
     [conversationId, uid, reconcileSentMessage, replyTo]
   );
 
   const handleSendMedia = useCallback(
-    async ({ file, isVoice, text: captionText, viewOnce }) => {
+    async ({ file, isVoice, durationSec, text: captionText, viewOnce }) => {
       if (!conversationId || !uid || !file) return;
       const isVisual = file.type?.startsWith('image/') || file.type?.startsWith('video/');
       const isViewOnce = Boolean(viewOnce && !isVoice && isVisual);
@@ -399,7 +500,25 @@ export default function ChatScreen() {
       const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const mediaPayload = isViewOnce
         ? { file, mediaKind: file.type?.startsWith('video/') ? 'video' : 'image' }
-        : { file };
+        : isVoice && durationSec
+          ? { file, durationSec }
+          : { file };
+      const payload = {
+        type,
+        ...(content ? { content } : {}),
+        media: mediaPayload,
+        ...(replyTo
+          ? {
+              replyTo: {
+                messageId: replyTo.id,
+                senderId: replyTo.senderId,
+                senderName: replyTo.senderName,
+                contentPreview: (replyTo.content || '').slice(0, 80),
+              },
+            }
+          : {}),
+      };
+
       pendingRef.current.set(localId, {
         conversationId,
         data: { type, content, media: mediaPayload },
@@ -413,37 +532,98 @@ export default function ChatScreen() {
           senderId: uid,
           type,
           content,
-          media: { fileName: file.name, isVoice, mediaKind: mediaPayload.mediaKind },
+          media: { fileName: file.name, isVoice, durationSec, mediaKind: mediaPayload.mediaKind },
           createdAt: new Date(),
         },
       ]);
+      setUploadProgress({ fileName: file.name, percent: 0 });
       try {
-        const payload = {
-          type,
-          ...(content ? { content } : {}),
-          media: mediaPayload,
-          ...(replyTo
-            ? {
-                replyTo: {
-                  messageId: replyTo.id,
-                  senderId: replyTo.senderId,
-                  senderName: replyTo.senderName,
-                  contentPreview: (replyTo.content || '').slice(0, 80),
-                },
-              }
-            : {}),
-        };
-        const res = await getMessagingService().sendMessage(conversationId, payload);
+        const res = await getMessagingService().sendMessage(conversationId, payload, {
+          onProgress: (pct) => setUploadProgress({ fileName: file.name, percent: pct }),
+          onUploadTask: (task) => {
+            uploadTaskRef.current = task;
+          },
+        });
         reconcileSentMessage(localId, res);
         if (replyTo) setReplyTo(null);
       } catch (err) {
-        toastError(err.message || 'Failed to send media');
         pendingRef.current.delete(localId);
-        setMessages((prev) => prev.filter((m) => m.id !== localId));
+        if (err?.code === 'storage/canceled') {
+          setMessages((prev) => prev.filter((m) => m.id !== localId));
+          toastSuccess('Upload cancelled');
+          return;
+        }
+        if (err?.code === 'messaging/request-sent') {
+          setMessages((prev) => prev.filter((m) => m.id !== localId));
+          setRequestNotice('Message request sent. It will deliver once accepted.');
+          return;
+        }
+        toastError(err.message || 'Failed to send media');
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === localId
+              ? {
+                  ...m,
+                  _pending: false,
+                  _failed: true,
+                  _error: err?.message || 'Upload failed',
+                  _retryPayload: payload,
+                  _retryIdempotencyKey: localId,
+                }
+              : m
+          )
+        );
+      } finally {
+        setUploadProgress(null);
+        uploadTaskRef.current = null;
       }
     },
     [conversationId, uid, reconcileSentMessage, replyTo]
   );
+
+  const handleCancelUpload = useCallback(() => {
+    if (uploadTaskRef.current?.cancel) {
+      try {
+        uploadTaskRef.current.cancel();
+      } catch {
+        /* noop */
+      }
+    }
+    uploadTaskRef.current = null;
+    setUploadProgress(null);
+  }, []);
+
+  const handleRetryMessage = useCallback(
+    async (msg) => {
+      if (!conversationId || !uid || !msg?._retryPayload) return;
+      const localId = msg.id;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === localId ? { ...m, _pending: true, _failed: false, _error: null } : m))
+      );
+      try {
+        const res = await getMessagingService().sendMessage(conversationId, msg._retryPayload, {
+          idempotencyKey: msg._retryIdempotencyKey || localId,
+        });
+        reconcileSentMessage(localId, res);
+      } catch (err) {
+        toastError(err?.message || 'Retry failed');
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === localId
+              ? { ...m, _pending: false, _failed: true, _error: err?.message || 'Failed to send' }
+              : m
+          )
+        );
+      }
+    },
+    [conversationId, uid, reconcileSentMessage]
+  );
+
+  const handleRemoveFailed = useCallback((msg) => {
+    if (!msg?.id) return;
+    pendingRef.current.delete(msg.id);
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+  }, []);
 
   const handleOpenViewOnce = useCallback(
     async (msg) => {
@@ -717,6 +897,34 @@ export default function ChatScreen() {
     }
   }, [conversationId, loadSavedState]);
 
+  const loadDrawerSharedTab = useCallback(async (tab) => {
+    if (!conversationId || !uid) return;
+    if (!['files', 'links', 'shared'].includes(tab)) return;
+    setLoadingSharedTab(true);
+    try {
+      const svc = getMessagingService();
+      const res = await svc.getConversationSharedItems?.(conversationId, {
+        category: tab,
+        limit: 40,
+        userId: uid,
+      });
+      const list = Array.isArray(res?.items) ? res.items : [];
+      if (tab === 'files') setSharedFiles(list);
+      else if (tab === 'links') setSharedLinks(list);
+      else if (tab === 'shared') setSharedContentItems(list);
+    } catch {
+      /* keep prior state cleanly */
+    } finally {
+      setLoadingSharedTab(false);
+    }
+  }, [conversationId, uid]);
+
+  useEffect(() => {
+    if (showInfoPanel && ['files', 'links', 'shared'].includes(infoTab)) {
+      loadDrawerSharedTab(infoTab);
+    }
+  }, [showInfoPanel, infoTab, loadDrawerSharedTab]);
+
   useEffect(() => {
     const onChatAction = (e) => {
       if (e?.detail?.action === 'open_info') {
@@ -734,7 +942,7 @@ export default function ChatScreen() {
     if (!q || searching) return;
     setSearching(true);
     try {
-      const res = await getMessagingService().searchMessagesAlgolia(conversationId, q, { limit: 20 });
+      const res = await getMessagingService().searchMessagesAlgolia(conversationId, q, { limit: 20, userId: uid });
       setSearchResults(res?.results || []);
     } catch (err) {
       setSearchResults(null);
@@ -742,7 +950,7 @@ export default function ChatScreen() {
     } finally {
       setSearching(false);
     }
-  }, [conversationId, searchQuery, searching]);
+  }, [conversationId, searchQuery, searching, uid]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!conversationId || !uid || loadingOlder) return;
@@ -841,27 +1049,145 @@ export default function ChatScreen() {
   // actions unconditionally, so a missing handler was a control that did
   // nothing when tapped.
   const handleReply = useCallback((msg) => {
+    setEditingMessage(null);
     setReplyTo({
       id: msg.id,
       senderId: msg.senderId,
       senderName: resolveSenderLabel(msg, msg.senderId === uid),
       content: msg.content || '',
     });
-  }, [uid, conversation, resolveSenderLabel]);
+  }, [uid, resolveSenderLabel]);
 
-  const handleEdit = useCallback(async (msg) => {
-    const next = await prompt({ title: 'Edit message', defaultValue: msg.content || '', confirmText: 'Save' });
-    if (next == null) return;
-    const trimmed = next.trim();
-    if (!trimmed || trimmed === msg.content) return;
+  const handleEdit = useCallback((msg) => {
+    setReplyTo(null);
+    setEditingMessage(msg);
+  }, []);
+
+  const handleOpenHistory = useCallback(async (msg) => {
+    if (!msg?.id || !conversationId) return;
+    setHistoryModal({ message: msg, entries: [], loading: true, error: null });
     try {
-      await getMessagingService().editMessage(msg.id, conversationId, uid, trimmed);
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, content: trimmed, isEdited: true } : m)));
-      toastSuccess('Message edited');
+      const res = await getMessagingService().getMessageHistory?.(conversationId, msg.id);
+      setHistoryModal({
+        message: msg,
+        entries: Array.isArray(res?.history) ? res.history : [],
+        loading: false,
+        error: res?.success === false ? res.error || 'Could not load edit history' : null,
+      });
     } catch (err) {
-      toastError(err?.message || 'Could not edit the message.');
+      setHistoryModal({
+        message: msg,
+        entries: [],
+        loading: false,
+        error: err?.message || 'Could not load edit history',
+      });
     }
-  }, [conversationId, uid]);
+  }, [conversationId]);
+
+  const handleConfirmDelete = useCallback(async (forEveryone) => {
+    if (!deleteTarget?.id || !conversationId || !uid || deletingMessage) return;
+    setDeletingMessage(true);
+    try {
+      const res = await getMessagingService().deleteMessage?.(deleteTarget.id, conversationId, uid, {
+        forEveryone: Boolean(forEveryone),
+      });
+      if (res?.success === false) {
+        throw new Error(res.error || 'Could not delete the message.');
+      }
+      if (forEveryone) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === deleteTarget.id
+              ? { ...m, isDeleted: true, content: 'This message was deleted', media: null }
+              : m
+          )
+        );
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+      }
+      setDeleteTarget(null);
+      toastSuccess(forEveryone ? 'Deleted for everyone' : 'Deleted for you');
+    } catch (err) {
+      toastError(err?.message || 'Could not delete the message.');
+    } finally {
+      setDeletingMessage(false);
+    }
+  }, [deleteTarget, conversationId, uid, deletingMessage]);
+
+  const isConversationMuted = Boolean(conversation?.mutedBy?.includes(uid));
+  const isConversationPinned = Boolean(conversation?.pinnedBy?.includes(uid));
+  const isConversationArchived = Boolean(conversation?.archivedBy?.includes(uid));
+
+  const handleToggleConvPin = useCallback(async () => {
+    if (!conversationId || !uid) return;
+    try {
+      const svc = getMessagingService();
+      if (isConversationPinned) await svc.unpinConversation(conversationId, uid);
+      else await svc.pinConversation(conversationId, uid);
+      setConversation((c) => {
+        if (!c) return c;
+        const next = isConversationPinned
+          ? (c.pinnedBy || []).filter((id) => id !== uid)
+          : [...new Set([...(c.pinnedBy || []), uid])];
+        return { ...c, pinnedBy: next };
+      });
+      toastSuccess(isConversationPinned ? 'Conversation unpinned' : 'Conversation pinned');
+    } catch (err) {
+      toastError(err?.message || 'Could not update pin');
+    }
+  }, [conversationId, uid, isConversationPinned]);
+
+  const handleToggleConvMute = useCallback(async () => {
+    if (!conversationId || !uid) return;
+    try {
+      const svc = getMessagingService();
+      if (isConversationMuted) await svc.unmuteConversation(conversationId, uid);
+      else await svc.muteConversation(conversationId, uid);
+      setConversation((c) => {
+        if (!c) return c;
+        const next = isConversationMuted
+          ? (c.mutedBy || []).filter((id) => id !== uid)
+          : [...new Set([...(c.mutedBy || []), uid])];
+        return { ...c, mutedBy: next };
+      });
+      toastSuccess(isConversationMuted ? 'Notifications unmuted' : 'Notifications muted');
+    } catch (err) {
+      toastError(err?.message || 'Could not update mute setting');
+    }
+  }, [conversationId, uid, isConversationMuted]);
+
+  const handleToggleConvArchive = useCallback(async () => {
+    if (!conversationId || !uid) return;
+    try {
+      const svc = getMessagingService();
+      if (isConversationArchived) await svc.unarchiveConversation(conversationId, uid);
+      else await svc.archiveConversation(conversationId, uid);
+      setConversation((c) => {
+        if (!c) return c;
+        const next = isConversationArchived
+          ? (c.archivedBy || []).filter((id) => id !== uid)
+          : [...new Set([...(c.archivedBy || []), uid])];
+        return { ...c, archivedBy: next };
+      });
+      toastSuccess(isConversationArchived ? 'Moved to inbox' : 'Conversation archived');
+    } catch (err) {
+      toastError(err?.message || 'Could not update archive status');
+    }
+  }, [conversationId, uid, isConversationArchived]);
+
+  const handleBlockPeer = useCallback(async () => {
+    if (!uid || otherParticipants.length !== 1) return;
+    const peerId = otherParticipants[0];
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      await getUserService().blockUser(uid, peerId);
+      setShowInfoPanel(false);
+      toastSuccess('User blocked');
+      navigate('/messages');
+    } catch (err) {
+      toastError(err?.message || 'Could not block user');
+    }
+  }, [uid, otherParticipants, navigate]);
 
   const openForwardPicker = useCallback(async (msg) => {
     setForwardTarget(msg);
@@ -974,6 +1300,45 @@ export default function ChatScreen() {
     return items;
   }, [messages, conversation, uid]);
 
+  const peerLastReadAt = useMemo(() => {
+    if (!conversation?.lastRead || !uid) return null;
+    let latest = null;
+    for (const [participantId, ts] of Object.entries(conversation.lastRead)) {
+      if (participantId === uid || !ts) continue;
+      const ms = ts?.toDate ? ts.toDate().getTime() : new Date(ts).getTime();
+      if (Number.isFinite(ms) && (!latest || ms > latest)) latest = ms;
+    }
+    return latest;
+  }, [conversation?.lastRead, uid]);
+
+  const peerLastDeliveredAt = useMemo(() => {
+    if (!conversation?.lastDelivered || !uid) return null;
+    let latest = null;
+    for (const [participantId, ts] of Object.entries(conversation.lastDelivered)) {
+      if (participantId === uid || !ts) continue;
+      const ms = ts?.toDate ? ts.toDate().getTime() : new Date(ts).getTime();
+      if (Number.isFinite(ms) && (!latest || ms > latest)) latest = ms;
+    }
+    return latest;
+  }, [conversation?.lastDelivered, uid]);
+
+  const deletedMessageIds = useMemo(() => {
+    const set = new Set();
+    for (const m of messages) {
+      if (m?.isDeleted) set.add(m.id);
+    }
+    return set;
+  }, [messages]);
+
+  const isGroupModeratorOrAdmin = useMemo(() => {
+    if (!conversation || !uid) return false;
+    return Boolean(
+      conversation.admins?.includes(uid) ||
+      conversation.moderators?.includes(uid) ||
+      conversation.createdBy === uid
+    );
+  }, [conversation, uid]);
+
   const activePinnedId = pinnedIds.length > 0 ? pinnedIds[pinnedBannerIndex % pinnedIds.length] : null;
   const activePinnedMsg = useMemo(() => {
     if (!activePinnedId) return null;
@@ -1045,8 +1410,8 @@ export default function ChatScreen() {
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
               )}
               {peerMeta?.level && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-400 shrink-0">
-                  Lv.{peerMeta.level}
+                <span className="text-[11px] font-semibold text-purple-400 tabular-nums shrink-0">
+                  · Lv.{peerMeta.level}
                 </span>
               )}
             </div>
@@ -1214,16 +1579,16 @@ export default function ChatScreen() {
               message={msg}
               isOwn={isOwn}
               currentUid={uid}
+              peerLastReadAt={peerLastReadAt}
+              peerLastDeliveredAt={peerLastDeliveredAt}
+              deletedMessageIds={deletedMessageIds}
               senderName={resolveSenderLabel(msg, isOwn)}
               senderAvatar={conversation?.participantAvatars?.[msg.senderId]}
               onReaction={handleReaction}
-              onDelete={async () => {
-                try {
-                  await getMessagingService().deleteMessage?.(msg.id, conversationId, uid);
-                } catch (err) {
-                  toastError(err?.message || 'Could not delete the message.');
-                }
-              }}
+              onDelete={(m) => setDeleteTarget(m)}
+              onRetry={handleRetryMessage}
+              onRemoveFailed={handleRemoveFailed}
+              onViewHistory={handleOpenHistory}
               onSave={toggleSaveMessage}
               isSaved={Boolean(savedIds[msg.id])}
               onReply={handleReply}
@@ -1319,13 +1684,13 @@ export default function ChatScreen() {
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                       {peerMeta?.level && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-500 dark:text-purple-300">
+                        <span className="text-[11px] font-semibold text-purple-500 dark:text-purple-300 tabular-nums">
                           Lv.{peerMeta.level}{peerMeta.rank ? ` · ${peerMeta.rank}` : ''}
                         </span>
                       )}
                       {presenceText && (
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {presenceText}
+                          {peerMeta?.level ? `· ${presenceText}` : presenceText}
                         </span>
                       )}
                     </div>
@@ -1361,11 +1726,70 @@ export default function ChatScreen() {
               </div>
             )}
 
+            {/* Quick Conversation Controls */}
+            <div className="grid grid-cols-4 gap-1.5 mb-4">
+              <button
+                type="button"
+                onClick={handleToggleConvPin}
+                className={cn(
+                  'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors',
+                  isConversationPinned
+                    ? 'border-purple-500/40 bg-purple-500/15 text-purple-400'
+                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                )}
+              >
+                <Pin className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{isConversationPinned ? 'Unpin' : 'Pin'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleConvMute}
+                className={cn(
+                  'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors',
+                  isConversationMuted
+                    ? 'border-purple-500/40 bg-purple-500/15 text-purple-400'
+                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                )}
+              >
+                {isConversationMuted ? <Bell className="w-3.5 h-3.5" aria-hidden="true" /> : <BellOff className="w-3.5 h-3.5" aria-hidden="true" />}
+                <span>{isConversationMuted ? 'Unmute' : 'Mute'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleConvArchive}
+                className={cn(
+                  'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors',
+                  isConversationArchived
+                    ? 'border-purple-500/40 bg-purple-500/15 text-purple-400'
+                    : isDark ? 'border-white/10 hover:bg-white/10 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                )}
+              >
+                <Archive className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{isConversationArchived ? 'Unarchive' : 'Archive'}</span>
+              </button>
+              {otherParticipants.length === 1 && (
+                <button
+                  type="button"
+                  onClick={handleBlockPeer}
+                  className={cn(
+                    'py-2 px-1 rounded-xl border text-[11px] font-semibold flex flex-col items-center gap-1 transition-colors text-red-500',
+                    isDark ? 'border-white/10 hover:bg-red-500/15' : 'border-slate-200 hover:bg-red-50'
+                  )}
+                >
+                  <Ban className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Block</span>
+                </button>
+              )}
+            </div>
+
             {/* Tabs */}
-            <div className="flex gap-1 p-1 rounded-xl mb-4" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
+            <div className="flex gap-1 p-1 rounded-xl mb-4 overflow-x-auto no-scrollbar" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
               {[
                 { id: 'pinned', label: 'Pinned', icon: Pin },
                 { id: 'media', label: 'Media', icon: ImageIcon },
+                { id: 'files', label: 'Files', icon: FileText },
+                { id: 'links', label: 'Links', icon: Globe },
+                { id: 'shared', label: 'Shared', icon: Sparkles },
                 { id: 'saved', label: 'Saved', icon: Bookmark },
                 { id: 'search', label: 'Search', icon: Search },
               ].map((tab) => {
@@ -1377,7 +1801,7 @@ export default function ChatScreen() {
                     onClick={() => setInfoTab(tab.id)}
                     aria-pressed={infoTab === tab.id}
                     className={cn(
-                      'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all',
+                      'flex items-center justify-center gap-1 px-2.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all',
                       infoTab === tab.id
                         ? 'bg-arvdoul-gradient text-white shadow'
                         : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
@@ -1474,6 +1898,106 @@ export default function ChatScreen() {
                       </button>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+
+            {infoTab === 'files' && (
+              <div className="space-y-2">
+                {loadingSharedTab ? (
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                ) : sharedFiles.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No shared files yet</p>
+                ) : (
+                  sharedFiles.map((f) => {
+                    const fileUrl = sanitizeExternalUrl(f.media?.url || f.media?.downloadUrl);
+                    return (
+                      <div
+                        key={f.id}
+                        className={cn(
+                          'p-3 rounded-xl border flex items-center justify-between gap-2 text-xs',
+                          isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => jumpToMessage(f.id)}
+                          className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                        >
+                          <FileText className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className="font-semibold truncate">{f.media?.name || f.content || 'Attachment'}</p>
+                            <p className="text-[11px] opacity-70 truncate">{resolveSenderLabel(f, f.senderId === uid)}</p>
+                          </div>
+                        </button>
+                        {fileUrl && (
+                          <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 rounded-lg bg-purple-500/15 text-purple-400 font-semibold shrink-0"
+                          >
+                            Open
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {infoTab === 'links' && (
+              <div className="space-y-2">
+                {loadingSharedTab ? (
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                ) : sharedLinks.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No shared links yet</p>
+                ) : (
+                  sharedLinks.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => jumpToMessage(l.id)}
+                      className={cn(
+                        'w-full text-left p-3 rounded-xl border text-xs space-y-1',
+                        isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-slate-50 border-slate-200'
+                      )}
+                    >
+                      <p className="font-semibold truncate text-purple-400">{l.linkPreview?.url || l.content}</p>
+                      <p className="text-[11px] opacity-70 truncate">{resolveSenderLabel(l, l.senderId === uid)}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {infoTab === 'shared' && (
+              <div className="space-y-2">
+                {loadingSharedTab ? (
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                ) : sharedContentItems.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No shared posts, Vibes, or Sparks yet</p>
+                ) : (
+                  sharedContentItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setShowInfoPanel(false);
+                        navigate(resolveSharedContentRoute(item.sharedContent));
+                      }}
+                      className={cn(
+                        'w-full text-left p-3 rounded-xl border text-xs space-y-1',
+                        isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-slate-50 border-slate-200'
+                      )}
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-purple-400">
+                        {item.sharedContent?.contentType || 'post'}
+                      </p>
+                      <p className="font-semibold truncate">{item.sharedContent?.title || item.content || 'View shared item'}</p>
+                    </button>
+                  ))
                 )}
               </div>
             )}
@@ -1631,6 +2155,21 @@ export default function ChatScreen() {
         </div>
       )}
 
+      {/* Request delivered notice */}
+      {requestNotice && (
+        <div className="max-w-4xl mx-auto w-full px-3 pb-1">
+          <div className={cn(
+            'flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs',
+            isDark ? 'bg-purple-500/15 border-purple-500/30 text-purple-200' : 'bg-purple-50 border-purple-200 text-purple-800'
+          )}>
+            <span>{requestNotice}</span>
+            <button type="button" onClick={() => setRequestNotice(null)} aria-label="Dismiss notice" className="p-1 rounded-full hover:bg-black/10">
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Reply banner — inset surface, no thick left accent border */}
       {replyTo && (
         <div className={cn('max-w-4xl mx-auto w-full px-3')}>
@@ -1665,6 +2204,12 @@ export default function ChatScreen() {
       {/* Input */}
       <div className="max-w-4xl mx-auto w-full">
         <MessageInput
+          conversationId={conversationId}
+          replyTo={replyTo}
+          editingMessage={editingMessage}
+          onCancelEdit={() => setEditingMessage(null)}
+          uploadProgress={uploadProgress}
+          onCancelUpload={handleCancelUpload}
           onSendMessage={handleSendMessage}
           onSendMedia={handleSendMedia}
           onTyping={handleTyping}
@@ -1673,6 +2218,140 @@ export default function ChatScreen() {
           disabled={!conversation}
         />
       </div>
+
+      {/* Delete Message Scope Modal (Delete for me vs Delete for everyone) */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Delete message"
+          onClick={() => !deletingMessage && setDeleteTarget(null)}
+        >
+          <div
+            className={cn(
+              'w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl border p-5 space-y-3',
+              isDark ? 'bg-[#0f172a] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-500" aria-hidden="true" />
+                <span>Delete message</span>
+              </h3>
+              <button
+                type="button"
+                disabled={deletingMessage}
+                onClick={() => setDeleteTarget(null)}
+                aria-label="Close delete dialog"
+                className={cn('p-1.5 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+            <p className={cn('text-xs', isDark ? 'text-slate-400' : 'text-slate-600')}>
+              Choose whether to hide this message only for your account or remove it for everyone in this conversation.
+            </p>
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                disabled={deletingMessage}
+                onClick={() => handleConfirmDelete(false)}
+                className={cn(
+                  'w-full py-2.5 rounded-xl text-sm font-semibold border transition-colors',
+                  isDark ? 'border-white/15 hover:bg-white/10 text-slate-100' : 'border-slate-200 hover:bg-slate-100 text-slate-900'
+                )}
+              >
+                Delete for me
+              </button>
+              {(deleteTarget.senderId === uid || isGroupModeratorOrAdmin) && !deleteTarget._local && (
+                <button
+                  type="button"
+                  disabled={deletingMessage}
+                  onClick={() => handleConfirmDelete(true)}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+                >
+                  Delete for everyone
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={deletingMessage}
+                onClick={() => setDeleteTarget(null)}
+                className={cn('w-full py-2 rounded-xl text-xs font-medium', isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit History Modal */}
+      {historyModal && (
+        <div
+          className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Message edit history"
+          onClick={() => setHistoryModal(null)}
+        >
+          <div
+            className={cn(
+              'w-full sm:max-w-md max-h-[75vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border p-5 space-y-3',
+              isDark ? 'bg-[#0f172a] border-white/10 text-gray-100' : 'bg-white border-slate-200 text-slate-900'
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-400" aria-hidden="true" />
+                <span>Edit history</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setHistoryModal(null)}
+                aria-label="Close edit history"
+                className={cn('p-1.5 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100')}
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className={cn('p-3 rounded-xl border text-xs', isDark ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200')}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block mb-1">Current version</span>
+              <p className="whitespace-pre-wrap">{historyModal.message?.content}</p>
+            </div>
+            {historyModal.loading ? (
+              <Skeleton className="h-16 w-full rounded-xl" />
+            ) : historyModal.error ? (
+              <p className="text-xs text-red-500">{historyModal.error}</p>
+            ) : historyModal.entries.length === 0 ? (
+              <p className={cn('text-xs text-center py-4', isDark ? 'text-slate-400' : 'text-slate-500')}>
+                No earlier versions recorded.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {historyModal.entries.map((entry, idx) => (
+                  <div
+                    key={entry.id || idx}
+                    className={cn('p-3 rounded-xl border text-xs space-y-1', isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200')}
+                  >
+                    <span className="text-[10px] opacity-65 block">
+                      {entry.editedAt?.toDate
+                        ? format(entry.editedAt.toDate(), 'PPp')
+                        : entry.editedAt
+                          ? format(new Date(entry.editedAt), 'PPp')
+                          : `Previous version ${idx + 1}`}
+                    </span>
+                    <p className="whitespace-pre-wrap">{entry.previousContent || entry.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* View-once ephemeral media modal */}
       {activeViewOnce && (

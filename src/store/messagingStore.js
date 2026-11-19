@@ -3,6 +3,11 @@
 import { create } from 'zustand';
 import { produce } from 'immer';
 import messagingService from '../services/messagesService';
+import {
+  saveScopedDraft,
+  loadScopedDraft,
+  clearScopedDraft,
+} from '../config/messagingContracts.js';
 
 export const useMessagingStore = create((set, get) => ({
   conversations: [],
@@ -21,6 +26,8 @@ export const useMessagingStore = create((set, get) => ({
 
   selectedConversationId: null,
   drafts: {}, // { [conversationId]: string }
+  callHistory: [],
+  callHistoryLoading: false,
 
   activeSubscriptions: {}, // { [conversationId]: unsubscribe }
 
@@ -251,6 +258,125 @@ export const useMessagingStore = create((set, get) => ({
     );
   },
 
+  applyRealtimeEvent: (conversationId, event, activeUserId = null) => {
+    if (!conversationId || !event) return;
+    set(
+      produce((draft) => {
+        if (event.type === 'new_message' && event.message) {
+          if (!draft.messages[conversationId]) draft.messages[conversationId] = [];
+          const idx = draft.messages[conversationId].findIndex((m) => m.id === event.message.id);
+          if (idx === -1) {
+            draft.messages[conversationId].push(event.message);
+          } else {
+            draft.messages[conversationId][idx] = {
+              ...draft.messages[conversationId][idx],
+              ...event.message,
+              _pending: false,
+              _optimistic: false,
+            };
+          }
+          const conv = draft.conversations.find((c) => c.id === conversationId);
+          if (conv) {
+            conv.lastMessage = event.message;
+            conv.updatedAt = event.message.createdAt || new Date();
+          }
+        } else if (event.type === 'message_updated' && event.message) {
+          const list = draft.messages[conversationId] || [];
+          if (activeUserId && Array.isArray(event.message.deletedFor) && event.message.deletedFor.includes(activeUserId)) {
+            draft.messages[conversationId] = list.filter((m) => m.id !== event.message.id);
+          } else {
+            const idx = list.findIndex((m) => m.id === event.message.id);
+            if (idx !== -1) {
+              list[idx] = { ...list[idx], ...event.message };
+            }
+          }
+        } else if (event.type === 'message_removed' && event.messageId) {
+          const list = draft.messages[conversationId] || [];
+          draft.messages[conversationId] = list.filter((m) => m.id !== event.messageId);
+        } else if (event.type === 'conversation_updated' && event.conversation) {
+          const idx = draft.conversations.findIndex((c) => c.id === conversationId);
+          if (idx !== -1) {
+            draft.conversations[idx] = {
+              ...draft.conversations[idx],
+              ...event.conversation,
+            };
+          }
+        }
+      })
+    );
+  },
+
+  retryFailedMessage: async (conversationId, failedMessageId, options = {}) => {
+    const list = get().messages[conversationId] || [];
+    const target = list.find((m) => m.id === failedMessageId);
+    if (!target) return { success: false };
+
+    set(
+      produce((draft) => {
+        const idx = (draft.messages[conversationId] || []).findIndex((m) => m.id === failedMessageId);
+        if (idx !== -1) {
+          draft.messages[conversationId][idx]._failed = false;
+          draft.messages[conversationId][idx]._pending = true;
+          draft.messages[conversationId][idx]._error = null;
+        }
+      })
+    );
+
+    const payload = target._retryPayload || {
+      type: target.type || 'text',
+      content: target.content || '',
+      replyTo: target.replyTo || null,
+      linkPreview: target.linkPreview || null,
+      sharedContent: target.sharedContent || null,
+    };
+
+    try {
+      const result = await messagingService.sendMessage(conversationId, payload, {
+        ...options,
+        idempotencyKey: target._retryIdempotencyKey || failedMessageId,
+      });
+      if (result?.success) {
+        set(
+          produce((draft) => {
+            const idx = (draft.messages[conversationId] || []).findIndex((m) => m.id === failedMessageId);
+            if (idx !== -1) {
+              draft.messages[conversationId][idx] = {
+                ...(result.message || draft.messages[conversationId][idx]),
+                id: result.messageId || failedMessageId,
+                _optimistic: false,
+                _pending: false,
+                _failed: false,
+                _queued: Boolean(result.offlineQueued),
+              };
+            }
+          })
+        );
+      }
+      return result;
+    } catch (error) {
+      set(
+        produce((draft) => {
+          const idx = (draft.messages[conversationId] || []).findIndex((m) => m.id === failedMessageId);
+          if (idx !== -1) {
+            draft.messages[conversationId][idx]._pending = false;
+            draft.messages[conversationId][idx]._failed = true;
+            draft.messages[conversationId][idx]._error = error?.message || 'Retry failed';
+          }
+        })
+      );
+      throw error;
+    }
+  },
+
+  removeFailedMessage: (conversationId, failedMessageId) => {
+    set(
+      produce((draft) => {
+        if (!draft.messages[conversationId]) return;
+        draft.messages[conversationId] = draft.messages[conversationId].filter((m) => m.id !== failedMessageId);
+      })
+    );
+  },
+
   reactToMessage: async (conversationId, messageId, userId, reaction) => {
     set(
       produce((draft) => {
@@ -391,19 +517,31 @@ export const useMessagingStore = create((set, get) => ({
     );
   },
 
-  saveDraft: (conversationId, content) => {
+  saveDraft: (conversationId, content, userId = null) => {
+    if (userId) saveScopedDraft(userId, conversationId, content);
     set(
       produce((draft) => {
-        draft.drafts[conversationId] = content;
+        if (!content || (typeof content === 'string' && !content.trim())) {
+          delete draft.drafts[conversationId];
+        } else {
+          draft.drafts[conversationId] = typeof content === 'string' ? content : (content.text || '');
+        }
       })
     );
   },
 
-  getDraft: (conversationId) => {
-    return get().drafts[conversationId] || '';
+  getDraft: (conversationId, userId = null) => {
+    const inMem = get().drafts[conversationId];
+    if (inMem) return inMem;
+    if (userId) {
+      const scoped = loadScopedDraft(userId, conversationId);
+      return scoped?.text || '';
+    }
+    return '';
   },
 
-  clearDraft: (conversationId) => {
+  clearDraft: (conversationId, userId = null) => {
+    if (userId) clearScopedDraft(userId, conversationId);
     set(
       produce((draft) => {
         delete draft.drafts[conversationId];
@@ -442,6 +580,35 @@ export const useMessagingStore = create((set, get) => ({
     });
   },
 
+  sendMessageGift: async ({ conversationId, recipientId, giftType, note = '' }) => {
+    const result = await messagingService.sendMessageGift({
+      conversationId,
+      recipientId,
+      giftType,
+      note,
+    });
+    if (result?.message) {
+      get().applyRealtimeEvent(conversationId, {
+        type: 'new_message',
+        message: result.message,
+      });
+    }
+    return result;
+  },
+
+  loadCallHistory: async (limitCount = 25) => {
+    set({ callHistoryLoading: true });
+    try {
+      const { getCallService } = await import('../services/callService.js');
+      const res = await getCallService().getCallHistory(limitCount);
+      set({ callHistory: Array.isArray(res?.calls) ? res.calls : [], callHistoryLoading: false });
+      return res;
+    } catch (err) {
+      set({ callHistoryLoading: false });
+      throw err;
+    }
+  },
+
   reset: () => {
     get().clearAllSubscriptions();
     set({
@@ -459,6 +626,8 @@ export const useMessagingStore = create((set, get) => ({
       totalUnreadCount: 0,
       selectedConversationId: null,
       drafts: {},
+      callHistory: [],
+      callHistoryLoading: false,
       activeSubscriptions: {},
     });
   },

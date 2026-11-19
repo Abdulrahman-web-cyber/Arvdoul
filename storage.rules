@@ -111,7 +111,10 @@ service firebase.storage {
       }
       allow read: if isParticipant();
       allow delete: if isParticipant();
-      allow write: if isParticipant() && request.resource.size < 25 * 1024 * 1024;
+      allow write: if isParticipant() &&
+        request.resource.size < 25 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        !request.resource.contentType.matches('text/html.*|image/svg.*|application/javascript.*|text/javascript.*|application/x-msdownload.*|application/x-executable.*|application/x-sh.*');
     }
 
     // Live media — REMOVED. Live streaming is signalling-only (no media is

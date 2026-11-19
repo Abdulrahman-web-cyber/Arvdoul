@@ -274,6 +274,181 @@
         "addedAt": { "type": "string" }
       },
       "required": ["memberId"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Participant-scoped 1:1 direct, group, or channel conversation thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["direct", "group", "channel"] },
+        "participants": { "type": "array" },
+        "participantCount": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "isActive": { "type": "boolean" },
+        "lastRead": { "type": "object" },
+        "lastDelivered": { "type": "object" },
+        "mutedBy": { "type": "array" },
+        "pinnedBy": { "type": "array" },
+        "archivedBy": { "type": "array" },
+        "pinnedMessages": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastActivity": { "type": "string" }
+      },
+      "required": ["id", "type", "participants", "createdBy", "isActive"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Conversation message with media, link preview, shared content reference, reply/forward metadata, and soft-delete fields.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["text", "image", "video", "audio", "file", "voice", "gif", "sticker", "location", "contact", "poll", "reply", "forward", "system", "view_once", "link", "shared_content"] },
+        "content": { "type": "string", "maxLength": 5000 },
+        "encrypted": { "type": "boolean" },
+        "media": { "type": "object" },
+        "linkPreview": { "type": "object" },
+        "sharedContent": { "type": "object" },
+        "replyTo": { "type": "object" },
+        "forwardFrom": { "type": "object" },
+        "isEdited": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" },
+        "deletedFor": { "type": "array" },
+        "readBy": { "type": "array" },
+        "deliveredTo": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "conversationId", "senderId", "type"]
+    },
+    "MessageReaction": {
+      "title": "MessageReaction",
+      "description": "Per-user emoji reaction owned by the reacting participant.",
+      "type": "object",
+      "properties": {
+        "emoji": { "type": "string", "maxLength": 16 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "messageId": { "type": "string", "maxLength": 128 },
+        "at": { "type": "string" }
+      },
+      "required": ["emoji", "conversationId", "messageId"]
+    },
+    "MessageRequest": {
+      "title": "MessageRequest",
+      "description": "Direct-message permission request when recipient privacy restricts open DMs.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "maxLength": 128 },
+        "recipientId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["senderId", "recipientId", "status"]
+    },
+    "LastMessage": {
+      "title": "LastMessage",
+      "description": "Latest message preview document synced atomically for inbox rows.",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "maxLength": 32 },
+        "text": { "type": "string", "maxLength": 200 },
+        "timestamp": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["messageId", "senderId", "type"]
+    },
+    "CommunityChannel": {
+      "title": "CommunityChannel",
+      "description": "Structured sub-channel inside a community (discussion, announcements, events).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "communityId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 64 },
+        "slug": { "type": "string", "maxLength": 64 },
+        "type": { "type": "string", "enum": ["discussion", "announcements", "events"] },
+        "description": { "type": "string", "maxLength": 300 },
+        "isDefault": { "type": "boolean" },
+        "isLocked": { "type": "boolean" },
+        "slowModeSeconds": { "type": "number" },
+        "order": { "type": "number" },
+        "messageCount": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "communityId", "name", "type"]
+    },
+    "ChannelMessage": {
+      "title": "ChannelMessage",
+      "description": "Message inside a structured community channel with role gating and moderation state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "communityId": { "type": "string", "maxLength": 128 },
+        "channelId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["text", "image", "event_share", "announcement", "system"] },
+        "content": { "type": "string", "maxLength": 5000 },
+        "isPinned": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" },
+        "sharedContent": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "communityId", "channelId", "senderId", "type"]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "Server-validated voice or video call signaling and lifecycle record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "callerId": { "type": "string", "maxLength": 128 },
+        "calleeIds": { "type": "array" },
+        "participants": { "type": "array" },
+        "callType": { "type": "string", "enum": ["audio", "video"] },
+        "status": { "type": "string", "enum": ["initiated", "ringing", "accepted", "connecting", "connected", "reconnecting", "ended", "rejected", "missed", "cancelled", "failed", "timed_out"] },
+        "durationSeconds": { "type": "number" },
+        "initiatedAt": { "type": "string" },
+        "endedAt": { "type": "string" }
+      },
+      "required": ["id", "callerId", "participants", "callType", "status"]
+    },
+    "UserDeviceSession": {
+      "title": "UserDeviceSession",
+      "description": "Active authenticated device session for multi-device sync and remote revocation.",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "label": { "type": "string", "maxLength": 120 },
+        "platform": { "type": "string", "maxLength": 64 },
+        "revoked": { "type": "boolean" },
+        "lastSeenAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["deviceId", "userId"]
+    },
+    "ModerationReport": {
+      "title": "ModerationReport",
+      "description": "Abuse report submitted for a group, community, channel, or call.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "reporterId": { "type": "string", "maxLength": 128 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "targetType": { "type": "string", "enum": ["group", "community", "channel", "call"] },
+        "reason": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["pending", "resolved", "dismissed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "reporterId", "targetId", "targetType", "reason", "status"]
     }
   },
   "firestore": {
@@ -348,6 +523,58 @@
     "/users/{userId}/close_circle/{memberId}": {
       "schema": "CloseCircleMember",
       "description": "Curated Close Circle audience member records"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Participant-scoped conversations"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Conversation messages"
+    },
+    "/conversations/{conversationId}/messages/{messageId}/reactions/{userId}": {
+      "schema": "MessageReaction",
+      "description": "Per-user reactions on a message"
+    },
+    "/message_requests/{requestId}": {
+      "schema": "MessageRequest",
+      "description": "Direct message approval requests"
+    },
+    "/last_messages/{conversationId}": {
+      "schema": "LastMessage",
+      "description": "Inbox preview state for the latest conversation message"
+    },
+    "/communities/{communityId}/channels/{channelId}": {
+      "schema": "CommunityChannel",
+      "description": "Channels inside an Arvdoul community"
+    },
+    "/communities/{communityId}/channels/{channelId}/messages/{messageId}": {
+      "schema": "ChannelMessage",
+      "description": "Messages posted inside a community channel"
+    },
+    "/calls/{callId}": {
+      "schema": "CallSession",
+      "description": "Voice and video call signaling and session lifecycle state"
+    },
+    "/user_devices/{userId}/sessions/{deviceId}": {
+      "schema": "UserDeviceSession",
+      "description": "Authenticated device session registrations for a user"
+    },
+    "/group_reports/{reportId}": {
+      "schema": "ModerationReport",
+      "description": "Moderation reports for group conversations"
+    },
+    "/community_reports/{reportId}": {
+      "schema": "ModerationReport",
+      "description": "Moderation reports for communities"
+    },
+    "/channel_reports/{reportId}": {
+      "schema": "ModerationReport",
+      "description": "Moderation reports for community channels"
+    },
+    "/call_reports/{reportId}": {
+      "schema": "ModerationReport",
+      "description": "Moderation reports for voice and video calls"
     }
   }
 }

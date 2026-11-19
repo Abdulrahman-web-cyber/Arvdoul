@@ -21,6 +21,15 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, 
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase';
 import { openDB } from 'idb';
 import { featureFlagService } from './featureFlagService.js';
+import {
+  MESSAGING_PART1_LIMITS,
+  validateAttachmentFile,
+  sanitizeExternalUrl,
+  extractFirstSafeUrl,
+  mergeReadCursorMap,
+  canSendToGroup,
+  GROUP_ROLES,
+} from '../config/messagingContracts.js';
 
 const MESSAGING_CONFIG = {
   FREE: {
@@ -80,6 +89,10 @@ const MESSAGING_CONFIG = {
     SYSTEM: 'system',
     AD: 'ad',
     VIEW_ONCE: 'view_once',
+    LINK: 'link',
+    SHARED_CONTENT: 'shared_content',
+    GIFT_MESSAGE: 'gift_message',
+    ROYAL_ANNOUNCEMENT: 'royal_announcement',
   },
   REACTION_TYPES: ['👍', '❤️', '😂', '😮', '😢', '🔥'],
   BLOCKING: {
@@ -120,7 +133,7 @@ const MESSAGING_CONFIG = {
     ENABLED: true,
     PROVIDER: 'algolia',
   },
-  GROUP_ROLES: ['admin', 'moderator', 'member'],
+  GROUP_ROLES,
   MESSAGE_TTL_DAYS: 365,
   INVITE_BASE_URL: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_INVITE_BASE_URL) || window.location.origin,
   EDIT_HISTORY_LIMIT: 10,
@@ -500,6 +513,7 @@ class UltimateMessagingService {
     );
     this.typingTimers = new Map();
     this.lastTypingWriteAt = new Map();
+    this.lastDeliveredWriteAt = new Map();
     this.rtdbListeners = new Map();
     this.firestoreListeners = new Map();
     this.pendingMessages = new Map();
@@ -1201,14 +1215,23 @@ class UltimateMessagingService {
     }
 
     if (!navigator.onLine) {
-      this.offlineQueue.add({ conversationId, data: messageData, options });
-      return { success: true, offlineQueued: true, messageId: 'pending_' + Date.now() };
+      const offlineKey = options.idempotencyKey || await this._generateIdempotencyKey(messageData, currentUser.uid, conversationId);
+      await this.offlineQueue.add({
+        id: offlineKey,
+        conversationId,
+        data: messageData,
+        options: { ...options, idempotencyKey: offlineKey },
+      });
+      return { success: true, offlineQueued: true, messageId: offlineKey };
     }
 
     const conv = await this.getConversation(conversationId, { cacheFirst: true });
-    if (!conv.success) throw new Error('Conversation not found');
+    if (!conv.success) throw new Error(conv.error || 'Conversation not found');
     if (conv.conversation.silencedBy?.includes(currentUser.uid)) {
       throw new Error('You have been muted in this conversation by a moderator');
+    }
+    if (conv.conversation.type === 'group' && !canSendToGroup(conv.conversation, currentUser.uid)) {
+      throw new Error('Only group moderators or admins can send messages right now');
     }
 
     // Channel: only admins/moderators can send
@@ -1420,6 +1443,19 @@ class UltimateMessagingService {
       }
     });
 
+    if (conv.conversation.type === 'group' && mentionedIds.length > 0) {
+      import('./callableService.js')
+        .then(({ callFunction, FUNCTIONS }) =>
+          callFunction(FUNCTIONS.SEND_MENTION_NOTIFICATIONS, {
+            conversationId,
+            messageId: idempotencyKey,
+            mentionedUserIds: mentionedIds,
+            snippet: preview,
+          })
+        )
+        .catch((err) => logger.warn('[messagesService] mention notification skipped', { error: err?.message }));
+    }
+
     return {
       success: true,
       message: { ...message, status: 'sent' },
@@ -1524,6 +1560,7 @@ class UltimateMessagingService {
       startAfterDate,
       threadId: options.threadId || null,
     });
+    messages = messages.filter((m) => !Array.isArray(m.deletedFor) || !m.deletedFor.includes(currentUser.uid));
 
     // decryption
     if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && featureFlagService.isEnabled('messaging.e2ee')) {
@@ -1662,6 +1699,32 @@ class UltimateMessagingService {
     this._notifyUnreadChanged();
   }
 
+  /**
+   * Update conversation-level delivery watermark once per incoming batch
+   * (debounced per conversation to minimize Firestore writes).
+   */
+  async markConversationDelivered(conversationId, userId) {
+    await this.ensureInitialized();
+    const uid = userId || this.auth?.currentUser?.uid;
+    if (!conversationId || !uid) return { success: false };
+
+    const now = Date.now();
+    const lastWrite = this.lastDeliveredWriteAt.get(conversationId) || 0;
+    if (now - lastWrite < 5000) return { success: true, throttled: true };
+
+    const conv = await this.getConversation(conversationId, { cacheFirst: true });
+    if (!conv.success || conv.conversation.disableReadReceipts) return { success: false };
+
+    this.lastDeliveredWriteAt.set(conversationId, now);
+    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
+    await this.fs.updateDoc(convRef, {
+      [`lastDelivered.${uid}`]: this.fs.serverTimestamp(),
+      updatedAt: this.fs.serverTimestamp(),
+    });
+    this.conversationsCache.delete(conversationId);
+    return { success: true };
+  }
+
   async setConversationReadReceipts(conversationId, userId, disableReadReceipts) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -1697,13 +1760,15 @@ class UltimateMessagingService {
         const inboxRef = this.fs.collection(this.firestore, inboxPath);
         const q = this.fs.query(inboxRef, this.fs.orderBy('createdAt', 'desc'), this.fs.limit(50));
         unsubscribeMessages = this.fs.onSnapshot(q, (snap) => {
-          snap.docChanges().forEach(change => {
+          snap.docChanges().forEach((change) => {
             if (change.type === 'added' && !change.doc.metadata.hasPendingWrites) {
-              this.getMessages(conversationId, { limit: 1 }).then(result => {
+              this.getMessages(conversationId, { limit: 1, cacheFirst: false }).then((result) => {
                 if (result.success && result.messages.length > 0) {
                   callback({ type: 'new_message', message: result.messages[0], conversationId });
                 }
               });
+            } else if (change.type === 'removed') {
+              callback({ type: 'message_removed', messageId: change.doc.id, conversationId });
             }
           });
         }, (err) => logger.warn('[messagesService] subscription error', err));
@@ -1718,10 +1783,21 @@ class UltimateMessagingService {
           this.fs.limit(50)
         );
         unsubscribeMessages = this.fs.onSnapshot(q, (snap) => {
-          snap.docChanges().forEach(change => {
+          snap.docChanges().forEach((change) => {
+            const msg = change.doc.data() || {};
+            const hiddenForViewer = Array.isArray(msg.deletedFor) && msg.deletedFor.includes(userId);
             if (change.type === 'added' && !change.doc.metadata.hasPendingWrites) {
-              const msg = change.doc.data();
-              callback({ type: 'new_message', message: { id: change.doc.id, ...msg }, conversationId });
+              if (!hiddenForViewer) {
+                callback({ type: 'new_message', message: { id: change.doc.id, ...msg }, conversationId });
+              }
+            } else if (change.type === 'modified') {
+              if (hiddenForViewer || msg.isDeleted) {
+                callback({ type: 'message_removed', messageId: change.doc.id, conversationId });
+              } else {
+                callback({ type: 'message_updated', message: { id: change.doc.id, ...msg }, conversationId });
+              }
+            } else if (change.type === 'removed') {
+              callback({ type: 'message_removed', messageId: change.doc.id, conversationId });
             }
           });
         }, (err) => logger.warn('[messagesService] subscription error', err));
@@ -1730,7 +1806,13 @@ class UltimateMessagingService {
       const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
       unsubscribeConversation = this.fs.onSnapshot(convRef, (snap) => {
         if (!snap.exists()) return;
-        callback({ type: 'conversation_updated', conversation: { id: snap.id, ...snap.data() }, conversationId });
+        const cachedConv = this.conversationsCache.get(conversationId);
+        const incomingData = { id: snap.id, ...snap.data() };
+        if (cachedConv?.lastRead || incomingData.lastRead) {
+          incomingData.lastRead = mergeReadCursorMap(cachedConv?.lastRead || {}, incomingData.lastRead || {});
+        }
+        this.conversationsCache.set(conversationId, { ...(cachedConv || {}), ...incomingData });
+        callback({ type: 'conversation_updated', conversation: incomingData, conversationId });
       }, (err) => logger.warn('[messagesService] subscription error', err));
 
       unsubscribeTyping = this.subscribeToTyping(conversationId, userId, (typing) => {
@@ -1801,16 +1883,51 @@ class UltimateMessagingService {
     await this.ensureInitialized();
     const originalMsg = await this._getMessage(sourceConversationId, messageId);
     if (!originalMsg) throw new Error('Original message not found');
+    if (originalMsg.isDeleted || originalMsg.deletedFor?.includes(userId)) {
+      throw new Error('Deleted messages cannot be forwarded');
+    }
+    if (originalMsg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VIEW_ONCE || originalMsg.media?.viewOnce) {
+      throw new Error('View-once media cannot be forwarded');
+    }
+
+    const forwardMeta = {
+      messageId,
+      conversationId: sourceConversationId,
+      senderId: originalMsg.senderId,
+      senderName: originalMsg.senderName || null,
+    };
+
+    if (originalMsg.type === MESSAGING_CONFIG.MESSAGE_TYPES.SHARED_CONTENT && originalMsg.sharedContent) {
+      return this.sendMessage(targetConversationId, {
+        type: MESSAGING_CONFIG.MESSAGE_TYPES.SHARED_CONTENT,
+        content: originalMsg.content || '',
+        sharedContent: originalMsg.sharedContent,
+        forwardFrom: forwardMeta,
+      }, options);
+    }
+
+    if (originalMsg.media?.url && [
+      MESSAGING_CONFIG.MESSAGE_TYPES.IMAGE,
+      MESSAGING_CONFIG.MESSAGE_TYPES.VIDEO,
+      MESSAGING_CONFIG.MESSAGE_TYPES.AUDIO,
+      MESSAGING_CONFIG.MESSAGE_TYPES.FILE,
+      MESSAGING_CONFIG.MESSAGE_TYPES.VOICE,
+      MESSAGING_CONFIG.MESSAGE_TYPES.GIF,
+    ].includes(originalMsg.type)) {
+      return this.sendMessage(targetConversationId, {
+        type: originalMsg.type,
+        content: originalMsg.content || '',
+        media: originalMsg.media,
+        forwardFrom: forwardMeta,
+      }, options);
+    }
+
     const messageData = {
       type: MESSAGING_CONFIG.MESSAGE_TYPES.FORWARD,
-      content: originalMsg.content,
-      media: originalMsg.media,
-      forwardFrom: {
-        messageId,
-        conversationId: sourceConversationId,
-        senderId: originalMsg.senderId,
-        senderName: originalMsg.senderName,
-      },
+      content: originalMsg.content || '',
+      media: originalMsg.media || null,
+      linkPreview: originalMsg.linkPreview || null,
+      forwardFrom: forwardMeta,
     };
     return this.sendMessage(targetConversationId, messageData, options);
   }
@@ -1818,33 +1935,34 @@ class UltimateMessagingService {
   async deleteMessage(messageId, conversationId, userId, deleteForEveryone = false) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
+    if (!conv.success) throw new Error('Conversation not found');
+    if (!conv.conversation.participants?.includes(userId)) {
+      throw new Error('Not a participant in this conversation');
+    }
     const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
     const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
     const msgSnap = await this.fs.getDoc(msgRef);
     if (!msgSnap.exists()) throw new Error('Message not found');
     const msg = msgSnap.data();
 
-    let canDelete = msg.senderId === userId;
-    if (!canDelete && conv.conversation.type === 'group') {
-      if (conv.conversation.admins?.includes(userId) || conv.conversation.moderators?.includes(userId)) canDelete = true;
+    let canDeleteForEveryone = msg.senderId === userId;
+    if (!canDeleteForEveryone && (conv.conversation.type === 'group' || conv.conversation.type === 'channel')) {
+      if (conv.conversation.admins?.includes(userId) || conv.conversation.moderators?.includes(userId)) {
+        canDeleteForEveryone = true;
+      }
     }
-    if (!canDelete && !deleteForEveryone) throw new Error('Cannot delete others’ messages');
 
     if (deleteForEveryone) {
+      if (!canDeleteForEveryone) {
+        throw new Error('Only the sender or a moderator can delete a message for everyone');
+      }
       const unreadParticipants = conv.conversation.participants.filter(pid => pid !== msg.senderId && !msg.readBy?.includes(pid));
       const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
       await this.fs.runTransaction(this.firestore, async (transaction) => {
-        // Firestore requires every transaction read to precede every write, so
-        // resolve the `last_messages` repair FIRST. Reading it after the
-        // `transaction.update`/shard writes below made the SDK throw
-        // ("all reads must be executed before all writes"), so delete-for-
-        // everyone always failed and left the counter/`last_messages` stale.
         const lastSnap = await transaction.get(lastMessageRef);
         let lastMessagePatch;
         if (lastSnap.exists() && lastSnap.data().messageId === messageId) {
-          // `msg.createdAt` is a stored value, but a legacy/offline-written doc
-          // may hold an ISO string, so guard the Timestamp conversion.
-          const deletedAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt);
+          const deletedAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt || Date.now());
           const prev = await this._getPreviousMessage(conversationId, conv.conversation, deletedAt);
           lastMessagePatch = prev
             ? {
@@ -1858,7 +1976,12 @@ class UltimateMessagingService {
             : null;
         }
 
-        transaction.update(msgRef, { isDeleted: true, deletedAt: this.fs.serverTimestamp(), deletedBy: userId });
+        transaction.update(msgRef, {
+          isDeleted: true,
+          deletedAt: this.fs.serverTimestamp(),
+          deletedBy: userId,
+          updatedAt: this.fs.serverTimestamp(),
+        });
         for (const pid of unreadParticipants) {
           await this._decrementUnreadCounter(conversationId, pid, 1, transaction);
         }
@@ -1869,47 +1992,85 @@ class UltimateMessagingService {
         }
       });
     } else {
-      await this.fs.updateDoc(msgRef, { deletedFor: this.fs.arrayUnion(userId) });
-      await this._decrementUnreadCounter(conversationId, userId, 1);
+      await this.fs.updateDoc(msgRef, {
+        deletedFor: this.fs.arrayUnion(userId),
+        updatedAt: this.fs.serverTimestamp(),
+      });
+      if (!msg.readBy?.includes(userId)) {
+        await this._decrementUnreadCounter(conversationId, userId, 1);
+      }
     }
     this._invalidateConversationMessagesCache(conversationId);
-    return { success: true };
+    this._invalidateUserConversationsCache(userId);
+    return { success: true, deleteForEveryone };
   }
 
   async editMessage(messageId, conversationId, userId, newContent) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
+    if (!conv.success) throw new Error('Conversation not found');
     const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
     const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
     const msgSnap = await this.fs.getDoc(msgRef);
     if (!msgSnap.exists()) throw new Error('Message not found');
-    if (msgSnap.data().senderId !== userId) throw new Error('Cannot edit others’ messages');
+    const msgData = msgSnap.data();
+    if (msgData.senderId !== userId) throw new Error('Cannot edit others’ messages');
+    if (msgData.isDeleted) throw new Error('Deleted messages cannot be edited');
+    if (this._isMediaMessage(msgData.type) && !msgData.content) {
+      throw new Error('This message type cannot be edited');
+    }
+
+    const trimmed = String(newContent || '').trim();
+    if (!trimmed) throw new Error('Edited message cannot be empty');
+    if (trimmed.length > MESSAGING_PART1_LIMITS.TEXT_MAX_LENGTH) {
+      throw new Error(`Message too long (max ${MESSAGING_PART1_LIMITS.TEXT_MAX_LENGTH} characters)`);
+    }
+
+    const createdMs = this._toMillis(msgData.createdAt);
+    if (createdMs && Date.now() - createdMs > MESSAGING_PART1_LIMITS.EDIT_WINDOW_MS) {
+      throw new Error('Messages can only be edited within 15 minutes');
+    }
 
     const historyRef = this.fs.collection(this.firestore, ...messagesSubPath.split('/'), messageId, 'history');
     const previousVersion = {
-      content: msgSnap.data().content,
-      editedAt: msgSnap.data().editedAt || msgSnap.data().createdAt,
-      editedBy: msgSnap.data().editedBy,
+      content: msgData.content || '',
+      editedAt: msgData.editedAt || msgData.createdAt || this.fs.serverTimestamp(),
+      editedBy: msgData.editedBy || userId,
     };
     await this.fs.addDoc(historyRef, previousVersion);
 
     await this.fs.updateDoc(msgRef, {
-      content: newContent,
+      content: trimmed,
       isEdited: true,
       editedAt: this.fs.serverTimestamp(),
       editedBy: userId,
       updatedAt: this.fs.serverTimestamp(),
     });
 
+    const lastMessageRef = this.fs.doc(this.firestore, 'last_messages', conversationId);
+    try {
+      const lastSnap = await this.fs.getDoc(lastMessageRef);
+      if (lastSnap.exists() && lastSnap.data().messageId === messageId) {
+        const previewText = trimmed.length > 50 ? `${trimmed.slice(0, 50)}…` : trimmed;
+        await this.fs.updateDoc(lastMessageRef, {
+          text: previewText,
+          updatedAt: this.fs.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      logger.warn('last_messages edit sync skipped', { conversationId, error: e?.message });
+    }
+
     const historySnap = await this.fs.getDocs(
-      this.fs.query(historyRef, this.fs.orderBy('editedAt', 'desc'), this.fs.limit(MESSAGING_CONFIG.EDIT_HISTORY_LIMIT + 1))
+      this.fs.query(historyRef, this.fs.orderBy('editedAt', 'desc'), this.fs.limit(MESSAGING_PART1_LIMITS.EDIT_HISTORY_MAX_ENTRIES + 1))
     );
-    if (historySnap.size > MESSAGING_CONFIG.EDIT_HISTORY_LIMIT) {
-      const toDelete = historySnap.docs.slice(MESSAGING_CONFIG.EDIT_HISTORY_LIMIT);
-      for (const doc of toDelete) await this.fs.deleteDoc(doc.ref);
+    if (historySnap.size > MESSAGING_PART1_LIMITS.EDIT_HISTORY_MAX_ENTRIES) {
+      const toDelete = historySnap.docs.slice(MESSAGING_PART1_LIMITS.EDIT_HISTORY_MAX_ENTRIES);
+      for (const hDoc of toDelete) await this.fs.deleteDoc(hDoc.ref);
     }
 
     this._invalidateConversationMessagesCache(conversationId);
+    this._invalidateUserConversationsCache(userId);
     return { success: true };
   }
 
@@ -2250,74 +2411,111 @@ class UltimateMessagingService {
     return { success: true, message: 'Join request sent' };
   }
 
-  async approveJoinRequest(conversationId, requestingUserId, adminId) {
+  async createGroupConversation(payload) {
     await this.ensureInitialized();
-    const conv = await this.getConversation(conversationId);
-    if (!conv.success || conv.conversation.type !== 'group') throw new Error('Not a group');
-    if (!conv.conversation.admins?.includes(adminId)) throw new Error('Admin required');
-
-    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
-    await this.fs.updateDoc(convRef, {
-      participants: arrayUnion(requestingUserId),
-      participantCount: increment(1),
-      'groupSettings.joinRequests': arrayRemove(requestingUserId),
-      updatedAt: this.fs.serverTimestamp(),
-    });
-    await this._sendSystemMessage(conversationId, 'join_request_approved', {
-      approvedBy: adminId,
-      userId: requestingUserId,
-    });
-    return { success: true };
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.CREATE_GROUP_CONVERSATION, payload || {});
+    if (res?.conversationId) {
+      this.conversationsCache.delete(res.conversationId);
+    }
+    if (this.auth?.currentUser?.uid) {
+      this._invalidateUserConversationsCache(this.auth.currentUser.uid);
+    }
+    return res;
   }
 
-  async rejectJoinRequest(conversationId, requestingUserId, adminId) {
+  async manageGroupMember(payload) {
     await this.ensureInitialized();
-    const conv = await this.getConversation(conversationId);
-    if (!conv.success || conv.conversation.type !== 'group') throw new Error('Not a group');
-    if (!conv.conversation.admins?.includes(adminId)) throw new Error('Admin required');
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.MANAGE_GROUP_MEMBER, payload || {});
+    if (payload?.conversationId) {
+      this.conversationsCache.delete(payload.conversationId);
+    }
+    if (this.auth?.currentUser?.uid) {
+      this._invalidateUserConversationsCache(this.auth.currentUser.uid);
+    }
+    return res;
+  }
 
-    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
-    await this.fs.updateDoc(convRef, {
-      'groupSettings.joinRequests': arrayRemove(requestingUserId),
-      updatedAt: this.fs.serverTimestamp(),
+  async updateGroupSettings(conversationId, payload) {
+    await this.ensureInitialized();
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.UPDATE_GROUP_SETTINGS, {
+      conversationId,
+      ...(payload || {}),
     });
-    await this._sendSystemMessage(conversationId, 'join_request_rejected', {
-      rejectedBy: adminId,
-      userId: requestingUserId,
+    this.conversationsCache.delete(conversationId);
+    return res;
+  }
+
+  async respondGroupJoinRequest(conversationId, requesterId, decision) {
+    await this.ensureInitialized();
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const res = await callFunction(FUNCTIONS.RESPOND_GROUP_JOIN_REQUEST, {
+      conversationId,
+      requesterId,
+      decision,
     });
-    return { success: true };
+    this.conversationsCache.delete(conversationId);
+    return res;
+  }
+
+  async approveJoinRequest(conversationId, requestingUserId) {
+    return this.respondGroupJoinRequest(conversationId, requestingUserId, 'approve');
+  }
+
+  async rejectJoinRequest(conversationId, requestingUserId) {
+    return this.respondGroupJoinRequest(conversationId, requestingUserId, 'reject');
   }
 
   async createInviteLink(conversationId, adminId, options = {}) {
     await this.ensureInitialized();
-    const conv = await this.getConversation(conversationId);
-    if (!conv.success || conv.conversation.type !== 'group') throw new Error('Not a group');
-    if (!conv.conversation.admins?.includes(adminId)) throw new Error('Admin required');
-
-    const inviteId = `invite_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    const inviteRef = this.fs.doc(this.firestore, 'group_invites', inviteId);
-    await this.fs.setDoc(inviteRef, {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const expiresInHours = options.expiresInHours
+      ?? (options.expiresAt ? Math.max(1, Math.round((new Date(options.expiresAt).getTime() - Date.now()) / 3600000)) : 168);
+    const res = await callFunction(FUNCTIONS.CREATE_GROUP_INVITE, {
       conversationId,
-      createdBy: adminId,
-      expiresAt: options.expiresAt ? this.fs.Timestamp.fromDate(options.expiresAt) : null,
-      maxUses: options.maxUses || null,
-      uses: 0,
-      createdAt: this.fs.serverTimestamp(),
+      expiresInHours,
+      maxUses: options.maxUses === undefined ? 50 : options.maxUses,
     });
+    const inviteId = res?.inviteId;
     const link = `${MESSAGING_CONFIG.INVITE_BASE_URL}/join-group?invite=${inviteId}`;
-    return { success: true, inviteId, link };
+    return { success: true, inviteId, link, maxUses: res?.maxUses ?? null, expiresAt: res?.expiresAt || null };
   }
 
-  async revokeInviteLink(inviteId, adminId) {
+  async revokeInviteLink(inviteId) {
     await this.ensureInitialized();
-    const inviteRef = this.fs.doc(this.firestore, 'group_invites', inviteId);
-    const inviteSnap = await this.fs.getDoc(inviteRef);
-    if (!inviteSnap.exists()) throw new Error('Invite not found');
-    const invite = inviteSnap.data();
-    const conv = await this.getConversation(invite.conversationId);
-    if (!conv.conversation.admins?.includes(adminId)) throw new Error('Admin required');
-    await this.fs.deleteDoc(inviteRef);
-    return { success: true };
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    return callFunction(FUNCTIONS.REVOKE_GROUP_INVITE, { inviteId });
+  }
+
+  async sendMessageGift({ conversationId, recipientId, giftType, note = '', idempotencyKey = null }) {
+    await this.ensureInitialized();
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const resolvedKey = idempotencyKey || `gift_${conversationId}_${recipientId}_${giftType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const res = await callFunction(FUNCTIONS.SEND_MESSAGE_GIFT, {
+      conversationId,
+      recipientId,
+      giftType,
+      note,
+      idempotencyKey: resolvedKey,
+    });
+    this._invalidateConversationMessagesCache(conversationId);
+    this.conversationsCache.delete(conversationId);
+    if (this.auth?.currentUser?.uid) {
+      this._invalidateUserConversationsCache(this.auth.currentUser.uid);
+    }
+    return res;
+  }
+
+  async reportGroup(conversationId, reason, details = '') {
+    await this.ensureInitialized();
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    return callFunction(FUNCTIONS.REPORT_GROUP, {
+      targetId: conversationId,
+      reason,
+      details,
+    });
   }
 
   async listInviteLinks(conversationId, adminId) {
@@ -2437,13 +2635,57 @@ class UltimateMessagingService {
     };
   }
 
-  async searchMessagesAlgolia(conversationId, query, options = {}) {
-    if (!MESSAGING_CONFIG.SEARCH_INDEXING.ENABLED) throw new Error('Search indexing not enabled');
-    const { callFunction, FUNCTIONS } = await import('./callableService.js');
-    const results = await callFunction(FUNCTIONS.SEARCH_MESSAGES, {
-      conversationId, query, limit: options.limit || 20,
+  async searchMessagesAlgolia(conversationId, queryText, options = {}) {
+    if (MESSAGING_CONFIG.SEARCH_INDEXING.ENABLED) {
+      try {
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        const results = await callFunction(FUNCTIONS.SEARCH_MESSAGES, {
+          conversationId, query: queryText, limit: options.limit || 20,
+        });
+        if (Array.isArray(results) && results.length > 0) {
+          return { success: true, results };
+        }
+      } catch (e) {
+        logger.debug('Callable search unavailable, using bounded conversation search', { error: e?.message });
+      }
+    }
+    return this.searchMessagesInConversation(conversationId, queryText, options.userId || this.auth?.currentUser?.uid, options);
+  }
+
+  async searchMessagesInConversation(conversationId, queryText, userId, options = {}) {
+    await this.ensureInitialized();
+    const cleanQuery = String(queryText || '').trim().toLowerCase();
+    if (!cleanQuery) return { success: true, results: [] };
+    const conv = await this.getConversation(conversationId, { cacheFirst: true });
+    if (!conv.success) return { success: false, results: [] };
+    const activeUid = userId || this.auth?.currentUser?.uid;
+    const shardPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
+    const messagesRef = this.fs.collection(this.firestore, ...shardPath.split('/'));
+    const snap = await this.fs.getDocs(
+      this.fs.query(
+        messagesRef,
+        this.fs.where('isDeleted', '==', false),
+        this.fs.orderBy('createdAt', 'desc'),
+        this.fs.limit(Math.min(options.scanLimit || 100, 100))
+      )
+    );
+    const matches = [];
+    snap.forEach((d) => {
+      const msg = { id: d.id, ...d.data() };
+      if (activeUid && Array.isArray(msg.deletedFor) && msg.deletedFor.includes(activeUid)) return;
+      const hay = [
+        msg.content,
+        msg.media?.name,
+        msg.linkPreview?.title,
+        msg.linkPreview?.url,
+        msg.sharedContent?.title,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (hay.includes(cleanQuery)) matches.push(msg);
     });
-    return { success: true, results };
+    return { success: true, results: matches.slice(0, options.limit || 25) };
   }
 
   async generateInviteQRCode(inviteId, adminId) {
@@ -2458,18 +2700,21 @@ class UltimateMessagingService {
   }
 
   async saveDraft(conversationId, userId, content) {
-    const db = await openDB('drafts', 1, { upgrade(db) { db.createObjectStore('drafts'); } });
-    await db.put('drafts', { content, updatedAt: Date.now() }, conversationId);
+    const uid = userId || this.auth?.currentUser?.uid || 'anon';
+    const db = await openDB('drafts', 1, { upgrade(db) { if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts'); } });
+    await db.put('drafts', { content, updatedAt: Date.now() }, `${uid}:${conversationId}`);
   }
 
-  async getDraft(conversationId) {
-    const db = await openDB('drafts', 1);
-    return db.get('drafts', conversationId);
+  async getDraft(conversationId, userId) {
+    const uid = userId || this.auth?.currentUser?.uid || 'anon';
+    const db = await openDB('drafts', 1, { upgrade(db) { if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts'); } });
+    return db.get('drafts', `${uid}:${conversationId}`);
   }
 
-  async deleteDraft(conversationId) {
-    const db = await openDB('drafts', 1);
-    await db.delete('drafts', conversationId);
+  async deleteDraft(conversationId, userId) {
+    const uid = userId || this.auth?.currentUser?.uid || 'anon';
+    const db = await openDB('drafts', 1, { upgrade(db) { if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts'); } });
+    await db.delete('drafts', `${uid}:${conversationId}`);
   }
 
   async searchStickers(query) {
@@ -2535,6 +2780,72 @@ class UltimateMessagingService {
       }
     }
     return { success: true, media };
+  }
+
+  async getConversationSharedItems(conversationId, { category = 'media', limit: pageLimit = 30, userId = null } = {}) {
+    await this.ensureInitialized();
+    const conv = await this.getConversation(conversationId, { cacheFirst: true });
+    if (!conv.success) return { success: false, items: [] };
+    const activeUid = userId || this.auth?.currentUser?.uid;
+    const boundedLimit = Math.min(Math.max(1, Number(pageLimit) || 30), 80);
+    const shardPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
+    const messagesRef = this.fs.collection(this.firestore, ...shardPath.split('/'));
+
+    const constraints = [];
+    if (category === 'media') {
+      constraints.push(this.fs.where('type', 'in', ['image', 'video', 'gif']));
+    } else if (category === 'files') {
+      constraints.push(this.fs.where('type', 'in', ['file', 'audio', 'voice']));
+    } else if (category === 'shared') {
+      constraints.push(this.fs.where('type', '==', 'shared_content'));
+    }
+
+    const snap = await this.fs.getDocs(
+      this.fs.query(
+        messagesRef,
+        ...constraints,
+        this.fs.where('isDeleted', '==', false),
+        this.fs.orderBy('createdAt', 'desc'),
+        this.fs.limit(boundedLimit)
+      )
+    );
+    const items = [];
+    snap.forEach((d) => {
+      const m = { id: d.id, ...d.data() };
+      if (activeUid && Array.isArray(m.deletedFor) && m.deletedFor.includes(activeUid)) return;
+      if (category === 'links') {
+        const safeUrl = sanitizeExternalUrl(m.linkPreview?.url) || extractFirstSafeUrl(m.content);
+        if (!safeUrl) return;
+        items.push({ ...m, resolvedUrl: safeUrl });
+        return;
+      }
+      items.push(m);
+    });
+    return { success: true, items };
+  }
+
+  async resolveSharedContentItem(sharedContent) {
+    if (!sharedContent?.contentId) return { available: false, reason: 'Content unavailable or private' };
+    await this.ensureInitialized();
+    const collectionName =
+      sharedContent.contentType === 'spark'
+        ? 'videos'
+        : sharedContent.contentType === 'vibe'
+          ? 'stories'
+          : sharedContent.contentType === 'event'
+            ? 'events'
+            : 'posts';
+    try {
+      const snap = await this.fs.getDoc(this.fs.doc(this.firestore, collectionName, sharedContent.contentId));
+      if (!snap.exists()) return { available: false, reason: 'Content unavailable or private' };
+      const data = snap.data() || {};
+      if (data.isDeleted || data.status === 'deleted') {
+        return { available: false, reason: 'Content unavailable or private' };
+      }
+      return { available: true, item: { id: snap.id, ...data } };
+    } catch {
+      return { available: false, reason: 'Content unavailable or private' };
+    }
   }
 
   async getMessageHistory(conversationId, messageId) {
@@ -2783,9 +3094,36 @@ class UltimateMessagingService {
   async _fetchUnreadCounts(userId, conversationIds) {
     const map = new Map();
     if (!userId) return map;
-    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
     const ids = [...new Set((conversationIds || []).filter(Boolean))]
       .slice(0, MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE * 2);
+    if (!ids.length) return map;
+
+    if (ids.length > 5) {
+      try {
+        const totalShardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.TOTAL_SHARD_COUNT;
+        const totalSnaps = await Promise.all(
+          Array.from({ length: totalShardCount }, (_, shard) =>
+            this.fs.getDoc(this.fs.doc(this.firestore, 'user_unread_totals', userId, 'shards', String(shard)))
+          )
+        );
+        let knownTotal = 0;
+        let hasAnyTotalShard = false;
+        totalSnaps.forEach((s) => {
+          if (s.exists()) {
+            hasAnyTotalShard = true;
+            knownTotal += Number(s.data()?.count) || 0;
+          }
+        });
+        if (hasAnyTotalShard && knownTotal === 0) {
+          ids.forEach((cid) => map.set(cid, 0));
+          return map;
+        }
+      } catch {
+        // Fall through to per-conversation read if total read is unavailable
+      }
+    }
+
+    const shardCount = MESSAGING_CONFIG.UNREAD_COUNTERS.SHARD_COUNT;
     await Promise.all(ids.map(async (conversationId) => {
       try {
         const snap = await this.fs.getDocs(
@@ -2857,10 +3195,22 @@ class UltimateMessagingService {
   async _validateMessage(data, conversationId, senderId) {
     const validTypes = Object.values(MESSAGING_CONFIG.MESSAGE_TYPES);
     if (!validTypes.includes(data.type)) throw new Error(`Invalid type: ${data.type}`);
-    if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
+    if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT || data.type === MESSAGING_CONFIG.MESSAGE_TYPES.REPLY) {
       const hasVibeAttachment = data.attachment?.type === 'vibe' && data.attachment?.vibeId;
-      if (!hasVibeAttachment && (!data.content || !data.content.trim())) throw new Error('Message cannot be empty');
-      if (data.content && data.content.length > MESSAGING_CONFIG.TEXT_MAX_LENGTH) throw new Error(`Message too long (max ${MESSAGING_CONFIG.TEXT_MAX_LENGTH} characters)`);
+      if (!hasVibeAttachment && (!data.content || !String(data.content).trim())) throw new Error('Message cannot be empty');
+      if (data.content && data.content.length > MESSAGING_PART1_LIMITS.TEXT_MAX_LENGTH) {
+        throw new Error(`Message too long (max ${MESSAGING_PART1_LIMITS.TEXT_MAX_LENGTH} characters)`);
+      }
+    }
+    if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.LINK) {
+      const safeUrl = sanitizeExternalUrl(data.linkPreview?.url || data.content);
+      if (!safeUrl) throw new Error('Valid http/https URL required');
+      data.linkPreview = { ...(data.linkPreview || {}), url: safeUrl };
+    }
+    if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.SHARED_CONTENT) {
+      if (!data.sharedContent?.contentId || !['post', 'vibe', 'spark', 'event'].includes(data.sharedContent?.contentType)) {
+        throw new Error('Valid Arvdoul shared content reference required');
+      }
     }
     if (data.type === MESSAGING_CONFIG.MESSAGE_TYPES.GIF) {
       if (!data.media?.url && !data.media?.file && !data.content) throw new Error('GIF URL or file required');
@@ -2890,10 +3240,12 @@ class UltimateMessagingService {
       senderName: pickDisplayName([sender.displayName, sender.username], { fallback: null }),
       senderPhoto: sender.photoURL || null,
       type: validated.type,
-      content: encryptedPayload ? null : validated.content,
+      content: encryptedPayload ? null : (validated.content ?? null),
       encrypted: !!encryptedPayload,
       encryptedData: encryptedPayload,
       media: mediaInfo,
+      linkPreview: validated.linkPreview || null,
+      sharedContent: validated.sharedContent || null,
       attachment: validated.attachment || null,
       metadata: validated.metadata || null,
       replyTo: validated.replyTo || null,
@@ -2917,42 +3269,56 @@ class UltimateMessagingService {
   }
 
   _getMessagePreview(msg) {
+    if (msg.isDeleted) return 'Message deleted';
     if (msg.attachment?.type === 'vibe') {
       if (msg.metadata?.type === 'vibe_reply') {
         return msg.content ? `Vibe reply: ${msg.content.slice(0, 40)}` : 'Replied to your Vibe';
       }
       return msg.content ? `Shared a Vibe: ${msg.content.slice(0, 40)}` : 'Shared a Vibe';
     }
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.LINK) {
+      return msg.linkPreview?.title || msg.linkPreview?.url || msg.content || 'Shared link';
+    }
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.SHARED_CONTENT) {
+      if (msg.sharedContent?.contentType === 'event') {
+        return msg.sharedContent?.title ? `Event: ${msg.sharedContent.title}` : 'Shared event';
+      }
+      return msg.sharedContent?.title || `Shared ${msg.sharedContent?.contentType || 'post'}`;
+    }
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.GIFT_MESSAGE) {
+      return msg.giftData?.giftType
+        ? `Gift: ${msg.giftData.giftType} (${msg.giftData.coinValue || ''} coins)`
+        : (msg.content || 'Sent a gift');
+    }
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.ROYAL_ANNOUNCEMENT) {
+      return msg.content ? `Royal Dispatch: ${msg.content.slice(0, 44)}` : 'Royal Dispatch';
+    }
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT || msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.REPLY) {
       if (msg.content) return msg.content.length > 50 ? msg.content.slice(0, 50) + '…' : msg.content;
       if (msg.encrypted) return '[Encrypted]';
     }
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.IMAGE) return '📷 Photo';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VIDEO) return '🎬 Video';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.AUDIO) return '🎵 Audio';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.FILE) return '📄 File';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VOICE) return '🎤 Voice message';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.GIF) return '🎞️ GIF';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.LOCATION) return '📍 Location';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.CONTACT) return '👤 Contact';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.POLL) return '📊 Poll';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.REPLY) return '↩️ Reply';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.FORWARD) return '⏩ Forwarded message';
-    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VIEW_ONCE) return '🔒 View‑once';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.IMAGE) return 'Photo';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VIDEO) return 'Video';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.AUDIO) return 'Audio';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.FILE) return msg.media?.name ? `File: ${msg.media.name}` : 'File';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VOICE) return 'Voice message';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.GIF) return 'GIF';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.LOCATION) return 'Location';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.CONTACT) return 'Contact';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.POLL) return 'Poll';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.FORWARD) return msg.content ? `Forwarded: ${String(msg.content).slice(0, 40)}` : 'Forwarded message';
+    if (msg.type === MESSAGING_CONFIG.MESSAGE_TYPES.VIEW_ONCE) return 'View-once media';
     return 'Message';
   }
 
-  async _uploadMessageMedia(messageId, file, userId, options, conversationId) {
-    const isImage = file.type.startsWith('image/');
-    const isVideo = file.type.startsWith('video/');
-
-    let maxSize = MESSAGING_CONFIG.FREE.FILE_MAX_SIZE;
-    if (isImage) maxSize = MESSAGING_CONFIG.FREE.IMAGE_MAX_SIZE;
-    else if (isVideo) maxSize = MESSAGING_CONFIG.FREE.VIDEO_MAX_SIZE;
-
-    if (file.size > maxSize) {
-      throw new Error(`File too large. Max size: ${(maxSize / 1024 / 1024).toFixed(0)}MB`);
+  async _uploadMessageMedia(messageId, file, userId, options = {}, conversationId) {
+    const check = validateAttachmentFile(file);
+    if (!check.valid) {
+      throw new Error(check.error);
     }
+
+    const isImage = file.type?.startsWith('image/') || check.kind === 'image';
+    const isVideo = file.type?.startsWith('video/') || check.kind === 'video';
 
     let processedFile = file;
     let dimensions = null;
@@ -2960,34 +3326,48 @@ class UltimateMessagingService {
 
     if (isImage) {
       processedFile = await this._compressImage(file, 1920, 0.8);
-      dimensions = { width: 0, height: 0 };
+      dimensions = await this._getImageDimensions(processedFile);
     } else if (isVideo) {
       duration = await this._getVideoDuration(file);
     }
 
-    const ext = processedFile.name.split('.').pop() || 'bin';
+    const ext = (processedFile.name || 'bin').split('.').pop() || 'bin';
     const path = `messages/${conversationId}/${messageId}.${ext}`;
     const fileRef = this.st.ref(this.storage, path);
 
     const uploadTask = this.st.uploadBytesResumable(fileRef, processedFile, {
-      contentType: processedFile.type,
-      customMetadata: { messageId, userId, originalName: processedFile.name },
+      contentType: processedFile.type || 'application/octet-stream',
+      customMetadata: { messageId, userId, originalName: processedFile.name || 'attachment' },
     });
+    options.onUploadTask?.(uploadTask);
 
     return new Promise((resolve, reject) => {
       uploadTask.on(
         'state_changed',
-        (snap) => options.onProgress?.(snap.bytesTransferred / snap.totalBytes),
-        (err) => reject(enhanceError(err, 'Upload failed')),
+        (snap) => {
+          const pct = snap.totalBytes > 0 ? snap.bytesTransferred / snap.totalBytes : 0;
+          options.onProgress?.(pct);
+        },
+        (err) => {
+          if (err?.code === 'storage/canceled') {
+            const cancelErr = new Error('Upload canceled');
+            cancelErr.code = 'storage/canceled';
+            reject(cancelErr);
+            return;
+          }
+          reject(enhanceError(err, 'Upload failed'));
+        },
         async () => {
           const url = await this.st.getDownloadURL(uploadTask.snapshot.ref);
           const metadata = await this.st.getMetadata(uploadTask.snapshot.ref);
           resolve({
             url,
             path,
-            name: processedFile.name,
-            size: metadata.size,
-            type: metadata.contentType,
+            name: processedFile.name || file.name,
+            size: metadata.size || processedFile.size,
+            type: metadata.contentType || processedFile.type,
+            mediaKind: check.kind,
+            viewOnce: Boolean(options.viewOnce),
             width: dimensions?.width || null,
             height: dimensions?.height || null,
             duration: duration,
@@ -3381,6 +3761,8 @@ class UltimateMessagingService {
     this.notificationSettingsCache.clear();
     this.dedupeMemoryCache.clear();
     this.messageKeysByConversation.clear();
+    this.lastDeliveredWriteAt?.clear();
+    this.unlockedPrivateKeys?.clear();
   }
 
   destroy() {
@@ -3417,6 +3799,7 @@ const messagingService = {
   replyToMessage: (cid, replyToId, uid, content, opts) => getMessagingService().replyToMessage(cid, replyToId, uid, content, opts),
   forwardMessage: (srcCid, mid, targetCid, uid, opts) => getMessagingService().forwardMessage(srcCid, mid, targetCid, uid, opts),
   markConversationAsRead: (cid, uid) => getMessagingService().markConversationAsRead(cid, uid),
+  markConversationDelivered: (cid, uid) => getMessagingService().markConversationDelivered(cid, uid),
   subscribeToConversation: (cid, uid, cb, opts) => getMessagingService().subscribeToConversation(cid, uid, cb, opts),
   getUserPrivacySettings: (uid) => getMessagingService().getUserPrivacySettings(uid),
   updatePrivacySettings: (uid, updates) => getMessagingService().updatePrivacySettings(uid, updates),
@@ -3432,6 +3815,10 @@ const messagingService = {
   addParticipants: (cid, uids, admin) => getMessagingService().addParticipants(cid, uids, admin),
   removeParticipants: (cid, uids, admin) => getMessagingService().removeParticipants(cid, uids, admin),
   updateGroupInfo: (cid, updates, admin) => getMessagingService().updateGroupInfo(cid, updates, admin),
+  createGroupConversation: (payload) => getMessagingService().createGroupConversation(payload),
+  manageGroupMember: (payload) => getMessagingService().manageGroupMember(payload),
+  updateGroupSettings: (cid, payload) => getMessagingService().updateGroupSettings(cid, payload),
+  respondGroupJoinRequest: (cid, reqUid, decision) => getMessagingService().respondGroupJoinRequest(cid, reqUid, decision),
   setUserRole: (cid, targetUid, role, admin) => getMessagingService().setUserRole(cid, targetUid, role, admin),
   addModerator: (cid, uid, admin) => getMessagingService().addModerator(cid, uid, admin),
   removeModerator: (cid, uid, admin) => getMessagingService().removeModerator(cid, uid, admin),
@@ -3454,6 +3841,8 @@ const messagingService = {
   revokeInviteLink: (inviteId, admin) => getMessagingService().revokeInviteLink(inviteId, admin),
   listInviteLinks: (cid, admin) => getMessagingService().listInviteLinks(cid, admin),
   joinGroupViaInvite: (inviteId, userId) => getMessagingService().joinGroupViaInvite(inviteId, userId),
+  sendMessageGift: (payload) => getMessagingService().sendMessageGift(payload),
+  reportGroup: (cid, reason, details) => getMessagingService().reportGroup(cid, reason, details),
   pinMessage: (cid, mid, uid) => getMessagingService().pinMessage(cid, mid, uid),
   unpinMessage: (cid, mid, uid) => getMessagingService().unpinMessage(cid, mid, uid),
   getPinnedMessages: (cid) => getMessagingService().getPinnedMessages(cid),
@@ -3462,6 +3851,7 @@ const messagingService = {
   setConversationReadReceipts: (cid, uid, disable) => getMessagingService().setConversationReadReceipts(cid, uid, disable),
   getGroupStats: (cid) => getMessagingService().getGroupStats(cid),
   searchMessagesAlgolia: (cid, query, opts) => getMessagingService().searchMessagesAlgolia(cid, query, opts),
+  searchMessagesInConversation: (cid, query, uid, opts) => getMessagingService().searchMessagesInConversation(cid, query, uid, opts),
   sendMessageRequest: (rid, sid) => getMessagingService().sendMessageRequest(rid, sid),
   getMessageRequests: (uid, opts) => getMessagingService().getMessageRequests(uid, opts),
   respondToMessageRequest: (rid, uid, accept) => getMessagingService().respondToMessageRequest(rid, uid, accept),
@@ -3479,13 +3869,15 @@ const messagingService = {
   scheduleMessage: (cid, data, opts) => getMessagingService()._scheduleMessage(cid, data, opts),
   cancelScheduledMessage: (schedId) => getMessagingService().cancelScheduledMessage(schedId),
   saveDraft: (cid, uid, content) => getMessagingService().saveDraft(cid, uid, content),
-  getDraft: (cid) => getMessagingService().getDraft(cid),
-  deleteDraft: (cid) => getMessagingService().deleteDraft(cid),
+  getDraft: (cid, uid) => getMessagingService().getDraft(cid, uid),
+  deleteDraft: (cid, uid) => getMessagingService().deleteDraft(cid, uid),
   searchStickers: (query) => getMessagingService().searchStickers(query),
   searchGifs: (query) => getMessagingService().searchGifs(query),
   uploadMessageMedia: (mid, file, uid, opts, conversationId) => getMessagingService()._uploadMessageMedia(mid, file, uid, opts, conversationId),
   reportMessage: (mid, cid, uid, reason, details) => getMessagingService().reportMessage(mid, cid, uid, reason, details),
   getConversationMedia: (cid, opts) => getMessagingService().getConversationMedia(cid, opts),
+  getConversationSharedItems: (cid, opts) => getMessagingService().getConversationSharedItems(cid, opts),
+  resolveSharedContentItem: (sharedContent) => getMessagingService().resolveSharedContentItem(sharedContent),
   getMessageHistory: (cid, mid) => getMessagingService().getMessageHistory(cid, mid),
   registerPushToken: (uid, token) => getMessagingService().registerPushToken(uid, token),
   getUnreadCount: (userId, conversationId) => getMessagingService().getUnreadCount(userId, conversationId),

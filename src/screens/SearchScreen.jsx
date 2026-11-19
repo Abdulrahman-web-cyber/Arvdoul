@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useLayoutChrome } from '../context/LayoutChromeContext.jsx';
 import { getUserService } from '../services/userService';
 import { toast } from 'sonner';
 import { useSearch } from '../hooks/useSearch';
@@ -65,6 +66,7 @@ const SearchScreen = memo(() => {
   const navigate = useNavigate();
   const { isDark, spring } = useTheme();
   const { user } = useAuth();
+  const { hasTopAppBar } = useLayoutChrome();
   
   const [showFilters, setShowFilters] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -377,82 +379,89 @@ const SearchScreen = memo(() => {
           : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
       )}
     >
-      {/* Search Header Bar with Input & Category Pills */}
+      {/* Search Header Bar with Input (only when TopAppBar absent) & Category Pills */}
       <div className="px-4 pt-2 pb-3 space-y-3">
-        {/* In-Page Quick Search Input */}
-        <div className="relative flex items-center gap-2">
-          <div className="relative flex-1 flex items-center">
-            <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input aria-label="Search people, tags, videos, and posts..."
-              type="text"
-              value={query}
-              onChange={(e) => {
-                const val = e.target.value;
-                updateQuery(val);
-                window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: val }));
-                if (!val.trim()) setHasSearched(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSearch();
-                }
-              }}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-              placeholder="Search people, tags, videos, and posts..."
-              className={cn(
-                "w-full pl-10 pr-9 py-2.5 rounded-2xl text-sm font-medium transition-all outline-none",
-                isDark
-                  ? "bg-white/[0.06] border border-white/10 text-white placeholder-slate-400 focus:bg-white/[0.10] focus:border-purple-500/50"
-                  : "bg-white border border-slate-200 text-slate-900 placeholder-slate-400 shadow-sm focus:border-purple-500"
-              )}
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => {
-                  updateQuery('');
-                  setHasSearched(false);
-                  window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: '' }));
+        {/* In-Page Quick Search Input (hidden when TopAppBar owns global search) + Voice & Filters */}
+        <div className={cn('relative flex items-center gap-2', hasTopAppBar && 'justify-end')}>
+          {!hasTopAppBar && (
+            <div className="relative flex-1 flex items-center">
+              <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                aria-label="Search people, tags, videos, and posts..."
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  updateQuery(val);
+                  window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: val }));
+                  if (!val.trim()) setHasSearched(false);
                 }}
-                className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                placeholder="Search people, tags, videos, and posts..."
+                className={cn(
+                  'w-full pl-10 pr-9 py-2.5 rounded-2xl text-sm font-medium transition-all outline-none',
+                  isDark
+                    ? 'bg-white/[0.06] border border-white/10 text-white placeholder-slate-400 focus:bg-white/[0.10] focus:border-purple-500/50'
+                    : 'bg-white border border-slate-200 text-slate-900 placeholder-slate-400 shadow-sm focus:border-purple-500'
+                )}
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateQuery('');
+                    setHasSearched(false);
+                    window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: '' }));
+                  }}
+                  aria-label="Clear search"
+                  className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={handleVoiceSearch}
             disabled={isListening}
             className={cn(
-              "p-2.5 rounded-2xl border transition-all flex items-center justify-center shrink-0 cursor-pointer",
+              'p-2.5 rounded-2xl border transition-all flex items-center gap-1.5 justify-center shrink-0 cursor-pointer',
               isListening
-                ? "bg-purple-600 text-white border-purple-500 animate-pulse"
+                ? 'bg-purple-600 text-white border-purple-500 animate-pulse'
                 : isDark
-                ? "bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]"
-                : "bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50"
+                ? 'bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]'
+                : 'bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50'
             )}
-            title={isListening ? "Listening…" : "Voice search"}
+            title={isListening ? 'Listening…' : 'Voice search'}
             aria-label="Search by voice"
           >
             <Mic className="w-4 h-4" />
+            {hasTopAppBar && <span className="text-xs font-medium hidden sm:inline">Voice</span>}
           </button>
           <button
             type="button"
-            onClick={() => setShowFilters(prev => !prev)}
+            onClick={() => setShowFilters((prev) => !prev)}
             className={cn(
-              "p-2.5 rounded-2xl border transition-all flex items-center justify-center shrink-0 cursor-pointer",
+              'p-2.5 rounded-2xl border transition-all flex items-center gap-1.5 justify-center shrink-0 cursor-pointer',
               showFilters
-                ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-500/25"
+                ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-500/25'
                 : isDark
-                ? "bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]"
-                : "bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50"
+                ? 'bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]'
+                : 'bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50'
             )}
             title="Search Filters"
+            aria-label="Search Filters"
           >
             <SlidersHorizontal className="w-4 h-4" />
+            {hasTopAppBar && <span className="text-xs font-medium hidden sm:inline">Filters</span>}
           </button>
         </div>
 

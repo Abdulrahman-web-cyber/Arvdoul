@@ -215,6 +215,13 @@ const NOTIFICATIONS_CONFIG = {
     VIBE_REPLY: 'vibe_reply',
     VIBE_SHARE: 'vibe_share',
     VIBE_MILESTONE: 'vibe_milestone',
+    COMMUNITY_ANNOUNCEMENT: 'community_announcement',
+    COMMUNITY_ACTIVITY: 'community_activity',
+    INCOMING_CALL: 'incoming_call',
+    MISSED_CALL: 'missed_call',
+    CREATOR_REQUEST: 'creator_request',
+    ROYAL_ANNOUNCEMENT: 'royal_announcement',
+    CHANNEL_MENTION: 'channel_mention',
   },
   INTELLIGENCE: {
     GROUPING: { ENABLED: true, TIME_WINDOW: 300000, MAX_GROUP_SIZE: 10 },
@@ -1061,6 +1068,7 @@ class UltimateNotificationsService {
   clearCache() {
     this.notificationsCache.clear();
     this.userPreferencesCache.clear();
+    this.hiddenSendersCache.clear();
   }
 
   destroy() {

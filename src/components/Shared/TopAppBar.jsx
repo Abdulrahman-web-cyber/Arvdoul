@@ -319,16 +319,24 @@ export const TopAppBar = ({
         setPendingCount(backgroundSyncService.getPendingCount());
       }
     };
+    const onQueueChanged = (e) => {
+      setIsOnline(navigator.onLine);
+      if (typeof e?.detail?.count === "number") {
+        setPendingCount(e.detail.count);
+      } else if (typeof backgroundSyncService?.getPendingCount === "function") {
+        setPendingCount(backgroundSyncService.getPendingCount());
+      }
+    };
 
     updateConn();
     window.addEventListener("online", updateConn);
     window.addEventListener("offline", updateConn);
-    const interval = setInterval(updateConn, 4000);
+    window.addEventListener("arvdoul:sync_queue_changed", onQueueChanged);
 
     return () => {
       window.removeEventListener("online", updateConn);
       window.removeEventListener("offline", updateConn);
-      clearInterval(interval);
+      window.removeEventListener("arvdoul:sync_queue_changed", onQueueChanged);
     };
   }, []);
 
@@ -769,8 +777,8 @@ export const TopAppBar = ({
                             <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
                           )}
                           {chatHeaderState?.level ? (
-                            <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0">
-                              Lv.{chatHeaderState.level}
+                            <span className="hidden sm:inline text-[11px] font-semibold text-purple-400 tabular-nums shrink-0">
+                              · Lv.{chatHeaderState.level}
                             </span>
                           ) : null}
                         </div>

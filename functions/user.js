@@ -324,10 +324,25 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
       return { success: true, status: 'partial_with_offload', message: 'Cleanup continues in background.' };
     }
 
+    // Device sessions
+    try {
+      const devicesRef = db.collection('user_devices').doc(userId);
+      await deleteSubcollectionsSequentially(devicesRef, ['sessions']);
+      await devicesRef.delete();
+    } catch (err) {
+      log('warn', 'device sessions cleanup failed during account deletion', { userId, error: err.message });
+    }
+
     // Core profile documents
-    await db.collection('user_settings').doc(userId).delete().catch(() => {});
-    await db.collection('user_preferences').doc(userId).delete().catch(() => {});
-    await privateDocRef.delete().catch(() => {});
+    await db.collection('user_settings').doc(userId).delete().catch((err) => {
+      log('warn', 'user_settings cleanup failed during deletion', { userId, error: err.message });
+    });
+    await db.collection('user_preferences').doc(userId).delete().catch((err) => {
+      log('warn', 'user_preferences cleanup failed during deletion', { userId, error: err.message });
+    });
+    await privateDocRef.delete().catch((err) => {
+      log('warn', 'users_private cleanup failed during deletion', { userId, error: err.message });
+    });
     await userDocRef.delete();
 
     // Remove from user recommendations (collection group). Bounded pages: the
@@ -497,4 +512,68 @@ exports.generateFriendRecommendations = functions.https.onCall(async (data, cont
     log('ERROR', 'generateFriendRecommendations failed', { uid, error: error.message });
     throw new functions.https.HttpsError('internal', error.message);
   }
+});
+
+// ----------------------------------------------------------------------
+//  4. Multi-device session registry (user_devices/{uid}/sessions/{deviceId})
+// ----------------------------------------------------------------------
+exports.registerDeviceSession = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'registerDeviceSession', 20, 60000);
+
+  const { deviceId, label = 'Web Browser', platform = 'web' } = data || {};
+  const cleanId = typeof deviceId === 'string' ? deviceId.trim().slice(0, 128) : '';
+  if (!cleanId) {
+    throw new functions.https.HttpsError('invalid-argument', 'deviceId is required.');
+  }
+
+  const sessionRef = db.collection('user_devices').doc(uid).collection('sessions').doc(cleanId);
+  const existing = await sessionRef.get();
+  await sessionRef.set({
+    deviceId: cleanId,
+    userId: uid,
+    label: typeof label === 'string' ? label.trim().slice(0, 120) : 'Web Browser',
+    platform: typeof platform === 'string' ? platform.trim().slice(0, 48) : 'web',
+    revoked: false,
+    lastSeenAt: FieldValue.serverTimestamp(),
+    createdAt: existing.exists ? (existing.data().createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { success: true, deviceId: cleanId };
+});
+
+exports.listDeviceSessions = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'listDeviceSessions', 30, 60000);
+
+  const snap = await db.collection('user_devices').doc(uid).collection('sessions')
+    .orderBy('lastSeenAt', 'desc')
+    .limit(25)
+    .get();
+
+  const sessions = snap.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+    lastSeenAt: d.data().lastSeenAt?.toDate?.()?.toISOString?.() || null,
+    createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() || null,
+  }));
+  return { success: true, sessions };
+});
+
+exports.revokeDeviceSession = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'revokeDeviceSession', 20, 60000);
+
+  const { deviceId } = data || {};
+  const cleanId = typeof deviceId === 'string' ? deviceId.trim().slice(0, 128) : '';
+  if (!cleanId) {
+    throw new functions.https.HttpsError('invalid-argument', 'deviceId is required.');
+  }
+
+  const sessionRef = db.collection('user_devices').doc(uid).collection('sessions').doc(cleanId);
+  await sessionRef.set({
+    revoked: true,
+    revokedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { success: true, deviceId: cleanId };
 });

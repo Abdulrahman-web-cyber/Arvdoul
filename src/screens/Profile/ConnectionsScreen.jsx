@@ -75,11 +75,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   // list must not reach another through a shared screen-level gate.
   const [capabilities, setCapabilities] = useState(null);
 
-  const rawLvl = targetProfile?.level ?? userProfile?.level ?? currentUser?.level;
+  const rawLvl = targetProfile?.level ?? (isOwner ? (userProfile?.level ?? currentUser?.level) : null);
   const effectiveLevel = rawLvl != null && Number.isFinite(Number(rawLvl)) ? Number(rawLvl) : null;
   const isCreatorOrAdvanced = Boolean(
     targetProfile?.isCreator ||
-    userProfile?.isCreator ||
+    (isOwner && userProfile?.isCreator) ||
     (effectiveLevel != null && effectiveLevel >= LEVEL_GATES.publicFollowers)
   );
 

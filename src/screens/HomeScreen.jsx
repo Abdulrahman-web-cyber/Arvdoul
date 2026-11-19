@@ -1355,11 +1355,15 @@ export default function HomeScreen() {
     };
   }, [user?.uid]);
 
-  // Background refresh on app resume
+  // Background refresh on app resume (60s cooldown)
+  const lastResumeSyncRef = useRef(0);
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && user?.uid && authInitialized && !isLoadingRef.current) {
-        sessionIdRef.current = Date.now();
+        const now = Date.now();
+        if (now - lastResumeSyncRef.current < 60000) return;
+        lastResumeSyncRef.current = now;
+        sessionIdRef.current = now;
         loadFeedRef.current?.(true, true);
         processOptimisticQueue(user.uid);
       }

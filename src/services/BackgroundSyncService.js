@@ -36,6 +36,13 @@ class BackgroundSyncService {
     }
   }
 
+  _notifyQueueChanged(count) {
+    this._pendingCount = count;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('arvdoul:sync_queue_changed', { detail: { count } }));
+    }
+  }
+
   /**
    * Dispatches queued offline operations. Delegates to the canonical sync
    * engine (`syncQueue`) so there is exactly one op-type → service map. The
@@ -49,8 +56,9 @@ class BackgroundSyncService {
     const uid =
       typeof window !== 'undefined' ? window._arvdoul_auth?.currentUser?.uid || null : null;
     await syncQueue({ ownerUid: uid });
-    this._pendingCount = await offlineQueue.getPendingCount({ ownerUid: uid });
-    return { processed: this._pendingCount === 0 ? 0 : this._pendingCount };
+    const count = await offlineQueue.getPendingCount({ ownerUid: uid });
+    this._notifyQueueChanged(count);
+    return { processed: count === 0 ? 0 : count };
   }
 
   /**
@@ -64,7 +72,9 @@ class BackgroundSyncService {
     offlineQueue
       .getPendingCount({ ownerUid: uid })
       .then((count) => {
-        this._pendingCount = count;
+        if (count !== this._pendingCount) {
+          this._notifyQueueChanged(count);
+        }
       })
       .catch((e) => {
         logger.debug('Pending-count read failed', { error: e?.message });

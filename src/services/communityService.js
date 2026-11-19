@@ -1,7 +1,7 @@
 // src/services/communityService.js
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, query, where, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore";
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { logger } from '../utils/Logger.js';
 import { unknownNumber } from '../lib/unknownNumber.js';
@@ -15,6 +15,11 @@ class CommunityService {
   constructor() {
     this.db = null;
     this.initialized = false;
+    this._channelCache = new Map();
+  }
+
+  clearCache() {
+    this._channelCache.clear();
   }
 
   async initialize() {
@@ -437,18 +442,134 @@ class CommunityService {
       .slice(0, limitNum);
   }
 
+  async getCommunityChannels(communityId, { forceRefresh = false } = {}) {
+    await this.initialize();
+    if (!communityId) return [];
+    const cached = this._channelCache.get(communityId);
+    if (!forceRefresh && cached && Date.now() - cached.at < 30_000) {
+      return cached.channels;
+    }
+    const res = await callFunction(FUNCTIONS.GET_COMMUNITY_CHANNELS, { communityId });
+    const channels = Array.isArray(res?.channels) ? res.channels : [];
+    this._channelCache.set(communityId, { channels, at: Date.now() });
+    return channels;
+  }
+
+  async createCommunityChannel(communityId, payload) {
+    await this.initialize();
+    const res = await callFunction(FUNCTIONS.CREATE_COMMUNITY_CHANNEL, { communityId, ...(payload || {}) });
+    this._channelCache.delete(communityId);
+    return res?.channel || null;
+  }
+
+  async updateCommunityChannel(communityId, channelId, updates) {
+    await this.initialize();
+    const res = await callFunction(FUNCTIONS.UPDATE_COMMUNITY_CHANNEL, { communityId, channelId, ...(updates || {}) });
+    this._channelCache.delete(communityId);
+    return res;
+  }
+
+  async deleteCommunityChannel(communityId, channelId) {
+    await this.initialize();
+    const res = await callFunction(FUNCTIONS.DELETE_COMMUNITY_CHANNEL, { communityId, channelId });
+    this._channelCache.delete(communityId);
+    return res;
+  }
+
+  async getChannelMessages(communityId, channelId, options = {}) {
+    await this.initialize();
+    const res = await callFunction(FUNCTIONS.GET_CHANNEL_MESSAGES, {
+      communityId,
+      channelId,
+      limit: options.limit || 40,
+      beforeId: options.beforeId || null,
+    });
+    return {
+      messages: Array.isArray(res?.messages) ? res.messages : [],
+      hasMore: Boolean(res?.hasMore),
+    };
+  }
+
+  async sendChannelMessage(communityId, channelId, payload) {
+    await this.initialize();
+    const res = await callFunction(FUNCTIONS.SEND_CHANNEL_MESSAGE, {
+      communityId,
+      channelId,
+      ...(typeof payload === 'string' ? { content: payload } : (payload || {})),
+    });
+    return res?.message || null;
+  }
+
+  async moderateChannelMessage(communityId, channelId, messageId, action) {
+    await this.initialize();
+    return callFunction(FUNCTIONS.MODERATE_CHANNEL_MESSAGE, { communityId, channelId, messageId, action });
+  }
+
+  async getCommunityMuteState(userId, communityId) {
+    await this.initialize();
+    if (!userId || !communityId) return { communityMuted: false, mutedChannels: [] };
+    try {
+      const snap = await getDoc(doc(this.db, 'user_settings', userId));
+      const mutes = snap.exists() ? snap.data()?.communityMutes || {} : {};
+      const entry = mutes[communityId] || {};
+      return {
+        communityMuted: Boolean(entry.muted),
+        mutedChannels: Array.isArray(entry.mutedChannels) ? entry.mutedChannels : [],
+      };
+    } catch {
+      return { communityMuted: false, mutedChannels: [] };
+    }
+  }
+
+  async toggleMuteCommunity(userId, communityId, muted) {
+    await this.initialize();
+    if (!userId || !communityId) return { communityMuted: false };
+    await setDoc(
+      doc(this.db, 'user_settings', userId),
+      { communityMutes: { [communityId]: { muted: Boolean(muted) } } },
+      { merge: true }
+    );
+    return { communityMuted: Boolean(muted) };
+  }
+
+  async toggleMuteChannel(userId, communityId, channelId, muted) {
+    await this.initialize();
+    if (!userId || !communityId || !channelId) return { mutedChannels: [] };
+    const state = await this.getCommunityMuteState(userId, communityId);
+    const set = new Set(state.mutedChannels);
+    if (muted) set.add(channelId);
+    else set.delete(channelId);
+    const mutedChannels = Array.from(set);
+    await setDoc(
+      doc(this.db, 'user_settings', userId),
+      { communityMutes: { [communityId]: { mutedChannels } } },
+      { merge: true }
+    );
+    return { mutedChannels };
+  }
+
+  async reportCommunity(communityId, reason, details = '') {
+    await this.initialize();
+    return callFunction(FUNCTIONS.REPORT_COMMUNITY, { targetId: communityId, reason, details });
+  }
+
+  async reportChannel(communityId, channelId, reason, details = '') {
+    await this.initialize();
+    return callFunction(FUNCTIONS.REPORT_CHANNEL, { targetId: `${communityId}_${channelId}`, communityId, channelId, reason, details });
+  }
+
   subscribeToCommunity(communityId, callback) {
-    return onSnapshot(doc(this.db, 'communities', communityId), (doc) => {
-      if (doc.exists) {
-        callback({ id: doc.id, ...doc.data() });
+    return onSnapshot(doc(this.db, 'communities', communityId), (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ id: docSnap.id, ...docSnap.data() });
       }
     }, (err) => logger.warn('[communityService] subscription error', err));
   }
 
   subscribeToMembers(communityId, callback) {
-    const unsubscribe = onSnapshot(doc(this.db, 'communities', communityId), (doc) => {
-      if (doc.exists) {
-        const members = doc.data().members || {};
+    const unsubscribe = onSnapshot(doc(this.db, 'communities', communityId), (docSnap) => {
+      if (docSnap.exists()) {
+        const members = docSnap.data().members || {};
         callback(Object.entries(members).map(([id, data]) => ({ id, ...data })));
       }
     }, (err) => logger.warn('[communityService] subscription error', err));
@@ -456,9 +577,9 @@ class CommunityService {
   }
 
   subscribeToPendingRequests(communityId, callback) {
-    const unsubscribe = onSnapshot(doc(this.db, 'communities', communityId), (doc) => {
-      if (doc.exists) {
-        const requests = doc.data().pendingRequests || {};
+    const unsubscribe = onSnapshot(doc(this.db, 'communities', communityId), (docSnap) => {
+      if (docSnap.exists()) {
+        const requests = docSnap.data().pendingRequests || {};
         callback(Object.entries(requests).map(([id, data]) => ({ id, ...data })));
       }
     }, (err) => logger.warn('[communityService] subscription error', err));

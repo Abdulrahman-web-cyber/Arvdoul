@@ -93,7 +93,13 @@ export default function LiveScreen() {
   }, [user?.uid]);
 
   useEffect(() => { loadStreams(); }, [loadStreams]);
-  useEffect(() => { const id = setInterval(loadStreams, 15000); return () => clearInterval(id); }, [loadStreams]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      loadStreams();
+    }, 30000);
+    return () => clearInterval(id);
+  }, [loadStreams]);
 
   useEffect(() => {
     try {
@@ -172,6 +178,7 @@ export default function LiveScreen() {
       setDuration(0);
       durationRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
       viewerPollRef.current = setInterval(async () => {
+        if (typeof document !== 'undefined' && document.hidden) return;
         try {
           const stream = await svc().getLiveStream(streamId);
           setViewerCount(stream?.viewerCount ?? stream?.stats?.totalViewers ?? null);
@@ -282,8 +289,12 @@ export default function LiveScreen() {
       }
     };
     loadComments();
-    commentPollRef.current = setInterval(loadComments, POLL_MS);
+    commentPollRef.current = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      loadComments();
+    }, POLL_MS);
     watchPollRef.current = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const fresh = await svc().getLiveStream(watching.id);
         if (fresh) {

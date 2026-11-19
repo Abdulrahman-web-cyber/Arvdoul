@@ -21,6 +21,7 @@ const functions = require('firebase-functions');
 const { checkRateLimit } = require('./rateLimit');
 const { getUserIdFromContext } = require('./auth');
 const { writeAudit } = require('./admin');
+const { awardXpSafe } = require('./xpAward');
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
@@ -104,6 +105,9 @@ exports.getUserEventRegistrations = functions.https.onCall(async (data, context)
         status: data.status || null,
         startDate: data.startDate || null,
         endDate: data.endDate || null,
+        timezone: data.timezone || null,
+        location: data.location || null,
+        communityId: data.communityId || null,
         coverImage: data.coverImage || null,
         organizerId: data.organizerId || null,
         attendeeStatus: data.attendees?.[uid]?.status || null,
@@ -141,6 +145,9 @@ exports.registerForEvent = functions.https.onCall(async (data, context) => {
     { attendingEvents: FieldValue.arrayUnion(eventId), updatedAt: FieldValue.serverTimestamp() },
     { merge: true }
   );
+  if (status === 'registered') {
+    await awardXpSafe(uid, 'event_rsvp', { source: eventId });
+  }
   return { success: true, status };
 });
 

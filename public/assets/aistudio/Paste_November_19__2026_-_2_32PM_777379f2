@@ -1,0 +1,6323 @@
+### ARVDOUL — PART 2: SOCIAL COMMUNICATION & DIGITAL NATION INTEGRATION
+
+### Complete Production Implementation Specification for Firebase AI Studio
+
+MASTER EXECUTION PROMPT · PART 2 OF 3 · SOCIAL COMMUNICATION ECOSYSTEM
+
+### 1\. MISSION AND DELIVERY STANDARD
+
+You are working on Arvdoul — The Digital Nation, a production-grade social platform designed to become a complete digital social ecosystem.
+
+Your assignment is to implement Part 2: Social Communication and Digital Nation Integration of Arvdoul's messaging ecosystem.
+
+Part 1 established the core direct-messaging foundation. Part 2 must extend that foundation into a connected communication ecosystem that supports groups, communities, channels, calling, social interactions, digital identity, Coins, XP, levels, Royal Family communication, creator interactions, events and multi-device synchronization.
+
+This is not a separate application or an independent messaging product.
+
+It is an expansion of Arvdoul's existing communication infrastructure.
+
+The goal is to make communication throughout Arvdoul feel unified. Users should be able to interact with friends, groups, communities, creators, events and authorized organizations without encountering disconnected communication experiences.
+
+The system must preserve the messaging foundation established in Part 1 while expanding its capabilities.
+
+Do not rebuild Part 1. Extend, improve and integrate it.
+
+The expected result is a mature social communication ecosystem capable of supporting real users, growing communities, meaningful interaction, digital ownership, and the distinctive Arvdoul economy.
+
+### 2\. NON-NEGOTIABLE EXECUTION RULES
+
+These requirements apply to every implementation task.
+
+### 2.1 Inspect the actual repository before implementation
+
+Before modifying anything, inspect the current repository and establish the actual state of Part 1.
+
+Inspect:
+
+* Existing messaging architecture.
+
+* Direct conversations and message services.
+
+* Existing Firestore collections and document models.
+
+* Existing Cloud Functions.
+
+* Existing Storage infrastructure.
+
+* Existing authentication and authorization.
+
+* Existing notification infrastructure.
+
+* Existing profile and social graph services.
+
+* Existing Posts, Vibes and Sparks implementations.
+
+* Existing XP and experience infrastructure.
+
+* Existing levels, titles and progression systems.
+
+* Existing Coins, wallet and transaction ledger.
+
+* Existing Royal Family and role-management systems.
+
+* Existing creator and monetization systems.
+
+* Existing event infrastructure.
+
+* Existing blocking, reporting and moderation systems.
+
+* Existing presence and multi-device infrastructure.
+
+* Existing design system and navigation.
+
+* Existing tests, indexes and Firebase security rules.
+
+* Existing partially completed group, community, channel and calling implementations.
+
+Search for existing implementations throughout the application.
+
+Do not assume that a subsystem is absent because its first implementation is not immediately obvious.
+
+Identify which services are genuinely authoritative, which are only UI wrappers, which are incomplete and which are unused.
+
+### 2.2 Verify Part 1 before extending it
+
+Part 2 depends on Part 1.
+
+Before making changes, verify that the following capabilities exist and work:
+
+* Direct conversations.
+
+* Inbox.
+
+* Text messaging.
+
+* Real-time message synchronization.
+
+* Message delivery and read states.
+
+* Message requests.
+
+* Attachments.
+
+* Voice notes.
+
+* Replying.
+
+* Reactions.
+
+* Forwarding.
+
+* Editing and deletion.
+
+* Message privacy.
+
+* Blocking and reporting.
+
+* Core notifications.
+
+* Offline handling.
+
+* Firestore and Storage authorization.
+
+* Profile integration.
+
+* Posts, Vibes and Sparks sharing where implemented.
+
+Use the actual repository and tests as evidence.
+
+If a Part 1 capability is missing, identify the precise dependency and its impact.
+
+Do not silently assume it works.
+
+Do not rebuild the entire direct-messaging system to compensate for one missing dependency.
+
+Repair only what is necessary and compatible with the established architecture.
+
+If a critical security or architectural dependency prevents safe implementation, report it as BLOCKED and identify the exact requirement.
+
+### 2.3 Preserve existing authoritative systems
+
+This is essential.
+
+Arvdoul must not end up with several competing sources of truth for the same feature.
+
+Reuse the existing authoritative systems for:
+
+* Authentication.
+
+* User profiles.
+
+* Social relationships.
+
+* Followers and friends.
+
+* Privacy.
+
+* Blocking.
+
+* Notifications.
+
+* Firebase Storage.
+
+* XP.
+
+* Levels.
+
+* Titles.
+
+* Coins.
+
+* Wallet balances.
+
+* Transaction history.
+
+* Royal Family membership.
+
+* Creator identity.
+
+* Verification.
+
+* Events.
+
+* Moderation.
+
+* Analytics.
+
+* Application settings.
+
+Do not create a second wallet to support gifting.
+
+Do not create a second XP system to reward messaging.
+
+Do not create a second levels system for group participation.
+
+Do not create a separate Royal Family identity database.
+
+Do not create independent notification infrastructure.
+
+Do not create competing group membership or community membership systems.
+
+If existing functionality is incomplete, extend the appropriate authoritative subsystem rather than implementing a shortcut.
+
+### 2.4 Do not compromise Part 1
+
+Part 1 direct conversations must continue working throughout Part 2 development.
+
+Do not:
+
+* Replace the direct-message data model unnecessarily.
+
+* Break existing message IDs.
+
+* Change the meaning of delivery or read states.
+
+* Break existing attachment paths.
+
+* Remove direct-message functionality.
+
+* Introduce conflicting message services.
+
+* Change existing message permissions without auditing their impact.
+
+* Duplicate listeners or notification processing.
+
+* Cause existing users to lose their conversation history.
+
+Any required migration must be documented, tested and backward-compatible wherever practical.
+
+### 2.5 Genuine functionality only
+
+Do not create decorative controls that imitate functionality.
+
+Do not introduce:
+
+* Fake group members.
+
+* Fake community statistics.
+
+* Fake online members.
+
+* Fake voice calls.
+
+* Fake video calls.
+
+* Fake Royal Family privileges.
+
+* Fake XP rewards.
+
+* Fake Coin transactions.
+
+* Fake creator verification.
+
+* Fake event attendance.
+
+* Fake synchronized devices.
+
+* Fake message delivery.
+
+* Fake moderation decisions.
+
+Every user-visible action must connect to a real backend operation and an appropriate permission model.
+
+### 2.6 Evidence-based completion
+
+A task is not complete because:
+
+* A screen was created.
+
+* A button appears.
+
+* A service was added.
+
+* A collection was created.
+
+* A function was deployed.
+
+* A build succeeded.
+
+* A test file exists.
+
+* A checkbox was selected.
+
+* An AI agent reported success.
+
+A task is complete only after actual functionality, integrations, authorization, error behavior and acceptance criteria have been verified.
+
+Never invent test results.
+
+Never claim a deployment or external integration that has not happened.
+
+Never claim that a feature works when its underlying infrastructure is unavailable.
+
+### 3\. STRICT SCOPE: PART 2 ONLY
+
+Part 2 expands communication beyond one-to-one messaging.
+
+### 3.1 Features included
+
+Implement:
+
+* Group conversations.
+
+* Group creation and management.
+
+* Group administrators and permissions.
+
+* Group invitations.
+
+* Group join requests.
+
+* Group membership management.
+
+* Group information and shared media.
+
+* Group message interactions.
+
+* Group-specific moderation and privacy.
+
+* Foundational community infrastructure.
+
+* Community membership.
+
+* Community channels.
+
+* Channel permissions and roles.
+
+* Community notifications.
+
+* Community discovery and management.
+
+* Foundational one-to-one and group voice/video calling.
+
+* Incoming and outgoing call experiences.
+
+* Call history and missed-call handling.
+
+* Advanced Vibes integration.
+
+* Advanced Posts integration.
+
+* Advanced Sparks integration.
+
+* XP and achievement integration.
+
+* Messaging-related level progression.
+
+* Existing title and status integration.
+
+* Coins and digital gifting through the authoritative wallet.
+
+* Royal Family communication integration.
+
+* Creator communication and reach-out integration.
+
+* Event-related conversations and coordination.
+
+* Advanced relationship-aware messaging permissions.
+
+* Multi-device synchronization.
+
+* Advanced notification preferences.
+
+* Advanced communication moderation.
+
+* Improved privacy settings.
+
+* Cross-feature navigation and discoverability.
+
+* Responsive UI and accessibility.
+
+* Backend, Firebase and security hardening.
+
+* Comprehensive integration and regression testing.
+
+### 3.2 Features explicitly reserved for Part 3
+
+Do not attempt to implement the following advanced ecosystem in Part 2:
+
+* Full advanced end-to-end encryption and cryptographic device management.
+
+* Advanced premium messaging customization.
+
+* Scheduled messages.
+
+* Advanced automated reminders.
+
+* Advanced disappearing-message systems.
+
+* Advanced message organization and power-user search.
+
+* Advanced voice/video production features.
+
+* Full meeting infrastructure.
+
+* Screen sharing.
+
+* Advanced creator messaging monetization.
+
+* Advanced paid reach-outs.
+
+* Advanced Royal Family organizational communication.
+
+* Advanced communication analytics and revenue intelligence.
+
+* Advanced community automation.
+
+* Advanced community productivity tools.
+
+* Advanced administrative communication dashboards.
+
+* Full enterprise-grade communication governance.
+
+Part 2 must deliver a strong foundation for these capabilities without prematurely implementing them.
+
+Do not display controls for future features that do not exist.
+
+Do not claim Part 3 functionality has been delivered.
+
+### 4\. ARCHITECTURAL PRINCIPLES
+
+### 4.1 One connected communication ecosystem
+
+The messaging infrastructure should support different communication contexts without creating unrelated messaging applications.
+
+The main communication contexts are:
+
+Direct conversations
+
+Existing Part 1 functionality.
+
+Groups
+
+Private or controlled conversations involving multiple participants.
+
+Community channels
+
+Structured communication spaces belonging to existing or newly introduced communities.
+
+Calls
+
+Real-time voice and video communication associated with authorized users or communication contexts.
+
+Social content conversations
+
+Communication originating from Vibes, Posts, Sparks and supported social interactions.
+
+Organizational communication
+
+Authorized communication associated with Royal Family roles and existing organizational structures.
+
+These contexts must share appropriate infrastructure, but their permissions, ownership and operational rules must remain distinct.
+
+Do not force every feature into one generic conversation type without considering its different security and lifecycle requirements.
+
+### 4.2 Preserve architectural boundaries
+
+Maintain clear responsibilities for:
+
+* Presentation.
+
+* Application orchestration.
+
+* Domain logic.
+
+* Data access.
+
+* Media processing.
+
+* Real-time communication.
+
+* Financial operations.
+
+* Progression operations.
+
+* Authorization.
+
+* Notifications.
+
+* Moderation.
+
+A group conversation, a community channel and a Royal Family announcement may share UI components or delivery infrastructure, but they should not automatically share identical permission models.
+
+### 4.3 Existing architecture first
+
+Adapt the actual repository's conventions.
+
+Do not introduce a parallel architecture solely to match the suggested organization below.
+
+A logical structure could look like:
+
+```text
+messaging/
+├── direct/
+├── groups/
+├── communities/
+├── channels/
+├── calls/
+├── integrations/
+│   ├── vibes/
+│   ├── posts/
+│   ├── sparks/
+│   ├── profiles/
+│   ├── social-graph/
+│   ├── coins/
+│   ├── xp/
+│   ├── levels/
+│   ├── royal-family/
+│   ├── creators/
+│   └── events/
+├── notifications/
+├── privacy/
+├── moderation/
+├── devices/
+├── components/
+├── hooks/
+├── services/
+├── repositories/
+├── domain/
+├── state/
+├── validation/
+├── types/
+└── tests/
+```
+
+Only introduce modules when they provide a real separation of responsibility.
+
+### 5\. GROUP MESSAGING SYSTEM
+
+Group messaging must become a complete extension of the Part 1 messaging foundation.
+
+It must support real communication among multiple users with reliable membership, permissions, privacy, administration and moderation.
+
+### 5.1 Group creation
+
+Allow an eligible user to create a group.
+
+The creation process should support:
+
+* Group name.
+
+* Group description.
+
+* Group avatar.
+
+* Initial participants.
+
+* Privacy setting.
+
+* Invitation permissions.
+
+* Membership approval setting where applicable.
+
+* Relevant group preferences.
+
+Do not overload the creation experience.
+
+Use clear steps, appropriate previews and validation.
+
+The creator becomes the initial authorized administrator according to the group policy.
+
+### 5.2 Group identity
+
+A group should have:
+
+* Stable group ID.
+
+* Display name.
+
+* Description.
+
+* Avatar.
+
+* Creator identity.
+
+* Creation timestamp.
+
+* Membership information.
+
+* Privacy configuration.
+
+* Group status.
+
+* Updated timestamp.
+
+* Last activity summary.
+
+Do not store unnecessary profile snapshots as authoritative user information.
+
+Group display information may be denormalized for performance, but it must not replace the authoritative user profile.
+
+### 5.3 Group membership
+
+Implement:
+
+* Adding authorized members.
+
+* Removing members.
+
+* Leaving a group.
+
+* Joining by invitation.
+
+* Joining through authorized discovery where supported.
+
+* Approval-based membership where configured.
+
+* Rejoining according to group policy.
+
+* Membership status tracking.
+
+* Membership-change history where needed.
+
+Membership operations must be authorized.
+
+A normal member must not be able to remove administrators or modify another member's permissions.
+
+### 5.4 Group invitations
+
+Support secure invitation mechanisms.
+
+Depending on the existing product architecture, these may include:
+
+* Selecting existing eligible users.
+
+* Inviting from a profile or conversation.
+
+* Secure invitation links.
+
+* Invitation expiration.
+
+* Invitation revocation.
+
+* Maximum-use limits where relevant.
+
+* Join requests.
+
+* Invitation acceptance or rejection.
+
+Invitation tokens must be unpredictable and validated on the backend.
+
+Do not expose permanent unrestricted group-join links by default.
+
+Do not allow an unauthorized user to invite people when the group's permissions prohibit it.
+
+### 5.5 Group conversation interface
+
+Extend the established conversation experience.
+
+Support:
+
+* Group avatar.
+
+* Group name.
+
+* Relevant member information.
+
+* Message timeline.
+
+* Sender identities.
+
+* Message timestamps.
+
+* Replies.
+
+* Reactions.
+
+* Forwarding.
+
+* Editing.
+
+* Deletion.
+
+* Attachments.
+
+* Shared Posts, Vibes and Sparks.
+
+* Mentions.
+
+* Read indicators where appropriate.
+
+* Message delivery states.
+
+* Group-specific system events.
+
+* New-message indicators.
+
+Preserve the functionality and visual consistency established in Part 1.
+
+### 5.6 Message attribution
+
+Group messages must clearly identify the sender.
+
+Display:
+
+* Sender name.
+
+* Sender profile image where appropriate.
+
+* Relevant identity or verification status.
+
+* Message content.
+
+* Message timestamp.
+
+* Appropriate interactions.
+
+Do not allow senders to impersonate another member.
+
+Do not trust client-supplied sender information.
+
+Resolve identity through the authoritative profile system.
+
+### 5.7 Group replies and mentions
+
+Support contextual replies and member mentions.
+
+Requirements:
+
+* Reply to a message.
+
+* Preview the original message.
+
+* Open the referenced message where available.
+
+* Mention eligible group participants.
+
+* Validate mention targets.
+
+* Support appropriate mention notifications.
+
+* Avoid notifying every participant for every ordinary message.
+
+* Handle removed or unavailable members.
+
+* Respect notification preferences.
+
+Mention notifications must not grant someone access to a private group.
+
+### 5.8 Group read and delivery states
+
+Group messaging requires a different model from one-to-one delivery.
+
+Do not create a receipt write for every message and every group member without evaluating its cost.
+
+Support appropriate states such as:
+
+* Sent.
+
+* Delivered to relevant participants where technically confirmed.
+
+* Read by specific participants when appropriate and privacy-permitted.
+
+For large groups, use efficient read cursors and carefully bounded receipt data.
+
+Provide a suitable interface for understanding message readership without creating excessive Firestore reads.
+
+Do not imply that all members have read a message merely because one person has.
+
+### 5.9 Group administration
+
+Support role-based administration.
+
+At minimum, design around:
+
+Creator/Owner
+
+The authorized owner of the group.
+
+Administrator
+
+A member with explicitly granted management permissions.
+
+Moderator
+
+A member with restricted moderation capabilities.
+
+Member
+
+A normal participant.
+
+Role names should align with Arvdoul's established role conventions where they already exist.
+
+A group role must not automatically grant global Arvdoul privileges.
+
+### 5.10 Group permission matrix
+
+Implement explicit permissions for:
+
+| Operation                 | Owner        | Admin        | Moderator    | Member       |
+| ------------------------- | ------------ | ------------ | ------------ | ------------ |
+| View authorized group     | Yes          | Yes          | Yes          | Yes          |
+| Send permitted messages   | Yes          | Yes          | Yes          | Yes          |
+| Invite members            | Configurable | Configurable | Configurable | Configurable |
+| Approve join requests     | Yes          | Configurable | Configurable | No           |
+| Remove members            | Yes          | Configurable | Configurable | No           |
+| Manage group settings     | Yes          | Configurable | Limited      | No           |
+| Assign moderator          | Yes          | Configurable | No           | No           |
+| Assign administrator      | Yes          | Restricted   | No           | No           |
+| Delete group              | Yes          | No           | No           | No           |
+| Moderate messages         | Yes          | Configurable | Configurable | No           |
+| Manage group restrictions | Yes          | Configurable | Limited      | No           |
+
+This is a permission design, not a hardcoded assumption that every group must behave identically.
+
+The actual permission configuration must be validated by trusted backend logic.
+
+Prevent privilege escalation.
+
+### 5.11 Group settings
+
+Support relevant settings:
+
+* Name and description.
+
+* Avatar.
+
+* Membership approval.
+
+* Who can invite.
+
+* Who can edit group information.
+
+* Who can send messages.
+
+* Who can manage administrators.
+
+* Who can moderate.
+
+* Who can share supported content.
+
+* Notification preferences.
+
+* Member visibility where appropriate.
+
+Do not expose settings that are not enforced.
+
+### 5.12 Group activity history
+
+Provide appropriate records of important changes.
+
+Examples:
+
+* Member joined.
+
+* Member left.
+
+* Member removed.
+
+* Administrator assigned.
+
+* Role changed.
+
+* Group information updated.
+
+* Group invitation revoked.
+
+* Significant moderation action.
+
+Do not create unnecessary public audit information containing sensitive administrative data.
+
+Protect sensitive moderation details.
+
+### 5.13 Group media
+
+Extend the Part 1 shared-media architecture to groups.
+
+Support:
+
+* Images.
+
+* Videos.
+
+* Voice notes.
+
+* Audio.
+
+* Documents.
+
+* Shared links.
+
+* Supported Arvdoul content.
+
+Apply the group's actual membership and access policy.
+
+Do not allow former members to retrieve media merely because they remember an old download URL.
+
+Define whether historical content remains visible after membership removal or departure, and enforce that policy consistently.
+
+### 6\. COMMUNITY AND CHANNEL SYSTEM
+
+Communities should provide structured social communication rather than simply becoming large group chats.
+
+Part 2 must establish a useful, extensible community foundation.
+
+### 6.1 Community identity
+
+Support a community entity with:
+
+* Stable ID.
+
+* Name.
+
+* Description.
+
+* Avatar.
+
+* Relevant cover or branding treatment if the existing design system supports it.
+
+* Creator or owner.
+
+* Membership settings.
+
+* Visibility.
+
+* Rules.
+
+* Categories or topics where appropriate.
+
+* Creation time.
+
+* Updated time.
+
+* Membership count.
+
+* Status.
+
+Avoid duplicated copies of user identity.
+
+### 6.2 Community visibility
+
+Support an appropriate visibility model.
+
+Possible configurations:
+
+* Publicly discoverable.
+
+* Private or invitation-controlled.
+
+* Restricted membership.
+
+* Approval-based entry.
+
+Use the existing privacy and moderation architecture.
+
+Do not make a private community accessible through an unprotected Firestore document or guessed Storage path.
+
+### 6.3 Community membership
+
+Implement:
+
+* Join.
+
+* Leave.
+
+* Request to join.
+
+* Approve.
+
+* Reject.
+
+* Invite.
+
+* Remove.
+
+* Restrict.
+
+* Ban where supported by the moderation policy.
+
+Membership changes must be authorized and auditable where appropriate.
+
+Prevent repeated abusive join requests.
+
+### 6.4 Channels
+
+A community may have multiple channels with different communication purposes.
+
+Examples:
+
+* General discussion.
+
+* Announcements.
+
+* Introductions.
+
+* Questions.
+
+* Events.
+
+* Media sharing.
+
+* Topic-specific discussions.
+
+Do not force these channel names on every community.
+
+Allow authorized administrators to create and manage channels.
+
+### 6.5 Channel types
+
+Implement the foundational types needed by Part 2:
+
+Discussion channel
+
+Participants can exchange messages according to channel permissions.
+
+Announcement channel
+
+Only authorized roles can publish messages; eligible members can read and interact according to policy.
+
+Event channel
+
+Used for communication related to a supported event.
+
+Only implement additional channel types when they have a real use case and backend behavior.
+
+### 6.6 Channel permissions
+
+Support appropriate controls for:
+
+* View channel.
+
+* Join or subscribe.
+
+* Send messages.
+
+* Reply.
+
+* React.
+
+* Share content.
+
+* Mention members.
+
+* Pin messages.
+
+* Manage channel settings.
+
+* Delete or moderate content.
+
+* Manage channel participants.
+
+Permission inheritance from the community must be explicit.
+
+Do not assume all community administrators automatically receive unrestricted access to every operational feature.
+
+### 6.7 Community roles
+
+Support role-based permissions appropriate to the community.
+
+At minimum:
+
+* Owner.
+
+* Administrator.
+
+* Moderator.
+
+* Member.
+
+Allow additional role labels only when supported by the existing role system and actual permission configuration.
+
+Do not confuse display titles with security roles.
+
+A decorative community title must never grant administrative access.
+
+### 6.8 Community discovery
+
+Integrate discovery into Arvdoul's existing discovery and search experience.
+
+Support useful discovery signals where available:
+
+* Community topics.
+
+* Public description.
+
+* Public activity.
+
+* Relevant content.
+
+* Public membership information.
+
+* Established moderation status.
+
+Do not create artificial popularity values.
+
+Do not fabricate activity or membership counts.
+
+Do not expose private community content in public search results.
+
+### 6.9 Community interface
+
+Build a cohesive community experience containing:
+
+* Community identity.
+
+* About information.
+
+* Membership state.
+
+* Channel navigation.
+
+* Relevant announcement.
+
+* Member information where permitted.
+
+* Channel notifications.
+
+* Community settings for authorized administrators.
+
+* Discovery and navigation.
+
+Avoid overwhelming the screen.
+
+Use adaptive navigation on mobile and appropriate navigation panels on larger screens.
+
+### 6.10 Community notifications
+
+Support:
+
+* Announcements.
+
+* Direct channel mentions.
+
+* Relevant replies.
+
+* Join-request decisions.
+
+* Important membership changes.
+
+* Event communications.
+
+* Moderation events when appropriate.
+
+Do not notify every member for every channel message by default.
+
+Provide appropriate subscription and notification preferences.
+
+### 7\. FOUNDATIONAL VOICE AND VIDEO CALLING
+
+Calls are a significant part of Part 2 and must be treated as genuine real-time infrastructure.
+
+Do not create a fake call interface.
+
+### 7.1 Supported calling scope
+
+Implement a foundational calling system supporting:
+
+* One-to-one audio calls.
+
+* One-to-one video calls.
+
+* Group audio calls.
+
+* Group video calls within a documented and tested capacity.
+
+* Incoming call handling.
+
+* Outgoing call handling.
+
+* Call acceptance.
+
+* Call rejection.
+
+* Call cancellation.
+
+* Call termination.
+
+* Missed-call records.
+
+* Appropriate call notifications.
+
+* Network recovery.
+
+Advanced meetings, screen sharing and advanced call productivity capabilities belong to Part 3.
+
+### 7.2 Infrastructure decision
+
+Before implementation, inspect available real-time infrastructure.
+
+Choose and document a viable approach.
+
+Possible architecture options include:
+
+WebRTC with managed SFU infrastructure
+
+Use a suitable managed real-time media service where it best satisfies reliability, scalability and operational requirements.
+
+WebRTC with self-managed SFU infrastructure
+
+Only choose this when the repository's deployment architecture, operational expertise and hosting capacity make it maintainable.
+
+Existing calling provider
+
+Reuse an existing, properly integrated provider when present.
+
+For reliable multi-party video, evaluate an SFU-based architecture rather than assuming peer-to-peer media connections will scale.
+
+### 7.3 Mandatory production infrastructure
+
+A working calling system must address:
+
+* Signaling.
+
+* ICE negotiation.
+
+* STUN.
+
+* TURN.
+
+* NAT traversal.
+
+* Media transport.
+
+* Audio device access.
+
+* Camera access.
+
+* Call session state.
+
+* Reconnection.
+
+* Participant authorization.
+
+* Call termination.
+
+* Network-quality adaptation.
+
+* Provider outages.
+
+* Abuse prevention.
+
+For multi-party calling, use an architecture that can handle participant media streams without relying on an uncontrolled mesh connection model.
+
+### 7.4 Provider and infrastructure honesty
+
+Do not hardcode undocumented provider credentials.
+
+Do not embed private API keys in frontend code.
+
+Do not pretend TURN or SFU infrastructure exists when it has not been provisioned.
+
+If a required provider, account, credential, server or paid infrastructure dependency is unavailable:
+
+* Identify the specific missing dependency.
+
+* Implement the valid architecture boundary and integration contract.
+
+* Complete the portions that can be tested independently.
+
+* Mark the infrastructure-dependent capability BLOCKED.
+
+* Document the setup needed to activate it.
+
+* Do not substitute a fake call experience.
+
+Prefer the most practical production solution and provide an honest cost and operational comparison.
+
+Avoid unnecessary subscriptions, but do not sacrifice fundamental calling reliability for a superficially free implementation.
+
+### 7.5 Call lifecycle
+
+A logical call lifecycle may include:
+
+```text
+initiated
+    ↓
+ringing
+    ↓
+accepted
+    ↓
+connecting
+    ↓
+connected
+    ↓
+reconnecting
+    ↓
+ended
+```
+
+Other valid terminal states include:
+
+* Rejected.
+
+* Cancelled.
+
+* Missed.
+
+* Failed.
+
+* Timed out.
+
+Define valid transitions and enforce them through authorized operations.
+
+Do not accept arbitrary client transitions.
+
+### 7.6 Outgoing call
+
+Implement:
+
+* Call initiation.
+
+* Recipient validation.
+
+* Permission checking.
+
+* Call invitation.
+
+* Ringing feedback.
+
+* Waiting state.
+
+* Connection feedback.
+
+* Cancellation.
+
+* Connection failure.
+
+* Retry where appropriate.
+
+Respect recipient availability, blocking and call privacy settings.
+
+### 7.7 Incoming call
+
+Implement:
+
+* Incoming-call notification.
+
+* Caller identity.
+
+* Audio/video call indication.
+
+* Accept.
+
+* Reject.
+
+* Missed-call handling.
+
+* Unsupported-device state.
+
+* Expired invitation handling.
+
+Avoid showing stale calls as active.
+
+### 7.8 Call controls
+
+During a call, support the appropriate controls:
+
+* Mute/unmute microphone.
+
+* Enable/disable camera.
+
+* Switch front/rear camera where available.
+
+* Select supported audio output.
+
+* End call.
+
+* View authorized participants.
+
+* Show connection status.
+
+* Handle permission problems.
+
+Do not display controls that cannot operate on the current device.
+
+### 7.9 Call privacy
+
+Integrate with user privacy settings.
+
+Support appropriate policies for:
+
+* Who can call.
+
+* Who can send call requests.
+
+* Muted or blocked participants.
+
+* Restricted users.
+
+* Group calling permissions.
+
+A blocked user must not bypass blocking through call signaling.
+
+### 7.10 Call history
+
+Maintain appropriate records for:
+
+* Outgoing calls.
+
+* Incoming calls.
+
+* Missed calls.
+
+* Rejected calls.
+
+* Call duration where valid.
+
+Do not collect or store audio/video recordings by default.
+
+Do not claim that calls are recorded.
+
+Call metadata retention must follow the existing privacy and retention policy.
+
+### 7.11 Call security
+
+Require authorization for:
+
+* Initiating calls.
+
+* Joining sessions.
+
+* Accepting invitations.
+
+* Accessing signaling.
+
+* Modifying session state.
+
+* Removing participants.
+
+* Ending calls.
+
+Prevent unauthorized users from entering an active call by guessing an ID or reusing a stale invitation.
+
+Part 2 must not claim full end-to-end encrypted calling unless an actual independently reviewed implementation supports that claim.
+
+### 7.12 Call experience quality
+
+Handle:
+
+* Microphone permission denied.
+
+* Camera permission denied.
+
+* Device without a camera.
+
+* Device without a microphone.
+
+* No available media devices.
+
+* Network loss.
+
+* Weak connection.
+
+* TURN failure.
+
+* SFU failure.
+
+* Recipient unavailable.
+
+* Call timeout.
+
+* Incoming call while already in a call.
+
+* Route changes.
+
+* Backgrounding where supported.
+
+* Browser capability limitations.
+
+Do not allow media devices to remain active after a call ends.
+
+Release tracks, streams, signaling resources and listeners correctly.
+
+### 8\. ADVANCED VIBES INTEGRATION
+
+Messaging should become a natural extension of Arvdoul's Vibes system.
+
+Inspect the existing Vibes architecture before implementing new behavior.
+
+Do not create another Stories platform.
+
+### 8.1 Vibe-to-message interaction
+
+Support appropriate messaging interactions originating from a Vibe.
+
+Depending on existing Vibes capabilities, allow:
+
+* Replying to a Vibe through messaging.
+
+* Reacting through the established interaction model.
+
+* Sharing a Vibe to a direct conversation.
+
+* Sharing a Vibe to an eligible group.
+
+* Opening a relevant conversation from a Vibe interaction.
+
+* Showing contextual references in chat.
+
+### 8.2 Contextual replies
+
+A reply to a Vibe should preserve the relationship to its original content.
+
+The message should communicate that the interaction originated from that Vibe.
+
+Resolve the source content through its authoritative service.
+
+Do not duplicate the original Vibe into the messaging database.
+
+### 8.3 Vibe privacy
+
+Respect:
+
+* Original audience.
+
+* Follower restrictions.
+
+* Friendship or connection rules.
+
+* Close-friends or custom audience configuration where existing.
+
+* Expiration.
+
+* Deletion.
+
+* Blocking.
+
+* Muting.
+
+* Restricted visibility.
+
+A user must not gain access to private Vibes by receiving a forwarded identifier.
+
+If the recipient cannot access the Vibe, show a safe unavailable state.
+
+### 8.4 Expiration and deletion
+
+If a Vibe expires or is removed:
+
+* Update the referenced preview appropriately.
+
+* Prevent unauthorized access.
+
+* Preserve valid conversation history where policy allows.
+
+* Avoid breaking the entire conversation.
+
+* Avoid leaving misleading active media previews.
+
+### 8.5 Vibes and group interactions
+
+Allow supported Vibe sharing and discussion in groups.
+
+Ensure that the entire recipient set is compatible with the source content's audience rules.
+
+Do not accidentally expand the original audience through group forwarding.
+
+Where recipients have different permissions, use the appropriate unavailable-content handling.
+
+### 9\. ADVANCED POSTS INTEGRATION
+
+Posts must integrate naturally with direct conversations, groups and community channels.
+
+### 9.1 Supported post sharing
+
+Support existing post formats where available:
+
+* Text.
+
+* Image.
+
+* Video.
+
+* Link.
+
+* Question.
+
+* Poll.
+
+* Audio.
+
+* Event.
+
+* Other implemented post formats.
+
+Do not invent post types that do not exist in the actual repository.
+
+### 9.2 Context-aware sharing
+
+Allow appropriate sharing into:
+
+* Direct conversations.
+
+* Groups.
+
+* Community discussion channels.
+
+* Eligible event channels.
+
+Respect target permissions.
+
+A private post must not become publicly accessible merely because it was shared into a group.
+
+### 9.3 Post references
+
+Use the authoritative Post ID and existing post resolver.
+
+Do not duplicate full post documents inside message records.
+
+Avoid stale previews.
+
+Handle:
+
+* Deleted posts.
+
+* Private posts.
+
+* Restricted posts.
+
+* Removed authors.
+
+* Changed audience settings.
+
+* Expired content where applicable.
+
+### 9.4 Post discussions
+
+Provide appropriate navigation between:
+
+* Original Post.
+
+* Shared message.
+
+* Relevant discussion context.
+
+Do not create independent duplicate comment systems.
+
+Use existing comment and reply infrastructure where appropriate.
+
+Keep comments and private messaging distinct when their audiences and permissions differ.
+
+### 9.5 Poll and question sharing
+
+If existing Posts support polls or questions, display a useful contextual preview in communication surfaces.
+
+Voting must happen through the authoritative poll system.
+
+A messaging client must not directly modify poll totals or invent votes.
+
+Respect poll visibility and eligibility.
+
+### 10\. ADVANCED SPARKS INTEGRATION
+
+Sparks are part of Arvdoul's short-form content ecosystem.
+
+Messaging must provide a clean bridge between content discovery and private social interaction.
+
+### 10.1 Sparks sharing
+
+Support:
+
+* Sharing a Spark to a direct conversation.
+
+* Sharing a Spark to a group.
+
+* Sharing a Spark to an eligible community channel.
+
+* Opening a Spark from a message.
+
+* Previewing supported Spark information.
+
+* Navigating back to the source conversation.
+
+### 10.2 Spark references
+
+Use authoritative Spark records.
+
+Do not copy full video files into messaging storage.
+
+Use appropriate thumbnail and preview data.
+
+Avoid unnecessary media downloads.
+
+### 10.3 Privacy and lifecycle
+
+Revalidate:
+
+* Original visibility.
+
+* Age or eligibility restrictions where applicable.
+
+* Creator restrictions.
+
+* Blocking.
+
+* Deletion.
+
+* Moderation status.
+
+* Geographic or other access restrictions where the platform actually supports them.
+
+Do not expose content that is no longer available.
+
+### 10.4 Spark interaction context
+
+Maintain context between:
+
+* Spark.
+
+* Original creator.
+
+* Message sender.
+
+* Recipient.
+
+* Relevant conversation.
+
+Do not confuse a content share with a public view, public engagement or creator monetization event.
+
+### 11\. XP, ACHIEVEMENTS AND LEVEL INTEGRATION
+
+Messaging and social communication should contribute to meaningful participation in Arvdoul.
+
+However, progression must be based on the authoritative XP and levels systems.
+
+Do not create a separate messaging XP economy.
+
+### 11.1 Existing progression audit
+
+Inspect the actual:
+
+* XP service.
+
+* XP event model.
+
+* Experience storage.
+
+* Level calculation.
+
+* Level thresholds.
+
+* Titles.
+
+* Achievements.
+
+* Reward policies.
+
+* Anti-abuse mechanisms.
+
+* Existing progression UI.
+
+Determine the canonical source of truth.
+
+Resolve any existing inconsistencies only through a justified, documented process.
+
+Do not invent an independent XP-to-level calculation.
+
+### 11.2 Messaging progression events
+
+Integrate qualifying messaging-related activities where they provide genuine product value.
+
+Possible events include:
+
+* Meaningful community participation.
+
+* Useful contribution to a group.
+
+* Positive community engagement.
+
+* Verified participation in supported collaborative events.
+
+* Completing a legitimate community contribution milestone.
+
+* Other qualifying social contributions already permitted by the progression system.
+
+Do not award XP for every sent message.
+
+Do not reward repetitive spam.
+
+Do not reward meaningless one-word messages.
+
+Do not permit automated scripts to farm progression through repeated activity.
+
+### 11.3 Anti-abuse requirements
+
+Progression must be:
+
+* Server validated.
+
+* Idempotent.
+
+* Auditable.
+
+* Rate-limited.
+
+* Protected against replay.
+
+* Protected against duplicated events.
+
+* Subject to eligibility rules.
+
+* Consistent with existing progression policies.
+
+Apply sensible qualification requirements, thresholds and caps through the authoritative XP system.
+
+Do not create client-controlled XP grants.
+
+### 11.4 Achievement integration
+
+Integrate relevant existing achievements or add genuinely new achievement definitions through the authoritative achievement system.
+
+Possible categories include:
+
+* Community participation.
+
+* Group contribution.
+
+* Event participation.
+
+* Meaningful collaboration.
+
+* Helpful community behavior.
+
+Achievement criteria must be objectively verifiable.
+
+An achievement must not be awarded simply because the user opened a screen.
+
+### 11.5 Level and title display
+
+Where relevant, display existing level and title information in:
+
+* Group member profiles.
+
+* Community member lists.
+
+* Conversation identity surfaces.
+
+* Appropriate participant details.
+
+Use the authoritative profile and progression information.
+
+Do not allow custom display titles to impersonate security roles or official Royal Family positions.
+
+Do not overload message bubbles with progression badges.
+
+### 11.6 Progression feedback
+
+When a genuine reward or achievement is granted:
+
+* Present accurate feedback.
+
+* Avoid duplicate celebration events.
+
+* Avoid blocking the conversation experience.
+
+* Respect reduced motion.
+
+* Keep notifications appropriate.
+
+* Reflect the authoritative balance or progression state.
+
+Do not report a reward before the backend confirms it.
+
+### 12\. COINS, WALLET AND DIGITAL GIFTING
+
+Coins provide a meaningful connection between social participation and Arvdoul's digital economy.
+
+Part 2 must introduce messaging-related gifting through the existing authoritative wallet infrastructure.
+
+This is a financial-value operation and requires stronger safeguards than ordinary messaging.
+
+### 12.1 Mandatory wallet audit
+
+Before implementing gifts, inspect:
+
+* Existing Coin balance fields.
+
+* Wallet service.
+
+* Ledger model.
+
+* Transaction history.
+
+* Currency conversion logic.
+
+* Coin purchase infrastructure.
+
+* Coin spending operations.
+
+* Refund and reversal behavior.
+
+* Transaction authorization.
+
+* Cloud Functions.
+
+* Existing security rules.
+
+* Monetization policies.
+
+Identify the one authoritative balance and transaction system.
+
+Do not create:
+
+* A messaging wallet.
+
+* A group wallet without a separately approved financial design.
+
+* A second Coin balance.
+
+* An independent transaction ledger.
+
+* A client-side payment implementation.
+
+### 12.2 Gift scope
+
+Support genuine Coin gifting between eligible users through authorized messaging contexts.
+
+Where supported, allow:
+
+* Sending a gift within a direct conversation.
+
+* Receiving a gift.
+
+* Displaying a gift message.
+
+* Viewing the related transaction.
+
+* Opening the recipient's relevant profile or gift information.
+
+* Handling failed transactions.
+
+* Viewing an appropriate transaction confirmation.
+
+Any group gift capability must follow a clearly defined target-recipient and permission model.
+
+Do not automatically give every group member an equal share unless that financial behavior has been explicitly designed and implemented.
+
+### 12.3 Gift experience
+
+A gift should communicate:
+
+* Sender.
+
+* Recipient.
+
+* Coin amount.
+
+* Optional message where appropriate.
+
+* Successful transaction state.
+
+* Relevant timestamp.
+
+* Appropriate gift presentation.
+
+Do not make the gift appear sent before the financial transaction is confirmed.
+
+Do not display decorative gift animations as proof of payment.
+
+### 12.4 Atomic financial operations
+
+Every gift must use an authorized backend transaction process.
+
+Requirements:
+
+* Authenticate sender.
+
+* Validate recipient.
+
+* Verify messaging and gifting permissions.
+
+* Validate amount.
+
+* Check available balance.
+
+* Apply applicable policy limits.
+
+* Generate a stable idempotency identifier.
+
+* Atomically debit sender.
+
+* Atomically credit recipient.
+
+* Write immutable ledger entries.
+
+* Link the transaction to its messaging reference.
+
+* Return canonical transaction status.
+
+* Notify participants after successful confirmation.
+
+Use the existing financial transaction architecture.
+
+Do not allow the frontend to set balances directly.
+
+Prevent:
+
+* Double spending.
+
+* Repeated transaction execution.
+
+* Negative balances.
+
+* Invalid amounts.
+
+* Recipient substitution.
+
+* Client-side balance manipulation.
+
+* Partial transactions.
+
+* Unauthorized reversals.
+
+### 12.5 Financial integrity
+
+Coin gifts must be auditable.
+
+Ensure transaction records can be reconciled with the authoritative wallet ledger.
+
+Do not silently change balances when a gift message is deleted.
+
+Deleting the display message must not reverse the underlying financial transaction.
+
+Refunds and reversals must follow the existing wallet policy through authorized operations.
+
+### 12.6 Coin amount and conversion
+
+Never invent or silently hardcode:
+
+* Coin-to-currency conversion rates.
+
+* Gift values.
+
+* Exchange rates.
+
+* Platform fees.
+
+* Withdrawal values.
+
+* Revenue shares.
+
+Read canonical rates and policies from the authoritative existing system.
+
+If inconsistent conversion logic exists, flag it and resolve it only through a documented financial-data migration or approved system change.
+
+### 12.7 Abuse and limits
+
+Support sensible financial protections:
+
+* Per-transaction limits.
+
+* Account-level restrictions.
+
+* Rate limits.
+
+* Anti-fraud signals where available.
+
+* Suspicious transaction review.
+
+* Unauthorized payment prevention.
+
+* Appropriate confirmation for large or unusual gifts.
+
+Thresholds must come from existing financial policy or an explicitly documented product decision.
+
+Do not create arbitrary values without justification.
+
+### 13\. ROYAL FAMILY COMMUNICATION INTEGRATION
+
+Royal Family is a distinctive Arvdoul organizational and status system.
+
+Its communication features must be connected to the existing Royal Family architecture rather than recreated inside messaging.
+
+### 13.1 Royal Family audit
+
+Inspect:
+
+* Royal Family membership model.
+
+* Official roles.
+
+* Hierarchy.
+
+* Titles and positions.
+
+* Authorization system.
+
+* Membership eligibility.
+
+* Verification.
+
+* Existing privileges.
+
+* Existing management interfaces.
+
+* Firestore collections.
+
+* Cloud Functions.
+
+* Existing communication features.
+
+Identify which Royal Family information is authoritative and which information is only decorative.
+
+### 13.2 Communication integration
+
+Support authorized Royal Family communication through existing messaging foundations.
+
+Appropriate Part 2 capabilities include:
+
+* Authorized Royal Family conversations.
+
+* Role-aware participant information.
+
+* Official announcements.
+
+* Relevant authorized channels.
+
+* Restricted communication spaces.
+
+* Notifications for authorized announcements.
+
+* Appropriate administrative communication.
+
+Do not assume every user with a prestigious display title automatically has Royal Family privileges.
+
+### 13.3 Authorization
+
+Royal Family access must be determined by the authoritative role and membership system.
+
+A client must never be able to:
+
+* Assign itself a Royal Family role.
+
+* Change its official rank.
+
+* Create an official Royal Family channel without authorization.
+
+* Invite unauthorized members into protected spaces.
+
+* Issue official announcements without permission.
+
+* Elevate itself to administrator.
+
+* Forge official communication.
+
+Validate privileged operations through trusted backend authorization.
+
+### 13.4 Official announcements
+
+Support authorized announcement publishing.
+
+Each announcement should have:
+
+* Authorized sender.
+
+* Authorized destination.
+
+* Relevant content.
+
+* Correct publication time.
+
+* Valid visibility rules.
+
+* Appropriate notification behavior.
+
+Do not allow an unofficial user to impersonate an institutional announcement.
+
+Distinguish actual official announcements from ordinary messages.
+
+### 13.5 Royal Family privacy
+
+Respect:
+
+* Private membership information.
+
+* Role-based access.
+
+* Restricted conversations.
+
+* Internal announcements.
+
+* Existing user-blocking policies.
+
+* Moderation policies.
+
+Do not reveal private institutional communication in public search results or unrelated profile surfaces.
+
+### 13.6 Strict Part 2 boundary
+
+This phase covers foundational authorized communication.
+
+Advanced governance, large-scale organizational coordination, detailed administrative workflows and sophisticated organizational analytics belong to Part 3.
+
+### 14\. CREATOR COMMUNICATION INTEGRATION
+
+Creators need appropriate communication capabilities without turning messaging into an unregulated monetization channel.
+
+### 14.1 Creator infrastructure audit
+
+Inspect:
+
+* Existing creator identity.
+
+* Creator verification.
+
+* Creator account settings.
+
+* Creator privacy.
+
+* Creator subscriptions.
+
+* Creator analytics.
+
+* Existing communication preferences.
+
+* Existing reach-out systems.
+
+* Existing monetization policies.
+
+Reuse the authoritative creator system.
+
+### 14.2 Creator reach-outs
+
+Support a clear way to contact eligible creators.
+
+Depending on existing permissions:
+
+* Direct conversation where permitted.
+
+* Message request where required.
+
+* Creator-specific incoming request presentation.
+
+* Creator communication preferences.
+
+* Appropriate profile-to-message navigation.
+
+Do not bypass Part 1 message requests.
+
+Do not expose a creator's private contact details.
+
+### 14.3 Creator inbox context
+
+Where supported by the existing architecture, provide enough context to distinguish:
+
+* Existing connections.
+
+* New message requests.
+
+* Relevant creator-related communication.
+
+* Authorized priority categories.
+
+Do not create a second inbox that duplicates the actual messaging inbox.
+
+### 14.4 Creator safety
+
+Support:
+
+* Request restrictions.
+
+* Blocking.
+
+* Reporting.
+
+* Communication limits.
+
+* Spam control.
+
+* Appropriate visibility settings.
+
+Do not assume that creator status means unlimited incoming communication.
+
+### 14.5 Creator monetization boundary
+
+Part 2 does not implement advanced paid reach-outs, premium messaging products, creator communication subscriptions or sophisticated communication revenue sharing.
+
+These belong to Part 3.
+
+Do not add a payment button that has no complete financial and entitlement implementation.
+
+### 15\. EVENTS AND COLLABORATIVE COMMUNICATION
+
+Events should become connected to messaging.
+
+Inspect the actual Arvdoul event system first.
+
+Do not build a second independent event platform.
+
+### 15.1 Event communication integration
+
+Support relevant communication workflows:
+
+* Sharing an event into a direct conversation.
+
+* Sharing an event into a group.
+
+* Sharing an event into an eligible community channel.
+
+* Opening an event from a message.
+
+* Navigating from an event to its relevant discussion.
+
+* Notifying authorized participants about important event changes.
+
+### 15.2 Event references
+
+Use the authoritative event identifier and resolver.
+
+Do not duplicate entire event records inside messaging documents.
+
+Handle:
+
+* Updated events.
+
+* Cancelled events.
+
+* Private events.
+
+* Expired events.
+
+* Restricted attendance.
+
+* Deleted events.
+
+* Unavailable hosts.
+
+### 15.3 Event discussions
+
+Where the existing event system supports event discussions or attendee communication, integrate messaging with it.
+
+A supported event discussion may include:
+
+* Event announcement context.
+
+* Participant communication.
+
+* Organizer messages.
+
+* Event-specific notifications.
+
+* Relevant group or channel discussion.
+
+Do not automatically give every event attendee access to private organizer conversations.
+
+### 15.4 RSVP and attendance
+
+RSVP and attendance status must remain authoritative in the existing event system.
+
+Do not let messages change attendance totals directly.
+
+Do not count shared event messages as confirmed attendance.
+
+### 15.5 Time handling
+
+Support accurate event times using the existing event timezone and date model.
+
+Do not rely on the viewer's local timezone as the authoritative event timezone.
+
+Clearly render relevant localized times and avoid confusing time shifts.
+
+### 16\. SOCIAL GRAPH AND CROSS-PLATFORM INTEGRATION
+
+Part 2 must make messaging respond correctly to the wider social graph.
+
+### 16.1 Relationship-aware communication
+
+Integrate with the actual relationship model.
+
+Support the existing meanings of:
+
+* Friends.
+
+* Followers.
+
+* Connections.
+
+* Restricted users.
+
+* Muted users.
+
+* Blocked users.
+
+* Other established relationship states.
+
+Do not create an alternative relationship graph for messaging.
+
+### 16.2 Relationship changes
+
+Handle changes occurring during active communication.
+
+Examples:
+
+* A user blocks another person.
+
+* A friendship ends.
+
+* A follower becomes restricted.
+
+* A user changes privacy settings.
+
+* An account is suspended.
+
+* An account is deleted.
+
+* A user leaves a group.
+
+* A participant loses access to a private community.
+
+Update the relevant communication permissions without requiring the user to sign out.
+
+### 16.3 Identity consistency
+
+Use authoritative profile data across:
+
+* Direct conversations.
+
+* Group messages.
+
+* Community channels.
+
+* Calling interfaces.
+
+* Creator communication.
+
+* Royal Family communication.
+
+* Event discussions.
+
+Do not allow inconsistent usernames or duplicate identity records.
+
+### 16.4 Shared participants
+
+Handle cases where blocked users and other users participate in the same group or community.
+
+Do not automatically expose private direct conversations because users share a group.
+
+Define the group behavior according to actual privacy and safety policies.
+
+Blocking must prevent prohibited direct contact and other explicitly restricted operations.
+
+### 17\. MULTI-DEVICE SYNCHRONIZATION
+
+Part 2 must ensure that a user can use Arvdoul across multiple authenticated devices without creating conflicting communication states.
+
+This is synchronization, not the advanced device-management system reserved for Part 3.
+
+### 17.1 Device and session audit
+
+Inspect:
+
+* Firebase Auth session behavior.
+
+* Existing active-session storage.
+
+* FCM token management.
+
+* Device registration.
+
+* Local persistence.
+
+* Pending message queues.
+
+* Draft storage.
+
+* Read-state behavior.
+
+* Existing cross-device listeners.
+
+Do not create a duplicate device-registration system.
+
+### 17.2 Device identity
+
+Where appropriate, maintain a stable device/session identifier for each authenticated application instance.
+
+A device record may contain:
+
+* Device/session identifier.
+
+* Authenticated user ID.
+
+* Platform.
+
+* Application version.
+
+* FCM token reference.
+
+* Last activity.
+
+* Registration timestamp.
+
+* Relevant session status.
+
+Do not collect unnecessary fingerprinting information.
+
+Do not treat a client-generated device name as proof of device identity.
+
+### 17.3 Synchronization behavior
+
+Support:
+
+* Message synchronization.
+
+* Conversation-list synchronization.
+
+* Read-state synchronization.
+
+* Unread-count synchronization.
+
+* Draft synchronization where supported.
+
+* Group membership synchronization.
+
+* Community membership synchronization.
+
+* Notification preference synchronization.
+
+* Relevant call-state synchronization.
+
+* Gift and transaction notification synchronization.
+
+* XP and achievement synchronization.
+
+All authoritative financial and progression states must come from their existing source systems.
+
+### 17.4 Concurrent sessions
+
+Handle the same account being active on multiple devices.
+
+Examples:
+
+* A message is read on one device.
+
+* A second device receives the updated read state.
+
+* A group invitation is accepted on mobile.
+
+* Desktop reflects the updated membership.
+
+* A conversation is muted on one device.
+
+* The notification preference synchronizes correctly.
+
+* A pending message is sent by one device while another session displays the updated conversation.
+
+### 17.5 Conflict resolution
+
+Define behavior for:
+
+* Simultaneous draft edits.
+
+* Concurrent message actions.
+
+* Offline state changes.
+
+* Repeated operations.
+
+* Read cursor conflicts.
+
+* Duplicate push notifications.
+
+* Stale cached records.
+
+* Session expiration.
+
+Do not let an older device state overwrite newer authoritative data.
+
+Use stable operation IDs and server-controlled timestamps where appropriate.
+
+### 17.6 Account isolation
+
+When an account signs out or changes:
+
+* Terminate account-specific listeners.
+
+* Invalidate appropriate caches.
+
+* Remove or isolate user-specific local data.
+
+* Stop unauthorized pending operations.
+
+* Reconcile pending uploads.
+
+* Prevent one account's data from appearing in another account's session.
+
+Do not delete server-side history as a side effect of changing devices.
+
+### 18\. ADVANCED NOTIFICATIONS
+
+Extend the existing Arvdoul notification system.
+
+Do not create another notification center.
+
+### 18.1 Supported notification events
+
+Integrate appropriate notifications for:
+
+Groups
+
+* Invitations.
+
+* Join requests.
+
+* Membership decisions.
+
+* Mentions.
+
+* Relevant replies.
+
+* Important administrative actions.
+
+Communities
+
+* Announcements.
+
+* Channel mentions.
+
+* Membership decisions.
+
+* Relevant discussions.
+
+* Event communications.
+
+Calls
+
+* Incoming calls.
+
+* Missed calls.
+
+* Relevant call status.
+
+Vibes, Posts and Sparks
+
+* Supported contextual replies.
+
+* Relevant shared-content interactions.
+
+* Existing social engagement events that belong in notifications.
+
+Coins
+
+* Confirmed received gifts.
+
+* Relevant transaction outcomes.
+
+Progression
+
+* Confirmed achievements.
+
+* Meaningful qualifying rewards.
+
+* Relevant level changes.
+
+Royal Family
+
+* Authorized announcements.
+
+* Relevant role or membership changes.
+
+Creator
+
+* Relevant requests.
+
+* Authorized creator communications.
+
+Events
+
+* Important event updates.
+
+* Relevant organizer or participant communications.
+
+Do not notify users for every low-value internal operation.
+
+### 18.2 Notification preferences
+
+Support granular preferences using the existing settings architecture.
+
+Appropriate settings may include:
+
+* Direct messages.
+
+* Group messages.
+
+* Mentions.
+
+* Community announcements.
+
+* Community activity.
+
+* Call notifications.
+
+* Gift notifications.
+
+* Creator requests.
+
+* Royal Family announcements.
+
+* Event notifications.
+
+Respect:
+
+* Muted conversations.
+
+* Muted groups.
+
+* Muted channels.
+
+* Blocked users.
+
+* Quiet hours where existing infrastructure supports them.
+
+* Notification privacy.
+
+* Account-level preferences.
+
+### 18.3 Intelligent grouping
+
+Group related notifications where it improves usability.
+
+For example, several messages from one active group should not necessarily produce an uncontrolled stream of individual push notifications.
+
+Do not merge separate security-sensitive, financial or urgent notifications into ambiguous summaries.
+
+### 18.4 Cross-device delivery
+
+Use the existing FCM token architecture.
+
+Handle:
+
+* Multiple registered devices.
+
+* Stale tokens.
+
+* Invalid tokens.
+
+* Duplicate events.
+
+* Token rotation.
+
+* Logged-out sessions.
+
+* Delivery failures.
+
+* Notification permission denial.
+
+### 18.5 Deep links
+
+Notifications must open the correct authorized destination.
+
+Examples:
+
+* Group conversation.
+
+* Community channel.
+
+* Message request.
+
+* Call screen.
+
+* Event.
+
+* Gift details.
+
+* Achievement information.
+
+* Relevant creator conversation.
+
+Never navigate to an inaccessible private resource.
+
+### 19\. ADVANCED PRIVACY AND MODERATION
+
+As communication expands, the abuse and privacy model must expand with it.
+
+### 19.1 Privacy architecture
+
+Inspect the existing platform privacy implementation.
+
+Extend it rather than creating independent settings.
+
+Support appropriate controls for:
+
+* Who can invite users to groups.
+
+* Who can add the current user.
+
+* Who can contact the current user.
+
+* Who can call the current user.
+
+* Who can mention the current user.
+
+* Who can discover communities.
+
+* Who can view community membership.
+
+* Who can invite members to a community.
+
+* Who can see relevant presence information.
+
+* Who can receive creator reach-out requests.
+
+Only expose options that are enforced by actual backend logic.
+
+### 19.2 Group moderation
+
+Support:
+
+* Removing inappropriate messages where authorized.
+
+* Reporting messages.
+
+* Reporting users.
+
+* Removing members.
+
+* Restricting members.
+
+* Muting members where supported.
+
+* Preventing repeat abuse.
+
+* Handling abusive invitations.
+
+* Reviewing moderation outcomes where the existing system supports it.
+
+Moderation permissions must be separate from normal membership.
+
+### 19.3 Community moderation
+
+Support:
+
+* Channel-level moderation.
+
+* Community-level permissions.
+
+* Report handling.
+
+* Member restrictions.
+
+* Bans where authorized.
+
+* Content removal.
+
+* Moderator actions.
+
+* Appropriate audit records.
+
+* Appeals integration where existing infrastructure supports it.
+
+Do not create an unrelated moderation backend.
+
+### 19.4 Reporting
+
+Reporting should be contextual.
+
+Support reports concerning:
+
+* Messages.
+
+* Group conversations.
+
+* Group members.
+
+* Groups.
+
+* Community channels.
+
+* Communities.
+
+* Calls where applicable under the safety policy.
+
+* Abusive invitations.
+
+* Creator communication.
+
+* Other supported communication behavior.
+
+Collect only relevant evidence.
+
+Do not automatically expose a user's entire private message history to other participants.
+
+### 19.5 Anti-abuse systems
+
+Protect against:
+
+* Invitation spam.
+
+* Group spam.
+
+* Community spam.
+
+* Repeated join requests.
+
+* Unwanted mentions.
+
+* Mass messaging.
+
+* Call flooding.
+
+* Fake participation.
+
+* Automated XP farming.
+
+* Coin gifting fraud.
+
+* Impersonation.
+
+* Role escalation.
+
+* Abusive creator requests.
+
+* Malicious shared-content links.
+
+Use trusted backend controls for critical enforcement.
+
+Do not rely only on disabling frontend controls.
+
+### 19.6 Moderator privileges
+
+Validate every moderation operation against authoritative roles and resource ownership.
+
+Do not trust a client-supplied `isAdmin`, `isModerator` or similar flag.
+
+A group moderator must not automatically become a global Arvdoul moderator.
+
+A community administrator must not automatically gain access to unrelated communities.
+
+A Royal Family title must not automatically grant platform moderation privileges.
+
+### 20\. FIRESTORE AND DATA ARCHITECTURE
+
+Part 2 introduces more complex relationships and larger communication datasets.
+
+Data modeling must remain deliberate and scalable.
+
+The following examples are logical reference structures, not instructions to create duplicate collections when the repository already contains equivalent models.
+
+### 20.1 Group structure
+
+An illustrative model:
+
+```text
+groups/{groupId}
+    members/{userId}
+    invitations/{invitationId}
+    joinRequests/{requestId}
+    messages/{messageId}
+    moderationRecords/{recordId}
+    media/{mediaId}
+```
+
+### 20.2 Community structure
+
+An illustrative model:
+
+```text
+communities/{communityId}
+    members/{userId}
+    invitations/{invitationId}
+    joinRequests/{requestId}
+    channels/{channelId}
+        messages/{messageId}
+        members/{userId}
+    moderationRecords/{recordId}
+```
+
+Use the actual repository's established organization when it differs.
+
+### 20.3 Calling structure
+
+An illustrative model:
+
+```text
+calls/{callId}
+    participants/{userId}
+    signaling/{signalId}
+```
+
+Avoid unbounded signaling documents and excessive persistent writes.
+
+Use ephemeral infrastructure or an appropriate provider for real-time signaling where necessary.
+
+Do not use Firestore as an audio/video transport.
+
+### 20.4 Gift transaction references
+
+An illustrative messaging reference:
+
+```text
+giftMessages/{messageId}
+    transactionId
+    conversationId
+    senderId
+    recipientId
+    createdAt
+```
+
+The actual transaction and wallet ledger remain authoritative.
+
+The messaging document is a contextual reference, not a second financial record.
+
+### 20.5 Device records
+
+An illustrative model:
+
+```text
+users/{userId}/devices/{deviceId}
+```
+
+Store only necessary registration and synchronization metadata.
+
+Follow existing token and session conventions.
+
+### 20.6 Data-model rules
+
+Do not:
+
+* Store unbounded member arrays.
+
+* Store complete message histories in group documents.
+
+* Use one large document for all community channels.
+
+* Put large media in Firestore.
+
+* Expose all member records to unauthorized users.
+
+* Trust client-maintained counts.
+
+* Store sensitive private data redundantly.
+
+* Create a second financial ledger.
+
+* Create a second XP history.
+
+* Make the client authoritative for administrative roles.
+
+Use bounded, indexed and permission-aware queries.
+
+### 20.7 Counters and denormalized data
+
+Member counts, unread counts, channel activity, group summaries and relevant statistics may require denormalization.
+
+Where implemented:
+
+* Define the canonical source.
+
+* Use trusted update operations.
+
+* Protect the counter from arbitrary client writes.
+
+* Handle repeated Cloud Function events.
+
+* Reconcile inconsistencies.
+
+* Document eventual consistency behavior.
+
+Do not invent counts.
+
+### 21\. FIREBASE SECURITY REQUIREMENTS
+
+Security must be tested independently for each new communication context.
+
+### 21.1 Authentication
+
+All protected actions must validate the authenticated UID.
+
+Never trust a client-supplied identity as proof of authorization.
+
+### 21.2 Group security
+
+Enforce:
+
+* Authorized group creation.
+
+* Authorized member addition.
+
+* Valid invitations.
+
+* Correct membership checks.
+
+* Role-based permissions.
+
+* Protected settings.
+
+* Sender identity.
+
+* Message ownership.
+
+* Restricted administrative actions.
+
+* Group membership privacy.
+
+* Attachment ownership.
+
+A non-member must not retrieve protected group history simply by guessing a group ID.
+
+### 21.3 Community security
+
+Enforce:
+
+* Community visibility.
+
+* Membership rules.
+
+* Channel access.
+
+* Role-based permissions.
+
+* Announcement publishing rights.
+
+* Member-management restrictions.
+
+* Moderation permissions.
+
+* Protected private content.
+
+* Protected invitation tokens.
+
+Do not rely on public/private frontend route visibility for authorization.
+
+### 21.4 Call security
+
+Enforce:
+
+* Caller authorization.
+
+* Recipient authorization.
+
+* Session membership.
+
+* Invitation validity.
+
+* Call-state transitions.
+
+* Signaling access.
+
+* Media-session access.
+
+* Participant removal rights.
+
+* Appropriate termination controls.
+
+### 21.5 Coins security
+
+Enforce through trusted backend logic.
+
+Clients must never directly modify:
+
+* Wallet balances.
+
+* Ledger entries.
+
+* Financial transaction status.
+
+* Gift settlement records.
+
+* Refund authorization.
+
+### 21.6 XP and progression security
+
+Enforce:
+
+* Authorized progression events.
+
+* Valid qualifying activities.
+
+* Idempotency.
+
+* Anti-abuse controls.
+
+* Protected progression records.
+
+* Server-controlled level calculation.
+
+### 21.7 Royal Family security
+
+Enforce authoritative membership and roles.
+
+Do not let a user modify official institutional identity through a client write.
+
+### 21.8 Storage security
+
+Extend Storage authorization to support:
+
+* Group attachments.
+
+* Community attachments.
+
+* Appropriate call-related media only where the design requires it.
+
+* Shared content references.
+
+* Authorized retrieval.
+
+* Authorized deletion.
+
+Do not expose protected media through guessed paths.
+
+### 21.9 Security-rule testing
+
+Create automated tests for allowed and rejected access.
+
+Test actual rules rather than relying on application code that hides unauthorized actions.
+
+### 22\. UX AND VISUAL DESIGN
+
+Part 2 must feel like a natural expansion of the Arvdoul experience.
+
+It must not feel like several unrelated products were placed inside one application.
+
+### 22.1 Arvdoul design identity
+
+Preserve the established design DNA.
+
+Dark theme
+
+* Main background: `#03071B`.
+
+* Surface: `rgba(255,255,255,0.06)`.
+
+Light theme
+
+* Main background: `#F6F8FC`.
+
+* Surface: `rgba(255,255,255,0.8)`.
+
+Brand gradient
+
+* `#8B1EF3`
+
+* `#4431F7`
+
+* `#055BFB`
+
+Brand glow references
+
+* `#C82BFF`.
+
+* `#0088FF`.
+
+Status colors
+
+* Success: `#10B981` and `#059669`.
+
+* Error: `#EF4444` and `#DC2626`.
+
+* Warning: `#F59E0B` and `#D97706`.
+
+Use existing design tokens rather than creating competing color definitions.
+
+### 22.2 Visual direction
+
+The expanded system should feel:
+
+* Premium.
+
+* Consistent.
+
+* Modern.
+
+* Refined.
+
+* Fast.
+
+* Distinctive.
+
+* Easy to navigate.
+
+* Comfortable for sustained usage.
+
+Use purposeful glass surfaces, balanced depth, refined shadows and controlled brand gradients.
+
+Do not overuse glow or blur.
+
+Do not make every element decorative.
+
+Do not allow complex group and community screens to become cluttered.
+
+### 22.3 Group UI
+
+Prioritize:
+
+* Group identity.
+
+* Participant context.
+
+* Message readability.
+
+* Relevant mentions.
+
+* Administrative actions.
+
+* Attachment previews.
+
+* Group information.
+
+* Member management.
+
+Keep administrative controls separated from everyday communication actions.
+
+### 22.4 Community UI
+
+Prioritize:
+
+* Community identity.
+
+* Relevant topic or purpose.
+
+* Membership state.
+
+* Channel navigation.
+
+* Important announcements.
+
+* Relevant activity.
+
+* Accessible moderation actions.
+
+Do not overwhelm the user with every channel and administrative option simultaneously.
+
+### 22.5 Calling UI
+
+Calling interfaces must prioritize:
+
+* Participant identity.
+
+* Connection status.
+
+* Media clarity.
+
+* Accessible controls.
+
+* Permission feedback.
+
+* Call termination.
+
+* Reconnection and error states.
+
+Avoid decorative animation that interferes with video readability or controls.
+
+### 22.6 Coins and gifts UI
+
+Financial interactions must feel deliberate and trustworthy.
+
+Show:
+
+* Exact amount.
+
+* Recipient.
+
+* Relevant confirmation.
+
+* Transaction outcome.
+
+* Appropriate balance information from the authoritative wallet.
+
+Prevent accidental gifting.
+
+Do not make the sending action resemble an ordinary emoji reaction.
+
+### 22.7 Progression UI
+
+Show XP, achievements and levels only where useful.
+
+Avoid turning every message into an achievement display.
+
+Use restrained celebration for genuine milestones.
+
+### 22.8 Royal Family UI
+
+Official communication must be recognizable without allowing decorative design to replace authentication.
+
+Clearly distinguish:
+
+* Official roles.
+
+* Ordinary users.
+
+* Verified profiles.
+
+* Display titles.
+
+* Authorized announcements.
+
+### 22.9 Responsive design
+
+Mobile
+
+* Touch-friendly navigation.
+
+* Practical group and channel browsing.
+
+* Usable call controls.
+
+* Keyboard-aware messaging.
+
+* Appropriate bottom sheets.
+
+* No horizontal overflow.
+
+Tablet
+
+* Adaptive navigation.
+
+* Better use of available space.
+
+* Appropriate split-view experiences.
+
+* Touch-friendly management tools.
+
+Desktop
+
+* Efficient channel navigation.
+
+* Multi-pane communication where appropriate.
+
+* Proper participant panels.
+
+* Keyboard interaction.
+
+* Comfortable reading width.
+
+Do not simply stretch mobile layouts across larger screens.
+
+### 22.10 Light and dark theme
+
+All new screens and interactions must support both themes.
+
+Inspect:
+
+* Text contrast.
+
+* Message bubbles.
+
+* Group surfaces.
+
+* Channel panels.
+
+* Member lists.
+
+* Menus.
+
+* Dialogs.
+
+* Call controls.
+
+* Gift interactions.
+
+* XP feedback.
+
+* Role indicators.
+
+* Loading states.
+
+* Error states.
+
+* Empty states.
+
+### 22.11 Accessibility
+
+Support:
+
+* Keyboard navigation.
+
+* Screen readers.
+
+* Correct button names.
+
+* Dialog semantics.
+
+* Focus management.
+
+* Visible focus states.
+
+* Adequate touch targets.
+
+* Reduced motion.
+
+* High contrast.
+
+* Logical reading order.
+
+* RTL languages.
+
+* Unicode.
+
+* Appropriate dynamic text scaling.
+
+### 23\. REQUIRED PART 2 SCREEN INVENTORY
+
+Integrate these screen experiences into the existing navigation.
+
+Do not duplicate existing routes or create unnecessary full-screen pages.
+
+| ID         | Screen                   | Required capability                                      |
+| ---------- | ------------------------ | -------------------------------------------------------- |
+| MSG2-UI-01 | Group Inbox              | Discover and manage group conversations                  |
+| MSG2-UI-02 | Create Group             | Create an authorized group                               |
+| MSG2-UI-03 | Group Conversation       | Full group messaging                                     |
+| MSG2-UI-04 | Group Details            | Manage group identity and settings                       |
+| MSG2-UI-05 | Group Members            | View and manage authorized members                       |
+| MSG2-UI-06 | Group Invitations        | Send, receive and manage invitations                     |
+| MSG2-UI-07 | Group Administration     | Manage authorized permissions                            |
+| MSG2-UI-08 | Community Discovery      | Discover eligible communities                            |
+| MSG2-UI-09 | Community Overview       | View community information                               |
+| MSG2-UI-10 | Community Channels       | Browse available channels                                |
+| MSG2-UI-11 | Channel Conversation     | Communicate in authorized channels                       |
+| MSG2-UI-12 | Community Members        | Manage or view authorized members                        |
+| MSG2-UI-13 | Community Management     | Configure community and moderation settings              |
+| MSG2-UI-14 | Incoming Call            | Handle an incoming voice/video invitation                |
+| MSG2-UI-15 | Outgoing Call            | Manage an outgoing call                                  |
+| MSG2-UI-16 | Active Call              | Provide functional real-time controls                    |
+| MSG2-UI-17 | Call History             | View supported call records                              |
+| MSG2-UI-18 | Vibe Share Context       | Share and discuss Vibes                                  |
+| MSG2-UI-19 | Post Share Context       | Share and discuss Posts                                  |
+| MSG2-UI-20 | Spark Share Context      | Share and discuss Sparks                                 |
+| MSG2-UI-21 | Gift Composer            | Create an authorized Coin gift                           |
+| MSG2-UI-22 | Gift Message             | View a confirmed gift                                    |
+| MSG2-UI-23 | Progression Feedback     | Display confirmed achievements and rewards               |
+| MSG2-UI-24 | Royal Communication      | Display authorized institutional communication           |
+| MSG2-UI-25 | Creator Communication    | Handle permitted creator reach-outs                      |
+| MSG2-UI-26 | Event Communication      | View and navigate event-related conversations            |
+| MSG2-UI-27 | Notification Preferences | Manage communication notifications                       |
+| MSG2-UI-28 | Multi-device State       | Present relevant synchronization and session information |
+
+Some experiences may be nested views, dialogs, panels or bottom sheets.
+
+Use existing application patterns.
+
+### 24\. TASK EXECUTION CATALOGUE
+
+Execute the following tasks in dependency order.
+
+Do not build every screen before establishing its data model, authorization and service integration.
+
+Every task must be independently tracked and supported by evidence.
+
+### PHASE A — FOUNDATION AND INTEGRATION AUDIT
+
+### MSG2-001 — Part 1 verification
+
+Work
+
+Inspect and verify the actual Part 1 implementation.
+
+Acceptance criteria
+
+* Direct-message foundation identified.
+
+* Core workflows tested.
+
+* Existing security rules inspected.
+
+* Existing message model documented.
+
+* Existing notification integration inspected.
+
+* Existing storage integration inspected.
+
+* Known defects recorded.
+
+Evidence
+
+Relevant code references, test output and integration report.
+
+### MSG2-002 — Digital Nation subsystem audit
+
+Work
+
+Inspect the authoritative Arvdoul systems that Part 2 must integrate.
+
+Acceptance criteria
+
+* Profile system identified.
+
+* Social graph identified.
+
+* XP system identified.
+
+* Levels system identified.
+
+* Coins and wallet identified.
+
+* Royal Family identified.
+
+* Creator system identified.
+
+* Vibes identified.
+
+* Posts identified.
+
+* Sparks identified.
+
+* Events identified.
+
+* Moderation identified.
+
+* Notification system identified.
+
+* Multi-device infrastructure identified.
+
+Evidence
+
+Subsystem inventory, authoritative data ownership and service references.
+
+### MSG2-003 — Dependency and architecture map
+
+Work
+
+Map dependencies and define the integration architecture.
+
+Acceptance criteria
+
+* Every new domain has a clear owner.
+
+* Existing systems selected for reuse.
+
+* No duplicate wallet or XP system.
+
+* No duplicate profile or relationship system.
+
+* Group, community and channel boundaries defined.
+
+* Calling infrastructure requirements identified.
+
+* Migration risks documented.
+
+Evidence
+
+Architecture decision records and dependency map.
+
+### MSG2-004 — Shared communication contracts
+
+Work
+
+Establish compatible domain contracts for the new communication contexts.
+
+Acceptance criteria
+
+* Direct conversations remain compatible.
+
+* Groups have an explicit data model.
+
+* Communities have an explicit data model.
+
+* Channels have an explicit data model.
+
+* Call sessions have defined states.
+
+* Messaging references to social content are standardized.
+
+* Authoritative role and membership references are defined.
+
+Evidence
+
+Types, schemas, validation tests and integration references.
+
+### PHASE B — GROUP MESSAGING
+
+### MSG2-005 — Group data model
+
+Work
+
+Implement the group identity, membership and settings model.
+
+Acceptance criteria
+
+* Stable group identity.
+
+* Protected membership.
+
+* Bounded data structures.
+
+* Clear role ownership.
+
+* Valid privacy states.
+
+* Compatible message integration.
+
+* No unbounded group document fields.
+
+Evidence
+
+Data model, rules and tests.
+
+### MSG2-006 — Secure group creation
+
+Work
+
+Implement idempotent group creation.
+
+Acceptance criteria
+
+* Authenticated creator.
+
+* Valid group details.
+
+* Initial membership validated.
+
+* Authorized creator role established.
+
+* Duplicate submission prevented.
+
+* Invalid creation rejected.
+
+Evidence
+
+Backend and integration tests.
+
+### MSG2-007 — Group membership operations
+
+Work
+
+Implement joining, leaving, removal and membership state.
+
+Acceptance criteria
+
+* Authorized membership changes.
+
+* Correct membership records.
+
+* Role checks.
+
+* Concurrent update safety.
+
+* Consistent group counts where available.
+
+* Existing participants remain correctly authorized.
+
+Evidence
+
+Membership tests and security verification.
+
+### MSG2-008 — Invitation system
+
+Work
+
+Implement secure group invitations.
+
+Acceptance criteria
+
+* Invitation authorization.
+
+* Valid invitation identity.
+
+* Expiration where configured.
+
+* Revocation.
+
+* Correct acceptance.
+
+* Duplicate protection.
+
+* Unauthorized invitation rejection.
+
+Evidence
+
+Invitation lifecycle tests.
+
+### MSG2-009 — Group conversation engine
+
+Work
+
+Extend the existing messaging engine for authorized group messages.
+
+Acceptance criteria
+
+* Multiple authorized senders.
+
+* Correct sender identity.
+
+* Stable message IDs.
+
+* Bounded pagination.
+
+* Correct ordering.
+
+* Message permissions.
+
+* Real-time updates.
+
+* No regression to direct conversations.
+
+Evidence
+
+Real group message exchange tests.
+
+### MSG2-010 — Group message interactions
+
+Work
+
+Enable supported message interactions in groups.
+
+Acceptance criteria
+
+* Reply.
+
+* Reactions.
+
+* Forwarding.
+
+* Editing.
+
+* Deletion.
+
+* Attachment interactions.
+
+* Authorization appropriate to each action.
+
+Evidence
+
+Group-specific functional and permission tests.
+
+### MSG2-011 — Mentions and replies
+
+Work
+
+Implement message mentions and contextual notification behavior.
+
+Acceptance criteria
+
+* Authorized mention targets.
+
+* Correct message references.
+
+* Relevant notifications.
+
+* Muted and blocked preferences respected.
+
+* No unauthorized group access through notifications.
+
+Evidence
+
+Mention and notification integration tests.
+
+### MSG2-012 — Group read and delivery model
+
+Work
+
+Implement group-appropriate delivery and read tracking.
+
+Acceptance criteria
+
+* Accurate per-participant semantics.
+
+* No misleading global read indicator.
+
+* Efficient read tracking.
+
+* Appropriate privacy.
+
+* Bounded write behavior.
+
+* Correct multi-device interaction.
+
+Evidence
+
+Multi-account tests and cost review.
+
+### MSG2-013 — Group roles and permissions
+
+Work
+
+Implement owner, administrator, moderator and member permissions.
+
+Acceptance criteria
+
+* Clear permission matrix.
+
+* Backend-enforced roles.
+
+* Protected role assignment.
+
+* No privilege escalation.
+
+* Correct behavior after role changes.
+
+* No global role leakage.
+
+Evidence
+
+Permission tests for every role.
+
+### MSG2-014 — Group administration
+
+Work
+
+Implement actual administrative operations.
+
+Acceptance criteria
+
+* Authorized member management.
+
+* Settings management.
+
+* Role assignment.
+
+* Relevant removal and moderation actions.
+
+* Ownership protection.
+
+* Appropriate activity records.
+
+Evidence
+
+Administrative workflow tests.
+
+### MSG2-015 — Group settings and details
+
+Work
+
+Implement the group information and settings experience.
+
+Acceptance criteria
+
+* Identity information.
+
+* Privacy.
+
+* Invitation policies.
+
+* Permissions.
+
+* Notifications.
+
+* Member information.
+
+* Authorized management actions.
+
+* Loading and failure states.
+
+Evidence
+
+Rendered UI and real settings persistence.
+
+### MSG2-016 — Group shared media
+
+Work
+
+Extend the existing media browsing system for group conversations.
+
+Acceptance criteria
+
+* Correct source messages.
+
+* Authorized media access.
+
+* Pagination.
+
+* Correct media types.
+
+* Deleted-content handling.
+
+* No unbounded message scanning.
+
+Evidence
+
+Storage and query tests.
+
+### MSG2-017 — Group safety and moderation
+
+Work
+
+Implement contextual reporting and moderation integration.
+
+Acceptance criteria
+
+* Report member.
+
+* Report message.
+
+* Remove unauthorized content.
+
+* Restrict member where supported.
+
+* Block abusive participation.
+
+* Correct role permissions.
+
+* Protected moderation records.
+
+Evidence
+
+Moderation and authorization tests.
+
+### PHASE C — COMMUNITIES AND CHANNELS
+
+### MSG2-018 — Community data model
+
+Work
+
+Implement or extend the authoritative community model.
+
+Acceptance criteria
+
+* Stable community identity.
+
+* Membership.
+
+* Visibility.
+
+* Role model.
+
+* Settings.
+
+* Ownership.
+
+* Correct channel relationship.
+
+Evidence
+
+Schema, repository and security tests.
+
+### MSG2-019 — Community creation
+
+Work
+
+Implement authorized community creation.
+
+Acceptance criteria
+
+* Valid identity.
+
+* Authenticated creator.
+
+* Membership initialization.
+
+* Privacy configuration.
+
+* Duplicate prevention.
+
+* Correct owner role.
+
+Evidence
+
+Creation integration tests.
+
+### MSG2-020 — Community membership
+
+Work
+
+Implement join, leave, invitation and approval workflows.
+
+Acceptance criteria
+
+* Correct public/private behavior.
+
+* Authorized decisions.
+
+* Valid member records.
+
+* Protected membership.
+
+* No duplicate join requests.
+
+* No unauthorized access.
+
+Evidence
+
+Multi-account membership tests.
+
+### MSG2-021 — Channel architecture
+
+Work
+
+Implement foundational community channel support.
+
+Acceptance criteria
+
+* Stable channel identity.
+
+* Channel ownership.
+
+* Correct parent community.
+
+* Channel visibility.
+
+* Role-aware permissions.
+
+* Appropriate message association.
+
+* Bounded retrieval.
+
+Evidence
+
+Schema and access-control tests.
+
+### MSG2-022 — Discussion channels
+
+Work
+
+Implement functional community discussion channels.
+
+Acceptance criteria
+
+* Authorized messages.
+
+* Real-time updates.
+
+* Pagination.
+
+* Message interactions.
+
+* Member attribution.
+
+* Privacy enforcement.
+
+Evidence
+
+End-to-end discussion tests.
+
+### MSG2-023 — Announcement channels
+
+Work
+
+Implement restricted publishing and authorized announcement delivery.
+
+Acceptance criteria
+
+* Authorized publishers.
+
+* Read permissions.
+
+* Correct announcement state.
+
+* Protected publishing actions.
+
+* Appropriate notifications.
+
+* No member impersonation.
+
+Evidence
+
+Role-based publishing tests.
+
+### MSG2-024 — Channel permissions
+
+Work
+
+Implement channel-specific permissions and role inheritance.
+
+Acceptance criteria
+
+* View permissions.
+
+* Write permissions.
+
+* Reply and reaction permissions.
+
+* Moderation permissions.
+
+* Member visibility.
+
+* Explicit inheritance behavior.
+
+* Backend enforcement.
+
+Evidence
+
+Permission matrix tests.
+
+### MSG2-025 — Community administration
+
+Work
+
+Implement community management.
+
+Acceptance criteria
+
+* Authorized owner operations.
+
+* Administrator management.
+
+* Moderator permissions.
+
+* Channel management.
+
+* Member management.
+
+* Community settings.
+
+* Relevant audit records.
+
+Evidence
+
+Administrative integration tests.
+
+### MSG2-026 — Community discovery
+
+Work
+
+Integrate public communities into the existing discovery experience.
+
+Acceptance criteria
+
+* Only eligible public information exposed.
+
+* Correct community identity.
+
+* Accurate membership data.
+
+* Relevant navigation.
+
+* Search integration where available.
+
+* No fabricated activity information.
+
+Evidence
+
+Discovery UI and privacy tests.
+
+### MSG2-027 — Community notifications
+
+Work
+
+Integrate community and channel events with existing notification infrastructure.
+
+Acceptance criteria
+
+* Announcements.
+
+* Mentions.
+
+* Relevant join decisions.
+
+* Important administrative events.
+
+* User preference enforcement.
+
+* Mute behavior.
+
+* Duplicate event handling.
+
+Evidence
+
+Notification integration tests.
+
+### MSG2-028 — Community moderation
+
+Work
+
+Implement contextual community moderation.
+
+Acceptance criteria
+
+* Member reports.
+
+* Message reports.
+
+* Channel reports.
+
+* Authorized member restrictions.
+
+* Moderation permissions.
+
+* Protected records.
+
+* Existing moderation integration.
+
+Evidence
+
+Moderation and security tests.
+
+### PHASE D — VOICE AND VIDEO CALLING
+
+### MSG2-029 — Calling architecture selection
+
+Work
+
+Evaluate existing real-time infrastructure and choose a production calling architecture.
+
+Acceptance criteria
+
+* Provider or infrastructure identified.
+
+* Signaling architecture documented.
+
+* Media transport documented.
+
+* STUN/TURN requirements documented.
+
+* SFU requirement evaluated.
+
+* Cost and operational risks documented.
+
+* Credential requirements identified.
+
+Evidence
+
+Architecture decision record.
+
+### MSG2-030 — Call signaling and authorization
+
+Work
+
+Implement trusted call signaling and lifecycle state management.
+
+Acceptance criteria
+
+* Authenticated caller.
+
+* Authorized recipient.
+
+* Valid session lifecycle.
+
+* Protected signaling.
+
+* Duplicate invitation protection.
+
+* Safe termination.
+
+* No stale session reuse.
+
+Evidence
+
+Backend and signaling tests.
+
+### MSG2-031 — One-to-one audio calls
+
+Work
+
+Implement actual one-to-one voice calling.
+
+Acceptance criteria
+
+* Real audio connection.
+
+* Microphone permissions.
+
+* Incoming and outgoing flows.
+
+* Connection state.
+
+* Muting.
+
+* Ending.
+
+* Reconnection behavior.
+
+* Resource cleanup.
+
+Evidence
+
+Real device/browser call tests using configured media infrastructure.
+
+### MSG2-032 — One-to-one video calls
+
+Work
+
+Implement actual one-to-one video calling.
+
+Acceptance criteria
+
+* Camera permission.
+
+* Real video transport.
+
+* Camera controls.
+
+* Audio controls.
+
+* Full call lifecycle.
+
+* Network failure behavior.
+
+* Resource cleanup.
+
+Evidence
+
+Real two-device video call test.
+
+### MSG2-033 — Group audio and video calls
+
+Work
+
+Implement foundational multi-participant calling using a suitable media architecture.
+
+Acceptance criteria
+
+* Authorized participant joining.
+
+* Media handling appropriate to group capacity.
+
+* Participant identification.
+
+* Call lifecycle.
+
+* Connection stability.
+
+* Participant removal where permitted.
+
+* Resource cleanup.
+
+Evidence
+
+Multi-device tests at the declared supported capacity.
+
+### MSG2-034 — Call experience UI
+
+Work
+
+Implement incoming, outgoing and active calling experiences.
+
+Acceptance criteria
+
+* Accurate call state.
+
+* Correct participant identity.
+
+* Functional controls.
+
+* Permission states.
+
+* Loading and failure states.
+
+* Responsive layout.
+
+* Accessibility.
+
+Evidence
+
+Actual call screens with working controls.
+
+### MSG2-035 — Call history and notifications
+
+Work
+
+Implement call records and relevant notification integration.
+
+Acceptance criteria
+
+* Incoming call.
+
+* Outgoing call.
+
+* Missed call.
+
+* Rejected call.
+
+* Correct session association.
+
+* Appropriate notifications.
+
+* Accurate duration where available.
+
+* Privacy-conscious metadata.
+
+Evidence
+
+Call lifecycle and notification tests.
+
+### MSG2-036 — Calling reliability and security
+
+Work
+
+Verify actual call operation and security.
+
+Acceptance criteria
+
+* Unauthorized users cannot join.
+
+* Blocked users cannot bypass permissions.
+
+* Expired invitations rejected.
+
+* Invalid signaling rejected.
+
+* Media resources released.
+
+* Connection recovery tested.
+
+* Provider failures handled.
+
+Evidence
+
+Security and multi-device testing.
+
+### PHASE E — DIGITAL NATION INTEGRATIONS
+
+### MSG2-037 — Vibes integration
+
+Work
+
+Implement contextual Vibes replies and sharing in eligible communication contexts.
+
+Acceptance criteria
+
+* Authoritative Vibe references.
+
+* Correct recipient permissions.
+
+* Group sharing where supported.
+
+* Contextual replies.
+
+* Expiration handling.
+
+* Deleted-content handling.
+
+* No privacy bypass.
+
+Evidence
+
+Vibe integration tests.
+
+### MSG2-038 — Posts integration
+
+Work
+
+Implement Post sharing and contextual discussion in authorized conversations, groups and channels.
+
+Acceptance criteria
+
+* Supported post types.
+
+* Authoritative post references.
+
+* Correct content previews.
+
+* Privacy enforcement.
+
+* Existing voting/comment behavior preserved.
+
+* Deleted and restricted content handled.
+
+Evidence
+
+Post-type integration tests.
+
+### MSG2-039 — Sparks integration
+
+Work
+
+Implement Spark sharing and navigation into the authoritative Spark system.
+
+Acceptance criteria
+
+* Correct Spark reference.
+
+* Appropriate media preview.
+
+* Permission validation.
+
+* No duplicate video storage.
+
+* Deletion and moderation handling.
+
+* Correct creator identity.
+
+Evidence
+
+Spark integration tests.
+
+### MSG2-040 — XP integration
+
+Work
+
+Integrate eligible communication activities with the existing XP system.
+
+Acceptance criteria
+
+* Existing XP service reused.
+
+* Only approved qualifying events rewarded.
+
+* Server-side validation.
+
+* Idempotency.
+
+* Anti-abuse controls.
+
+* No client-controlled rewards.
+
+* Correct progression updates.
+
+Evidence
+
+Backend progression tests and ledger/state verification.
+
+### MSG2-041 — Achievement and levels integration
+
+Work
+
+Connect supported communication milestones to existing achievements and levels.
+
+Acceptance criteria
+
+* Existing achievement engine reused.
+
+* Verifiable criteria.
+
+* Correct level resolution.
+
+* Authoritative title information.
+
+* Duplicate reward prevention.
+
+* No display-title privilege escalation.
+
+Evidence
+
+Progression tests and profile integration.
+
+### MSG2-042 — Coins and wallet integration
+
+Work
+
+Implement secure messaging-related Coin gifting.
+
+Acceptance criteria
+
+* Existing wallet reused.
+
+* Canonical balance read.
+
+* Atomic transaction.
+
+* Idempotent execution.
+
+* Correct debit and credit.
+
+* Immutable ledger records.
+
+* Accurate gift message.
+
+* No balance manipulation.
+
+* Correct failure and reversal handling.
+
+Evidence
+
+Real backend transaction tests, including duplicate and insufficient-balance cases.
+
+### MSG2-043 — Royal Family integration
+
+Work
+
+Integrate authorized Royal Family communication.
+
+Acceptance criteria
+
+* Existing Royal Family membership reused.
+
+* Role validation.
+
+* Authorized communication spaces.
+
+* Official announcement permissions.
+
+* Protected access.
+
+* No role spoofing.
+
+* No unauthorized privileged operations.
+
+Evidence
+
+Permission and multi-account integration tests.
+
+### MSG2-044 — Creator communication integration
+
+Work
+
+Integrate messaging with authoritative creator identity and communication preferences.
+
+Acceptance criteria
+
+* Correct creator identity.
+
+* Valid communication eligibility.
+
+* Request integration.
+
+* Privacy settings.
+
+* Blocking and reporting.
+
+* No duplicate creator system.
+
+* No unsupported monetization controls.
+
+Evidence
+
+Creator workflow tests.
+
+### MSG2-045 — Event communication integration
+
+Work
+
+Integrate existing event records and communication workflows.
+
+Acceptance criteria
+
+* Authoritative event reference.
+
+* Relevant conversation or channel association.
+
+* Event changes handled.
+
+* RSVP remains authoritative.
+
+* Timezone-correct rendering.
+
+* Privacy preserved.
+
+* Notifications accurate.
+
+Evidence
+
+Event integration tests.
+
+### MSG2-046 — Social graph integration
+
+Work
+
+Ensure all new communication contexts follow the authoritative relationship and privacy system.
+
+Acceptance criteria
+
+* Blocking enforcement.
+
+* Relationship-aware requests.
+
+* Privacy updates reflected.
+
+* No duplicate relationship engine.
+
+* Correct profile identity.
+
+* Shared-group edge cases handled.
+
+Evidence
+
+Cross-feature permission tests.
+
+### PHASE F — SYNCHRONIZATION, NOTIFICATIONS AND SAFETY
+
+### MSG2-047 — Multi-device registration and synchronization
+
+Work
+
+Extend existing device and session infrastructure to support expanded communication.
+
+Acceptance criteria
+
+* Existing device registration reused.
+
+* User-specific device isolation.
+
+* Message synchronization.
+
+* Group synchronization.
+
+* Community synchronization.
+
+* Read-state synchronization.
+
+* Preference synchronization.
+
+* Account-switch cleanup.
+
+Evidence
+
+Two or more independent sessions testing real state changes.
+
+### MSG2-048 — Advanced notification preferences
+
+Work
+
+Implement additional notification controls.
+
+Acceptance criteria
+
+* Group notification settings.
+
+* Channel notification settings.
+
+* Call settings.
+
+* Creator communication settings.
+
+* Royal Family settings.
+
+* Event settings.
+
+* Mute behavior.
+
+* Existing settings integration.
+
+Evidence
+
+Settings persistence and notification-delivery tests.
+
+### MSG2-049 — Cross-device notification delivery
+
+Work
+
+Ensure notifications are appropriately delivered across authenticated devices.
+
+Acceptance criteria
+
+* Current device registration.
+
+* Multiple device targeting.
+
+* Stale token handling.
+
+* Duplicate event protection.
+
+* Account isolation.
+
+* Privacy protection.
+
+* Correct deep links.
+
+Evidence
+
+FCM integration tests where infrastructure is available.
+
+### MSG2-050 — Advanced communication moderation
+
+Work
+
+Complete expanded moderation integration.
+
+Acceptance criteria
+
+* Group reporting.
+
+* Community reporting.
+
+* Channel moderation.
+
+* Call privacy enforcement.
+
+* Invitation abuse protection.
+
+* Financial abuse protections.
+
+* Progression abuse protections.
+
+* Existing moderation workflows reused.
+
+Evidence
+
+Security and moderation tests.
+
+### PHASE G — UI, QUALITY AND FINAL VERIFICATION
+
+### MSG2-051 — Group messaging UI
+
+Work
+
+Complete the group messaging experience.
+
+Acceptance criteria
+
+* Group inbox.
+
+* Group conversation.
+
+* Group details.
+
+* Members.
+
+* Invitations.
+
+* Administrative controls.
+
+* Shared media.
+
+* Dark/light themes.
+
+* Responsive layouts.
+
+* Accessibility.
+
+Evidence
+
+Rendered screens and real group interactions.
+
+### MSG2-052 — Community and channel UI
+
+Work
+
+Complete community discovery, overview, channel navigation and communication.
+
+Acceptance criteria
+
+* Community identity.
+
+* Membership states.
+
+* Channel navigation.
+
+* Discussion and announcements.
+
+* Member management.
+
+* Moderation.
+
+* Notification preferences.
+
+* Responsive layouts.
+
+Evidence
+
+Actual community workflows.
+
+### MSG2-053 — Calling UI
+
+Work
+
+Complete incoming, outgoing and active call interfaces.
+
+Acceptance criteria
+
+* Real connection state.
+
+* Functional media controls.
+
+* Permission handling.
+
+* Network failure handling.
+
+* Call termination.
+
+* Accessibility.
+
+* Mobile and desktop behavior.
+
+Evidence
+
+Actual call session recordings or reproducible test observations, subject to privacy and consent.
+
+### MSG2-054 — Coins, XP and identity UI
+
+Work
+
+Complete messaging-related financial and progression interfaces.
+
+Acceptance criteria
+
+* Accurate gift information.
+
+* Confirmed transaction state.
+
+* Authoritative Coin balance.
+
+* Genuine achievement feedback.
+
+* Correct level and title information.
+
+* No misleading reward indicators.
+
+Evidence
+
+Real backend-confirmed operations and rendered UI.
+
+### MSG2-055 — Royal Family, creator and event UI
+
+Work
+
+Complete relevant communication experiences for these integrations.
+
+Acceptance criteria
+
+* Correct identity.
+
+* Correct access.
+
+* Functional navigation.
+
+* Correct messaging behavior.
+
+* Relevant notification states.
+
+* Appropriate privacy.
+
+Evidence
+
+Cross-feature integration tests.
+
+### MSG2-056 — Accessibility and localization
+
+Work
+
+Audit all new Part 2 interfaces.
+
+Acceptance criteria
+
+* Keyboard operation.
+
+* Screen-reader support.
+
+* Sufficient contrast.
+
+* Reduced motion.
+
+* Touch targets.
+
+* RTL layout.
+
+* Unicode.
+
+* Accessible call controls.
+
+* Accessible group and community navigation.
+
+Evidence
+
+Accessibility audit and manual review.
+
+### MSG2-057 — Firebase security verification
+
+Work
+
+Verify security rules and trusted backend operations for all new systems.
+
+Acceptance criteria
+
+* Group isolation.
+
+* Community privacy.
+
+* Channel permission enforcement.
+
+* Call authorization.
+
+* Wallet security.
+
+* XP security.
+
+* Royal Family authorization.
+
+* Attachment access.
+
+* Multi-device account isolation.
+
+Evidence
+
+Automated Security Rules and backend authorization tests.
+
+### MSG2-058 — Performance and cost verification
+
+Work
+
+Measure or analyze the performance and cost implications of expanded communication.
+
+Acceptance criteria
+
+* Bounded message queries.
+
+* Efficient member retrieval.
+
+* Controlled listeners.
+
+* Scalable counters.
+
+* Efficient notification fan-out.
+
+* Appropriate media loading.
+
+* Call infrastructure cost reviewed.
+
+* Wallet transaction efficiency reviewed.
+
+* No obvious excessive Firestore writes.
+
+Evidence
+
+Query review, relevant measurements and documented trade-offs.
+
+### MSG2-059 — Full regression testing
+
+Work
+
+Verify that Part 1 and the rest of Arvdoul still work.
+
+Acceptance criteria
+
+* Direct messages.
+
+* Message requests.
+
+* Attachments.
+
+* Notifications.
+
+* Blocking.
+
+* Profiles.
+
+* Posts.
+
+* Vibes.
+
+* Sparks.
+
+* Existing Coins.
+
+* Existing XP.
+
+* Existing levels.
+
+* Existing Royal Family functionality.
+
+* Existing navigation.
+
+* Existing authentication.
+
+Evidence
+
+Relevant automated test results and functional regression report.
+
+### MSG2-060 — Final Part 2 verification
+
+Work
+
+Verify the complete expanded communication ecosystem.
+
+Acceptance criteria
+
+* Group communication works.
+
+* Community communication works.
+
+* Channels work.
+
+* Permissions work.
+
+* Calls work where infrastructure is configured.
+
+* Social integrations work.
+
+* XP integration works.
+
+* Coin gifting works.
+
+* Royal Family integration works.
+
+* Creator communication works.
+
+* Event integration works.
+
+* Multi-device synchronization works.
+
+* Notifications work.
+
+* Security tests pass.
+
+* Responsive UI is verified.
+
+* Known limitations are documented.
+
+Evidence
+
+A reproducible, subsystem-by-subsystem completion report.
+
+### 25\. REQUIRED TESTING STRATEGY
+
+Testing must validate real operations and integration boundaries.
+
+### 25.1 Unit tests
+
+Test:
+
+* Group creation validation.
+
+* Membership state transitions.
+
+* Invitation validation.
+
+* Role permission calculations.
+
+* Channel authorization.
+
+* Call lifecycle transitions.
+
+* Call participant authorization.
+
+* Notification preference evaluation.
+
+* XP qualification.
+
+* Coin gift validation.
+
+* Transaction idempotency.
+
+* Shared-content access decisions.
+
+* Device synchronization conflict resolution.
+
+### 25.2 Group integration tests
+
+Use several genuinely independent authenticated accounts.
+
+Verify:
+
+Scenario A — Group creation
+
+* Account A creates a group.
+
+* Account A invites B and C.
+
+* B accepts.
+
+* C accepts.
+
+* The group displays all authorized members.
+
+* Each participant can access the permitted message history.
+
+Scenario B — Role permissions
+
+* A assigns B as administrator.
+
+* B performs an authorized administrative operation.
+
+* C attempts the same operation as a normal member.
+
+* The backend rejects C's unauthorized operation.
+
+* A removes B's role.
+
+* B immediately loses the relevant privilege.
+
+Scenario C — Group messaging
+
+* A sends a message.
+
+* B replies.
+
+* C reacts.
+
+* The other participants receive correct updates.
+
+* Read and delivery states remain accurate.
+
+Scenario D — Membership removal
+
+* A removes a member.
+
+* The member loses access according to the configured policy.
+
+* Existing authorized participants retain expected access.
+
+* Cached permissions do not allow continued unauthorized operations.
+
+### 25.3 Community integration tests
+
+Verify:
+
+* A creates a community.
+
+* A creates a discussion channel.
+
+* A creates an announcement channel.
+
+* B joins.
+
+* B can use permitted discussion functionality.
+
+* B cannot publish in the restricted announcement channel.
+
+* An authorized administrator publishes.
+
+* B receives the appropriate announcement.
+
+* Private channel access is denied to unauthorized users.
+
+### 25.4 Call integration tests
+
+Use real supported devices or test environments with valid media infrastructure.
+
+Verify:
+
+* A initiates an audio call to B.
+
+* B receives an incoming invitation.
+
+* B accepts.
+
+* Audio connects.
+
+* A mutes and unmutes.
+
+* B ends the call.
+
+* Both clients receive the correct terminal state.
+
+Repeat for video.
+
+For group calls, test the declared participant capacity and verify:
+
+* Joining.
+
+* Leaving.
+
+* Media handling.
+
+* Reconnection.
+
+* Unauthorized joining.
+
+* Session termination.
+
+Do not declare calling production-ready based solely on mocked WebRTC objects.
+
+### 25.5 Vibes, Posts and Sparks integration tests
+
+Verify:
+
+* Direct sharing.
+
+* Group sharing.
+
+* Community channel sharing where supported.
+
+* Correct content references.
+
+* Correct author identity.
+
+* Access control.
+
+* Expiration.
+
+* Deletion.
+
+* Unavailable content.
+
+* Restricted content.
+
+* No audience expansion.
+
+### 25.6 XP tests
+
+Verify:
+
+* Valid qualifying event.
+
+* Invalid event.
+
+* Replayed event.
+
+* Duplicate event.
+
+* Excessive activity.
+
+* Reward limit.
+
+* Correct XP balance.
+
+* Correct level calculation.
+
+* Correct achievement state.
+
+Confirm that a user cannot farm XP by simply sending repeated messages.
+
+### 25.7 Coins tests
+
+Verify:
+
+* A has sufficient balance.
+
+* A sends a gift to B.
+
+* The transaction is committed.
+
+* A is debited exactly once.
+
+* B is credited exactly once.
+
+* A sees the transaction result.
+
+* B sees the gift.
+
+* Retrying the same operation does not duplicate the gift.
+
+Also test:
+
+* Insufficient balance.
+
+* Invalid amount.
+
+* Blocked recipient.
+
+* Unauthorized transaction.
+
+* Concurrent transactions.
+
+* Duplicate request.
+
+* Failed backend operation.
+
+* Transaction reconciliation.
+
+### 25.8 Royal Family tests
+
+Verify:
+
+* Authorized member access.
+
+* Unauthorized member denial.
+
+* Official announcement permission.
+
+* Role modification restrictions.
+
+* No client-side role escalation.
+
+* Correct notification access.
+
+* Private communication boundaries.
+
+### 25.9 Multi-device tests
+
+Use at least two independently authenticated device sessions.
+
+Verify:
+
+* New messages synchronize.
+
+* Group membership changes synchronize.
+
+* Community membership changes synchronize.
+
+* Read states synchronize.
+
+* Notification preferences synchronize.
+
+* Account switching clears or isolates private local data.
+
+* Duplicate queued operations do not execute twice.
+
+### 26\. PERFORMANCE, COST AND SCALABILITY
+
+Part 2 introduces substantially more users, permissions, streams and communication activity.
+
+### 26.1 Firestore efficiency
+
+Avoid:
+
+* Unbounded group member arrays.
+
+* Unbounded community member arrays.
+
+* Unbounded messages inside a document.
+
+* Unbounded call signaling history.
+
+* Excessive listeners.
+
+* Per-member receipt writes for every large-group message without justification.
+
+* Repeated full profile reads.
+
+* Repeated membership resolution.
+
+* Unnecessary notification fan-out.
+
+* Duplicate XP events.
+
+* Duplicate wallet writes.
+
+Use:
+
+* Bounded queries.
+
+* Cursor pagination.
+
+* Appropriate indexes.
+
+* Efficient membership lookups.
+
+* Controlled listeners.
+
+* Idempotent backend processing.
+
+* Trusted summary updates.
+
+* Appropriate caching.
+
+* Explicit data-retention policies.
+
+### 26.2 Group scaling
+
+Do not assume every group will have the same size.
+
+Document expected group behavior and limits based on the actual product design.
+
+Use appropriate pagination and role resolution.
+
+Do not load every member and every message whenever a group opens.
+
+### 26.3 Community scaling
+
+Community membership and channel histories may become large.
+
+Use:
+
+* Paginated members.
+
+* Paginated messages.
+
+* Efficient channel indexes.
+
+* Appropriate notification fan-out.
+
+* Controlled listeners.
+
+* Server-side moderation operations.
+
+Avoid public counters that trigger large unnecessary reads.
+
+### 26.4 Calling scalability
+
+Evaluate:
+
+* Concurrent sessions.
+
+* Participants per call.
+
+* SFU capacity.
+
+* TURN bandwidth.
+
+* Media quality.
+
+* Regional latency.
+
+* Infrastructure cost.
+
+* Provider limits.
+
+* Failure recovery.
+
+Do not claim global calling scalability without real infrastructure evidence.
+
+### 26.5 XP and Coin cost controls
+
+Use idempotent operations and trusted aggregation.
+
+Prevent repeated Firestore writes for events that should settle only once.
+
+Do not make the messaging UI poll the wallet ledger continuously.
+
+Refresh canonical financial state at meaningful points.
+
+### 26.6 React performance
+
+Avoid rerendering every message when:
+
+* One participant changes presence.
+
+* One reaction changes.
+
+* One membership record changes.
+
+* A call participant updates.
+
+* A notification arrives.
+
+Use targeted state subscriptions and efficient component boundaries.
+
+Use virtualization where justified.
+
+Ensure all listeners, media streams and device resources are properly cleaned up.
+
+### 27\. DATA MIGRATIONS AND BACKWARD COMPATIBILITY
+
+Part 2 may require extending Part 1 data structures.
+
+Every migration must be planned.
+
+Before modifying a schema:
+
+* Identify current readers.
+
+* Identify current writers.
+
+* Identify backend functions.
+
+* Identify security rules.
+
+* Identify relevant indexes.
+
+* Identify existing records.
+
+* Identify older client behavior.
+
+* Define compatibility requirements.
+
+* Design an idempotent migration.
+
+* Define recovery and rollback behavior.
+
+* Test migrated and unmigrated records.
+
+* Document the operational impact.
+
+Do not rename or restructure existing conversation collections unnecessarily.
+
+Do not invalidate message history.
+
+Do not remove Part 1 data simply to achieve architectural uniformity.
+
+Use additive migration wherever possible.
+
+### 28\. AGENT EXECUTION AND ACCOUNTABILITY PROTOCOL
+
+Part 2 introduces several interconnected subsystems.
+
+You must ensure that implementation agents complete real engineering work rather than merely marking task identifiers as finished.
+
+### 28.1 Required task report
+
+Every task must provide:
+
+```text
+TASK ID:
+TASK NAME:
+
+STATUS:
+NOT STARTED / IN PROGRESS / BLOCKED / VERIFIED
+
+1. Existing implementation inspected
+   - Relevant files:
+   - Existing services:
+   - Existing collections:
+   - Existing integrations:
+   - Existing defects:
+
+2. Implementation
+   - Files created:
+   - Files modified:
+   - Backend changes:
+   - Frontend changes:
+   - Database changes:
+   - Security changes:
+   - External infrastructure changes:
+   - Integrations:
+
+3. Functional verification
+   - Tests executed:
+   - Real behavior tested:
+   - Edge cases tested:
+   - Failure cases tested:
+
+4. Security verification
+   - Authorization tested:
+   - Permission boundaries tested:
+   - Security rules tested:
+   - Financial integrity tested where relevant:
+
+5. Performance verification
+   - Query behavior:
+   - Listener behavior:
+   - Resource management:
+   - Cost implications:
+
+6. Acceptance criteria
+   - Demonstrated:
+   - Not demonstrated:
+   - Evidence:
+
+7. Remaining work
+   - Defects:
+   - Dependencies:
+   - Blockers:
+   - Risks:
+
+FINAL STATUS:
+NOT STARTED / IN PROGRESS / BLOCKED / VERIFIED
+```
+
+### 28.2 Required evidence for specific claims
+
+Group messaging complete
+
+Must demonstrate real multi-account group creation, membership, messaging and authorization.
+
+Community system complete
+
+Must demonstrate actual community membership, channels, roles, permissions and communication.
+
+Voice calling complete
+
+Must demonstrate a real media connection between independent authenticated endpoints using configured media infrastructure.
+
+Video calling complete
+
+Must demonstrate actual video transmission and working controls.
+
+XP integration complete
+
+Must demonstrate server-authorized rewards, idempotency and correct progression state.
+
+Coin gifting complete
+
+Must demonstrate an actual canonical wallet transaction and immutable ledger consistency.
+
+Royal Family integration complete
+
+Must demonstrate authoritative identity and backend-enforced permissions.
+
+Multi-device synchronization complete
+
+Must demonstrate actual synchronization across independent authenticated sessions.
+
+Security complete
+
+Must demonstrate successful authorized operations and rejected unauthorized operations.
+
+Responsive UI complete
+
+Must demonstrate the experience on relevant viewport sizes and both themes.
+
+### 28.3 Status definitions
+
+NOT STARTED
+
+No meaningful implementation has been completed.
+
+IN PROGRESS
+
+Implementation exists, but one or more acceptance criteria remain unverified.
+
+BLOCKED
+
+A specific external dependency, permission, infrastructure requirement or architectural issue prevents completion.
+
+Include the exact blocker.
+
+VERIFIED
+
+All task acceptance criteria have been demonstrated through actual tests and evidence.
+
+Do not mark partially completed tasks VERIFIED.
+
+### 28.4 Parallel execution
+
+Agents may work in parallel only where dependencies and file ownership permit it.
+
+Parallel work must not cause:
+
+* Competing Firestore schemas.
+
+* Multiple message engines.
+
+* Multiple wallet services.
+
+* Multiple XP services.
+
+* Duplicate notification functions.
+
+* Conflicting security rules.
+
+* Duplicate components with different behavior.
+
+* Uncoordinated migration changes.
+
+* Overlapping edits that overwrite one another.
+
+Assign clear ownership of:
+
+* Data contracts.
+
+* Backend functions.
+
+* Security rules.
+
+* UI integration.
+
+* Shared services.
+
+* Existing subsystem adapters.
+
+Merge work only after integration tests and relevant ownership checks.
+
+### 28.5 No false completion
+
+Never:
+
+* Count UI-only work as a completed backend feature.
+
+* Count a mocked call as a functioning call.
+
+* Count a button as a completed financial transaction.
+
+* Count client-side XP updates as server-verified progression.
+
+* Count an invitation screen as a secure invitation system.
+
+* Count a community screen as a complete community architecture.
+
+* Count a build as an integration test.
+
+* Ignore failing tests.
+
+* Conceal infrastructure blockers.
+
+* Fabricate test evidence.
+
+### 29\. REGRESSION PROTECTION
+
+Part 2 must preserve the rest of Arvdoul.
+
+Verify that these systems continue working:
+
+* Authentication.
+
+* Signup and login.
+
+* Onboarding.
+
+* Home.
+
+* Existing navigation.
+
+* Profiles.
+
+* Direct conversations.
+
+* Message requests.
+
+* Text messages.
+
+* Attachments.
+
+* Voice notes.
+
+* Existing notifications.
+
+* Existing Posts.
+
+* Existing Vibes.
+
+* Existing Sparks.
+
+* Existing Coins.
+
+* Existing wallet operations.
+
+* Existing XP.
+
+* Existing levels.
+
+* Existing titles.
+
+* Royal Family.
+
+* Creator systems.
+
+* Events.
+
+* Existing privacy settings.
+
+* Blocking and restrictions.
+
+* Theme switching.
+
+* Firebase Storage.
+
+* Existing moderation.
+
+Do not modify unrelated features merely to simplify a new integration.
+
+If an unrelated defect is identified, document it independently.
+
+### 30\. DELIVERY GATES
+
+Part 2 must pass all six gates.
+
+### Gate 1 — Existing foundation and integration readiness
+
+* Part 1 verified.
+
+* Existing messaging architecture inspected.
+
+* Profiles and social graph inspected.
+
+* XP and levels inspected.
+
+* Wallet and ledger inspected.
+
+* Royal Family inspected.
+
+* Creator infrastructure inspected.
+
+* Events inspected.
+
+* Notifications inspected.
+
+* Security boundaries mapped.
+
+Gate condition: Every integration is based on the actual repository and an identified authoritative subsystem.
+
+### Gate 2 — Group and community communication
+
+* Groups can be created.
+
+* Membership works.
+
+* Invitations work.
+
+* Group permissions work.
+
+* Group conversations work.
+
+* Group moderation works.
+
+* Communities work.
+
+* Channels work.
+
+* Announcement permissions work.
+
+* Community moderation works.
+
+Gate condition: Multiple independent accounts can use genuine groups and community communication with enforced permissions.
+
+### Gate 3 — Real-time calling
+
+* Calling architecture documented.
+
+* Real signaling implemented.
+
+* One-to-one audio works.
+
+* One-to-one video works.
+
+* Foundational group calling works at the declared supported capacity.
+
+* Incoming and outgoing calls work.
+
+* Call termination works.
+
+* Network failure handling verified.
+
+* Media-resource cleanup verified.
+
+* Security verified.
+
+Gate condition: Calling is demonstrated using real media infrastructure, not a simulated interface. Any unavailable infrastructure must be explicitly marked BLOCKED.
+
+### Gate 4 — Digital Nation integration
+
+* Vibes integration works.
+
+* Posts integration works.
+
+* Sparks integration works.
+
+* XP integration works.
+
+* Achievements and level integration works.
+
+* Coin gifting works through the authoritative wallet.
+
+* Royal Family communication works.
+
+* Creator communication works.
+
+* Event integration works.
+
+* Social graph permissions work.
+
+Gate condition: Every connected subsystem uses its authoritative source of truth and passes integration tests.
+
+### Gate 5 — Synchronization, safety and product quality
+
+* Multi-device state synchronization works.
+
+* Notifications work.
+
+* Notification preferences work.
+
+* Group privacy works.
+
+* Community privacy works.
+
+* Advanced moderation works.
+
+* Dark theme verified.
+
+* Light theme verified.
+
+* Mobile verified.
+
+* Tablet verified.
+
+* Desktop verified.
+
+* Accessibility reviewed.
+
+Gate condition: The expanded ecosystem is reliable, usable and correctly permissioned.
+
+### Gate 6 — Final integration and regression
+
+* Part 1 remains functional.
+
+* Existing Arvdoul features remain functional.
+
+* Firestore Rules verified.
+
+* Storage Rules verified.
+
+* Backend authorization verified.
+
+* Financial integrity verified.
+
+* Progression integrity verified.
+
+* Performance reviewed.
+
+* Cost implications documented.
+
+* Critical tests pass.
+
+* Remaining blockers documented.
+
+* Final evidence report produced.
+
+Gate condition: Part 2 is fully integrated into Arvdoul and its functionality is demonstrated by reproducible evidence.
+
+### 31\. FINAL DELIVERABLES
+
+At completion, provide the following.
+
+### 31.1 Product deliverable
+
+A working social communication ecosystem that extends Part 1 with:
+
+* Group messaging.
+
+* Group administration.
+
+* Communities.
+
+* Channels.
+
+* Foundational voice and video calling.
+
+* Advanced Vibes integration.
+
+* Advanced Posts integration.
+
+* Advanced Sparks integration.
+
+* XP and achievements.
+
+* Levels and titles.
+
+* Coin gifting.
+
+* Royal Family communication.
+
+* Creator communication.
+
+* Event communication.
+
+* Multi-device synchronization.
+
+* Advanced notifications.
+
+* Expanded privacy and moderation.
+
+Only describe a capability as delivered when its actual implementation and acceptance criteria are verified.
+
+### 31.2 Architecture documentation
+
+Document:
+
+* Group data model.
+
+* Community data model.
+
+* Channel architecture.
+
+* Role and permission model.
+
+* Calling architecture.
+
+* Media infrastructure.
+
+* Notification architecture.
+
+* XP event integration.
+
+* Coin gifting transaction flow.
+
+* Royal Family authorization.
+
+* Creator communication integration.
+
+* Event integration.
+
+* Device synchronization.
+
+* Privacy and moderation.
+
+* Firebase data ownership.
+
+* Migration decisions.
+
+* Future extension points.
+
+### 31.3 Changed-file report
+
+List:
+
+* Files created.
+
+* Files modified.
+
+* Files removed, if any.
+
+* Firestore collections and subcollections added or changed.
+
+* Storage paths added or changed.
+
+* Cloud Functions created or modified.
+
+* Security rules changed.
+
+* Indexes added.
+
+* External infrastructure configured.
+
+* Secrets or environment configuration required.
+
+* Data migrations introduced.
+
+Explain why important changes were necessary.
+
+### 31.4 Testing report
+
+Include:
+
+* Tests discovered.
+
+* Tests added.
+
+* Tests executed.
+
+* Passing tests.
+
+* Failing tests.
+
+* Skipped tests.
+
+* Security-rule tests.
+
+* Group integration tests.
+
+* Community integration tests.
+
+* Calling tests.
+
+* XP tests.
+
+* Coin transaction tests.
+
+* Royal Family tests.
+
+* Multi-device tests.
+
+* Responsive testing.
+
+* Accessibility review.
+
+* Performance observations.
+
+* Cost implications.
+
+Do not fabricate test counts.
+
+### 31.5 Infrastructure and operational report
+
+Calling and some real-time systems may require infrastructure beyond application code.
+
+Document:
+
+* Required provider or infrastructure.
+
+* Configuration.
+
+* Environment variables.
+
+* Secrets.
+
+* Deployment requirements.
+
+* Infrastructure costs.
+
+* Operational dependencies.
+
+* Monitoring requirements.
+
+* Known reliability limitations.
+
+Never expose secrets in source code or reports.
+
+### 31.6 Remaining work report
+
+Identify all unfinished work, including:
+
+* Incomplete functionality.
+
+* Unverified operations.
+
+* Infrastructure blockers.
+
+* Known security limitations.
+
+* Performance concerns.
+
+* Migration risks.
+
+* Missing integrations.
+
+* Unresolved defects.
+
+Do not conceal incomplete features behind a successful build.
+
+### 31.7 Final task status
+
+Provide a complete MSG2-001 through MSG2-060 status table.
+
+Every task must be marked:
+
+* NOT STARTED.
+
+* IN PROGRESS.
+
+* BLOCKED.
+
+* VERIFIED.
+
+Calculate any completion percentage strictly from verified tasks.
+
+Do not count partially implemented or untested tasks as complete.
+
+### 32\. FINAL ENGINEERING DIRECTIVE
+
+Part 2 is the point at which Arvdoul messaging evolves from an individual communication system into a connected social communication ecosystem.
+
+The objective is not simply to add group chats, communities, calls and gift buttons.
+
+The objective is to make these capabilities work together as one coherent platform.
+
+A user should be able to:
+
+* Communicate privately with another person.
+
+* Create and manage a group.
+
+* Participate in meaningful group discussions.
+
+* Join communities.
+
+* Communicate through specialized channels.
+
+* Participate in real voice and video calls.
+
+* Share and discuss Vibes.
+
+* Share and discuss Posts.
+
+* Share and discuss Sparks.
+
+* Progress through legitimate social participation.
+
+* Earn genuine achievements.
+
+* Display authoritative levels and titles.
+
+* Send real Coin gifts through the existing wallet.
+
+* Participate in authorized Royal Family communication.
+
+* Contact creators through the correct permission model.
+
+* Coordinate around real Arvdoul events.
+
+* Continue conversations across authenticated devices.
+
+* Control privacy and notification preferences.
+
+* Report and manage abusive communication.
+
+All of this must operate without breaking the existing messaging foundation or creating competing versions of Arvdoul's core systems.
+
+The implementation must be:
+
+* Architecturally consistent.
+
+* Secure.
+
+* Permission-aware.
+
+* Financially correct.
+
+* Progression-integrated.
+
+* Reliable under network interruptions.
+
+* Efficient with Firebase.
+
+* Responsive across supported devices.
+
+* Accessible.
+
+* Maintainable.
+
+* Testable.
+
+* Honest about external dependencies.
+
+Do not introduce Part 3 functionality prematurely.
+
+Do not invent infrastructure.
+
+Do not substitute visual simulations for real operations.
+
+Do not duplicate authoritative services.
+
+Do not compromise data integrity for convenience.
+
+Do not mark a task complete without evidence.
+
+Execute Part 2 only. Extend the verified Part 1 foundation, integrate the existing Arvdoul Digital Nation systems, implement the actual functionality, validate every permission boundary, test real multi-user workflows and document all remaining limitations.

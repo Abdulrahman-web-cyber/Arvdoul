@@ -119,6 +119,7 @@ exports.createCommunity = functions.https.onCall(async (data, context) => {
     isDeleted: false,
   };
   await ref.set(community);
+  await seedDefaultCommunityChannels(ref, uid);
   await db.doc(`users/${uid}`).set(
     { communityCount: FieldValue.increment(1), joinedCommunities: FieldValue.arrayUnion(ref.id), updatedAt: FieldValue.serverTimestamp() },
     { merge: true }
@@ -512,3 +513,325 @@ exports.getMyCommunities = functions.https.onCall(async (data, context) => {
     .get();
   return { success: true, communities: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
 });
+
+// ======================================================================
+//  PART 2: STRUCTURED COMMUNITY CHANNELS, MESSAGES & MODERATION
+// ======================================================================
+const { awardXpSafe } = require('./xpAward');
+const { logger } = require('./logger');
+const { writeNotification } = require('./notificationWriter');
+
+const DEFAULT_CHANNELS = [
+  { id: 'general', name: 'general', type: 'discussion', description: 'General community discussion', isDefault: true, order: 1 },
+  { id: 'announcements', name: 'announcements', type: 'announcements', description: 'Official leadership broadcasts', isDefault: true, order: 2 },
+  { id: 'events', name: 'events', type: 'events', description: 'Upcoming gatherings & event updates', isDefault: true, order: 3 },
+];
+
+async function seedDefaultCommunityChannels(communityRef, creatorUid) {
+  const batch = db.batch();
+  for (const ch of DEFAULT_CHANNELS) {
+    const chRef = communityRef.collection('channels').doc(ch.id);
+    batch.set(chRef, {
+      ...ch,
+      communityId: communityRef.id,
+      slug: ch.id,
+      isLocked: false,
+      slowModeSeconds: 0,
+      messageCount: 0,
+      createdBy: creatorUid,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  await batch.commit();
+}
+
+exports.getCommunityChannels = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getCommunityChannels', 60, 60000);
+
+  const { communityId } = data || {};
+  const { ref, data: community } = await loadCommunity(communityId);
+  const membership = community.members?.[uid];
+
+  if (community.privacy === 'secret' && !membership) {
+    throw httpError('permission-denied', 'This community is private.');
+  }
+  if (community.privacy === 'private' && !membership) {
+    return { success: true, channels: [] };
+  }
+
+  let snap = await ref.collection('channels').orderBy('order', 'asc').limit(50).get();
+  if (snap.empty) {
+    await seedDefaultCommunityChannels(ref, community.createdBy || uid);
+    snap = await ref.collection('channels').orderBy('order', 'asc').limit(50).get();
+  }
+
+  const channels = snap.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+    createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() || null,
+    updatedAt: d.data().updatedAt?.toDate?.()?.toISOString?.() || null,
+  }));
+  return { success: true, channels };
+});
+
+exports.createCommunityChannel = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'createCommunityChannel', 15, 60000);
+
+  const { communityId, name, type = 'discussion', description = '', slowModeSeconds = 0 } = data || {};
+  const { ref, data: community } = await loadCommunity(communityId);
+  assertRole(community, uid, ['owner', 'admin']);
+
+  const cleanedName = cleanText(name, 48).toLowerCase().replace(/[^a-z0-9-_ ]/g, '').trim();
+  if (!cleanedName) throw httpError('invalid-argument', 'A valid channel name is required.');
+  if (!['discussion', 'announcements', 'events'].includes(type)) {
+    throw httpError('invalid-argument', 'type must be discussion, announcements, or events.');
+  }
+
+  const slug = cleanedName.replace(/\s+/g, '-');
+  const existing = await ref.collection('channels').limit(30).get();
+  if (existing.size >= 25) {
+    throw httpError('failed-precondition', 'Maximum channel limit (25) reached for this community.');
+  }
+
+  const chRef = ref.collection('channels').doc();
+  const channelDoc = {
+    id: chRef.id,
+    communityId,
+    name: cleanedName,
+    slug,
+    type,
+    description: cleanText(description, 240),
+    isDefault: false,
+    isLocked: false,
+    slowModeSeconds: Math.min(Math.max(0, Number(slowModeSeconds) || 0), 3600),
+    order: existing.size + 1,
+    messageCount: 0,
+    createdBy: uid,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  await chRef.set(channelDoc);
+  await writeAudit(uid, 'community_channel_created', communityId, { channelId: chRef.id, name: cleanedName, type }, 'community');
+  return { success: true, channel: { ...channelDoc, createdAt: new Date().toISOString() } };
+});
+
+exports.updateCommunityChannel = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'updateCommunityChannel', 25, 60000);
+
+  const { communityId, channelId, name, description, isLocked, slowModeSeconds } = data || {};
+  if (!channelId) throw httpError('invalid-argument', 'channelId is required.');
+
+  const { ref, data: community } = await loadCommunity(communityId);
+  assertRole(community, uid, ['owner', 'admin']);
+
+  const chRef = ref.collection('channels').doc(channelId);
+  const chSnap = await chRef.get();
+  if (!chSnap.exists) throw httpError('not-found', 'Channel not found.');
+
+  const patch = { updatedAt: FieldValue.serverTimestamp() };
+  if (typeof name === 'string' && name.trim()) patch.name = cleanText(name, 48).toLowerCase();
+  if (typeof description === 'string') patch.description = cleanText(description, 240);
+  if (typeof isLocked === 'boolean') patch.isLocked = isLocked;
+  if (slowModeSeconds !== undefined) patch.slowModeSeconds = Math.min(Math.max(0, Number(slowModeSeconds) || 0), 3600);
+
+  await chRef.update(patch);
+  return { success: true, channelId };
+});
+
+exports.deleteCommunityChannel = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'deleteCommunityChannel', 10, 60000);
+
+  const { communityId, channelId } = data || {};
+  if (!channelId) throw httpError('invalid-argument', 'channelId is required.');
+
+  const { ref, data: community } = await loadCommunity(communityId);
+  assertRole(community, uid, ['owner', 'admin']);
+
+  const chRef = ref.collection('channels').doc(channelId);
+  const chSnap = await chRef.get();
+  if (!chSnap.exists) throw httpError('not-found', 'Channel not found.');
+  if (chSnap.data().isDefault) throw httpError('failed-precondition', 'Default community channels cannot be deleted.');
+
+  await chRef.delete();
+  await writeAudit(uid, 'community_channel_deleted', communityId, { channelId }, 'community');
+  return { success: true, channelId };
+});
+
+exports.getChannelMessages = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getChannelMessages', 90, 60000);
+
+  const { communityId, channelId, limit: rawLimit = 40, beforeId = null } = data || {};
+  if (!channelId) throw httpError('invalid-argument', 'channelId is required.');
+
+  const { ref, data: community } = await loadCommunity(communityId);
+  const membership = community.members?.[uid];
+  if ((community.privacy === 'private' || community.privacy === 'secret') && !membership) {
+    throw httpError('permission-denied', 'Membership required to read private community channels.');
+  }
+  if (community.moderation?.bannedUsers?.includes(uid)) {
+    throw httpError('permission-denied', 'You are banned from this community.');
+  }
+
+  const pageLimit = Math.min(Math.max(1, Number(rawLimit) || 40), 50);
+  let q = ref.collection('channels').doc(channelId).collection('messages')
+    .orderBy('createdAt', 'desc')
+    .limit(pageLimit);
+
+  if (beforeId && typeof beforeId === 'string') {
+    const cursorSnap = await ref.collection('channels').doc(channelId).collection('messages').doc(beforeId).get();
+    if (cursorSnap.exists) q = q.startAfter(cursorSnap);
+  }
+
+  const snap = await q.get();
+  const messages = snap.docs
+    .filter((d) => d.data().isDeleted !== true)
+    .map((d) => ({
+      id: d.id,
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() || null,
+    }))
+    .reverse();
+
+  return { success: true, messages, hasMore: snap.size === pageLimit };
+});
+
+exports.sendChannelMessage = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'sendChannelMessage', 40, 60000);
+
+  const { communityId, channelId, content = '', type = 'text', sharedContent = null } = data || {};
+  if (!channelId) throw httpError('invalid-argument', 'channelId is required.');
+
+  const { ref, data: community } = await loadCommunity(communityId);
+  const role = roleOf(community, uid);
+  if (!role || role === 'restricted') {
+    throw httpError('permission-denied', 'Active community membership required to post.');
+  }
+  if (community.moderation?.bannedUsers?.includes(uid)) {
+    throw httpError('permission-denied', 'You are banned from this community.');
+  }
+
+  const chRef = ref.collection('channels').doc(channelId);
+  const chSnap = await chRef.get();
+  if (!chSnap.exists) throw httpError('not-found', 'Channel not found.');
+  const channel = chSnap.data();
+
+  const isStaff = ['owner', 'admin', 'moderator'].includes(role);
+  if (channel.type === 'announcements' && !isStaff) {
+    throw httpError('permission-denied', 'Only community leaders and moderators can post in Announcements.');
+  }
+  if (channel.isLocked && !isStaff) {
+    throw httpError('permission-denied', 'This channel is currently locked.');
+  }
+
+  const slowDelay = Number(channel.slowModeSeconds || community.moderation?.slowModeDelay || 0);
+  if (slowDelay > 0 && !isStaff) {
+    await checkRateLimit(uid, `ch_slow_${communityId}_${channelId}`, 1, slowDelay * 1000);
+  }
+
+  const cleanedContent = cleanText(content, 4000);
+  if (!cleanedContent && !sharedContent) {
+    throw httpError('invalid-argument', 'Message text or shared content is required.');
+  }
+
+  const userSnap = await db.doc(`users/${uid}`).get();
+  const u = userSnap.exists ? userSnap.data() : {};
+  const msgRef = chRef.collection('messages').doc();
+
+  const msgDoc = {
+    id: msgRef.id,
+    communityId,
+    channelId,
+    senderId: uid,
+    senderName: u.displayName || u.username || 'Member',
+    senderPhoto: u.photoURL || null,
+    senderRole: role,
+    type: ['text', 'image', 'event_share', 'announcement'].includes(type) ? type : 'text',
+    content: cleanedContent,
+    sharedContent: sharedContent && typeof sharedContent === 'object' ? sharedContent : null,
+    isPinned: false,
+    isDeleted: false,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+
+  await msgRef.set(msgDoc);
+  await chRef.update({
+    messageCount: FieldValue.increment(1),
+    lastMessageAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  // Anti-spam gated XP: only substantive contributions (>=12 chars) earn bounded daily XP
+  if (cleanedContent.length >= 12) {
+    await awardXpSafe(uid, 'community_channel_contribution', { source: `${communityId}:${channelId}:${msgRef.id}` });
+  }
+
+  // Broadcast announcement notifications (respecting recipient communityAnnouncements opt-out & mutes)
+  if (channel.type === 'announcements') {
+    const memberIds = Object.keys(community.members || {}).filter((id) => id !== uid).slice(0, 100);
+    await Promise.allSettled(
+      memberIds.map(async (memberId) => {
+        const settingsSnap = await db.collection('user_settings').doc(memberId).get();
+        const prefs = settingsSnap.exists ? settingsSnap.data()?.notificationPreferences : null;
+        if (prefs?.communityAnnouncements === false) return;
+        await writeNotification(memberId, {
+          type: 'community_announcement',
+          title: `${community.name} · #${channel.name}`,
+          message: cleanedContent.slice(0, 140),
+          senderId: uid,
+          senderName: msgDoc.senderName,
+          metadata: { communityId, channelId, messageId: msgRef.id },
+        }).catch((err) => logger.warn('community announcement notif failed', { memberId, error: err.message }));
+      })
+    );
+  }
+
+  return {
+    success: true,
+    message: { ...msgDoc, createdAt: new Date().toISOString() },
+  };
+});
+
+exports.moderateChannelMessage = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'moderateChannelMessage', 40, 60000);
+
+  const { communityId, channelId, messageId, action } = data || {};
+  if (!channelId || !messageId || !['pin', 'unpin', 'delete'].includes(action)) {
+    throw httpError('invalid-argument', 'communityId, channelId, messageId, and action (pin|unpin|delete) required.');
+  }
+
+  const { ref, data: community } = await loadCommunity(communityId);
+  const role = roleOf(community, uid);
+  const isStaff = ['owner', 'admin', 'moderator'].includes(role);
+
+  const msgRef = ref.collection('channels').doc(channelId).collection('messages').doc(messageId);
+  const msgSnap = await msgRef.get();
+  if (!msgSnap.exists) throw httpError('not-found', 'Message not found.');
+  const msg = msgSnap.data();
+
+  if (action === 'delete') {
+    if (!isStaff && msg.senderId !== uid) {
+      throw httpError('permission-denied', 'Only staff or the message author can delete this message.');
+    }
+    await msgRef.update({ isDeleted: true, deletedBy: uid, deletedAt: FieldValue.serverTimestamp() });
+  } else {
+    if (!isStaff) {
+      throw httpError('permission-denied', 'Only community leaders and moderators can pin messages.');
+    }
+    await msgRef.update({ isPinned: action === 'pin', pinnedBy: uid });
+  }
+
+  if (isStaff) {
+    await writeAudit(uid, `channel_message_${action}`, communityId, { channelId, messageId }, 'community');
+  }
+  return { success: true, messageId, action };
+});
+

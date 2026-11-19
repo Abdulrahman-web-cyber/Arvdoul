@@ -12,8 +12,28 @@
 
 import { logger } from '../utils/Logger.js';
 import { pickDisplayName } from './profileReadModel.js';
+import { callFunction, FUNCTIONS } from './callableService.js';
+import { CALL_STATES, CALL_TERMINAL_STATES } from '../config/messagingContracts.js';
 
-const CALL_STATUS = { RINGING: 'ringing', ACTIVE: 'active', ENDED: 'ended' };
+const CALL_STATUS = {
+  INITIATED: 'initiated',
+  RINGING: 'ringing',
+  ACCEPTED: 'accepted',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  ACTIVE: 'active',
+  RECONNECTING: 'reconnecting',
+  ENDED: 'ended',
+  REJECTED: 'rejected',
+  MISSED: 'missed',
+  CANCELLED: 'cancelled',
+  FAILED: 'failed',
+  TIMED_OUT: 'timed_out',
+};
+
+const DEFAULT_STUN_ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+];
 
 class CallService {
   async _firestore() {
@@ -207,6 +227,81 @@ class CallService {
     }
   }
 
+  /**
+   * Honest WebRTC ICE / SFU capability resolution.
+   * Never fabricates TURN or SFU credentials when env vars are unset.
+   */
+  getIceConfiguration(serverIceConfig = null) {
+    const envTurnUrls = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_TURN_URLS : '';
+    const envTurnUser = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_TURN_USERNAME : '';
+    const envTurnPass = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_TURN_CREDENTIAL : '';
+    const envSfu = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SFU_ENDPOINT : '';
+
+    if (serverIceConfig && Array.isArray(serverIceConfig.iceServers) && serverIceConfig.iceServers.length > 0) {
+      return {
+        iceServers: serverIceConfig.iceServers,
+        turnConfigured: Boolean(serverIceConfig.turnConfigured),
+        sfuConfigured: Boolean(serverIceConfig.sfuConfigured),
+        sfuEndpoint: serverIceConfig.sfuEndpoint || null,
+      };
+    }
+
+    const iceServers = [...DEFAULT_STUN_ICE_SERVERS];
+    let turnConfigured = false;
+    if (envTurnUrls && envTurnUser && envTurnPass) {
+      const urls = String(envTurnUrls).split(',').map((u) => u.trim()).filter(Boolean);
+      if (urls.length > 0) {
+        iceServers.push({ urls, username: envTurnUser, credential: envTurnPass });
+        turnConfigured = true;
+      }
+    }
+
+    return {
+      iceServers,
+      turnConfigured,
+      sfuConfigured: Boolean(envSfu),
+      sfuEndpoint: envSfu || null,
+    };
+  }
+
+  /**
+   * Server-authoritative call initiation (`functions/calls.js#initiateCall`).
+   * Enforces whoCanCall privacy, mutual blocks, and group caps, while
+   * returning deterministic callId and real ICE configuration.
+   */
+  async initiateCall({ conversationId = null, recipientIds = [], callType = 'audio', callId = null }) {
+    return callFunction(FUNCTIONS.INITIATE_CALL, {
+      conversationId,
+      recipientIds,
+      callType,
+      callId,
+    });
+  }
+
+  async respondToCall(callId, action) {
+    if (!callId) throw new Error('callId is required');
+    return callFunction(FUNCTIONS.RESPOND_TO_CALL, { callId, action });
+  }
+
+  async updateCallSessionState(callId, state, reason = '') {
+    if (!callId || !CALL_STATES.includes(state)) return { success: false };
+    return callFunction(FUNCTIONS.UPDATE_CALL_SESSION_STATE, { callId, state, reason });
+  }
+
+  async getCallHistory(limitCount = 25) {
+    const res = await callFunction(FUNCTIONS.GET_CALL_HISTORY, { limit: limitCount });
+    return {
+      calls: Array.isArray(res?.calls) ? res.calls : [],
+      turnConfigured: Boolean(res?.turnConfigured),
+      sfuConfigured: Boolean(res?.sfuConfigured),
+    };
+  }
+
+  async reportCall(callId, reason, details = '') {
+    if (!callId) throw new Error('callId is required');
+    return callFunction(FUNCTIONS.REPORT_CALL, { targetId: callId, reason, details });
+  }
+
   async addIceCandidate(callId, candidate, fromUid) {
     const db = await this._firestore();
     const { collection, addDoc } = await this._fs();
@@ -233,5 +328,5 @@ export function getCallService() {
   return _instance;
 }
 
-export { CALL_STATUS };
-export default { getCallService, CALL_STATUS };
+export { CALL_STATUS, CALL_TERMINAL_STATES };
+export default { getCallService, CALL_STATUS, CALL_TERMINAL_STATES };

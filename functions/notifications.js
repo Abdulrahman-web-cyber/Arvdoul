@@ -205,10 +205,16 @@ async function processPushTask(docRef, taskData, pushId) {
           pushId: String(pushId || ''),
           type: String(payload.type || 'general'),
           targetId: payload.targetId ? String(payload.targetId) : '',
+          conversationId: payload.conversationId ? String(payload.conversationId) : '',
+          click_action: payload.clickAction ? String(payload.clickAction) : '',
+          url: payload.clickAction ? String(payload.clickAction) : '',
           priority: String(payload.priority || 'normal'),
         },
         tokens: chunk.map(t => t.token),
       };
+      if (payload.clickAction) {
+        message.webpush = { fcmOptions: { link: String(payload.clickAction) } };
+      }
       if (payload.imageUrl) message.notification.imageUrl = payload.imageUrl;
       const response = await admin.messaging().sendEachForMulticast(message);
       totalSuccess += response.successCount;
@@ -383,6 +389,13 @@ const CLIENT_SOCIAL_NOTIFICATION_TYPES = new Set([
   'group_join_request',
   'event_update',
   'story_collaboration',
+  'community_announcement',
+  'community_activity',
+  'incoming_call',
+  'missed_call',
+  'creator_request',
+  'royal_announcement',
+  'channel_mention',
 ]);
 const CLIENT_SELF_NOTIFICATION_TYPES = new Set(['welcome', 'system']);
 
@@ -446,7 +459,7 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('resource-exhausted', 'Too many notifications to this recipient');
   }
 
-  // Get recipient preferences and apply DND / channel opt-outs
+  // Get recipient preferences and apply DND / channel / category opt-outs
   const prefsSnap = await db.collection('user_settings').doc(recipientId).get();
   const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
   if (prefs?.doNotDisturb?.enabled) {
@@ -454,6 +467,27 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     if (dndActive && notificationData.priority !== 'high') {
       return { success: false, skipped: true, reason: 'DND active' };
     }
+  }
+
+  // Enforce granular notification category opt-outs
+  const CATEGORY_PREF_MAP = {
+    message: 'directMessages',
+    group_message: 'groupMessages',
+    group_join_request: 'groupMessages',
+    mention: 'mentions',
+    channel_mention: 'mentions',
+    community_announcement: 'communityAnnouncements',
+    community_activity: 'communityActivity',
+    incoming_call: 'callNotifications',
+    missed_call: 'callNotifications',
+    gift_received: 'giftNotifications',
+    creator_request: 'creatorRequests',
+    royal_announcement: 'royalAnnouncements',
+    event_update: 'eventNotifications',
+  };
+  const prefKey = CATEGORY_PREF_MAP[type];
+  if (prefs && prefKey && prefs[prefKey] === false) {
+    return { success: false, skipped: true, reason: `category_${prefKey}_disabled` };
   }
 
   // Channel opt-outs (written by the Settings screen to `user_settings`).
@@ -466,18 +500,42 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     return { success: false, skipped: true, reason: 'all channels disabled' };
   }
 
-  // Enrich with sender info. A caller-supplied `message` is used as-is; the
-  // fallback must be a real sentence, never the fabricated `"<name> like"` /
-  // `"Someone like"` (the type word is not a verb).
+  // Enrich with sender info and verify Royal standing when dispatching a royal_announcement
   const senderSnap = await db.collection('users').doc(senderId).get();
-  const senderName = senderSnap.exists ? (senderSnap.data().displayName || senderSnap.id) : `user ${String(senderId).slice(0, 6)}`;
-  const message = notificationData.message
+  const senderData = senderSnap.exists ? senderSnap.data() : {};
+  if (type === 'royal_announcement') {
+    const ROYAL_IDS = new Set(['king', 'queen', 'duke', 'royal', 'sovereign']);
+    const activeId = typeof senderData.activeTitle === 'object' && senderData.activeTitle !== null
+      ? String(senderData.activeTitle.id || '').toLowerCase()
+      : String(senderData.activeTitle || '').toLowerCase();
+    const titleIds = Array.isArray(senderData.titles)
+      ? senderData.titles.map((t) => (typeof t === 'object' && t !== null ? String(t.id || t.titleId || '') : String(t || '')).toLowerCase())
+      : [];
+    const roleIds = Array.isArray(senderData.roles) ? senderData.roles.map((r) => String(r).toLowerCase()) : [];
+    const verifiedRoyal = ROYAL_IDS.has(activeId) || titleIds.some((t) => ROYAL_IDS.has(t)) || roleIds.some((r) => ROYAL_IDS.has(r));
+    if (!verifiedRoyal) {
+      throw new functions.https.HttpsError('permission-denied', 'Royal Family standing is required to broadcast royal announcements.');
+    }
+  }
+
+  const senderName = senderSnap.exists ? (senderData.displayName || senderSnap.id) : `user ${String(senderId).slice(0, 6)}`;
+  const rawMessage = notificationData.message
     || (senderSnap.exists ? `${senderName} sent you a notification` : 'You have a new notification');
+  const conversationId = notificationData.metadata?.conversationId || null;
+  const isMessageType = type === 'message' || type === 'group_message';
+  const hidePreview = Boolean(prefs?.hidePreview);
+  const pushBody = isMessageType && hidePreview ? 'Sent you a new message' : rawMessage;
+  const clickAction = isMessageType && conversationId
+    ? (notificationData.metadata?.kind === 'message_request' ? '/messages?tab=requests' : `/messages/${conversationId}`)
+    : (notificationData.metadata?.clickAction || null);
+  const message = rawMessage;
   const payload = {
     title: notificationData.title,
-    body: message,
+    body: pushBody,
     type: notificationData.type,
-    targetId: notificationData.metadata?.postId || null,
+    targetId: notificationData.metadata?.postId || conversationId || null,
+    conversationId,
+    clickAction,
     priority: notificationData.priority || 'normal',
   };
 

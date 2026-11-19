@@ -63,6 +63,10 @@ const REPORT_TARGETS = {
   // single document the callable can fetch), so moderators still get the
   // conversation context. The admin queue reads this collection too.
   message: { collection: 'message_reports', contentField: 'messageId', contentCollection: 'conversations' },
+  group: { collection: 'group_reports', contentField: 'conversationId', contentCollection: 'conversations' },
+  community: { collection: 'community_reports', contentField: 'communityId', contentCollection: 'communities' },
+  channel: { collection: 'channel_reports', contentField: 'channelId', contentCollection: 'communities' },
+  call: { collection: 'call_reports', contentField: 'callId', contentCollection: 'calls' },
 };
 
 // Exactly the field names the admin console reads (reporterName, content,
@@ -167,6 +171,10 @@ exports.reportVideo = reportAlias('video');
 exports.reportUser = reportAlias('user');
 exports.reportStory = reportAlias('story');
 exports.reportVibeReply = reportAlias('vibe_reply');
+exports.reportGroup = reportAlias('group');
+exports.reportCommunity = reportAlias('community');
+exports.reportChannel = reportAlias('channel');
+exports.reportCall = reportAlias('call');
 
 // ----------------------------------------------------------------------
 //  2. getReports — moderation queue reader (admin only)

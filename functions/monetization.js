@@ -646,6 +646,238 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
 });
 
 // ----------------------------------------------------------------------
+// 4b. sendMessageGift — real-time chat gift with atomic ledger & bubble
+// ----------------------------------------------------------------------
+exports.sendMessageGift = functions.https.onCall(async (data, context) => {
+  try {
+    const senderUid = getUserIdFromContext(context);
+    const { conversationId, recipientId, giftType, idempotencyKey, note = '' } = data || {};
+    if (!conversationId || !recipientId || !giftType) {
+      throw new functions.https.HttpsError('invalid-argument', 'conversationId, recipientId, and giftType are required.');
+    }
+    if (senderUid === recipientId) {
+      throw new functions.https.HttpsError('invalid-argument', 'You cannot send a chat gift to yourself.');
+    }
+
+    const rawGiftConfig = getRuntimeConfig('APP_GIFT_TYPES', 'app.gift_types');
+    const parsedGiftTypes = typeof rawGiftConfig === 'string'
+      ? (() => { try { return JSON.parse(rawGiftConfig); } catch { return {}; } })()
+      : (rawGiftConfig || {});
+    const giftConfig = { ...DEFAULT_GIFT_TYPES, ...parsedGiftTypes };
+    const giftValue = giftConfig[giftType];
+    if (!giftValue) {
+      throw new functions.https.HttpsError('invalid-argument', `Unknown gift type: ${giftType}`);
+    }
+
+    await checkRateLimit(senderUid, 'sendMessageGift', 10, 60000);
+    await enforceDailyLimit(senderUid, giftValue, 'giftSent', 50000);
+    await checkNewAccountAbuse(senderUid, giftValue);
+
+    const [block1, block2] = await Promise.all([
+      admin.firestore().collection('blocks').doc(`${senderUid}_${recipientId}`).get(),
+      admin.firestore().collection('blocks').doc(`${recipientId}_${senderUid}`).get(),
+    ]);
+    if (block1.exists || block2.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Gifting is unavailable between blocked accounts.');
+    }
+
+    const key = generateIdempotencyKey(idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    await checkMutualTransfer(senderUid, recipientId, giftValue);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== senderUid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
+
+      const convRef = admin.firestore().collection('conversations').doc(conversationId);
+      const convSnap = await t.get(convRef);
+      if (!convSnap.exists) throw new functions.https.HttpsError('not-found', 'Conversation not found.');
+      const conv = convSnap.data();
+      const participants = Array.isArray(conv.participants) ? conv.participants : [];
+      if (!participants.includes(senderUid) || !participants.includes(recipientId)) {
+        throw new functions.https.HttpsError('permission-denied', 'Both sender and recipient must be participants in this conversation.');
+      }
+
+      const senderSnap = await t.get(admin.firestore().collection('users').doc(senderUid));
+      const recipientSnap = await t.get(admin.firestore().collection('users').doc(recipientId));
+      if (!senderSnap.exists || !recipientSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'User account not found.');
+      }
+      const recipientPrefs = recipientSnap.data()?.settings?.privacy || {};
+      if (recipientPrefs.whoCanSendGifts === 'none') {
+        throw new functions.https.HttpsError('permission-denied', 'Recipient has disabled incoming gifts.');
+      }
+
+      const senderBal = await readCoinBalance(t, senderUid, { fallbackToPublic: true });
+      const available = getAvailableBalance({ coins: senderBal.coins, lockedCoins: senderBal.lockedCoins });
+      if (available < giftValue) {
+        throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
+      }
+      const recipientBal = await readCoinBalance(t, recipientId, { fallbackToPublic: true });
+
+      const senderNewBalance = senderBal.coins - giftValue;
+      const recipientNewBalance = recipientBal.coins + giftValue;
+      writeCoinBalance(t, senderUid, { coins: senderNewBalance });
+      writeCoinBalance(t, recipientId, { coins: recipientNewBalance });
+
+      const senderName = senderSnap.data()?.displayName || senderSnap.data()?.username || 'Citizen';
+      const recipientName = recipientSnap.data()?.displayName || recipientSnap.data()?.username || 'Citizen';
+      const cleanedNote = typeof note === 'string' ? note.trim().slice(0, 140) : '';
+
+      const giftTxRef = admin.firestore().collection('gift_transactions').doc();
+      const senderTxRef = admin.firestore().collection('coin_transactions').doc();
+      const recipientTxRef = admin.firestore().collection('coin_transactions').doc();
+      const nowTS = admin.firestore.FieldValue.serverTimestamp();
+      const expireAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+      t.set(giftTxRef, {
+        senderId: senderUid,
+        receiverId: recipientId,
+        conversationId,
+        giftType,
+        value: giftValue,
+        note: cleanedNote,
+        createdAt: nowTS,
+        idempotencyKey: key,
+        expireAt,
+      });
+
+      t.set(senderTxRef, {
+        userId: senderUid,
+        type: 'debit',
+        amount: giftValue,
+        balanceAfter: senderNewBalance,
+        relatedUserId: recipientId,
+        reason: 'chat_gift_sent',
+        metadata: { conversationId, giftType, giftTxId: giftTxRef.id },
+        idempotencyKey: key,
+        createdAt: nowTS,
+        expireAt,
+      });
+      t.set(recipientTxRef, {
+        userId: recipientId,
+        type: 'credit',
+        amount: giftValue,
+        balanceAfter: recipientNewBalance,
+        relatedUserId: senderUid,
+        reason: 'chat_gift_received',
+        metadata: { conversationId, giftType, giftTxId: giftTxRef.id },
+        idempotencyKey: key,
+        createdAt: nowTS,
+        expireAt,
+      });
+
+      createLedgerEntry(t, `users:${senderUid}`, `users:${recipientId}`, giftValue, {
+        reason: 'chat_gift',
+        conversationId,
+        giftType,
+        transactionId: giftTxRef.id,
+      });
+
+      const msgRef = convRef.collection('messages').doc();
+      const messageText = `Sent a ${giftType} gift (${giftValue} coins) to ${recipientName}`;
+      t.set(msgRef, {
+        id: msgRef.id,
+        conversationId,
+        senderId: senderUid,
+        senderName,
+        senderPhoto: senderSnap.data()?.photoURL || null,
+        type: 'gift_message',
+        content: cleanedNote || messageText,
+        giftData: {
+          giftTxId: giftTxRef.id,
+          giftType,
+          coins: giftValue,
+          recipientId,
+          recipientName,
+          note: cleanedNote,
+        },
+        giftTransactionId: giftTxRef.id,
+        reactions: {},
+        isEdited: false,
+        isDeleted: false,
+        deletedFor: [],
+        readBy: [senderUid],
+        deliveredTo: [senderUid],
+        createdAt: nowTS,
+        updatedAt: nowTS,
+      });
+
+      t.set(admin.firestore().collection('last_messages').doc(conversationId), {
+        messageId: msgRef.id,
+        senderId: senderUid,
+        type: 'gift_message',
+        text: messageText.slice(0, 120),
+        timestamp: nowTS,
+        updatedAt: nowTS,
+      });
+      t.update(convRef, {
+        lastActivity: nowTS,
+        updatedAt: nowTS,
+      });
+
+      const resultData = {
+        success: true,
+        newBalance: senderNewBalance,
+        receiverNewBalance: recipientNewBalance,
+        giftTxId: giftTxRef.id,
+        messageId: msgRef.id,
+        receiverId: recipientId,
+        senderName,
+      };
+
+      t.set(ledgerRef, {
+        function: 'sendMessageGift',
+        userId: senderUid,
+        result: resultData,
+        processedAt: nowTS,
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      return { ...resultData, _freshCommit: true };
+    });
+
+    if (result?._freshCommit) {
+      delete result._freshCommit;
+      const settingsSnap = await admin.firestore().collection('user_settings').doc(recipientId).get();
+      const prefs = settingsSnap.exists ? settingsSnap.data()?.notificationPreferences : null;
+      if (prefs?.giftNotifications !== false) {
+        await writeNotification(recipientId, {
+          type: 'gift_received',
+          title: 'Chat gift received',
+          message: `${result.senderName || 'Someone'} sent you a ${giftType} gift (${giftValue} coins)`,
+          senderId: senderUid,
+          senderName: result.senderName || 'Citizen',
+          metadata: { conversationId, giftType, coins: giftValue, giftTxId: result.giftTxId },
+        }).catch((err) => logger.warn('Chat gift notification failed', { error: err.message }));
+
+        if (prefs?.push !== false) {
+          await enqueuePush(recipientId, {
+            title: 'Chat gift received',
+            body: `${result.senderName || 'Someone'} sent you a ${giftType} gift (${giftValue} coins)`,
+            type: 'gift_received',
+            conversationId,
+            clickAction: `/messages/${conversationId}`,
+          }).catch((e) => logger.warn('Chat gift push failed', { error: e.message }));
+        }
+      }
+
+      await awardXpSafe(senderUid, 'gift_sent', { source: result.giftTxId });
+      await awardXpSafe(recipientId, 'gift_received', { source: result.giftTxId });
+    }
+
+    logEvent('chat_gift_sent', { sender: senderUid, recipient: recipientId, conversationId, giftType, value: giftValue });
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
+// ----------------------------------------------------------------------
 // 5. boostPost – ownership enforced, cost cap
 // ----------------------------------------------------------------------
 exports.boostPost = functions.https.onCall(async (data, context) => {

@@ -3,6 +3,7 @@ import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { unknownNumber } from '../lib/unknownNumber.js';
+import { buildSharedContentReference } from '../config/messagingContracts.js';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, startAfter, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 const EVENTS_PER_PAGE = 20;
@@ -38,6 +39,7 @@ class EventService {
       coverImage: data.coverImage || '',
       startDate: data.startDate,
       endDate: data.endDate || null,
+      timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       location: data.location || '',
       locationLat: data.locationLat || null,
       locationLng: data.locationLng || null,
@@ -102,9 +104,9 @@ class EventService {
     }
 
     const allowedFields = [
-      'title', 'description', 'coverImage', 'startDate', 'endDate',
+      'title', 'description', 'coverImage', 'startDate', 'endDate', 'timezone',
       'location', 'locationLat', 'locationLng', 'type', 'capacity',
-      'tickets', 'schedule', 'media', 'status'
+      'tickets', 'communityId', 'schedule', 'media', 'status'
     ];
     
     const updateData = { updatedAt: serverTimestamp() };
@@ -476,6 +478,21 @@ class EventService {
     }
   }
 
+  getEventShareReference(event) {
+    if (!event) return null;
+    return buildSharedContentReference('event', {
+      id: event.id || event.eventId,
+      authorId: event.organizerId || event.userId,
+      authorName: event.organizerName || '',
+      title: event.title || '',
+      coverImage: event.coverImage || '',
+      date: event.startDate || null,
+      timezone: event.timezone || 'UTC',
+      location: event.location || '',
+      communityId: event.communityId || null,
+    });
+  }
+
   /**
    * Subscribe to event updates
    * @param {string} eventId - Event ID
@@ -483,9 +500,9 @@ class EventService {
    * @returns {Function} Unsubscribe function
    */
   subscribeToEvent(eventId, callback) {
-    return onSnapshot(doc(this.db, 'events', eventId), (doc) => {
-      if (doc.exists) {
-        callback({ id: doc.id, ...doc.data() });
+    return onSnapshot(doc(this.db, 'events', eventId), (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ id: docSnap.id, ...docSnap.data() });
       }
     }, (err) => logger.warn('[eventService] subscription error', err));
   }

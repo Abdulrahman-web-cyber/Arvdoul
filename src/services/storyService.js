@@ -12,10 +12,10 @@ import {
   documentId
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { getMessagingService } from './messagesService.js';
 
 import {
   VIBE_AUDIENCES,
+  VIBE_REACTIONS,
   VIBE_LIMITS,
   VIBE_UPLOAD_STATES,
   VIBE_POLICY_SCOPES,
@@ -966,6 +966,7 @@ class UltimateStoryService {
       idempotencyKey: options.idempotencyKey || createVibeIdempotencyKey(currentUser.uid),
     });
 
+    await this._incrementAnalyticsShard(storyId, 'replies', 1);
     this.storyCache.delete(storyId);
     auditLogger.log('story.replied', {
       userId: currentUser.uid,

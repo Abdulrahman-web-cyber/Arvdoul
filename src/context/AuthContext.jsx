@@ -19,8 +19,32 @@ import { cacheManager } from "../utils/CacheManager.js";
 import { purgeDeviceLocalContent } from "../utils/localContentCache.js";
 import { PRIVATE_PROFILE_FIELDS } from "../config/profileContracts.js";
 import { useUserSettings } from "../hooks/useUserSettings.js";
+import { useMessagingStore } from "../store/messagingStore";
 
 const AuthContext = createContext(null);
+
+function getOrCreateDeviceId() {
+  try {
+    const existing = localStorage.getItem('arvdoul_device_id');
+    if (existing) return existing;
+    const created = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem('arvdoul_device_id', created);
+    return created;
+  } catch {
+    return `dev_${Date.now().toString(36)}`;
+  }
+}
+
+function getDeviceLabel() {
+  if (typeof navigator === 'undefined') return 'Web Browser';
+  const ua = navigator.userAgent || '';
+  if (/iPhone/i.test(ua)) return 'Arvdoul Web · iPhone';
+  if (/iPad/i.test(ua)) return 'Arvdoul Web · iPad';
+  if (/Android/i.test(ua)) return 'Arvdoul Web · Android';
+  if (/Mac/i.test(ua)) return 'Arvdoul Web · Mac';
+  if (/Win/i.test(ua)) return 'Arvdoul Web · Windows';
+  return 'Arvdoul Web · Browser';
+}
 
 const AuthStorageManager = {
   clearAll() {
@@ -317,7 +341,14 @@ export function AuthProvider({ children }) {
   const clearSessionStores = useCallback(() => {
     useProfileStore.getState().clear();
     useAnalyticsStore.getState().clear();
+    useMessagingStore.getState().reset();
     clearUserDataRef.current();
+    import('../services/communityService.js')
+      .then(({ getCommunityService }) => getCommunityService?.()?.clearCache?.())
+      .catch((err) => console.warn('[Auth] community cache clear failed', err?.message));
+    import('../services/notificationsService.js')
+      .then(({ getNotificationsService }) => getNotificationsService?.()?.clearCache?.())
+      .catch((err) => console.warn('[Auth] notification cache clear failed', err?.message));
     // Drop the in-memory service cache too. Firestore/feed/video/counter reads
     // are cached by uid; without this a signed-out session (or the next account
     // on a shared device) could be served the previous user's cached documents.
@@ -530,6 +561,15 @@ export function AuthProvider({ children }) {
                 userService.updateLastActive(uid).catch((err) =>
                   console.warn('[Auth] last-active update failed', err?.message));
               }
+              import('../services/callableService.js')
+                .then(({ callFunction, FUNCTIONS }) =>
+                  callFunction(FUNCTIONS.REGISTER_DEVICE_SESSION, {
+                    deviceId: getOrCreateDeviceId(),
+                    label: getDeviceLabel(),
+                    platform: 'web',
+                  })
+                )
+                .catch((err) => console.warn('[Auth] device session registration skipped', err?.message));
             }
 
             const status = profile.accountStatus;
@@ -802,8 +842,24 @@ export function AuthProvider({ children }) {
               // The messaging queue is a fourth store; a queued offline message
               // must not replay (send from) the incoming account.
               import('../services/messagesService.js')
-                .then(({ purgeMessageQueueForOwner }) => purgeMessageQueueForOwner(lastProfileUidRef.current))
+                .then(({ purgeMessageQueueForOwner, getMessagingService }) => {
+                  purgeMessageQueueForOwner(lastProfileUidRef.current);
+                  getMessagingService?.()?.clearCache?.();
+                })
                 .catch((err) => console.warn('[Auth] message-queue purge on switch failed', err?.message));
+              import('../config/messagingContracts.js')
+                .then(({ purgeMessageDraftsForOwner }) => purgeMessageDraftsForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] message-draft purge on switch failed', err?.message));
+              useMessagingStore.getState().reset();
+              import('../services/settingsService.js')
+                .then(({ settingsService }) => settingsService?.invalidate?.(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] settings cache invalidation on switch failed', err?.message));
+              import('../services/communityService.js')
+                .then(({ getCommunityService }) => getCommunityService?.()?.clearCache?.())
+                .catch((err) => console.warn('[Auth] community cache clear on switch failed', err?.message));
+              import('../services/notificationsService.js')
+                .then(({ getNotificationsService }) => getNotificationsService?.()?.clearCache?.())
+                .catch((err) => console.warn('[Auth] notification cache clear on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -855,8 +911,14 @@ export function AuthProvider({ children }) {
                 .then(({ purgeNotificationQueueForOwner }) => purgeNotificationQueueForOwner(departingUid))
                 .catch((err) => console.warn('[Auth] notification-queue purge on logout failed', err?.message));
               import('../services/messagesService.js')
-                .then(({ purgeMessageQueueForOwner }) => purgeMessageQueueForOwner(departingUid))
+                .then(({ purgeMessageQueueForOwner, getMessagingService }) => {
+                  purgeMessageQueueForOwner(departingUid);
+                  getMessagingService?.()?.clearCache?.();
+                })
                 .catch((err) => console.warn('[Auth] message-queue purge on logout failed', err?.message));
+              import('../config/messagingContracts.js')
+                .then(({ purgeMessageDraftsForOwner }) => purgeMessageDraftsForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] message-draft purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {
@@ -1316,6 +1378,11 @@ export function AuthProvider({ children }) {
         import('../services/notificationsService.js')
           .then(({ getNotificationsService }) => getNotificationsService().removePushToken(uidForToken))
           .catch((err) => console.warn('[Auth] push-token cleanup on logout failed', err?.message));
+        import('../services/callableService.js')
+          .then(({ callFunction, FUNCTIONS }) =>
+            callFunction(FUNCTIONS.REVOKE_DEVICE_SESSION, { deviceId: getOrCreateDeviceId() })
+          )
+          .catch((err) => console.warn('[Auth] device session revoke on logout failed', err?.message));
       }
       await authService.signOut();
       if (isMounted.current) {

@@ -42,6 +42,7 @@ merge(require('./video.js'));
 merge(require('./live.js'));
 merge(require('./notifications.js'));
 merge(require('./messaging.js'));
+merge(require('./calls.js'));
 merge(require('./search.js'));
 merge(require('./monetization.js'));
 merge(require('./polls.js'));

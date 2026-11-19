@@ -15,16 +15,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const INITIAL = { messages: 0, notifications: 0, network: 0 };
+const BADGE_FOCUS_COOLDOWN_MS = 30000;
 
 export function useNavBadges() {
   const { user } = useAuth();
   const uid = user?.uid || null;
   const [counts, setCounts] = useState(INITIAL);
   const inFlight = useRef(false);
+  const lastFetchRef = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
     if (!uid || inFlight.current) return;
+    const now = Date.now();
+    if (!force && lastFetchRef.current > 0 && now - lastFetchRef.current < BADGE_FOCUS_COOLDOWN_MS) {
+      return;
+    }
     inFlight.current = true;
+    lastFetchRef.current = now;
     try {
       const { getMessagingService } = await import('../services/messagesService.js');
       const { getNotificationsService } = await import('../services/notificationsService.js');
@@ -65,13 +72,13 @@ export function useNavBadges() {
       setCounts(INITIAL);
       return undefined;
     }
-    refresh();
+    refresh(true);
 
-    const onFocus = () => refresh();
+    const onFocus = () => refresh(false);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') refresh();
+      if (document.visibilityState === 'visible') refresh(false);
     };
-    const onMessageEvent = () => refresh();
+    const onMessageEvent = () => refresh(true);
 
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisible);

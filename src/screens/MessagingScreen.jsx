@@ -39,12 +39,19 @@ import {
   EyeOff,
   Gift,
   Sparkles,
+  UserPlus,
+  Check,
+  CheckCheck,
+  Ban,
+  Link2,
 } from 'lucide-react';
 import { LazyImage } from '../components/Shared/LazyImage';
+import { listDraftConversationMap } from '../config/messagingContracts.js';
 
 const FILTER_TABS = [
   { id: 'all', label: 'All', icon: Inbox },
   { id: 'unread', label: 'Unread', icon: Mail },
+  { id: 'requests', label: 'Requests', icon: UserPlus },
   { id: 'groups', label: 'Groups', icon: Users },
   { id: 'personal', label: 'Personal', icon: User },
   { id: 'channels', label: 'Channels', icon: Radio },
@@ -62,6 +69,8 @@ const ATTACHMENT_LABEL = {
   location: 'Location',
   contact: 'Contact',
   poll: 'Poll',
+  link: 'Link',
+  shared_content: 'Shared',
 };
 
 function mapServiceConversation(c, uid) {
@@ -119,6 +128,35 @@ function mapServiceConversation(c, uid) {
     ? (other?.id || other?.uid || (c.participants || []).find((p) => p !== uid) || null)
     : null;
 
+  const lastRawMs = rawTime && !Number.isNaN(rawTime.getTime()) ? rawTime.getTime() : 0;
+  const isOwnLastMessage = Boolean(uid && lastMsg.senderId && lastMsg.senderId === uid);
+  const toMillis = (v) => {
+    if (!v) return 0;
+    if (typeof v === 'number') return v;
+    if (typeof v?.toMillis === 'function') return v.toMillis();
+    if (typeof v?.seconds === 'number') return v.seconds * 1000;
+    const d = new Date(v).getTime();
+    return Number.isNaN(d) ? 0 : d;
+  };
+  let lastMessageRead = false;
+  let lastMessageDelivered = false;
+  if (isOwnLastMessage && c.lastRead && typeof c.lastRead === 'object') {
+    for (const [participantId, ts] of Object.entries(c.lastRead)) {
+      if (participantId !== uid && toMillis(ts) >= lastRawMs && lastRawMs > 0) {
+        lastMessageRead = true;
+        break;
+      }
+    }
+  }
+  if (isOwnLastMessage && !lastMessageRead && c.lastDelivered && typeof c.lastDelivered === 'object') {
+    for (const [participantId, ts] of Object.entries(c.lastDelivered)) {
+      if (participantId !== uid && toMillis(ts) >= lastRawMs && lastRawMs > 0) {
+        lastMessageDelivered = true;
+        break;
+      }
+    }
+  }
+
   return {
     id: c.id,
     isAd: false,
@@ -135,6 +173,9 @@ function mapServiceConversation(c, uid) {
     verified: Boolean(other?.isVerified),
     preview: typeof lastMsg.text === 'string' ? lastMsg.text : '',
     attachmentType: lastMsg.type && lastMsg.type !== 'text' ? lastMsg.type : null,
+    isOwnLastMessage,
+    lastMessageRead,
+    lastMessageDelivered,
     time:
       rawTime && !Number.isNaN(rawTime.getTime())
         ? rawTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -197,13 +238,19 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
     [conversations]
   );
 
+  const lastInboxLoadRef = useRef(0);
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+    const load = async (force = false) => {
       if (!user?.uid) {
         setLoadingConversations(false);
         return;
       }
+      const now = Date.now();
+      if (!force && lastInboxLoadRef.current > 0 && now - lastInboxLoadRef.current < 30000) {
+        return;
+      }
+      lastInboxLoadRef.current = now;
       try {
         setLoadingConversations(true);
         setConversationsError(null);
@@ -223,11 +270,11 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
         if (!cancelled) setLoadingConversations(false);
       }
     };
-    load();
+    load(true);
     const handleFocus = () => {
-      if (document.visibilityState === 'visible') load();
+      if (document.visibilityState === 'visible') load(false);
     };
-    const handleReadSync = () => load();
+    const handleReadSync = () => load(true);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('arvdoul:messages-read', handleReadSync);
     document.addEventListener('visibilitychange', handleFocus);
@@ -387,7 +434,32 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
     [user?.uid, navigate]
   );
 
+  const handleBlockRequester = useCallback(
+    async (req) => {
+      if (!user?.uid || !req?.senderId) return;
+      try {
+        const [{ getUserService }, { getMessagingService }] = await Promise.all([
+          import('../services/userService.js'),
+          import('../services/messagesService.js'),
+        ]);
+        await getUserService().blockUser(user.uid, req.senderId);
+        await getMessagingService().respondToMessageRequest(req.id, user.uid, false).catch(() => {});
+        setMessageRequests((prev) => prev.filter((r) => r.id !== req.id));
+        toast.success('Sender blocked and request removed');
+      } catch (err) {
+        toast.error(err?.message || 'Could not block sender');
+      }
+    },
+    [user?.uid]
+  );
+
+  const draftMap = useMemo(
+    () => (user?.uid ? listDraftConversationMap(user.uid) : {}),
+    [user?.uid, conversations]
+  );
+
   const filteredConversations = useMemo(() => {
+    if (activeFilter === 'requests') return [];
     const filtered = conversations.filter((item) => {
       if (item.isAd) {
         return activeFilter === 'all' && !searchQuery.trim() && !pinnedOnly;
@@ -631,6 +703,16 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                       {totalUnread}
                     </span>
                   )}
+                  {tab.id === 'requests' && messageRequests.length > 0 && (
+                    <span
+                      className={cn(
+                        'tabular-nums text-[11px] font-bold',
+                        isActive ? 'text-white/90' : isDark ? 'text-purple-300' : 'text-purple-700'
+                      )}
+                    >
+                      {messageRequests.length}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -799,7 +881,35 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
           )}
 
           {/* Pending Message Requests */}
-          {messageRequests.length > 0 && (
+          {activeFilter !== 'requests' && messageRequests.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveFilter('requests')}
+              className={cn(
+                'w-full p-2.5 rounded-xl border flex items-center justify-between gap-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark
+                  ? 'bg-[#090F2D] border-purple-500/30 hover:border-purple-400/50'
+                  : 'bg-white border-purple-200 hover:border-purple-400'
+              )}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <UserPlus className="w-4 h-4 text-purple-500 shrink-0" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold truncate">
+                    {messageRequests.length} pending message request{messageRequests.length === 1 ? '' : 's'}
+                  </p>
+                  <p className={cn('text-[11px] truncate', isDark ? 'text-slate-400' : 'text-slate-500')}>
+                    Review senders before adding them to your inbox
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-purple-500 dark:text-purple-300 shrink-0">
+                Open
+              </span>
+            </button>
+          )}
+
+          {activeFilter === 'requests' && (
             <section aria-label="Message requests" className="space-y-2">
               <h2
                 className={cn(
@@ -809,70 +919,93 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
               >
                 Message requests ({messageRequests.length})
               </h2>
-              <div className="space-y-2">
-                {messageRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className={cn(
-                      'p-3 rounded-xl border flex items-center justify-between gap-3',
-                      isDark ? 'bg-[#090F2D] border-purple-500/30' : 'bg-white border-purple-200'
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {req.senderAvatar ? (
-                        <LazyImage
-                          src={req.senderAvatar}
-                          alt=""
-                          className="w-9 h-9 rounded-full object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-arvdoul-gradient flex items-center justify-center text-xs font-bold text-white shrink-0">
-                          {pickDisplayName([req.senderName], {
-                            fallback: req.senderId ? String(req.senderId).slice(0, 2).toUpperCase() : '—',
-                          })
-                            .charAt(0)
-                            .toUpperCase()}
-                        </div>
+              {messageRequests.length === 0 ? (
+                <div className={cn('text-center py-12 px-4 text-sm', isDark ? 'text-slate-400' : 'text-slate-500')}>
+                  <UserPlus className="w-8 h-8 mx-auto mb-2.5 opacity-40" aria-hidden="true" />
+                  <p>No pending message requests.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {messageRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className={cn(
+                        'p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3',
+                        isDark ? 'bg-[#090F2D] border-purple-500/30' : 'bg-white border-purple-200'
                       )}
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold truncate">
-                          {pickDisplayName([req.senderName], {
-                            fallback: req.senderId ? `user ${String(req.senderId).slice(0, 6)}` : '—',
-                          })}
-                        </p>
-                        <p className={cn('text-[11px]', isDark ? 'text-slate-400' : 'text-slate-500')}>
-                          Wants to message you
-                        </p>
+                    >
+                      <button
+                        type="button"
+                        onClick={() => req.senderId && navigate(`/profile/${req.senderId}`)}
+                        className="flex items-center gap-2.5 min-w-0 text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                      >
+                        {req.senderAvatar ? (
+                          <LazyImage
+                            src={req.senderAvatar}
+                            alt=""
+                            className="w-9 h-9 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-arvdoul-gradient flex items-center justify-center text-xs font-bold text-white shrink-0">
+                            {pickDisplayName([req.senderName], {
+                              fallback: req.senderId ? String(req.senderId).slice(0, 2).toUpperCase() : '—',
+                            })
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate">
+                            {pickDisplayName([req.senderName], {
+                              fallback: req.senderId ? `user ${String(req.senderId).slice(0, 6)}` : '—',
+                            })}
+                          </p>
+                          <p className={cn('text-[11px]', isDark ? 'text-slate-400' : 'text-slate-500')}>
+                            Wants to message you · Tap to view profile
+                          </p>
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRequestResponse(req.id, true)}
+                          className="px-3 py-1.5 rounded-lg bg-arvdoul-gradient text-white text-xs font-semibold hover:brightness-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestResponse(req.id, false)}
+                          className={cn(
+                            'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                            isDark
+                              ? 'bg-white/10 text-slate-300 hover:bg-white/15'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          )}
+                        >
+                          Decline
+                        </button>
+                        {req.senderId && (
+                          <button
+                            type="button"
+                            onClick={() => handleBlockRequester(req)}
+                            aria-label="Block requester"
+                            title="Block user"
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                          >
+                            <Ban className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleRequestResponse(req.id, true)}
-                        className="px-3 py-1.5 rounded-lg bg-arvdoul-gradient text-white text-xs font-semibold hover:brightness-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRequestResponse(req.id, false)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-                          isDark
-                            ? 'bg-white/10 text-slate-300 hover:bg-white/15'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        )}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
           {/* Conversation List */}
+          {activeFilter !== 'requests' && (
           <section aria-label="Conversations" className="space-y-1.5">
             {loadingConversations && filteredConversations.length === 0 && (
               <div className="space-y-2" role="status" aria-label="Loading conversations">
@@ -1011,12 +1144,9 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                           {item.peerLevel && (
                             <span
                               title={item.peerRank ? `Level ${item.peerLevel} · ${item.peerRank}` : `Level ${item.peerLevel}`}
-                              className={cn(
-                                'px-1.5 py-0.5 rounded-full text-[10px] font-bold tabular-nums shrink-0',
-                                isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
-                              )}
+                              className="text-[11px] font-semibold text-purple-400 tabular-nums shrink-0"
                             >
-                              Lv.{item.peerLevel}
+                              · Lv.{item.peerLevel}
                             </span>
                           )}
                           {item.pinned && (
@@ -1044,6 +1174,14 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                       </div>
 
                       <div className="flex items-center justify-between gap-2 mt-0.5">
+                        {draftMap[item.id]?.text ? (
+                          <div className="flex items-center gap-1 text-xs min-w-0 flex-1">
+                            <span className="font-semibold text-amber-500 shrink-0">Draft:</span>
+                            <p className={cn('truncate italic', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                              {draftMap[item.id].text}
+                            </p>
+                          </div>
+                        ) : (
                         <div
                           className={cn(
                             'flex items-center gap-1.5 text-xs min-w-0 flex-1',
@@ -1056,6 +1194,17 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                                 : 'text-slate-500'
                           )}
                         >
+                          {item.isOwnLastMessage && (item.preview || item.attachmentType) && (
+                            <span className="shrink-0" aria-label={item.lastMessageRead ? 'Read' : item.lastMessageDelivered ? 'Delivered' : 'Sent'}>
+                              {item.lastMessageRead ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-blue-500" aria-hidden="true" />
+                              ) : item.lastMessageDelivered ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+                              )}
+                            </span>
+                          )}
                           {item.attachmentType && (
                             <span className="inline-flex items-center gap-1 shrink-0 text-purple-500 dark:text-purple-300">
                               {item.attachmentType === 'image' && <ImageIcon className="w-3.5 h-3.5" aria-hidden="true" />}
@@ -1063,11 +1212,13 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                               {item.attachmentType === 'audio' && <Music className="w-3.5 h-3.5" aria-hidden="true" />}
                               {item.attachmentType === 'voice' && <Mic className="w-3.5 h-3.5" aria-hidden="true" />}
                               {item.attachmentType === 'view_once' && <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />}
+                              {item.attachmentType === 'link' && <Link2 className="w-3.5 h-3.5" aria-hidden="true" />}
                               {(item.attachmentType === 'file' ||
                                 item.attachmentType === 'gif' ||
                                 item.attachmentType === 'location' ||
                                 item.attachmentType === 'contact' ||
-                                item.attachmentType === 'poll') && (
+                                item.attachmentType === 'poll' ||
+                                item.attachmentType === 'shared_content') && (
                                 <Paperclip className="w-3.5 h-3.5" aria-hidden="true" />
                               )}
                               <span>{ATTACHMENT_LABEL[item.attachmentType] || item.attachmentType}</span>
@@ -1078,6 +1229,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
                             {item.preview || (item.attachmentType ? '' : 'No messages yet')}
                           </p>
                         </div>
+                        )}
 
                         {item.unread > 0 && (
                           <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-arvdoul-gradient text-white text-[11px] font-bold flex items-center justify-center tabular-nums shrink-0">
@@ -1247,6 +1399,7 @@ export default function MessagingScreen({ sidebarMode = false, activeConversatio
               </div>
             )}
           </section>
+          )}
         </div>
       </div>
 

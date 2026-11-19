@@ -101,6 +101,8 @@ const XP_RULES = Object.freeze({
   streak_milestone: { xp: 50, dailyCap: 50 },
   live_minute: { xp: 1, dailyCap: 60 },
   video_watched: { xp: 1, dailyCap: 50 },
+  event_rsvp: { xp: 10, dailyCap: 30 },
+  community_channel_contribution: { xp: 5, dailyCap: 25 },
 });
 
 /**

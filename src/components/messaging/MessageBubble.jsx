@@ -4,6 +4,12 @@ import React, { useState, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { MESSAGING_CONFIG } from '../../services/messagesService.js';
 import {
+  sanitizeExternalUrl,
+  extractFirstSafeUrl,
+  resolveSharedContentRoute,
+  MESSAGING_PART1_LIMITS,
+} from '../../config/messagingContracts.js';
+import {
   Copy,
   Reply,
   Share,
@@ -28,6 +34,9 @@ import {
   SmilePlus,
   FileText,
   EyeOff,
+  RotateCcw,
+  Globe,
+  Sparkles,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -36,6 +45,15 @@ import { LazyImage } from '../../components/Shared/LazyImage';
 const REACTION_EMOJIS =
   (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
+function toMillis(val) {
+  if (!val) return 0;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+  if (val instanceof Date) return val.getTime();
+  if (typeof val?.toDate === 'function') return val.toDate().getTime();
+  const parsed = new Date(val).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 const MessageBubble = React.memo(
   ({
     message,
@@ -43,6 +61,9 @@ const MessageBubble = React.memo(
     senderName,
     senderAvatar,
     currentUid = null,
+    peerLastReadAt = null,
+    peerLastDeliveredAt = null,
+    deletedMessageIds = null,
     onReaction,
     onReply,
     onForward,
@@ -51,6 +72,9 @@ const MessageBubble = React.memo(
     onReport,
     onSave,
     onPin,
+    onRetry,
+    onRemoveFailed,
+    onViewHistory,
     onJumpToMessage,
     onOpenViewOnce,
     openedViewOnceIds = null,
@@ -73,28 +97,39 @@ const MessageBubble = React.memo(
 
     if (!message) return null;
 
-    const { id, type, content, media, reactions, isEdited, isDeleted, _pending, _failed, createdAt } = message;
+    const { id, type, content, media, reactions, isEdited, isDeleted, _pending, _failed, _queued, createdAt } = message;
     const isDark = theme === 'dark';
 
-    const time = createdAt?.toDate?.()
-      ? format(createdAt.toDate(), 'p')
-      : createdAt instanceof Date
-        ? format(createdAt, 'p')
-        : '';
+    const msgMs = toMillis(createdAt);
+    const time = msgMs ? format(new Date(msgMs), 'p') : '';
 
-    const hasOtherRead =
-      Array.isArray(message.readBy) && message.readBy.some((uid) => uid !== message.senderId);
-    const hasOtherDelivered =
-      Array.isArray(message.deliveredTo) &&
-      message.deliveredTo.some((uid) => uid !== message.senderId);
+    const hasOtherRead = Boolean(
+      (Array.isArray(message.readBy) && message.readBy.some((u) => u !== message.senderId)) ||
+      (peerLastReadAt && msgMs && msgMs <= toMillis(peerLastReadAt))
+    );
+    const hasOtherDelivered = Boolean(
+      (Array.isArray(message.deliveredTo) && message.deliveredTo.some((u) => u !== message.senderId)) ||
+      (peerLastDeliveredAt && msgMs && msgMs <= toMillis(peerLastDeliveredAt))
+    );
+
+    const canEditWithinWindow = Boolean(
+      isOwn &&
+      onEdit &&
+      !_pending &&
+      !_failed &&
+      (type === 'text' || type === 'link') &&
+      (!msgMs || (Date.now() - msgMs) <= MESSAGING_PART1_LIMITS.EDIT_WINDOW_MS)
+    );
 
     const getStatusIcon = () => {
       if (_failed) return <AlertCircle className="w-3.5 h-3.5 text-red-500" aria-label="Failed to send" />;
+      if (_queued) return <Clock className="w-3.5 h-3.5 text-amber-400" aria-label="Queued offline" />;
       if (_pending) return <Clock className="w-3.5 h-3.5 text-slate-400" aria-label="Sending" />;
       if (isOwn) {
         if (hasOtherRead) return <CheckCheck className="w-3.5 h-3.5 text-blue-400" aria-label="Read" />;
-        if (hasOtherDelivered)
+        if (hasOtherDelivered) {
           return <CheckCheck className="w-3.5 h-3.5 text-slate-400" aria-label="Delivered" />;
+        }
         return <Check className="w-3.5 h-3.5 text-slate-400" aria-label="Sent" />;
       }
       return null;
@@ -147,9 +182,28 @@ const MessageBubble = React.memo(
     };
 
     const internalPathMatch = typeof content === 'string'
-      ? content.match(/https?:\/\/[^/\s]+(\/(?:post|profile|user|vibes|stories|community|spaces)\/[^\s]+)/i)
+      ? content.match(/https?:\/\/[^/\s]+(\/(?:post|profile|user|vibes|stories|video|community|spaces)\/[^\s]+)/i)
       : null;
     const sharedInternalPath = internalPathMatch ? internalPathMatch[1] : null;
+    const safeExternalUrl =
+      sanitizeExternalUrl(message.linkPreview?.url) ||
+      (type === 'link' || type === 'text' ? extractFirstSafeUrl(content) : null);
+
+    let linkHost = null;
+    if (safeExternalUrl) {
+      try {
+        linkHost = new URL(safeExternalUrl).hostname.replace(/^www\./, '');
+      } catch {
+        linkHost = null;
+      }
+    }
+
+    const isReplyOriginalDeleted = Boolean(
+      message.replyTo?.messageId &&
+      deletedMessageIds &&
+      typeof deletedMessageIds.has === 'function' &&
+      deletedMessageIds.has(message.replyTo.messageId)
+    );
 
     if (isDeleted) {
       return (
@@ -230,8 +284,10 @@ const MessageBubble = React.memo(
               <div className="font-semibold text-[11px] text-purple-400">
                 {message.replyTo.senderName || 'Reply'}
               </div>
-              <div className="truncate opacity-80 text-[11px]">
-                {(message.replyTo.content || message.replyTo.contentPreview || '').substring(0, 80)}
+              <div className={cn('truncate opacity-80 text-[11px]', isReplyOriginalDeleted && 'italic opacity-65')}>
+                {isReplyOriginalDeleted
+                  ? 'Original message deleted'
+                  : (message.replyTo.content || message.replyTo.contentPreview || '').substring(0, 80)}
               </div>
             </button>
           )}
@@ -289,6 +345,7 @@ const MessageBubble = React.memo(
                   : isDark
                     ? 'bg-[#0F1733] text-white border border-white/[0.08] rounded-bl-sm'
                     : 'bg-white text-slate-900 border border-slate-200 shadow-xs rounded-bl-sm',
+                _failed && 'ring-1 ring-red-400/70',
                 message.encrypted && 'flex items-center gap-2'
               )}
             >
@@ -296,9 +353,13 @@ const MessageBubble = React.memo(
                 <Lock className="w-3.5 h-3.5 text-emerald-300 shrink-0 inline mr-1" aria-hidden="true" />
               )}
 
-              {type === 'text' && (
+              {(type === 'text' || type === 'link') && (
                 <div className="space-y-1.5">
-                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap select-text">{content}</p>
+                  {content && (
+                    <p dir="auto" className="text-[14px] leading-relaxed whitespace-pre-wrap select-text">
+                      {content}
+                    </p>
+                  )}
                   {sharedInternalPath && onNavigate && (
                     <button
                       type="button"
@@ -316,8 +377,82 @@ const MessageBubble = React.memo(
                       <span>Open in Arvdoul</span>
                     </button>
                   )}
+                  {safeExternalUrl && !sharedInternalPath && (
+                    <a
+                      href={safeExternalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(
+                        'flex items-center gap-2.5 p-2 rounded-xl border transition-colors',
+                        isOwn
+                          ? 'bg-white/10 border-white/20 hover:bg-white/15'
+                          : isDark
+                            ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                      )}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0">
+                        <Globe className="w-4 h-4" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold truncate">
+                          {message.linkPreview?.title || linkHost || 'External link'}
+                        </p>
+                        <p className="text-[11px] opacity-75 truncate">{safeExternalUrl}</p>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden="true" />
+                    </a>
+                  )}
                 </div>
               )}
+
+              {type === 'shared_content' && (() => {
+                const sc = message.sharedContent || {};
+                const route = resolveSharedContentRoute(sc);
+                const unavailable = Boolean(message.sharedContentUnavailable || !sc.contentId);
+                const kindLabel = sc.contentType === 'spark' ? 'Spark Video' : sc.contentType === 'vibe' ? 'Vibe Story' : 'Post';
+                return (
+                  <button
+                    type="button"
+                    disabled={unavailable || !onNavigate}
+                    onClick={() => !unavailable && onNavigate?.(route)}
+                    className={cn(
+                      'w-full text-left rounded-xl border p-2.5 space-y-2 min-w-[210px] transition-colors',
+                      isOwn
+                        ? 'bg-white/10 border-white/20 hover:bg-white/15'
+                        : isDark
+                          ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100',
+                      unavailable && 'opacity-65 cursor-default'
+                    )}
+                  >
+                    {sc.thumbnailUrl && !unavailable && (
+                      <LazyImage
+                        src={sc.thumbnailUrl}
+                        alt={sc.title || kindLabel}
+                        className="w-full h-32 rounded-lg object-cover"
+                      />
+                    )}
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">
+                          {unavailable ? 'Content unavailable' : kindLabel}
+                        </p>
+                        <p className="text-xs font-semibold truncate">
+                          {unavailable
+                            ? 'This shared item was removed or is private.'
+                            : (sc.title || content || `View ${kindLabel.toLowerCase()}`)}
+                        </p>
+                        {sc.authorName && !unavailable && (
+                          <p className="text-[11px] opacity-75 truncate">by {sc.authorName}</p>
+                        )}
+                      </div>
+                      {!unavailable && <ExternalLink className="w-3.5 h-3.5 opacity-60 shrink-0 mt-0.5" aria-hidden="true" />}
+                    </div>
+                  </button>
+                );
+              })()}
 
               {type === 'view_once' && (() => {
                 const isOpened = Boolean(
@@ -383,7 +518,7 @@ const MessageBubble = React.memo(
                       loading="lazy"
                     />
                   </button>
-                  {content && <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{content}</p>}
+                  {content && <p dir="auto" className="text-[14px] leading-relaxed whitespace-pre-wrap">{content}</p>}
                 </div>
               )}
 
@@ -411,7 +546,7 @@ const MessageBubble = React.memo(
                     className="max-w-xs sm:max-w-sm rounded-xl max-h-72"
                     preload="metadata"
                   />
-                  {content && <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{content}</p>}
+                  {content && <p dir="auto" className="text-[14px] leading-relaxed whitespace-pre-wrap">{content}</p>}
                 </div>
               )}
 
@@ -488,37 +623,40 @@ const MessageBubble = React.memo(
                 </div>
               )}
 
-              {type === 'location' && (
-                <a
-                  href={
-                    content ||
-                    (media?.location
-                      ? `https://maps.google.com/?q=${media.location.latitude},${media.location.longitude}`
-                      : '#')
-                  }
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className={cn(
-                    'block p-2 rounded-xl transition-colors border group/loc',
-                    isOwn
-                      ? 'bg-white/10 border-white/20 hover:bg-white/15'
-                      : isDark
-                        ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                      <MapPin className="w-4 h-4" aria-hidden="true" />
+              {type === 'location' && (() => {
+                const safeMapUrl = sanitizeExternalUrl(
+                  content ||
+                  (media?.location
+                    ? `https://maps.google.com/?q=${media.location.latitude},${media.location.longitude}`
+                    : '')
+                ) || '#';
+                return (
+                  <a
+                    href={safeMapUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className={cn(
+                      'block p-2 rounded-xl transition-colors border group/loc',
+                      isOwn
+                        ? 'bg-white/10 border-white/20 hover:bg-white/15'
+                        : isDark
+                          ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <MapPin className="w-4 h-4" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold truncate">Shared Location</p>
+                        <p className="text-[11px] opacity-75 truncate">Open in Maps</p>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover/loc:opacity-100" aria-hidden="true" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold truncate">Shared Location</p>
-                      <p className="text-[11px] opacity-75 truncate">Open in Maps</p>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover/loc:opacity-100" aria-hidden="true" />
-                  </div>
-                </a>
-              )}
+                  </a>
+                );
+              })()}
 
               {type === 'contact' && (() => {
                 const contactUid = typeof content === 'string' && content.startsWith('profile:')
@@ -550,31 +688,43 @@ const MessageBubble = React.memo(
                 );
               })()}
 
-              {type === 'file' && media && (
-                <a
-                  href={media.url || '#'}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className={cn(
-                    'flex items-center gap-2.5 p-2 rounded-xl border transition-colors',
-                    isOwn
-                      ? 'bg-white/10 border-white/20 hover:bg-white/15'
-                      : isDark
-                        ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                  )}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                    <FileText className="w-4 h-4" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold truncate">{media.name || 'Attachment'}</div>
-                    <div className="text-[11px] opacity-75 tabular-nums">{media.size || 'File'}</div>
-                  </div>
-                </a>
-              )}
+              {type === 'file' && media && (() => {
+                const safeFileUrl = sanitizeExternalUrl(media.url) || '#';
+                return (
+                  <a
+                    href={safeFileUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className={cn(
+                      'flex items-center gap-2.5 p-2 rounded-xl border transition-colors',
+                      isOwn
+                        ? 'bg-white/10 border-white/20 hover:bg-white/15'
+                        : isDark
+                          ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    )}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold truncate">{media.name || 'Attachment'}</div>
+                      <div className="text-[11px] opacity-75 tabular-nums">{media.size || 'File'}</div>
+                    </div>
+                  </a>
+                );
+              })()}
 
-              {isEdited && <span className="text-[11px] opacity-75 ml-1.5 italic">(edited)</span>}
+              {isEdited && (
+                <button
+                  type="button"
+                  onClick={() => onViewHistory?.(message)}
+                  className="text-[11px] opacity-75 ml-1.5 italic underline decoration-dotted hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white rounded"
+                  title="View edit history"
+                >
+                  (edited)
+                </button>
+              )}
             </div>
           </div>
 
@@ -606,10 +756,10 @@ const MessageBubble = React.memo(
             </div>
           )}
 
-          {/* Timestamp and delivery status */}
+          {/* Timestamp, delivery status, and failed send retry/remove controls */}
           <div
             className={cn(
-              'flex items-center gap-1 text-[11px] px-1 tabular-nums',
+              'flex items-center gap-1.5 text-[11px] px-1 tabular-nums flex-wrap',
               isOwn
                 ? isDark
                   ? 'justify-end text-slate-400'
@@ -620,9 +770,35 @@ const MessageBubble = React.memo(
             )}
           >
             {isPinned && <Pin className="w-3 h-3 text-purple-400 rotate-45" aria-label="Pinned" />}
+            {_queued && <span className="text-amber-400 font-medium">Queued offline</span>}
             <span>{time}</span>
             {getStatusIcon()}
           </div>
+
+          {_failed && isOwn && (
+            <div className="flex items-center justify-end gap-2 px-1 text-[11px]">
+              <span className="text-red-500 font-medium">{message._error || 'Not delivered'}</span>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={() => onRetry(message)}
+                  className="inline-flex items-center gap-1 font-semibold text-purple-400 hover:text-purple-300"
+                >
+                  <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                  <span>Retry</span>
+                </button>
+              )}
+              {onRemoveFailed && (
+                <button
+                  type="button"
+                  onClick={() => onRemoveFailed(message)}
+                  className="font-medium text-slate-400 hover:text-slate-200"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Reactions Picker Popover */}
           {showReactions && (
@@ -700,20 +876,22 @@ const MessageBubble = React.memo(
                   <span>Reply</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    onForward?.(message);
-                    setShowMenu(false);
-                  }}
-                  className={cn(
-                    'w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors',
-                    isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
-                  )}
-                >
-                  <Share className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Forward</span>
-                </button>
+                {type !== 'view_once' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onForward?.(message);
+                      setShowMenu(false);
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors',
+                      isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                    )}
+                  >
+                    <Share className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Forward</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -747,39 +925,59 @@ const MessageBubble = React.memo(
                   </button>
                 )}
 
-                {isOwn ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onEdit?.(message);
-                        setShowMenu(false);
-                      }}
-                      className={cn(
-                        'w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors',
-                        isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
-                      )}
-                    >
-                      <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onDelete?.(message);
-                        setShowMenu(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors text-red-500 hover:bg-red-500/15"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Delete</span>
-                    </button>
-                  </>
-                ) : (
+                {canEditWithinWindow && (
                   <button
                     type="button"
                     onClick={() => {
-                      onReport?.(message);
+                      onEdit?.(message);
+                      setShowMenu(false);
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors',
+                      isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                    )}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Edit</span>
+                  </button>
+                )}
+
+                {isEdited && onViewHistory && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onViewHistory(message);
+                      setShowMenu(false);
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors',
+                      isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                    )}
+                  >
+                    <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Edit history</span>
+                  </button>
+                )}
+
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDelete(message);
+                      setShowMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors text-red-500 hover:bg-red-500/15"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{isOwn ? 'Delete' : 'Delete for me'}</span>
+                  </button>
+                )}
+
+                {!isOwn && onReport && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onReport(message);
                       setShowMenu(false);
                     }}
                     className="w-full text-left px-3 py-2 text-xs font-medium flex items-center gap-2 rounded-xl transition-colors text-red-500 hover:bg-red-500/15"
@@ -830,3 +1028,4 @@ const MessageBubble = React.memo(
 MessageBubble.displayName = 'MessageBubble';
 
 export default MessageBubble;
+
