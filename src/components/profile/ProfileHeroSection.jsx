@@ -950,12 +950,17 @@ export const ProfileHeroSection = memo(({
             )}
 
             {showLevel && userLevel !== null && (
-              <LevelNumeralBadge
-                level={userLevel}
-                theme={theme}
-                size="sm"
-                onClick={isOwner ? () => handleOpenRoadmap('levels') : undefined}
-              />
+              <span className="inline-flex items-center gap-1.5">
+                <LevelNumeralBadge
+                  level={userLevel}
+                  theme={theme}
+                  size="sm"
+                  onClick={isOwner ? () => handleOpenRoadmap('levels') : undefined}
+                />
+                <span className={cn("text-[12px] font-medium tabular-nums", muted)}>
+                  Level {Math.floor(userLevel)}
+                </span>
+              </span>
             )}
 
             {!isVerified && isOwner && verificationLevelGate !== null && (
