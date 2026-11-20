@@ -11,10 +11,12 @@ import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
   Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus,
-  Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle
+  Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle, Phone, Gift, UserPlus, UserCheck, Coins, BarChart2
 } from 'lucide-react';
+import { toast as sonnerToast } from 'sonner';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 
 const REPORT_PRESETS = [
   'Harassment or bullying',
@@ -23,9 +25,23 @@ const REPORT_PRESETS = [
   'Inappropriate content',
 ];
 
-const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light', capabilities, onRelationshipChange }) => {
+const ProfileOptionsMenu = ({
+  profile,
+  isOwner = false,
+  onClose,
+  theme = 'light',
+  capabilities,
+  onRelationshipChange,
+  friendshipStatus = 'none',
+  friendRequestLoading = false,
+  onFriendRequestToggle,
+  onCancelFriendRequest,
+  onOpenTipModal,
+  onOpenLocationSetup,
+}) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const callsEnabled = useFeatureFlag('messaging.calls');
   const [busy, setBusy] = useState(null);
   const [blocked, setBlocked] = useState(Boolean(capabilities?.isBlocking || profile?.isBlocked || profile?.isBlockedByViewer));
   const [muted, setMuted] = useState(Boolean(capabilities?.isMuted || profile?.isMuted));
@@ -274,21 +290,104 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
           </button>
 
           {!isOwner && (
-            <button
-              type="button"
-              className={itemCls}
-              onClick={() => {
-                onClose?.();
-                navigate(`/messages/new?shareProfile=${userId}`);
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                  <MessageCircle className="w-4 h-4" />
+            <>
+              {onFriendRequestToggle && (
+                <button
+                  type="button"
+                  disabled={friendRequestLoading || friendshipStatus === 'friends'}
+                  className={itemCls}
+                  onClick={() => {
+                    const action = friendshipStatus === 'pending' && onCancelFriendRequest
+                      ? onCancelFriendRequest
+                      : onFriendRequestToggle;
+                    onClose?.();
+                    action?.();
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                      {friendRequestLoading
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : friendshipStatus === 'friends'
+                          ? <UserCheck className="w-4 h-4 text-emerald-400" />
+                          : <UserPlus className="w-4 h-4" />}
+                    </div>
+                    <span>
+                      {friendshipStatus === 'friends'
+                        ? 'Friends'
+                        : friendshipStatus === 'received'
+                          ? 'Accept Friend Request'
+                          : friendshipStatus === 'pending'
+                            ? (onCancelFriendRequest ? 'Cancel Friend Request' : 'Friend Request Sent')
+                            : 'Add Friend'}
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {callsEnabled && (
+                <button
+                  type="button"
+                  className={itemCls}
+                  disabled={busy === 'call'}
+                  onClick={async () => {
+                    if (!userId || busy) return;
+                    setBusy('call');
+                    try {
+                      const { getMessagingService } = await import('../../services/messagesService.js');
+                      const { conversation } = await getMessagingService().createConversation([userId]);
+                      onClose?.();
+                      navigate(`/call/${conversation.id}?type=audio`);
+                    } catch {
+                      sonnerToast.error('Could not start audio call.');
+                    } finally {
+                      setBusy(null);
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                      {busy === 'call' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
+                    </div>
+                    <span>Audio Call</span>
+                  </div>
+                </button>
+              )}
+
+              {onOpenTipModal && (
+                <button
+                  type="button"
+                  className={itemCls}
+                  onClick={() => {
+                    onClose?.();
+                    onOpenTipModal();
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                      <Gift className="w-4 h-4" />
+                    </div>
+                    <span>Send Coins / Gift</span>
+                  </div>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={itemCls}
+                onClick={() => {
+                  onClose?.();
+                  navigate(`/messages/new?shareProfile=${userId}`);
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  <span>Send via Direct Message</span>
                 </div>
-                <span>Send via Direct Message</span>
-              </div>
-            </button>
+              </button>
+            </>
           )}
 
           {isOwner && (
@@ -367,7 +466,8 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
-                  window.dispatchEvent(new CustomEvent('arvdoul:open_location_setup'));
+                  if (onOpenLocationSetup) onOpenLocationSetup();
+                  else window.dispatchEvent(new CustomEvent('arvdoul:open_location_setup'));
                 }}
               >
                 <div className="flex items-center gap-3">
@@ -375,6 +475,38 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                     <MapPin className="w-4 h-4" />
                   </div>
                   <span>Civic Location</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={itemCls}
+                onClick={() => {
+                  onClose?.();
+                  navigate('/profile/analytics');
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                    <BarChart2 className="w-4 h-4" />
+                  </div>
+                  <span>Profile Insights &amp; Views</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={itemCls}
+                onClick={() => {
+                  onClose?.();
+                  navigate('/coins');
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                  <span>Coins Treasury</span>
                 </div>
               </button>
 

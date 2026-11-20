@@ -12,7 +12,7 @@ import {
   Video,
   Film,
   Image as ImageIcon,
-  Disc,
+  Sparkles,
   Music,
   Bookmark,
   Tag,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { getAdaptiveTuning } from '../../utils/deviceCapabilities.js';
 
 const ProfileTabsBar = memo(({
   activeTab = 'posts',
@@ -34,13 +35,14 @@ const ProfileTabsBar = memo(({
   counts = {},
 }) => {
   const isDark = theme === 'dark';
+  const isLiteMode = getAdaptiveTuning().isLiteMode;
 
   const tabs = [
     { id: 'posts', label: 'Posts', icon: Grid3x3 },
     { id: 'videos', label: 'Videos', icon: Video },
     { id: 'reels', label: 'Reels', icon: Film },
     { id: 'photos', label: 'Photos', icon: ImageIcon },
-    { id: 'stories', label: 'Stories', icon: Disc },
+    { id: 'stories', label: 'Vibes', icon: Sparkles },
     { id: 'audio', label: 'Audio', icon: Music },
     ...(isOwner ? [{ id: 'saved', label: 'Saved', icon: Bookmark }] : []),
     { id: 'tagged', label: 'Tagged', icon: Tag },
@@ -57,7 +59,8 @@ const ProfileTabsBar = memo(({
   return (
     <div
       className={cn(
-        "w-full border-b backdrop-blur-md transition-colors flex items-center justify-between gap-3",
+        "w-full border-b transition-colors flex items-center justify-between gap-3",
+        !isLiteMode && "backdrop-blur-md",
         isDark
           ? "bg-[#03071B]/90 border-white/[0.08] text-white"
           : "bg-[#F6F8FC]/90 border-slate-200/80 text-slate-900"

@@ -252,17 +252,20 @@ export default function HighlightsScreen() {
                       'w-full h-full rounded-xl overflow-hidden',
                       'bg-white dark:bg-[#080F2E]'
                     )}>
-                      {highlight.coverUrl ? (
-                        <LazyImage
-                          src={highlight.coverUrl}
-                          alt={highlight.title || 'Highlight cover'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl">
-                          {highlight.emoji || '📚'}
-                        </div>
-                      )}
+                      {(() => {
+                        const coverSrc = highlight.coverUrl || highlight.cover || highlight.thumbnailUrl || highlight.mediaURL;
+                        return coverSrc ? (
+                          <LazyImage
+                            src={coverSrc}
+                            alt={highlight.title || 'Highlight cover'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-4xl">
+                            {highlight.emoji || '📚'}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <p className="text-sm text-slate-900 dark:text-white text-center mt-2 truncate font-medium">

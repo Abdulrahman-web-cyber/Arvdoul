@@ -58,6 +58,8 @@ export default function ProfilePreviewScreen({
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
   const storeHighlights = useProfileStore((state) => state.highlights);
+  const storeStories = useProfileStore((state) => state.stories);
+  const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const loadProfile = useProfileStore((state) => state.loadProfile);
 
   const [activeTab, setActiveTab] = useState('posts');
@@ -131,7 +133,7 @@ export default function ProfilePreviewScreen({
             isFollowing: viewPerspective === 'follower' || viewPerspective === 'connection',
             isFollower: viewPerspective === 'follower' || viewPerspective === 'connection',
             isMutualFriend: viewPerspective === 'connection',
-            requestStatus: null,
+            requestStatus: storeFollowStatus?.requestStatus ?? null,
           },
       viewAs: isOwnerView ? null : viewPerspective,
     });
@@ -285,6 +287,7 @@ export default function ProfilePreviewScreen({
             theme={theme}
             profile={projectedProfile}
             capabilities={capabilities}
+            showCoins={false}
           />
 
           {/* 3. Citizen Progression */}
@@ -316,19 +319,34 @@ export default function ProfilePreviewScreen({
             onViewModeChange={handleViewModeChange}
             isOwner={isOwnerMode}
             theme={theme}
-            counts={{
-              posts: (storePosts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
-              reels: (storePosts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-              audio: (storePosts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
-              saved: 0,
-              tagged: (storePosts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
-            }}
+            counts={(() => {
+              const list = storePosts || [];
+              const vibePosts = list.filter((p) => p.type === 'story' || p.type === 'vibe' || p.isStory || p.isVibe);
+              const mergedVibeIds = new Set([
+                ...((storeStories || []).map((s) => s?.id).filter(Boolean)),
+                ...vibePosts.map((p) => p?.id).filter(Boolean),
+              ]);
+              return {
+                posts: list.filter(p => p.type !== 'audio' && p.type !== 'track' && p.type !== 'story' && p.type !== 'vibe').length,
+                videos: list.filter(p => p.type === 'video' || p.type === 'reel' || p.type === 'spark' || Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video')).length,
+                reels: list.filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+                photos: list.filter(p => {
+                  const isVidOrAudio = p.type === 'video' || p.type === 'reel' || p.type === 'spark' || p.type === 'audio' || p.type === 'track' || Boolean(p.videoURL || p.videoUrl || p.audioURL || p.audioUrl);
+                  return !isVidOrAudio && (p.type === 'image' || p.type === 'photo' || p.type === 'gallery' || Boolean(p.mediaURL || p.imageUrl || (Array.isArray(p.media) && p.media.length > 0)));
+                }).length,
+                stories: Math.max(mergedVibeIds.size, (storeStories || []).length),
+                audio: list.filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+                saved: 0,
+                tagged: list.filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+              };
+            })()}
           />
 
           {/* 6. Feed & Tab Content */}
           <ProfileFeedGrid
             posts={storePosts || []}
             savedPosts={[]}
+            stories={storeStories || []}
             activeTab={activeTab}
             viewMode={viewMode}
             loading={false}

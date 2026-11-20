@@ -18,8 +18,9 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useProfileStore } from '../store/profileStore.js';
-import { settingsService, DEFAULT_SETTINGS } from '../services/settingsService.js';
+import { settingsService, DEFAULT_SETTINGS, mergeSettings } from '../services/settingsService.js';
 import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES } from '../services/levelSystemService.js';
+import userServiceDefault, { getUserService } from '../services/userService.js';
 import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
 import { VIBE_POLICY_SCOPES, VIBE_POLICY_SCOPE_OPTIONS } from '../config/vibeContracts.js';
@@ -332,12 +333,19 @@ export default function SettingsScreen() {
     async (path, value) => {
       if (!settings || !uid) return;
       const previous = settings;
-      // Optimistic
+      // Optimistic (deep-merge defaults and ensure intermediate objects exist)
       setSettings((cur) => {
-        const next = JSON.parse(JSON.stringify(cur || DEFAULT_SETTINGS));
+        const base = cur || DEFAULT_SETTINGS || {};
+        const next = typeof mergeSettings === 'function'
+          ? mergeSettings(base)
+          : { ...base };
         const keys = path.split('.');
         let node = next;
-        for (let i = 0; i < keys.length - 1; i++) node = node[keys[i]];
+        for (let i = 0; i < keys.length - 1; i++) {
+          const existing = node[keys[i]];
+          node[keys[i]] = existing && typeof existing === 'object' ? { ...existing } : {};
+          node = node[keys[i]];
+        }
         node[keys[keys.length - 1]] = value;
         return next;
       });
@@ -355,7 +363,6 @@ export default function SettingsScreen() {
     setProfileIsPrivate(val);
     if (!uid) return;
     try {
-      const { getUserService } = await import('../services/userService.js');
       const userService = getUserService();
       await userService.updateUserProfile(uid, { isPrivate: val });
       useProfileStore.setState((s) => ({
@@ -377,7 +384,6 @@ export default function SettingsScreen() {
     setProfilePrivacy(updatedPrivacy);
     if (!uid) return;
     try {
-      const { getUserService } = await import('../services/userService.js');
       const userService = getUserService();
       await userService.updateUserProfile(uid, { privacy: updatedPrivacy });
       useProfileStore.setState((s) => ({
@@ -391,6 +397,11 @@ export default function SettingsScreen() {
       toast.error('Failed to update privacy settings');
     }
   }, [uid]);
+
+  const handleUpdateProfilePrivacyScope = useCallback(
+    (scopeKey, value) => handleUpdateProfilePrivacyScopes({ [scopeKey]: value }),
+    [handleUpdateProfilePrivacyScopes]
+  );
 
   const handleReduceMotion = (value) => {
     document.documentElement.classList.toggle('arvdoul-reduce-motion', value);
@@ -454,8 +465,7 @@ export default function SettingsScreen() {
     if (!uid) return;
     setDeleting(true);
     try {
-      const { default: userService } = await import('../services/userService.js');
-      await userService.deleteAccount(uid);
+      await userServiceDefault.deleteAccount(uid);
       setShowDeleteConfirm(false);
       toast.success(t('settings.accountDeleted'));
       navigate('/login');
@@ -1053,7 +1063,7 @@ export default function SettingsScreen() {
                     key={s.id}
                     label={s.label}
                     active={(profilePrivacy.creatorInfo || VISIBILITY_SCOPES.EVERYONE) === s.id}
-                    onClick={() => handleUpdateProfilePrivacyScopes({ creatorInfo: s.id })}
+                    onClick={() => handleUpdateProfilePrivacyScope('creatorInfo', s.id)}
                   />
                 ))}
               </div>

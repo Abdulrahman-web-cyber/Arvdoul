@@ -224,8 +224,8 @@ describe('SettingsScreen', () => {
         'u1',
         expect.objectContaining({
           privacy: expect.objectContaining({
-            followersList: 'followers',
-            followingList: 'followers',
+            followersList: 'FOLLOWERS',
+            followingList: 'FOLLOWERS',
           }),
         })
       );
@@ -240,10 +240,10 @@ describe('SettingsScreen', () => {
         'u1',
         expect.objectContaining({
           privacy: expect.objectContaining({
-            followersList: 'followers',
-            followingList: 'followers',
-            communities: 'connections',
-            collections: 'connections',
+            followersList: 'FOLLOWERS',
+            followingList: 'FOLLOWERS',
+            communities: 'CONNECTIONS',
+            collections: 'CONNECTIONS',
           }),
         })
       );

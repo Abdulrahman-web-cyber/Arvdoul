@@ -1,14 +1,11 @@
 /**
- * Production-grade 6-Stat Civic Metrics Ledger.
- * Renders a unified, hairline-divided architectural ledger strip (Light & Dark theme):
- * 1. Posts
- * 2. Followers
- * 3. Following
- * 4. Friends / Mutuals
- * 5. Profile Views / Likes
- * 6. Coins Ledger
- *
- * Strictly fail-closed on capability gates and never fabricates unknown counts.
+ * Production-grade Civic Metrics Ledger.
+ * Renders a unified, hairline-divided architectural ledger strip (Light & Dark theme).
+ * Enforces Arvdoul progression rules:
+ * - Citizens below Level 3 (non-creator) operate with Friends & core metrics (no Followers/Following tabs/cells).
+ * - Level 3+ or Creator unlocks Followers & Following alongside Friends.
+ * - Strictly fail-closed on capability gates and never fabricates unknown counts.
+ * - Coins lives in a dedicated Treasury card when `showCoins` is false to avoid duplication.
  *
  * @component
  */
@@ -16,6 +13,8 @@
 import { memo } from "react";
 import { FileText, Users, UserCheck, UserPlus, Eye, Heart, Coins } from "lucide-react";
 import { cn } from '../../lib/utils';
+import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
+import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 
 const formatNumber = (num) => {
   if (num === undefined || num === null) return '—';
@@ -33,6 +32,7 @@ const ProfileMetricsGrid = memo(({
   analytics,
   onMetricPress,
   capabilities,
+  showCoins = false,
 }) => {
   const isDark = theme === 'dark';
 
@@ -50,6 +50,13 @@ const ProfileMetricsGrid = memo(({
   const canShowFriends = Boolean(capabilities?.canViewFriends);
   const canShowEconomic = isOwner || Boolean(capabilities?.canViewEconomicStatus);
 
+  // Enforce Friends (< Level 3) -> Followers (Level 3+ / Creator)
+  const rawLevel = profile?.level != null && Number.isFinite(Number(profile.level)) ? Number(profile.level) : null;
+  const isCreator = resolveCreatorFlag(profile || {}, {}, rawLevel);
+  const followersTierUnlocked = Boolean(
+    isCreator || rawLevel === null || rawLevel >= LEVEL_GATES.publicFollowers
+  );
+
   const followerGrowth = analytics?.followerGrowth ? Number(analytics.followerGrowth) : null;
   const viewsGrowth = analytics?.viewsGrowth ? Number(analytics.viewsGrowth) : null;
 
@@ -63,24 +70,28 @@ const ProfileMetricsGrid = memo(({
       clickable: Boolean(onMetricPress),
       trend: null,
     },
-    {
-      key: 'followers',
-      label: 'Followers',
-      value: canShowFollowers ? formatNumber(followersCount) : '—',
-      icon: Users,
-      accentClass: 'text-arvdoul-purple dark:text-purple-400',
-      clickable: canShowFollowers && Boolean(onMetricPress),
-      trend: canShowFollowers && followerGrowth ? `+${followerGrowth}%` : null,
-    },
-    {
-      key: 'following',
-      label: 'Following',
-      value: canShowFollowing ? formatNumber(followingCount) : '—',
-      icon: UserCheck,
-      accentClass: 'text-cyan-600 dark:text-cyan-400',
-      clickable: canShowFollowing && Boolean(onMetricPress),
-      trend: null,
-    },
+    ...(followersTierUnlocked
+      ? [
+          {
+            key: 'followers',
+            label: 'Followers',
+            value: canShowFollowers ? formatNumber(followersCount) : '—',
+            icon: Users,
+            accentClass: 'text-arvdoul-purple dark:text-purple-400',
+            clickable: canShowFollowers && Boolean(onMetricPress),
+            trend: canShowFollowers && followerGrowth ? `+${followerGrowth}%` : null,
+          },
+          {
+            key: 'following',
+            label: 'Following',
+            value: canShowFollowing ? formatNumber(followingCount) : '—',
+            icon: UserCheck,
+            accentClass: 'text-cyan-600 dark:text-cyan-400',
+            clickable: canShowFollowing && Boolean(onMetricPress),
+            trend: null,
+          },
+        ]
+      : []),
     {
       key: 'friends',
       label: 'Friends',
@@ -101,16 +112,29 @@ const ProfileMetricsGrid = memo(({
       clickable: isOwner && Boolean(onMetricPress),
       trend: isOwner && viewsGrowth ? `+${viewsGrowth}%` : null,
     },
-    {
-      key: 'coins',
-      label: 'Coins',
-      value: canShowEconomic && coinsCount !== null ? formatNumber(coinsCount) : '—',
-      icon: Coins,
-      accentClass: 'text-amber-500 dark:text-amber-400',
-      clickable: Boolean(onMetricPress),
-      trend: null,
-    },
+    ...(showCoins
+      ? [
+          {
+            key: 'coins',
+            label: 'Coins',
+            value: canShowEconomic && coinsCount !== null ? formatNumber(coinsCount) : '—',
+            icon: Coins,
+            accentClass: 'text-amber-500 dark:text-amber-400',
+            clickable: Boolean(onMetricPress),
+            trend: null,
+          },
+        ]
+      : []),
   ];
+
+  const gridColsClass =
+    stats.length === 3
+      ? 'grid-cols-3'
+      : stats.length === 4
+        ? 'grid-cols-2 sm:grid-cols-4'
+        : stats.length === 5
+          ? 'grid-cols-2 sm:grid-cols-5'
+          : 'grid-cols-3 lg:grid-cols-6';
 
   return (
     <div
@@ -121,7 +145,7 @@ const ProfileMetricsGrid = memo(({
           : "border-slate-200/90 bg-slate-200/80 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
       )}
     >
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-px">
+      <div className={cn("grid gap-px", gridColsClass)}>
         {stats.map((item) => {
           const Icon = item.icon;
           const isClickable = item.clickable;

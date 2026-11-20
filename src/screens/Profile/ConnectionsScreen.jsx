@@ -410,12 +410,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     }
   }, [currentUserId, friendBusyIds, sentFriendIds]);
 
+  const followersUnlocked = effectiveLevel === null || isCreatorOrAdvanced;
+
   const tabVisible = useMemo(() => ({
-    followers: isOwner || Boolean(capabilities?.canViewFollowers),
-    following: isOwner || Boolean(capabilities?.canViewFollowing),
+    followers: followersUnlocked && (isOwner || Boolean(capabilities?.canViewFollowers)),
+    following: followersUnlocked && (isOwner || Boolean(capabilities?.canViewFollowing)),
     friends: isOwner || Boolean(capabilities?.canViewFriends),
     discover: isOwner,
-  }), [isOwner, capabilities]);
+  }), [followersUnlocked, isOwner, capabilities]);
 
   useEffect(() => {
     if (!tabVisible[activeTab]) {

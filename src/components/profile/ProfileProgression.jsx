@@ -1,7 +1,7 @@
 /**
  * Production-grade Citizen Progression & Civic Standing strip component.
- * Displays server-authoritative rank title, XP progress, daily streak,
- * reputation, and upcoming milestone reward cleanly on a single hairline bar.
+ * Displays server-authoritative rank title, bespoke per-level numeral emblem,
+ * XP progress, daily streak, reputation, and upcoming milestone reward.
  *
  * Never fabricates progression (renders unavailable when level is absent).
  *
@@ -12,11 +12,10 @@ import { memo, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Crown, Flame, ChevronRight, Award, Sparkles } from "lucide-react";
 import { cn } from '../../lib/utils';
-import { tokens } from '../../design-system/tokens.js';
+import LevelNumeralBadge from './LevelNumeralBadge.jsx';
 import {
   getLevelInfo,
   getRankTitle,
-  getLevelBandColor,
   getLevelUpReward,
 } from '../../services/levelSystemService';
 
@@ -37,7 +36,7 @@ const ProfileProgression = memo(({
 
   const explicitLevel = Number(level);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
-  const effectiveLevel = hasLevel ? explicitLevel : null;
+  const effectiveLevel = hasLevel ? Math.floor(explicitLevel) : null;
 
   const hasReputation = reputation !== null && reputation !== undefined && Number.isFinite(Number(reputation));
   const safeReputation = hasReputation ? Number(reputation) : null;
@@ -45,9 +44,12 @@ const ProfileProgression = memo(({
   const hasExperience = experience !== null && experience !== undefined && Number.isFinite(Number(experience));
 
   const xpInfo = useMemo(() => {
-    if (!hasLevel || !hasExperience) return null;
+    if (!hasLevel) return null;
     try {
-      return getLevelInfo(Number(experience));
+      if (hasExperience) {
+        return getLevelInfo(Number(experience));
+      }
+      return null;
     } catch {
       return null;
     }
@@ -59,15 +61,6 @@ const ProfileProgression = memo(({
       return getRankTitle(effectiveLevel);
     } catch {
       return null;
-    }
-  }, [hasLevel, effectiveLevel]);
-
-  const levelColor = useMemo(() => {
-    if (!hasLevel) return tokens.color.brand.violet;
-    try {
-      return getLevelBandColor(effectiveLevel);
-    } catch {
-      return tokens.color.brand.violet;
     }
   }, [hasLevel, effectiveLevel]);
 
@@ -107,7 +100,7 @@ const ProfileProgression = memo(({
         <button
           type="button"
           onClick={() => navigate('/passport')}
-          className="shrink-0 min-h-[40px] inline-flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer self-start sm:self-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+          className="shrink-0 min-h-[44px] inline-flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors cursor-pointer self-start sm:self-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
         >
           <span>View Passport</span>
           <ChevronRight className="w-3.5 h-3.5" />
@@ -119,7 +112,7 @@ const ProfileProgression = memo(({
   const progress = xpInfo?.progress ?? 0;
   const xpIntoLevel = xpInfo?.xpIntoLevel ?? 0;
   const xpToNext = xpInfo?.xpToNext ?? 0;
-  const isMaxLevel = xpInfo?.isMaxLevel ?? false;
+  const isMaxLevel = xpInfo?.isMaxLevel ?? effectiveLevel >= 100;
 
   return (
     <div className={cn(
@@ -131,24 +124,21 @@ const ProfileProgression = memo(({
     )}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div
-            className="w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border"
-            style={{
-              background: `${levelColor}18`,
-              borderColor: `${levelColor}38`,
-              color: isDark ? '#fff' : levelColor,
-            }}
-          >
-            <span className="text-[9px] font-semibold uppercase tracking-wider opacity-75 leading-none">LVL</span>
-            <span className="font-display text-sm font-bold leading-tight tabular-nums">{effectiveLevel}</span>
-          </div>
+          {showLevel && (
+            <LevelNumeralBadge
+              level={effectiveLevel}
+              theme={theme}
+              size="md"
+              onClick={isOwner ? () => navigate('/progress') : undefined}
+            />
+          )}
 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h3 className="font-display text-sm sm:text-base font-bold tracking-tight truncate">
                 {rankTitle || `Citizen Tier ${effectiveLevel}`}
               </h3>
-              <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden="true" />
             </div>
 
             <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-slate-400">
@@ -177,10 +167,10 @@ const ProfileProgression = memo(({
 
         <button
           type="button"
-          onClick={() => navigate('/passport')}
-          className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:bg-purple-500/10 transition-colors cursor-pointer self-start sm:self-center shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+          onClick={() => navigate(isOwner ? '/progress' : '/passport')}
+          className="min-h-[44px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:bg-purple-500/10 transition-colors cursor-pointer self-start sm:self-center shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
         >
-          <span>Digital Passport & Perks</span>
+          <span>{isOwner ? 'Progression & Perks' : 'Standing & Perks'}</span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -196,7 +186,14 @@ const ProfileProgression = memo(({
             </span>
           </div>
 
-          <div className="w-full h-1.5 rounded-full bg-slate-200/90 dark:bg-white/10 overflow-hidden">
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+            aria-label={`Level ${effectiveLevel} progress ${Math.round(progress)}%`}
+            className="w-full h-1.5 rounded-full bg-slate-200/90 dark:bg-white/10 overflow-hidden"
+          >
             <div
               className="h-full rounded-full transition-all duration-700"
               style={{

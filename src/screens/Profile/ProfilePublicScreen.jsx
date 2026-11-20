@@ -8,9 +8,9 @@
  * @component
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { Lock, UserPlus, UserX, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Lock, UserPlus, UserX, ShieldAlert, RefreshCw, Coins, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -26,7 +26,6 @@ import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getUserService } from '../../services/userService.js';
-import { getAnalyticsService } from '../../services/analyticsService.js';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
 import { unknownNumber } from '../../lib/unknownNumber';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
@@ -41,14 +40,22 @@ import ProfileFeaturedSection from '../../components/profile/ProfileFeaturedSect
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
-import ProfileTipModal from '../../components/profile/ProfileTipModal';
-import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
-import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
-// Modals
-import ProfileOptionsMenu from '../../components/profile/ProfileOptionsMenu';
-import ProfileVerificationModal from '../../components/profile/ProfileVerificationModal';
+const lazyDefault = (loader) => lazy(async () => {
+  const mod = await loader();
+  const comp = mod?.default?.default || mod?.default || Object.values(mod || {}).find(
+    (v) => typeof v === 'function' || (v && typeof v === 'object' && v.$$typeof)
+  );
+  return { default: comp };
+});
+
+// Modals (lazy-loaded on demand to reduce memory footprint)
+const ProfileTipModal = lazyDefault(() => import('../../components/profile/ProfileTipModal'));
+const ProfileQRCodeModal = lazyDefault(() => import('../../components/profile/ProfileQRCodeModal'));
+const ProfileQRScannerModal = lazyDefault(() => import('../../components/profile/ProfileQRScannerModal'));
+const ProfileOptionsMenu = lazyDefault(() => import('../../components/profile/ProfileOptionsMenu'));
+const ProfileVerificationModal = lazyDefault(() => import('../../components/profile/ProfileVerificationModal'));
 
 export default function ProfilePublicScreen() {
   const { userId } = useParams();
@@ -72,6 +79,8 @@ export default function ProfilePublicScreen() {
   const storeMutualFriends = useProfileStore((state) => state.mutualFriends);
   const storeMutualFriendsResolved = useProfileStore((state) => state.mutualFriendsResolved);
   const storeHighlights = useProfileStore((state) => state.highlights);
+  const storeStories = useProfileStore((state) => state.stories);
+  const storeStoriesLoading = useProfileStore((state) => state.storiesLoading);
 
   const [localLoading, setLocalLoading] = useState(true);
   const [friendshipStatus, setFriendshipStatus] = useState('none'); // 'none' | 'pending' | 'received' | 'friends'
@@ -144,6 +153,7 @@ export default function ProfilePublicScreen() {
           userService.areFriends(currentUserId, resolvedUid),
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
+          store.loadStories(resolvedUid),
           store.loadMutualFriends(currentUserId, resolvedUid),
         ]);
 
@@ -182,18 +192,11 @@ export default function ProfilePublicScreen() {
             console.warn('Friend request status note:', reqErr);
           }
         }
-
-        try {
-          getAnalyticsService().trackProfileView(currentUserId, resolvedUid).catch((e) => {
-            console.warn('[Profile] view not tracked', e?.message);
-          });
-        } catch (e) {
-          console.warn('[Profile] analytics service unavailable for view tracking', e?.message);
-        }
       } else {
         await Promise.allSettled([
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
+          store.loadStories(resolvedUid),
         ]);
       }
     } catch (err) {
@@ -257,6 +260,7 @@ export default function ProfilePublicScreen() {
       if (next?.isFollowing) {
         store.loadPosts(targetUid, { limit: 30 });
         store.loadHighlights(targetUid);
+        store.loadStories(targetUid);
       }
     }
   }, [currentUserId, isFollowing, requestStatus, profileData?.id, profileData?.uid, routeUserId, navigate]);
@@ -728,13 +732,14 @@ export default function ProfilePublicScreen() {
             onFriendPress={() => navigate(`/profile/${effectiveProfile?.id || effectiveProfile?.uid || userId}/friends`)}
           />
 
-          {/* 3. 6-Card Civic Metrics Grid */}
+          {/* 3. Civic Metrics Grid (Coins moved to Patronage Vault below) */}
           <ProfileMetricsGrid
             isOwner={false}
             theme={theme}
             profile={effectiveProfile}
             analytics={null}
             capabilities={capabilities}
+            showCoins={false}
             onMetricPress={(key) => {
               const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;
               if (key === 'followers') navigate(`/profile/${targetId}/followers`);
@@ -744,6 +749,54 @@ export default function ProfilePublicScreen() {
               else if (key === 'posts') setActiveTab('posts');
             }}
           />
+
+          {/* 3b. Patronage & Coins Vault Strip */}
+          {(Boolean(capabilities?.canViewEconomicStatus) || Boolean(currentUserId)) && (
+            <div
+              className={cn(
+                "rounded-2xl border px-4 py-3 sm:px-5 sm:py-3.5 flex flex-wrap items-center justify-between gap-3 transition-colors",
+                isDark
+                  ? "bg-[#080F2E]/85 border-amber-400/20 text-white"
+                  : "bg-white border-amber-200/80 text-slate-900 shadow-xs"
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-500 flex items-center justify-center shrink-0">
+                  <Coins className="w-4 h-4" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">
+                    Arvdoul Patronage
+                  </p>
+                  {capabilities?.canViewEconomicStatus && effectiveProfile?.coins != null ? (
+                    <p className="text-sm font-bold tabular-nums">
+                      {Number(effectiveProfile.coins).toLocaleString()} <span className="font-normal text-xs opacity-75">Coins in treasury</span>
+                    </p>
+                  ) : (
+                    <p className={cn("text-xs", isDark ? "text-slate-400" : "text-slate-600")}>
+                      Support this citizen directly with Arvdoul Coins
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {currentUserId && !isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setShowTipModal(true)}
+                  className={cn(
+                    "min-h-[44px] px-4 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    isDark
+                      ? "bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25"
+                      : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
+                  )}
+                >
+                  <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Send Coins</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {!capabilities.canViewContent ? (
             /* Restricted / Private Account Access Gate */
@@ -793,6 +846,7 @@ export default function ProfilePublicScreen() {
                 highlights={storeHighlights}
                 userId={targetUid}
                 isOwner={false}
+                managedByParent={true}
                 theme={theme}
               />
 
@@ -815,13 +869,27 @@ export default function ProfilePublicScreen() {
                   onViewModeChange={handleViewModeChange}
                   isOwner={false}
                   theme={theme}
-                  counts={{
-                    posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
-                    reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-                    audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
-                    saved: 0,
-                    tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
-                  }}
+                  counts={(() => {
+                    const list = posts || [];
+                    const vibePosts = list.filter((p) => p.type === 'story' || p.type === 'vibe' || p.isStory || p.isVibe);
+                    const mergedVibeIds = new Set([
+                      ...((storeStories || []).map((s) => s?.id).filter(Boolean)),
+                      ...vibePosts.map((p) => p?.id).filter(Boolean),
+                    ]);
+                    return {
+                      posts: list.filter(p => p.type !== 'audio' && p.type !== 'track' && p.type !== 'story' && p.type !== 'vibe').length,
+                      videos: list.filter(p => p.type === 'video' || p.type === 'reel' || p.type === 'spark' || Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video')).length,
+                      reels: list.filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+                      photos: list.filter(p => {
+                        const isVidOrAudio = p.type === 'video' || p.type === 'reel' || p.type === 'spark' || p.type === 'audio' || p.type === 'track' || Boolean(p.videoURL || p.videoUrl || p.audioURL || p.audioUrl);
+                        return !isVidOrAudio && (p.type === 'image' || p.type === 'photo' || p.type === 'gallery' || Boolean(p.mediaURL || p.imageUrl || (Array.isArray(p.media) && p.media.length > 0)));
+                      }).length,
+                      stories: Math.max(mergedVibeIds.size, (storeStories || []).length),
+                      audio: list.filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+                      saved: 0,
+                      tagged: list.filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+                    };
+                  })()}
                 />
               </div>
 
@@ -840,9 +908,10 @@ export default function ProfilePublicScreen() {
               {/* 8. Media Feed Grid with Multi-View Mode */}
               <ProfileFeedGrid
                 posts={posts}
+                stories={storeStories}
                 activeTab={activeTab}
                 viewMode={viewMode}
-                loading={storePostsLoading}
+                loading={storePostsLoading || (activeTab === 'stories' && storeStoriesLoading)}
                 theme={theme}
                 profile={effectiveProfile}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
@@ -857,67 +926,86 @@ export default function ProfilePublicScreen() {
 
         {/* Tip / Gift Modal */}
         {showTipModal && (
-          <ProfileTipModal
-            isOpen={showTipModal}
-            onClose={() => setShowTipModal(false)}
-            recipient={effectiveProfile}
-            currentUser={currentUser}
-            onTipSuccess={() => {
-              setShowTipModal(false);
-            }}
-          />
+          <Suspense fallback={null}>
+            <ProfileTipModal
+              isOpen={showTipModal}
+              onClose={() => setShowTipModal(false)}
+              recipient={effectiveProfile}
+              currentUser={currentUser}
+              onTipSuccess={() => {
+                setShowTipModal(false);
+              }}
+            />
+          </Suspense>
         )}
 
         {/* QR Code Modal */}
-        <ProfileQRCodeModal
-          isOpen={showQrModal}
-          onClose={() => setShowQrModal(false)}
-          profile={effectiveProfile}
-          theme={theme}
-        />
+        {showQrModal && (
+          <Suspense fallback={null}>
+            <ProfileQRCodeModal
+              isOpen={showQrModal}
+              onClose={() => setShowQrModal(false)}
+              profile={effectiveProfile}
+              theme={theme}
+            />
+          </Suspense>
+        )}
 
         {/* QR Scanner Modal */}
         {showScannerModal && (
-          <ProfileQRScannerModal
-            isOpen={showScannerModal}
-            onClose={() => setShowScannerModal(false)}
-            theme={theme}
-          />
+          <Suspense fallback={null}>
+            <ProfileQRScannerModal
+              isOpen={showScannerModal}
+              onClose={() => setShowScannerModal(false)}
+              theme={theme}
+            />
+          </Suspense>
         )}
 
         {/* Options Menu */}
         {showOptionsMenu && (
-          <ProfileOptionsMenu
-            profile={effectiveProfile}
-            isOwner={false}
-            theme={theme}
-            capabilities={capabilities}
-            onRelationshipChange={({ type, value }) => {
-              setRelationship((prev) => ({
-                ...(prev || {}),
-                ...(type === 'block'
-                  ? { isBlocking: value }
-                  : type === 'mute'
-                    ? { isMuted: value }
-                    : { isRestricted: value }),
-              }));
-              if (type === 'block' && value === false) {
-                loadPublicProfile();
-              }
-            }}
-            onClose={() => setShowOptionsMenu(false)}
-          />
+          <Suspense fallback={null}>
+            <ProfileOptionsMenu
+              profile={effectiveProfile}
+              isOwner={false}
+              theme={theme}
+              capabilities={capabilities}
+              friendshipStatus={friendshipStatus}
+              friendRequestLoading={friendRequestLoading}
+              onFriendRequestToggle={handleFriendRequestToggle}
+              onCancelFriendRequest={handleCancelFriendRequest}
+              onOpenTipModal={() => setShowTipModal(true)}
+              onRelationshipChange={({ type, value }) => {
+                setRelationship((prev) => ({
+                  ...(prev || {}),
+                  ...(type === 'block'
+                    ? { isBlocking: value }
+                    : type === 'mute'
+                      ? { isMuted: value }
+                      : { isRestricted: value }),
+                }));
+                if (type === 'block' && value === false) {
+                  loadPublicProfile();
+                }
+              }}
+              onClose={() => setShowOptionsMenu(false)}
+            />
+          </Suspense>
         )}
 
         {/* Verification Details Modal */}
-        <ProfileVerificationModal
-          isOpen={showVerificationModal}
-          onClose={() => setShowVerificationModal(false)}
-          isVerified={effectiveProfile.isVerified}
-          profile={effectiveProfile}
-          isOwner={false}
-          theme={theme}
-        />
+        {showVerificationModal && (
+          <Suspense fallback={null}>
+            <ProfileVerificationModal
+              isOpen={showVerificationModal}
+              onClose={() => setShowVerificationModal(false)}
+              isVerified={effectiveProfile.isVerified}
+              profile={effectiveProfile}
+              isOwner={false}
+              theme={theme}
+            />
+          </Suspense>
+        )}
       </div>
     </ErrorBoundary>
   );

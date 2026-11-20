@@ -680,7 +680,8 @@ export default function EditProfileScreen() {
               type="button"
               onClick={handleSave}
               disabled={saving || usernameAvailability === 'taken'}
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md shadow-purple-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Save Profile Changes"
+              className="min-h-[44px] inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md shadow-purple-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               style={{
                 background: BRAND_GRADIENT
               }}
@@ -1007,7 +1008,7 @@ export default function EditProfileScreen() {
                   {formData.tagline.length}/{PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH}
                 </span>
               </div>
-              <input aria-label="Tagline or Status"
+              <input aria-label="Tagline / Status"
                 type="text"
                 value={formData.tagline}
                 onChange={(e) => handleInputChange('tagline', e.target.value)}
@@ -1091,7 +1092,7 @@ export default function EditProfileScreen() {
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
                   Profession / Role
                 </label>
-                <input aria-label="Profession or Role"
+                <input aria-label="Profession / Role"
                   type="text"
                   value={formData.profession}
                   onChange={(e) => handleInputChange('profession', e.target.value)}
@@ -1204,9 +1205,9 @@ export default function EditProfileScreen() {
               </div>
 
               <div className="flex items-center justify-between gap-2 pt-0.5">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">Location Precision</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">Location Privacy</span>
                 <select
-                  aria-label="Location Precision"
+                  aria-label="Location Privacy"
                   value={formData.locationPrivacy || 'public'}
                   onChange={(e) => handleInputChange('locationPrivacy', e.target.value)}
                   className={cn(
@@ -1671,16 +1672,34 @@ export default function EditProfileScreen() {
                 value={formData.defaultTab}
                 onChange={(e) => handleInputChange('defaultTab', e.target.value)}
                 className={cn(
-                  "px-3.5 py-1.5 rounded-xl text-xs font-semibold outline-none border cursor-pointer",
+                  "px-3.5 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                   isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
                 )}
               >
-                <option value="posts">Posts & Sparks</option>
-                <option value="reels">Reels & Clips</option>
+                <option value="posts">Posts &amp; Sparks</option>
+                <option value="reels">Reels &amp; Clips</option>
                 <option value="audio">Audio Tracks</option>
-                <option value="citizenship">Citizenship & Provenance</option>
-                <option value="about">About & Manifesto</option>
+                <option value="citizenship">Citizenship &amp; Provenance</option>
+                <option value="about">About &amp; Manifesto</option>
               </select>
+            </div>
+
+            {/* Active Civic / Royal Title Manager Shortcut */}
+            <div className="pt-3 border-t border-slate-200/70 dark:border-white/[0.06] flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-xs sm:text-sm font-semibold">Civic &amp; Royal Title</div>
+                <div className="text-[11px] text-slate-400">Equip earned heraldic or civic titles on your hero crest</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/titles')}
+                className={cn(
+                  "min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  isDark ? "bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25" : "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                )}
+              >
+                Manage Titles
+              </button>
             </div>
           </div>
         </section>

@@ -170,10 +170,14 @@ const ProfileCreatorDashboard = memo(({
     ? ranking.label
     : '—';
 
+  const timeframeLabel = selectedTimeframe === '7d' ? '7d'
+    : selectedTimeframe === '30d' ? '30d'
+    : selectedTimeframe === '90d' ? '90d' : '1y';
+
   const studioCells = [
     {
       key: 'views',
-      label: 'Profile Views',
+      label: `Period Views (${timeframeLabel})`,
       value: views === null ? '—' : views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views,
       trend: vTrend,
       sparkColor: 'var(--arv-brand-violet)',
@@ -181,7 +185,7 @@ const ProfileCreatorDashboard = memo(({
     },
     {
       key: 'reach',
-      label: 'Reach',
+      label: 'Audience Reach',
       value: reach === null ? '—' : reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach,
       trend: rTrend,
       sparkColor: tokens.color.brand.cyan,
@@ -197,7 +201,7 @@ const ProfileCreatorDashboard = memo(({
     },
     {
       key: 'coins',
-      label: 'Coins Earned',
+      label: `Coins Earned (${timeframeLabel})`,
       value: coins === null ? '—' : coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins,
       trend: cTrend,
       sparkColor: tokens.color.semantic.warning,

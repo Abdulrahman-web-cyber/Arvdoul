@@ -36,6 +36,8 @@ export const ProfileQuickEditModal = memo(({
   const displayNameRef = useRef(null);
   const bioRef = useRef(null);
   const websiteRef = useRef(null);
+  const initialFieldRef = useRef(initialField);
+  initialFieldRef.current = initialField;
 
   // Keyed on `isOpen` and the target id — never the whole profile object. A
   // realtime snapshot replaces the object identity mid-edit, and an effect
@@ -49,15 +51,16 @@ export const ProfileQuickEditModal = memo(({
       setTagline(profile?.tagline || '');
       setWebsite(profile?.website || '');
       setErrors({});
+      const targetField = initialFieldRef.current;
       const timer = setTimeout(() => {
-        if (initialField === 'bio') bioRef.current?.focus();
-        else if (initialField === 'website') websiteRef.current?.focus();
-        else if (initialField === 'displayName') displayNameRef.current?.focus();
+        if (targetField === 'bio') bioRef.current?.focus();
+        else if (targetField === 'website') websiteRef.current?.focus();
+        else if (targetField === 'displayName') displayNameRef.current?.focus();
       }, 40);
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, profileId, initialField]);
+  }, [isOpen, profileId]);
 
   useEffect(() => {
     if (!isOpen) return;

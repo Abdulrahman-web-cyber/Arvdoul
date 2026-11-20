@@ -83,6 +83,8 @@ const initialState = {
   
   // Creator info
   level: null,
+  experience: null,
+  levelInfo: null,
   levelLoading: false,
   
   // Balance
@@ -115,6 +117,13 @@ const initialState = {
   loadSeq: {},
 };
 
+// Module-level deduplication so rapid double-mounts or duplicate callers share
+// a single network pass instead of doubling Firestore reads on low-RAM devices.
+let _inFlightProfileKey = null;
+let _inFlightProfilePromise = null;
+let _lastCompletedProfileKey = null;
+let _lastCompletedProfileAt = 0;
+
 export const useProfileStore = create(
   immer((set, get) => ({
     ...initialState,
@@ -140,6 +149,26 @@ export const useProfileStore = create(
     loadProfile: async (userId, currentUserId, options = {}) => {
       if (!userId) return;
 
+      const dedupeKey = `${userId}::${currentUserId || ''}::${options?.viewAs || 'default'}`;
+      if (!options?.force) {
+        if (_inFlightProfileKey === dedupeKey && _inFlightProfilePromise && get().loading) {
+          return _inFlightProfilePromise;
+        }
+        if (
+          _lastCompletedProfileKey === dedupeKey &&
+          Date.now() - _lastCompletedProfileAt < 2000 &&
+          get().profile &&
+          !get().error
+        ) {
+          return;
+        }
+      } else {
+        _inFlightProfileKey = null;
+        _inFlightProfilePromise = null;
+        _lastCompletedProfileKey = null;
+        _lastCompletedProfileAt = 0;
+      }
+
       const prevProfile = get().profile;
       const prevId = prevProfile?.id || prevProfile?.uid;
       const prevUsername = prevProfile?.username?.toLowerCase();
@@ -150,6 +179,10 @@ export const useProfileStore = create(
         prevId?.toLowerCase() !== normalizedTarget &&
         prevUsername !== normalizedTarget
       );
+      if (isSwitchingTarget) {
+        _lastCompletedProfileKey = null;
+        _lastCompletedProfileAt = 0;
+      }
 
       const requestId = get().requestSeq + 1;
       set((state) => {
@@ -165,9 +198,15 @@ export const useProfileStore = create(
           state.postsCursor = null;
           state.postsError = null;
           state.highlights = [];
+          state.stories = [];
+          state.savedPosts = [];
           state.followStatus = null;
+          state.experience = null;
+          state.levelInfo = null;
         }
       });
+
+      const runLoad = (async () => {
       
       try {
         const userService = getUserService();
@@ -285,13 +324,18 @@ export const useProfileStore = create(
           state.mutualFriends = mutualFriends;
           state.mutualFriendsResolved = mutualFriendsResolved;
           state.level = resolvedProfile.level ?? level ?? null;
+          const rawXp = resolvedProfile.experience ?? resolvedProfile.xp ?? null;
+          state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : state.experience;
           state.balance = balance;
           state.position = position;
         });
+
+        _lastCompletedProfileKey = dedupeKey;
+        _lastCompletedProfileAt = Date.now();
         
-        // Track profile view if not owner
-        if (!isOwner && currentUserId) {
-          analyticsService.trackProfileView(currentUserId, userId).catch((e) => {
+        // Track profile view once using resolvedUid (never raw @handle)
+        if (!isOwner && currentUserId && resolvedUid && !options?.viewAs) {
+          analyticsService.trackProfileView(currentUserId, resolvedUid).catch((e) => {
             console.warn('Profile view not tracked', e?.message);
           });
         }
@@ -338,7 +382,21 @@ export const useProfileStore = create(
           state.isOwner = isOwner;
           state.balance = null;
           state.level = null;
+          state.experience = null;
+          state.levelInfo = null;
         });
+      }
+      })();
+
+      _inFlightProfileKey = dedupeKey;
+      _inFlightProfilePromise = runLoad;
+      try {
+        return await runLoad;
+      } finally {
+        if (_inFlightProfilePromise === runLoad) {
+          _inFlightProfileKey = null;
+          _inFlightProfilePromise = null;
+        }
       }
     },
     
@@ -351,7 +409,7 @@ export const useProfileStore = create(
       set((state) => {
         state.refreshKey += 1;
       });
-      await get().loadProfile(userId, currentUserId);
+      await get().loadProfile(userId, currentUserId, { force: true });
     },
 
     /**
@@ -630,17 +688,25 @@ export const useProfileStore = create(
       
       try {
         const storyService = getStoryService();
-        const storiesFeed = await storyService.getStoriesFeed(userId, {});
-        const rawList = Array.isArray(storiesFeed)
-          ? storiesFeed
-          : Array.isArray(storiesFeed?.stories)
-            ? storiesFeed.stories
-            : Array.isArray(storiesFeed?.groups)
-              ? storiesFeed.groups.flatMap((g) => (Array.isArray(g?.stories) ? g.stories : [g]))
+        const storiesRes = typeof storyService.getUserStories === 'function'
+          ? await storyService.getUserStories(userId)
+          : await storyService.getStoriesFeed(userId, {});
+
+        const rawList = Array.isArray(storiesRes)
+          ? storiesRes
+          : Array.isArray(storiesRes?.stories)
+            ? storiesRes.stories
+            : Array.isArray(storiesRes?.groups)
+              ? storiesRes.groups.flatMap((g) => (Array.isArray(g?.stories) ? g.stories : [g]))
               : [];
 
         const userStories = rawList.filter(
-          (s) => s && (s.userId === userId || s.authorId === userId || s.uid === userId)
+          (s) => s && (
+            s.userId === userId ||
+            s.authorId === userId ||
+            s.uid === userId ||
+            (!s.userId && !s.authorId && !s.uid)
+          )
         );
 
         if (!get()._isLoadCurrent('stories', __seq)) return;
@@ -678,6 +744,8 @@ export const useProfileStore = create(
           // fabricated `|| 1` here would mis-state standing through
           // ProfileMyScreen's creator gate.
           state.level = levelData?.level ?? null;
+          state.experience = levelData?.experience ?? null;
+          state.levelInfo = levelData ?? null;
           state.levelLoading = false;
         });
       } catch (error) {
@@ -812,11 +880,10 @@ export const useProfileStore = create(
      */
     follow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
-      // Idempotent & concurrency-safe: ignore double-taps while loading,
-      // already following, or with a pending private follow request.
+      // Idempotent & concurrency-safe: ignore double-taps while loading or
+      // already following.
       if (get().followLoading) return;
       if (get().followStatus?.isFollowing === true) return;
-      if (get().followStatus?.requestStatus === 'pending') return;
 
       // Snapshot before the optimistic write so rollback restores the
       // real previous state instead of a hard-coded guess. Immer copy-on-writes
@@ -991,6 +1058,10 @@ export const useProfileStore = create(
      * Clear all profile state
      */
     clear: () => {
+      _inFlightProfileKey = null;
+      _inFlightProfilePromise = null;
+      _lastCompletedProfileKey = null;
+      _lastCompletedProfileAt = 0;
       set((state) => {
         const nextSeq = (state.requestSeq || 0) + 1;
         const nextLoads = {};
@@ -1007,6 +1078,10 @@ export const useProfileStore = create(
      * Reset store to initial state
      */
     reset: () => {
+      _inFlightProfileKey = null;
+      _inFlightProfilePromise = null;
+      _lastCompletedProfileKey = null;
+      _lastCompletedProfileAt = 0;
       set(() => ({ ...initialState }));
     },
   }))

@@ -1,7 +1,8 @@
 /**
- * Production-grade Unboxed Story Highlights Carousel.
+ * Production-grade Unboxed Story (Vibes) Highlights Carousel.
  * Renders cleanly directly on the profile canvas without an enclosing box wrapper,
- * and resets local state cleanly when switching target userIds.
+ * skips redundant Firestore queries when managedByParent=true, supports both
+ * cover photos and emoji highlights, and resets state cleanly on userId change.
  *
  * @component
  */
@@ -18,6 +19,7 @@ const ProfileHighlightsSection = memo(({
   highlights = [],
   userId,
   isOwner = false,
+  managedByParent = false,
   theme = 'light',
   onHighlightPress,
   onAddHighlight,
@@ -32,12 +34,17 @@ const ProfileHighlightsSection = memo(({
     const targetUserId = userId || (isOwner ? 'me' : null);
     setRealHighlights([]);
 
+    // When the parent profile screen owns highlight loading, skip a redundant
+    // Firestore fetch on low-RAM devices.
+    if (managedByParent) return () => { isMounted = false; };
+
     async function loadHighlights() {
       if (!targetUserId) return;
       try {
         const res = await storyService.getHighlights(targetUserId).catch(() => ({ highlights: [] }));
-        if (isMounted && res?.highlights && Array.isArray(res.highlights)) {
-          setRealHighlights(res.highlights);
+        const list = Array.isArray(res) ? res : (Array.isArray(res?.highlights) ? res.highlights : []);
+        if (isMounted) {
+          setRealHighlights(list);
         }
       } catch (err) {
         console.warn('Highlights load note:', err);
@@ -46,19 +53,22 @@ const ProfileHighlightsSection = memo(({
 
     loadHighlights();
     return () => { isMounted = false; };
-  }, [userId, isOwner]);
+  }, [userId, isOwner, managedByParent]);
 
   const items = React.useMemo(() => {
-    const source = realHighlights.length > 0 ? realHighlights : (Array.isArray(highlights) ? highlights : []);
-    const fallbackTitle = realHighlights.length > 0 ? 'Moment' : 'Highlight';
+    const source = !managedByParent && realHighlights.length > 0
+      ? realHighlights
+      : (Array.isArray(highlights) ? highlights : []);
+    const fallbackTitle = !managedByParent && realHighlights.length > 0 ? 'Moment' : 'Highlight';
     return source
-      .map(h => ({
+      .map((h) => ({
         id: h.id,
         title: h.title || fallbackTitle,
-        cover: h.cover || h.coverUrl || h.thumbnailUrl || h.mediaURL,
+        cover: h.cover || h.coverUrl || h.thumbnailUrl || h.mediaURL || null,
+        emoji: h.emoji || null,
       }))
-      .filter(item => Boolean(item.cover));
-  }, [realHighlights, highlights]);
+      .filter((item) => Boolean(item.cover || item.emoji || item.title));
+  }, [realHighlights, highlights, managedByParent]);
 
   if (!isOwner && items.length === 0) {
     return null;
@@ -67,8 +77,10 @@ const ProfileHighlightsSection = memo(({
   const handleItemClick = (item) => {
     if (onHighlightPress) {
       onHighlightPress(item);
+    } else if (item?.id) {
+      navigate(`/highlight/${item.id}`);
     } else {
-      navigate(`/stories?highlight=${item.id}`);
+      navigate('/profile/highlights');
     }
   };
 
@@ -84,7 +96,7 @@ const ProfileHighlightsSection = memo(({
     <section aria-label="Highlights" className="w-full py-1">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-arvdoul-purple" />
+          <Sparkles className="w-4 h-4 text-arvdoul-purple" aria-hidden="true" />
           <h2 className="font-display font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white">
             Highlights
           </h2>
@@ -93,10 +105,10 @@ const ProfileHighlightsSection = memo(({
         <button
           type="button"
           onClick={handleHeaderAction}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer"
+          className="min-h-[36px] inline-flex items-center gap-1 text-xs font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline transition-opacity cursor-pointer"
         >
           <span>{isOwner ? 'Manage' : 'View all'}</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
 
@@ -105,7 +117,7 @@ const ProfileHighlightsSection = memo(({
           <button
             type="button"
             onClick={onAddHighlight || (() => navigate('/profile/highlights?create=true'))}
-            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer focus:outline-none"
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-xl p-0.5"
             aria-label="Create new highlight"
           >
             <div className={cn(
@@ -114,7 +126,7 @@ const ProfileHighlightsSection = memo(({
                 ? "border-white/20 bg-white/[0.03] group-hover:border-arvdoul-purple text-slate-300 group-hover:text-purple-300"
                 : "border-slate-300 bg-white group-hover:border-arvdoul-purple text-slate-600 group-hover:text-arvdoul-purple"
             )}>
-              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" aria-hidden="true" />
             </div>
             <span className="text-[11px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-[70px]">
               New
@@ -127,7 +139,7 @@ const ProfileHighlightsSection = memo(({
             key={item.id}
             type="button"
             onClick={() => handleItemClick(item)}
-            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer focus:outline-none"
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-xl p-0.5"
             aria-label={`Highlight: ${item.title}`}
           >
             <div
@@ -135,15 +147,21 @@ const ProfileHighlightsSection = memo(({
               style={{ background: BRAND_GRADIENT }}
             >
               <div className={cn(
-                "w-full h-full rounded-full overflow-hidden ring-2",
+                "w-full h-full rounded-full overflow-hidden ring-2 flex items-center justify-center",
                 isDark ? "bg-[#080F2E] ring-[#03071B]" : "bg-slate-100 ring-[#F6F8FC]"
               )}>
-                <LazyImage
-                  src={item.cover}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  loading="lazy"
-                />
+                {item.cover ? (
+                  <LazyImage
+                    src={item.cover}
+                    alt={item.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="text-xl sm:text-2xl select-none" aria-hidden="true">
+                    {item.emoji || item.title.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
               </div>
             </div>
 

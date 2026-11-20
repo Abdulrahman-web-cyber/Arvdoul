@@ -3,14 +3,42 @@
 import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Heart, MessageCircle, Play, Pause, Film, Image as ImageIcon, Bookmark, Share2, Sparkles, Layers, MapPin, Globe, Calendar, Coins, ShieldCheck, Music, Tag, Sliders, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, Play, Pause, Film, Image as ImageIcon, Bookmark, Share2, Sparkles, Layers, MapPin, Globe, Calendar, Coins, ShieldCheck, Music, Tag, Sliders, Loader2, BarChart2, Link2, Repeat2 } from "lucide-react";
 import { cn } from '../../lib/utils';
 import { getPerksForLevel } from '../../services/levelSystemService';
-import { pickDisplayName, resolveAvatarUrl } from '../../services/profileReadModel.js';
+import { pickDisplayName, pickHandle, resolveAvatarUrl } from '../../services/profileReadModel.js';
 import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import ProfileCitizenshipCard from './ProfileCitizenshipCard';
 import { LazyImage } from '../../components/Shared/LazyImage';
+
+function resolvePrimaryMediaUrl(item) {
+  if (!item) return null;
+  if (Array.isArray(item.media) && item.media.length > 0) {
+    const first = item.media[0];
+    if (typeof first === 'string' && first) return first;
+    if (first && typeof first === 'object') {
+      const m = first.url || first.mediaURL || first.mediaUrl || first.thumbnailUrl || first.src;
+      if (m) return m;
+    }
+  }
+  return (
+    item.mediaURL ||
+    item.thumbnailUrl ||
+    item.mediaUrl ||
+    item.imageUrl ||
+    item.photoURL ||
+    item.coverImage ||
+    item.image ||
+    null
+  );
+}
+
+function getMediaCount(item) {
+  if (!item) return 0;
+  if (Array.isArray(item.media) && item.media.length > 0) return item.media.length;
+  return resolvePrimaryMediaUrl(item) ? 1 : 0;
+}
 
 function formatSafeDate(raw, options) {
   if (!raw) return null;
@@ -29,6 +57,7 @@ function formatSafeDate(raw, options) {
 const ProfileFeedGrid = memo(({
   posts = [],
   savedPosts = [],
+  stories = [],
   activeTab = 'posts',
   viewMode = 'grid',
   loading = false,
@@ -401,24 +430,27 @@ const ProfileFeedGrid = memo(({
   if (activeTab === 'saved') {
     displayItems = savedPosts;
   } else if (activeTab === 'reels') {
-    displayItems = displayItems.filter(p => 
-      p.type === 'reel' || 
-      p.type === 'spark' || 
-      p.isReel || 
+    displayItems = displayItems.filter(p =>
+      p.type === 'reel' ||
+      p.type === 'spark' ||
+      p.isReel ||
       p.isSpark ||
       (p.type === 'video' && (p.aspectRatio === '9:16' || p.isVertical))
     );
   } else if (activeTab === 'videos') {
-    displayItems = displayItems.filter(p => 
-      p.type === 'video' || 
-      p.type === 'reel' || 
-      Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video')
+    displayItems = displayItems.filter(p =>
+      p.type === 'video' ||
+      p.type === 'reel' ||
+      p.type === 'spark' ||
+      Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video') ||
+      (Array.isArray(p.media) && p.media.some((m) => m?.type === 'video'))
     );
   } else if (activeTab === 'photos') {
     displayItems = displayItems.filter(p => {
       const isVideoOrAudio =
         p.type === 'video' ||
         p.type === 'reel' ||
+        p.type === 'spark' ||
         p.type === 'audio' ||
         p.type === 'track' ||
         p.type === 'music' ||
@@ -427,34 +459,43 @@ const ProfileFeedGrid = memo(({
       return (
         p.type === 'image' ||
         p.type === 'photo' ||
-        Boolean(p.mediaURL || p.imageUrl || p.photoURL || p.coverImage)
+        p.type === 'gallery' ||
+        Boolean(resolvePrimaryMediaUrl(p))
       );
     });
   } else if (activeTab === 'stories') {
-    displayItems = displayItems.filter(p => 
-      p.type === 'story' || 
-      p.isStory || 
+    const merged = [...(stories || []), ...displayItems.filter(p =>
+      p.type === 'story' ||
+      p.type === 'vibe' ||
+      p.isStory ||
       p.isVibe
-    );
+    )];
+    const seen = new Set();
+    displayItems = merged.filter((item) => {
+      if (!item?.id) return true;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
   } else if (activeTab === 'audio') {
-    displayItems = displayItems.filter(p => 
-      p.type === 'audio' || 
-      p.type === 'track' || 
-      p.type === 'music' || 
+    displayItems = displayItems.filter(p =>
+      p.type === 'audio' ||
+      p.type === 'track' ||
+      p.type === 'music' ||
       Boolean(p.audioURL || p.audioUrl || p.waveform || p.bpm || p.soundUrl || p.genre)
     );
   } else if (activeTab === 'tagged') {
     const targetUid = profile?.uid || profile?.id;
     const targetUsername = (profile?.username || '').toLowerCase();
-    displayItems = displayItems.filter(p => 
+    displayItems = displayItems.filter(p =>
       (Array.isArray(p.taggedUsers) && (p.taggedUsers.includes(targetUid) || p.taggedUsers.includes(targetUsername))) ||
       (Array.isArray(p.tags) && p.tags.includes(targetUsername)) ||
       (p.content && targetUsername && p.content.toLowerCase().includes(`@${targetUsername}`)) ||
       p.type === 'tagged'
     );
   } else if (activeTab === 'posts') {
-    // Standard posts: exclude dedicated audio tracks to keep categories sharp
-    displayItems = displayItems.filter(p => p.type !== 'audio' && p.type !== 'track');
+    // Standard posts: exclude dedicated audio tracks and expired vibes to keep categories sharp
+    displayItems = displayItems.filter(p => p.type !== 'audio' && p.type !== 'track' && p.type !== 'story' && p.type !== 'vibe');
   }
 
   // Loading skeleton before empty state so initial load never flashes "No Posts Yet"
@@ -511,9 +552,9 @@ const ProfileFeedGrid = memo(({
       },
       stories: {
         icon: Sparkles,
-        title: 'No Stories Yet',
-        desc: 'Moments and daily vibe stories will appear here.',
-        cta: isOwner ? 'Post Story' : null,
+        title: 'No Vibes Yet',
+        desc: 'Moments and daily Arvdoul Vibes will appear here.',
+        cta: isOwner ? 'Post a Vibe' : null,
         action: () => navigate('/create-story'),
       },
       reels: {
@@ -764,11 +805,26 @@ const ProfileFeedGrid = memo(({
           : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"
       )}>
         {displayItems.map((item, idx) => {
-          const isVid = item.type === 'video' || item.type === 'reel' || Boolean(item.duration);
-          const isReel = isReelsTab || item.type === 'reel';
-          const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
+          const isVibe = activeTab === 'stories' || item.type === 'story' || item.type === 'vibe' || Boolean(item.isStory || item.isVibe);
+          const isVid = item.type === 'video' || item.type === 'reel' || item.type === 'spark' || Boolean(item.duration || item.videoURL || item.videoUrl);
+          const isReel = isReelsTab || item.type === 'reel' || item.type === 'spark';
+          const isPoll = Boolean(item.poll?.options || item.type === 'poll');
+          const isEvent = Boolean(item.eventDate || item.type === 'event');
+          const isRepost = Boolean(item.repostedPost || item.quotedPost);
+          const mediaUrl = resolvePrimaryMediaUrl(item);
+          const mediaCount = getMediaCount(item);
           const formattedDate = formatSafeDate(item.createdAt, { month: 'short', day: 'numeric' });
-          const openPost = () => (onPostClick ? onPostClick(item) : navigate(isReel ? `/reels?reelId=${item.id}` : `/post/${item.id}`));
+          const openPost = () => {
+            if (isVibe) {
+              navigate(item.id ? `/stories?storyId=${item.id}` : '/stories');
+              return;
+            }
+            if (onPostClick) {
+              onPostClick(item);
+              return;
+            }
+            navigate(isReel ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+          };
 
           return (
             <article
@@ -776,13 +832,13 @@ const ProfileFeedGrid = memo(({
               className={cn(
                 "group relative rounded-xl sm:rounded-2xl overflow-hidden border transition-transform hover:scale-[1.015]",
                 isDark ? "border-white/[0.08] bg-[#080F2E]" : "border-slate-200/80 bg-white",
-                isReel ? "aspect-[9/16]" : "aspect-square"
+                (isReel || isVibe) ? "aspect-[9/16]" : "aspect-square"
               )}
             >
               <button
                 type="button"
                 onClick={openPost}
-                aria-label={item.title || item.caption || item.text || 'Open post'}
+                aria-label={item.title || item.caption || item.text || (isVibe ? 'Open Vibe' : 'Open post')}
                 className="w-full h-full block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
               >
                 {mediaUrl ? (
@@ -800,9 +856,26 @@ const ProfileFeedGrid = memo(({
                       ? "bg-[#080F2E] text-slate-100"
                       : "bg-white text-slate-800"
                   )}>
-                    <span className="text-xs font-medium line-clamp-5 leading-relaxed">
-                      {item.content || item.caption || item.text || item.title || 'Post'}
-                    </span>
+                    <div className="space-y-1.5 min-w-0">
+                      {isPoll && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-purple-400">
+                          <BarChart2 className="w-3 h-3" /> Poll
+                        </span>
+                      )}
+                      {isEvent && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-500">
+                          <Calendar className="w-3 h-3" /> Event
+                        </span>
+                      )}
+                      {isRepost && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-cyan-500">
+                          <Repeat2 className="w-3 h-3" /> Repost
+                        </span>
+                      )}
+                      <span className="text-xs font-medium line-clamp-5 leading-relaxed block">
+                        {item.content || item.caption || item.text || item.title || (isVibe ? 'Vibe' : 'Post')}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
                       <div className="flex items-center gap-2.5 sm:hidden tabular-nums">
                         <span className="inline-flex items-center gap-1">
@@ -814,7 +887,7 @@ const ProfileFeedGrid = memo(({
                           {commentCount(item)}
                         </span>
                       </div>
-                      <span className="hidden sm:inline capitalize">{item.type || 'post'}</span>
+                      <span className="hidden sm:inline capitalize">{isVibe ? 'Vibe' : (item.type || 'post')}</span>
                       <span className="tabular-nums">{formattedDate || ''}</span>
                     </div>
                   </div>
@@ -827,8 +900,22 @@ const ProfileFeedGrid = memo(({
                   </div>
                 )}
 
+                {!isVid && mediaCount > 1 && (
+                  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold pointer-events-none">
+                    <Layers className="w-3 h-3" />
+                    <span>{mediaCount}</span>
+                  </div>
+                )}
+
+                {isVibe && (
+                  <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/65 backdrop-blur-md text-purple-200 flex items-center gap-1 text-[10px] font-bold pointer-events-none">
+                    <Sparkles className="w-3 h-3" />
+                    <span>Vibe</span>
+                  </div>
+                )}
+
                 {/* Tag indicator on tagged tab */}
-                {activeTab === 'tagged' && (
+                {activeTab === 'tagged' && !isVibe && (
                   <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-indigo-600/80 backdrop-blur-md text-white flex items-center gap-1 text-[10px] font-bold pointer-events-none">
                     <Tag className="w-3 h-3" />
                     <span>Tagged</span>
@@ -888,10 +975,21 @@ const ProfileFeedGrid = memo(({
       <>
       <div className="columns-1 sm:columns-2 lg:columns-2 xl:columns-3 gap-4 space-y-4 w-full">
         {displayItems.map((item, idx) => {
-          const isVid = item.type === 'video' || item.type === 'reel';
-          const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
+          const isVibe = activeTab === 'stories' || item.type === 'story' || item.type === 'vibe' || Boolean(item.isStory || item.isVibe);
+          const isVid = item.type === 'video' || item.type === 'reel' || item.type === 'spark' || Boolean(item.videoURL || item.videoUrl);
+          const mediaUrl = resolvePrimaryMediaUrl(item);
           const isLiked = Boolean(likedPosts[item.id]);
-          const openPost = () => (onPostClick ? onPostClick(item) : navigate(item.type === 'reel' ? `/reels?reelId=${item.id}` : `/post/${item.id}`));
+          const openPost = () => {
+            if (isVibe) {
+              navigate(item.id ? `/stories?storyId=${item.id}` : '/stories');
+              return;
+            }
+            if (onPostClick) {
+              onPostClick(item);
+              return;
+            }
+            navigate(item.type === 'reel' || item.type === 'spark' ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+          };
 
           return (
             <article
@@ -1016,14 +1114,30 @@ const ProfileFeedGrid = memo(({
     <>
     <div className="space-y-5 w-full">
       {displayItems.map((item, idx) => {
-        const isVid = item.type === 'video' || item.type === 'reel';
-        const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
+        const isVibe = activeTab === 'stories' || item.type === 'story' || item.type === 'vibe' || Boolean(item.isStory || item.isVibe);
+        const isVid = item.type === 'video' || item.type === 'reel' || item.type === 'spark' || Boolean(item.videoURL || item.videoUrl);
+        const mediaUrl = resolvePrimaryMediaUrl(item);
+        const mediaCount = getMediaCount(item);
         const isLiked = Boolean(likedPosts[item.id]);
         const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: null })
           || `user ${String(profile?.id || profile?.uid || item.authorId || '').slice(0, 6)}`;
+        const authorHandle = pickHandle([profile?.username, item.authorHandle, item.authorUsername]);
         const authorAvatar = resolveAvatarUrl(profile?.photoURL || item.authorAvatar, authorName, profile?.id || profile?.uid || item.authorId);
         const formattedFeedDate = formatSafeDate(item.createdAt, { month: 'short', day: 'numeric' });
-        const openPost = () => (onPostClick ? onPostClick(item) : navigate(`/post/${item.id}`));
+        const linkTarget = sanitizeProfileUrl(item.linkUrl || item.externalUrl);
+        const pollOptions = Array.isArray(item.poll?.options) ? item.poll.options : (Array.isArray(item.options) ? item.options : null);
+        const quote = item.repostedPost || item.quotedPost || null;
+        const openPost = () => {
+          if (isVibe) {
+            navigate(item.id ? `/stories?storyId=${item.id}` : '/stories');
+            return;
+          }
+          if (onPostClick) {
+            onPostClick(item);
+            return;
+          }
+          navigate(item.type === 'reel' || item.type === 'spark' ? `/reels?reelId=${item.id}` : `/post/${item.id}`);
+        };
 
         return (
           <article
@@ -1056,11 +1170,13 @@ const ProfileFeedGrid = memo(({
                       {authorName}
                     </h4>
                     <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <span>{handle}</span>
-                      {formattedFeedDate && (
+                      {authorHandle && <span>@{authorHandle}</span>}
+                      {authorHandle && formattedFeedDate && <span>·</span>}
+                      {formattedFeedDate && <span>{formattedFeedDate}</span>}
+                      {isVibe && (
                         <>
                           <span>·</span>
-                          <span>{formattedFeedDate}</span>
+                          <span className="text-purple-400 font-semibold">Vibe</span>
                         </>
                       )}
                     </div>
@@ -1083,6 +1199,65 @@ const ProfileFeedGrid = memo(({
                 </div>
               )}
 
+              {/* Rich Post Metadata (Polls, Events, External Links, Reposts) */}
+              {pollOptions && pollOptions.length > 0 && (
+                <div className="px-4 pb-3 space-y-1.5">
+                  {pollOptions.slice(0, 4).map((opt, optIdx) => (
+                    <div
+                      key={opt?.id || optIdx}
+                      className={cn(
+                        "px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between",
+                        isDark ? "bg-white/[0.04] border-white/10 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"
+                      )}
+                    >
+                      <span className="truncate">{typeof opt === 'string' ? opt : (opt?.text || opt?.label || `Option ${optIdx + 1}`)}</span>
+                      {typeof opt?.votes === 'number' && (
+                        <span className="tabular-nums text-[11px] opacity-70 ml-2">{opt.votes}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {item.eventDate && (
+                <div className="px-4 pb-3">
+                  <div className={cn(
+                    "px-3 py-2 rounded-xl border text-xs font-semibold inline-flex items-center gap-2",
+                    isDark ? "bg-emerald-500/10 border-emerald-400/20 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  )}>
+                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                    <span>{item.eventTitle || 'Scheduled Event'} · {formatSafeDate(item.eventDate, { month: 'short', day: 'numeric', year: 'numeric' }) || String(item.eventDate)}</span>
+                  </div>
+                </div>
+              )}
+
+              {linkTarget && (
+                <div className="px-4 pb-3">
+                  <div className={cn(
+                    "px-3 py-2 rounded-xl border text-xs flex items-center gap-2 truncate",
+                    isDark ? "bg-white/[0.04] border-white/10 text-indigo-300" : "bg-slate-50 border-slate-200 text-indigo-600"
+                  )}>
+                    <Link2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{linkTarget}</span>
+                  </div>
+                </div>
+              )}
+
+              {quote && (
+                <div className="px-4 pb-3">
+                  <div className={cn(
+                    "p-3 rounded-xl border text-xs space-y-1",
+                    isDark ? "bg-white/[0.03] border-white/10 text-slate-300" : "bg-slate-50 border-slate-200 text-slate-600"
+                  )}>
+                    <div className="flex items-center gap-1.5 font-semibold text-[11px] text-cyan-500">
+                      <Repeat2 className="w-3.5 h-3.5" />
+                      <span>{quote.authorName || 'Quoted Creation'}</span>
+                    </div>
+                    <p className="line-clamp-2">{quote.content || quote.caption || quote.text || 'Shared post'}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Media Body */}
               {mediaUrl && (
                 <div className="relative w-full bg-black max-h-[520px] overflow-hidden flex items-center justify-center">
@@ -1093,6 +1268,12 @@ const ProfileFeedGrid = memo(({
                     loading="lazy"
                     referrerPolicy="no-referrer"
                   />
+                  {!isVid && mediaCount > 1 && (
+                    <div className="absolute top-3 right-3 px-2 py-0.5 rounded-lg bg-black/65 text-white text-xs font-bold flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>1 / {mediaCount}</span>
+                    </div>
+                  )}
                   {isVid && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors">
                       <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-lg">

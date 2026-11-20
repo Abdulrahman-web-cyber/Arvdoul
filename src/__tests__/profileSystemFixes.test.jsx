@@ -336,10 +336,10 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
     fireEvent.change(taglineInput, { target: { value: 'Building Arvdoul' } });
     fireEvent.change(screen.getByLabelText('Education'), { target: { value: 'B.Sc. Systems' } });
     fireEvent.change(screen.getByLabelText('Gender Identity'), { target: { value: 'Non-binary' } });
-    fireEvent.change(screen.getByLabelText('Location Privacy'), { target: { value: 'connections' } });
-    fireEvent.change(screen.getByLabelText('Custom Links visibility'), { target: { value: 'followers' } });
-    fireEvent.change(screen.getByLabelText('Civic Titles visibility'), { target: { value: 'connections' } });
-    fireEvent.change(screen.getByLabelText('Communities & Collections visibility'), { target: { value: 'only_me' } });
+    fireEvent.change(screen.getByLabelText('Location Privacy'), { target: { value: 'country_only' } });
+    fireEvent.change(screen.getByLabelText('Custom Links visibility'), { target: { value: 'FOLLOWERS' } });
+    fireEvent.change(screen.getByLabelText('Civic Titles visibility'), { target: { value: 'CONNECTIONS' } });
+    fireEvent.change(screen.getByLabelText('Communities & Collections visibility'), { target: { value: 'ONLY_ME' } });
 
     // Triggering Cancel while dirty opens unsaved-changes confirmation dialog
     fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
@@ -354,12 +354,12 @@ describe('AboutScreen & EditProfileScreen regression fixes', () => {
           tagline: 'Building Arvdoul',
           education: 'B.Sc. Systems',
           gender: 'Non-binary',
-          locationPrivacy: 'connections',
+          locationPrivacy: 'country_only',
           privacy: expect.objectContaining({
-            links: 'followers',
-            titles: 'connections',
-            communities: 'only_me',
-            collections: 'only_me',
+            links: 'FOLLOWERS',
+            titles: 'CONNECTIONS',
+            communities: 'ONLY_ME',
+            collections: 'ONLY_ME',
           }),
         })
       );
