@@ -1,9 +1,18 @@
 /**
- * Production-grade owner view of the authenticated user's profile.
- * Rebuilt to perfectly match the uploaded design specifications across Light and Dark themes.
- * Fully integrated with real system data, server-authoritative level & progression,
- * real coin ledger balance, real analytics, highlights, and content management.
- * 
+ * Owner view of the authenticated user's profile.
+ *
+ * Composition (top to bottom), each section delegated to an existing component:
+ *  1. Identity            - ProfileHeroSection
+ *  2. Social presence     - ProfileMetricsGrid
+ *  3. Digital standing    - ProfileProgression + ProfileHighlightsSection
+ *  4. Creator intelligence- ProfileCreatorDashboard (owner perspective only)
+ *  5. Content hub         - ProfileTabsBar, ProfilePinnedPosts, ProfileFeedGrid
+ *  6. Secondary interfaces- modals, options menu, view-as banner
+ *
+ * The AuthContext UID is the only ownership authority. App-store user data is
+ * used for supplementary display fields only when it carries the same UID.
+ * Owner-only actions are unavailable while previewing another perspective.
+ *
  * @component
  */
 import { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from "react";
@@ -18,9 +27,7 @@ import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import ProfileViewAsBanner from '../../components/profile/ProfileViewAsBanner';
 import { shareProfile } from '../../utils/shareUtils';
-import { getStoredUid } from '../../utils/security';
 import {
-  deriveHandle,
   isPlaceholderHandle,
   deriveProfileIdentity,
   projectProfileForViewer,
@@ -49,10 +56,38 @@ import ProfileQuickEditModal from '../../components/profile/ProfileQuickEditModa
 import ProfileOptionsMenu from '../../components/profile/ProfileOptionsMenu';
 const AvatarUploadModal = lazy(() => import('../../components/profile/AvatarUploadModal'));
 
+const VIEW_MODE_STORAGE_KEY = 'arvdoul_profile_view_mode';
+
+const PERSPECTIVE_LABELS = {
+  public: 'Public',
+  follower: 'Follower',
+  connection: 'Connection',
+};
+
+/**
+ * Glass surfaces. Blur is applied only to these few top-level surfaces
+ * (error banner, private-state card, sticky tabs) to stay light on low-end devices.
+ */
+const GLASS_DARK =
+  'bg-[#0B1233]/70 border-white/[0.09] backdrop-blur-xl shadow-[0_8px_32px_rgba(3,7,27,0.45)]';
+const GLASS_LIGHT =
+  'bg-white/75 border-slate-200/80 backdrop-blur-xl shadow-[0_8px_30px_rgba(15,23,42,0.07)]';
+
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4431F7] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent';
+
+/**
+ * @param {unknown} value
+ * @returns {string | null} The value if it is a non-empty string.
+ */
+const asNonEmptyString = (value) =>
+  typeof value === 'string' && value.length > 0 ? value : null;
+
 export default function ProfileMyScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  
+  const isDark = theme === 'dark';
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -64,10 +99,13 @@ export default function ProfileMyScreen() {
   const [showPerspectiveModal, setShowPerspectiveModal] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [viewAs, setViewAs] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
+  const [requestedUid, setRequestedUid] = useState(null);
+
+  const isOwnerView = viewAs === 'owner';
 
   const [viewMode, setViewMode] = useState(() => {
     try {
-      return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
+      return localStorage.getItem(VIEW_MODE_STORAGE_KEY) || 'grid';
     } catch {
       return 'grid';
     }
@@ -76,27 +114,38 @@ export default function ProfileMyScreen() {
   const handleViewModeChange = useCallback((mode) => {
     setViewMode(mode);
     try {
-      localStorage.setItem('arvdoul_profile_view_mode', mode);
+      localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
     } catch {
       /* view-mode persistence is a preference, not state */
     }
   }, []);
 
-  // Authenticated user identity
+  // --- Authenticated identity -------------------------------------------
+  // AuthContext is the sole ownership authority. A locally stored UID is never
+  // used, and app-store data is only supplementary and only when its UID
+  // equals the authenticated UID.
   const { user: authContextUser } = useAuth();
-  const authStoreUser = useAppStore((state) => state.currentUser);
-  const currentUser = authContextUser || authStoreUser;
-  const currentUserId = authContextUser?.uid || authStoreUser?.uid || getStoredUid();
+  const appStoreUser = useAppStore((state) => state.currentUser);
+  const currentUserId = asNonEmptyString(authContextUser?.uid);
 
-  const handleViewAsChange = useCallback((mode) => {
-    setViewAs(mode);
-    if (!currentUserId) return;
-    useProfileStore.getState().loadProfile(currentUserId, currentUserId, {
-      viewAs: mode === 'owner' ? null : mode
-    });
-  }, [currentUserId]);
+  const authDisplayName = authContextUser?.displayName ?? null;
+  const authEmail = authContextUser?.email ?? null;
+  const authPhotoURL = authContextUser?.photoURL ?? null;
 
-  // Profile store - reactive state selectors
+  const currentUser = useMemo(() => {
+    if (!currentUserId) return null;
+    const supplement =
+      appStoreUser && appStoreUser.uid === currentUserId ? appStoreUser : {};
+    return {
+      ...supplement,
+      uid: currentUserId,
+      displayName: authDisplayName ?? supplement.displayName,
+      email: authEmail ?? supplement.email,
+      photoURL: authPhotoURL ?? supplement.photoURL,
+    };
+  }, [currentUserId, appStoreUser, authDisplayName, authEmail, authPhotoURL]);
+
+  // --- Store selectors --------------------------------------------------
   const profile = useProfileStore((state) => state.profile);
   const loading = useProfileStore((state) => state.loading);
   const error = useProfileStore((state) => state.error);
@@ -110,97 +159,150 @@ export default function ProfileMyScreen() {
   const level = useProfileStore((state) => state.level);
   const balance = useProfileStore((state) => state.balance);
 
-  // Analytics store - reactive state selectors
   const analytics = useAnalyticsStore((state) => state.analytics);
   const timeframe = useAnalyticsStore((state) => state.timeframe);
   const ranking = useAnalyticsStore((state) => state.ranking);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
-  // Auto-generate and ensure a unique username via userService if loaded user document has none
+  // A profile left in the store by a previous account must never be shown.
+  const profileOwnerId = profile?.uid ?? profile?.id ?? null;
+  const isProfileStale = Boolean(profile && profileOwnerId && profileOwnerId !== currentUserId);
+  const ownedProfile = profile && !isProfileStale ? profile : null;
+  const profileUsername = ownedProfile?.username;
+  const profileDisplayName = ownedProfile?.displayName;
+  const hasOwnedProfile = Boolean(ownedProfile);
+
+  // --- Modal helpers (owner-only surfaces) ------------------------------
+  const closeOwnerModals = useCallback(() => {
+    setShowAvatarModal(false);
+    setShowLocationModal(false);
+    setShowVerificationModal(false);
+    setShowQuickEditModal(false);
+    setShowOptionsMenu(false);
+  }, []);
+
+  const handleViewAsChange = useCallback((mode) => {
+    setViewAs(mode);
+    if (mode !== 'owner') closeOwnerModals();
+    if (!currentUserId) return;
+    useProfileStore.getState().loadProfile(currentUserId, currentUserId, {
+      viewAs: mode === 'owner' ? null : mode,
+    });
+  }, [currentUserId, closeOwnerModals]);
+
+  // Account switch: drop any preview perspective and owner modals.
+  const previousUidRef = useRef(currentUserId);
   useEffect(() => {
-    if (!currentUserId || loading || !profile) return;
-    let cancelled = false;
+    if (previousUidRef.current === currentUserId) return;
+    previousUidRef.current = currentUserId;
+    setViewAs('owner');
+    closeOwnerModals();
+  }, [currentUserId, closeOwnerModals]);
+
+  const reloadOwnerProfile = useCallback(() => {
+    if (!currentUserId) return;
+    useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+  }, [currentUserId]);
+
+  // Log load failures; the UI shows a sanitized message only.
+  useEffect(() => {
+    if (error) console.error('Profile load error:', error);
+  }, [error]);
+
+  // --- Username auto-generation (existing userService contract) ---------
+  // Attempted at most once per account to avoid duplicate side effects.
+  const usernameAttemptRef = useRef(null);
+  const latestUidRef = useRef(currentUserId);
+  useEffect(() => {
+    latestUidRef.current = currentUserId;
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!isOwnerView || !currentUserId || loading || !hasOwnedProfile) return;
+    if (profileUsername && !isPlaceholderHandle(profileUsername)) return;
+    if (usernameAttemptRef.current === currentUserId) return;
+    usernameAttemptRef.current = currentUserId;
+    const uid = currentUserId;
+
     const ensureUniqueUser = async () => {
       try {
-        const storedHandle = profile?.username;
-        if (storedHandle && !isPlaceholderHandle(storedHandle)) return;
         const userServiceModule = await import('../../services/userService.js');
         const userService = userServiceModule.getUserService();
-        const base = currentUser?.displayName || profile?.displayName || 'citizen';
+        const base = authDisplayName || profileDisplayName || 'citizen';
         const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'citizen';
-        const generated = await userService.generateUniqueUsername(cleanBase, currentUserId);
-        if (!cancelled && generated) {
-          await userService.updateUserProfile(currentUserId, { username: generated });
-          useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+        const generated = await userService.generateUniqueUsername(cleanBase, uid);
+        if (!generated) return;
+        await userService.updateUserProfile(uid, { username: generated });
+        if (latestUidRef.current === uid) {
+          useProfileStore.getState().loadProfile(uid, uid);
         }
       } catch (err) {
         console.warn('Auto username generation note:', err);
       }
     };
     ensureUniqueUser();
-    return () => { cancelled = true; };
-  }, [currentUserId, loading, profile, currentUser?.displayName]);
+  }, [isOwnerView, currentUserId, loading, hasOwnedProfile, profileUsername, profileDisplayName, authDisplayName]);
 
-  // Server-authoritative composite profile. The identity/count derivation is
-  // the shared `deriveProfileIdentity` (profileReadModel) so the owner screen
-  // cannot drift from the public/preview screens; the owner-only extras
-  // (viewer fallbacks for bio/location/website, coins) are applied here.
+  // --- Derived profile --------------------------------------------------
+  // Identity/count derivation is the shared read model. Email addresses are
+  // never used as a handle or display name. The coin balance comes first from
+  // the economy-backed store value; profile metadata is only a fallback, and
+  // the loaded (possibly partial) posts page is never used as a lifetime count.
   const effectiveProfile = useMemo(() => {
-    const base = profile && typeof profile === 'object' ? profile : {};
+    const base = ownedProfile && typeof ownedProfile === 'object' ? ownedProfile : {};
+    const viewer = currentUser || {};
     const identity = deriveProfileIdentity(base, {
-      viewer: currentUser || {},
-      handleCandidates: [base.username, currentUser?.username],
-      handleFallbacks: [currentUser?.displayName, base.displayName, currentUser?.email, base.email],
+      viewer,
+      handleCandidates: [base.username, viewer.username],
+      handleFallbacks: [viewer.displayName, base.displayName],
       handleFallback: 'citizen',
-      displayCandidates: [currentUser?.displayName, currentUser?.name, base.displayName, base.name],
-      displayFallback: deriveHandle(currentUser?.email) || (currentUserId ? `user ${String(currentUserId).slice(0, 6)}` : '—'),
-      followerCandidates: [base.followerCount, base.followersCount, currentUser?.followerCount],
-      followingCandidates: [base.followingCount, currentUser?.followingCount],
-      postCandidates: [base.postCount, posts?.length],
-      levelCandidates: [level, base.level, currentUser?.level],
-      coinCandidates: [base.coins, base.coinBalance, balance, currentUser?.coins],
+      displayCandidates: [viewer.displayName, viewer.name, base.displayName, base.name],
+      displayFallback: currentUserId ? `user ${String(currentUserId).slice(0, 6)}` : '—',
+      followerCandidates: [base.followerCount, base.followersCount, viewer.followerCount],
+      followingCandidates: [base.followingCount, viewer.followingCount],
+      postCandidates: [base.postCount],
+      levelCandidates: [level, base.level, viewer.level],
+      coinCandidates: [
+        Number.isFinite(balance) ? balance : undefined,
+        base.coins,
+        base.coinBalance,
+        viewer.coins,
+      ],
       userId: currentUserId,
     });
-    const safeBio = (typeof base.bio === 'string' ? base.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
-    const safeLocation = typeof base.location === 'string' ? base.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
-    const safeWebsite = typeof base.website === 'string' ? base.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
+    const pickString = (a, b) => (typeof a === 'string' ? a : (typeof b === 'string' ? b : ''));
     return {
       ...base,
       ...identity,
-      bio: safeBio,
-      location: safeLocation,
-      website: safeWebsite,
+      bio: pickString(base.bio, viewer.bio).trim(),
+      location: pickString(base.location, viewer.location),
+      website: pickString(base.website, viewer.website),
     };
-  }, [profile, currentUser, currentUserId, posts?.length, balance, level]);
+  }, [ownedProfile, currentUser, currentUserId, balance, level]);
 
-  // Centrally resolved Action Capabilities adhering strictly to active viewAs perspective
-  const capabilities = useMemo(() => {
-    const isSimulatedOwner = viewAs === 'owner';
-    return resolveCapabilities({
-      viewer: isSimulatedOwner ? currentUser : { uid: `preview_${viewAs}_visitor` },
-      target: effectiveProfile,
-      relationship: {
-        isOwner: isSimulatedOwner,
-        isFollowing: viewAs === 'follower' || viewAs === 'connection',
-        isFollower: viewAs === 'follower' || viewAs === 'connection',
-        isMutualFriend: viewAs === 'connection',
-        isBlocked: false,
-      },
-      viewAs: isSimulatedOwner ? null : viewAs
-    });
-  }, [currentUser, effectiveProfile, viewAs]);
+  // Capabilities resolved by the existing engine for the active perspective.
+  const capabilities = useMemo(() => resolveCapabilities({
+    viewer: isOwnerView ? currentUser : { uid: `preview_${viewAs}_visitor` },
+    target: effectiveProfile,
+    relationship: {
+      isOwner: isOwnerView,
+      isFollowing: viewAs === 'follower' || viewAs === 'connection',
+      isFollower: viewAs === 'follower' || viewAs === 'connection',
+      isMutualFriend: viewAs === 'connection',
+      isBlocked: false,
+    },
+    viewAs: isOwnerView ? null : viewAs,
+  }), [currentUser, effectiveProfile, isOwnerView, viewAs]);
 
-  // Projected profile adhering strictly to active viewer perspective and privacy boundaries
   const displayedProfile = useMemo(() => {
-    if (viewAs === 'owner') return effectiveProfile;
+    if (isOwnerView) return effectiveProfile;
     return projectProfileForViewer(effectiveProfile, capabilities);
-  }, [effectiveProfile, capabilities, viewAs]);
+  }, [effectiveProfile, capabilities, isOwnerView]);
 
-  // Deep links such as /profile?tab=posts (QuickAccessPanel, share links) name
-  // the tab to open; nothing read the param, so every such link landed on the
-  // default tab. Applied once per mount so it cannot override later clicks.
+  // --- Deep-linked / default tab (applied once per mount) ---------------
   const [searchParams] = useSearchParams();
   const appliedDefaultTabRef = useRef(false);
+  const preferredTab = displayedProfile?.defaultTab;
   useEffect(() => {
     if (appliedDefaultTabRef.current) return;
     const requestedTab = searchParams.get('tab');
@@ -209,16 +311,13 @@ export default function ProfileMyScreen() {
       appliedDefaultTabRef.current = true;
       return;
     }
-    // Otherwise open on the owner's chosen default tab (the Edit Profile
-    // "Default Starting Tab").
-    const preferred = displayedProfile?.defaultTab;
-    if (preferred && PROFILE_TABS.includes(preferred)) {
-      setActiveTab(preferred);
+    if (preferredTab && PROFILE_TABS.includes(preferredTab)) {
+      setActiveTab(preferredTab);
       appliedDefaultTabRef.current = true;
     }
-  }, [searchParams, displayedProfile?.defaultTab]);
+  }, [searchParams, preferredTab]);
 
-  // Load user profile & content on mount / user switch
+  // --- Data loading -----------------------------------------------------
   useEffect(() => {
     if (!currentUserId) return;
     const profileStore = useProfileStore.getState();
@@ -228,52 +327,62 @@ export default function ProfileMyScreen() {
     profileStore.loadBalance(currentUserId);
     profileStore.loadPosition(currentUserId);
     profileStore.loadPosts(currentUserId);
+    setRequestedUid(currentUserId);
   }, [currentUserId]);
 
-  // Load creator analytics separately so switching dashboard timeframe never re-fetches profile/posts
+  // Analytics load separately so a timeframe change never re-fetches profile/posts.
   useEffect(() => {
     if (!currentUserId) return;
     useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe);
   }, [currentUserId, timeframe]);
 
-  // Paginate the profile feed. Without this the grid stopped at the first page.
   const handleLoadMorePosts = useCallback(() => {
     if (!currentUserId) return;
-    useProfileStore.getState().loadMorePosts(currentUserId);
+    const store = useProfileStore.getState();
+    if (store.postsLoading) return;
+    store.loadMorePosts(currentUserId);
   }, [currentUserId]);
 
-  // Tab change handler
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
-    if (tab === 'saved' && (!savedPosts || savedPosts.length === 0) && currentUserId) {
-      useProfileStore.getState().loadSavedPosts(currentUserId);
-    }
-  }, [currentUserId, savedPosts]);
+    if (tab !== 'saved' || !currentUserId) return;
+    const store = useProfileStore.getState();
+    if (store.savedLoading || (store.savedPosts && store.savedPosts.length > 0)) return;
+    store.loadSavedPosts(currentUserId);
+  }, [currentUserId]);
 
-  // Explicit refresh handler for header / error retry
+  // Refresh reports the real outcome of each operation.
   const handleRefresh = useCallback(async () => {
     if (!currentUserId || isRefreshing) return;
     setIsRefreshing(true);
     try {
       const profileStore = useProfileStore.getState();
       const analyticsStore = useAnalyticsStore.getState();
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         profileStore.loadProfile(currentUserId, currentUserId, {
-          viewAs: viewAs === 'owner' ? null : viewAs,
+          viewAs: isOwnerView ? null : viewAs,
         }),
         profileStore.loadHighlights(currentUserId),
         analyticsStore.loadAnalytics(currentUserId, timeframe),
         profileStore.loadPosts(currentUserId),
       ]);
-      toast.success('Profile refreshed');
+      const failed = results.filter((r) => r.status === 'rejected');
+      failed.forEach((r) => console.warn('Refresh operation failed:', r.reason));
+      if (failed.length === 0) {
+        toast.success('Profile refreshed');
+      } else if (failed.length < results.length) {
+        toast.warning('Some sections could not be refreshed');
+      } else {
+        toast.error('Could not refresh your profile');
+      }
     } catch (e) {
-      console.warn('Refresh note:', e);
+      console.warn('Refresh failed:', e);
+      toast.error('Could not refresh your profile');
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentUserId, isRefreshing, timeframe, viewAs]);
+  }, [currentUserId, isRefreshing, timeframe, viewAs, isOwnerView]);
 
-  // Handle Share
   const handleShare = useCallback(async () => {
     try {
       const target = effectiveProfile || { id: currentUserId, uid: currentUserId };
@@ -281,18 +390,73 @@ export default function ProfileMyScreen() {
       if (result.copied) {
         toast.success('Profile link copied to clipboard!');
       }
-    } catch (err) {
+    } catch {
       toast.error('Could not share profile');
     }
   }, [effectiveProfile, currentUserId]);
 
-  // Cross-component event listeners for TopAppBar & Header actions
+  // --- Owner-only actions (inert while previewing another perspective) --
+  const openLocationSetup = useCallback(() => {
+    if (isOwnerView) setShowLocationModal(true);
+  }, [isOwnerView]);
+
+  const openOptions = useCallback(() => {
+    if (isOwnerView) setShowOptionsMenu(true);
+  }, [isOwnerView]);
+
+  const openAvatarModal = useCallback(() => {
+    if (isOwnerView) setShowAvatarModal(true);
+  }, [isOwnerView]);
+
+  const openVerification = useCallback(() => {
+    if (isOwnerView) setShowVerificationModal(true);
+  }, [isOwnerView]);
+
+  const openQuickEdit = useCallback((field = 'all') => {
+    if (!isOwnerView) return;
+    setQuickEditField(field);
+    setShowQuickEditModal(true);
+  }, [isOwnerView]);
+
+  const handleEditProfile = useCallback(() => {
+    if (isOwnerView) navigate('/profile/edit');
+  }, [isOwnerView, navigate]);
+
+  const handleInsights = useCallback(() => {
+    if (isOwnerView) navigate('/profile/analytics');
+  }, [isOwnerView, navigate]);
+
+  const handlePostClick = useCallback((post) => navigate(`/post/${post.id}`), [navigate]);
+
+  const handleMetricPress = useCallback((key) => {
+    if (!currentUserId) return;
+    switch (key) {
+      case 'followers':
+      case 'following':
+      case 'friends':
+        navigate(`/profile/${currentUserId}/${key}`);
+        break;
+      case 'posts':
+        handleTabChange('posts');
+        break;
+      case 'coins':
+        if (isOwnerView) navigate('/coins');
+        break;
+      case 'views':
+        if (isOwnerView) navigate('/profile/analytics');
+        break;
+      default:
+        break;
+    }
+  }, [currentUserId, isOwnerView, navigate, handleTabChange]);
+
+  // Cross-component events from the app shell.
   useEffect(() => {
     const handleQrEvent = () => setShowQrModal(true);
     const handlePerspectiveEvent = () => setShowPerspectiveModal(true);
     const handleShareEvent = () => handleShare();
-    const handleOptionsEvent = () => setShowOptionsMenu(true);
-    const handleLocationEvent = () => setShowLocationModal(true);
+    const handleOptionsEvent = () => openOptions();
+    const handleLocationEvent = () => openLocationSetup();
 
     window.addEventListener('arvdoul:open_qr_code', handleQrEvent);
     window.addEventListener('arvdoul:open_perspective_modal', handlePerspectiveEvent);
@@ -307,32 +471,87 @@ export default function ProfileMyScreen() {
       window.removeEventListener('arvdoul:open_profile_options', handleOptionsEvent);
       window.removeEventListener('arvdoul:open_location_setup', handleLocationEvent);
     };
-  }, [handleShare]);
+  }, [handleShare, openOptions, openLocationSetup]);
 
-  const isDark = theme === 'dark';
+  // --- Avatar handlers --------------------------------------------------
+  const syncAppStoreAvatar = useCallback((photoURL) => {
+    const appUser = useAppStore.getState().currentUser;
+    if (appUser && (appUser.uid === currentUserId || appUser.id === currentUserId)) {
+      useAppStore.getState().setCurrentUser({ ...appUser, photoURL });
+    }
+  }, [currentUserId]);
 
+  const handleAvatarUpload = useCallback(async (croppedFile) => {
+    if (!isOwnerView || !currentUserId) return;
+    const toastId = toast.loading('Uploading avatar...');
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      const uploadRes = await getUserService().uploadAvatar(currentUserId, croppedFile);
+      const nextUrl = typeof uploadRes === 'string' ? uploadRes : (uploadRes?.photoURL || uploadRes?.url || null);
+      if (nextUrl) syncAppStoreAvatar(nextUrl);
+      toast.success('Avatar updated successfully!', { id: toastId });
+      setShowAvatarModal(false);
+      reloadOwnerProfile();
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      toast.error(err?.message || 'Failed to upload avatar', { id: toastId });
+    }
+  }, [isOwnerView, currentUserId, syncAppStoreAvatar, reloadOwnerProfile]);
+
+  const handleAvatarRemove = useCallback(async () => {
+    if (!isOwnerView || !currentUserId) return;
+    const toastId = toast.loading('Removing avatar...');
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      await getUserService().updateUserProfile(currentUserId, { photoURL: '' });
+      syncAppStoreAvatar('');
+      toast.success('Avatar removed', { id: toastId });
+      setShowAvatarModal(false);
+      reloadOwnerProfile();
+    } catch (err) {
+      console.error('Avatar removal failed:', err);
+      toast.error(err?.message || 'Failed to remove avatar', { id: toastId });
+    }
+  }, [isOwnerView, currentUserId, syncAppStoreAvatar, reloadOwnerProfile]);
+
+  // Tab counts reflect only the pages loaded so far (see response notes).
+  const tabCounts = useMemo(() => {
+    const list = posts || [];
+    return {
+      posts: list.filter((p) => p.type !== 'audio' && p.type !== 'track').length,
+      reels: list.filter((p) => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+      audio: list.filter((p) => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+      saved: savedPosts?.length || 0,
+      tagged: list.filter((p) => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+    };
+  }, [posts, savedPosts]);
+
+  const glass = isDark ? GLASS_DARK : GLASS_LIGHT;
+
+  // --- Gate: signed out -------------------------------------------------
   if (!currentUserId) {
     return (
       <div className={cn(
         "min-h-[70vh] flex items-center justify-center p-4",
         isDark ? "text-white" : "text-slate-900"
       )}>
-        <div className={cn(
-          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
-        )}>
-          <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
-            <Lock className="w-8 h-8" />
+        <div className={cn("max-w-md w-full p-8 rounded-3xl border text-center space-y-4", glass)}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#8B1EF3]/20 to-[#055BFB]/20 text-[#8B1EF3] flex items-center justify-center">
+            <Lock className="w-8 h-8" aria-hidden="true" />
           </div>
           <h2 className="font-display text-xl font-bold">Sign in to view your profile</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className={cn("text-sm", isDark ? "text-slate-400" : "text-slate-600")}>
             Access your Arvdoul identity, progression, creations, and settings by signing in.
           </p>
           <div className="pt-2 flex justify-center">
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+              className={cn(
+                "min-h-[48px] px-8 py-2.5 rounded-2xl font-bold text-sm text-white bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]",
+                "hover:brightness-110 active:scale-[0.98] shadow-md transition-all motion-reduce:transition-none cursor-pointer",
+                FOCUS_RING
+              )}
             >
               Sign In
             </button>
@@ -342,195 +561,229 @@ export default function ProfileMyScreen() {
     );
   }
 
-  if (loading && !profile && !currentUser) {
+  // --- Gate: initial profile load --------------------------------------
+  // Skeleton until this account's profile arrives (or the load fails); never
+  // shows a previous account's profile or an empty fallback card.
+  if (!ownedProfile && !error && (loading || requestedUid !== currentUserId)) {
     return (
-      <div className="w-full pb-20">
+      <div className="w-full pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
         <ProfileSkeleton theme={theme} />
       </div>
     );
   }
 
+  const showPrivateState = !isOwnerView && !capabilities.canViewContent;
+
   return (
     <ErrorBoundary>
       <div
         className={cn(
-          "w-full pb-20 transition-colors duration-200",
-          isDark
-            ? "text-white selection:bg-purple-500/30"
-            : "text-slate-900 selection:bg-purple-500/20"
+          "relative isolate w-full overflow-x-clip pb-[calc(5rem+env(safe-area-inset-bottom,0px))] transition-colors duration-200 motion-reduce:transition-none",
+          isDark ? "text-white selection:bg-purple-500/30" : "text-slate-900 selection:bg-purple-500/20"
         )}
       >
+        {/* Ambient brand lighting: one static layer, no blur filter */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px]"
+          style={{
+            background: isDark
+              ? 'radial-gradient(60% 45% at 12% 0%, rgba(200,43,255,0.16), transparent 70%), radial-gradient(55% 45% at 92% 6%, rgba(0,136,255,0.14), transparent 70%)'
+              : 'radial-gradient(60% 45% at 12% 0%, rgba(200,43,255,0.09), transparent 70%), radial-gradient(55% 45% at 92% 6%, rgba(0,136,255,0.08), transparent 70%)',
+          }}
+        />
 
-        {/* Load failure banner */}
+        {/* Load failure banner (sanitized; details are logged) */}
         {error && (
-          <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 pt-2">
-            <div className={cn(
-              "flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold",
-              isDark
-                ? "bg-red-500/10 border-red-500/25 text-red-300"
-                : "bg-red-50 border-red-200 text-red-700"
-            )}>
-              <span className="truncate">{error}</span>
+          <div className="w-full max-w-[1160px] mx-auto px-3 sm:px-4 lg:px-6 pt-3">
+            <div
+              role="alert"
+              className={cn(
+                "flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border text-sm",
+                isDark
+                  ? "bg-red-500/10 border-red-400/25 text-red-200 backdrop-blur-xl"
+                  : "bg-red-50/90 border-red-200 text-red-700 backdrop-blur-xl"
+              )}
+            >
+              <span className="min-w-0 font-semibold">
+                We couldn't load everything on your profile. Please try again.
+              </span>
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
+                aria-busy={isRefreshing}
                 className={cn(
-                  "min-h-[40px] px-3.5 py-1.5 rounded-xl font-bold transition-colors shrink-0 inline-flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200"
+                  "min-h-[44px] px-4 rounded-xl font-bold shrink-0 inline-flex items-center gap-2 cursor-pointer transition-colors motion-reduce:transition-none",
+                  "disabled:opacity-60 disabled:cursor-not-allowed",
+                  isDark ? "bg-white/10 hover:bg-white/15 text-white" : "bg-white hover:bg-slate-100 text-red-700 border border-red-200",
+                  FOCUS_RING
                 )}
               >
-                <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-                <span>Retry</span>
+                <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+                <span>{isRefreshing ? 'Retrying' : 'Retry'}</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Master Container */}
-        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-5 sm:space-y-6">
-          {/* 1. Master Identity Card with Level Badge, Passport & Action Bar */}
-          <ProfileHeroSection
-            profile={displayedProfile}
-            isOwner={viewAs === 'owner'}
-            level={displayedProfile?.level}
-            theme={theme}
-            onOpenQrCode={() => setShowQrModal(true)}
-            onOpenLocationSetup={() => setShowLocationModal(true)}
-            onOpenOptions={() => setShowOptionsMenu(true)}
-            onAvatarClick={() => setShowAvatarModal(true)}
-            onShare={handleShare}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefreshing}
-            onEditProfile={() => navigate('/profile/edit')}
-            onOpenQuickEdit={(field = 'all') => {
-              setQuickEditField(field);
-              setShowQuickEditModal(true);
-            }}
-            onOpenVerificationModal={() => setShowVerificationModal(true)}
-            onInsightsPress={() => navigate('/profile/analytics')}
-            capabilities={capabilities}
-          />
+        {/* Master container */}
+        <div className="w-full max-w-[1160px] mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-5 space-y-5 sm:space-y-6 lg:space-y-8">
+          {/* 01. Identity */}
+          <section aria-label="Profile identity" className="min-w-0">
+            <ProfileHeroSection
+              profile={displayedProfile}
+              isOwner={isOwnerView}
+              level={displayedProfile?.level}
+              theme={theme}
+              onOpenQrCode={() => setShowQrModal(true)}
+              onOpenLocationSetup={openLocationSetup}
+              onOpenOptions={openOptions}
+              onAvatarClick={openAvatarModal}
+              onShare={handleShare}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+              onEditProfile={handleEditProfile}
+              onOpenQuickEdit={openQuickEdit}
+              onOpenVerificationModal={openVerification}
+              onInsightsPress={handleInsights}
+              capabilities={capabilities}
+            />
+          </section>
 
-          {/* 2. 6-Card Metrics Grid */}
-          <ProfileMetricsGrid
-            isOwner={viewAs === 'owner'}
-            theme={theme}
-            profile={displayedProfile}
-            analytics={analytics}
-            capabilities={capabilities}
-            onMetricPress={(key) => {
-              if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
-              else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
-              else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
-              else if (key === 'coins') navigate('/coins');
-              else if (key === 'posts') setActiveTab('posts');
-              else if (key === 'views') navigate('/profile/analytics');
-            }}
-          />
+          {/* 02. Social presence */}
+          <section aria-label="Social presence" className="min-w-0">
+            <ProfileMetricsGrid
+              isOwner={isOwnerView}
+              theme={theme}
+              profile={displayedProfile}
+              analytics={analytics}
+              capabilities={capabilities}
+              onMetricPress={handleMetricPress}
+            />
+          </section>
 
-          {viewAs !== 'owner' && !capabilities.canViewContent ? (
-            <div className={cn(
-              "p-8 sm:p-12 rounded-2xl border text-center space-y-3",
-              isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-white border-slate-200/90 shadow-sm"
-            )}>
-              <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                <Lock className="w-6 h-6" />
+          {showPrivateState ? (
+            <section
+              role="status"
+              aria-label="Private content"
+              className={cn("p-8 sm:p-12 rounded-3xl border text-center space-y-3", glass)}
+            >
+              <div className="w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-[#8B1EF3]/20 to-[#055BFB]/20 text-[#8B1EF3] flex items-center justify-center">
+                <Lock className="w-6 h-6" aria-hidden="true" />
               </div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                Visitors in {viewAs === 'public' ? 'Public' : viewAs} perspective cannot view private highlights, pinned posts, or media gallery.
+              <h3 className="text-base font-bold">This Account is Private</h3>
+              <p className={cn("text-sm max-w-md mx-auto", isDark ? "text-slate-400" : "text-slate-600")}>
+                Visitors in the {PERSPECTIVE_LABELS[viewAs] || viewAs} perspective cannot view private highlights, pinned posts, or the media gallery.
               </p>
-            </div>
+              <button
+                type="button"
+                onClick={() => handleViewAsChange('owner')}
+                className={cn(
+                  "min-h-[44px] px-5 rounded-2xl font-bold text-sm text-white bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]",
+                  "hover:brightness-110 active:scale-[0.98] transition-all motion-reduce:transition-none cursor-pointer",
+                  FOCUS_RING
+                )}
+              >
+                Return to owner view
+              </button>
+            </section>
           ) : (
             <>
-              {/* 3. Citizen Progression & Civic Standing (level / XP / streak /
-                  reputation — each gated by the owner's show* privacy toggles) */}
-              <ProfileProgression
-                level={displayedProfile?.level}
-                experience={displayedProfile?.experience}
-                streak={displayedProfile?.activeStreak}
-                reputation={displayedProfile?.reputation}
-                showLevel={displayedProfile?.showLevel !== false}
-                showReputation={displayedProfile?.showReputation !== false}
-                showStreak={displayedProfile?.showStreak !== false}
-                isOwner={viewAs === 'owner'}
-                theme={theme}
-              />
+              {/* 03. Digital standing: side by side only on large screens */}
+              <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
+                <section aria-label="Progression" className="min-w-0">
+                  <ProfileProgression
+                    level={displayedProfile?.level}
+                    experience={displayedProfile?.experience}
+                    streak={displayedProfile?.activeStreak}
+                    reputation={displayedProfile?.reputation}
+                    showLevel={displayedProfile?.showLevel !== false}
+                    showReputation={displayedProfile?.showReputation !== false}
+                    showStreak={displayedProfile?.showStreak !== false}
+                    isOwner={isOwnerView}
+                    theme={theme}
+                  />
+                </section>
 
-              {/* 4. Story Highlights Carousel */}
-              <ProfileHighlightsSection
-                highlights={highlights}
-                userId={currentUserId}
-                isOwner={viewAs === 'owner'}
-                theme={theme}
-                onAddHighlight={() => navigate('/profile/highlights?create=true')}
-              />
-
-              {/* 4. Creator Analytics Dashboard (when owner) */}
-              {viewAs === 'owner' && (
-                <ProfileCreatorDashboard
-                  analytics={analytics}
-                  ranking={ranking}
-                  userLevel={effectiveProfile?.level ?? null}
-                  isCreator={effectiveProfile?.isCreator}
-                  theme={theme}
-                  timeframe={timeframe}
-                  onTimeframeChange={setTimeframe}
-                />
-              )}
-
-              {/* 5. Sticky Underline Tabs Bar with View Mode Switcher */}
-              <div className="sticky top-0 z-30">
-                <ProfileTabsBar
-                  activeTab={activeTab}
-                  onTabChange={handleTabChange}
-                  viewMode={viewMode}
-                  onViewModeChange={handleViewModeChange}
-                  isOwner={viewAs === 'owner'}
-                  theme={theme}
-                  counts={{
-                    posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
-                    reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-                    audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
-                    saved: savedPosts?.length || 0,
-                    tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
-                  }}
-                />
+                <section aria-label="Story highlights" className="min-w-0">
+                  <ProfileHighlightsSection
+                    highlights={highlights}
+                    userId={currentUserId}
+                    isOwner={isOwnerView}
+                    theme={theme}
+                    onAddHighlight={() => {
+                      if (isOwnerView) navigate('/profile/highlights?create=true');
+                    }}
+                  />
+                </section>
               </div>
 
-              {/* 6. Pinned Posts 4-Card Section (shown on 'posts' tab) */}
-              {activeTab === 'posts' && (
-                <ProfilePinnedPosts
-                  posts={posts}
-                  profileId={currentUserId}
-                  isOwner={viewAs === 'owner'}
-                  theme={theme}
-                  onPostClick={(post) => navigate(`/post/${post.id}`)}
-                  onViewAll={() => setActiveTab('posts')}
-                />
+              {/* 04. Creator intelligence (owner perspective only) */}
+              {isOwnerView && (
+                <section aria-label="Creator dashboard" className="min-w-0">
+                  <ProfileCreatorDashboard
+                    analytics={analytics}
+                    ranking={ranking}
+                    userLevel={effectiveProfile?.level ?? null}
+                    isCreator={effectiveProfile?.isCreator}
+                    theme={theme}
+                    timeframe={timeframe}
+                    onTimeframeChange={setTimeframe}
+                  />
+                </section>
               )}
 
-              {/* 7. Multi-View Media & Posts Grid */}
-              <ProfileFeedGrid
-                posts={posts}
-                savedPosts={savedPosts}
-                activeTab={activeTab}
-                viewMode={viewMode}
-                loading={postsLoading || savedLoading}
-                theme={theme}
-                profile={displayedProfile}
-                isOwner={viewAs === 'owner'}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
-                hasMore={Boolean(postsCursor && postsHasMore)}
-                loadingMore={postsLoading}
-                onLoadMore={handleLoadMorePosts}
-              />
+              {/* 05. Content hub */}
+              <section aria-label="Profile content" className="min-w-0 space-y-4 sm:space-y-5">
+                <div
+                  className={cn(
+                    "sticky top-0 z-30 rounded-2xl border overflow-hidden",
+                    glass
+                  )}
+                >
+                  <ProfileTabsBar
+                    activeTab={activeTab}
+                    onTabChange={handleTabChange}
+                    viewMode={viewMode}
+                    onViewModeChange={handleViewModeChange}
+                    isOwner={isOwnerView}
+                    theme={theme}
+                    counts={tabCounts}
+                  />
+                </div>
+
+                {activeTab === 'posts' && (
+                  <ProfilePinnedPosts
+                    posts={posts}
+                    profileId={currentUserId}
+                    isOwner={isOwnerView}
+                    theme={theme}
+                    onPostClick={handlePostClick}
+                    onViewAll={() => setActiveTab('posts')}
+                  />
+                )}
+
+                <ProfileFeedGrid
+                  posts={posts}
+                  savedPosts={savedPosts}
+                  activeTab={activeTab}
+                  viewMode={viewMode}
+                  loading={postsLoading || savedLoading}
+                  theme={theme}
+                  profile={displayedProfile}
+                  isOwner={isOwnerView}
+                  onPostClick={handlePostClick}
+                  hasMore={Boolean(postsCursor && postsHasMore)}
+                  loadingMore={postsLoading}
+                  onLoadMore={handleLoadMorePosts}
+                />
+              </section>
             </>
           )}
         </div>
 
-        {/* Perspective Switcher Modal */}
+        {/* 06. Secondary interfaces */}
         <ProfilePerspectiveModal
           isOpen={showPerspectiveModal}
           onClose={() => setShowPerspectiveModal(false)}
@@ -539,7 +792,6 @@ export default function ProfileMyScreen() {
           theme={theme}
         />
 
-        {/* QR Code Modal */}
         <ProfileQRCodeModal
           isOpen={showQrModal}
           onClose={() => setShowQrModal(false)}
@@ -547,12 +799,7 @@ export default function ProfileMyScreen() {
           theme={theme}
         />
 
-        {/* QR Scanner is reachable from within ProfileQRCodeModal (scan a
-            friend's code). The screen-level scanner state was never settable
-            once the hero dropped its onOpenQrScanner prop, so it is removed. */}
-
-        {/* Location Setup Modal */}
-        {showLocationModal && (
+        {isOwnerView && showLocationModal && (
           <ProfileLocationModal
             isOpen={showLocationModal}
             onClose={() => setShowLocationModal(false)}
@@ -560,98 +807,53 @@ export default function ProfileMyScreen() {
             currentPrivacy={effectiveProfile?.locationPrivacy}
             userId={currentUserId}
             theme={theme}
-            onLocationUpdated={(newLoc) => {
-              useProfileStore.getState().loadProfile(currentUserId, currentUserId);
-            }}
+            onLocationUpdated={reloadOwnerProfile}
           />
         )}
 
-        {/* Verification Status & Application Modal */}
         <ProfileVerificationModal
-          isOpen={showVerificationModal}
+          isOpen={isOwnerView && showVerificationModal}
           onClose={() => setShowVerificationModal(false)}
           isVerified={effectiveProfile.isVerified}
           profile={effectiveProfile}
-          isOwner={true}
+          isOwner={isOwnerView}
           theme={theme}
-          onVerificationSubmitted={() => {
-            useProfileStore.getState().loadProfile(currentUserId, currentUserId);
-          }}
+          onVerificationSubmitted={reloadOwnerProfile}
         />
 
-        {/* Quick Profile Edit Modal */}
         <ProfileQuickEditModal
-          isOpen={showQuickEditModal}
+          isOpen={isOwnerView && showQuickEditModal}
           onClose={() => setShowQuickEditModal(false)}
           initialField={quickEditField}
           profile={effectiveProfile}
           userId={currentUserId}
           theme={theme}
-          onProfileUpdated={() => {
-            useProfileStore.getState().loadProfile(currentUserId, currentUserId);
-          }}
+          onProfileUpdated={reloadOwnerProfile}
         />
 
-        {/* Options Menu Dialog */}
-        {showOptionsMenu && (
+        {isOwnerView && showOptionsMenu && (
           <ProfileOptionsMenu
             profile={effectiveProfile}
-            isOwner={true}
+            isOwner={isOwnerView}
             theme={theme}
             onClose={() => setShowOptionsMenu(false)}
           />
         )}
 
-        {/* Avatar Upload Modal */}
-        {showAvatarModal && (
+        {isOwnerView && showAvatarModal && (
           <Suspense fallback={null}>
             <AvatarUploadModal
               isOpen={showAvatarModal}
               onClose={() => setShowAvatarModal(false)}
-              onUpload={async (croppedFile) => {
-                const toastId = toast.loading('Uploading avatar...');
-                try {
-                  const { getUserService } = await import('../../services/userService.js');
-                  const uploadRes = await getUserService().uploadAvatar(currentUserId, croppedFile);
-                  const nextUrl = typeof uploadRes === 'string' ? uploadRes : (uploadRes?.photoURL || uploadRes?.url || null);
-                  if (nextUrl) {
-                    const appUser = useAppStore.getState().currentUser;
-                    if (appUser && (appUser.uid === currentUserId || appUser.id === currentUserId)) {
-                      useAppStore.getState().setCurrentUser({ ...appUser, photoURL: nextUrl });
-                    }
-                  }
-                  toast.success('Avatar updated successfully!', { id: toastId });
-                  setShowAvatarModal(false);
-                  useProfileStore.getState().loadProfile(currentUserId, currentUserId);
-                } catch (err) {
-                  console.error('Avatar upload failed:', err);
-                  toast.error(err?.message || 'Failed to upload avatar', { id: toastId });
-                }
-              }}
-              onRemoveAvatar={async () => {
-                const toastId = toast.loading('Removing avatar...');
-                try {
-                  const { getUserService } = await import('../../services/userService.js');
-                  await getUserService().updateUserProfile(currentUserId, { photoURL: '' });
-                  const appUser = useAppStore.getState().currentUser;
-                  if (appUser && (appUser.uid === currentUserId || appUser.id === currentUserId)) {
-                    useAppStore.getState().setCurrentUser({ ...appUser, photoURL: '' });
-                  }
-                  toast.success('Avatar removed', { id: toastId });
-                  setShowAvatarModal(false);
-                  useProfileStore.getState().loadProfile(currentUserId, currentUserId);
-                } catch (err) {
-                  console.error('Avatar removal failed:', err);
-                  toast.error(err?.message || 'Failed to remove avatar', { id: toastId });
-                }
-              }}
+              onUpload={handleAvatarUpload}
+              onRemoveAvatar={handleAvatarRemove}
               currentAvatarUrl={effectiveProfile?.photoURL}
               theme={theme}
             />
           </Suspense>
         )}
 
-        {/* Persistent Floating Banner for Simulated View As Perspective */}
+        {/* Persistent banner for simulated view-as perspectives */}
         <ProfileViewAsBanner
           viewAs={viewAs}
           onViewAsChange={handleViewAsChange}

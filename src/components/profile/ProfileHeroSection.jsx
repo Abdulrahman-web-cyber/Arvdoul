@@ -1,18 +1,26 @@
 /**
- * Production-grade Architectural Identity Hero for Arvdoul Profiles (Owner & Visitor).
- * Uses editorial hierarchy, self-hosted Clash Display + Inter typography, crisp hairline
- * separation, unboxed civic standing metadata, and a single-row primary/secondary CTA bar.
+ * Identity hero for Arvdoul profiles (owner and visitor).
+ *
+ * A centered, single-column identity composition that sits directly on the
+ * page (no hero card, no ambient lighting, no colored glow in either theme):
+ *
+ *   portrait -> name + verification -> @handle -> designations -> bio/tagline
+ *   -> location / website / joined -> civic standing + Digital Passport -> actions
+ *
+ * Glass is used for three things only: the civic-standing panel (with its
+ * Passport button), the secondary controls, and the "More" menu.
+ * Metrics, analytics, highlights and content belong to their own components.
+ *
+ * Props, named exports and callbacks are unchanged.
  *
  * @component
  */
 
-import { memo, useMemo, useState, useCallback } from "react";
+import { memo, useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import {
   BadgeCheck,
   MapPin,
-  Globe,
-  Calendar,
   Crown,
   MoreHorizontal,
   QrCode,
@@ -25,12 +33,11 @@ import {
   Settings,
   UserCheck,
   UserPlus,
-  Camera,
   Copy,
   Check,
   BarChart2,
   ChevronLeft,
-  Shield,
+  ChevronRight,
   ShieldCheck,
   Star,
   Lock,
@@ -41,42 +48,124 @@ import {
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { pickHandle, deriveHandle, pickDisplayName, resolveRoyalFlag, resolveCreatorFlag } from '../../services/profileReadModel.js';
+import { pickHandle, pickDisplayName, resolveRoyalFlag, resolveCreatorFlag } from '../../services/profileReadModel.js';
 import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
-import { BRAND_GRADIENT, brandRgba } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
 const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
 
-// Format joined date nicely. Returns null when the timestamp is absent or
-// unparseable so the caller renders nothing rather than a fabricated date.
+const COPIED_RESET_MS = 2000;
+const BIO_CLAMP_THRESHOLD = 140;
+const MENU_ID = 'profile-hero-more';
+
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4431F7] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
+
+const PRESS =
+  'active:scale-[0.98] motion-reduce:active:scale-100 transition-[transform,background-color,border-color,color,opacity,filter] duration-150 motion-reduce:transition-none';
+
+/**
+ * Materials. Gradients appear only as faint tints inside the civic panel,
+ * the Passport button and the menu; there is no glow, ambient layer or colored
+ * shadow. Elevation, where present, is neutral.
+ */
+const MATERIAL = {
+  dark: {
+    // Smoked glass
+    panel: {
+      background:
+        'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.05) 50%, rgba(5,91,251,0.09) 100%), rgba(255,255,255,0.04)',
+      backdropFilter: 'blur(20px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+      border: '1px solid rgba(255,255,255,0.11)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
+    },
+    passport: {
+      background:
+        'linear-gradient(135deg, rgba(139,30,243,0.24) 0%, rgba(68,49,247,0.16) 55%, rgba(5,91,251,0.22) 100%)',
+      border: '1px solid rgba(255,255,255,0.14)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
+    },
+    overlay: {
+      background:
+        'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(5,91,251,0.08) 100%), rgba(12,18,44,0.9)',
+      backdropFilter: 'blur(22px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(22px) saturate(150%)',
+      border: '1px solid rgba(255,255,255,0.12)',
+      boxShadow: '0 12px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
+    },
+    reflection: 'via-white/30',
+    outline: '0 0 0 1px rgba(255,255,255,0.16)',
+    control:
+      'bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] border-white/[0.10] text-slate-100 backdrop-blur-md',
+  },
+  light: {
+    // Crystal
+    panel: {
+      background:
+        'linear-gradient(145deg, rgba(139,30,243,0.07) 0%, rgba(68,49,247,0.04) 50%, rgba(5,91,251,0.07) 100%), rgba(255,255,255,0.66)',
+      backdropFilter: 'blur(20px) saturate(145%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(145%)',
+      border: '1px solid rgba(120,140,170,0.22)',
+      boxShadow:
+        '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(30,41,90,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
+    },
+    passport: {
+      background:
+        'linear-gradient(135deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.06) 55%, rgba(5,91,251,0.10) 100%), rgba(255,255,255,0.7)',
+      border: '1px solid rgba(68,49,247,0.20)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.95)',
+    },
+    overlay: {
+      background:
+        'linear-gradient(145deg, rgba(139,30,243,0.06) 0%, rgba(5,91,251,0.06) 100%), rgba(255,255,255,0.92)',
+      backdropFilter: 'blur(22px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(22px) saturate(150%)',
+      border: '1px solid rgba(120,140,170,0.22)',
+      boxShadow: '0 12px 32px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.95)',
+    },
+    reflection: 'via-white',
+    outline: '0 0 0 1px rgba(15,23,42,0.12)',
+    control:
+      'bg-white/70 hover:bg-white active:bg-white border-slate-300/60 text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.05)] backdrop-blur-md',
+  },
+};
+
+/** Returns a finite number or null. */
+const toFiniteNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Joined date. Returns null when absent/unparseable so nothing is fabricated.
 const formatJoinedDate = (createdAt) => {
   if (!createdAt) return null;
   try {
     const d = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
     if (isNaN(d.getTime())) return null;
     const month = d.toLocaleString('default', { month: 'short' });
-    const year = d.getFullYear();
-    return `Joined ${month} ${year}`;
+    return `Joined ${month} ${d.getFullYear()}`;
   } catch {
     return null;
   }
 };
 
-/**
- * 1. Legacy Banner export for compatibility
- */
+/** Legacy banner export for compatibility (Arvdoul profiles have no cover photo). */
 export const ProfileBanner = memo(() => null);
 ProfileBanner.displayName = 'ProfileBanner';
 
 /**
- * 2. Streamlined Civic Standing & Digital Passport Panel
+ * Civic-standing glass panel: level insignia, rank, real progress (only when
+ * the level service supplies valid data), roadmap access (the insignia block)
+ * and the Digital Passport button. No XP or percentage is ever estimated.
  */
 export const ProfileLevelProgressCard = memo(({
   level = null,
@@ -88,193 +177,198 @@ export const ProfileLevelProgressCard = memo(({
   navigate,
   onOpenRoadmap,
 }) => {
+  const material = isDark ? MATERIAL.dark : MATERIAL.light;
+  const muted = isDark ? 'text-slate-400' : 'text-slate-500';
+  const text = isDark ? 'text-white' : 'text-slate-900';
+
+  // Progress is only derived from a real, finite XP value.
   const levelInfo = useMemo(() => {
-    const rawLvl = level !== null && level !== undefined ? Number(level) : null;
-    const rawXp = experience !== null && experience !== undefined ? Number(experience) : null;
+    const xp = toFiniteNumber(experience);
+    if (xp === null || xp < 0) return null;
+    return getLevelInfo(xp) || null;
+  }, [experience]);
 
-    if (rawLvl === null && rawXp === null) return null;
-
-    if (rawXp !== null && !Number.isNaN(rawXp) && rawXp > 0) {
-      return getLevelInfo(rawXp);
-    }
-    if (rawLvl && !Number.isNaN(rawLvl) && rawLvl > 0) {
-      const lvlObj = LevelModule.LEVELS?.[rawLvl - 1];
-      const xpReq = lvlObj?.xpRequired ?? (50 * rawLvl * (rawLvl - 1));
-      return getLevelInfo(xpReq);
-    }
-    return null;
-  }, [experience, level]);
-
-  const passportUrl = isOwner ? '/passport' : `/passport/${userId || 'user'}`;
+  const levelNumber = useMemo(() => {
+    const fromService = toFiniteNumber(levelInfo?.level);
+    if (fromService !== null && fromService > 0) return Math.floor(fromService);
+    const fromProp = toFiniteNumber(level);
+    return fromProp !== null && fromProp > 0 ? Math.floor(fromProp) : null;
+  }, [levelInfo, level]);
 
   const rankTitle = useMemo(() => {
-    if (!levelInfo?.level) return null;
+    if (!levelNumber) return null;
     try {
-      return LevelModule.getRankTitle?.(levelInfo.level) || null;
+      return LevelModule.getRankTitle?.(levelNumber) || null;
     } catch {
       return null;
     }
-  }, [levelInfo?.level]);
+  }, [levelNumber]);
 
-  const cardSurface = cn(
-    "w-full lg:w-[272px] shrink-0 rounded-2xl border p-3.5 sm:p-4 flex flex-col justify-between gap-3 transition-colors",
-    isDark
-      ? "bg-white/[0.03] border-white/[0.08] text-white"
-      : "bg-white/90 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.03)]"
+  const isMaxLevel = Boolean(levelInfo?.isMaxLevel) || levelInfo?.nextLevelXp === null;
+  const nextXp = toFiniteNumber(levelInfo?.nextLevelXp);
+  const currentXp = toFiniteNumber(levelInfo?.currentLevelXp);
+  const xpInto = toFiniteNumber(levelInfo?.xpIntoLevel);
+  const span = !isMaxLevel && nextXp !== null && currentXp !== null ? nextXp - currentXp : null;
+  const hasProgress = Boolean(levelInfo) && span !== null && span > 0 && xpInto !== null && xpInto >= 0;
+  const percent = hasProgress
+    ? Math.min(100, Math.max(0, Math.round(toFiniteNumber(levelInfo.progress) ?? (xpInto / span) * 100)))
+    : null;
+
+  const passportUrl = isOwner ? '/passport' : (userId ? `/passport/${userId}` : null);
+  const openPassport = () => { if (passportUrl) navigate?.(passportUrl); };
+
+  const shell = cn("relative w-full max-w-[420px] mx-auto rounded-[20px] p-3 text-left", text);
+  const rowButton = cn("flex items-center gap-3 w-full min-h-[48px] rounded-xl text-left cursor-pointer", PRESS, FOCUS_RING);
+  const overline = cn("block text-[11px] font-medium uppercase tracking-[0.08em]", muted);
+
+  const reflection = (
+    <span
+      aria-hidden="true"
+      className={cn("pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent to-transparent", material.reflection)}
+    />
+  );
+
+  const passportButton = (
+    <button
+      type="button"
+      onClick={openPassport}
+      disabled={!passportUrl}
+      className={cn(
+        "w-full min-h-[44px] px-3.5 rounded-xl text-[13px] font-semibold inline-flex items-center justify-between gap-2 cursor-pointer",
+        "hover:brightness-[1.07] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100",
+        PRESS, FOCUS_RING, text
+      )}
+      style={material.passport}
+    >
+      <span className="inline-flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <span>Digital Passport</span>
+      </span>
+      <ChevronRight className={cn("w-4 h-4 shrink-0", muted)} aria-hidden="true" />
+    </button>
+  );
+
+  const plainInsignia = (
+    <span
+      aria-hidden="true"
+      className={cn("w-[42px] h-[42px] rounded-[14px] flex items-center justify-center shrink-0", isDark ? "bg-white/10 text-slate-300" : "bg-slate-900/[0.06] text-slate-500")}
+    >
+      <ShieldCheck className="w-5 h-5" />
+    </span>
   );
 
   if (!showLevel && !isOwner) {
     return (
-      <div className={cardSurface}>
-        <div className="flex items-center gap-2.5">
-          <div className={cn(
-            "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-            isDark ? "bg-white/[0.05] text-slate-300" : "bg-slate-100 text-slate-600"
-          )}>
-            <Shield className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs font-semibold truncate">Civic Standing</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Hidden by owner</div>
-          </div>
+      <div className={shell} style={material.panel}>
+        {reflection}
+        <div className="flex items-center gap-3 min-h-[48px]">
+          <span
+            aria-hidden="true"
+            className={cn("w-[42px] h-[42px] rounded-[14px] flex items-center justify-center shrink-0", isDark ? "bg-white/10" : "bg-slate-900/[0.06]", muted)}
+          >
+            <Lock className="w-5 h-5" />
+          </span>
+          <span className="min-w-0">
+            <span className={overline}>Civic standing</span>
+            <span className="block text-[15px] font-semibold leading-tight truncate">Hidden by owner</span>
+          </span>
         </div>
-
-        <button
-          type="button"
-          onClick={() => navigate?.(passportUrl)}
-          className={cn(
-            "w-full min-h-[40px] py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-            isDark
-              ? "bg-white/[0.05] hover:bg-white/[0.09] border-white/10 text-slate-100"
-              : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
-          )}
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple" />
-          <span>Digital Passport</span>
-        </button>
+        <div className="mt-2.5">{passportButton}</div>
       </div>
     );
   }
 
-  if (!levelInfo) {
-    const handleOpenCitizenship = () => (onOpenRoadmap ? onOpenRoadmap('citizenship') : navigate?.(passportUrl));
+  if (!levelNumber) {
+    const openCitizenship = () => (onOpenRoadmap ? onOpenRoadmap('citizenship') : openPassport());
+    const content = (
+      <>
+        {plainInsignia}
+        <span className="min-w-0 flex-1">
+          <span className={overline}>Civic standing</span>
+          <span className="block text-[15px] font-semibold leading-tight truncate">
+            {isOwner ? 'Open citizenship roadmap' : 'Not available'}
+          </span>
+        </span>
+        {isOwner && <ChevronRight className={cn("w-4 h-4 shrink-0", muted)} aria-hidden="true" />}
+      </>
+    );
     return (
-      <div className={cardSurface}>
-        <button
-          type="button"
-          onClick={handleOpenCitizenship}
-          className="flex items-center gap-2.5 text-left w-full rounded-xl p-1 -m-1 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-        >
-          <div className={cn(
-            "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-            isDark ? "bg-purple-500/15 text-purple-300" : "bg-purple-50 text-purple-700"
-          )}>
-            <Shield className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs font-semibold truncate">Civic Standing</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Initialize citizenship</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navigate?.(passportUrl)}
-          className={cn(
-            "w-full min-h-[44px] py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-            isDark
-              ? "bg-white/[0.05] hover:bg-white/[0.09] border-white/10 text-slate-100"
-              : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
-          )}
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple" />
-          <span>Digital Passport</span>
-        </button>
+      <div className={shell} style={material.panel}>
+        {reflection}
+        {isOwner ? (
+          <button type="button" onClick={openCitizenship} className={rowButton}>{content}</button>
+        ) : (
+          <div className="flex items-center gap-3 min-h-[48px]">{content}</div>
+        )}
+        <div className="mt-2.5">{passportButton}</div>
       </div>
     );
   }
 
-  const currentLevel = levelInfo.level;
-  const currentXp = levelInfo.xpIntoLevel ?? 0;
-  const isMaxLevel = Boolean(levelInfo.isMaxLevel) || levelInfo.nextLevelXp === null;
-  const levelSpan = isMaxLevel ? null : levelInfo.nextLevelXp - levelInfo.currentLevelXp;
-  const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
-
-  const handleOpenLevels = () => (onOpenRoadmap ? onOpenRoadmap('levels') : navigate?.(passportUrl));
+  const openLevels = () => (onOpenRoadmap ? onOpenRoadmap('levels') : openPassport());
+  const subtitle = hasProgress
+    ? `Level ${levelNumber} · ${Math.round(xpInto).toLocaleString()} / ${Math.round(span).toLocaleString()} XP`
+    : isMaxLevel
+      ? `Level ${levelNumber} · Apex`
+      : rankTitle ? `Level ${levelNumber}` : null;
 
   return (
-    <div className={cardSurface}>
+    <div className={shell} style={material.panel}>
+      {reflection}
       <button
         type="button"
-        onClick={handleOpenLevels}
-        title="View Level Progression & Citizenship Roadmap"
-        className="flex items-center justify-between gap-2.5 text-left w-full rounded-xl p-1 -m-1 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+        onClick={openLevels}
+        aria-label={`Level ${levelNumber}${rankTitle ? `, ${rankTitle}` : ''}. Open level roadmap`}
+        className={rowButton}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 100 100" className="w-full h-full">
-              <polygon
-                points="50 3, 90 25, 90 75, 50 97, 10 75, 10 25"
-                className="fill-arvdoul-purple stroke-purple-400/40"
-                strokeWidth="4"
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold tabular-nums">
-              {currentLevel}
-            </span>
-          </div>
-
-          <div className="min-w-0">
-            <div className="font-display text-sm font-bold text-slate-900 dark:text-white tabular-nums leading-tight truncate">
-              {rankTitle || `Level ${currentLevel}`}
-            </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
-              {isMaxLevel
-                ? `Level ${currentLevel} · Apex`
-                : `Lv.${currentLevel} · ${currentXp.toLocaleString()}/${levelSpan.toLocaleString()} XP (${progressPercent}%)`}
-            </div>
-          </div>
-        </div>
+        <span
+          aria-hidden="true"
+          className="w-[42px] h-[42px] rounded-[14px] flex items-center justify-center shrink-0 text-white text-[17px] font-semibold tabular-nums"
+          style={{
+            background: BRAND_GRADIENT,
+            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.28), inset 0 1px 0 rgba(255,255,255,0.35)',
+          }}
+        >
+          {levelNumber}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={overline}>Civic standing</span>
+          <span className="block text-[15px] font-semibold leading-tight truncate">
+            {rankTitle || `Level ${levelNumber}`}
+          </span>
+          {subtitle && (
+            <span className={cn("block text-[12px] leading-snug tabular-nums truncate", muted)}>{subtitle}</span>
+          )}
+        </span>
+        <ChevronRight className={cn("w-4 h-4 shrink-0", muted)} aria-hidden="true" />
       </button>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate?.(passportUrl)}
-          className={cn(
-            "flex-1 min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-            isDark
-              ? "bg-white/[0.05] hover:bg-white/[0.1] text-slate-100 border-white/10"
-              : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200"
-          )}
-          title="Open Digital Passport"
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple shrink-0" />
-          <span className="truncate">Passport</span>
-        </button>
+      {hasProgress && (
+        <div className="mt-2 flex items-center gap-2.5 px-0.5">
+          <span
+            role="progressbar"
+            aria-label="Progress to next level"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            className={cn("block flex-1 h-1 rounded-full overflow-hidden", isDark ? "bg-white/10" : "bg-slate-900/10")}
+          >
+            <span
+              className="block h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none"
+              style={{ width: `${percent}%`, background: BRAND_GRADIENT }}
+            />
+          </span>
+          <span className={cn("text-[11px] font-medium tabular-nums", muted)}>{percent}%</span>
+        </div>
+      )}
 
-        <button
-          type="button"
-          onClick={handleOpenLevels}
-          className={cn(
-            "min-h-[44px] px-3 py-1.5 rounded-xl text-[11px] font-semibold inline-flex items-center justify-center border shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-            isDark
-              ? "border-purple-500/25 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
-              : "border-purple-200 bg-purple-50 text-arvdoul-purple hover:bg-purple-100/80"
-          )}
-          title="View Level Progression Roadmap"
-        >
-          Roadmap
-        </button>
-      </div>
+      <div className="mt-2.5">{passportButton}</div>
     </div>
   );
 });
 ProfileLevelProgressCard.displayName = 'ProfileLevelProgressCard';
 
-/**
- * 3. Legacy compatibility exports
- */
+/** Legacy compatibility exports */
 export const ProfileActionDock = memo(() => null);
 ProfileActionDock.displayName = 'ProfileActionDock';
 export const ProfileLargeCoinCard = memo(() => null);
@@ -282,9 +376,27 @@ ProfileLargeCoinCard.displayName = 'ProfileLargeCoinCard';
 export const ProfileMetricsBar = memo(() => null);
 ProfileMetricsBar.displayName = 'ProfileMetricsBar';
 
-/**
- * 4. Main ProfileHeroSection
- */
+/** One row of the "More" menu. */
+const MenuItem = ({ icon: Icon, label, onClick, disabled = false, busy = false, isDark, className }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    aria-busy={busy || undefined}
+    className={cn(
+      "w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-[13px] font-medium text-left cursor-pointer",
+      "disabled:opacity-50 disabled:cursor-not-allowed",
+      PRESS, FOCUS_RING,
+      isDark ? "text-slate-100 hover:bg-white/[0.08] active:bg-white/[0.12]" : "text-slate-800 hover:bg-slate-900/[0.05] active:bg-slate-900/[0.08]",
+      className
+    )}
+  >
+    <Icon className={cn("w-4 h-4 shrink-0", isDark ? "text-slate-300" : "text-slate-500", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+    <span className="flex-1 min-w-0 truncate">{label}</span>
+  </button>
+);
+
+/** Main ProfileHeroSection */
 export const ProfileHeroSection = memo(({
   profile,
   isOwner = false,
@@ -317,10 +429,55 @@ export const ProfileHeroSection = memo(({
   const navigate = useNavigate();
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
+  const material = isDark ? MATERIAL.dark : MATERIAL.light;
   const callsEnabled = useFeatureFlag('messaging.calls');
+
+  const text = isDark ? 'text-white' : 'text-slate-900';
+  const body = isDark ? 'text-slate-200' : 'text-slate-700';
+  const muted = isDark ? 'text-slate-400' : 'text-slate-500';
+  const accent = isDark ? 'text-purple-300' : 'text-[#8B1EF3]';
+
   const [copiedHandle, setCopiedHandle] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [roadmapInitialTab, setRoadmapInitialTab] = useState('levels');
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [callPending, setCallPending] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState(null);
+
+  const copiedTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+  const callInFlightRef = useRef(false);
+  const menuWrapRef = useRef(null);
+  const menuTriggerRef = useRef(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
+
+  // Menu: close on outside press and on Escape (focus returns to the trigger).
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onPointerDown = (e) => {
+      if (menuWrapRef.current && !menuWrapRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   const handleOpenRoadmap = useCallback((tab = 'levels') => {
     setRoadmapInitialTab(tab);
@@ -330,26 +487,38 @@ export const ProfileHeroSection = memo(({
   const profileUid = profile?.id || profile?.uid || null;
 
   const handleStartCall = useCallback(async () => {
-    if (!profileUid) return;
+    if (!profileUid || callInFlightRef.current) return;
+    callInFlightRef.current = true;
+    setCallPending(true);
     try {
       const { getMessagingService } = await import('../../services/messagesService.js');
       const { conversation } = await getMessagingService().createConversation([profileUid]);
       navigate(`/call/${conversation.id}?type=audio`);
     } catch {
       toast.error('Could not start call');
+    } finally {
+      callInFlightRef.current = false;
+      if (mountedRef.current) setCallPending(false);
     }
   }, [profileUid, navigate]);
 
   const displayName = pickDisplayName([profile?.displayName, profile?.name], {
     fallback: profileUid ? `user ${String(profileUid).slice(0, 6)}` : '—',
   });
-  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || null;
+  // Canonical handle only; never derived from the display name.
+  const username = pickHandle([profile?.username, profile?.handle]) || null;
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
+  const avatarFailed = failedAvatarUrl === avatarUrl;
+  const initials = useMemo(
+    () => displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => Array.from(w)[0]).join('').toUpperCase() || '?',
+    [displayName]
+  );
 
   const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
-  const isVerified = Boolean(profile?.isVerified === true);
+  const isVerified = profile?.isVerified === true;
   const isCreator = resolveCreatorFlag(profile || {}, {}, userLevel);
-  const isPremium = Boolean(profile?.isPremium || profile?.subscription);
+  // Only an explicit flag counts; an arbitrary `subscription` object is not proof of an active plan.
+  const isPremium = profile?.isPremium === true;
 
   const creatorBadgeLabel = useMemo(
     () => getIdentityBadge(profile?.level, { isCreator })?.label || null,
@@ -360,25 +529,21 @@ export const ProfileHeroSection = memo(({
   const isLevelEligibleForVerification = userLevel !== null && verificationLevelGate !== null && userLevel >= verificationLevelGate;
   const sovereignGate = LevelModule.LEVEL_GATES?.sovereign ?? null;
 
-  const isDefaultAura = useMemo(() => {
-    const aura = profile?.crestAura;
-    if (aura === 'purple' || aura === 'royal' || aura === 'cyan' || aura === 'emerald' || aura === 'gold') return false;
-    if (sovereignGate !== null && userLevel !== null && userLevel >= sovereignGate) return false;
-    return true;
-  }, [profile?.crestAura, userLevel, sovereignGate]);
-
+  // Crest aura = existing identity/progression styling. It is NOT a story indicator,
+  // and this component receives no story-availability prop, so no story ring is drawn.
   const crestAuraRing = useMemo(() => {
     const aura = profile?.crestAura;
-    if (aura === 'purple') return 'bg-gradient-to-tr from-purple-500 via-indigo-600 to-fuchsia-500';
+    if (aura === 'purple') return 'linear-gradient(135deg,#a855f7,#4f46e5,#d946ef)';
     if (aura === 'royal' || (sovereignGate !== null && userLevel !== null && userLevel >= sovereignGate)) {
-      return 'bg-gradient-to-tr from-blue-500 via-indigo-700 to-cyan-400';
+      return 'linear-gradient(135deg,#3b82f6,#4338ca,#22d3ee)';
     }
-    if (aura === 'cyan') return 'bg-gradient-to-tr from-cyan-400 via-teal-500 to-sky-300';
-    if (aura === 'emerald') return 'bg-gradient-to-tr from-emerald-400 via-green-600 to-teal-300';
-    if (aura === 'gold') return 'bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-300';
-    return 'bg-arvdoul-gradient';
+    if (aura === 'cyan') return 'linear-gradient(135deg,#22d3ee,#14b8a6,#7dd3fc)';
+    if (aura === 'emerald') return 'linear-gradient(135deg,#34d399,#16a34a,#5eead4)';
+    if (aura === 'gold') return 'linear-gradient(135deg,#fbbf24,#eab308,#fcd34d)';
+    return null;
   }, [profile?.crestAura, userLevel, sovereignGate]);
 
+  // Presentation only: derived from existing resolvers, never an authorization signal.
   const isRoyal = useMemo(() => {
     if (resolveRoyalFlag(profile)) return true;
     const stats = {
@@ -390,26 +555,26 @@ export const ProfileHeroSection = memo(({
       achievements: profile?.achievements ?? null,
       policyStanding: profile?.policyStanding || profile?.accountStatus || null,
     };
-    const dukeCheck = getRoyalEligibility('duke', stats);
-    if (dukeCheck.eligible) return true;
-    const kingCheck = getRoyalEligibility('king', stats);
-    return kingCheck.eligible;
+    if (getRoyalEligibility('duke', stats).eligible) return true;
+    return getRoyalEligibility('king', stats).eligible;
   }, [profile, level]);
 
-  const isOnline = Boolean(profile?.presence?.status === 'online' || profile?.isOnline === true);
-
-  const handleLabel = username || displayName;
-  const handleCopyHandle = useCallback(async (e) => {
-    e?.stopPropagation?.();
+  const handleCopyHandle = useCallback(async () => {
+    if (!username) return;
     try {
-      await navigator.clipboard.writeText(`@${handleLabel}`);
+      if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(`@${username}`);
+      if (!mountedRef.current) return;
       setCopiedHandle(true);
-      toast.success(`Copied @${handleLabel} to clipboard`);
-      setTimeout(() => setCopiedHandle(false), 2000);
+      toast.success(`Copied @${username}`);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) setCopiedHandle(false);
+      }, COPIED_RESET_MS);
     } catch {
-      toast.info(`@${handleLabel}`);
+      toast.error('Could not copy handle');
     }
-  }, [handleLabel]);
+  }, [username]);
 
   const bio = (typeof profile?.bio === 'string' && profile.bio.trim())
     ? profile.bio.trim()
@@ -417,45 +582,207 @@ export const ProfileHeroSection = memo(({
   const tagline = (typeof profile?.tagline === 'string' && profile.tagline.trim()) ? profile.tagline.trim() : '';
   const location = (typeof profile?.location === 'string' && profile.location.trim()) ? profile.location.trim() : '';
   const website = (typeof profile?.website === 'string' && profile.website.trim()) ? profile.website.trim() : '';
+  const websiteHref = website ? sanitizeProfileUrl(website) : null;
+  const websiteLabel = website.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const joinedDate = profile?.createdAt ? formatJoinedDate(profile.createdAt) : null;
+  const isLongBio = bio.length > BIO_CLAMP_THRESHOLD;
 
-  const secondaryBtnClass = cn(
-    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3.5 py-2 rounded-2xl border text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-    isDark
-      ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-100"
-      : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-sm"
-  );
-
-  const iconBtnClass = cn(
-    "inline-flex items-center justify-center w-11 h-11 rounded-2xl border transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-    isDark
-      ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-200"
-      : "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-700 shadow-sm"
-  );
+  // All supported designations, rendered as consistent, quiet credentials.
+  const designations = [
+    isRoyal && { key: 'royal', label: 'Royal Family', icon: Crown, onClick: () => handleOpenRoadmap('royals') },
+    isCreator && creatorBadgeLabel && { key: 'creator', label: creatorBadgeLabel, icon: Star },
+    isPremium && { key: 'premium', label: 'Premium', icon: Crown },
+  ].filter(Boolean);
 
   const showInlineBack = Boolean(onBack && !hasTopAppBar);
+  const showHeroRefresh = Boolean(onRefresh && !showInlineBack);
+  const canOpenAvatar = Boolean(isOwner && onAvatarClick);
+  const canMessage = Boolean(onOpenMessages) && capabilities?.canMessage !== false;
+
+  const iconBtn = cn(
+    "relative inline-flex items-center justify-center w-11 h-11 rounded-[14px] border shrink-0 cursor-pointer",
+    "disabled:opacity-50 disabled:cursor-not-allowed",
+    PRESS, FOCUS_RING, material.control
+  );
+  const primaryBtn = cn(
+    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-[14px] text-[13px] font-semibold whitespace-nowrap cursor-pointer",
+    "disabled:opacity-60 disabled:cursor-not-allowed",
+    PRESS, FOCUS_RING
+  );
+
+  // Menu selection: close, restore focus to the trigger, then run the action
+  // (an action that opens a modal moves focus there afterwards).
+  const closeThen = (fn) => () => {
+    setMenuOpen(false);
+    menuTriggerRef.current?.focus();
+    fn?.();
+  };
+
+  const friendLabel = friendshipStatus === 'friends' ? 'Friends'
+    : friendshipStatus === 'received' ? 'Accept friend request'
+    : friendshipStatus === 'pending' ? (onCancelFriendRequest ? 'Cancel friend request' : 'Friend request sent')
+    : 'Add friend';
+  const FriendIcon = friendshipStatus === 'friends' ? UserCheck
+    : friendshipStatus === 'pending' ? X
+    : UserPlus;
+  const friendAction = friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle;
+  const friendRequestWaiting = !isOwner && Boolean(onFriendRequestToggle) && friendshipStatus === 'received';
+
+  const menuItems = isOwner
+    ? [
+        onOpenQuickEdit && { key: 'quick', icon: Edit3, label: 'Quick edit', onClick: closeThen(() => onOpenQuickEdit('all')) },
+        onOpenLocationSetup && { key: 'loc', icon: MapPin, label: 'Location', onClick: closeThen(onOpenLocationSetup) },
+        { key: 'insights', icon: BarChart2, label: 'Insights', onClick: closeThen(onInsightsPress || (() => navigate('/profile/analytics'))) },
+        { key: 'coins', icon: Coins, label: 'Coins', onClick: closeThen(() => navigate('/coins')) },
+        { key: 'settings', icon: Settings, label: 'Settings', onClick: closeThen(() => navigate('/settings')) },
+        showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: closeThen(onRefresh) },
+        onOpenOptions && { key: 'options', icon: MoreHorizontal, label: 'Profile options & View As', onClick: closeThen(onOpenOptions) },
+      ]
+    : [
+        onFriendRequestToggle && {
+          key: 'friend', icon: FriendIcon, label: friendLabel,
+          disabled: friendRequestLoading || friendshipStatus === 'friends' || !friendAction,
+          busy: friendRequestLoading, onClick: closeThen(friendAction),
+        },
+        callsEnabled && {
+          key: 'call', icon: Phone, label: 'Audio call',
+          disabled: !onOpenMessages || callPending, busy: callPending, onClick: closeThen(handleStartCall),
+        },
+        onOpenTipModal && { key: 'gift', icon: Gift, label: 'Send gift', onClick: closeThen(onOpenTipModal) },
+        onShare && { key: 'share', icon: Share2, label: 'Share profile', className: 'min-[360px]:hidden', onClick: closeThen(onShare) },
+        showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: closeThen(onRefresh) },
+        onOpenOptions && { key: 'options', icon: MoreHorizontal, label: 'More options', onClick: closeThen(onOpenOptions) },
+      ];
+  const visibleMenuItems = menuItems.filter(Boolean);
+
+  // The panel stays mounted so it can fade; `invisible` removes it from the tab order when closed.
+  // It is anchored to the trigger, which always sits inside the centered action row,
+  // so the 232px panel (capped to the viewport) stays on screen.
+  const moreMenu = visibleMenuItems.length > 0 && (
+    <div ref={menuWrapRef} className="relative shrink-0">
+      <button
+        ref={menuTriggerRef}
+        type="button"
+        onClick={() => setMenuOpen((open) => !open)}
+        aria-expanded={menuOpen}
+        aria-controls={MENU_ID}
+        aria-label={friendRequestWaiting ? 'More actions, friend request waiting' : 'More actions'}
+        className={iconBtn}
+      >
+        <MoreHorizontal className="w-[18px] h-[18px]" aria-hidden="true" />
+        {friendRequestWaiting && (
+          <span aria-hidden="true" className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500" />
+        )}
+      </button>
+
+      <div
+        id={MENU_ID}
+        role="group"
+        aria-label="More profile actions"
+        className={cn(
+          "absolute right-0 top-full mt-1.5 z-30 w-[232px] max-w-[calc(100vw-24px)] max-h-[min(60vh,360px)] overflow-y-auto overscroll-contain p-1 rounded-2xl text-left origin-top-right",
+          "transition-[opacity,transform,visibility] duration-150 motion-reduce:transition-none",
+          menuOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
+        )}
+        style={material.overlay}
+      >
+        {visibleMenuItems.map(({ key, ...item }) => (
+          <MenuItem key={key} isDark={isDark} {...item} />
+        ))}
+      </div>
+    </div>
+  );
+
+  const shareButton = onShare && (
+    <button
+      type="button"
+      onClick={onShare}
+      className={cn(iconBtn, !isOwner && "hidden min-[360px]:inline-flex")}
+      aria-label="Share profile"
+    >
+      <Share2 className="w-[18px] h-[18px]" aria-hidden="true" />
+    </button>
+  );
+
+  const portraitFace = avatarFailed ? (
+    <span
+      aria-hidden="true"
+      className={cn("w-full h-full flex items-center justify-center text-[34px] font-semibold", isDark ? "bg-[#0B1438] text-slate-200" : "bg-slate-200 text-slate-600")}
+    >
+      {initials}
+    </span>
+  ) : (
+    <LazyImage
+      src={avatarUrl}
+      alt={canOpenAvatar ? '' : `${displayName} profile photo`}
+      className="w-full h-full object-cover"
+      loading="lazy"
+      onError={() => setFailedAvatarUrl(avatarUrl)}
+    />
+  );
+
+  const portraitClip = cn(
+    "block w-full h-full rounded-full overflow-hidden relative",
+    isDark ? "bg-[#080F2E]" : "bg-slate-100"
+  );
+
+  const metaItems = [
+    location && {
+      key: 'location',
+      node: isOwner && onOpenLocationSetup ? (
+        <button
+          type="button"
+          onClick={onOpenLocationSetup}
+          className={cn("max-w-full min-w-0 truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}
+        >
+          {location}
+        </button>
+      ) : (
+        <span className="max-w-full min-w-0 truncate">{location}</span>
+      ),
+    },
+    websiteLabel && {
+      key: 'website',
+      node: websiteHref ? (
+        <a
+          href={websiteHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn("max-w-full min-w-0 truncate rounded-md font-medium hover:underline underline-offset-2", accent, FOCUS_RING)}
+        >
+          {websiteLabel}
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      ) : (
+        <span className="max-w-full min-w-0 truncate">{websiteLabel}</span>
+      ),
+    },
+    joinedDate && { key: 'joined', node: <span>{joinedDate}</span> },
+  ].filter(Boolean);
+
+  const verifiedIcon = (
+    <BadgeCheck className="w-5 h-5 min-[412px]:w-[22px] min-[412px]:h-[22px] fill-[#4431F7] text-white" aria-hidden="true" />
+  );
 
   return (
-    <section
-      aria-label="Profile identity"
-      className={cn(
-        "w-full pb-6 border-b transition-colors",
-        isDark ? "border-white/[0.08] text-white" : "border-slate-200/80 text-slate-900"
-      )}
+    <div
+      role="group"
+      aria-label="Profile header"
+      className={cn("relative z-20 w-full font-sans py-1", text)}
     >
-      {/* Top Utility Row (only rendered when inline Back is needed outside TopAppBar) */}
       {showInlineBack && (
-        <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
           <button
             type="button"
             onClick={onBack}
-            className={cn(
-              "inline-flex items-center gap-1.5 min-h-[40px] px-2.5 -ml-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-              isDark ? "text-slate-300 hover:text-white hover:bg-white/[0.06]" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            )}
             aria-label="Go back"
+            className={cn(
+              "inline-flex items-center gap-1 min-h-[44px] pl-1.5 pr-3 -ml-1.5 rounded-xl text-[13px] font-medium cursor-pointer",
+              PRESS, FOCUS_RING,
+              isDark ? "text-slate-300 hover:bg-white/[0.07]" : "text-slate-600 hover:bg-slate-900/[0.05]"
+            )}
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
             <span>Back</span>
           </button>
 
@@ -464,573 +791,288 @@ export const ProfileHeroSection = memo(({
               type="button"
               onClick={onRefresh}
               disabled={isRefreshing}
+              aria-busy={isRefreshing}
               aria-label="Refresh profile"
-              title="Refresh profile"
-              className={cn(
-                "inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                isDark
-                  ? "border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.06]"
-                  : "border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              )}
+              className={iconBtn}
             >
-              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-              <span className="hidden sm:inline">Refresh</span>
+              <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
             </button>
           )}
         </div>
       )}
 
-      {/* Main Editorial Identity Row */}
-      <div className="flex flex-col lg:flex-row items-start justify-between gap-5 lg:gap-8">
-        {/* Left: Portrait + Typography & Metadata */}
-        <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 min-w-0 flex-1 w-full">
-          {/* Circular Portrait */}
-          <div className="relative shrink-0">
-            <div
-              className={cn("w-24 h-24 sm:w-28 sm:h-28 lg:w-[120px] lg:h-[120px] rounded-full p-[3px] relative transition-transform duration-300", crestAuraRing)}
-              style={isDefaultAura ? { boxShadow: `0 12px 28px ${brandRgba(isDark ? 0.28 : 0.16)}` } : undefined}
+      <div className="mx-auto w-full max-w-[560px] flex flex-col items-center text-center">
+        {/* 1. Portrait: fixed box (no layout shift), thin structural edge only */}
+        <div
+          className={cn("relative shrink-0 rounded-full", crestAuraRing && "p-[2px]")}
+          style={{
+            width: 'clamp(104px, calc(80px + 8vw), 128px)',
+            aspectRatio: '1 / 1',
+            ...(crestAuraRing ? { background: crestAuraRing } : { boxShadow: material.outline }),
+          }}
+        >
+          {canOpenAvatar ? (
+            <button
+              type="button"
+              onClick={onAvatarClick}
+              aria-label="Update profile avatar"
+              className={cn(portraitClip, "cursor-pointer hover:opacity-95 active:opacity-90", PRESS, FOCUS_RING)}
             >
-              <button
-                type="button"
-                onClick={onAvatarClick}
-                className={cn(
-                  "w-full h-full rounded-full overflow-hidden ring-2 block relative cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  isDark ? "bg-[#080F2E] ring-[#03071B]" : "bg-slate-100 ring-[#F6F8FC]"
-                )}
-                aria-label={isOwner ? "Update profile avatar" : "Profile Avatar"}
-              >
-                <LazyImage
-                  src={avatarUrl}
-                  alt={displayName}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                />
-
-                {isOwner && (
-                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                    <Camera className="w-5 h-5 text-white" />
-                  </div>
-                )}
-              </button>
-
-              {/* Presence Dot (only shown when online) */}
-              {isOnline && (
-                <div
-                  className={cn(
-                    "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2",
-                    isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]"
-                  )}
-                  title="Online"
-                  aria-label="Online"
-                />
-              )}
-              {isOwner && !isOnline && (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "pointer-events-none sm:hidden absolute bottom-0.5 right-0.5 w-7 h-7 rounded-full flex items-center justify-center border shadow-md",
-                    isDark ? "bg-[#0B1438] border-white/15 text-white" : "bg-white border-slate-200 text-slate-700"
-                  )}
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Identity & Editorial Details */}
-          <div className="space-y-2.5 min-w-0 flex-1 w-full">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-display text-2xl sm:text-3xl lg:text-[34px] font-bold tracking-tight text-slate-900 dark:text-white leading-[1.12]">
-                  {displayName}
-                </h1>
-
-                {isVerified && (
-                  <button
-                    type="button"
-                    onClick={onOpenVerificationModal}
-                    title="Verified Account • Click to view credentials"
-                    aria-label="Verified Account credentials"
-                    className="inline-flex items-center justify-center text-arvdoul-blue shrink-0 cursor-pointer hover:scale-105 transition-transform"
-                  >
-                    <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-arvdoul-purple text-white" />
-                  </button>
-                )}
-              </div>
-
-              {/* Unboxed @handle + inline standing strip */}
-              <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap text-xs sm:text-[13px]">
-                <button
-                  type="button"
-                  onClick={handleCopyHandle}
-                  className="group/handle inline-flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400 hover:text-arvdoul-purple dark:hover:text-purple-300 transition-colors cursor-pointer"
-                  title="Click to copy handle"
-                >
-                  <span>@{handleLabel}</span>
-                  {copiedHandle ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  ) : (
-                    <Copy className="w-3 h-3 opacity-50 group-hover/handle:opacity-100 transition-opacity" />
-                  )}
-                </button>
-
-                {isVerified ? (
-                  <>
-                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
-                    <button
-                      type="button"
-                      onClick={onOpenVerificationModal}
-                      className="inline-flex items-center gap-1 font-semibold text-arvdoul-purple dark:text-purple-300 hover:underline cursor-pointer"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Verified</span>
-                    </button>
-                  </>
-                ) : isOwner ? (
-                  <>
-                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
-                    <button
-                      type="button"
-                      onClick={onOpenVerificationModal}
-                      className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300 hover:text-arvdoul-purple dark:hover:text-purple-300 transition-colors cursor-pointer"
-                    >
-                      {isLevelEligibleForVerification ? (
-                        <>
-                          <ShieldCheck className="w-3.5 h-3.5 text-arvdoul-purple" />
-                          <span>Get Verified</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-3 h-3 text-slate-400" />
-                          <span>Level {verificationLevelGate} to Verify</span>
-                        </>
-                      )}
-                    </button>
-                  </>
-                ) : null}
-
-                {isCreator && creatorBadgeLabel && (
-                  <>
-                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span>{creatorBadgeLabel}</span>
-                    </span>
-                  </>
-                )}
-
-                {isPremium && (
-                  <>
-                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-300">
-                      <Crown className="w-3.5 h-3.5" />
-                      <span>Premium</span>
-                    </span>
-                  </>
-                )}
-
-                {isRoyal && (
-                  <>
-                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenRoadmap('royals')}
-                      className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-300 hover:underline cursor-pointer"
-                      title="View Royal Family Privileges & Standing"
-                    >
-                      <Crown className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Royal Family</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Bio & Tagline */}
-            {(bio || isOwner || tagline) && (
-              <div className="space-y-1 max-w-2xl text-sm text-slate-700 dark:text-slate-200">
-                {bio ? (
-                  <div className="flex items-start gap-2 group/bio">
-                    <p className="leading-relaxed">{bio}</p>
-                    {isOwner && onOpenQuickEdit && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenQuickEdit('bio')}
-                        className="text-slate-400 hover:text-arvdoul-purple opacity-70 hover:opacity-100 transition-opacity p-1 shrink-0 cursor-pointer"
-                        title="Edit Bio"
-                        aria-label="Edit Bio"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ) : isOwner ? (
-                  <button
-                    type="button"
-                    onClick={() => (onOpenQuickEdit ? onOpenQuickEdit('bio') : (onEditProfile ? onEditProfile() : navigate('/profile/edit')))}
-                    className="text-xs text-arvdoul-purple dark:text-purple-400 hover:underline inline-flex items-center gap-1 font-semibold cursor-pointer"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Add a bio to your profile</span>
-                  </button>
-                ) : null}
-
-                {tagline && (
-                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-snug">
-                    {tagline}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Coordinates: Location, Website, Joined Date */}
-            {(location || website || joinedDate || isOwner) && (
-              <div className="flex items-center gap-x-3.5 gap-y-1.5 flex-wrap pt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                {location ? (
-                  isOwner ? (
-                    <button
-                      type="button"
-                      onClick={onOpenLocationSetup}
-                      className="inline-flex items-center gap-1 hover:text-arvdoul-purple dark:hover:text-purple-300 transition-colors cursor-pointer"
-                      title="Change location"
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-arvdoul-purple" />
-                      <span>{location}</span>
-                    </button>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{location}</span>
-                    </span>
-                  )
-                ) : isOwner ? (
-                  <button
-                    type="button"
-                    onClick={onOpenLocationSetup}
-                    className="inline-flex items-center gap-1 text-arvdoul-purple dark:text-purple-400 hover:underline cursor-pointer"
-                  >
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>Add location</span>
-                  </button>
-                ) : null}
-
-                {website ? (() => {
-                  const safeHref = sanitizeProfileUrl(website);
-                  return safeHref ? (
-                    <a
-                      href={safeHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-arvdoul-purple dark:text-purple-400 hover:underline font-medium"
-                    >
-                      <Globe className="w-3.5 h-3.5" />
-                      <span>{website.replace(/^https?:\/\//, '')}</span>
-                    </a>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                      <Globe className="w-3.5 h-3.5" />
-                      <span>{website}</span>
-                    </span>
-                  );
-                })() : isOwner && onOpenQuickEdit ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenQuickEdit('website')}
-                    className="inline-flex items-center gap-1 text-arvdoul-purple dark:text-purple-400 hover:underline cursor-pointer"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>Add link</span>
-                  </button>
-                ) : null}
-
-                {joinedDate && (
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{joinedDate}</span>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+              {portraitFace}
+            </button>
+          ) : (
+            <div className={portraitClip}>{portraitFace}</div>
+          )}
         </div>
 
-        {/* Right: Streamlined Civic Standing & Digital Passport */}
-        <ProfileLevelProgressCard
-          level={profile?.level ?? level ?? null}
-          experience={profile?.experience ?? null}
-          isOwner={isOwner}
-          isDark={isDark}
-          userId={profileUid}
-          showLevel={profile?.showLevel !== false}
-          navigate={navigate}
-          onOpenRoadmap={handleOpenRoadmap}
-        />
-      </div>
+        {/* 2. Display name + verification */}
+        <h1
+          className={cn("mt-3 max-w-full font-sans font-semibold [overflow-wrap:anywhere]", text)}
+          style={{
+            fontSize: 'clamp(22px, calc(10px + 3.6vw), 28px)',
+            lineHeight: 1.18,
+            letterSpacing: '-0.016em',
+            textWrap: 'balance',
+          }}
+        >
+          <span>{displayName}</span>
+          {isVerified && (
+            onOpenVerificationModal ? (
+              <button
+                type="button"
+                onClick={onOpenVerificationModal}
+                aria-label="Verified account credentials"
+                className={cn(
+                  "relative inline-flex align-[-3px] ml-1.5 rounded-full cursor-pointer",
+                  "after:absolute after:-inset-2 after:content-['']",
+                  PRESS, FOCUS_RING
+                )}
+              >
+                {verifiedIcon}
+              </button>
+            ) : (
+              <span role="img" aria-label="Verified account" className="inline-flex align-[-3px] ml-1.5">
+                {verifiedIcon}
+              </span>
+            )
+          )}
+        </h1>
 
-      {/* Primary Action Strip — iOS-aligned hierarchy */}
-      <div className="mt-5 sm:mt-6 flex items-center justify-between gap-2.5 flex-wrap">
-        {isOwner ? (
-          <>
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0">
+        {/* 3. Username + copy (and owner verification prompt) */}
+        {(username || (!isVerified && isOwner && verificationLevelGate !== null)) && (
+          <div className="mt-1 max-w-full flex items-center justify-center gap-x-3 flex-wrap text-[13px] leading-5">
+            {username && (
+              <button
+                type="button"
+                onClick={handleCopyHandle}
+                aria-label={`Copy handle @${username}`}
+                className={cn(
+                  "inline-flex items-center gap-1 max-w-full min-w-0 min-h-[28px] rounded-md font-medium cursor-pointer transition-colors motion-reduce:transition-none",
+                  muted, isDark ? "hover:text-slate-200" : "hover:text-slate-800",
+                  FOCUS_RING
+                )}
+              >
+                <span className="truncate">@{username}</span>
+                {copiedHandle ? (
+                  <Check className="w-3 h-3 text-emerald-500 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Copy className="w-3 h-3 opacity-60 shrink-0" aria-hidden="true" />
+                )}
+              </button>
+            )}
+
+            {!isVerified && isOwner && verificationLevelGate !== null && (
+              <button
+                type="button"
+                onClick={onOpenVerificationModal}
+                disabled={!onOpenVerificationModal}
+                className={cn(
+                  "inline-flex items-center gap-1 min-h-[28px] rounded-md text-[12px] font-medium cursor-pointer disabled:cursor-default transition-colors motion-reduce:transition-none",
+                  isLevelEligibleForVerification ? accent : muted,
+                  FOCUS_RING
+                )}
+              >
+                {isLevelEligibleForVerification ? (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Get verified</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3 h-3" aria-hidden="true" />
+                    <span>Level {verificationLevelGate} to verify</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 4. Designations */}
+        {designations.length > 0 && (
+          <div className="mt-2 flex items-center justify-center gap-1.5 flex-wrap">
+            {designations.map(({ key, label, icon: Icon, onClick }) => {
+              const chip = cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] leading-none font-medium",
+                isDark ? "border-white/[0.12] bg-white/[0.03] text-slate-300" : "border-slate-300/70 bg-white/50 text-slate-600"
+              );
+              const content = (
+                <>
+                  <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />
+                  <span>{label}</span>
+                </>
+              );
+              return onClick ? (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={onClick}
+                  className={cn(chip, "cursor-pointer", PRESS, FOCUS_RING, isDark ? "hover:bg-white/[0.07]" : "hover:bg-white")}
+                >
+                  {content}
+                </button>
+              ) : (
+                <span key={key} className={chip}>{content}</span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 5. Bio and tagline */}
+        {(bio || tagline) && (
+          <div className={cn("mt-3 w-full max-w-[52ch] text-[14px] leading-[1.55] [overflow-wrap:anywhere]", body)}>
+            {bio && (
+              <p className={cn("whitespace-pre-line", isLongBio && !bioExpanded && "line-clamp-3")}>{bio}</p>
+            )}
+            {bio && isLongBio && (
+              <button
+                type="button"
+                onClick={() => setBioExpanded((v) => !v)}
+                aria-expanded={bioExpanded}
+                className={cn("mt-0.5 min-h-[28px] px-1 rounded-md text-[12px] font-semibold hover:underline underline-offset-2 cursor-pointer", accent, FOCUS_RING)}
+              >
+                {bioExpanded ? 'Less' : 'More'}
+              </button>
+            )}
+            {tagline && (
+              <p className={cn("text-[12.5px] leading-snug", muted, bio && "mt-1.5")}>{tagline}</p>
+            )}
+          </div>
+        )}
+        {!bio && !tagline && isOwner && onOpenQuickEdit && (
+          <button
+            type="button"
+            onClick={() => onOpenQuickEdit('bio')}
+            className={cn("mt-2 min-h-[32px] px-1 rounded-md text-[13px] font-medium hover:underline underline-offset-2 cursor-pointer", accent, FOCUS_RING)}
+          >
+            Add a bio
+          </button>
+        )}
+
+        {/* 6. Location, website, joined */}
+        {metaItems.length > 0 && (
+          <div className={cn("mt-2.5 max-w-full flex items-center justify-center gap-x-2 gap-y-0.5 flex-wrap text-[12px] leading-5", muted)}>
+            {metaItems.map(({ key, node }, index) => (
+              <span key={key} className="inline-flex items-center gap-2 min-w-0 max-w-full">
+                {index > 0 && <span aria-hidden="true">·</span>}
+                {node}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* 7. Civic standing + Digital Passport */}
+        <div className="mt-4 w-full">
+          <ProfileLevelProgressCard
+            level={profile?.level ?? level ?? null}
+            experience={profile?.experience ?? null}
+            isOwner={isOwner}
+            isDark={isDark}
+            userId={profileUid}
+            showLevel={profile?.showLevel !== false}
+            navigate={navigate}
+            onOpenRoadmap={handleOpenRoadmap}
+          />
+        </div>
+
+        {/* 8. Principal actions (9. More menu is the last control) */}
+        <div className="mt-3 w-full max-w-[420px] flex items-center gap-2">
+          {isOwner ? (
+            <>
               <button
                 type="button"
                 onClick={onEditProfile || (() => navigate('/profile/edit'))}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                className={cn(primaryBtn, "flex-1 min-w-0 text-white hover:brightness-110")}
                 style={{ background: BRAND_GRADIENT }}
               >
-                <Edit3 className="w-4 h-4" />
-                <span>Edit Profile</span>
+                <Edit3 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">Edit Profile</span>
               </button>
-
-              <button
-                type="button"
-                onClick={onInsightsPress || (() => navigate('/profile/analytics'))}
-                className={cn(secondaryBtnClass, "flex-1 sm:flex-none")}
-              >
-                <BarChart2 className="w-4 h-4 text-arvdoul-blue" />
-                <span>Insights</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/coins')}
-                className={secondaryBtnClass}
-              >
-                <Coins className="w-4 h-4 text-amber-500" />
-                <span>Coins</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {onShare && (
-                <button
-                  type="button"
-                  onClick={onShare}
-                  className={iconBtnClass}
-                  aria-label="Share Profile"
-                  title="Share Profile"
-                >
-                  <Share2 className="w-4 h-4 text-arvdoul-purple" />
-                </button>
-              )}
-
+              {shareButton}
               {onOpenQrCode && (
-                <button
-                  type="button"
-                  onClick={onOpenQrCode}
-                  className={iconBtnClass}
-                  aria-label="Identity QR Code"
-                  title="Identity QR Code"
-                >
-                  <QrCode className="w-4 h-4 text-arvdoul-purple" />
+                <button type="button" onClick={onOpenQrCode} className={iconBtn} aria-label="Identity QR code">
+                  <QrCode className="w-[18px] h-[18px]" aria-hidden="true" />
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={() => navigate('/settings')}
-                className={iconBtnClass}
-                aria-label="Settings"
-                title="Settings"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-
-              {onRefresh && !showInlineBack && (
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  disabled={isRefreshing}
-                  className={cn(iconBtnClass, "disabled:opacity-60")}
-                  aria-label="Refresh profile"
-                  title="Refresh profile"
-                >
-                  <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-                </button>
-              )}
-
-              {onOpenOptions && (
-                <button
-                  type="button"
-                  onClick={onOpenOptions}
-                  className={iconBtnClass}
-                  aria-label="Profile options"
-                  title="Profile options & View As"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial flex-wrap min-w-0">
-              {/* Primary Follow CTA */}
+              {moreMenu}
+            </>
+          ) : (
+            <>
               <button
                 type="button"
                 onClick={onFollowToggle}
                 disabled={followLoading || !onFollowToggle}
-                aria-disabled={followLoading || !onFollowToggle}
-                title={!onFollowToggle ? 'Preview only — this is how your profile looks to others' : undefined}
+                aria-busy={followLoading || undefined}
+                title={!onFollowToggle ? 'Preview only: this is how your profile looks to others' : undefined}
                 className={cn(
-                  "flex-1 sm:flex-none sm:min-w-[148px] min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  !onFollowToggle && "opacity-60 cursor-not-allowed",
+                  primaryBtn,
+                  "flex-1 min-w-0",
                   isFollowing || requestStatus === 'pending'
-                    ? (isDark
-                        ? "bg-white/10 hover:bg-white/15 border border-white/15 text-white"
-                        : "bg-slate-200/80 hover:bg-slate-300/80 border border-slate-300 text-slate-900")
-                    : "text-white shadow-md hover:brightness-110"
+                    ? cn("border", material.control)
+                    : "text-white hover:brightness-110"
                 )}
                 style={!(isFollowing || requestStatus === 'pending') ? { background: BRAND_GRADIENT } : undefined}
               >
                 {isFollowing ? (
                   <>
-                    <UserCheck className="w-4 h-4" />
-                    <span>Following</span>
+                    <UserCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Following</span>
                   </>
                 ) : requestStatus === 'pending' ? (
                   <>
-                    <Clock className="w-4 h-4" />
-                    <span>Requested</span>
+                    <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Requested</span>
                   </>
                 ) : (
                   <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Follow</span>
+                    <UserPlus className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Follow</span>
                   </>
                 )}
               </button>
 
-              {/* Message CTA */}
               <button
                 type="button"
                 onClick={onOpenMessages}
-                disabled={!onOpenMessages}
-                aria-disabled={!onOpenMessages}
-                title={!onOpenMessages ? 'Preview only' : undefined}
+                disabled={!canMessage}
+                aria-label="Message"
+                title={!onOpenMessages ? 'Preview only' : (capabilities?.canMessage === false ? 'Messaging is not available' : undefined)}
                 className={cn(
-                  secondaryBtnClass,
-                  "flex-1 sm:flex-none px-4 py-2.5",
-                  (!onOpenMessages || capabilities?.canMessage === false) && "opacity-60 cursor-not-allowed"
+                  primaryBtn, "border shrink-0 px-0 w-11 min-[380px]:px-3.5 min-[380px]:w-auto", material.control
                 )}
               >
-                <MessageSquare className="w-4 h-4" />
-                <span>Message</span>
+                <MessageSquare className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
+                <span className="hidden min-[380px]:inline">Message</span>
               </button>
 
-              {/* Friend Request CTA */}
-              {onFriendRequestToggle && (
-                <button
-                  type="button"
-                  onClick={friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle}
-                  disabled={friendRequestLoading || friendshipStatus === 'friends'}
-                  className={cn(
-                    "min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl font-semibold text-xs sm:text-[13px] border transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    friendshipStatus === 'friends'
-                      ? (isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700")
-                      : friendshipStatus === 'received'
-                      ? "bg-emerald-600 hover:bg-emerald-500 border-transparent text-white shadow-sm cursor-pointer"
-                      : friendshipStatus === 'pending'
-                      ? (isDark ? "bg-white/5 hover:bg-red-500/10 border-white/10 hover:border-red-500/30 text-slate-300 hover:text-red-300 cursor-pointer" : "bg-white hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-700 hover:text-red-600 cursor-pointer")
-                      : cn(secondaryBtnClass, "py-2.5")
-                  )}
-                >
-                  {friendshipStatus === 'friends' ? (
-                    <>
-                      <UserCheck className="w-4 h-4" />
-                      <span>Friends</span>
-                    </>
-                  ) : friendshipStatus === 'received' ? (
-                    <>
-                      <UserPlus className="w-4 h-4" />
-                      <span>Accept Request</span>
-                    </>
-                  ) : friendshipStatus === 'pending' ? (
-                    <>
-                      <X className="w-4 h-4" />
-                      <span>{onCancelFriendRequest ? 'Cancel Request' : 'Request Sent'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="w-4 h-4" />
-                      <span>Add Friend</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {/* Utility Icon Actions */}
-            <div className="flex items-center gap-2 shrink-0">
-              {callsEnabled && (
-                <button
-                  type="button"
-                  onClick={handleStartCall}
-                  disabled={!onOpenMessages}
-                  aria-disabled={!onOpenMessages}
-                  className={cn(iconBtnClass, !onOpenMessages && "opacity-60 cursor-not-allowed")}
-                  title={onOpenMessages ? 'Audio Call' : 'Preview only'}
-                  aria-label="Audio Call"
-                >
-                  <Phone className="w-4 h-4" />
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={onOpenTipModal}
-                disabled={!onOpenTipModal}
-                aria-disabled={!onOpenTipModal}
-                title={onOpenTipModal ? 'Send Gift / Tip Coins' : 'Preview only'}
-                className={cn(iconBtnClass, !onOpenTipModal && "opacity-60 cursor-not-allowed")}
-                aria-label="Send Gift"
-              >
-                <Gift className="w-4 h-4 text-arvdoul-purple" />
-              </button>
-
-              {onShare && (
-                <button
-                  type="button"
-                  onClick={onShare}
-                  title="Share Profile"
-                  className={iconBtnClass}
-                  aria-label="Share Profile"
-                >
-                  <Share2 className="w-4 h-4" />
-                </button>
-              )}
-
-              {onRefresh && !showInlineBack && (
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  disabled={isRefreshing}
-                  className={cn(iconBtnClass, "disabled:opacity-60")}
-                  aria-label="Refresh profile"
-                  title="Refresh profile"
-                >
-                  <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={onOpenOptions}
-                disabled={!onOpenOptions}
-                aria-disabled={!onOpenOptions}
-                title={onOpenOptions ? 'More Options' : 'Preview only'}
-                className={cn(iconBtnClass, !onOpenOptions && "opacity-60 cursor-not-allowed")}
-                aria-label="More Options"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </div>
-          </>
-        )}
+              {shareButton}
+              {moreMenu}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Interactive Level, Citizenship & Royal Family System Roadmap Modal */}
+      {/* Level, citizenship and Royal Family roadmap modal */}
       <ProfileSystemRoadmapModal
         isOpen={showRoadmapModal}
         onClose={() => setShowRoadmapModal(false)}
@@ -1039,7 +1081,7 @@ export const ProfileHeroSection = memo(({
         initialTab={roadmapInitialTab}
         userId={profileUid}
       />
-    </section>
+    </div>
   );
 });
 

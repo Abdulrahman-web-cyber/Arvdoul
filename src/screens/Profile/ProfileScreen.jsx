@@ -1,10 +1,18 @@
 /**
- * Central controller that dynamically renders ProfileMyScreen for the profile owner
- * or ProfilePublicScreen for visitors and creators.
- * 
- * Deeply wired to useProfileStore so route parameters, user handles, and active
- * profile state synchronize authoritatively.
- * 
+ * Central controller that renders ProfileMyScreen for the profile owner
+ * or ProfilePublicScreen for visitors.
+ *
+ * Responsibilities:
+ * - Read the route parameter (`useParams().userId`).
+ * - Treat the AuthContext user's UID as the only ownership authority.
+ * - Decide owner vs. visitor by exact UID comparison, or by a username that is
+ *   tied to the authenticated UID.
+ * - Ask the existing profile store to load the target profile when the store
+ *   does not already hold it.
+ *
+ * This component is NOT an authorization boundary. It only picks which
+ * existing screen to show; access to private data must be enforced elsewhere.
+ *
  * @component
  */
 
@@ -13,63 +21,91 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
-import { getStoredUid } from '../../utils/security';
 import ProfileMyScreen from './ProfileMyScreen';
 import ProfilePublicScreen from './ProfilePublicScreen';
 
+/** Route value meaning "the signed-in user's own profile". */
+const SELF_ROUTE_KEY = 'me';
+
+/**
+ * Returns the value only if it is a non-empty string, otherwise null.
+ * UIDs are opaque, so the value is never trimmed, cased or transformed.
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+const asNonEmptyString = (value) =>
+  typeof value === 'string' && value.length > 0 ? value : null;
+
+/**
+ * Normalizes a username for comparison (case-insensitive, no leading "@").
+ * Must never be applied to UIDs.
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+const toUsernameKey = (value) => {
+  if (typeof value !== 'string') return null;
+  const key = value.trim().replace(/^@/, '').toLowerCase();
+  return key || null;
+};
+
 export default function ProfileScreen() {
+  // React Router already decodes route params once; decoding again could
+  // corrupt identifiers containing "%", so no further decoding is done.
   const { userId } = useParams();
   const { user: authContextUser } = useAuth();
-  const authStoreUser = useAppStore(state => state.currentUser);
-  const authUser = authStoreUser || authContextUser;
-  const currentUserId = authUser?.uid || authContextUser?.uid || getStoredUid();
+  const appStoreUser = useAppStore((state) => state.currentUser);
 
-  // Wire Profile Store
-  const storeProfile = useProfileStore((state) => state.profile);
+  // Only primitive fields are selected so unrelated profile changes do not rerender.
+  const profileUid = useProfileStore((state) => state.profile?.uid ?? state.profile?.id ?? null);
+  const profileUsername = useProfileStore((state) => state.profile?.username ?? null);
   const loadProfile = useProfileStore((state) => state.loadProfile);
 
-  const rawUserId = userId ? String(userId).replace(/^@/, '').trim() : null;
-  const lowerUserId = rawUserId ? rawUserId.toLowerCase() : null;
-  const rawEmail = typeof authUser?.email === 'string' ? authUser.email : '';
-  const rawUsername = typeof authUser?.username === 'string' ? authUser.username : '';
-  const currentUsername = (rawUsername || rawEmail.split('@')[0] || '').toLowerCase().trim();
+  // --- Authenticated identity -------------------------------------------
+  // The AuthContext session is authoritative. The app store is never trusted
+  // to establish identity, and a locally stored UID is never used.
+  const authUid = asNonEmptyString(authContextUser?.uid);
+  const appStoreUid = asNonEmptyString(appStoreUser?.uid);
+  const hasIdentityConflict = Boolean(authUid && appStoreUid && appStoreUid !== authUid);
 
-  // Evaluate if current viewer is owner of this profile route
-  const isOwner = Boolean(
-    currentUserId && (
-      !rawUserId ||
-      rawUserId === currentUserId ||
-      (lowerUserId && lowerUserId === currentUserId.toLowerCase()) ||
-      lowerUserId === 'me' ||
-      (currentUsername && lowerUserId === currentUsername) ||
-      (storeProfile &&
-        (storeProfile.id === currentUserId || storeProfile.uid === currentUserId) &&
-        (lowerUserId === storeProfile.username?.toLowerCase() || rawUserId === storeProfile.id))
-    )
+  // A username is only accepted from a user object whose UID is the session UID.
+  const authUsername = toUsernameKey(
+    authContextUser?.username ?? (appStoreUid === authUid ? appStoreUser?.username : null)
   );
 
-  // Ensure target profile is loaded into useProfileStore if viewing a distinct user
+  // --- Route interpretation ---------------------------------------------
+  const trimmedParam = typeof userId === 'string' ? userId.trim().replace(/^@/, '') : '';
+  const routeId = trimmedParam || null; // case preserved: may be a UID
+  const routeKey = toUsernameKey(routeId); // lowercased: only for username comparison
+  const isSelfRoute = routeId === null || routeKey === SELF_ROUTE_KEY;
+
+  // --- Ownership --------------------------------------------------------
+  const isOwner = Boolean(
+    authUid &&
+      !hasIdentityConflict &&
+      (isSelfRoute ||
+        routeId === authUid ||
+        (authUsername && routeKey === authUsername) ||
+        // Username route resolved through the loaded profile: the profile must
+        // belong to the session UID and carry the username in the route.
+        (profileUid === authUid &&
+          toUsernameKey(profileUsername) !== null &&
+          routeKey === toUsernameKey(profileUsername)))
+  );
+
+  // --- Profile loading --------------------------------------------------
+  // Owner: load the session UID. Visitor: load the route value as before.
+  // "me"/empty routes without an owner have no target (nothing is requested).
+  const targetId = isOwner ? authUid : isSelfRoute ? null : routeId;
+
+  const isTargetLoaded = isOwner
+    ? profileUid === authUid
+    : profileUid === routeId ||
+      (routeKey !== null && toUsernameKey(profileUsername) === routeKey);
+
   useEffect(() => {
-    const targetUid = isOwner ? currentUserId : (rawUserId || currentUserId);
-    if (!targetUid) return;
+    if (!targetId || isTargetLoaded) return;
+    loadProfile(targetId, authUid);
+  }, [targetId, authUid, isTargetLoaded, loadProfile]);
 
-    // Trigger loadProfile if profile in store doesn't match target route
-    const currentStoreId = storeProfile?.id || storeProfile?.uid;
-    const currentStoreUsername = storeProfile?.username?.toLowerCase();
-
-    const isAlreadyLoaded = isOwner
-      ? (currentStoreId === currentUserId)
-      : (currentStoreId === rawUserId || (lowerUserId && currentStoreUsername === lowerUserId));
-
-    if (!isAlreadyLoaded) {
-      loadProfile(targetUid, currentUserId);
-    }
-  }, [rawUserId, lowerUserId, currentUserId, isOwner, loadProfile, storeProfile?.id, storeProfile?.uid, storeProfile?.username]);
-
-  if (isOwner) {
-    return <ProfileMyScreen />;
-  }
-
-  return <ProfilePublicScreen />;
+  return isOwner ? <ProfileMyScreen /> : <ProfilePublicScreen />;
 }
-
