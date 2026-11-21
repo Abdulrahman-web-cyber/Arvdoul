@@ -6,6 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const store = read('src/store/profileStore.js');
 const ownerProfile = read('src/screens/Profile/ProfileMyScreen.jsx');
+const publicProfile = read('src/screens/Profile/ProfilePublicScreen.jsx');
 
 describe('profile cache and unknown-value isolation', () => {
   test('device-local optimistic posts never widen a visitor profile query', () => {
@@ -29,6 +30,15 @@ describe('profile cache and unknown-value isolation', () => {
     expect(filter).toMatch(/s\.ownerId === userId/);
     expect(filter).toMatch(/s\.uid === userId/);
     expect(filter).not.toMatch(/!s\.userId|!s\.authorId|!s\.uid/);
+  });
+
+  test('visitor profile is withheld when relationship and block state cannot be verified', () => {
+    expect(publicProfile).toContain('const [relationshipError, setRelationshipError] = useState(false)');
+    expect(publicProfile).toContain("relSettled.status !== 'fulfilled' || !relSettled.value");
+    expect(publicProfile).toContain('setRelationshipError(true)');
+    expect(publicProfile).toContain('Profile Access Could Not Be Verified');
+    expect(publicProfile).toContain('Its contents and actions are withheld until that check succeeds.');
+    expect(publicProfile).not.toContain('userService.areFriends(currentUserId, resolvedUid)');
   });
 
   test('unknown wallet balance is not initialized as a measured zero', () => {
