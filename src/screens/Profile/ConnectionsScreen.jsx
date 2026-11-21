@@ -138,16 +138,35 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       }
       setLoading(true);
       setPermissionDenied(false);
+      // Route changes must not display the previous target's social graph
+      // while the next profile and its permissions are being resolved.
+      setTargetProfile(null);
+      setCapabilities(null);
+      setFollowers([]);
+      setFollowing([]);
+      setFriends([]);
+      setSuggestions([]);
+      setCursors({ followers: null, following: null, friends: null });
+      setHasMore({ followers: false, following: false, friends: false });
 
       try {
         const userService = getUserService();
 
         const [profile, rel] = await Promise.all([
-          userService.getUserProfile(targetUserId, currentUserId).catch(() => null),
+          userService.getUserProfile(targetUserId, currentUserId),
           currentUserId && currentUserId !== targetUserId
-            ? userService.getRelationshipState(currentUserId, targetUserId).catch(() => null)
+            ? userService.getRelationshipState(currentUserId, targetUserId)
             : Promise.resolve({ isOwner: Boolean(currentUserId && targetUserId === currentUserId) }),
         ]);
+
+        if (!profile) {
+          if (isMounted) setPermissionDenied(true);
+          return;
+        }
+        if (currentUserId && currentUserId !== targetUserId && !rel) {
+          if (isMounted) setPermissionDenied(true);
+          return;
+        }
 
         if (isMounted) {
           setTargetProfile(profile);
@@ -230,6 +249,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               followStates = await userService.getFollowStates(currentUserId, allIds);
             } catch (e) {
               console.warn('Follow-state hydration failed:', e?.message);
+              setPermissionDenied(true);
+              return;
             }
           }
           const withState = (list) => list.map((u) => {
@@ -253,6 +274,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         }
       } catch (err) {
         console.error('Failed to load connection graph:', err);
+        // Profile or safety-relationship failure must never be interpreted as
+        // a public/empty graph and then used to enable social actions.
+        if (isMounted) setPermissionDenied(true);
       } finally {
         if (isMounted) setLoading(false);
       }
