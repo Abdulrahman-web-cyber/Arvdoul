@@ -882,6 +882,7 @@ class ProductionAuthService {
   }
 
   async signInWithGoogle(options = {}) {
+    this.googleRedirectError = null;
     try {
       await this.initialize();
       const {
