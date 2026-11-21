@@ -19,6 +19,37 @@ const AUTH_CONFIG = {
   SERVER_RATE_LIMIT_FUNCTION: null
 };
 
+const GOOGLE_REDIRECT_PENDING_KEY = 'arvdoul_google_redirect_pending';
+
+const markGoogleRedirectPending = () => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, '1');
+    }
+  } catch (error) {
+    logger.warn('Google redirect marker could not be persisted', { message: error?.message });
+  }
+};
+
+const hasGoogleRedirectPending = () => {
+  try {
+    return typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const clearGoogleRedirectPending = () => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+    }
+  } catch {
+    // Session marker cleanup is best-effort; it contains no credential data.
+  }
+};
+
 class AuthError extends Error {
   constructor(code, message, originalError = null) {
     super(message);
@@ -80,7 +111,20 @@ class ProductionAuthService {
       this.googleRedirectError = null;
       try {
         const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
+        const hadPendingGoogleRedirect = hasGoogleRedirectPending();
         const redirectResult = await getRedirectResult(this.auth);
+        const redirectUser = redirectResult?.user || this.auth.currentUser || null;
+        if (redirectUser) {
+          clearGoogleRedirectPending();
+        } else if (hadPendingGoogleRedirect) {
+          clearGoogleRedirectPending();
+          const missingResult = new Error(
+            'Google account selection returned to Arvdoul without a completed Firebase session. Check the Firebase authorized domains and try again in Chrome.'
+          );
+          missingResult.code = 'auth/redirect-result-missing';
+          this.googleRedirectError = missingResult;
+          logger.error('Google redirect returned without an authenticated user', { code: missingResult.code });
+        }
         if (redirectResult?.user) {
           const user = redirectResult.user;
           logger.info('Google redirect sign-in completed', { uid: user.uid });
@@ -121,6 +165,7 @@ class ProductionAuthService {
         // A malformed/expired redirect must not prevent an already-restored
         // Firebase session from being observed. Keep the original error for
         // diagnostics instead of disguising it as a popup-permission failure.
+        clearGoogleRedirectPending();
         this.googleRedirectError = redirectError;
         logger.error('Google redirect result processing failed', {
           code: redirectError?.code || null,
@@ -858,8 +903,14 @@ class ProductionAuthService {
       const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
       const prefersRedirect = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
       if (prefersRedirect) {
-        await signInWithRedirect(this.auth, provider);
-        return { success: true, redirecting: true };
+        markGoogleRedirectPending();
+        try {
+          await signInWithRedirect(this.auth, provider);
+          return { success: true, redirecting: true };
+        } catch (redirectError) {
+          clearGoogleRedirectPending();
+          throw redirectError;
+        }
       }
 
       let result;
@@ -871,9 +922,11 @@ class ProductionAuthService {
         if (popupError.code === 'auth/popup-blocked') {
           logger.warn('Popup blocked; attempting signInWithRedirect fallback...');
           try {
+            markGoogleRedirectPending();
             await signInWithRedirect(this.auth, provider);
             return { success: true, redirecting: true };
           } catch (redirectError) {
+            clearGoogleRedirectPending();
             // Preserve the real fallback failure. Re-throwing popupError here
             // masked domain/storage/network failures as a popup issue.
             logger.error('signInWithRedirect failed:', redirectError);
