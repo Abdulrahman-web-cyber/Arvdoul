@@ -77,6 +77,15 @@ describe('storage.rules delete semantics', () => {
     expect(missing).toEqual([]);
   });
 
+  test('private and audience story paths are not covered by a recursive public-read rule', () => {
+    expect(rules).toContain('match /stories/{userId}/audience/{storyId}/{fileName=**}');
+    expect(rules).toContain('match /stories/{userId}/private/{fileName=**}');
+    expect(rules).toContain('match /stories/{userId}/{fileName}');
+    expect(rules).not.toContain('match /stories/{userId}/{fileName=**}');
+    const storyService = read('src/services/storyService.js');
+    expect(storyService).toMatch(/stories\/\$\{userId\}\/audience\/\$\{storyId\}/);
+  });
+
   test('the default deny catch-all remains', () => {
     expect(rules).toMatch(/match\s+\/\{allPaths=\*\*\}/);
     expect(rules).toMatch(/allow read, write: if false/);

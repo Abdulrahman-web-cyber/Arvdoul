@@ -2287,11 +2287,10 @@ class UltimateStoryService {
     const stampName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const vis = uploadOptions.visibility || STORY_CONFIG.VISIBILITY.PUBLIC;
     const storyId = uploadOptions.storyId;
-    const path = vis === STORY_CONFIG.VISIBILITY.PRIVATE && storyId
+    if (!storyId) throw new Error('A story id is required before uploading story media.');
+    const path = vis === STORY_CONFIG.VISIBILITY.PRIVATE
       ? `stories/${userId}/private/${storyId}/${stampName}`
-      : (['followers', 'connections', 'close_circle', 'selected'].includes(vis) && storyId)
-        ? `stories/${userId}/audience/${storyId}/${stampName}`
-        : `stories/${userId}/${stampName}`;
+      : `stories/${userId}/audience/${storyId}/${stampName}`;
     const fileRef = this.st.ref(this.storage, path);
     const uploadTask = this.st.uploadBytesResumable(fileRef, file, {
       contentType: file.type,
