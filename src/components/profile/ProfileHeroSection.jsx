@@ -18,6 +18,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   BadgeCheck,
   MapPin,
+  Briefcase,
+  Link2,
+  CalendarDays,
   Crown,
   MoreHorizontal,
   QrCode,
@@ -771,7 +774,12 @@ export const ProfileHeroSection = memo(({
   const metaItems = [
     profession && {
       key: 'profession',
-      node: <span className="max-w-full min-w-0 truncate">{profession}</span>,
+      node: (
+        <span className="inline-flex items-center gap-2 max-w-full min-w-0">
+          <Briefcase className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
+          <span className="truncate">{profession}</span>
+        </span>
+      ),
     },
     location && {
       key: 'location',
@@ -779,35 +787,48 @@ export const ProfileHeroSection = memo(({
         <button
           type="button"
           onClick={onOpenLocationSetup}
-          className={cn("inline-flex items-center gap-1 max-w-full min-w-0 truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}
+          className={cn("inline-flex items-center gap-2 max-w-full min-w-0 truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}
         >
-          <MapPin className="w-3 h-3 shrink-0 opacity-75" aria-hidden="true" />
+          <MapPin className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
           <span className="truncate">{location}</span>
         </button>
       ) : (
-        <span className="inline-flex items-center gap-1 max-w-full min-w-0 truncate">
-          <MapPin className="w-3 h-3 shrink-0 opacity-75" aria-hidden="true" />
+        <span className="inline-flex items-center gap-2 max-w-full min-w-0 truncate">
+          <MapPin className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
           <span className="truncate">{location}</span>
         </span>
       ),
     },
     websiteLabel && {
       key: 'website',
-      node: websiteHref ? (
-        <a
-          href={websiteHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn("max-w-full min-w-0 truncate rounded-md font-medium hover:underline underline-offset-2", accent, FOCUS_RING)}
-        >
-          {websiteLabel}
-          <span className="sr-only"> (opens in a new tab)</span>
-        </a>
-      ) : (
-        <span className="max-w-full min-w-0 truncate">{websiteLabel}</span>
+      node: (
+        <span className="inline-flex items-center gap-2 max-w-full min-w-0">
+          <Link2 className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
+          {websiteHref ? (
+            <a
+              href={websiteHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn("max-w-full min-w-0 truncate rounded-md font-medium hover:underline underline-offset-2", accent, FOCUS_RING)}
+            >
+              {websiteLabel}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          ) : (
+            <span className="max-w-full min-w-0 truncate">{websiteLabel}</span>
+          )}
+        </span>
       ),
     },
-    joinedDate && { key: 'joined', node: <span>{joinedDate}</span> },
+    joinedDate && {
+      key: 'joined',
+      node: (
+        <span className="inline-flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
+          <span>{joinedDate}</span>
+        </span>
+      ),
+    },
   ].filter(Boolean);
 
   const verifiedIcon = (
@@ -1070,10 +1091,12 @@ export const ProfileHeroSection = memo(({
 
         {/* 6. Profession, location, website, joined */}
         {metaItems.length > 0 && (
-          <div className={cn("mt-2 max-w-full flex items-center justify-center gap-x-2 gap-y-0.5 flex-wrap text-[12px] leading-5", muted)}>
-            {metaItems.map(({ key, node }, index) => (
-              <span key={key} className="inline-flex items-center gap-2 min-w-0 max-w-full">
-                {index > 0 && <span aria-hidden="true">·</span>}
+          <div className={cn(
+            "mt-4 w-full max-w-[520px] grid grid-cols-1 min-[420px]:grid-cols-2 items-center justify-items-center gap-x-5 gap-y-2.5 text-[13px] sm:text-[14px] leading-5",
+            muted
+          )}>
+            {metaItems.map(({ key, node }) => (
+              <span key={key} className="inline-flex items-center justify-center min-w-0 max-w-full">
                 {node}
               </span>
             ))}
