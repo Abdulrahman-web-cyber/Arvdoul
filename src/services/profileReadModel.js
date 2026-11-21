@@ -374,6 +374,7 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   const mayViewFollowers = isOwner || Boolean(caps.canViewFollowers);
   const mayViewFollowing = isOwner || Boolean(caps.canViewFollowing);
   const mayViewFriends = isOwner || Boolean(caps.canViewFriends);
+  const mayViewLinks = isOwner || Boolean(caps.canViewLinks);
   const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
@@ -397,7 +398,9 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     canViewFollowersList: Boolean(caps.canViewFollowers),
     canViewFollowingList: Boolean(caps.canViewFollowing),
     canViewFriendsList: Boolean(caps.canViewFriends),
-    links: caps.canViewLinks ? (profile.links || []) : [],
+    links: !blocked && mayViewIdentity && mayViewLinks ? (profile.links || []) : [],
+    website: !blocked && mayViewIdentity && mayViewLinks ? profile.website : '',
+    websiteUrl: !blocked && mayViewIdentity && mayViewLinks ? profile.websiteUrl : '',
     presence: presenceVisible ? profile.presence : OFFLINE_PRESENCE,
     isOnline: presenceVisible ? profile.isOnline : false,
     lastActive: presenceVisible ? profile.lastActive : null,
