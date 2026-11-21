@@ -233,7 +233,7 @@ describe('Profile System Hardening & Validation Contracts', () => {
       const state = useProfileStore.getState();
       expect(state.profile).toBeNull();
       expect(state.activeTab).toBe('posts');
-      expect(state.balance).toBe(0);
+      expect(state.balance).toBeNull();
     });
   });
 
