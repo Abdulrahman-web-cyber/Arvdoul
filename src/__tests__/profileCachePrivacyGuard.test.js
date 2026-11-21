@@ -106,9 +106,12 @@ describe('profile cache and unknown-value isolation', () => {
   });
 
   test('visitor profile is withheld when relationship and block state cannot be verified', () => {
+    expect(publicProfile).toContain('const [relationshipResolved, setRelationshipResolved] = useState(false)');
     expect(publicProfile).toContain('const [relationshipError, setRelationshipError] = useState(false)');
     expect(publicProfile).toContain("relSettled[0].status !== 'fulfilled' || !relSettled[0].value");
     expect(publicProfile).toContain('setRelationshipError(true)');
+    expect(publicProfile).toContain('!relationshipResolved && !relationshipError');
+    expect(publicProfile).toContain('setRelationshipResolved(true)');
     expect(publicProfile).toContain('Profile Access Could Not Be Verified');
     expect(publicProfile).toContain('Its contents and actions are withheld until that check succeeds.');
     expect(publicProfile).not.toContain('userService.areFriends(currentUserId, resolvedUid)');
