@@ -18,7 +18,6 @@ import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
-import { getStoredUser, getStoredUid } from '../utils/security.js';
 import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 import { getUserService } from '../services/userService.js';
 import { socialGraphService } from '../services/socialGraphService.js';
@@ -43,7 +42,7 @@ function isApprovedFollowerView(get, userId, options) {
   const profile = options.profile || state.profile;
   if (!profile || (profile.id !== userId && profile.uid !== userId)) return false;
   if (profile.isPrivate !== true) return false;
-  const viewerUid = getStoredUid() || useAppStore.getState().currentUser?.uid || null;
+  const viewerUid = state.viewerUid || null;
   if (!viewerUid || viewerUid === userId) return false;
   return state.followStatus?.isFollowing === true;
 }
@@ -51,6 +50,7 @@ function isApprovedFollowerView(get, userId, options) {
 const initialState = {
   // Profile data
   profile: null,
+  viewerUid: null,
   loading: false,
   error: null,
   isOwner: false,
@@ -193,6 +193,7 @@ export const useProfileStore = create(
       const requestId = get().requestSeq + 1;
       set((state) => {
         state.requestSeq = requestId;
+        state.viewerUid = currentUserId || null;
         state.loading = true;
         state.error = null;
         // A new profile load invalidates any prior mutual-friends result.
@@ -302,9 +303,9 @@ export const useProfileStore = create(
         }
 
         // Resolve profile strictly separating owner auth context from visited public profiles.
-        const appCurrentUser = isOwner ? (useAppStore.getState().currentUser || getStoredUser()) : null;
-        const storedUid = getStoredUid();
-        const effectiveUid = isOwner ? (currentUserId || storedUid) : null;
+        const appStoreUser = useAppStore.getState().currentUser;
+        const appCurrentUser = isOwner && appStoreUser?.uid === currentUserId ? appStoreUser : null;
+        const effectiveUid = isOwner ? currentUserId : null;
         const fallbackDisplayName = isOwner
           ? pickDisplayName(
               [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
@@ -376,10 +377,10 @@ export const useProfileStore = create(
         }
       } catch (error) {
         console.warn('Load profile handled gracefully with fallback:', error?.message);
-        const storedUid = getStoredUid();
-        const effectiveUid = currentUserId || storedUid;
-        const isOwner = !userId || userId === effectiveUid;
-        const localAuth = isOwner ? (getStoredUser() || {}) : {};
+        const effectiveUid = currentUserId || null;
+        const isOwner = Boolean(currentUserId && (!userId || userId === effectiveUid));
+        const appStoreUser = useAppStore.getState().currentUser;
+        const localAuth = isOwner && appStoreUser?.uid === currentUserId ? appStoreUser : {};
 
         const rawDisplayName = isOwner ? (localAuth.displayName || localAuth.name) : null;
         const fallbackDisplayName = isOwner
@@ -531,7 +532,7 @@ export const useProfileStore = create(
       });
       
       try {
-        const viewerId = getStoredUid() || useAppStore.getState().currentUser?.uid || null;
+        const viewerId = get().viewerUid || null;
         const constrainAuthorIsPrivate = !isApprovedFollowerView(get, userId, options);
         const queryOpts = {
           limit: options.limit || 12,
@@ -648,7 +649,7 @@ export const useProfileStore = create(
         const result = await fsSvc.getPostsByUser(userId, {
           limit: 12,
           cursor: postsCursor,
-          viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
+          viewerId: get().viewerUid || null,
           constrainAuthorIsPrivate: !isApprovedFollowerView(get, userId, {}),
         });
 
