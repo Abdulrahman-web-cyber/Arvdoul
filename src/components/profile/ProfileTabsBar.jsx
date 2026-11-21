@@ -98,7 +98,7 @@ const ProfileTabsBar = memo(({
                 <span
                   className={cn(
                     "text-[11px] font-semibold tabular-nums",
-                    isActive ? "text-arvdoul-purple dark:text-purple-300" : "text-slate-400 dark:text-slate-500"
+                    isActive ? "text-white/90" : "text-slate-400 dark:text-slate-500"
                   )}
                 >
                   {count}
