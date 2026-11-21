@@ -42,7 +42,7 @@ import {
   persistentLocalCache as _fbPersistentLocalCache,
   persistentMultipleTabManager as _fbPersistentMultipleTabManager,
 } from 'firebase/firestore';
-import { getAuth as _fbGetAuth, setPersistence as _fbSetPersistence, browserLocalPersistence as _fbBrowserLocalPersistence } from 'firebase/auth';
+import { getAuth as _fbGetAuth, setPersistence as _fbSetPersistence, browserLocalPersistence as _fbBrowserLocalPersistence, browserSessionPersistence as _fbBrowserSessionPersistence } from 'firebase/auth';
 import { getStorage as _fbGetStorage } from 'firebase/storage';
 
 const _fbApp = _fbGetApps().length ? _fbGetApp() : _fbInitializeApp(FIREBASE_CONFIG);
@@ -99,16 +99,35 @@ if (typeof window !== 'undefined' && APP_CHECK_SITE_KEY) {
     });
 }
 
-// Mirror the manager's auth hardening so phone/SMS auth keeps working.
-try {
-  if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'test') {
-    _fbSetPersistence(auth, _fbBrowserLocalPersistence);
+// Persistence is part of auth bootstrap, not a fire-and-forget side effect.
+// AuthService awaits this promise before consuming OAuth redirect results or
+// installing AuthContext listeners. If local storage is unavailable, session
+// persistence is the supported fallback; never silently race either operation.
+export const authPersistenceReady = (async () => {
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') return 'test';
+  try {
+    await _fbSetPersistence(auth, _fbBrowserLocalPersistence);
+    return 'local';
+  } catch (localError) {
+    try {
+      await _fbSetPersistence(auth, _fbBrowserSessionPersistence);
+      return 'session';
+    } catch (sessionError) {
+      console.warn('[FirebaseAuth] persistence unavailable', {
+        local: localError?.code || localError?.message,
+        session: sessionError?.code || sessionError?.message,
+      });
+      return 'none';
+    }
   }
+})();
+
+try {
   if (!auth.settings) auth.settings = {};
   auth.settings.appVerificationDisabledForTesting = false;
   auth.languageCode = (typeof navigator !== 'undefined' && navigator.language) || 'en';
 } catch (_eagerAuthErr) {
-  /* Persistence may be unavailable in some environments (e.g. private mode). */
+  /* Auth settings are optional in restricted test/browser contexts. */
 }
 
 export const OperationType = Object.freeze({
