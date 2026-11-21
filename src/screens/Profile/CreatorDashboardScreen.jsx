@@ -50,18 +50,18 @@ export default function CreatorDashboardScreen() {
     else if (profileSupplement && !isCreator) navigate('/profile', { replace: true });
   }, [currentUserId, isCreator, navigate]);
   
-  const {
-    analytics,
-    loading,
-    error,
-    timeframe,
-    dailyStats,
-    ranking,
-    demographics,
-    loadAnalytics,
-    setTimeframe,
-    refresh,
-  } = useAnalyticsStore();
+  const analyticsState = useAnalyticsStore();
+  const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId;
+  const analytics = isAnalyticsForCurrentUser ? analyticsState.analytics : null;
+  const loading = analyticsState.loading;
+  const error = isAnalyticsForCurrentUser ? analyticsState.error : null;
+  const timeframe = analyticsState.timeframe;
+  const dailyStats = isAnalyticsForCurrentUser ? analyticsState.dailyStats : [];
+  const ranking = isAnalyticsForCurrentUser ? analyticsState.ranking : null;
+  const demographics = isAnalyticsForCurrentUser ? analyticsState.demographics : null;
+  const loadAnalytics = analyticsState.loadAnalytics;
+  const setTimeframe = analyticsState.setTimeframe;
+  const refresh = analyticsState.refresh;
   
   // Load analytics
   useEffect(() => {
