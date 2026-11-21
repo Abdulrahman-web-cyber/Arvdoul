@@ -706,18 +706,39 @@ class ProfessionalUserService {
       phoneVerified: Boolean(profileData.phoneVerified)
     };
 
-    // Align verification booleans with live Firebase Auth token claims so
-    // `users_private` create/update rules never fail on stale caller booleans.
+    // The users_private rules compare these booleans against ID-token claims,
+    // not the User object's potentially stale metadata. Refresh and read the
+    // claims before the transaction or recently verified accounts can receive
+    // permission-denied while completing SetupProfile.
+    let liveAuthUser = null;
     try {
       const firebase = await import('../firebase/firebase.js');
       const auth = await firebase.getAuthInstance();
       if (auth?.currentUser && auth.currentUser.uid === userId) {
-        profile.emailVerified = Boolean(auth.currentUser.emailVerified);
-        profile.phoneVerified = Boolean(auth.currentUser.phoneNumber);
-        if (!profile.email && auth.currentUser.email) profile.email = auth.currentUser.email;
-        if (!profile.phoneNumber && auth.currentUser.phoneNumber) profile.phoneNumber = auth.currentUser.phoneNumber;
+        liveAuthUser = auth.currentUser;
+        if (typeof liveAuthUser.getIdTokenResult === 'function') {
+          const tokenResult = await liveAuthUser.getIdTokenResult(true);
+          const claims = tokenResult?.claims || {};
+          profile.emailVerified = claims.email_verified === true;
+          profile.phoneVerified = typeof claims.phone_number === 'string' && claims.phone_number.length > 0;
+        } else {
+          profile.emailVerified = Boolean(liveAuthUser.emailVerified);
+          profile.phoneVerified = Boolean(liveAuthUser.phoneNumber);
+        }
+        if (!profile.email && liveAuthUser.email) profile.email = liveAuthUser.email;
+        if (!profile.phoneNumber && liveAuthUser.phoneNumber) profile.phoneNumber = liveAuthUser.phoneNumber;
       }
-    } catch { /* non-blocking in non-browser/test environments */ }
+    } catch (refreshError) {
+      logger.error('Auth token refresh failed before profile transaction', {
+        userId, code: refreshError?.code || null, error: refreshError?.message || 'unknown',
+      });
+      if (liveAuthUser) {
+        const error = new Error('Your sign-in session could not be refreshed. Sign in again, then complete your profile.');
+        error.code = 'auth/session-refresh-failed';
+        error.cause = refreshError;
+        throw error;
+      }
+    }
 
     const userDoc = doc(this.firestore, 'users', userId);
     const usernameDoc = doc(this.firestore, 'usernames', username);

@@ -919,8 +919,13 @@ class ProductionAuthService {
         result = await signInWithPopup(this.auth, provider);
       } catch (popupError) {
         logger.warn('signInWithPopup error:', popupError.code || popupError.message);
-        // Only fallback to redirect if popup was genuinely blocked by browser
-        if (popupError.code === 'auth/popup-blocked') {
+        // Redirect also works where Firebase cannot create a popup at all.
+        // Do not redirect on popup-closed/cancelled: those are deliberate user actions.
+        const redirectFallbackCodes = new Set([
+          'auth/popup-blocked',
+          'auth/operation-not-supported-in-this-environment',
+        ]);
+        if (redirectFallbackCodes.has(popupError.code)) {
           logger.warn('Popup blocked; attempting signInWithRedirect fallback...');
           try {
             markGoogleRedirectPending();
@@ -1342,7 +1347,9 @@ class ProductionAuthService {
         : 'Google sign-in could not complete. This is not an operating-system permission request; check the OAuth provider configuration, authorized domain, browser storage and network, then retry.',
       'auth/user-disabled': 'This account has been disabled.',
       'auth/too-many-requests': 'Too many attempts. Please try again later.',
-      'auth/operation-not-allowed': 'This sign-in method is currently not enabled. Please sign in with Email or Phone.',
+      'auth/operation-not-allowed': 'This sign-in provider is not enabled in Firebase Authentication. Enable the selected provider under Sign-in method.',
+      'auth/operation-not-supported-in-this-environment': 'This browser cannot complete the Google sign-in popup. Open Arvdoul in Chrome or another supported browser and retry.',
+      'auth/web-storage-unsupported': 'This browser blocks the storage required for Google sign-in. Open Arvdoul in Chrome or another supported browser.',
       'auth/requires-recent-login': 'Please re-authenticate to continue.',
       'auth/network-request-failed': 'Network error. Check your connection.',
       'auth/expired-action-code': 'Reset link has expired. Please request a new one.',
@@ -1354,7 +1361,7 @@ class ProductionAuthService {
       'auth/popup-blocked': typeof window !== 'undefined' && window.self !== window.top
         ? 'Pop-up blocked by browser or preview iframe. Open in a new tab or use Email / Phone.'
         : 'Pop-up blocked by browser. Please allow pop-ups for this site.',
-      'auth/unauthorized-domain': 'This domain is not authorized for OAuth in Firebase. Please use Email or Phone authentication.',
+      'auth/unauthorized-domain': 'This domain is not authorized for Google OAuth. Add the current Arvdoul domain in Firebase Authentication > Settings > Authorized domains.',
       'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in method.',
       'auth/credential-already-in-use': 'This credential is already associated with a different user account.',
       'permission-denied': 'Missing permissions while setting up your account. Please refresh and sign in again.'

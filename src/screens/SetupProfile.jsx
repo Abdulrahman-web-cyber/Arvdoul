@@ -1109,6 +1109,7 @@ export default function SetupProfile() {
   const handleSubmit = async () => {
     if (loading || profileComplete || !displayName.trim() || username.length < 3) return;
     setLoading(true);
+    let setupStage = 'username-check';
     try {
       const avail = await checkUsernameAvailability(username, user?.uid);
       if (!avail.available) {
@@ -1124,6 +1125,7 @@ export default function SetupProfile() {
         } catch { return {}; }
       })());
 
+      setupStage = 'profile-transaction';
       const result = await createUserProfile(user.uid, {
         uid: user.uid,
         displayName: displayName.trim(),
@@ -1145,6 +1147,7 @@ export default function SetupProfile() {
       if (!result.success) throw new Error(result.error || "Profile creation failed");
 
       // Update Firebase Auth user profile safely (skip oversized data: URLs)
+      setupStage = 'auth-profile-sync';
       if (authService?.auth?.currentUser) {
         try {
           const authPatch = { displayName: displayName.trim() };
@@ -1157,8 +1160,10 @@ export default function SetupProfile() {
         }
       }
 
+      setupStage = 'profile-refresh';
       await refreshUserProfile();
 
+      setupStage = 'onboarding-cleanup';
       sessionStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_step1");
@@ -1169,9 +1174,15 @@ export default function SetupProfile() {
       toast.success("🎉 Profile setup complete!");
       setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 500);
     } catch (error) {
+      const errorCode = error?.code || error?.cause?.code || 'unknown';
+      console.error('[ProfileSetup] completion failed', {
+        stage: setupStage, code: errorCode, message: error?.message || 'unknown',
+      });
       const msg = error?.message?.includes("does not exist") || error?.message?.includes("datastore/setup")
         ? "Database connection updating. Please tap again."
-        : (error?.message || "Failed to create profile");
+        : errorCode === 'permission-denied'
+          ? `Firebase denied the profile save during ${setupStage}. Refresh and retry; the error code is recorded for diagnosis.`
+          : (error?.message || "Failed to create profile");
       toast.error(msg);
     } finally {
       setLoading(false);
