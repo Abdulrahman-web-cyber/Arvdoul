@@ -251,8 +251,9 @@ export default function ProfileMyScreen() {
       try {
         const userServiceModule = await import('../../services/userService.js');
         const userService = userServiceModule.getUserService();
-        const base = authDisplayName || profileDisplayName || 'citizen';
-        const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'citizen';
+        const uidFallback = currentUserId ? `user${String(currentUserId).slice(0, 6)}` : '';
+        const base = authDisplayName || profileDisplayName || uidFallback;
+        const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || uidFallback;
         const generated = await userService.generateUniqueUsername(cleanBase, uid);
         if (!generated) return;
         await userService.updateUserProfile(uid, { username: generated });
@@ -290,7 +291,7 @@ export default function ProfileMyScreen() {
       viewer,
       handleCandidates: [base.username, viewer.username],
       handleFallbacks: [viewer.displayName, base.displayName],
-      handleFallback: 'citizen',
+      handleFallback: null,
       displayCandidates: [viewer.displayName, viewer.name, base.displayName, base.name],
       displayFallback: currentUserId ? `user ${String(currentUserId).slice(0, 6)}` : '—',
       followerCandidates: [base.followerCount, base.followersCount, viewer.followerCount],
