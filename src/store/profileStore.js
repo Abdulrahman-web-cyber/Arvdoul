@@ -92,7 +92,8 @@ const initialState = {
   levelLoading: false,
   
   // Balance
-  balance: 0,
+  // Unknown until the economy service resolves; zero is a real balance.
+  balance: null,
   balanceLoading: false,
   
   // Position
@@ -544,7 +545,14 @@ export const useProfileStore = create(
             // Match only this author's posts. The previous `|| !p.authorId`
             // clause injected another account's (or an unattributed) cached
             // post into every profile's feed.
-            const localUserPosts = localPosts.filter(p => p && p.authorId === userId);
+            // Device-local optimistic posts are not an authorization source.
+            // Only merge them into the owner's own profile; a visitor's server
+            // query is already privacy-filtered and must never be widened by a
+            // shared, uid-unscoped localStorage cache.
+            const localUserPosts = viewerId === userId
+              ? localPosts.filter((p) => p && p.authorId === userId &&
+                  p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled')
+              : [];
             if (localUserPosts.length > 0) {
               const existingIds = new Set(userPosts.map(p => p.id));
               for (const lp of localUserPosts) {
@@ -801,8 +809,7 @@ export const useProfileStore = create(
           (s) => s && (
             s.userId === userId ||
             s.authorId === userId ||
-            s.uid === userId ||
-            (!s.userId && !s.authorId && !s.uid)
+            s.uid === userId
           )
         );
 
