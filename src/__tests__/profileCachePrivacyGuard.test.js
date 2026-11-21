@@ -105,6 +105,16 @@ describe('profile cache and unknown-value isolation', () => {
     expect(filter).not.toMatch(/!s\.userId|!s\.authorId|!s\.uid/);
   });
 
+  test('profile surfaces wait for Firebase auth restoration before treating a viewer as anonymous', () => {
+    for (const source of [publicProfile, connections, about, creatorDashboard]) {
+      expect(source).toContain('authInitialized');
+    }
+    expect(publicProfile).toContain('if (!authInitialized)');
+    expect(connections).toContain('if (!authInitialized)');
+    expect(about).toContain('if (!authInitialized)');
+    expect(creatorDashboard).toContain('if (!authInitialized) return');
+  });
+
   test('visitor profile is withheld when relationship and block state cannot be verified', () => {
     expect(publicProfile).toContain('const [relationshipResolved, setRelationshipResolved] = useState(false)');
     expect(publicProfile).toContain('const [relationshipError, setRelationshipError] = useState(false)');
