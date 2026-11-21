@@ -33,7 +33,7 @@ const formatNumber = (num) => {
 export default function CreatorDashboardScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user: authUser, userProfile } = useAuth();
+  const { user: authUser, userProfile, authInitialized } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
   // Only the Firebase Auth session establishes identity. Store/profile data is
   // supplementary and accepted only when its UID matches that session.
@@ -46,10 +46,15 @@ export default function CreatorDashboardScreen() {
   const isCreator = resolveCreatorFlag(profileSupplement || {}, authUser || {}, profileSupplement?.level ?? authUser?.level ?? null);
 
   useEffect(() => {
+    if (!authInitialized) return;
     if (!currentUserId) navigate('/login', { replace: true });
     else if (profileSupplement && !isCreator) navigate('/profile', { replace: true });
-  }, [currentUserId, isCreator, navigate]);
+  }, [authInitialized, currentUserId, isCreator, navigate]);
   
+  if (!authInitialized) {
+    return <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Restoring session"><div className="h-8 w-8 rounded-full border-2 border-current border-t-transparent animate-spin" /></div>;
+  }
+
   const analyticsState = useAnalyticsStore();
   const timeframe = analyticsState.timeframe;
   const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe;
