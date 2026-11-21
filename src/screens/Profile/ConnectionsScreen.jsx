@@ -298,7 +298,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     return () => {
       isMounted = false;
     };
-  }, [targetUserId, currentUserId, isOwner, currentUser, refreshNonce]);
+  }, [targetUserId, currentUserId, isOwner, currentUser, refreshNonce, authInitialized]);
 
   // Cursor-based Load More for active list tab
   const handleLoadMore = useCallback(async () => {
