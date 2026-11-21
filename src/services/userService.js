@@ -1706,12 +1706,25 @@ class ProfessionalUserService {
       if (snap.exists() && snap.data().status === 'pending') {
         return { success: true, alreadyRequested: true, requestId };
       }
-      // Re-sending after decline/cancel is allowed (status resets to pending).
-      transaction.set(requestRef, {
-        fromUserId, toUserId, fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
-        fromUserPhotoURL: fromUser?.photoURL || null, status: 'pending',
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-      });
+      const requestData = {
+        fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
+        fromUserPhotoURL: fromUser?.photoURL || null,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (snap.exists()) {
+        // A declined/cancelled request can be sent again. Update only mutable
+        // request fields so immutable sender/recipient identity and any
+        // compatible historical metadata remain intact under Firestore rules.
+        const previousStatus = snap.data().status;
+        if (!['declined', 'cancelled'].includes(previousStatus)) {
+          throw new Error('This friend request can no longer be re-sent.');
+        }
+        transaction.update(requestRef, requestData);
+      } else {
+        transaction.set(requestRef, { fromUserId, toUserId, ...requestData });
+      }
       return { success: true, alreadyRequested: false, requestId };
     });
 
