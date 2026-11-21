@@ -255,13 +255,15 @@ export default function ProfilePublicScreen() {
     if (!targetUid) return;
     useProfileStore.getState().loadMorePosts(targetUid);
   }, [targetUid]);
+  // Only the resolved relationship graph is authoritative. A profile's
+  // denormalized isFollowing field can be stale and must not enable actions.
   const isFollowing = Boolean(
-    isMatchingTarget && (storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing)
+    isMatchingTarget && currentUserId && (relationship?.isFollowing ?? storeFollowStatus?.isFollowing ?? false)
   );
   // A private target records a pending follow request rather than an edge; the
   // control must show "Requested" (and offer withdrawal), not "Follow".
-  const requestStatus = isMatchingTarget
-    ? (storeFollowStatus?.requestStatus ?? relationship?.requestStatus ?? null)
+  const requestStatus = isMatchingTarget && currentUserId
+    ? (relationship?.requestStatus ?? storeFollowStatus?.requestStatus ?? null)
     : null;
   const followLoading = storeFollowLoading;
 
