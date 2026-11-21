@@ -137,6 +137,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
+      if (!authInitialized) {
+        setLoading(true);
+        return;
+      }
       if (!targetUserId) {
         setLoading(false);
         return;
