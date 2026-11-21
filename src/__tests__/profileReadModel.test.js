@@ -223,8 +223,8 @@ describe('profileReadModel - capability projection', () => {
     expect(projected.location).toBe('');
     expect(projected.website).toBe('');
     expect(projected.canViewIdentity).toBe(false);
-    // `links` has its own scope and stays when that scope allows it.
-    expect(projected.links).toEqual(['a']);
+    // Website/links metadata is withheld unless both profile-info and links scopes allow it.
+    expect(projected.links).toEqual([]);
     // The account identity is never masked — only the descriptive card.
     expect(projected.id).toBe('u1');
   });
