@@ -222,11 +222,24 @@ export function deriveProfileIdentity(profile = {}, opts = {}) {
 export const IDENTITY_INFO_FIELDS = Object.freeze([
   'bio',
   'location',
+  'city',
+  'country',
+  'address',
   'website',
+  'websiteUrl',
   'pronouns',
   'profession',
   'education',
+  // Names used by the two-name identity editor remain available through
+  // displayName, but raw first/last and every birth-date alias are private
+  // descriptive identity fields when profileInfo is restricted.
+  'firstName',
+  'lastName',
   'birthday',
+  'dob',
+  'birthDate',
+  'dateOfBirth',
+  'birthdate',
   'gender',
 ]);
 
