@@ -887,7 +887,7 @@ export const ProfileHeroSection = memo(({
               aria-label="Online now"
               title="Online now"
               className={cn(
-                "absolute bottom-1.5 right-1.5 w-4.5 h-4.5 rounded-full bg-emerald-500 ring-[3px] shadow-[0_0_12px_rgba(16,185,129,0.45)]",
+                "absolute bottom-1.5 right-1.5 w-[18px] h-[18px] rounded-full bg-emerald-500 ring-[3px] shadow-[0_0_12px_rgba(16,185,129,0.45)]",
                 isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]"
               )}
             />
