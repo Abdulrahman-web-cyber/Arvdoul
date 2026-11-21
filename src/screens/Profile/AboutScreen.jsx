@@ -40,6 +40,7 @@ export default function AboutScreen() {
   const { profile: storeProfile, loading: storeLoading, error: storeError, loadProfile } = useProfileStore();
   const [relationship, setRelationship] = useState(null);
   const [relationshipError, setRelationshipError] = useState(false);
+  const [relationshipTargetId, setRelationshipTargetId] = useState(null);
 
   const currentUserId = authUser?.uid || null;
   const cleanParam = userId ? String(userId).replace(/^@/, '').trim() : '';
@@ -79,16 +80,20 @@ export default function AboutScreen() {
     if (!currentUserId || !resolvedUid || isActualOwner || resolvedUid === currentUserId) {
       setRelationship(null);
       setRelationshipError(false);
+      setRelationshipTargetId(resolvedUid || targetId || null);
       return;
     }
 
+    setRelationship(null);
     setRelationshipError(false);
+    setRelationshipTargetId(null);
     getUserService()
       .getRelationshipState(currentUserId, resolvedUid)
       .then((rel) => {
         if (mounted) {
           setRelationship(rel);
           setRelationshipError(false);
+          setRelationshipTargetId(resolvedUid);
         }
       })
       .catch(() => {
@@ -97,11 +102,12 @@ export default function AboutScreen() {
         if (mounted) {
           setRelationship(null);
           setRelationshipError(true);
+          setRelationshipTargetId(resolvedUid);
         }
       });
 
     return () => { mounted = false; };
-  }, [currentUserId, targetId, storeProfile?.uid, storeProfile?.id, isActualOwner]);
+  }, [currentUserId, targetId, storeProfile?.uid, storeProfile?.id, storeProfile?.username, storeProfileMatchesTarget, isActualOwner]);
 
   const effectiveProfile = useMemo(() => {
     const ownerProfile = isActualOwner && storeProfileMatchesTarget &&
@@ -130,13 +136,31 @@ export default function AboutScreen() {
   const capabilities = useMemo(() => resolveCapabilities({
     viewer: currentUserId ? { uid: currentUserId } : null,
     target: effectiveProfile,
-    relationship: isActualOwner ? { isOwner: true } : (relationshipError ? { isBlocked: true } : (relationship || { isOwner: false })),
-  }), [currentUserId, effectiveProfile, isActualOwner, relationship, relationshipError]);
+    relationship: isActualOwner ? { isOwner: true } : (relationshipTargetId === (storeProfileMatchesTarget ? (storeProfile?.uid || storeProfile?.id) : targetId) && relationship ? relationship : { isBlocked: true }),
+  }), [currentUserId, effectiveProfile, isActualOwner, relationship, relationshipTargetId, storeProfileMatchesTarget, storeProfile?.uid, storeProfile?.id, targetId]);
 
   const displayedProfile = useMemo(
     () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isActualOwner }),
     [effectiveProfile, capabilities, isActualOwner]
   );
+
+  const expectedRelationshipTarget = storeProfileMatchesTarget
+    ? (storeProfile?.uid || storeProfile?.id)
+    : targetId;
+  const relationshipReady = isActualOwner || !currentUserId ||
+    (relationshipTargetId === expectedRelationshipTarget && Boolean(relationship));
+
+  if (currentUserId && !isActualOwner && !relationshipReady && !relationshipError) {
+    return (
+      <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')}>
+        <div className="w-full max-w-md space-y-3" role="status" aria-label="Verifying profile privacy">
+          <Skeleton className="h-7 w-44 rounded-lg" />
+          <Skeleton className="h-4 w-full rounded-md" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   if (relationshipError) {
     return (
@@ -149,8 +173,11 @@ export default function AboutScreen() {
             const resolvedUid = storeProfile?.uid || storeProfile?.id;
             if (!currentUserId || !resolvedUid) return;
             getUserService().getRelationshipState(currentUserId, resolvedUid)
-              .then(setRelationship)
-              .then(() => setRelationshipError(false))
+              .then((rel) => {
+                setRelationship(rel);
+                setRelationshipTargetId(resolvedUid);
+                setRelationshipError(false);
+              })
               .catch(() => setRelationshipError(true));
           }} className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient cursor-pointer">
             Retry verification
