@@ -135,7 +135,7 @@ export default function ProfilePreviewScreen({
       website: p.website || '',
       isPrivate: Boolean(p.isPrivate),
     };
-  }, [rawProfile, currentUserId, authUser, storeUser, storePosts, storePostsCount, storePostsHasMore]);
+  }, [rawProfile, currentUserId, authUser, storePosts, storePostsCount, storePostsHasMore]);
 
   const isOwnerMode = viewPerspective === 'owner';
 
