@@ -164,8 +164,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             : Promise.resolve({ isOwner: Boolean(currentUserId && targetUserId === currentUserId) }),
         ]);
 
+        if (!isMounted) return;
         if (!profile) {
-          if (isMounted) setPermissionDenied(true);
+          setPermissionDenied(true);
           return;
         }
         if (currentUserId && currentUserId !== targetUserId && !rel) {
@@ -215,6 +216,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           discoverPromise,
           sentRequestsPromise,
         ]);
+        if (!isMounted) return;
+        if ([followersRes, followingRes, friendsRes].some((result) => result.status === 'rejected')) {
+          setPermissionDenied(true);
+          return;
+        }
 
         if (isMounted) {
           const followersVal = followersRes.status === 'fulfilled' ? followersRes.value : null;
