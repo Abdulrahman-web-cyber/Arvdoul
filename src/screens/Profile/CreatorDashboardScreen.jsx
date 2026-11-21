@@ -51,11 +51,11 @@ export default function CreatorDashboardScreen() {
   }, [currentUserId, isCreator, navigate]);
   
   const analyticsState = useAnalyticsStore();
+  const timeframe = analyticsState.timeframe;
   const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe;
   const analytics = isAnalyticsForCurrentUser ? analyticsState.analytics : null;
   const loading = analyticsState.loading;
   const error = isAnalyticsForCurrentUser ? analyticsState.error : null;
-  const timeframe = analyticsState.timeframe;
   const dailyStats = isAnalyticsForCurrentUser ? analyticsState.dailyStats : [];
   const ranking = isAnalyticsForCurrentUser ? analyticsState.ranking : null;
   const demographics = isAnalyticsForCurrentUser ? analyticsState.demographics : null;
