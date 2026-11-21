@@ -316,7 +316,7 @@ describe('firestore.rules economy accounting (regression guards)', () => {
     // The old resource.data-only rule denied that first read.
     expect(fr).toMatch(/requestId\.matches\('\^' \+ uid\(\) \+ '_\.\*\$'\)/);
     expect(fr).toMatch(/requestId\.matches\('\^\.\*_' \+ uid\(\) \+ '\$'\)/);
-    expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\['status', 'updatedAt'\]\)/);
+    expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\[[\s\S]*'fromUserPhotoURL'[\s\S]*\]\)/);
     expect(fr).toContain('allow delete: if false;');
 
     // Accepting a friend request creates both follow directions. The accepting
@@ -420,6 +420,23 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await assertFails(updateDoc(doc(alice, 'friend_requests/alice_bob'), {
         status: 'accepted',
         updatedAt: 2,
+      }));
+      // Only the recipient may decline; the sender may then re-send the
+      // terminal request using the explicitly allowed mutable fields.
+      await assertSucceeds(updateDoc(doc(bob, 'friend_requests/alice_bob'), {
+        status: 'declined',
+        updatedAt: 2,
+      }));
+      await assertSucceeds(updateDoc(doc(alice, 'friend_requests/alice_bob'), {
+        status: 'pending',
+        createdAt: 3,
+        updatedAt: 3,
+        fromUserDisplayName: 'Alice Updated',
+        fromUserPhotoURL: null,
+      }));
+      await assertFails(updateDoc(doc(mallory, 'friend_requests/alice_bob'), {
+        status: 'pending',
+        updatedAt: 4,
       }));
 
       // Accepting a request must create BOTH follow edges, even when the
