@@ -66,6 +66,12 @@ describe('profile cache and unknown-value isolation', () => {
     expect(preview).not.toContain('storeUser');
   });
 
+  test('owner-only local posts are excluded from public/follower perspective previews', () => {
+    expect(store).toMatch(/viewerId === userId && \(!options\.viewAs \|\| options\.viewAs === 'owner'\)/);
+    expect(ownerProfile).toContain('profileStore.loadPosts(currentUserId, {');
+    expect(ownerProfile).toContain('viewAs: mode === \'owner\' ? null : mode');
+  });
+
   test('profile story hydration requires an explicit matching author', () => {
     const start = store.indexOf('const userStories = rawList.filter');
     const end = store.indexOf('if (!get()._isLoadCurrent', start);
