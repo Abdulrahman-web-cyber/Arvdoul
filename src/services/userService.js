@@ -1786,8 +1786,6 @@ class ProfessionalUserService {
         return { success: false, blocked: true };
       }
 
-      transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
-
       // Read both directions before the first transaction write. A creator
       // follow may already exist when the reciprocal friend request is
       // accepted; only create missing edges and increment only their counters.
