@@ -314,8 +314,2024 @@ describe('firestore.rules economy accounting (regression guards)', () => {
 
     // The send flow transaction reads this deterministic id before it exists.
     // The old resource.data-only rule denied that first read.
-    expect(fr).toMatch(/requestId\.startsWith\(uid\(\) \+ '_'\)/);
-    expect(fr).toMatch(/requestId\.endsWith\('_' \+ uid\(\)\)/);
+    expect(fr).toMatch(/requestId\.matches\('\^' \+ uid\(\) \+ '_\.\*\
+    expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\['status', 'updatedAt'\]\)/);
+    expect(fr).toContain('allow delete: if false;');
+
+    // Accepting a friend request creates both follow directions. The accepting
+    // user may create their own edge to a private requester only when that
+    // requester explicitly asked to become friends.
+    const follows = blockBody('follows');
+    expect(follows).toMatch(/friendRequestFrom\(request\.resource\.data\.followingId, uid\(\)\)/);
+  });
+});
+
+describe('firestore.rules messaging membership (regression guards)', () => {
+  test('a system message (senderId "system") is creatable by a participant', () => {
+    // Every `_sendSystemMessage` write uses `senderId: 'system'`, but the
+    // message-create rule required `senderId == uid()` for EVERY message — so
+    // every system message was denied and the membership call that sent it
+    // (leaveGroup / addParticipants / role changes) failed outright.
+    expect(rules).toContain("request.resource.data.senderId == 'system'");
+    expect(rules).toContain('request.resource.data.isSystem == true');
+    expect(rules).toContain("!('text' in request.resource.data)");
+  });
+
+  test('a participant may remove themselves from participants (leave)', () => {
+    // The non-admin leave path updates `participants`; the old rule required an
+    // admin for ANY participants change, so leaving was denied. The rule now
+    // admits `old.removeAll([uid()]) == new`.
+    expect(rules).toContain('resource.data.participants.removeAll([uid()]) == request.resource.data.participants');
+  });
+
+  test('message read receipts are self-scoped (N200)', () => {
+    // `markMessageAsRead`/`markMessageAsDelivered` append the CALLER's uid. A
+    // bare `hasOnly(['readBy','deliveredTo'])` matched key names only, so any
+    // participant could REPLACE both arrays — forging another member's read
+    // receipt or wiping the record. The carve-out now pins the caller's own
+    // uid via removeAll.
+    expect(rules).toContain("affectedKeys().hasOnly(['readBy', 'deliveredTo'])");
+    expect(rules).toContain("request.resource.data.get('readBy', []).removeAll([uid()]) ==");
+    expect(rules).toContain("request.resource.data.get('deliveredTo', []).removeAll([uid()]) ==");
+  });
+
+  test('leaveGroup sends the "left" notice before the membership update', () => {
+    // The create rule requires the sender to still be a participant; after the
+    // removal the departing member is not, so the notice must come first.
+    const svc = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    const start = svc.indexOf('async leaveGroup');
+    const body = svc.slice(start, svc.indexOf('\n  async ', start + 1));
+    const noticeAt = body.indexOf("'user_left'");
+    const removalAt = body.indexOf('participants: arrayRemove(userId)');
+    expect(noticeAt).toBeGreaterThan(-1);
+    expect(removalAt).toBeGreaterThan(-1);
+    expect(noticeAt).toBeLessThan(removalAt);
+  });
+});
+
+describe('firestore.rules adversarial checks (emulator)', () => {
+  let reachable = false;
+  beforeAll(async () => { reachable = await emulatorReachable(); });
+
+  test('friend request transactions can read missing ids and accept mutual friendship safely', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, getDoc, runTransaction, updateDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(ctx.firestore(), 'users/alice'), { uid: 'alice', isPrivate: true });
+        await setDoc(doc(ctx.firestore(), 'users/bob'), { uid: 'bob', isPrivate: false });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const mallory = env.authenticatedContext('mallory').firestore();
+      const requestRef = doc(alice, 'friend_requests/alice_bob');
+
+      // This is the exact first operation in sendFriendRequest(): read the
+      // deterministic document inside a transaction before creating it.
+      await assertSucceeds(runTransaction(alice, async (transaction) => {
+        const existing = await transaction.get(requestRef);
+        if (existing.exists()) throw new Error('Expected a new friend request');
+        transaction.set(requestRef, {
+          fromUserId: 'alice',
+          toUserId: 'bob',
+          status: 'pending',
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }));
+
+      // Only either participant may inspect the request; a third party cannot
+      // probe it even though missing participant-keyed ids are readable.
+      await assertSucceeds(getDoc(doc(bob, 'friend_requests/alice_bob')));
+      await assertFails(getDoc(doc(mallory, 'friend_requests/alice_bob')));
+      await assertFails(updateDoc(doc(alice, 'friend_requests/alice_bob'), {
+        status: 'accepted',
+        updatedAt: 2,
+      }));
+
+      // Accepting a request must create BOTH follow edges, even when the
+      // requester is private. The request itself is the explicit consent.
+      await assertSucceeds(runTransaction(bob, async (transaction) => {
+        const request = await transaction.get(doc(bob, 'friend_requests/alice_bob'));
+        if (!request.exists() || request.data().status !== 'pending') {
+          throw new Error('Expected a pending friend request');
+        }
+        transaction.update(doc(bob, 'friend_requests/alice_bob'), {
+          status: 'accepted',
+          updatedAt: 2,
+        });
+        transaction.set(doc(bob, 'follows/alice_bob'), {
+          followerId: 'alice',
+          followingId: 'bob',
+          createdAt: 2,
+        });
+        transaction.set(doc(bob, 'follows/bob_alice'), {
+          followerId: 'bob',
+          followingId: 'alice',
+          createdAt: 2,
+        });
+      }));
+      await assertSucceeds(getDoc(doc(alice, 'follows/alice_bob')));
+      await assertSucceeds(getDoc(doc(alice, 'follows/bob_alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('rules compile and enforce the profile-analytics boundary', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      const alice = env.authenticatedContext('alice');
+      const bob = env.authenticatedContext('bob');
+
+      // Server-authoritative analytics: no client writes (audit N010/N019).
+      await assertFails(setDoc(doc(alice.firestore(), 'profile_analytics/bob'), { totalViews: 999 }));
+      await assertFails(setDoc(doc(alice.firestore(), 'profile_views/x'), { profileOwnerId: 'bob' }));
+      await assertFails(getDoc(doc(bob.firestore(), 'profile_analytics/alice')));
+      // Sharded counters accept only a single `value` field.
+      await assertSucceeds(setDoc(doc(alice.firestore(), 'counter_shards/a__totalViews__1'), { value: 1 }));
+      await assertFails(setDoc(doc(alice.firestore(), 'counter_shards/a__totalViews__2'), { value: 1, evil: 2 }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('space roster writes are self-scoped (N198)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayUnion, arrayRemove, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'spaces/s1'), {
+          title: 'x', hostId: 'host', host: { id: 'host' },
+          participants: ['host'], listeners: [{ id: 'host' }], audienceCount: 1, raisedHands: [],
+        });
+      });
+      const host = env.authenticatedContext('host').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      // A member joins: adds ONLY themselves, count tracks the roster.
+      await assertSucceeds(updateDoc(doc(bob, 'spaces/s1'), {
+        participants: arrayUnion('bob'),
+        listeners: arrayUnion({ id: 'bob' }),
+        audienceCount: increment(1),
+      }));
+      // A member leaves: removes ONLY themselves.
+      await assertSucceeds(updateDoc(doc(bob, 'spaces/s1'), {
+        participants: arrayRemove('bob'),
+        listeners: arrayRemove({ id: 'bob' }),
+        audienceCount: increment(-1),
+      }));
+      // An outsider cannot add a DIFFERENT user to the roster (was the hole:
+      // `hasOnly` only checks key names).
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { participants: arrayUnion('mallory') }));
+      // Nor remove another participant.
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { participants: arrayRemove('host') }));
+      // Nor wipe the roster / desync the audience count from the roster.
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { participants: [] }));
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { audienceCount: 999 }));
+      // The host still owns the space.
+      await assertSucceeds(updateDoc(doc(host, 'spaces/s1'), { title: 'renamed' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('post engagement writes are reaction-scoped (N199)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'posts/p1'), {
+          authorId: 'alice', authorIsPrivate: false, visibility: 'public',
+          status: 'published', isDeleted: false, createdAt: 1,
+          stats: { likes: 0, views: 0, comments: 0, reactions: { '👍': 0 }, pollVotes: 0 },
+          poll: { options: [{ id: 'opt_0', text: 'a', votes: 0 }], totalVotes: 0 },
+          gifts: [],
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // A non-author may bump the reaction aggregate (the real reaction path).
+      await assertSucceeds(updateDoc(doc(bob, 'posts/p1'), {
+        'stats.reactions.👍': increment(1), updatedAt: 2,
+      }));
+      // ...but may NOT rewrite the whole stats map (likes/views/pollVotes).
+      await assertFails(updateDoc(doc(bob, 'posts/p1'), {
+        stats: { likes: 999999, views: 0, comments: 0, reactions: {}, pollVotes: 0 }, updatedAt: 3,
+      }));
+      // ...nor the poll (options / totalVotes) — that is the server callable.
+      await assertFails(updateDoc(doc(bob, 'posts/p1'), {
+        poll: { options: [{ id: 'opt_0', text: 'a', votes: 999 }], totalVotes: 999 }, updatedAt: 4,
+      }));
+      // ...nor the gifts array.
+      await assertFails(updateDoc(doc(bob, 'posts/p1'), { gifts: [{ sender: 'bob', value: 1 }], updatedAt: 5 }));
+      // The author may still edit their own post (content fields).
+      await assertSucceeds(updateDoc(doc(alice, 'posts/p1'), { content: 'edited', updatedAt: 6 }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('message read receipts are self-scoped (N200)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayUnion } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        // dave is a fourth participant so carol can attempt to forge a
+        // receipt for someone other than herself.
+        await setDoc(doc(ctx.firestore(), 'conversations/g1'), {
+          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol', 'dave'],
+          participantCount: 4, admins: ['alice'], createdBy: 'alice',
+        });
+        await setDoc(doc(ctx.firestore(), 'conversations/g1/messages/m1'), {
+          senderId: 'alice', type: 'text', text: 'hi',
+          readBy: ['alice'], deliveredTo: ['alice'],
+        });
+      });
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      // The real receipt path: a participant appends ONLY their own uid.
+      await assertSucceeds(updateDoc(doc(bob, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('bob') }));
+      // A participant cannot forge ANOTHER member's read receipt (the only
+      // permitted difference is the caller's own uid — carol appending dave).
+      await assertFails(updateDoc(doc(carol, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('dave') }));
+      // Carol may still append her own uid...
+      await assertSucceeds(updateDoc(doc(carol, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('carol') }));
+      // ...nor wipe the record of who has read it.
+      await assertFails(updateDoc(doc(carol, 'conversations/g1/messages/m1'), { readBy: [] }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('comment reaction arrays are writable but tallies are not (N201)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayUnion } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'comments/c1'), {
+          userId: 'alice', postId: 'p1', content: 'hi',
+          likes: 0, dislikes: 0, likesBy: [], dislikesBy: [],
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // The real like path: a non-author appends their uid to the array.
+      await assertSucceeds(updateDoc(doc(bob, 'comments/c1'), { likesBy: arrayUnion('bob') }));
+      // A non-author may NOT set the numeric tally (sharded counter owns it).
+      await assertFails(updateDoc(doc(bob, 'comments/c1'), { likes: 999999 }));
+      // Nor may the author inflate their own.
+      await assertFails(updateDoc(doc(alice, 'comments/c1'), { likes: 999999 }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('private collections deny the wrong viewer (N020-N024)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      // Seed the participant list and the owner-scoped docs with rules off.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'conversations/c1'), { participants: ['alice', 'bob'] });
+        await setDoc(doc(db, 'last_messages/c1'), { text: 'private', senderId: 'bob' });
+        await setDoc(doc(db, 'saved_sounds/alice_s1'), { userId: 'alice', soundId: 's1' });
+        await setDoc(doc(db, 'incidents/i1'), { reporterId: 'alice', description: 'x' });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      // N020 — last_messages: participant reads, outsider cannot (was world-readable).
+      await assertSucceeds(getDoc(doc(alice, 'last_messages/c1')));
+      await assertSucceeds(getDoc(doc(bob, 'last_messages/c1')));
+      await assertFails(getDoc(doc(carol, 'last_messages/c1')));
+
+      // N021 — saved_sounds: owner reads, others cannot.
+      await assertSucceeds(getDoc(doc(alice, 'saved_sounds/alice_s1')));
+      await assertFails(getDoc(doc(bob, 'saved_sounds/alice_s1')));
+
+      // N022 — poll_votes is server-only: no client read or write at all.
+      await assertFails(getDoc(doc(alice, 'poll_votes/alice_p1')));
+      await assertFails(setDoc(doc(alice, 'poll_votes/alice_p1'), { userId: 'alice', pollId: 'p1' }));
+
+      // N023 — incidents: reporter reads their own, others cannot.
+      await assertSucceeds(getDoc(doc(alice, 'incidents/i1')));
+      await assertFails(getDoc(doc(bob, 'incidents/i1')));
+
+      // N024 — audit_logs: no client create/update/delete, non-admin cannot read.
+      await assertFails(setDoc(doc(alice, 'audit_logs/l1'), { action: 'forged', userId: 'alice' }));
+      await assertFails(getDoc(doc(alice, 'audit_logs/l1')));
+      await assertFails(setDoc(doc(alice, 'audit_logs/l1'), { action: 'tamper' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('allowDMs preference gates direct-conversation creation (N029)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const dm = (self, other) => ({
+      id: `direct_${[self, other].sort().join('_')}`,
+      type: 'direct',
+      participants: [self, other],
+      createdBy: self,
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      // Seed three recipients with different allowDMs preferences + a mutual
+      // follow between alice and bob only.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users/alice'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'users/bob'), { settings: { privacy: { allowDMs: 'friends' } } });
+        await setDoc(doc(db, 'users/carol'), { settings: { privacy: { allowDMs: 'none' } } });
+        await setDoc(doc(db, 'users/erin'), { settings: { privacy: { allowDMs: 'none' } } });
+        await setDoc(doc(db, 'follows/alice_bob'), { followerId: 'alice', followingId: 'bob' });
+        await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const dave = env.authenticatedContext('dave').firestore();
+
+      // alice<->bob are mutual friends and bob allows 'friends' — alice may DM.
+      await assertSucceeds(setDoc(doc(alice, 'conversations/direct_alice_bob'), dm('alice', 'bob')));
+      // dave is not a mutual friend of bob ('friends') — blocked.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_bob_dave'), dm('dave', 'bob')));
+      // carol accepts no DMs at all — blocked.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_carol_dave'), dm('dave', 'carol')));
+      // alice allows 'everyone' — dave may DM.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/direct_alice_dave'), dm('dave', 'alice')));
+
+      // A 3-participant group is unaffected by allowDMs.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/group_x'), {
+        id: 'group_x', type: 'group', participants: ['dave', 'carol', 'bob'], createdBy: 'dave',
+      }));
+
+      // A 'none' recipient can still accept a pending request: consent (the
+      // message_requests doc addressed to them) overrides their preference.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'message_requests/carol_dave'), {
+          senderId: 'dave', recipientId: 'carol', status: 'pending',
+        });
+      });
+      const carol = env.authenticatedContext('carol').firestore();
+      await assertSucceeds(setDoc(doc(carol, 'conversations/direct_carol_dave'), dm('carol', 'dave')));
+
+      // N205 — the request doc id MUST match the payload. dave forges an id
+      // (`forged_1`) to impersonate a request to erin (allowDMs 'none'), which
+      // `dmRequestFrom(erin, dave)` reads by path, not by field. The create is
+      // rejected because the id must equal `<recipientId>_<senderId>`.
+      await assertFails(setDoc(doc(dave, 'message_requests/forged_1'), {
+        senderId: 'dave', recipientId: 'erin', status: 'pending',
+      }));
+      // The correctly-shaped request is accepted. The SENDER cannot open the
+      // DM off their own request — consent belongs to the recipient, who is
+      // the only party the rule admits (`dmRequestFrom(erin, dave)` reads
+      // `message_requests/erin_dave`). This mirrors the real accept path:
+      // `respondToMessageRequest` → `createConversation` runs as the recipient.
+      await assertSucceeds(setDoc(doc(dave, 'message_requests/erin_dave'), {
+        senderId: 'dave', recipientId: 'erin', status: 'pending',
+      }));
+      const erin = env.authenticatedContext('erin').firestore();
+      await assertFails(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      await assertSucceeds(setDoc(doc(erin, 'conversations/direct_dave_erin'), dm('erin', 'dave')));
+
+      // N204 — a DECLINED request must NOT authorise the conversation. The
+      // recipient flips the status (the real respond path), after which
+      // `dmRequestFrom` no longer returns true.
+      await assertSucceeds(setDoc(doc(erin, 'message_requests/erin_dave'), {
+        senderId: 'dave', recipientId: 'erin', status: 'declined',
+      }, { merge: true }));
+      await assertFails(setDoc(doc(erin, 'conversations/direct_erin_dave_2'), {
+        id: 'direct_erin_dave_2', type: 'direct', participants: ['dave', 'erin'], createdBy: 'erin',
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a block edge forbids opening a direct conversation, even with consent (N221)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const dm = (self, other) => ({
+      id: `direct_${[self, other].sort().join('_')}`,
+      type: 'direct',
+      participants: [self, other],
+      createdBy: self,
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        // Both allow DMs; a block edge exists dave -> erin (dave blocked erin).
+        await setDoc(doc(db, 'users/dave'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'users/erin'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'blocks/dave_erin'), { blockerId: 'dave', blockedId: 'erin' });
+        // erin even consented (a pending request), which must NOT override the block.
+        await setDoc(doc(db, 'message_requests/dave_erin'), {
+          senderId: 'erin', recipientId: 'dave', status: 'pending',
+        });
+      });
+
+      const erin = env.authenticatedContext('erin').firestore();
+      const dave = env.authenticatedContext('dave').firestore();
+
+      // The blocked party (erin) cannot open a DM with her blocker (dave) …
+      await assertFails(setDoc(doc(erin, 'conversations/direct_dave_erin'), dm('erin', 'dave')));
+      // … nor can the blocker re-open one to the blocked party.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      // A group is unaffected by a block between two of its members.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/group_bk'), {
+        id: 'group_bk', type: 'group', participants: ['dave', 'erin', 'carol'], createdBy: 'dave',
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('message reactions are readable via the collection-group query (N098)', async () => {
+    // `messagesService.getMessages` merges reactions with ONE
+    // `collectionGroup('reactions')` query. Firestore authorizes a
+    // collection-group query only through a recursive-wildcard rule; the
+    // per-subcollection rule cannot, so without the `match /{path=**}/reactions`
+    // block the query failed `list` and every reaction was silently dropped.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collectionGroup, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'conversations/c1'), { participants: ['alice', 'bob'] });
+        await setDoc(doc(db, 'conversations/c1/messages/m1'), { senderId: 'bob', text: 'hi' });
+        await setDoc(doc(db, 'conversations/c1/messages/m1/reactions/alice'),
+          { emoji: '❤️', conversationId: 'c1', messageId: 'm1' });
+        // supergroup shard layout must resolve through the same rule
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2'), { senderId: 'bob', text: 'hi2' });
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2/reactions/bob'),
+          { emoji: '🔥', conversationId: 'c1', messageId: 'm2' });
+      });
+      const cgQuery = (db) => query(
+        collectionGroup(db, 'reactions'),
+        where('conversationId', '==', 'c1'),
+        where('messageId', 'in', ['m1', 'm2'])
+      );
+      await assertSucceeds(getDocs(cgQuery(env.authenticatedContext('alice').firestore())));
+      await assertFails(getDocs(cgQuery(env.authenticatedContext('carol').firestore())));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a username doc cannot be hijacked by another user (N102)', async () => {
+    // `usernames/{name}` grants `create, update: request.resource.data.userId == uid()`.
+    // For an UPDATE that compares the NEW userId, so any signed-in user could
+    // overwrite any claimed username doc with their own userId — stealing the
+    // username; every share/QR link for it then resolved to the attacker.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'usernames/alice'), { userId: 'alice', username: 'alice' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // Bob must not be able to steal alice's username doc...
+      await assertFails(setDoc(doc(bob, 'usernames/alice'), { userId: 'bob', username: 'alice' }));
+      // ...nor claim a brand-new name as someone else's userId.
+      await assertFails(setDoc(doc(bob, 'usernames/newname'), { userId: 'alice', username: 'newname' }));
+      // The owner may re-assert their own doc (createUserProfile merge set)...
+      await assertSucceeds(setDoc(doc(alice, 'usernames/alice'), { userId: 'alice', username: 'alice' }, { merge: true }));
+      // ...and a fresh user may claim an unclaimed name.
+      await assertSucceeds(setDoc(doc(bob, 'usernames/bobname'), { userId: 'bob', username: 'bobname' }));
+
+      // Read back through a normal (rules-enabled) context: `usernames` is
+      // world-readable, and `withSecurityRulesDisabled` does not return the
+      // callback value.
+      const after = await getDoc(doc(alice, 'usernames/alice'));
+      expect(after.data().userId).toBe('alice');
+
+      // N103 — previous_usernames squatting: carol cannot pre-create a history
+      // doc for a name she never held, but alice (who owns it) can record it.
+      await assertFails(setDoc(doc(env.authenticatedContext('carol').firestore(), 'previous_usernames/alice'),
+        { userId: 'carol', oldUsername: 'alice', currentUsername: 'carol2' }));
+      await assertSucceeds(setDoc(doc(alice, 'previous_usernames/alice'),
+        { userId: 'alice', oldUsername: 'alice', currentUsername: 'alice2' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('group invite links are admin-minted and readable by id (N-group-invites)', async () => {
+    // The rule was nested under `conversations/{id}` while the client reads and
+    // writes the TOP-LEVEL `group_invites` collection, so every create fell
+    // through to the deny-all catch-all and "create invite link" silently
+    // failed. This pins the corrected top-level contract.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/c1'), { participants: ['alice', 'bob'], admins: ['alice'], type: 'group' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      const invite = { conversationId: 'c1', createdBy: 'alice', uses: 0 };
+
+      // Only a conversation admin may mint an invite, and it must stamp them.
+      await assertSucceeds(setDoc(doc(alice, 'group_invites/inv1'), invite));
+      await assertFails(setDoc(doc(bob, 'group_invites/inv2'), { ...invite, createdBy: 'bob' }));
+      await assertFails(setDoc(doc(alice, 'group_invites/inv3'), { ...invite, createdBy: 'bob' }));
+
+      // The invite id is the bearer token in the link: any signed-in user
+      // (even a non-participant) may read it by id to join.
+      await assertSucceeds(getDoc(doc(carol, 'group_invites/inv1')));
+
+      // Revoke / use-count changes are admin-only.
+      await assertFails(updateDoc(doc(bob, 'group_invites/inv1'), { uses: 99 }));
+      await assertSucceeds(updateDoc(doc(alice, 'group_invites/inv1'), { uses: 1 }));
+
+      // LIST is admin-only and must be scoped to an administered conversation,
+      // so the whole collection cannot be enumerated.
+      await assertFails(getDocs(query(collection(bob, 'group_invites'), where('conversationId', '==', 'c1'))));
+      await assertSucceeds(getDocs(query(collection(alice, 'group_invites'), where('conversationId', '==', 'c1'))));
+
+      await assertFails(deleteDoc(doc(bob, 'group_invites/inv1')));
+      await assertSucceeds(deleteDoc(doc(alice, 'group_invites/inv1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('the public feed list is admitted and never leaks a draft (N-feed-list)', async () => {
+    // `request.query` exposes only limit/offset/orderBy, so the old
+    // `request.query.get(field, sentinel)` list helper returned the sentinel and
+    // denied EVERY feed `list` for non-admins (the home feed silently fell back
+    // to an empty/permission-denied state). The rule now authorises per
+    // candidate document. This pins both the admit and the no-leak property.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'posts/pub1'), { authorId: 'alice', authorIsPrivate: false, visibility: 'public', status: 'published', isDeleted: false, createdAt: 1 });
+        await setDoc(doc(db, 'posts/draft1'), { authorId: 'alice', authorIsPrivate: false, visibility: 'public', status: 'draft', isDeleted: false, createdAt: 2 });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // The exact public-feed shape feedService issues now succeeds...
+      const publicFeed = (db) => query(collection(db, 'posts'),
+        where('authorIsPrivate', '==', false), where('status', '==', 'published'),
+        where('isDeleted', '==', false), where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'), limit(10));
+      const snap = await assertSucceeds(getDocs(publicFeed(bob)));
+      expect(snap.docs.map((d) => d.id)).toEqual(['pub1']);
+
+      // ...the author reads their own drafts through an author-scoped query...
+      await assertSucceeds(getDocs(query(collection(alice, 'posts'),
+        where('authorId', '==', 'alice'), orderBy('createdAt', 'desc'), limit(10))));
+
+      // ...but a viewer's author-scoped query must carry the public constraints
+      // (an authorId-only query could return alice's draft, so it is denied)...
+      await assertFails(getDocs(query(collection(bob, 'posts'),
+        where('authorId', '==', 'alice'), orderBy('createdAt', 'desc'), limit(10))));
+
+      // ...and an unconstrained query is denied wholesale.
+      await assertFails(getDocs(query(collection(bob, 'posts'), limit(50))));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a private author\'s approved follower reads the grid; a stranger cannot (N206)', async () => {
+    // The capability engine grants `canViewContent` to an approved follower of a
+    // private account, but the read rule hard-required `authorIsPrivate == false`
+    // with no follower branch, so a follower's profile grid silently returned 0
+    // (and the author-scoped query was denied). The follower shape must NOT
+    // constrain `authorIsPrivate` (the rule proves the edge from `authorId`).
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users/alice'), { isPrivate: true });
+        await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
+        for (let i = 0; i < 3; i++) {
+          await setDoc(doc(db, `posts/priv${i}`), { authorId: 'alice', authorIsPrivate: true, visibility: 'public', status: 'published', isDeleted: false, expiresAt: null, createdAt: i });
+        }
+      });
+      const bob = env.authenticatedContext('bob').firestore();   // approved follower
+      const dave = env.authenticatedContext('dave').firestore(); // stranger
+
+      // The approved-follower shape (no authorIsPrivate constraint) is admitted
+      // and returns the private author's posts.
+      const followerGrid = (db) => query(collection(db, 'posts'),
+        where('authorId', '==', 'alice'), where('status', '==', 'published'),
+        where('isDeleted', '==', false), where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'), limit(30));
+      const snap = await assertSucceeds(getDocs(followerGrid(bob)));
+      expect(snap.size).toBe(3);
+      await assertSucceeds(getDoc(doc(bob, 'posts/priv1')));
+
+      // A stranger cannot list or read the private author's posts.
+      await assertFails(getDocs(followerGrid(dave)));
+      await assertFails(getDoc(doc(dave, 'posts/priv1')));
+
+      // The bypass this depends on: a user cannot self-create a `follows` edge
+      // to a private account (that edge is only written by the owner on
+      // approval), or they would gain content access without consent.
+      await assertFails(setDoc(doc(dave, 'follows/dave_alice'), { followerId: 'dave', followingId: 'alice' }));
+
+      // The owner's approval path still writes the edge for the requester.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'follow_requests/erin_alice'), { fromUserId: 'erin', toUserId: 'alice', status: 'pending' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      await assertSucceeds(setDoc(doc(alice, 'follows/erin_alice'), { followerId: 'erin', followingId: 'alice' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a post without an expiresAt field is still readable (N208)', async () => {
+    // The get-rule read `resource.data.expiresAt` directly, which RAISES when the
+    // field is absent — denying the whole read. A post that never expires
+    // legitimately omits `expiresAt` (the server's `createCommunityPost` did),
+    // so the member who created the community post could not read it back. The
+    // rule now uses `.get('expiresAt', null)`.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'communities/c1'), { privacy: 'private', members: { bob: { role: 'member' } } });
+        // Exactly the server `createCommunityPost` shape (no `expiresAt`).
+        await setDoc(doc(db, 'posts/comm1'), { authorId: 'alice', authorIsPrivate: false, communityId: 'c1', content: 'hi', type: 'text', media: [], visibility: 'community', status: 'published', isDeleted: false, createdAt: 1 });
+        await setDoc(doc(db, 'posts/pub1'), { authorId: 'alice', authorIsPrivate: false, content: 'hi', type: 'text', media: [], visibility: 'public', status: 'published', isDeleted: false, createdAt: 2 });
+      });
+      const bob = env.authenticatedContext('bob').firestore();   // community member
+      const dave = env.authenticatedContext('dave').firestore(); // non-member
+
+      await assertSucceeds(getDoc(doc(bob, 'posts/comm1')));
+      await assertSucceeds(getDoc(doc(dave, 'posts/pub1')));
+      // Membership is still enforced — a non-member is denied the community post.
+      await assertFails(getDoc(doc(dave, 'posts/comm1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a user cannot write another user\'s daily upload counter shard (N210)', async () => {
+    // The rule was `isOwner(request.resource.data.userId)` — it trusted the
+    // `userId` FIELD but never bound the document ID to the caller. Any
+    // signed-in user could create `daily_upload_counters/upload_{victim}_...`
+    // with `userId: victim`, resetting/inflating the victim's daily video-upload
+    // counter and defeating the per-tier upload limit. The id is now pinned to
+    // the caller (`shardId.matches('upload_' + uid() + '_...')`), mirroring
+    // `unread_counters`.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      const alice = env.authenticatedContext('alice').firestore();
+      const mallory = env.authenticatedContext('mallory').firestore();
+
+      // The owner increments their own shard.
+      await assertSucceeds(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 1,
+      }));
+      // A different user cannot create a shard under alice's id…
+      await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_alice_2026-11-08_shard_1'), {
+        userId: 'alice', date: '2026-11-08', shard: 1, count: 0,
+      }));
+      // …nor an arbitrary id that merely carries alice's userId field.
+      await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_mallory_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 0,
+      }));
+      // N370: the VALUE is bounded too — a fresh shard may not start above the
+      // per-shard window, so the limit cannot be pre-saturated in one write.
+      await assertFails(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_2'), {
+        userId: 'alice', date: '2026-11-08', shard: 2, count: 999999,
+      }));
+      // …and an update may only step the count by a small delta.
+      await assertFails(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 999999,
+      }, { merge: true }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+
+  test('the owner story grid lists while another user\'s grid is denied (N-story-list)', async () => {
+    // A story `list` rule may only read fields the query constrains: the old
+    // combined `allow read` read isDeleted/status/expiresAt/moderationStatus/
+    // visibility, so a list query that omits any of them made `resource.data.X`
+    // undefined and threw ("Property isDeleted is undefined on object"),
+    // denying the whole read. `getUserStories` (the reachable grid) is now
+    // admitted by the owner-scoped `list` rule; a stranger's grid is denied.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collection, query, where, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'stories/own1'), {
+          userId: 'alice', isDeleted: false, status: 'published', moderationStatus: 'pending', visibility: 'public',
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const grid = (db, uid) => query(collection(db, 'stories'), where('userId', '==', uid), where('isDeleted', '==', false), limit(30));
+      await assertSucceeds(getDocs(grid(alice, 'alice')));
+      await assertFails(getDocs(grid(bob, 'alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('group leave + system messages are authorized as intended (N197)', async () => {
+    // 1) a non-admin participant may remove themselves (leave);
+    // 2) a participant may write the `user_left` system notice while still a
+    //    member, but no member may forge another member's notice or inject
+    //    text through a "system" message.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayRemove, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const sysMsg = (eventData) => ({
+      type: 'system', eventType: 'user_left', eventData, senderId: 'system',
+      senderName: 'System', isSystem: true,
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/g1'), {
+          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol'],
+          participantCount: 3, admins: ['alice'], roles: { alice: 'admin', bob: 'member', carol: 'member' },
+          createdBy: 'alice',
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // A member sends their own "left" notice (still a participant) — allowed.
+      await assertSucceeds(setDoc(doc(bob, 'conversations/g1/messages/sys_bob'),
+        sysMsg({ userId: 'bob' })));
+      // A member cannot forge another member's notice.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_forged'),
+        sysMsg({ userId: 'carol' })));
+      // A "system" message may not smuggle real content.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_evil'),
+        { ...sysMsg({ userId: 'bob' }), text: 'free advertising' }));
+      // A non-admin may only emit the two self-service event types; a member
+      // cannot forge a "role_changed" notice about themselves.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_role'),
+        { ...sysMsg({ userId: 'bob' }), eventType: 'role_changed' }));
+      // A member cannot author a normal message as someone else.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/forged'),
+        { type: 'text', text: 'hi', senderId: 'carol' }));
+
+      // The non-admin leaves: participants drops ONLY bob, count decremented.
+      await assertSucceeds(updateDoc(doc(bob, 'conversations/g1'), {
+        participants: arrayRemove('bob'), participantCount: increment(-1),
+      }));
+      // A member cannot remove someone ELSE.
+      await assertFails(updateDoc(doc(env.authenticatedContext('carol').firestore(), 'conversations/g1'), {
+        participants: arrayRemove('alice'), participantCount: increment(-1),
+      }));
+      // A member cannot self-promote.
+      await assertFails(updateDoc(doc(env.authenticatedContext('carol').firestore(), 'conversations/g1'), {
+        admins: ['carol'],
+      }));
+      // The admin may remove a member.
+      await assertSucceeds(updateDoc(doc(alice, 'conversations/g1'), {
+        participants: arrayRemove('carol'), participantCount: increment(-1),
+      }));
+
+      // A departing SOLE admin transfers first (they are no longer an admin
+      // when the `admin_transferred` notice is written) then leaves — both
+      // notices must still be creatable via the self carve-out.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/g2'), {
+          id: 'g2', type: 'group', participants: ['dave', 'erin'],
+          participantCount: 2, admins: ['dave'], roles: { dave: 'admin', erin: 'member' },
+          createdBy: 'dave',
+        });
+      });
+      const dave = env.authenticatedContext('dave').firestore();
+      await assertSucceeds(updateDoc(doc(dave, 'conversations/g2'), {
+        admins: ['erin'], 'roles.erin': 'admin',
+      }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/g2/messages/sys_xfer'),
+        { ...sysMsg({ from: 'dave', to: 'erin' }), eventType: 'admin_transferred' }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/g2/messages/sys_left2'),
+        sysMsg({ userId: 'dave' })));
+      await assertSucceeds(updateDoc(doc(dave, 'conversations/g2'), {
+        participants: arrayRemove('dave'), participantCount: increment(-1),
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+});
+\)/);
+    expect(fr).toMatch(/requestId\.matches\('\^\.\*_' \+ uid\(\) \+ '\
+    expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\['status', 'updatedAt'\]\)/);
+    expect(fr).toContain('allow delete: if false;');
+
+    // Accepting a friend request creates both follow directions. The accepting
+    // user may create their own edge to a private requester only when that
+    // requester explicitly asked to become friends.
+    const follows = blockBody('follows');
+    expect(follows).toMatch(/friendRequestFrom\(request\.resource\.data\.followingId, uid\(\)\)/);
+  });
+});
+
+describe('firestore.rules messaging membership (regression guards)', () => {
+  test('a system message (senderId "system") is creatable by a participant', () => {
+    // Every `_sendSystemMessage` write uses `senderId: 'system'`, but the
+    // message-create rule required `senderId == uid()` for EVERY message — so
+    // every system message was denied and the membership call that sent it
+    // (leaveGroup / addParticipants / role changes) failed outright.
+    expect(rules).toContain("request.resource.data.senderId == 'system'");
+    expect(rules).toContain('request.resource.data.isSystem == true');
+    expect(rules).toContain("!('text' in request.resource.data)");
+  });
+
+  test('a participant may remove themselves from participants (leave)', () => {
+    // The non-admin leave path updates `participants`; the old rule required an
+    // admin for ANY participants change, so leaving was denied. The rule now
+    // admits `old.removeAll([uid()]) == new`.
+    expect(rules).toContain('resource.data.participants.removeAll([uid()]) == request.resource.data.participants');
+  });
+
+  test('message read receipts are self-scoped (N200)', () => {
+    // `markMessageAsRead`/`markMessageAsDelivered` append the CALLER's uid. A
+    // bare `hasOnly(['readBy','deliveredTo'])` matched key names only, so any
+    // participant could REPLACE both arrays — forging another member's read
+    // receipt or wiping the record. The carve-out now pins the caller's own
+    // uid via removeAll.
+    expect(rules).toContain("affectedKeys().hasOnly(['readBy', 'deliveredTo'])");
+    expect(rules).toContain("request.resource.data.get('readBy', []).removeAll([uid()]) ==");
+    expect(rules).toContain("request.resource.data.get('deliveredTo', []).removeAll([uid()]) ==");
+  });
+
+  test('leaveGroup sends the "left" notice before the membership update', () => {
+    // The create rule requires the sender to still be a participant; after the
+    // removal the departing member is not, so the notice must come first.
+    const svc = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    const start = svc.indexOf('async leaveGroup');
+    const body = svc.slice(start, svc.indexOf('\n  async ', start + 1));
+    const noticeAt = body.indexOf("'user_left'");
+    const removalAt = body.indexOf('participants: arrayRemove(userId)');
+    expect(noticeAt).toBeGreaterThan(-1);
+    expect(removalAt).toBeGreaterThan(-1);
+    expect(noticeAt).toBeLessThan(removalAt);
+  });
+});
+
+describe('firestore.rules adversarial checks (emulator)', () => {
+  let reachable = false;
+  beforeAll(async () => { reachable = await emulatorReachable(); });
+
+  test('friend request transactions can read missing ids and accept mutual friendship safely', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, getDoc, runTransaction, updateDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(ctx.firestore(), 'users/alice'), { uid: 'alice', isPrivate: true });
+        await setDoc(doc(ctx.firestore(), 'users/bob'), { uid: 'bob', isPrivate: false });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const mallory = env.authenticatedContext('mallory').firestore();
+      const requestRef = doc(alice, 'friend_requests/alice_bob');
+
+      // This is the exact first operation in sendFriendRequest(): read the
+      // deterministic document inside a transaction before creating it.
+      await assertSucceeds(runTransaction(alice, async (transaction) => {
+        const existing = await transaction.get(requestRef);
+        if (existing.exists()) throw new Error('Expected a new friend request');
+        transaction.set(requestRef, {
+          fromUserId: 'alice',
+          toUserId: 'bob',
+          status: 'pending',
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }));
+
+      // Only either participant may inspect the request; a third party cannot
+      // probe it even though missing participant-keyed ids are readable.
+      await assertSucceeds(getDoc(doc(bob, 'friend_requests/alice_bob')));
+      await assertFails(getDoc(doc(mallory, 'friend_requests/alice_bob')));
+      await assertFails(updateDoc(doc(alice, 'friend_requests/alice_bob'), {
+        status: 'accepted',
+        updatedAt: 2,
+      }));
+
+      // Accepting a request must create BOTH follow edges, even when the
+      // requester is private. The request itself is the explicit consent.
+      await assertSucceeds(runTransaction(bob, async (transaction) => {
+        const request = await transaction.get(doc(bob, 'friend_requests/alice_bob'));
+        if (!request.exists() || request.data().status !== 'pending') {
+          throw new Error('Expected a pending friend request');
+        }
+        transaction.update(doc(bob, 'friend_requests/alice_bob'), {
+          status: 'accepted',
+          updatedAt: 2,
+        });
+        transaction.set(doc(bob, 'follows/alice_bob'), {
+          followerId: 'alice',
+          followingId: 'bob',
+          createdAt: 2,
+        });
+        transaction.set(doc(bob, 'follows/bob_alice'), {
+          followerId: 'bob',
+          followingId: 'alice',
+          createdAt: 2,
+        });
+      }));
+      await assertSucceeds(getDoc(doc(alice, 'follows/alice_bob')));
+      await assertSucceeds(getDoc(doc(alice, 'follows/bob_alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('rules compile and enforce the profile-analytics boundary', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      const alice = env.authenticatedContext('alice');
+      const bob = env.authenticatedContext('bob');
+
+      // Server-authoritative analytics: no client writes (audit N010/N019).
+      await assertFails(setDoc(doc(alice.firestore(), 'profile_analytics/bob'), { totalViews: 999 }));
+      await assertFails(setDoc(doc(alice.firestore(), 'profile_views/x'), { profileOwnerId: 'bob' }));
+      await assertFails(getDoc(doc(bob.firestore(), 'profile_analytics/alice')));
+      // Sharded counters accept only a single `value` field.
+      await assertSucceeds(setDoc(doc(alice.firestore(), 'counter_shards/a__totalViews__1'), { value: 1 }));
+      await assertFails(setDoc(doc(alice.firestore(), 'counter_shards/a__totalViews__2'), { value: 1, evil: 2 }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('space roster writes are self-scoped (N198)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayUnion, arrayRemove, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'spaces/s1'), {
+          title: 'x', hostId: 'host', host: { id: 'host' },
+          participants: ['host'], listeners: [{ id: 'host' }], audienceCount: 1, raisedHands: [],
+        });
+      });
+      const host = env.authenticatedContext('host').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      // A member joins: adds ONLY themselves, count tracks the roster.
+      await assertSucceeds(updateDoc(doc(bob, 'spaces/s1'), {
+        participants: arrayUnion('bob'),
+        listeners: arrayUnion({ id: 'bob' }),
+        audienceCount: increment(1),
+      }));
+      // A member leaves: removes ONLY themselves.
+      await assertSucceeds(updateDoc(doc(bob, 'spaces/s1'), {
+        participants: arrayRemove('bob'),
+        listeners: arrayRemove({ id: 'bob' }),
+        audienceCount: increment(-1),
+      }));
+      // An outsider cannot add a DIFFERENT user to the roster (was the hole:
+      // `hasOnly` only checks key names).
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { participants: arrayUnion('mallory') }));
+      // Nor remove another participant.
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { participants: arrayRemove('host') }));
+      // Nor wipe the roster / desync the audience count from the roster.
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { participants: [] }));
+      await assertFails(updateDoc(doc(carol, 'spaces/s1'), { audienceCount: 999 }));
+      // The host still owns the space.
+      await assertSucceeds(updateDoc(doc(host, 'spaces/s1'), { title: 'renamed' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('post engagement writes are reaction-scoped (N199)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'posts/p1'), {
+          authorId: 'alice', authorIsPrivate: false, visibility: 'public',
+          status: 'published', isDeleted: false, createdAt: 1,
+          stats: { likes: 0, views: 0, comments: 0, reactions: { '👍': 0 }, pollVotes: 0 },
+          poll: { options: [{ id: 'opt_0', text: 'a', votes: 0 }], totalVotes: 0 },
+          gifts: [],
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // A non-author may bump the reaction aggregate (the real reaction path).
+      await assertSucceeds(updateDoc(doc(bob, 'posts/p1'), {
+        'stats.reactions.👍': increment(1), updatedAt: 2,
+      }));
+      // ...but may NOT rewrite the whole stats map (likes/views/pollVotes).
+      await assertFails(updateDoc(doc(bob, 'posts/p1'), {
+        stats: { likes: 999999, views: 0, comments: 0, reactions: {}, pollVotes: 0 }, updatedAt: 3,
+      }));
+      // ...nor the poll (options / totalVotes) — that is the server callable.
+      await assertFails(updateDoc(doc(bob, 'posts/p1'), {
+        poll: { options: [{ id: 'opt_0', text: 'a', votes: 999 }], totalVotes: 999 }, updatedAt: 4,
+      }));
+      // ...nor the gifts array.
+      await assertFails(updateDoc(doc(bob, 'posts/p1'), { gifts: [{ sender: 'bob', value: 1 }], updatedAt: 5 }));
+      // The author may still edit their own post (content fields).
+      await assertSucceeds(updateDoc(doc(alice, 'posts/p1'), { content: 'edited', updatedAt: 6 }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('message read receipts are self-scoped (N200)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayUnion } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        // dave is a fourth participant so carol can attempt to forge a
+        // receipt for someone other than herself.
+        await setDoc(doc(ctx.firestore(), 'conversations/g1'), {
+          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol', 'dave'],
+          participantCount: 4, admins: ['alice'], createdBy: 'alice',
+        });
+        await setDoc(doc(ctx.firestore(), 'conversations/g1/messages/m1'), {
+          senderId: 'alice', type: 'text', text: 'hi',
+          readBy: ['alice'], deliveredTo: ['alice'],
+        });
+      });
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      // The real receipt path: a participant appends ONLY their own uid.
+      await assertSucceeds(updateDoc(doc(bob, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('bob') }));
+      // A participant cannot forge ANOTHER member's read receipt (the only
+      // permitted difference is the caller's own uid — carol appending dave).
+      await assertFails(updateDoc(doc(carol, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('dave') }));
+      // Carol may still append her own uid...
+      await assertSucceeds(updateDoc(doc(carol, 'conversations/g1/messages/m1'),
+        { readBy: arrayUnion('carol') }));
+      // ...nor wipe the record of who has read it.
+      await assertFails(updateDoc(doc(carol, 'conversations/g1/messages/m1'), { readBy: [] }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('comment reaction arrays are writable but tallies are not (N201)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayUnion } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'comments/c1'), {
+          userId: 'alice', postId: 'p1', content: 'hi',
+          likes: 0, dislikes: 0, likesBy: [], dislikesBy: [],
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // The real like path: a non-author appends their uid to the array.
+      await assertSucceeds(updateDoc(doc(bob, 'comments/c1'), { likesBy: arrayUnion('bob') }));
+      // A non-author may NOT set the numeric tally (sharded counter owns it).
+      await assertFails(updateDoc(doc(bob, 'comments/c1'), { likes: 999999 }));
+      // Nor may the author inflate their own.
+      await assertFails(updateDoc(doc(alice, 'comments/c1'), { likes: 999999 }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('private collections deny the wrong viewer (N020-N024)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      // Seed the participant list and the owner-scoped docs with rules off.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'conversations/c1'), { participants: ['alice', 'bob'] });
+        await setDoc(doc(db, 'last_messages/c1'), { text: 'private', senderId: 'bob' });
+        await setDoc(doc(db, 'saved_sounds/alice_s1'), { userId: 'alice', soundId: 's1' });
+        await setDoc(doc(db, 'incidents/i1'), { reporterId: 'alice', description: 'x' });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      // N020 — last_messages: participant reads, outsider cannot (was world-readable).
+      await assertSucceeds(getDoc(doc(alice, 'last_messages/c1')));
+      await assertSucceeds(getDoc(doc(bob, 'last_messages/c1')));
+      await assertFails(getDoc(doc(carol, 'last_messages/c1')));
+
+      // N021 — saved_sounds: owner reads, others cannot.
+      await assertSucceeds(getDoc(doc(alice, 'saved_sounds/alice_s1')));
+      await assertFails(getDoc(doc(bob, 'saved_sounds/alice_s1')));
+
+      // N022 — poll_votes is server-only: no client read or write at all.
+      await assertFails(getDoc(doc(alice, 'poll_votes/alice_p1')));
+      await assertFails(setDoc(doc(alice, 'poll_votes/alice_p1'), { userId: 'alice', pollId: 'p1' }));
+
+      // N023 — incidents: reporter reads their own, others cannot.
+      await assertSucceeds(getDoc(doc(alice, 'incidents/i1')));
+      await assertFails(getDoc(doc(bob, 'incidents/i1')));
+
+      // N024 — audit_logs: no client create/update/delete, non-admin cannot read.
+      await assertFails(setDoc(doc(alice, 'audit_logs/l1'), { action: 'forged', userId: 'alice' }));
+      await assertFails(getDoc(doc(alice, 'audit_logs/l1')));
+      await assertFails(setDoc(doc(alice, 'audit_logs/l1'), { action: 'tamper' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('allowDMs preference gates direct-conversation creation (N029)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const dm = (self, other) => ({
+      id: `direct_${[self, other].sort().join('_')}`,
+      type: 'direct',
+      participants: [self, other],
+      createdBy: self,
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      // Seed three recipients with different allowDMs preferences + a mutual
+      // follow between alice and bob only.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users/alice'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'users/bob'), { settings: { privacy: { allowDMs: 'friends' } } });
+        await setDoc(doc(db, 'users/carol'), { settings: { privacy: { allowDMs: 'none' } } });
+        await setDoc(doc(db, 'users/erin'), { settings: { privacy: { allowDMs: 'none' } } });
+        await setDoc(doc(db, 'follows/alice_bob'), { followerId: 'alice', followingId: 'bob' });
+        await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const dave = env.authenticatedContext('dave').firestore();
+
+      // alice<->bob are mutual friends and bob allows 'friends' — alice may DM.
+      await assertSucceeds(setDoc(doc(alice, 'conversations/direct_alice_bob'), dm('alice', 'bob')));
+      // dave is not a mutual friend of bob ('friends') — blocked.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_bob_dave'), dm('dave', 'bob')));
+      // carol accepts no DMs at all — blocked.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_carol_dave'), dm('dave', 'carol')));
+      // alice allows 'everyone' — dave may DM.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/direct_alice_dave'), dm('dave', 'alice')));
+
+      // A 3-participant group is unaffected by allowDMs.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/group_x'), {
+        id: 'group_x', type: 'group', participants: ['dave', 'carol', 'bob'], createdBy: 'dave',
+      }));
+
+      // A 'none' recipient can still accept a pending request: consent (the
+      // message_requests doc addressed to them) overrides their preference.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'message_requests/carol_dave'), {
+          senderId: 'dave', recipientId: 'carol', status: 'pending',
+        });
+      });
+      const carol = env.authenticatedContext('carol').firestore();
+      await assertSucceeds(setDoc(doc(carol, 'conversations/direct_carol_dave'), dm('carol', 'dave')));
+
+      // N205 — the request doc id MUST match the payload. dave forges an id
+      // (`forged_1`) to impersonate a request to erin (allowDMs 'none'), which
+      // `dmRequestFrom(erin, dave)` reads by path, not by field. The create is
+      // rejected because the id must equal `<recipientId>_<senderId>`.
+      await assertFails(setDoc(doc(dave, 'message_requests/forged_1'), {
+        senderId: 'dave', recipientId: 'erin', status: 'pending',
+      }));
+      // The correctly-shaped request is accepted. The SENDER cannot open the
+      // DM off their own request — consent belongs to the recipient, who is
+      // the only party the rule admits (`dmRequestFrom(erin, dave)` reads
+      // `message_requests/erin_dave`). This mirrors the real accept path:
+      // `respondToMessageRequest` → `createConversation` runs as the recipient.
+      await assertSucceeds(setDoc(doc(dave, 'message_requests/erin_dave'), {
+        senderId: 'dave', recipientId: 'erin', status: 'pending',
+      }));
+      const erin = env.authenticatedContext('erin').firestore();
+      await assertFails(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      await assertSucceeds(setDoc(doc(erin, 'conversations/direct_dave_erin'), dm('erin', 'dave')));
+
+      // N204 — a DECLINED request must NOT authorise the conversation. The
+      // recipient flips the status (the real respond path), after which
+      // `dmRequestFrom` no longer returns true.
+      await assertSucceeds(setDoc(doc(erin, 'message_requests/erin_dave'), {
+        senderId: 'dave', recipientId: 'erin', status: 'declined',
+      }, { merge: true }));
+      await assertFails(setDoc(doc(erin, 'conversations/direct_erin_dave_2'), {
+        id: 'direct_erin_dave_2', type: 'direct', participants: ['dave', 'erin'], createdBy: 'erin',
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a block edge forbids opening a direct conversation, even with consent (N221)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const dm = (self, other) => ({
+      id: `direct_${[self, other].sort().join('_')}`,
+      type: 'direct',
+      participants: [self, other],
+      createdBy: self,
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        // Both allow DMs; a block edge exists dave -> erin (dave blocked erin).
+        await setDoc(doc(db, 'users/dave'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'users/erin'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'blocks/dave_erin'), { blockerId: 'dave', blockedId: 'erin' });
+        // erin even consented (a pending request), which must NOT override the block.
+        await setDoc(doc(db, 'message_requests/dave_erin'), {
+          senderId: 'erin', recipientId: 'dave', status: 'pending',
+        });
+      });
+
+      const erin = env.authenticatedContext('erin').firestore();
+      const dave = env.authenticatedContext('dave').firestore();
+
+      // The blocked party (erin) cannot open a DM with her blocker (dave) …
+      await assertFails(setDoc(doc(erin, 'conversations/direct_dave_erin'), dm('erin', 'dave')));
+      // … nor can the blocker re-open one to the blocked party.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_dave_erin'), dm('dave', 'erin')));
+      // A group is unaffected by a block between two of its members.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/group_bk'), {
+        id: 'group_bk', type: 'group', participants: ['dave', 'erin', 'carol'], createdBy: 'dave',
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('message reactions are readable via the collection-group query (N098)', async () => {
+    // `messagesService.getMessages` merges reactions with ONE
+    // `collectionGroup('reactions')` query. Firestore authorizes a
+    // collection-group query only through a recursive-wildcard rule; the
+    // per-subcollection rule cannot, so without the `match /{path=**}/reactions`
+    // block the query failed `list` and every reaction was silently dropped.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collectionGroup, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'conversations/c1'), { participants: ['alice', 'bob'] });
+        await setDoc(doc(db, 'conversations/c1/messages/m1'), { senderId: 'bob', text: 'hi' });
+        await setDoc(doc(db, 'conversations/c1/messages/m1/reactions/alice'),
+          { emoji: '❤️', conversationId: 'c1', messageId: 'm1' });
+        // supergroup shard layout must resolve through the same rule
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2'), { senderId: 'bob', text: 'hi2' });
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2/reactions/bob'),
+          { emoji: '🔥', conversationId: 'c1', messageId: 'm2' });
+      });
+      const cgQuery = (db) => query(
+        collectionGroup(db, 'reactions'),
+        where('conversationId', '==', 'c1'),
+        where('messageId', 'in', ['m1', 'm2'])
+      );
+      await assertSucceeds(getDocs(cgQuery(env.authenticatedContext('alice').firestore())));
+      await assertFails(getDocs(cgQuery(env.authenticatedContext('carol').firestore())));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a username doc cannot be hijacked by another user (N102)', async () => {
+    // `usernames/{name}` grants `create, update: request.resource.data.userId == uid()`.
+    // For an UPDATE that compares the NEW userId, so any signed-in user could
+    // overwrite any claimed username doc with their own userId — stealing the
+    // username; every share/QR link for it then resolved to the attacker.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'usernames/alice'), { userId: 'alice', username: 'alice' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // Bob must not be able to steal alice's username doc...
+      await assertFails(setDoc(doc(bob, 'usernames/alice'), { userId: 'bob', username: 'alice' }));
+      // ...nor claim a brand-new name as someone else's userId.
+      await assertFails(setDoc(doc(bob, 'usernames/newname'), { userId: 'alice', username: 'newname' }));
+      // The owner may re-assert their own doc (createUserProfile merge set)...
+      await assertSucceeds(setDoc(doc(alice, 'usernames/alice'), { userId: 'alice', username: 'alice' }, { merge: true }));
+      // ...and a fresh user may claim an unclaimed name.
+      await assertSucceeds(setDoc(doc(bob, 'usernames/bobname'), { userId: 'bob', username: 'bobname' }));
+
+      // Read back through a normal (rules-enabled) context: `usernames` is
+      // world-readable, and `withSecurityRulesDisabled` does not return the
+      // callback value.
+      const after = await getDoc(doc(alice, 'usernames/alice'));
+      expect(after.data().userId).toBe('alice');
+
+      // N103 — previous_usernames squatting: carol cannot pre-create a history
+      // doc for a name she never held, but alice (who owns it) can record it.
+      await assertFails(setDoc(doc(env.authenticatedContext('carol').firestore(), 'previous_usernames/alice'),
+        { userId: 'carol', oldUsername: 'alice', currentUsername: 'carol2' }));
+      await assertSucceeds(setDoc(doc(alice, 'previous_usernames/alice'),
+        { userId: 'alice', oldUsername: 'alice', currentUsername: 'alice2' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('group invite links are admin-minted and readable by id (N-group-invites)', async () => {
+    // The rule was nested under `conversations/{id}` while the client reads and
+    // writes the TOP-LEVEL `group_invites` collection, so every create fell
+    // through to the deny-all catch-all and "create invite link" silently
+    // failed. This pins the corrected top-level contract.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/c1'), { participants: ['alice', 'bob'], admins: ['alice'], type: 'group' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const carol = env.authenticatedContext('carol').firestore();
+
+      const invite = { conversationId: 'c1', createdBy: 'alice', uses: 0 };
+
+      // Only a conversation admin may mint an invite, and it must stamp them.
+      await assertSucceeds(setDoc(doc(alice, 'group_invites/inv1'), invite));
+      await assertFails(setDoc(doc(bob, 'group_invites/inv2'), { ...invite, createdBy: 'bob' }));
+      await assertFails(setDoc(doc(alice, 'group_invites/inv3'), { ...invite, createdBy: 'bob' }));
+
+      // The invite id is the bearer token in the link: any signed-in user
+      // (even a non-participant) may read it by id to join.
+      await assertSucceeds(getDoc(doc(carol, 'group_invites/inv1')));
+
+      // Revoke / use-count changes are admin-only.
+      await assertFails(updateDoc(doc(bob, 'group_invites/inv1'), { uses: 99 }));
+      await assertSucceeds(updateDoc(doc(alice, 'group_invites/inv1'), { uses: 1 }));
+
+      // LIST is admin-only and must be scoped to an administered conversation,
+      // so the whole collection cannot be enumerated.
+      await assertFails(getDocs(query(collection(bob, 'group_invites'), where('conversationId', '==', 'c1'))));
+      await assertSucceeds(getDocs(query(collection(alice, 'group_invites'), where('conversationId', '==', 'c1'))));
+
+      await assertFails(deleteDoc(doc(bob, 'group_invites/inv1')));
+      await assertSucceeds(deleteDoc(doc(alice, 'group_invites/inv1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('the public feed list is admitted and never leaks a draft (N-feed-list)', async () => {
+    // `request.query` exposes only limit/offset/orderBy, so the old
+    // `request.query.get(field, sentinel)` list helper returned the sentinel and
+    // denied EVERY feed `list` for non-admins (the home feed silently fell back
+    // to an empty/permission-denied state). The rule now authorises per
+    // candidate document. This pins both the admit and the no-leak property.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'posts/pub1'), { authorId: 'alice', authorIsPrivate: false, visibility: 'public', status: 'published', isDeleted: false, createdAt: 1 });
+        await setDoc(doc(db, 'posts/draft1'), { authorId: 'alice', authorIsPrivate: false, visibility: 'public', status: 'draft', isDeleted: false, createdAt: 2 });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // The exact public-feed shape feedService issues now succeeds...
+      const publicFeed = (db) => query(collection(db, 'posts'),
+        where('authorIsPrivate', '==', false), where('status', '==', 'published'),
+        where('isDeleted', '==', false), where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'), limit(10));
+      const snap = await assertSucceeds(getDocs(publicFeed(bob)));
+      expect(snap.docs.map((d) => d.id)).toEqual(['pub1']);
+
+      // ...the author reads their own drafts through an author-scoped query...
+      await assertSucceeds(getDocs(query(collection(alice, 'posts'),
+        where('authorId', '==', 'alice'), orderBy('createdAt', 'desc'), limit(10))));
+
+      // ...but a viewer's author-scoped query must carry the public constraints
+      // (an authorId-only query could return alice's draft, so it is denied)...
+      await assertFails(getDocs(query(collection(bob, 'posts'),
+        where('authorId', '==', 'alice'), orderBy('createdAt', 'desc'), limit(10))));
+
+      // ...and an unconstrained query is denied wholesale.
+      await assertFails(getDocs(query(collection(bob, 'posts'), limit(50))));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a private author\'s approved follower reads the grid; a stranger cannot (N206)', async () => {
+    // The capability engine grants `canViewContent` to an approved follower of a
+    // private account, but the read rule hard-required `authorIsPrivate == false`
+    // with no follower branch, so a follower's profile grid silently returned 0
+    // (and the author-scoped query was denied). The follower shape must NOT
+    // constrain `authorIsPrivate` (the rule proves the edge from `authorId`).
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users/alice'), { isPrivate: true });
+        await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
+        for (let i = 0; i < 3; i++) {
+          await setDoc(doc(db, `posts/priv${i}`), { authorId: 'alice', authorIsPrivate: true, visibility: 'public', status: 'published', isDeleted: false, expiresAt: null, createdAt: i });
+        }
+      });
+      const bob = env.authenticatedContext('bob').firestore();   // approved follower
+      const dave = env.authenticatedContext('dave').firestore(); // stranger
+
+      // The approved-follower shape (no authorIsPrivate constraint) is admitted
+      // and returns the private author's posts.
+      const followerGrid = (db) => query(collection(db, 'posts'),
+        where('authorId', '==', 'alice'), where('status', '==', 'published'),
+        where('isDeleted', '==', false), where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'), limit(30));
+      const snap = await assertSucceeds(getDocs(followerGrid(bob)));
+      expect(snap.size).toBe(3);
+      await assertSucceeds(getDoc(doc(bob, 'posts/priv1')));
+
+      // A stranger cannot list or read the private author's posts.
+      await assertFails(getDocs(followerGrid(dave)));
+      await assertFails(getDoc(doc(dave, 'posts/priv1')));
+
+      // The bypass this depends on: a user cannot self-create a `follows` edge
+      // to a private account (that edge is only written by the owner on
+      // approval), or they would gain content access without consent.
+      await assertFails(setDoc(doc(dave, 'follows/dave_alice'), { followerId: 'dave', followingId: 'alice' }));
+
+      // The owner's approval path still writes the edge for the requester.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'follow_requests/erin_alice'), { fromUserId: 'erin', toUserId: 'alice', status: 'pending' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      await assertSucceeds(setDoc(doc(alice, 'follows/erin_alice'), { followerId: 'erin', followingId: 'alice' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a post without an expiresAt field is still readable (N208)', async () => {
+    // The get-rule read `resource.data.expiresAt` directly, which RAISES when the
+    // field is absent — denying the whole read. A post that never expires
+    // legitimately omits `expiresAt` (the server's `createCommunityPost` did),
+    // so the member who created the community post could not read it back. The
+    // rule now uses `.get('expiresAt', null)`.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'communities/c1'), { privacy: 'private', members: { bob: { role: 'member' } } });
+        // Exactly the server `createCommunityPost` shape (no `expiresAt`).
+        await setDoc(doc(db, 'posts/comm1'), { authorId: 'alice', authorIsPrivate: false, communityId: 'c1', content: 'hi', type: 'text', media: [], visibility: 'community', status: 'published', isDeleted: false, createdAt: 1 });
+        await setDoc(doc(db, 'posts/pub1'), { authorId: 'alice', authorIsPrivate: false, content: 'hi', type: 'text', media: [], visibility: 'public', status: 'published', isDeleted: false, createdAt: 2 });
+      });
+      const bob = env.authenticatedContext('bob').firestore();   // community member
+      const dave = env.authenticatedContext('dave').firestore(); // non-member
+
+      await assertSucceeds(getDoc(doc(bob, 'posts/comm1')));
+      await assertSucceeds(getDoc(doc(dave, 'posts/pub1')));
+      // Membership is still enforced — a non-member is denied the community post.
+      await assertFails(getDoc(doc(dave, 'posts/comm1')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a user cannot write another user\'s daily upload counter shard (N210)', async () => {
+    // The rule was `isOwner(request.resource.data.userId)` — it trusted the
+    // `userId` FIELD but never bound the document ID to the caller. Any
+    // signed-in user could create `daily_upload_counters/upload_{victim}_...`
+    // with `userId: victim`, resetting/inflating the victim's daily video-upload
+    // counter and defeating the per-tier upload limit. The id is now pinned to
+    // the caller (`shardId.matches('upload_' + uid() + '_...')`), mirroring
+    // `unread_counters`.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      const alice = env.authenticatedContext('alice').firestore();
+      const mallory = env.authenticatedContext('mallory').firestore();
+
+      // The owner increments their own shard.
+      await assertSucceeds(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 1,
+      }));
+      // A different user cannot create a shard under alice's id…
+      await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_alice_2026-11-08_shard_1'), {
+        userId: 'alice', date: '2026-11-08', shard: 1, count: 0,
+      }));
+      // …nor an arbitrary id that merely carries alice's userId field.
+      await assertFails(setDoc(doc(mallory, 'daily_upload_counters/upload_mallory_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 0,
+      }));
+      // N370: the VALUE is bounded too — a fresh shard may not start above the
+      // per-shard window, so the limit cannot be pre-saturated in one write.
+      await assertFails(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_2'), {
+        userId: 'alice', date: '2026-11-08', shard: 2, count: 999999,
+      }));
+      // …and an update may only step the count by a small delta.
+      await assertFails(setDoc(doc(alice, 'daily_upload_counters/upload_alice_2026-11-08_shard_0'), {
+        userId: 'alice', date: '2026-11-08', shard: 0, count: 999999,
+      }, { merge: true }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+
+  test('the owner story grid lists while another user\'s grid is denied (N-story-list)', async () => {
+    // A story `list` rule may only read fields the query constrains: the old
+    // combined `allow read` read isDeleted/status/expiresAt/moderationStatus/
+    // visibility, so a list query that omits any of them made `resource.data.X`
+    // undefined and threw ("Property isDeleted is undefined on object"),
+    // denying the whole read. `getUserStories` (the reachable grid) is now
+    // admitted by the owner-scoped `list` rule; a stranger's grid is denied.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collection, query, where, limit, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'stories/own1'), {
+          userId: 'alice', isDeleted: false, status: 'published', moderationStatus: 'pending', visibility: 'public',
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const grid = (db, uid) => query(collection(db, 'stories'), where('userId', '==', uid), where('isDeleted', '==', false), limit(30));
+      await assertSucceeds(getDocs(grid(alice, 'alice')));
+      await assertFails(getDocs(grid(bob, 'alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('group leave + system messages are authorized as intended (N197)', async () => {
+    // 1) a non-admin participant may remove themselves (leave);
+    // 2) a participant may write the `user_left` system notice while still a
+    //    member, but no member may forge another member's notice or inject
+    //    text through a "system" message.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, arrayRemove, increment } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const sysMsg = (eventData) => ({
+      type: 'system', eventType: 'user_left', eventData, senderId: 'system',
+      senderName: 'System', isSystem: true,
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/g1'), {
+          id: 'g1', type: 'group', participants: ['alice', 'bob', 'carol'],
+          participantCount: 3, admins: ['alice'], roles: { alice: 'admin', bob: 'member', carol: 'member' },
+          createdBy: 'alice',
+        });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // A member sends their own "left" notice (still a participant) — allowed.
+      await assertSucceeds(setDoc(doc(bob, 'conversations/g1/messages/sys_bob'),
+        sysMsg({ userId: 'bob' })));
+      // A member cannot forge another member's notice.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_forged'),
+        sysMsg({ userId: 'carol' })));
+      // A "system" message may not smuggle real content.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_evil'),
+        { ...sysMsg({ userId: 'bob' }), text: 'free advertising' }));
+      // A non-admin may only emit the two self-service event types; a member
+      // cannot forge a "role_changed" notice about themselves.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/sys_role'),
+        { ...sysMsg({ userId: 'bob' }), eventType: 'role_changed' }));
+      // A member cannot author a normal message as someone else.
+      await assertFails(setDoc(doc(bob, 'conversations/g1/messages/forged'),
+        { type: 'text', text: 'hi', senderId: 'carol' }));
+
+      // The non-admin leaves: participants drops ONLY bob, count decremented.
+      await assertSucceeds(updateDoc(doc(bob, 'conversations/g1'), {
+        participants: arrayRemove('bob'), participantCount: increment(-1),
+      }));
+      // A member cannot remove someone ELSE.
+      await assertFails(updateDoc(doc(env.authenticatedContext('carol').firestore(), 'conversations/g1'), {
+        participants: arrayRemove('alice'), participantCount: increment(-1),
+      }));
+      // A member cannot self-promote.
+      await assertFails(updateDoc(doc(env.authenticatedContext('carol').firestore(), 'conversations/g1'), {
+        admins: ['carol'],
+      }));
+      // The admin may remove a member.
+      await assertSucceeds(updateDoc(doc(alice, 'conversations/g1'), {
+        participants: arrayRemove('carol'), participantCount: increment(-1),
+      }));
+
+      // A departing SOLE admin transfers first (they are no longer an admin
+      // when the `admin_transferred` notice is written) then leaves — both
+      // notices must still be creatable via the self carve-out.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'conversations/g2'), {
+          id: 'g2', type: 'group', participants: ['dave', 'erin'],
+          participantCount: 2, admins: ['dave'], roles: { dave: 'admin', erin: 'member' },
+          createdBy: 'dave',
+        });
+      });
+      const dave = env.authenticatedContext('dave').firestore();
+      await assertSucceeds(updateDoc(doc(dave, 'conversations/g2'), {
+        admins: ['erin'], 'roles.erin': 'admin',
+      }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/g2/messages/sys_xfer'),
+        { ...sysMsg({ from: 'dave', to: 'erin' }), eventType: 'admin_transferred' }));
+      await assertSucceeds(setDoc(doc(dave, 'conversations/g2/messages/sys_left2'),
+        sysMsg({ userId: 'dave' })));
+      await assertSucceeds(updateDoc(doc(dave, 'conversations/g2'), {
+        participants: arrayRemove('dave'), participantCount: increment(-1),
+      }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+});
+\)/);
     expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\['status', 'updatedAt'\]\)/);
     expect(fr).toContain('allow delete: if false;');
 
