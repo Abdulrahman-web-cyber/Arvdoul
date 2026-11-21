@@ -60,7 +60,7 @@ export default function AboutScreen() {
   );
 
   useEffect(() => {
-    if (!targetId) return;
+    if (!authInitialized || !targetId) return;
     const currentProfile = useProfileStore.getState().profile;
     const matchesStore = currentProfile && (
       currentProfile.id === targetId ||
@@ -143,6 +143,18 @@ export default function AboutScreen() {
     () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isActualOwner }),
     [effectiveProfile, capabilities, isActualOwner]
   );
+
+  if (!authInitialized) {
+    return (
+      <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')} role="status" aria-label="Restoring session">
+        <div className="w-full max-w-md space-y-3">
+          <Skeleton className="h-7 w-44 rounded-lg" />
+          <Skeleton className="h-4 w-full rounded-md" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   const expectedRelationshipTarget = storeProfileMatchesTarget
     ? (storeProfile?.uid || storeProfile?.id)
