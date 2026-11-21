@@ -1866,6 +1866,31 @@ class ProfessionalUserService {
     return result;
   }
 
+  /**
+   * Resolve the two deterministic friend-request documents for a profile
+   * relationship. This is intentionally a pair of point reads, not two
+   * 200-document inbox queries on every profile visit.
+   */
+  async getFriendRequestStatus(fromUserId, toUserId) {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) {
+      return { sent: null, received: null };
+    }
+    await this._ensureInitialized();
+    const { doc, getDoc } = await import('firebase/firestore');
+    const sentRef = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
+    const receivedRef = doc(this.firestore, 'friend_requests', `${toUserId}_${fromUserId}`);
+    const [sentSnap, receivedSnap] = await Promise.all([
+      getDoc(sentRef),
+      getDoc(receivedRef),
+    ]);
+    const sentData = sentSnap.exists() ? { id: sentSnap.id, ...sentSnap.data() } : null;
+    const receivedData = receivedSnap.exists() ? { id: receivedSnap.id, ...receivedSnap.data() } : null;
+    return {
+      sent: sentData?.fromUserId === fromUserId && sentData?.toUserId === toUserId && sentData.status === 'pending' ? sentData : null,
+      received: receivedData?.fromUserId === toUserId && receivedData?.toUserId === fromUserId && receivedData.status === 'pending' ? receivedData : null,
+    };
+  }
+
   async getFriendRequests(userId, type = 'received') {
     await this._ensureInitialized();
     const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
