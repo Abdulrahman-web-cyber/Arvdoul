@@ -93,7 +93,15 @@ const ProfileHighlightsSection = memo(({
   };
 
   return (
-    <section aria-label="Highlights" className="w-full py-1">
+    <section
+      aria-label="Highlights"
+      className={cn(
+        "w-full rounded-[24px] border px-4 py-4 sm:px-5",
+        isDark
+          ? "border-white/[0.12] bg-white/[0.045] shadow-[0_12px_34px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          : "border-white/90 bg-white/55 shadow-[0_10px_30px_rgba(38,56,120,0.08),inset_0_1px_0_rgba(255,255,255,0.95)]"
+      )}
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-arvdoul-purple" aria-hidden="true" />
