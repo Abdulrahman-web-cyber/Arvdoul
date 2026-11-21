@@ -57,6 +57,16 @@ describe('profile cache and unknown-value isolation', () => {
     expect(connections).toContain('if (!isMounted) return');
   });
 
+  test('a profile refresh invalidates every secondary loader from the previous target', () => {
+    const start = store.indexOf('loadProfile: async');
+    const end = store.indexOf('const runLoad', start);
+    const loader = store.slice(start, end);
+    expect(loader).toContain("state.loadSeq[key] = (state.loadSeq[key] || 0) + 1");
+    for (const key of ['posts', 'highlights', 'saved', 'shop', 'stories', 'level', 'balance', 'position', 'followStatus', 'mutualFriends']) {
+      expect(loader).toContain("'" + key + "'");
+    }
+  });
+
   test('profile store viewer identity comes from AuthContext parameters, not persisted UID mirrors', () => {
     expect(store).toContain('viewerUid: null');
     expect(store).toContain('state.viewerUid = currentUserId || null');
