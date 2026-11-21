@@ -578,7 +578,8 @@ export const ProfileHeroSection = memo(({
     if (aura === 'cyan') return 'linear-gradient(135deg,#22d3ee,#14b8a6,#7dd3fc)';
     if (aura === 'emerald') return 'linear-gradient(135deg,#34d399,#16a34a,#5eead4)';
     if (aura === 'gold') return 'linear-gradient(135deg,#fbbf24,#eab308,#fcd34d)';
-    return null;
+    // All profiles receive the Arvdoul DNA ring; earned crest cosmetics override it.
+    return BRAND_GRADIENT;
   }, [profile?.crestAura, isRoyal, userLevel, sovereignGate]);
 
   const handleCopyHandle = useCallback(async () => {
@@ -633,7 +634,7 @@ export const ProfileHeroSection = memo(({
     PRESS, FOCUS_RING, material.control
   );
   const primaryBtn = cn(
-    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-[14px] text-[13px] font-semibold whitespace-nowrap cursor-pointer",
+    "inline-flex items-center justify-center gap-2 min-h-[50px] px-4 rounded-[17px] text-[13px] sm:text-[14px] font-semibold whitespace-nowrap cursor-pointer",
     "disabled:opacity-60 disabled:cursor-not-allowed",
     PRESS, FOCUS_RING
   );
@@ -825,7 +826,7 @@ export const ProfileHeroSection = memo(({
     <div
       role="group"
       aria-label="Profile header"
-      className={cn("relative z-20 w-full font-sans py-1", text)}
+      className={cn("relative z-20 w-full font-sans py-3 sm:py-4", text)}
     >
       {showInlineBack && (
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -858,14 +859,14 @@ export const ProfileHeroSection = memo(({
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-[560px] flex flex-col items-center text-center">
+      <div className="mx-auto w-full max-w-[640px] flex flex-col items-center text-center">
         {/* 1. Portrait */}
         <div
-          className={cn("relative shrink-0 rounded-full", crestAuraRing && "p-[2px]")}
+          className={cn("relative shrink-0 rounded-full p-[4px]", isDark ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_24px_rgba(99,45,255,0.32),0_0_42px_rgba(0,136,255,0.18)]" : "shadow-[0_0_0_1px_rgba(255,255,255,0.9),0_8px_28px_rgba(76,86,210,0.22)]")}
           style={{
-            width: 'clamp(100px, calc(76px + 7.5vw), 124px)',
+            width: 'clamp(148px, 28vw, 184px)',
             aspectRatio: '1 / 1',
-            ...(crestAuraRing ? { background: crestAuraRing } : { boxShadow: material.outline }),
+            background: crestAuraRing || BRAND_GRADIENT,
           }}
         >
           {canOpenAvatar ? (
@@ -895,11 +896,11 @@ export const ProfileHeroSection = memo(({
 
         {/* 2. Display name + verification */}
         <h1
-          className={cn("mt-3 max-w-full font-sans font-semibold [overflow-wrap:anywhere]", text)}
+          className={cn("mt-4 max-w-full font-sans font-bold [overflow-wrap:anywhere]", text)}
           style={{
-            fontSize: 'clamp(22px, calc(10px + 3.6vw), 28px)',
-            lineHeight: 1.18,
-            letterSpacing: '-0.016em',
+            fontSize: 'clamp(25px, calc(12px + 3.9vw), 33px)',
+            lineHeight: 1.12,
+            letterSpacing: '-0.025em',
             textWrap: 'balance',
           }}
         >
@@ -928,7 +929,7 @@ export const ProfileHeroSection = memo(({
 
         {/* 3. Username + Bespoke Per-Level Numeral Emblem + Owner verification status */}
         {(username || (showLevel && userLevel !== null) || (!isVerified && isOwner && verificationLevelGate !== null)) && (
-          <div className="mt-1.5 max-w-full flex items-center justify-center gap-x-2.5 gap-y-1 flex-wrap text-[13px] leading-5">
+          <div className="mt-2 max-w-full flex items-center justify-center gap-x-3 gap-y-2 flex-wrap text-[14px] leading-5">
             {username && (
               <button
                 type="button"
@@ -1075,13 +1076,13 @@ export const ProfileHeroSection = memo(({
         )}
 
         {/* 7. Principal actions: Edit Profile / Follow-or-Friend + Digital Passport beside it */}
-        <div className="mt-4 w-full max-w-[460px] flex items-center gap-2">
+        <div className="mt-5 w-full max-w-[520px] flex items-center gap-2">
           {isOwner ? (
             <>
               <button
                 type="button"
                 onClick={onEditProfile || (() => navigate('/profile/edit'))}
-                className={cn(primaryBtn, "flex-1 min-w-0 text-white hover:brightness-110")}
+                className={cn(primaryBtn, "flex-1 min-w-0 text-white hover:brightness-110 shadow-[0_8px_24px_rgba(50,80,255,0.24)]")}
                 style={{ background: BRAND_GRADIENT }}
               >
                 <Edit3 className="w-4 h-4 shrink-0" aria-hidden="true" />
