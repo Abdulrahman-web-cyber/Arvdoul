@@ -61,7 +61,9 @@ class ProductionAuthService {
       (async () => {
         try {
           const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
-          const redirectResult = await getRedirectResult(this.auth).catch(() => null);
+          // getRedirectResult resolves null when no redirect is pending. Do not
+          // swallow real OAuth/configuration failures as if there were no result.
+          const redirectResult = await getRedirectResult(this.auth);
           if (redirectResult?.user) {
             logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
             const user = redirectResult.user;
@@ -816,8 +818,8 @@ class ProductionAuthService {
     try {
       await this.initialize();
       const {
-        GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo,
-        updateProfile, setPersistence, browserLocalPersistence
+        GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+        getAdditionalUserInfo, updateProfile
       } = await import('firebase/auth');
 
       logger.warn('// Starting Google authentication...');
@@ -827,7 +829,16 @@ class ProductionAuthService {
       const customParams = { prompt: 'select_account' };
       if (options.email) customParams.login_hint = options.email;
       provider.setCustomParameters(customParams);
-      await setPersistence(this.auth, browserLocalPersistence);
+
+      // Persistence is configured once by firebase/firebase.js. Re-awaiting
+      // setPersistence here is redundant and can consume the browser's transient
+      // user activation before signInWithPopup opens its window.
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+      const prefersRedirect = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+      if (prefersRedirect) {
+        await signInWithRedirect(this.auth, provider);
+        return { success: true, redirecting: true };
+      }
 
       let result;
       try {
@@ -837,13 +848,14 @@ class ProductionAuthService {
         // Only fallback to redirect if popup was genuinely blocked by browser
         if (popupError.code === 'auth/popup-blocked') {
           logger.warn('Popup blocked; attempting signInWithRedirect fallback...');
-          const { signInWithRedirect } = await import('firebase/auth');
           try {
             await signInWithRedirect(this.auth, provider);
             return { success: true, redirecting: true };
           } catch (redirectError) {
+            // Preserve the real fallback failure. Re-throwing popupError here
+            // masked domain/storage/network failures as a popup issue.
             logger.error('signInWithRedirect failed:', redirectError);
-            throw popupError;
+            throw redirectError;
           }
         }
         throw popupError;
