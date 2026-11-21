@@ -39,6 +39,6 @@ describe('profile cache and unknown-value isolation', () => {
     expect(ownerProfile).toContain('withCoins: false');
     expect(ownerProfile).toMatch(/value !== null && value !== undefined && value !== '' && Number\.isFinite\(Number\(value\)\)/);
     expect(ownerProfile).toContain('coins: resolvedCoins');
-    expect(ownerProfile).toContain('resolvedExperience === undefined');
+    expect(ownerProfile).toContain('resolvedExperience !== undefined');
   });
 });
