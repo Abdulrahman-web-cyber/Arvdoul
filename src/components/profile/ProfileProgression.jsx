@@ -78,10 +78,10 @@ const ProfileProgression = memo(({
 
     return (
       <div className={cn(
-        "w-full rounded-2xl px-4 sm:px-5 py-3.5 border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3",
+        "w-full rounded-[24px] px-4 sm:px-5 py-4 border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_10px_28px_rgba(0,0,0,0.10)]",
         isDark
-          ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
-          : "bg-white border-slate-200/90 text-slate-900 shadow-sm",
+          ? "bg-white/[0.055] border-white/[0.12] text-white"
+          : "bg-white/65 border-white/90 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.08)]",
         className
       )}>
         <div className="flex items-center gap-3">
@@ -116,10 +116,10 @@ const ProfileProgression = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-2xl px-4 sm:px-5 py-3.5 border transition-colors",
+      "w-full rounded-[24px] px-4 sm:px-5 py-4 border transition-colors shadow-[0_10px_28px_rgba(0,0,0,0.10)]",
       isDark
         ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
-        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_10px_rgba(15,23,42,0.03)]",
+        : "bg-white/65 border-white/90 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.08)]",
       className
     )}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

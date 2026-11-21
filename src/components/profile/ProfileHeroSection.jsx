@@ -18,6 +18,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   BadgeCheck,
   MapPin,
+  Briefcase,
+  Link2,
+  CalendarDays,
   Crown,
   MoreHorizontal,
   QrCode,
@@ -578,7 +581,8 @@ export const ProfileHeroSection = memo(({
     if (aura === 'cyan') return 'linear-gradient(135deg,#22d3ee,#14b8a6,#7dd3fc)';
     if (aura === 'emerald') return 'linear-gradient(135deg,#34d399,#16a34a,#5eead4)';
     if (aura === 'gold') return 'linear-gradient(135deg,#fbbf24,#eab308,#fcd34d)';
-    return null;
+    // All profiles receive the Arvdoul DNA ring; earned crest cosmetics override it.
+    return BRAND_GRADIENT;
   }, [profile?.crestAura, isRoyal, userLevel, sovereignGate]);
 
   const handleCopyHandle = useCallback(async () => {
@@ -633,7 +637,7 @@ export const ProfileHeroSection = memo(({
     PRESS, FOCUS_RING, material.control
   );
   const primaryBtn = cn(
-    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-[14px] text-[13px] font-semibold whitespace-nowrap cursor-pointer",
+    "inline-flex items-center justify-center gap-2 min-h-[50px] px-4 rounded-[17px] text-[13px] sm:text-[14px] font-semibold whitespace-nowrap cursor-pointer",
     "disabled:opacity-60 disabled:cursor-not-allowed",
     PRESS, FOCUS_RING
   );
@@ -770,7 +774,12 @@ export const ProfileHeroSection = memo(({
   const metaItems = [
     profession && {
       key: 'profession',
-      node: <span className="max-w-full min-w-0 truncate">{profession}</span>,
+      node: (
+        <span className="inline-flex items-center gap-2 max-w-full min-w-0">
+          <Briefcase className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
+          <span className="truncate">{profession}</span>
+        </span>
+      ),
     },
     location && {
       key: 'location',
@@ -778,35 +787,48 @@ export const ProfileHeroSection = memo(({
         <button
           type="button"
           onClick={onOpenLocationSetup}
-          className={cn("inline-flex items-center gap-1 max-w-full min-w-0 truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}
+          className={cn("inline-flex items-center gap-2 max-w-full min-w-0 truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}
         >
-          <MapPin className="w-3 h-3 shrink-0 opacity-75" aria-hidden="true" />
+          <MapPin className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
           <span className="truncate">{location}</span>
         </button>
       ) : (
-        <span className="inline-flex items-center gap-1 max-w-full min-w-0 truncate">
-          <MapPin className="w-3 h-3 shrink-0 opacity-75" aria-hidden="true" />
+        <span className="inline-flex items-center gap-2 max-w-full min-w-0 truncate">
+          <MapPin className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
           <span className="truncate">{location}</span>
         </span>
       ),
     },
     websiteLabel && {
       key: 'website',
-      node: websiteHref ? (
-        <a
-          href={websiteHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn("max-w-full min-w-0 truncate rounded-md font-medium hover:underline underline-offset-2", accent, FOCUS_RING)}
-        >
-          {websiteLabel}
-          <span className="sr-only"> (opens in a new tab)</span>
-        </a>
-      ) : (
-        <span className="max-w-full min-w-0 truncate">{websiteLabel}</span>
+      node: (
+        <span className="inline-flex items-center gap-2 max-w-full min-w-0">
+          <Link2 className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
+          {websiteHref ? (
+            <a
+              href={websiteHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn("max-w-full min-w-0 truncate rounded-md font-medium hover:underline underline-offset-2", accent, FOCUS_RING)}
+            >
+              {websiteLabel}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          ) : (
+            <span className="max-w-full min-w-0 truncate">{websiteLabel}</span>
+          )}
+        </span>
       ),
     },
-    joinedDate && { key: 'joined', node: <span>{joinedDate}</span> },
+    joinedDate && {
+      key: 'joined',
+      node: (
+        <span className="inline-flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
+          <span>{joinedDate}</span>
+        </span>
+      ),
+    },
   ].filter(Boolean);
 
   const verifiedIcon = (
@@ -825,7 +847,7 @@ export const ProfileHeroSection = memo(({
     <div
       role="group"
       aria-label="Profile header"
-      className={cn("relative z-20 w-full font-sans py-1", text)}
+      className={cn("relative z-20 w-full font-sans py-3 sm:py-4", text)}
     >
       {showInlineBack && (
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -858,14 +880,14 @@ export const ProfileHeroSection = memo(({
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-[560px] flex flex-col items-center text-center">
+      <div className="mx-auto w-full max-w-[640px] flex flex-col items-center text-center">
         {/* 1. Portrait */}
         <div
-          className={cn("relative shrink-0 rounded-full", crestAuraRing && "p-[2px]")}
+          className={cn("relative shrink-0 rounded-full p-[4px]", isDark ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_24px_rgba(99,45,255,0.32),0_0_42px_rgba(0,136,255,0.18)]" : "shadow-[0_0_0_1px_rgba(255,255,255,0.9),0_8px_28px_rgba(76,86,210,0.22)]")}
           style={{
-            width: 'clamp(100px, calc(76px + 7.5vw), 124px)',
+            width: 'clamp(148px, 28vw, 184px)',
             aspectRatio: '1 / 1',
-            ...(crestAuraRing ? { background: crestAuraRing } : { boxShadow: material.outline }),
+            background: crestAuraRing || BRAND_GRADIENT,
           }}
         >
           {canOpenAvatar ? (
@@ -886,7 +908,7 @@ export const ProfileHeroSection = memo(({
               aria-label="Online now"
               title="Online now"
               className={cn(
-                "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2",
+                "absolute bottom-1.5 right-1.5 w-[18px] h-[18px] rounded-full bg-emerald-500 ring-[3px] shadow-[0_0_12px_rgba(16,185,129,0.45)]",
                 isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]"
               )}
             />
@@ -895,11 +917,11 @@ export const ProfileHeroSection = memo(({
 
         {/* 2. Display name + verification */}
         <h1
-          className={cn("mt-3 max-w-full font-sans font-semibold [overflow-wrap:anywhere]", text)}
+          className={cn("mt-4 max-w-full font-sans font-bold [overflow-wrap:anywhere]", text)}
           style={{
-            fontSize: 'clamp(22px, calc(10px + 3.6vw), 28px)',
-            lineHeight: 1.18,
-            letterSpacing: '-0.016em',
+            fontSize: 'clamp(25px, calc(12px + 3.9vw), 33px)',
+            lineHeight: 1.12,
+            letterSpacing: '-0.025em',
             textWrap: 'balance',
           }}
         >
@@ -928,7 +950,7 @@ export const ProfileHeroSection = memo(({
 
         {/* 3. Username + Bespoke Per-Level Numeral Emblem + Owner verification status */}
         {(username || (showLevel && userLevel !== null) || (!isVerified && isOwner && verificationLevelGate !== null)) && (
-          <div className="mt-1.5 max-w-full flex items-center justify-center gap-x-2.5 gap-y-1 flex-wrap text-[13px] leading-5">
+          <div className="mt-2 max-w-full flex items-center justify-center gap-x-3 gap-y-2 flex-wrap text-[14px] leading-5">
             {username && (
               <button
                 type="button"
@@ -950,17 +972,22 @@ export const ProfileHeroSection = memo(({
             )}
 
             {showLevel && userLevel !== null && (
-              <span className="inline-flex items-center gap-1.5">
-                <LevelNumeralBadge
-                  level={userLevel}
-                  theme={theme}
-                  size="sm"
-                  onClick={isOwner ? () => handleOpenRoadmap('levels') : undefined}
-                />
-                <span className={cn("text-[12px] font-medium tabular-nums", muted)}>
-                  Level {Math.floor(userLevel)}
-                </span>
-              </span>
+              <button
+                type="button"
+                onClick={isOwner ? () => handleOpenRoadmap('levels') : undefined}
+                disabled={!isOwner}
+                aria-label={isOwner ? `Level ${Math.floor(userLevel)}, open progression` : `Level ${Math.floor(userLevel)}`}
+                className={cn(
+                  "inline-flex items-center gap-2 min-h-[34px] rounded-full border px-3.5 py-1 text-[13px] font-semibold tabular-nums",
+                  isDark
+                    ? "border-indigo-300/30 bg-gradient-to-r from-violet-500/20 via-indigo-500/15 to-cyan-500/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                    : "border-indigo-300/50 bg-white/75 text-slate-900 shadow-[0_3px_12px_rgba(65,80,190,0.12)]",
+                  isOwner && "cursor-pointer", FOCUS_RING
+                )}
+              >
+                <LevelNumeralBadge level={userLevel} theme={isDark ? 'dark' : 'light'} size="sm" />
+                <span>Level {Math.floor(userLevel)}</span>
+              </button>
             )}
 
             {!isVerified && isOwner && verificationLevelGate !== null && (
@@ -1064,10 +1091,12 @@ export const ProfileHeroSection = memo(({
 
         {/* 6. Profession, location, website, joined */}
         {metaItems.length > 0 && (
-          <div className={cn("mt-2 max-w-full flex items-center justify-center gap-x-2 gap-y-0.5 flex-wrap text-[12px] leading-5", muted)}>
-            {metaItems.map(({ key, node }, index) => (
-              <span key={key} className="inline-flex items-center gap-2 min-w-0 max-w-full">
-                {index > 0 && <span aria-hidden="true">·</span>}
+          <div className={cn(
+            "mt-4 w-full max-w-[520px] grid grid-cols-1 min-[420px]:grid-cols-2 items-center justify-items-center gap-x-5 gap-y-2.5 text-[13px] sm:text-[14px] leading-5",
+            muted
+          )}>
+            {metaItems.map(({ key, node }) => (
+              <span key={key} className="inline-flex items-center justify-center min-w-0 max-w-full">
                 {node}
               </span>
             ))}
@@ -1075,13 +1104,13 @@ export const ProfileHeroSection = memo(({
         )}
 
         {/* 7. Principal actions: Edit Profile / Follow-or-Friend + Digital Passport beside it */}
-        <div className="mt-4 w-full max-w-[460px] flex items-center gap-2">
+        <div className="mt-5 w-full max-w-[520px] flex items-center gap-2">
           {isOwner ? (
             <>
               <button
                 type="button"
                 onClick={onEditProfile || (() => navigate('/profile/edit'))}
-                className={cn(primaryBtn, "flex-1 min-w-0 text-white hover:brightness-110")}
+                className={cn(primaryBtn, "flex-1 min-w-0 text-white hover:brightness-110 shadow-[0_8px_24px_rgba(50,80,255,0.24)]")}
                 style={{ background: BRAND_GRADIENT }}
               >
                 <Edit3 className="w-4 h-4 shrink-0" aria-hidden="true" />

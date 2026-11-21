@@ -59,11 +59,11 @@ const ProfileTabsBar = memo(({
   return (
     <div
       className={cn(
-        "w-full border-b transition-colors flex items-center justify-between gap-3",
-        !isLiteMode && "backdrop-blur-md",
+        "w-full rounded-[22px] border transition-colors flex items-center justify-between gap-2 px-2",
+        !isLiteMode && "backdrop-blur-xl",
         isDark
-          ? "bg-[#03071B]/90 border-white/[0.08] text-white"
-          : "bg-[#F6F8FC]/90 border-slate-200/80 text-slate-900"
+          ? "bg-[#080F2E]/82 border-white/[0.12] text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)]"
+          : "bg-white/75 border-white/90 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.08)]"
       )}
     >
       {/* Horizontal Scrollable Tab Strip */}
@@ -85,32 +85,26 @@ const ProfileTabsBar = memo(({
               aria-selected={isActive}
               onClick={() => onTabChange?.(tab.id)}
               className={cn(
-                "relative min-h-[44px] flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer select-none whitespace-nowrap rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                "relative min-h-[42px] flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 shrink-0 cursor-pointer select-none whitespace-nowrap rounded-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isActive
-                  ? "text-slate-900 dark:text-white"
+                  ? "text-white shadow-[0_5px_16px_rgba(52,70,220,0.24)]"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               )}
+              style={isActive ? { background: BRAND_GRADIENT } : undefined}
             >
-              <Icon className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", isActive && "text-arvdoul-purple")} />
+              <Icon className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", isActive && "text-white")} />
               <span>{tab.label}</span>
               {count > 0 && (
                 <span
                   className={cn(
                     "text-[11px] font-semibold tabular-nums",
-                    isActive ? "text-arvdoul-purple dark:text-purple-300" : "text-slate-400 dark:text-slate-500"
+                    isActive ? "text-white/90" : "text-slate-400 dark:text-slate-500"
                   )}
                 >
                   {count}
                 </span>
               )}
 
-              {isActive && (
-                <span
-                  aria-hidden="true"
-                  className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-full"
-                  style={{ background: BRAND_GRADIENT }}
-                />
-              )}
             </button>
           );
         })}

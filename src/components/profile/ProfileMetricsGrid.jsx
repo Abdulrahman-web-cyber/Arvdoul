@@ -139,10 +139,10 @@ const ProfileMetricsGrid = memo(({
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border overflow-hidden",
+        "w-full rounded-[24px] border overflow-hidden",
         isDark
-          ? "border-white/[0.08] bg-white/[0.07]"
-          : "border-slate-200/90 bg-slate-200/80 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
+          ? "border-white/[0.12] bg-white/[0.045] shadow-[0_12px_34px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          : "border-white/90 bg-white/55 shadow-[0_10px_30px_rgba(38,56,120,0.09),inset_0_1px_0_rgba(255,255,255,0.95)]"
       )}
     >
       <div className={cn("grid gap-px", gridColsClass)}>
@@ -151,10 +151,10 @@ const ProfileMetricsGrid = memo(({
           const isClickable = item.clickable;
 
           const cellClass = cn(
-            "min-h-[68px] sm:min-h-[76px] px-3 sm:px-4 py-3 sm:py-4 transition-colors flex flex-col justify-between gap-1.5 sm:gap-2 text-left select-none",
+            "min-h-[82px] sm:min-h-[92px] px-3 sm:px-4 py-3.5 sm:py-4 transition-colors flex flex-col justify-between gap-2 text-left select-none",
             isDark
-              ? "bg-[#080F2E]/95 text-white"
-              : "bg-white text-slate-900",
+              ? "bg-[#080F2E]/72 text-white"
+              : "bg-white/72 text-slate-900",
             isClickable && (
               isDark
                 ? "cursor-pointer hover:bg-[#0D1742] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-arvdoul-purple"

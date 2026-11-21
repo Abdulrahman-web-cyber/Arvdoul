@@ -650,7 +650,7 @@ export default function ProfileMyScreen() {
         )}
 
         {/* Master container */}
-        <div className="w-full max-w-[1160px] mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-5 space-y-5 sm:space-y-6 lg:space-y-8">
+        <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 space-y-4 sm:space-y-5 lg:space-y-6">
           {/* Instant-paint background sync bar while Firestore profile hydrates */}
           {loading && !ownedProfile && (
             <div
@@ -702,10 +702,10 @@ export default function ProfileMyScreen() {
             <section aria-label="Arvdoul Coins Treasury" className="min-w-0">
               <div
                 className={cn(
-                  "rounded-2xl border px-4 py-3.5 sm:px-5 sm:py-4 flex flex-wrap items-center justify-between gap-3 transition-colors",
+                  "rounded-[24px] border px-4 py-4 sm:px-5 sm:py-4 flex flex-wrap items-center justify-between gap-3 transition-all duration-200 shadow-[0_10px_28px_rgba(0,0,0,0.10)]",
                   isDark
-                    ? "bg-[#080F2E]/85 border-amber-400/20 text-white"
-                    : "bg-white border-amber-200/80 text-slate-900 shadow-xs"
+                    ? "bg-[#080F2E]/78 border-amber-300/25 text-white"
+                    : "bg-white/70 border-amber-200/80 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.07)]"
                 )}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -827,7 +827,7 @@ export default function ProfileMyScreen() {
               <section aria-label="Profile content" className="min-w-0 space-y-4 sm:space-y-5">
                 <div
                   className={cn(
-                    "sticky top-0 z-30 rounded-2xl border overflow-hidden",
+                    "sticky top-0 z-30 rounded-[24px] border overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.12)]",
                     glass
                   )}
                 >
