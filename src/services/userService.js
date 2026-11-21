@@ -1788,20 +1788,31 @@ class ProfessionalUserService {
 
       transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
 
-      // Create mutual follow edges
+      // Read both directions before the first transaction write. A creator
+      // follow may already exist when the reciprocal friend request is
+      // accepted; only create missing edges and increment only their counters.
       const f1 = doc(this.firestore, 'follows', `${req.fromUserId}_${req.toUserId}`);
       const f2 = doc(this.firestore, 'follows', `${req.toUserId}_${req.fromUserId}`);
-      transaction.set(f1, { followerId: req.fromUserId, followingId: req.toUserId, createdAt: serverTimestamp() });
-      transaction.set(f2, { followerId: req.toUserId, followingId: req.fromUserId, createdAt: serverTimestamp() });
+      const [f1Snap, f2Snap] = await Promise.all([
+        transaction.get(f1),
+        transaction.get(f2),
+      ]);
+      const createForward = !f1Snap.exists();
+      const createReverse = !f2Snap.exists();
 
-      // Correct mutual increments via sharded counters: each user gains one
-      // follower and one following (no hot user-doc increments).
-      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followingCount' });
-      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followerCount' });
-      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followingCount' });
-      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followerCount' });
+      transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
+      if (createForward) {
+        transaction.set(f1, { followerId: req.fromUserId, followingId: req.toUserId, createdAt: serverTimestamp() });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followerCount' });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followingCount' });
+      }
+      if (createReverse) {
+        transaction.set(f2, { followerId: req.toUserId, followingId: req.fromUserId, createdAt: serverTimestamp() });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followerCount' });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followingCount' });
+      }
 
-      return { success: true };
+      return { success: true, createdForward: createForward, createdReverse: createReverse };
     });
 
     if (requesterId && result.success) {
