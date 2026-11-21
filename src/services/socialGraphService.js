@@ -269,8 +269,11 @@ class SocialGraphService {
       this._writeCache(this.edgeCache, cacheKey, edge);
       return edge;
     } catch (err) {
+      // Relationship state includes blocks/mutes/restricts. Returning an empty
+      // edge on a failed read would turn a permission/network failure into an
+      // authorization bypass. Let callers fail closed instead.
       logger.warn('[SocialGraph] relationship read failed', { viewerId, targetId, error: err?.message });
-      return emptyEdge(targetId);
+      throw err;
     }
   }
 
@@ -341,7 +344,10 @@ class SocialGraphService {
         });
       }
     } catch (err) {
+      // A partial/empty map would silently erase block and mute state for the
+      // entire batch. Never return a successful-looking graph on read failure.
       logger.warn('[SocialGraph] batch edge read failed', { viewerId, count: others.length, error: err?.message });
+      throw err;
     }
     return result;
   }
@@ -590,8 +596,8 @@ class SocialGraphService {
    * Ids whose content/suggestions the viewer must never see: users the viewer
    * blocked, users who blocked the viewer (reverse block — otherwise a blocker
    * leaks back into the viewer's surfaces), and users the viewer muted. Read
-   * through the spine's bounded, rules-provable edge lists. Fails open (empty
-   * set) only when the graph read errors.
+   * through the spine's bounded, rules-provable edge lists. A failed safety
+   * read rejects so callers can withhold the surface rather than leak rows.
    */
   async getHiddenAuthorIds(userId) {
     if (!userId) return new Set();
@@ -603,8 +609,8 @@ class SocialGraphService {
       ]);
       return new Set([...(blocked.ids || []), ...(blockedBy.ids || []), ...(muted.ids || [])]);
     } catch (err) {
-      logger.warn('[SocialGraph] hidden-author read failed; not filtering', { error: err?.message });
-      return new Set();
+      logger.warn('[SocialGraph] hidden-author read failed; withholding results', { error: err?.message });
+      throw err;
     }
   }
 
