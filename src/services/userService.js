@@ -1302,9 +1302,10 @@ class ProfessionalUserService {
       ]);
       return new Set([...(blocked.ids || []), ...(blockedBy.ids || [])]);
     } catch (err) {
-      // Fail open: an unreadable graph must not empty the request inbox.
-      logger.warn('[UserService] blocked-pair read failed; not filtering requests', { error: err?.message });
-      return new Set();
+      // If safety edges cannot be resolved, an actionable request inbox could
+      // expose or approve a request across a block. Withhold the inbox instead.
+      logger.warn('[UserService] blocked-pair read failed; withholding requests', { error: err?.message });
+      throw err;
     }
   }
 
