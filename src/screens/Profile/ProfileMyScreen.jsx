@@ -201,7 +201,14 @@ export default function ProfileMyScreen() {
     setViewAs(mode);
     if (mode !== 'owner') closeOwnerModals();
     if (!currentUserId) return;
-    useProfileStore.getState().loadProfile(currentUserId, currentUserId, {
+    const profileStore = useProfileStore.getState();
+    profileStore.loadProfile(currentUserId, currentUserId, {
+      viewAs: mode === 'owner' ? null : mode,
+    });
+    // Reload from the server for simulated visitors. The owner-only local
+    // optimistic cache must never appear in a public/follower preview.
+    profileStore.loadPosts(currentUserId, {
+      limit: 12,
       viewAs: mode === 'owner' ? null : mode,
     });
   }, [currentUserId, closeOwnerModals]);
