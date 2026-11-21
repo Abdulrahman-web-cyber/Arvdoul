@@ -367,8 +367,11 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     isBlockedByTarget: Boolean(caps.isBlockedBy),
     isBlockedByViewer: Boolean(caps.isBlocking),
     isRestricted: blocked || Boolean(caps.isRestricted),
-    followerCount: blocked ? 0 : profile.followerCount,
-    followingCount: blocked ? 0 : profile.followingCount,
+    // Privacy scopes must mask the data itself, not only hide the metric
+    // component. Other profile surfaces may read these projected fields.
+    followerCount: blocked ? 0 : (isOwner || Boolean(caps.canViewFollowers) ? profile.followerCount : null),
+    followingCount: blocked ? 0 : (isOwner || Boolean(caps.canViewFollowing) ? profile.followingCount : null),
+    friendCount: blocked ? 0 : (isOwner || Boolean(caps.canViewFriends) ? profile.friendCount : null),
     postCount: blocked ? 0 : profile.postCount,
     canViewIdentity: Boolean(caps.canViewIdentity),
     canViewCreatorInfo: Boolean(caps.canViewCreatorInfo),
