@@ -311,6 +311,19 @@ describe('firestore.rules economy accounting (regression guards)', () => {
 
     const folr = blockBody('follow_requests');
     expect(folr).toMatch(/requestId == request\.resource\.data\.fromUserId \+ '_' \+ request\.resource\.data\.toUserId/);
+
+    // The send flow transaction reads this deterministic id before it exists.
+    // The old resource.data-only rule denied that first read.
+    expect(fr).toMatch(/requestId\.startsWith\(uid\(\) \+ '_'\)/);
+    expect(fr).toMatch(/requestId\.endsWith\('_' \+ uid\(\)\)/);
+    expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\['status', 'updatedAt'\]\)/);
+    expect(fr).toContain('allow delete: if false;');
+
+    // Accepting a friend request creates both follow directions. The accepting
+    // user may create their own edge to a private requester only when that
+    // requester explicitly asked to become friends.
+    const follows = blockBody('follows');
+    expect(follows).toMatch(/friendRequestFrom\(request\.resource\.data\.followingId, uid\(\)\)/);
   });
 });
 
