@@ -33,6 +33,8 @@ class ProductionAuthService {
     this.auth = null;
     this.firebase = null;
     this.initialized = false;
+    this.initializationPromise = null;
+    this.googleRedirectError = null;
     this.verificationStates = new Map();
     this.recaptchaVerifiers = new Map();
   }
@@ -42,6 +44,18 @@ class ProductionAuthService {
   }
 
   async initialize() {
+    if (this.initialized) return this.auth;
+    if (this.initializationPromise) return this.initializationPromise;
+
+    this.initializationPromise = this._initialize();
+    try {
+      return await this.initializationPromise;
+    } finally {
+      this.initializationPromise = null;
+    }
+  }
+
+  async _initialize() {
     if (this.initialized) return this.auth;
     logger.info('Initializing auth service');
     try {
@@ -55,60 +69,65 @@ class ProductionAuthService {
       }
 
       this.firebase = firebaseApp;
-      this.initialized = true;
 
-      // Handle Google redirect auth result in background without blocking startup
-      (async () => {
-        try {
-          const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
-          // getRedirectResult resolves null when no redirect is pending. Do not
-          // swallow real OAuth/configuration failures as if there were no result.
-          const redirectResult = await getRedirectResult(this.auth);
-          if (redirectResult?.user) {
-            logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
-            const user = redirectResult.user;
-            await user.getIdToken(true).catch(() => {});
-            const additionalInfo = getAdditionalUserInfo(redirectResult);
-            const isNewUser = additionalInfo?.isNewUser || false;
-            if (isNewUser && additionalInfo?.profile) {
-              try {
-                await updateProfile(user, {
-                  displayName: additionalInfo.profile.name || user.displayName,
-                  photoURL: additionalInfo.profile.picture || user.photoURL
-                });
-              } catch (e) {
-                logger.warn('Google redirect auth profile sync failed', { uid: user.uid, error: e?.message });
-              }
+      // Resolve a pending OAuth redirect BEFORE AuthContext subscribes to
+      // onAuthStateChanged. Otherwise the observer can publish an initial
+      // signed-out state, clear session markers, and leave LoginScreen mounted
+      // while Firebase is still consuming the Google redirect response.
+      this.googleRedirectError = null;
+      try {
+        const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
+        const redirectResult = await getRedirectResult(this.auth);
+        if (redirectResult?.user) {
+          const user = redirectResult.user;
+          logger.info('Google redirect sign-in completed', { uid: user.uid });
+          await user.getIdToken(true).catch((tokenError) => {
+            logger.warn('Google redirect token refresh deferred', { uid: user.uid, error: tokenError?.message });
+          });
+
+          const additionalInfo = getAdditionalUserInfo(redirectResult);
+          if (additionalInfo?.isNewUser && additionalInfo?.profile) {
+            try {
+              await updateProfile(user, {
+                displayName: additionalInfo.profile.name || user.displayName,
+                photoURL: additionalInfo.profile.picture || user.photoURL,
+              });
+            } catch (profileError) {
+              logger.warn('Google redirect auth profile sync failed', { uid: user.uid, error: profileError?.message });
+            }
+
+            const profilePayload = {
+              displayName: user.displayName,
+              email: user.email || '',
+              photoURL: user.photoURL,
+              authProvider: 'google',
+              emailVerified: Boolean(user.emailVerified),
+              phoneVerified: Boolean(user.phoneNumber),
+              isProfileComplete: false,
+            };
+            try {
               const { createUserProfile } = await import('./userService.js');
-              try {
-                await createUserProfile(user.uid, {
-                  displayName: user.displayName,
-                  email: user.email || '',
-                  photoURL: user.photoURL,
-                  authProvider: 'google',
-                  emailVerified: Boolean(user.emailVerified),
-                  phoneVerified: Boolean(user.phoneNumber),
-                  isProfileComplete: false
-                });
-              } catch (pErr) {
-                logger.warn('Google redirect profile bootstrap failed', { uid: user.uid, error: pErr?.message });
-                this._storePendingProfile(user.uid, {
-                  displayName: user.displayName,
-                  email: user.email || '',
-                  photoURL: user.photoURL,
-                  authProvider: 'google',
-                  emailVerified: Boolean(user.emailVerified),
-                  phoneVerified: Boolean(user.phoneNumber),
-                  isProfileComplete: false
-                });
-              }
+              await createUserProfile(user.uid, profilePayload);
+            } catch (profileError) {
+              logger.warn('Google redirect profile bootstrap deferred', { uid: user.uid, error: profileError?.message });
+              this._storePendingProfile(user.uid, profilePayload);
             }
           }
-        } catch (redirectError) {
-          logger.error('Google redirect sign-in error:', redirectError);
         }
-      })();
+      } catch (redirectError) {
+        // A malformed/expired redirect must not prevent an already-restored
+        // Firebase session from being observed. Keep the original error for
+        // diagnostics instead of disguising it as a popup-permission failure.
+        this.googleRedirectError = redirectError;
+        logger.error('Google redirect result processing failed', {
+          code: redirectError?.code || null,
+          message: redirectError?.message || String(redirectError),
+        });
+      }
 
+      // Only mark initialization complete after redirect consumption has
+      // settled. Concurrent initialize() callers share initializationPromise.
+      this.initialized = true;
       logger.warn('// Auth service ready');
       return this.auth;
     } catch (error) {
