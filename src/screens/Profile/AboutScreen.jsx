@@ -36,7 +36,7 @@ export default function AboutScreen() {
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
-  const { user: authUser } = useAuth();
+  const { user: authUser, authInitialized } = useAuth();
   const { profile: storeProfile, loading: storeLoading, error: storeError, loadProfile } = useProfileStore();
   const [relationship, setRelationship] = useState(null);
   const [relationshipError, setRelationshipError] = useState(false);
@@ -144,6 +144,24 @@ export default function AboutScreen() {
     [effectiveProfile, capabilities, isActualOwner]
   );
 
+  const rankTitle = useMemo(() => {
+    if (displayedProfile?.level == null) return null;
+    try {
+      return getRankTitle(displayedProfile.level);
+    } catch {
+      return null;
+    }
+  }, [displayedProfile?.level]);
+
+  const perks = useMemo(() => {
+    if (displayedProfile?.level == null) return [];
+    try {
+      return getPerksForLevel(displayedProfile.level) || [];
+    } catch {
+      return [];
+    }
+  }, [displayedProfile?.level]);
+
   if (!authInitialized) {
     return (
       <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')} role="status" aria-label="Restoring session">
@@ -198,24 +216,6 @@ export default function AboutScreen() {
       </div>
     );
   }
-
-  const rankTitle = useMemo(() => {
-    if (displayedProfile?.level == null) return null;
-    try {
-      return getRankTitle(displayedProfile.level);
-    } catch {
-      return null;
-    }
-  }, [displayedProfile?.level]);
-
-  const perks = useMemo(() => {
-    if (displayedProfile?.level == null) return [];
-    try {
-      return getPerksForLevel(displayedProfile.level) || [];
-    } catch {
-      return [];
-    }
-  }, [displayedProfile?.level]);
 
   const handleEdit = () => {
     navigate('/profile/edit');
