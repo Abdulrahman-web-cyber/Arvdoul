@@ -88,10 +88,10 @@ const ProfileCreatorDashboard = memo(({
   if (!isEligibleCreator) {
     return (
       <div className={cn(
-        "w-full rounded-2xl p-5 border transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4",
+        "w-full rounded-[24px] p-5 border transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_10px_28px_rgba(0,0,0,0.10)]",
         isDark
-          ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
-          : "bg-white border-slate-200/90 text-slate-900 shadow-sm"
+          ? "bg-white/[0.055] border-white/[0.12] text-white"
+          : "bg-white/65 border-white/90 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.08)]"
       )}>
         <div className="space-y-1.5 max-w-lg">
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
@@ -211,10 +211,10 @@ const ProfileCreatorDashboard = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-2xl border overflow-hidden",
+      "w-full rounded-[24px] border overflow-hidden shadow-[0_12px_32px_rgba(0,0,0,0.10)]",
       isDark
-        ? "bg-[#080F2E]/85 border-white/[0.08] text-white"
-        : "bg-white border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.03)]"
+        ? "bg-[#080F2E]/78 border-white/[0.12] text-white"
+        : "bg-white/70 border-white/90 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.08)]"
     )}>
       {/* Studio Header */}
       <div className={cn(
