@@ -936,6 +936,7 @@ export default function LoginScreen() {
   const { theme } = themeCtx;
   const {
     user,
+    authError,
     isAuthenticated,
     profileResolved,
     needsOnboarding,
@@ -985,6 +986,12 @@ export default function LoginScreen() {
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
   }, [isAuthenticated, user, profileResolved, needsOnboarding, navigate]);
+
+  useEffect(() => {
+    if (typeof authError !== 'string' || !authError.startsWith('Google sign-in')) return;
+    setErrors((previous) => ({ ...previous, general: authError }));
+    toast.error(authError);
+  }, [authError]);
 
   // Focus the email field only where it won't pop a mobile keyboard unexpectedly.
   useEffect(() => {
