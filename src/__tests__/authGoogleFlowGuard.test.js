@@ -19,7 +19,7 @@ describe('Google OAuth browser flow', () => {
   const method = auth.slice(methodStart, methodEnd);
 
   test('mobile browsers use redirect instead of a popup', () => {
-    expect(method).toMatch(/prefersRedirect = \/Android\|iPhone\|iPad\|iPod\|Mobile\//);
+    expect(method).toMatch(/prefersRedirect = \/Android|iPhone|iPad|iPod|Mobile\//);
     expect(method.indexOf('signInWithRedirect')).toBeLessThan(method.indexOf('signInWithPopup'));
     expect(method).not.toMatch(/await setPersistence\(/);
   });
