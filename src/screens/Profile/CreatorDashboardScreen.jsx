@@ -51,7 +51,7 @@ export default function CreatorDashboardScreen() {
   }, [currentUserId, isCreator, navigate]);
   
   const analyticsState = useAnalyticsStore();
-  const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId;
+  const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe;
   const analytics = isAnalyticsForCurrentUser ? analyticsState.analytics : null;
   const loading = analyticsState.loading;
   const error = isAnalyticsForCurrentUser ? analyticsState.error : null;
