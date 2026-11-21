@@ -74,7 +74,7 @@ describe('profile cache and unknown-value isolation', () => {
     expect(store).toContain('state.viewerUid = currentUserId || null');
     expect(store).not.toContain('getStoredUid');
     expect(store).not.toContain('getStoredUser');
-    expect(store).toContain('state.followStatusTargetId !== userId');
+    expect(store).toContain('state.followStatusTargetId = resolvedUid || userId');
     expect(store).toContain('appStoreUser?.uid === currentUserId');
   });
 
