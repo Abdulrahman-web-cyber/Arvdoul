@@ -18,6 +18,23 @@ describe('Google OAuth browser flow', () => {
   const methodEnd = auth.indexOf('async createRecaptchaVerifier', methodStart);
   const method = auth.slice(methodStart, methodEnd);
 
+
+  test('redirect result is consumed before auth initialization resolves', () => {
+    const initialize = auth.slice(auth.indexOf('async initialize()'), auth.indexOf('async _sendWelcomeNotification'));
+    expect(initialize).toContain('if (this.initializationPromise) return this.initializationPromise');
+    expect(initialize).toContain('await getRedirectResult(this.auth)');
+    expect(initialize).toContain('this.initialized = true');
+    expect(initialize.indexOf('await getRedirectResult(this.auth)')).toBeLessThan(initialize.indexOf('this.initialized = true'));
+    expect(initialize).not.toMatch(/\(async \(\) => \{/);
+  });
+
+  test('redirect processing errors remain diagnostic and do not block restored auth sessions', () => {
+    const initialize = auth.slice(auth.indexOf('async _initialize()'), auth.indexOf('async _sendWelcomeNotification'));
+    expect(initialize).toContain('this.googleRedirectError = redirectError');
+    expect(initialize).toContain('onAuthStateChanged');
+    expect(initialize).not.toContain('ensure pop-ups are allowed');
+  });
+
   test('mobile browsers use redirect instead of a popup', () => {
     expect(method).toMatch(/prefersRedirect = \/Android|iPhone|iPad|iPod|Mobile\//);
     const mobileBranch = method.slice(method.indexOf('if (prefersRedirect)'), method.indexOf('let result;'));
