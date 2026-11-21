@@ -26,6 +26,7 @@ describe('profile cache and unknown-value isolation', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(filter).toMatch(/s\.userId === userId/);
     expect(filter).toMatch(/s\.authorId === userId/);
+    expect(filter).toMatch(/s\.ownerId === userId/);
     expect(filter).toMatch(/s\.uid === userId/);
     expect(filter).not.toMatch(/!s\.userId|!s\.authorId|!s\.uid/);
   });
