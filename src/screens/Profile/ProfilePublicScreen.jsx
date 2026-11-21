@@ -92,6 +92,7 @@ export default function ProfilePublicScreen() {
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [relationship, setRelationship] = useState(null);
+  const [relationshipResolved, setRelationshipResolved] = useState(false);
   const [relationshipError, setRelationshipError] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     try {
@@ -126,6 +127,7 @@ export default function ProfilePublicScreen() {
 
     setLocalLoading(true);
     setRelationship(null);
+    setRelationshipResolved(false);
     setRelationshipError(false);
     setFriendshipStatus('none');
     setPendingRequestId(null);
@@ -168,6 +170,7 @@ export default function ProfilePublicScreen() {
         const rel = relSettled[0].value;
         if (isMountedRef.current) {
           setRelationship(rel);
+          setRelationshipResolved(true);
         }
 
         if (rel.isBlockedBy || rel.isBlocking) {
@@ -206,6 +209,7 @@ export default function ProfilePublicScreen() {
           }
         }
       } else {
+        if (isMountedRef.current) setRelationshipResolved(true);
         await Promise.allSettled([
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
@@ -528,6 +532,16 @@ export default function ProfilePublicScreen() {
   if (loading && !profileData) {
     return (
       <div className="w-full pb-20">
+        <ProfileSkeleton theme={theme} variant="public" />
+      </div>
+    );
+  }
+
+  // The six-second content fallback must never release a signed-in visitor
+  // profile while its block/privacy relationship read is still pending.
+  if (!loading && baseProfile && !isOwner && currentUserId && !relationshipResolved && !relationshipError) {
+    return (
+      <div className="w-full pb-20" role="status" aria-label="Verifying profile access">
         <ProfileSkeleton theme={theme} variant="public" />
       </div>
     );
