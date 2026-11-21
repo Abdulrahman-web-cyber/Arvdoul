@@ -34,6 +34,18 @@ describe('profile cache and unknown-value isolation', () => {
     expect(connections).toContain('setFriends([])');
   });
 
+  test('public profile follow controls never trust denormalized profile flags', () => {
+    expect(publicProfile).toContain('relationship?.isFollowing ?? storeFollowStatus?.isFollowing ?? false');
+    expect(publicProfile).not.toContain('profileData?.isFollowing');
+    expect(publicProfile).toContain('isMatchingTarget && currentUserId');
+  });
+
+  test('connection pagination fails closed and discards responses after a target switch', () => {
+    expect(connections).not.toContain("console.warn('Follow-state hydration failed:', e?.message)");
+    expect(connections).toContain('targetKeyRef.current !== requestedTargetId');
+    expect(connections).toContain('if (!isMounted) return');
+  });
+
   test('profile preview never renders a profile cached for a different authenticated UID', () => {
     expect(preview).toContain('const currentUserId = authUser?.uid || null');
     expect(preview).toContain('explicitProfileId === currentUserId');
