@@ -159,6 +159,10 @@ describe('profile cache and unknown-value isolation', () => {
     expect(store).toMatch(/typeof balanceData === 'number' \? balanceData : null/);
   });
 
+  test('profile refresh clears stale XP instead of carrying it forward', () => {
+    expect(store).toContain("state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : null");
+  });
+
   test('unknown XP and coin balance remain unavailable until numeric data exists', () => {
     expect(ownerProfile).toContain('withCoins: false');
     expect(ownerProfile).toMatch(/value !== null && value !== undefined && value !== '' && Number\.isFinite\(Number\(value\)\)/);
