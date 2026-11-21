@@ -34,6 +34,14 @@ describe('profile cache and unknown-value isolation', () => {
     expect(connections).toContain('setFriends([])');
   });
 
+  test('optimistic follow actions cannot mutate a different route target', () => {
+    expect(store).toContain('followStatusTargetId: null');
+    expect(store).toContain('state.followStatusTargetId = resolvedUid || userId');
+    expect(store).toContain('get().followStatusTargetId === followingId');
+    expect(store).toContain("(state.profile?.uid || state.profile?.id) === followingId");
+    expect(store).toContain("if ((state.profile?.uid || state.profile?.id) !== followingId) return");
+  });
+
   test('public profile follow controls never trust denormalized profile flags', () => {
     expect(publicProfile).toContain('relationship?.isFollowing ?? storeFollowStatus?.isFollowing ?? false');
     expect(publicProfile).not.toContain('profileData?.isFollowing');
