@@ -194,7 +194,7 @@ describe('Profile System Hardening & Validation Contracts', () => {
       expect(state.isOwner).toBe(false);
       expect(state.activeTab).toBe('posts');
       expect(state.posts).toEqual([]);
-      expect(state.balance).toBe(0);
+      expect(state.balance).toBeNull();
     });
 
     test('setActiveTab updates tab properly', () => {
