@@ -1142,6 +1142,7 @@ export function AuthProvider({ children }) {
       try {
         setIsSignupInProgress(true);
         setError(null);
+        setAuthError(null);
         const result = await authService.signInWithGoogle(options);
         if (result?.redirecting) {
           toast.info('Redirecting to Google Sign-In...');
