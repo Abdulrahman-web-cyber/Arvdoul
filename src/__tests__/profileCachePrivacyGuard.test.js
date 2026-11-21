@@ -52,7 +52,9 @@ describe('profile cache and unknown-value isolation', () => {
   });
 
   test('connection pagination fails closed and discards responses after a target switch', () => {
-    expect(connections).not.toContain("console.warn('Follow-state hydration failed:', e?.message)");
+    const start = connections.indexOf('const hydrateFollowStates');
+    const end = connections.indexOf('}, [currentUserId]);', start);
+    expect(connections.slice(start, end)).not.toContain('catch (e)');
     expect(connections).toContain('targetKeyRef.current !== requestedTargetId');
     expect(connections).toContain('if (!isMounted) return');
   });
@@ -105,7 +107,7 @@ describe('profile cache and unknown-value isolation', () => {
 
   test('visitor profile is withheld when relationship and block state cannot be verified', () => {
     expect(publicProfile).toContain('const [relationshipError, setRelationshipError] = useState(false)');
-    expect(publicProfile).toContain("relSettled.status !== 'fulfilled' || !relSettled.value");
+    expect(publicProfile).toContain("relSettled[0].status !== 'fulfilled' || !relSettled[0].value");
     expect(publicProfile).toContain('setRelationshipError(true)');
     expect(publicProfile).toContain('Profile Access Could Not Be Verified');
     expect(publicProfile).toContain('Its contents and actions are withheld until that check succeeds.');
@@ -141,7 +143,7 @@ describe('profile cache and unknown-value isolation', () => {
     expect(analyticsStore).toContain('const requestId = (get().requestSeq || 0) + 1');
     expect(analyticsStore).toContain('get().requestSeq !== requestId || get().analyticsUserId !== userId');
     expect(analyticsStore).toContain('state.requestSeq = nextSeq');
-    expect(ownerProfile).toContain('state.analyticsUserId === currentUserId ? state.analytics : null');
+    expect(ownerProfile).toContain('state.analyticsUserId === currentUserId && state.analyticsTimeframe === state.timeframe ? state.analytics : null');
     expect(creatorDashboard).toContain('analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe');
   });
 
@@ -156,7 +158,7 @@ describe('profile cache and unknown-value isolation', () => {
 
   test('unknown wallet balance is not initialized as a measured zero', () => {
     expect(store).toMatch(/balance: null,/);
-    expect(store).toMatch(/typeof balanceData === 'number' \? balanceData : null/);
+    expect(store).toContain('balance = typeof balanceResult === \'number\' ? balanceResult : null');
   });
 
   test('profile refresh clears stale XP instead of carrying it forward', () => {
