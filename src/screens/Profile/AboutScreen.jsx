@@ -70,7 +70,7 @@ export default function AboutScreen() {
     if (!matchesStore) {
       loadProfile(targetId, currentUserId);
     }
-  }, [targetId, currentUserId, loadProfile]);
+  }, [targetId, currentUserId, authInitialized, loadProfile]);
 
   useEffect(() => {
     let mounted = true;
