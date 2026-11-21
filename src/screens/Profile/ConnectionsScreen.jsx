@@ -4,7 +4,7 @@
 // Unifies Followers, Following, Mutual Friends, and Owner Discover tabs with real backend telemetry,
 // cursor pagination, and privacy capability governance.
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -52,6 +52,13 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
   const targetUserId = userId || currentUserId;
   const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
+  const targetKeyRef = useRef(targetUserId);
+  useEffect(() => {
+    targetKeyRef.current = targetUserId;
+    return () => {
+      if (targetKeyRef.current === targetUserId) targetKeyRef.current = null;
+    };
+  }, [targetUserId]);
 
   const [targetProfile, setTargetProfile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,11 +118,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     )];
     let followStates = new Map();
     if (currentUserId && allIds.length) {
-      try {
-        followStates = await userService.getFollowStates(currentUserId, allIds);
-      } catch (e) {
-        console.warn('Follow-state hydration failed:', e?.message);
-      }
+      // A failed graph read is not "not following". Reject the page so it
+      // cannot render actionable Follow buttons with fabricated false state.
+      followStates = await userService.getFollowStates(currentUserId, allIds);
     }
     return (list) => list.map((u) => {
       const id = u?.id || u?.uid;
@@ -253,6 +258,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               return;
             }
           }
+          if (!isMounted) return;
           const withState = (list) => list.map((u) => {
             const id = u?.id || u?.uid;
             const s = followStates instanceof Map ? followStates.get(id) : followStates?.[id];
@@ -294,6 +300,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     const cursor = cursors[activeTab];
     if (!cursor || !hasMore[activeTab] || !targetUserId) return;
 
+    const requestedTargetId = targetUserId;
     setLoadingMoreTab(activeTab);
     try {
       const userService = getUserService();
@@ -312,6 +319,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       }
 
       const withState = await hydrateFollowStates(userService, [rawNext]);
+      if (targetKeyRef.current !== requestedTargetId) return;
       const hydrated = withState(rawNext);
 
       const mergeUnique = (prev) => {
