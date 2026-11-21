@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const auth = fs.readFileSync(path.join(root, 'src/services/authService.js'), 'utf8');
 const login = fs.readFileSync(path.join(root, 'src/screens/LoginScreen.jsx'), 'utf8');
+const authContext = fs.readFileSync(path.join(root, 'src/context/AuthContext.jsx'), 'utf8');
 
 describe('Google OAuth browser flow', () => {
   const methodStart = auth.indexOf('async signInWithGoogle(');
@@ -31,7 +32,8 @@ describe('Google OAuth browser flow', () => {
   test('redirect processing errors remain diagnostic and do not block restored auth sessions', () => {
     const initialize = auth.slice(auth.indexOf('async _initialize()'), auth.indexOf('async _sendWelcomeNotification'));
     expect(initialize).toContain('this.googleRedirectError = redirectError');
-    expect(initialize).toContain('onAuthStateChanged');
+    const listenerSetup = authContext.slice(authContext.indexOf('const setupAuthListener = async'), authContext.indexOf('const signUpWithEmailPassword = useCallback'));
+    expect(listenerSetup.indexOf('await authService.initialize()')).toBeLessThan(listenerSetup.indexOf('onAuthStateChanged(auth'));
     expect(initialize).not.toContain('ensure pop-ups are allowed');
   });
 
