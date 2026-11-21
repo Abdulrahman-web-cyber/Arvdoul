@@ -52,6 +52,10 @@ const EDGE_COLLECTIONS = Object.freeze({
  * allowed. `follows` is world-readable, so its id-only read stays valid.
  */
 const EDGE_ACTOR_SPECS = Object.freeze({
+  follow: {
+    out: { collection: 'follows', actorField: 'followerId', otherField: 'followingId' },
+    in: { collection: 'follows', actorField: 'followingId', otherField: 'followerId' },
+  },
   block: {
     out: { collection: 'blocks', actorField: 'blockerId', otherField: 'blockedId' },
     in: { collection: 'blocks', actorField: 'blockedId', otherField: 'blockerId' },
@@ -234,8 +238,8 @@ class SocialGraphService {
     try {
       await this._ensureInitialized();
       const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut, pendingOut] = await Promise.all([
-        this._existingIds(EDGE_COLLECTIONS.follow, [`${viewerId}_${targetId}`]),
-        this._existingIds(EDGE_COLLECTIONS.follow, [`${targetId}_${viewerId}`]),
+        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.out),
+        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.follow.in),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.in),
         this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.mute.out),
@@ -297,11 +301,12 @@ class SocialGraphService {
     try {
       await this._ensureInitialized();
 
-      // `follows` is world-readable, so the id-only `in` read is allowed.
+      // Follow reads use actor equality so Firestore can prove the caller is
+      // one endpoint of each edge; the collection is no longer world-readable.
       const [followOut, followIn] = include.includes('follow')
         ? await Promise.all([
-            this._existingIds(EDGE_COLLECTIONS.follow, others.map((t) => `${viewerId}_${t}`)),
-            this._existingIds(EDGE_COLLECTIONS.follow, others.map((t) => `${t}_${viewerId}`)),
+            this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.follow.out),
+            this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.follow.in),
           ])
         : [new Set(), new Set()];
 
@@ -579,8 +584,12 @@ class SocialGraphService {
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
       const data = await callFunction(FUNCTIONS.GET_MUTUAL_FRIENDS, { userId: viewerId, otherUserId: targetId });
       const mutual = data?.mutualFriends || [];
-      if (mutual.length > 0) return mutual.filter(isVisible);
+      // Empty successful results are authoritative; do not issue a duplicate
+      // client-side query after the callable has completed.
+      return mutual.filter(isVisible);
     } catch (err) {
+      // An authorization denial must never fall through to a local read.
+      if (err?.code === 'functions/permission-denied' || err?.code === 'permission-denied') throw err;
       logger.debug('[SocialGraph] mutual fallback', { error: err?.message });
     }
     const [a, b] = await Promise.all([
@@ -603,14 +612,39 @@ class SocialGraphService {
     if (!userId) return new Set();
     try {
       const [blocked, blockedBy, muted] = await Promise.all([
-        this.listEdges(userId, 'blocked', { limit: 500 }),
-        this.listEdges(userId, 'blocked_by', { limit: 500 }),
-        this.listEdges(userId, 'muted', { limit: 500 }),
+        this._collectEdgesBounded(userId, 'blocked', 5000),
+        this._collectEdgesBounded(userId, 'blocked_by', 5000),
+        this._collectEdgesBounded(userId, 'muted', 5000),
       ]);
-      return new Set([...(blocked.ids || []), ...(blockedBy.ids || []), ...(muted.ids || [])]);
+      if (!blocked.complete || !blockedBy.complete || !muted.complete) {
+        throw new Error('Safety relationship list exceeded the bounded scan limit; results withheld');
+      }
+      return new Set([...blocked.ids, ...blockedBy.ids, ...muted.ids]);
     } catch (err) {
       logger.warn('[SocialGraph] hidden-author read failed; withholding results', { error: err?.message });
       throw err;
+    }
+  }
+
+  /**
+   * Collect a cursor-paged relationship list up to a hard cap. A full final
+   * page is followed by a one-row probe so exact-cap and truncated lists differ.
+   */
+  async _collectEdgesBounded(userId, kind, maxEdges) {
+    const cap = Math.max(1, Math.min(Number(maxEdges) || 1, 5000));
+    const ids = [];
+    let cursor = null;
+    while (true) {
+      const remaining = cap - ids.length;
+      const page = await this.listEdges(userId, kind, {
+        limit: remaining > 0 ? Math.min(MAX_PAGE_SIZE, remaining) : 1,
+        cursor,
+      });
+      if (remaining <= 0) return { ids, complete: page.ids.length === 0 };
+      ids.push(...page.ids);
+      if (!page.hasMore) return { ids, complete: true };
+      if (!page.nextCursor) return { ids, complete: false };
+      cursor = page.nextCursor;
     }
   }
 
@@ -658,13 +692,16 @@ class SocialGraphService {
   async getFriendCount(userId, { maxEdges = 500 } = {}) {
     if (!userId) return null;
     try {
-      const [followingPage, followerPage] = await Promise.all([
-        this.listEdges(userId, 'following', { limit: maxEdges }),
-        this.listEdges(userId, 'followers', { limit: maxEdges }),
+      const cap = Math.max(1, Math.min(Number(maxEdges) || 500, 5000));
+      const [following, followers] = await Promise.all([
+        this._collectEdgesBounded(userId, 'following', cap),
+        this._collectEdgesBounded(userId, 'followers', cap),
       ]);
-      const followerSet = new Set(followerPage?.ids || []);
+      // Never render a partial intersection as a total.
+      if (!following.complete || !followers.complete) return null;
+      const followerSet = new Set(followers.ids);
       let count = 0;
-      for (const id of followingPage?.ids || []) {
+      for (const id of following.ids) {
         if (followerSet.has(id)) count += 1;
       }
       return count;

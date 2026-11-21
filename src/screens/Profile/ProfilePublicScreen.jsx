@@ -186,7 +186,6 @@ export default function ProfilePublicScreen() {
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
           store.loadStories(resolvedUid),
-          store.loadMutualFriends(currentUserId, resolvedUid),
         ]);
         if (areFriends) {
           if (isMountedRef.current) setFriendshipStatus('friends');

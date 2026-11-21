@@ -395,18 +395,51 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
 exports.getMutualFriends = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'getMutualFriends', 60, 60000);
-  const { otherUserId } = data;
-  if (!otherUserId) throw new functions.https.HttpsError('invalid-argument', 'otherUserId is required.');
+  const { otherUserId } = data || {};
+  if (!otherUserId || typeof otherUserId !== 'string' || otherUserId === uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'A different otherUserId is required.');
+  }
 
   try {
+    const [targetSnap, viewerFollowsTarget, targetFollowsViewer, blockOut, blockIn] = await Promise.all([
+      db.collection('users').doc(otherUserId).get(),
+      db.collection('follows').doc(`${uid}_${otherUserId}`).get(),
+      db.collection('follows').doc(`${otherUserId}_${uid}`).get(),
+      db.collection('blocks').doc(`${uid}_${otherUserId}`).get(),
+      db.collection('blocks').doc(`${otherUserId}_${uid}`).get(),
+    ]);
+    if (!targetSnap.exists) throw new functions.https.HttpsError('not-found', 'Profile not found.');
+    if (blockOut.exists || blockIn.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Mutual connections are unavailable for this relationship.');
+    }
+
+    const target = targetSnap.data() || {};
+    const viewerFollows = viewerFollowsTarget.exists;
+    const targetFollows = targetFollowsViewer.exists;
+    const isConnection = viewerFollows && targetFollows;
+    const relation = isConnection ? 'CONNECTION' : (viewerFollows ? 'FOLLOWER' : 'PUBLIC');
+    const privacy = target.privacy || {};
+    const canViewScope = (rawScope) => {
+      const scope = String(rawScope || 'EVERYONE').toUpperCase();
+      return scope === 'EVERYONE' ||
+        (scope === 'FOLLOWERS' && (relation === 'FOLLOWER' || relation === 'CONNECTION')) ||
+        (scope === 'CONNECTIONS' && relation === 'CONNECTION');
+    };
+    const canViewContent = target.isPrivate !== true || viewerFollows;
+    const canViewFriends =
+      canViewContent &&
+      canViewScope(privacy.followersList) &&
+      canViewScope(privacy.followingList);
+    if (!canViewFriends) {
+      throw new functions.https.HttpsError('permission-denied', 'This profile does not share its friends list with you.');
+    }
+
     const [myFollowsSnap, otherFollowsSnap] = await Promise.all([
       db.collection('follows').where('followerId', '==', uid).limit(200).get(),
       db.collection('follows').where('followerId', '==', otherUserId).limit(200).get(),
     ]);
-
     const myFollowing = new Set(myFollowsSnap.docs.map(d => d.data().followingId));
     const mutualIds = [];
-
     for (const doc of otherFollowsSnap.docs) {
       const id = doc.data().followingId;
       if (myFollowing.has(id)) mutualIds.push(id);
@@ -431,6 +464,7 @@ exports.getMutualFriends = functions.https.onCall(async (data, context) => {
 
     return { success: true, mutualFriends: profiles };
   } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
     log('ERROR', 'getMutualFriends failed', { uid, otherUserId, error: error.message });
     throw new functions.https.HttpsError('internal', error.message);
   }

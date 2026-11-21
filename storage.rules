@@ -90,7 +90,9 @@ service firebase.storage {
           request.resource.contentType.matches('video/.*') ||
           request.resource.contentType.matches('audio/.*'));
     }
-    match /stories/{userId}/{fileName=**} {
+    // Legacy public stories uploaded before the story-id media path existed.
+    // This exact one-segment match cannot overlap private/ or audience/ paths.
+    match /stories/{userId}/{fileName} {
       allow read: if request.auth != null;
       allow delete: if isOwner(userId);
       allow write: if isOwner(userId) &&

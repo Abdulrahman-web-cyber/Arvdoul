@@ -65,9 +65,12 @@ describe('Google OAuth browser flow', () => {
     expect(method).not.toMatch(/await setPersistence\(/);
   });
 
-  test('popup fallback reports the actual redirect failure', () => {
-    const fallback = method.slice(method.indexOf('if (popupError.code === \'auth/popup-blocked\')'));
-    expect(fallback).toContain('throw redirectError');
+  test('popup fallback redirects in blocked and unsupported popup contexts, preserving the real redirect error', () => {
+    expect(method).toContain("'auth/popup-blocked'");
+    expect(method).toContain("'auth/operation-not-supported-in-this-environment'");
+    expect(method).toContain('redirectFallbackCodes.has(popupError.code)');
+    expect(method).toContain('throw redirectError');
+    expect(method).not.toContain("'auth/popup-closed-by-user'");
   });
 
   test('generic OAuth internal errors are not mislabeled as popup permissions', () => {

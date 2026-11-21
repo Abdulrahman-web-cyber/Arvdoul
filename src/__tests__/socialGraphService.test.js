@@ -56,6 +56,11 @@ jest.unstable_mockModule('firebase/firestore', () => ({
       const dir = order.order === 'DESCENDING' ? -1 : 1;
       rows.sort((a, b) => (a.data[order.field] > b.data[order.field] ? dir : a.data[order.field] < b.data[order.field] ? -dir : 0));
     }
+    const cursor = constraints.find((c) => c.__type === 'startAfter');
+    if (cursor && order) {
+      const cursorValue = cursor.c?.data?.()?.[order.field];
+      rows = rows.filter((r) => (order.order === 'DESCENDING' ? r.data[order.field] < cursorValue : r.data[order.field] > cursorValue));
+    }
     if (cap) rows = rows.slice(0, cap.n);
 
     const docs = rows.map((r) => ({ id: r.id, data: () => r.data }));
@@ -216,6 +221,25 @@ describe('listEdges (bounded, index-backed)', () => {
     const blockedBy = await getSocialGraphService().listEdges('me', 'blocked_by');
     expect(blocked.ids).toEqual(['x']);
     expect(blockedBy.ids).toEqual(['y']);
+  });
+});
+
+describe('bounded complete safety and friend-count pagination', () => {
+  test('friend count pages past the 100-edge Firestore page cap', async () => {
+    for (let i = 0; i < 125; i++) {
+      const friendId = `friend_${String(i).padStart(3, '0')}`;
+      seedFollow('me', friendId);
+      seedFollow(friendId, 'me');
+    }
+    expect(await getSocialGraphService().getFriendCount('me')).toBe(125);
+  });
+
+  test('hidden-author filtering scans every page up to its safety cap', async () => {
+    for (let i = 0; i < 105; i++) {
+      const blockedId = `blocked_${String(i).padStart(3, '0')}`;
+      store.set(`blocks/me_${blockedId}`, { blockerId: 'me', blockedId });
+    }
+    expect((await getSocialGraphService().getHiddenAuthorIds('me')).size).toBe(105);
   });
 });
 

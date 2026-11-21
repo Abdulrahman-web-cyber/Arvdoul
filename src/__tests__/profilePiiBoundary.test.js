@@ -125,6 +125,13 @@ describe('client and server honour the split', () => {
   const userService = fs.readFileSync(path.join(ROOT, 'src/services/userService.js'), 'utf8');
   const authContext = fs.readFileSync(path.join(ROOT, 'src/context/AuthContext.jsx'), 'utf8');
 
+  test('createUserProfile refreshes and reads ID-token claims before private writes', () => {
+    expect(userService).toContain('getIdTokenResult(true)');
+    expect(userService).toContain('claims.email_verified === true');
+    expect(userService).toContain("typeof claims.phone_number === 'string'");
+    expect(userService).toContain('auth/session-refresh-failed');
+  });
+
   test('createUserProfile writes through splitProfileFields', () => {
     expect(userService).toContain('splitProfileFields(profile)');
     expect(userService).toContain('PRIVATE_PROFILE_COLLECTION');

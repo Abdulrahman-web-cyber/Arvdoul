@@ -815,7 +815,25 @@ service cloud.firestore {
 
     // ==================== SOCIAL GRAPH ====================
     match /follows/{followId} {
-      allow read: if isSignedIn();
+      // Missing deterministic edge point-reads are allowed only when the id
+      // names the caller as an endpoint. Existing reads are limited to the two
+      // parties or a viewer permitted by the relevant profile-list scope.
+      allow get: if isSignedIn() && (
+        followId.matches(uid() + '_.*') ||
+        followId.matches('.*_' + uid()) ||
+        resource.data.followingId == uid() ||
+        resource.data.followerId == uid() ||
+        profileSectionReadable(resource.data.followingId, 'followersList', 'EVERYONE') ||
+        profileSectionReadable(resource.data.followerId, 'followingList', 'EVERYONE')
+      );
+      // Queries are admitted only when they constrain an endpoint or the
+      // corresponding target's visible follower/following list.
+      allow list: if isSignedIn() && (
+        resource.data.followerId == uid() ||
+        resource.data.followingId == uid() ||
+        profileSectionReadable(resource.data.followingId, 'followersList', 'EVERYONE') ||
+        profileSectionReadable(resource.data.followerId, 'followingList', 'EVERYONE')
+      );
       // You can only create your own follow edge (follower must be you) against
       // a PUBLIC target, UNLESS you are accepting a pending friend/follow
       // request addressed to you: accepting creates the requester's edge

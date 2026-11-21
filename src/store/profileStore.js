@@ -245,14 +245,14 @@ export const useProfileStore = create(
         const canReadFriendsCount =
           Boolean(resolvedUid) &&
           !profile?.isBlocked &&
-          (isOwner || profile?.canViewFriendsList !== false);
+          (isOwner || profile?.canViewFriendsList === true);
 
         // Fetch viewer-scoped follow status, mutual friends, friend count, balance, and position in parallel
         const [followSettled, mutualSettled, friendCountSettled, balanceSettled, positionSettled] = await Promise.allSettled([
           (!isOwner && currentUserId)
             ? userService.getFollowStatus(currentUserId, resolvedUid)
             : Promise.resolve(null),
-          (!isOwner && currentUserId)
+          (!isOwner && currentUserId && canReadFriendsCount)
             ? userService.getMutualFriends(currentUserId, resolvedUid)
             : Promise.resolve({ mutualFriends: [] }),
           canReadFriendsCount && typeof socialGraphService.getFriendCount === 'function'
