@@ -80,6 +80,8 @@ describe('profile cache and unknown-value isolation', () => {
 
   test('profile preview never renders a profile cached for a different authenticated UID', () => {
     expect(preview).toContain('const currentUserId = authUser?.uid || null');
+    expect(preview).toContain('authInitialized');
+    expect(preview).toContain('if (!authInitialized || propLoading || (!effectiveProfile && currentUserId))');
     expect(preview).toContain('explicitProfileId === currentUserId');
     expect(preview).toContain('storeProfileId === currentUserId');
     expect(preview).not.toContain('getStoredUid');
