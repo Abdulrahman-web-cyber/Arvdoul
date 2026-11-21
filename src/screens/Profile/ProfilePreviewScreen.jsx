@@ -117,7 +117,7 @@ export default function ProfilePreviewScreen({
       viewer: authUser || {},
       handleCandidates: [p.username],
       handleFallbacks: [authUser?.email],
-      handleFallback: 'citizen',
+      handleFallback: null,
       displayCandidates: [p.displayName, p.name],
       displayFallback: null,
       followerCandidates: [p.followerCount, p.followersCount],
