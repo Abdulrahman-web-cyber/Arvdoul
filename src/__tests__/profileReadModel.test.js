@@ -669,6 +669,22 @@ describe('friends scope is resolved once and consumed everywhere (N046 follow-up
   });
 });
 
+describe('presence privacy masks all activity timestamps', () => {
+  it('does not expose last-login/last-seen timestamps when presence is hidden', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      lastLogin: '2026-11-21T10:00:00.000Z',
+      lastSeenAt: '2026-11-21T10:00:00.000Z',
+      lastActiveAt: '2026-11-21T10:00:00.000Z',
+      lastOnlineAt: '2026-11-21T10:00:00.000Z',
+    }, { canViewPresence: false });
+    expect(projected.lastLogin).toBeNull();
+    expect(projected.lastSeenAt).toBeNull();
+    expect(projected.lastActiveAt).toBeNull();
+    expect(projected.lastOnlineAt).toBeNull();
+  });
+});
+
 describe('profile-info privacy masks every raw personal identity alias', () => {
   it('masks names, location, and birth-date aliases while preserving public display identity', () => {
     const projected = projectProfileForViewer({
