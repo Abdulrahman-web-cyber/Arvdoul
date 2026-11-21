@@ -12,7 +12,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 import { useProfileStore } from '../../store/profileStore';
-import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Edit3, ShieldCheck } from "lucide-react";
 import { ErrorBoundary } from '../../components/ErrorBoundary';
@@ -23,7 +22,6 @@ import ProfileHighlightsSection from '../../components/profile/ProfileHighlights
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
-import { getStoredUid, getStoredUser } from '../../utils/security';
 import {
   deriveProfileIdentity,
   projectProfileForViewer,
@@ -54,7 +52,7 @@ export default function ProfilePreviewScreen({
   const isDark = theme === 'dark';
 
   const { user: authUser } = useAuth();
-  const storeUser = useAppStore((state) => state.currentUser);
+
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
   const storePostsCount = useProfileStore((state) => state.postsCount);
@@ -83,10 +81,16 @@ export default function ProfilePreviewScreen({
     }
   }, []);
 
-  const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
+  const currentUserId = authUser?.uid || null;
 
   // Resolve active profile from props, location.state, store, or auth
-  const rawProfile = propProfile || location.state?.profile || storeProfile || authUser || storeUser || getStoredUser();
+  const explicitProfile = propProfile || location.state?.profile || null;
+  const explicitProfileId = explicitProfile?.uid || explicitProfile?.id || null;
+  const storeProfileId = storeProfile?.uid || storeProfile?.id || null;
+  const rawProfile = (explicitProfileId && explicitProfileId === currentUserId ? explicitProfile : null)
+    || (storeProfileId && storeProfileId === currentUserId ? storeProfile : null)
+    || authUser
+    || null;
 
   useEffect(() => {
     if (!rawProfile && currentUserId) {
@@ -110,7 +114,7 @@ export default function ProfilePreviewScreen({
             : p.postCount;
 
     const identity = deriveProfileIdentity(p, {
-      viewer: authUser || storeUser || {},
+      viewer: authUser || {},
       handleCandidates: [p.username],
       handleFallbacks: [authUser?.email],
       handleFallback: 'citizen',
