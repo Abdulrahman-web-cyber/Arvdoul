@@ -51,10 +51,6 @@ export default function CreatorDashboardScreen() {
     else if (profileSupplement && !isCreator) navigate('/profile', { replace: true });
   }, [authInitialized, currentUserId, isCreator, navigate]);
   
-  if (!authInitialized) {
-    return <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Restoring session"><div className="h-8 w-8 rounded-full border-2 border-current border-t-transparent animate-spin" /></div>;
-  }
-
   const analyticsState = useAnalyticsStore();
   const timeframe = analyticsState.timeframe;
   const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe;
@@ -95,6 +91,10 @@ export default function CreatorDashboardScreen() {
     linkElement.click();
   }, [analytics, timeframe]);
   
+  if (!authInitialized) {
+    return <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Restoring session"><div className="h-8 w-8 rounded-full border-2 border-current border-t-transparent animate-spin" /></div>;
+  }
+
   // Metrics cards
   const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null);
   const metrics = [
