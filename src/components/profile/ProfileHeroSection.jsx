@@ -887,7 +887,7 @@ export const ProfileHeroSection = memo(({
               aria-label="Online now"
               title="Online now"
               className={cn(
-                "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2",
+                "absolute bottom-1.5 right-1.5 w-4.5 h-4.5 rounded-full bg-emerald-500 ring-[3px] shadow-[0_0_12px_rgba(16,185,129,0.45)]",
                 isDark ? "ring-[#03071B]" : "ring-[#F6F8FC]"
               )}
             />
@@ -951,17 +951,22 @@ export const ProfileHeroSection = memo(({
             )}
 
             {showLevel && userLevel !== null && (
-              <span className="inline-flex items-center gap-1.5">
-                <LevelNumeralBadge
-                  level={userLevel}
-                  theme={theme}
-                  size="sm"
-                  onClick={isOwner ? () => handleOpenRoadmap('levels') : undefined}
-                />
-                <span className={cn("text-[12px] font-medium tabular-nums", muted)}>
-                  Level {Math.floor(userLevel)}
-                </span>
-              </span>
+              <button
+                type="button"
+                onClick={isOwner ? () => handleOpenRoadmap('levels') : undefined}
+                disabled={!isOwner}
+                aria-label={isOwner ? `Level ${Math.floor(userLevel)}, open progression` : `Level ${Math.floor(userLevel)}`}
+                className={cn(
+                  "inline-flex items-center gap-2 min-h-[34px] rounded-full border px-3.5 py-1 text-[13px] font-semibold tabular-nums",
+                  isDark
+                    ? "border-indigo-300/30 bg-gradient-to-r from-violet-500/20 via-indigo-500/15 to-cyan-500/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                    : "border-indigo-300/50 bg-white/75 text-slate-900 shadow-[0_3px_12px_rgba(65,80,190,0.12)]",
+                  isOwner && "cursor-pointer", FOCUS_RING
+                )}
+              >
+                <LevelNumeralBadge level={userLevel} theme={isDark ? 'dark' : 'light'} size="sm" />
+                <span>Level {Math.floor(userLevel)}</span>
+              </button>
             )}
 
             {!isVerified && isOwner && verificationLevelGate !== null && (
