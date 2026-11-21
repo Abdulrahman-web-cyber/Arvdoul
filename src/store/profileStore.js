@@ -57,6 +57,7 @@ const initialState = {
   
   // Follow status
   followStatus: null,
+  followStatusTargetId: null,
   followLoading: false,
   
   // Mutual friends
@@ -214,6 +215,7 @@ export const useProfileStore = create(
           state.stories = [];
           state.savedPosts = [];
           state.followStatus = null;
+          state.followStatusTargetId = null;
           state.experience = null;
           state.levelInfo = null;
         }
@@ -352,6 +354,7 @@ export const useProfileStore = create(
           state.error = null;
           state.isOwner = isOwner;
           state.followStatus = followStatus;
+          state.followStatusTargetId = resolvedUid || userId;
           state.mutualFriends = mutualFriends;
           state.mutualFriendsResolved = mutualFriendsResolved;
           state.friendCount = friendCount;
@@ -937,6 +940,7 @@ export const useProfileStore = create(
         if (!get()._isLoadCurrent('followStatus', __seq)) return;
         set((state) => {
           state.followStatus = followStatus;
+          state.followStatusTargetId = followingId;
         });
       } catch (error) {
         console.error('❌ Load follow status failed:', error);
@@ -988,22 +992,20 @@ export const useProfileStore = create(
       // Idempotent & concurrency-safe: ignore double-taps while loading or
       // already following.
       if (get().followLoading) return;
-      if (get().followStatus?.isFollowing === true) return;
+      if (get().followStatusTargetId === followingId && get().followStatus?.isFollowing === true) return;
 
-      // Snapshot before the optimistic write so rollback restores the
-      // real previous state instead of a hard-coded guess. Immer copy-on-writes
-      // the draft, so the reference is not mutated by the optimistic `set`.
-      const previousFollowStatus = get().followStatus;
-      const previousFollowerCount = get().profile?.followerCount ?? null;
+      const isCurrentProfileTarget = (get().profile?.uid || get().profile?.id) === followingId;
+      const previousFollowStatus = get().followStatusTargetId === followingId ? get().followStatus : null;
+      const previousFollowerCount = isCurrentProfileTarget ? (get().profile?.followerCount ?? null) : null;
 
-      // Optimistic update
       set((state) => {
         state.followLoading = true;
-        if (state.followStatus) {
-          state.followStatus.isFollowing = true;
-        }
-        if (state.profile && typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
-          state.profile.followerCount += 1;
+        if (isCurrentProfileTarget) {
+          state.followStatusTargetId = followingId;
+          state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
+          if (typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+            state.profile.followerCount += 1;
+          }
         }
       });
       
@@ -1013,8 +1015,12 @@ export const useProfileStore = create(
         if (result?.requested || result?.requestStatus === 'pending') {
           set((state) => {
             state.followLoading = false;
-            state.followStatus = { isFollowing: false, requestStatus: 'pending' };
-            if (state.profile) state.profile.followerCount = previousFollowerCount;
+            if (state.followStatusTargetId === followingId) {
+              state.followStatus = { isFollowing: false, requestStatus: 'pending' };
+            }
+            if ((state.profile?.uid || state.profile?.id) === followingId) {
+              state.profile.followerCount = previousFollowerCount;
+            }
           });
           toast.success('Follow request sent');
           return { requested: true, requestStatus: 'pending' };
@@ -1022,7 +1028,9 @@ export const useProfileStore = create(
         
         set((state) => {
           state.followLoading = false;
-          state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
+          }
         });
         
         toast.success('Following!');
@@ -1033,8 +1041,10 @@ export const useProfileStore = create(
         // Rollback to the captured snapshot.
         set((state) => {
           state.followLoading = false;
-          state.followStatus = previousFollowStatus;
-          if (state.profile) {
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = previousFollowStatus;
+          }
+          if ((state.profile?.uid || state.profile?.id) === followingId) {
             state.profile.followerCount = previousFollowerCount;
           }
         });
@@ -1053,21 +1063,22 @@ export const useProfileStore = create(
       if (get().followLoading) return;
       // Idempotent: a double-tap while not following must not decrement the
       // optimistic counter a second time.
-      if (get().followStatus?.isFollowing === false) return;
+      if (get().followStatusTargetId === followingId && get().followStatus?.isFollowing === false) return;
       
       // Store previous state for rollback. Immer copy-on-writes the draft, so
       // the reference is not mutated by the optimistic `set`.
-      const previousFollowStatus = get().followStatus;
-      const previousFollowerCount = get().profile?.followerCount ?? null;
-      
-      // Optimistic update
+      const isCurrentProfileTarget = (get().profile?.uid || get().profile?.id) === followingId;
+      const previousFollowStatus = get().followStatusTargetId === followingId ? get().followStatus : null;
+      const previousFollowerCount = isCurrentProfileTarget ? (get().profile?.followerCount ?? null) : null;
+
       set((state) => {
         state.followLoading = true;
-        if (state.followStatus) {
-          state.followStatus.isFollowing = false;
-        }
-        if (state.profile && typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
-          state.profile.followerCount = Math.max(0, state.profile.followerCount - 1);
+        if (isCurrentProfileTarget) {
+          state.followStatusTargetId = followingId;
+          state.followStatus = { ...state.followStatus, isFollowing: false, requestStatus: null };
+          if (typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+            state.profile.followerCount = Math.max(0, state.profile.followerCount - 1);
+          }
         }
       });
       
@@ -1077,7 +1088,9 @@ export const useProfileStore = create(
         
         set((state) => {
           state.followLoading = false;
-          state.followStatus = { ...state.followStatus, isFollowing: false };
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = { ...state.followStatus, isFollowing: false, requestStatus: null };
+          }
         });
         
         toast.success('Unfollowed');
@@ -1087,8 +1100,10 @@ export const useProfileStore = create(
         // Rollback
         set((state) => {
           state.followLoading = false;
-          state.followStatus = previousFollowStatus;
-          if (state.profile) {
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = previousFollowStatus;
+          }
+          if ((state.profile?.uid || state.profile?.id) === followingId) {
             state.profile.followerCount = previousFollowerCount;
           }
         });
