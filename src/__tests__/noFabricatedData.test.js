@@ -3708,7 +3708,7 @@ describe('Creator dashboard never fabricates growth rate or active days (N172)',
     const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
     expect(s).not.toContain('{analytics.activeDays} days');
     expect(s).toContain('typeof activeDaysCount === \'number\' ? `${activeDaysCount} days` : \'—\'');
-    expect(s).toContain('userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null');
+    expect(s).toContain('profileSupplement?.activeDaysCount ?? null');
   });
 
   test('the identity mirror carries the canonical activeDaysCount', () => {
