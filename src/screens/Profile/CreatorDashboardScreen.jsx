@@ -47,7 +47,7 @@ export default function CreatorDashboardScreen() {
 
   useEffect(() => {
     if (!currentUserId) navigate('/login', { replace: true });
-    else if (!isCreator) navigate('/profile', { replace: true });
+    else if (profileSupplement && !isCreator) navigate('/profile', { replace: true });
   }, [currentUserId, isCreator, navigate]);
   
   const {
