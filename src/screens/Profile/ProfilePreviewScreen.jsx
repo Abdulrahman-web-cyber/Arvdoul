@@ -51,7 +51,7 @@ export default function ProfilePreviewScreen({
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
-  const { user: authUser } = useAuth();
+  const { user: authUser, authInitialized } = useAuth();
 
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
@@ -187,7 +187,7 @@ export default function ProfilePreviewScreen({
     }
   }, [projectedProfile, currentUserId]);
 
-  if (propLoading || (!effectiveProfile && currentUserId)) {
+  if (!authInitialized || propLoading || (!effectiveProfile && currentUserId)) {
     return (
       <div className={cn(
         'min-h-screen pb-20',
