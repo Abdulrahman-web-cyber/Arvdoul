@@ -486,9 +486,6 @@ export const TopAppBar = ({
       setNetworkSearchQuery("");
       setNetworkHeaderState(null);
     }
-    if (currentMode !== "profile_visitor") {
-      setProfileHeaderState(null);
-    }
   }, [currentMode]);
 
   // Title
