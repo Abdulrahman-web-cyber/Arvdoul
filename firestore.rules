@@ -832,8 +832,7 @@ service cloud.firestore {
           // forge `follows/{me}_{privateUser}` and read the private account's
           // content without consent.
           (request.resource.data.followerId == uid() &&
-            (!targetIsPrivate(request.resource.data.followingId) ||
-              friendRequestFrom(request.resource.data.followingId, uid()))) ||
+            !targetIsPrivate(request.resource.data.followingId)) ||
           (request.resource.data.followingId == uid() &&
             (friendRequestFrom(request.resource.data.followerId, uid()) ||
               followRequestFrom(request.resource.data.followerId, uid()))));
@@ -913,17 +912,19 @@ service cloud.firestore {
         request.resource.data.toUserId != uid() &&
         requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
         request.resource.data.status == 'pending';
-      // Only the sender may withdraw; only the recipient may accept/decline.
-      // Parties and immutable identity fields cannot be rewritten. No client
-      // flow deletes request history.
+      // Only the sender may withdraw or re-send a declined/cancelled request;
+      // only the recipient may accept/decline. Party ids remain immutable.
       allow update: if isSignedIn() &&
         request.resource.data.fromUserId == resource.data.fromUserId &&
         request.resource.data.toUserId == resource.data.toUserId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
-        resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'createdAt', 'fromUserDisplayName', 'fromUserPhotoURL'
+        ]) &&
         (
-          (resource.data.fromUserId == uid() && request.resource.data.status == 'cancelled') ||
-          (resource.data.toUserId == uid() &&
+          (resource.data.fromUserId == uid() &&
+            ((resource.data.status == 'pending' && request.resource.data.status == 'cancelled') ||
+             (resource.data.status in ['cancelled', 'declined'] && request.resource.data.status == 'pending'))) ||
+          (resource.data.toUserId == uid() && resource.data.status == 'pending' &&
             request.resource.data.status in ['accepted', 'declined', 'blocked'])
         );
       allow delete: if false;
