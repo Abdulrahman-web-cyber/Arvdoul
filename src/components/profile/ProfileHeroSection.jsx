@@ -1,21 +1,20 @@
 /**
  * Identity hero for Arvdoul profiles (owner and visitor).
  *
- * Centered composition on a locally scoped ambient glass environment:
+ * Compact, centered composition that sits directly on the page canvas
+ * (the hero draws no background of its own):
  *
- *   portrait (orbital ring, presence) -> name + verification -> @handle
- *   -> level pill -> designations -> motto -> bio / tagline -> metadata
- *   -> primary action -> four-tile secondary dock (incl. the More menu)
+ *   avatar (Vibes ring only when active Vibes exist) -> name + verification
+ *   -> @handle -> designations -> [Level | Location | Website | Joined]
+ *   -> bio / tagline -> one row of four compact glass actions
  *
- * Privacy: every identity detail the viewer may not see (level, titles,
- * creator status, presence) fails closed for visitors unless the matching
- * capability is explicitly granted. This component is not a permission engine;
- * it renders the already-projected profile it is given.
+ * Privacy: level, titles, creator status and presence fail closed for
+ * visitors unless the matching capability is explicitly granted. Permission-
+ * sensitive actions also require an explicit grant. This component is not a
+ * permission engine; it renders the already-projected profile it is given.
  *
- * Metrics, treasury, progression, highlights, creator analytics, tabs and
- * content belong to their own components.
- *
- * Props, named exports and callbacks are unchanged.
+ * Props, named exports and callbacks are unchanged, plus two optional props:
+ * `vibes` and `vibesLoading` (the already-loaded profile stories).
  *
  * @component
  */
@@ -58,7 +57,6 @@ import {
 } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
-import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
 import * as ReadModel from '../../services/profileReadModel.js';
 import * as DeviceCaps from '../../utils/deviceCapabilities.js';
 import * as LevelNumeralModule from './LevelNumeralBadge';
@@ -67,18 +65,10 @@ import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
-import { BRAND_GRADIENT, brandRgba, brandHexRgba, tokens } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 
-const lazyDefault = (loader) => lazy(async () => {
-  const mod = await loader();
-  const comp = mod?.default?.default || mod?.default || Object.values(mod || {}).find(
-    (v) => typeof v === 'function' || (v && typeof v === 'object' && v.$$typeof)
-  );
-  return { default: comp };
-});
-
-const ProfileSystemRoadmapModal = lazyDefault(() => import('./ProfileSystemRoadmapModal'));
+const ProfileSystemRoadmapModal = lazy(() => import('./ProfileSystemRoadmapModal'));
 
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
@@ -92,112 +82,117 @@ const LevelNumeralBadge = LevelNumeralModule.default || LevelNumeralModule.Level
 
 const COPIED_RESET_MS = 2000;
 const BIO_CLAMP_THRESHOLD = 140;
-const PAGE_BG = { dark: tokens.color.bg.dark, light: tokens.color.bg.light };
+// Used only as the outer edge of the presence dot, never as a background.
+const EDGE_COLOR = { dark: '#03071B', light: '#F6F8FC' };
+const DEAD_STORY_STATUSES = ['deleted', 'removed', 'expired', 'rejected'];
+const DEAD_MODERATION_STATUSES = ['rejected', 'removed', 'blocked'];
 
 const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4431F7] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
 
 const PRESS =
-  'active:scale-[0.985] motion-reduce:active:scale-100 transition-[transform,background-color,border-color,color,opacity,filter,box-shadow] duration-150 motion-reduce:transition-none';
+  'active:scale-[0.98] motion-reduce:active:scale-100 transition-[transform,background-color,border-color,color,opacity,filter] duration-150 motion-reduce:transition-none';
 
 /**
- * Single source of glass materials for the hero. Lite mode drops every
- * backdrop filter and keeps the surfaces opaque enough to stay legible.
+ * Glass materials, each built from layers: translucent base, upper sheen,
+ * fine border, inner top highlight and a soft natural shadow. Lite mode drops
+ * every backdrop filter and keeps the surfaces opaque enough to stay legible.
  */
 const buildMaterial = (isDark, isLite) => {
-  const blur = (px) => (isLite ? {} : { backdropFilter: `blur(${px}px) saturate(150%)`, WebkitBackdropFilter: `blur(${px}px) saturate(150%)` });
-  const indigo = tokens.color.brand.indigo;
-  const blue = tokens.color.brand.blue;
-
+  const blur = (px) => (isLite ? {} : { backdropFilter: `blur(${px}px) saturate(160%)`, WebkitBackdropFilter: `blur(${px}px) saturate(160%)` });
   return isDark
     ? {
-        tile: {
-          background: isLite ? 'rgba(20,28,64,0.92)' : 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 8px 20px -10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.12)',
+        action: {
+          background: isLite
+            ? 'linear-gradient(180deg, rgba(34,44,96,0.95), rgba(18,26,66,0.95))'
+            : 'linear-gradient(180deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, rgba(139,30,243,0.10), rgba(5,91,251,0.10)), rgba(16,24,62,0.55)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 6px 14px -6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.25)',
           ...blur(14),
+        },
+        chip: {
+          background: isLite ? 'rgba(24,32,76,0.95)' : 'linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03)), rgba(16,24,62,0.5)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14)',
+          ...blur(12),
         },
         panel: {
           background:
-            `linear-gradient(145deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(indigo, 0.05)} 50%, ${brandHexRgba(blue, 0.09)} 100%), rgba(255,255,255,0.04)`,
+            'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.05) 50%, rgba(5,91,251,0.09) 100%), rgba(255,255,255,0.04)',
           border: '1px solid rgba(255,255,255,0.11)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
           ...blur(20),
         },
         passport: {
-          background: `linear-gradient(135deg, ${brandRgba(0.24)} 0%, ${brandHexRgba(indigo, 0.16)} 55%, ${brandHexRgba(blue, 0.22)} 100%)`,
+          background: 'linear-gradient(135deg, rgba(139,30,243,0.24) 0%, rgba(68,49,247,0.16) 55%, rgba(5,91,251,0.22) 100%)',
           border: '1px solid rgba(255,255,255,0.14)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
         },
         overlay: {
           background: isLite
             ? 'rgb(14,20,48)'
-            : `linear-gradient(145deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(blue, 0.08)} 100%), rgba(12,18,44,0.92)`,
+            : 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)), linear-gradient(145deg, rgba(139,30,243,0.10), rgba(5,91,251,0.08)), rgba(12,18,44,0.9)',
           border: '1px solid rgba(255,255,255,0.14)',
-          boxShadow: '0 14px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+          boxShadow: '0 14px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)',
           ...blur(22),
         },
-        primaryShadow: isLite
-          ? `0 6px 14px -8px ${brandHexRgba(indigo, 0.6)}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.18)`
-          : `0 12px 28px -8px ${brandHexRgba(indigo, 0.58)}, 0 4px 12px -4px ${brandRgba(0.32)}, inset 0 1px 0 rgba(255,255,255,0.36), inset 0 -1px 0 rgba(0,0,0,0.2)`,
-        ringGlow: isLite
-          ? `0 0 14px ${brandHexRgba(indigo, 0.35)}`
-          : `0 0 26px ${brandRgba(0.42)}, 0 0 46px ${brandHexRgba(blue, 0.30)}`,
-        gap: 'rgba(3,7,27,0.9)',
-        reflection: 'via-white/30',
-        control: 'bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] border-white/[0.10] text-slate-100',
+        brandShadow: '0 6px 14px -6px rgba(68,49,247,0.6), inset 0 1px 0 rgba(255,255,255,0.3)',
+        ringShadow: isLite ? 'none' : 'drop-shadow(0 0 6px rgba(68,49,247,0.5))',
+        text: 'text-slate-100',
       }
     : {
-        tile: {
-          background: isLite ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.72)',
-          border: '1px solid rgba(120,140,170,0.22)',
-          boxShadow: '0 8px 20px -12px rgba(30,41,90,0.25), inset 0 1px 0 rgba(255,255,255,0.95)',
+        action: {
+          background: isLite
+            ? 'linear-gradient(180deg, #FFFFFF, #F1F4FA)'
+            : 'radial-gradient(120% 90% at 0% 0%, rgba(139,30,243,0.07), transparent 60%), radial-gradient(120% 90% at 100% 100%, rgba(5,91,251,0.07), transparent 60%), linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.60)), rgba(255,255,255,0.5)',
+          border: '1px solid rgba(120,140,170,0.24)',
+          boxShadow: '0 8px 16px -10px rgba(30,41,90,0.32), inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(120,140,170,0.10)',
           ...blur(14),
+        },
+        chip: {
+          background: isLite ? 'rgb(255,255,255)' : 'linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.65)), rgba(255,255,255,0.5)',
+          border: '1px solid rgba(120,140,170,0.24)',
+          boxShadow: '0 4px 10px -6px rgba(30,41,90,0.25), inset 0 1px 0 rgba(255,255,255,1)',
+          ...blur(12),
         },
         panel: {
           background:
-            `linear-gradient(145deg, ${brandRgba(0.07)} 0%, ${brandHexRgba(indigo, 0.04)} 50%, ${brandHexRgba(blue, 0.07)} 100%), rgba(255,255,255,0.66)`,
+            'linear-gradient(145deg, rgba(139,30,243,0.07) 0%, rgba(68,49,247,0.04) 50%, rgba(5,91,251,0.07) 100%), rgba(255,255,255,0.66)',
           border: '1px solid rgba(120,140,170,0.22)',
           boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(30,41,90,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
           ...blur(20),
         },
         passport: {
           background:
-            `linear-gradient(135deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(indigo, 0.06)} 55%, ${brandHexRgba(blue, 0.10)} 100%), rgba(255,255,255,0.7)`,
-          border: `1px solid ${brandHexRgba(indigo, 0.20)}`,
+            'linear-gradient(135deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.06) 55%, rgba(5,91,251,0.10) 100%), rgba(255,255,255,0.7)',
+          border: '1px solid rgba(68,49,247,0.20)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.95)',
         },
         overlay: {
           background: isLite
             ? 'rgb(255,255,255)'
-            : `linear-gradient(145deg, ${brandRgba(0.06)} 0%, ${brandHexRgba(blue, 0.06)} 100%), rgba(255,255,255,0.94)`,
-          border: '1px solid rgba(120,140,170,0.22)',
+            : 'linear-gradient(145deg, rgba(139,30,243,0.06), rgba(5,91,251,0.06)), rgba(255,255,255,0.94)',
+          border: '1px solid rgba(120,140,170,0.24)',
           boxShadow: '0 14px 34px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
           ...blur(22),
         },
-        primaryShadow: isLite
-          ? `0 6px 14px -8px ${brandHexRgba(indigo, 0.5)}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.12)`
-          : `0 12px 26px -10px ${brandHexRgba(indigo, 0.48)}, 0 4px 12px -4px ${brandRgba(0.24)}, inset 0 1px 0 rgba(255,255,255,0.36), inset 0 -1px 0 rgba(0,0,0,0.14)`,
-        ringGlow: isLite
-          ? `0 4px 14px ${brandHexRgba(indigo, 0.22)}`
-          : `0 10px 30px ${brandHexRgba(indigo, 0.28)}, 0 0 24px ${brandRgba(0.16)}`,
-        gap: 'rgba(246,248,252,0.92)',
-        reflection: 'via-white',
-        control: 'bg-white/70 hover:bg-white active:bg-white border-slate-300/60 text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.05)]',
+        brandShadow: '0 8px 16px -8px rgba(68,49,247,0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
+        ringShadow: isLite ? 'none' : 'drop-shadow(0 2px 6px rgba(68,49,247,0.3))',
+        text: 'text-slate-800',
       };
 };
 
-/** Designation material: royal gold, creator violet, premium metallic. */
+/** Designation material: royal champagne gold, creator violet, premium metallic. */
 const DESIGNATION_STYLE = {
   dark: {
-    royal: { background: 'linear-gradient(180deg, rgba(245,184,59,0.18), rgba(245,184,59,0.06))', border: '1px solid rgba(245,184,59,0.45)', color: '#F6D58A' },
-    creator: { background: `linear-gradient(180deg, ${brandRgba(0.28)}, ${brandHexRgba(tokens.color.brand.indigo, 0.14)})`, border: '1px solid rgba(168,85,247,0.45)', color: '#E9D5FF' },
-    premium: { background: 'rgba(226,232,240,0.09)', border: '1px solid rgba(226,232,240,0.28)', color: '#E2E8F0' },
+    royal: { background: 'linear-gradient(180deg, rgba(245,184,59,0.20), rgba(245,184,59,0.07))', border: '1px solid rgba(245,184,59,0.45)', color: '#F6D58A', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)' },
+    creator: { background: 'linear-gradient(180deg, rgba(139,30,243,0.30), rgba(68,49,247,0.15))', border: '1px solid rgba(168,85,247,0.45)', color: '#E9D5FF', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)' },
+    premium: { background: 'rgba(226,232,240,0.09)', border: '1px solid rgba(226,232,240,0.28)', color: '#E2E8F0', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)' },
   },
   light: {
-    royal: { background: 'linear-gradient(180deg, #FFF8E6, #FFF1CC)', border: '1px solid rgba(217,160,30,0.5)', color: '#8A5A00' },
-    creator: { background: 'linear-gradient(180deg, #F5EBFF, #EDE4FF)', border: `1px solid ${brandRgba(0.3)}`, color: '#6B21A8' },
-    premium: { background: 'linear-gradient(180deg, #F8FAFC, #EEF2F7)', border: '1px solid #CBD5E1', color: '#334155' },
+    royal: { background: 'linear-gradient(180deg, #FFF9E8, #FFF0C9)', border: '1px solid rgba(217,160,30,0.5)', color: '#8A5A00', boxShadow: 'inset 0 1px 0 #fff' },
+    creator: { background: 'linear-gradient(180deg, #F6ECFF, #EDE4FF)', border: '1px solid rgba(139,30,243,0.3)', color: '#6B21A8', boxShadow: 'inset 0 1px 0 #fff' },
+    premium: { background: 'linear-gradient(180deg, #F8FAFC, #EEF2F7)', border: '1px solid #CBD5E1', color: '#334155', boxShadow: 'inset 0 1px 0 #fff' },
   },
 };
 
@@ -210,21 +205,62 @@ const toFiniteNumber = (value) => {
 
 const cleanString = (value) => (typeof value === 'string' && value.trim() ? value.trim() : '');
 
-/** Humanizes a canonical title id (e.g. "grand-duke" -> "Grand Duke"). */
+/** Humanizes a title id (e.g. "grand-duke" -> "Grand Duke"); used only when no canonical label exists. */
 const humanizeTitle = (id) =>
   String(id).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase());
 
-// Joined date. Returns null when absent/unparseable so nothing is fabricated.
-const formatJoinedDate = (createdAt) => {
-  if (!createdAt) return null;
+/** Safe timestamp -> milliseconds for Firestore timestamps, Dates, numbers and ISO strings. */
+const toMillis = (value) => {
+  if (!value) return null;
   try {
-    const d = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
-    if (isNaN(d.getTime())) return null;
-    const month = d.toLocaleString('default', { month: 'short' });
-    return `Joined ${month} ${d.getFullYear()}`;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value.toDate === 'function') return value.toDate().getTime();
+    const t = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
   } catch {
     return null;
   }
+};
+
+// Joined date. Returns null when absent/unparseable so nothing is fabricated.
+const formatJoinedDate = (createdAt) => {
+  const ms = toMillis(createdAt);
+  if (ms === null) return null;
+  return `Joined ${new Date(ms).getFullYear()}`;
+};
+
+/** Compact display label for a website: hostname without "www." (falls back to the stripped raw value). */
+const websiteDisplay = (raw, href) => {
+  try {
+    const host = new URL(href || raw).hostname.replace(/^www\./, '');
+    if (host) return host;
+  } catch {
+    /* fall through */
+  }
+  return raw.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[/?#].*$/, '');
+};
+
+/**
+ * Derives the avatar ring state from the already-loaded profile stories.
+ * 'none' when there is nothing authorized and active (or data is missing / loading),
+ * 'unseen' / 'seen' when seen status is known, 'active' when it is not.
+ * Records the loading path already authorized are trusted; lifecycle fields are only
+ * used to drop records that are clearly dead.
+ */
+const resolveVibesRingState = (vibes, loading) => {
+  if (loading || !Array.isArray(vibes) || vibes.length === 0) return 'none';
+  const now = Date.now();
+  const active = vibes.filter((v) => {
+    if (!v || typeof v !== 'object' || v.isDeleted === true) return false;
+    if (typeof v.status === 'string' && DEAD_STORY_STATUSES.includes(v.status.toLowerCase())) return false;
+    if (typeof v.moderationStatus === 'string' && DEAD_MODERATION_STATUSES.includes(v.moderationStatus.toLowerCase())) return false;
+    const expires = toMillis(v.expiresAt);
+    return !(expires !== null && expires <= now);
+  });
+  if (active.length === 0) return 'none';
+  if (active.some((v) => v.seen === false)) return 'unseen';
+  if (active.every((v) => v.seen === true)) return 'seen';
+  return 'active';
 };
 
 /** Legacy banner export for compatibility (Arvdoul profiles have no cover photo). */
@@ -273,12 +309,10 @@ export const ProfileLevelProgressCard = memo(({
   }, [levelNumber]);
 
   const isMaxLevel = Boolean(levelInfo?.isMaxLevel) || levelInfo?.nextLevelXp === null;
-  const hasSpan =
-    !isMaxLevel &&
-    toFiniteNumber(levelInfo?.nextLevelXp) !== null &&
-    toFiniteNumber(levelInfo?.currentLevelXp) !== null;
-  const span = hasSpan ? (levelInfo.nextLevelXp - levelInfo.currentLevelXp) : null;
+  const nextXp = toFiniteNumber(levelInfo?.nextLevelXp);
+  const currentXp = toFiniteNumber(levelInfo?.currentLevelXp);
   const xpInto = toFiniteNumber(levelInfo?.xpIntoLevel);
+  const span = !isMaxLevel && nextXp !== null && currentXp !== null ? nextXp - currentXp : null;
   const hasProgress = Boolean(levelInfo) && span !== null && span > 0 && xpInto !== null && xpInto >= 0;
   const percent = hasProgress
     ? Math.min(100, Math.max(0, Math.round(toFiniteNumber(levelInfo.progress) ?? (xpInto / span) * 100)))
@@ -418,103 +452,149 @@ export const ProfileMetricsBar = memo(() => null);
 ProfileMetricsBar.displayName = 'ProfileMetricsBar';
 
 /**
- * Locally scoped ambient environment behind the portrait. Decorative only:
- * static CSS gradients plus a few SVG curves, no blur filters, edges masked
- * into the page. Lite mode renders the gradients only.
+ * Compact action: icon left, label right, labels wrap to two lines instead of
+ * shrinking. `variant="brand"` is the gradient primary at the same height.
  */
-const AmbientBackdrop = memo(({ isDark, isLite }) => {
-  const uid = useId().replace(/:/g, '');
-  const fade = 'radial-gradient(ellipse 100% 100% at 50% 38%, #000 55%, transparent 100%)';
-  const glow = isDark
-    ? `radial-gradient(55% 40% at 50% 30%, ${brandHexRgba(tokens.color.brand.indigo, 0.22)}, transparent 70%), radial-gradient(40% 32% at 8% 8%, ${brandRgba(0.22)}, transparent 70%), radial-gradient(40% 32% at 96% 18%, ${brandHexRgba(tokens.color.brand.cyan, 0.18)}, transparent 70%)`
-    : `radial-gradient(55% 40% at 50% 30%, rgba(99,102,241,0.14), transparent 70%), radial-gradient(40% 32% at 8% 8%, ${brandHexRgba(tokens.color.brand.pink, 0.12)}, transparent 70%), radial-gradient(40% 32% at 96% 18%, ${brandHexRgba(tokens.color.brand.cyan, 0.14)}, transparent 70%)`;
-  const c1 = isDark ? tokens.color.brand.violet : '#B07CFF';
-  const c2 = isDark ? tokens.color.brand.indigo : '#7C8CFF';
-  const c3 = isDark ? tokens.color.brand.cyan : '#5AB4FF';
-  const fillOpacity = isDark ? 0.34 : 0.28;
-  const strokeOpacity = isDark ? 0.55 : 0.45;
+const ActionButton = forwardRef(({
+  icon: Icon, label, ariaLabel, onClick, disabled = false, busy = false, variant = 'glass', style, material, title, ...rest
+}, ref) => (
+  <button
+    ref={ref}
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    aria-busy={busy || undefined}
+    aria-label={ariaLabel}
+    title={title}
+    className={cn(
+      "relative w-full h-[46px] min-[412px]:h-[48px] px-1.5 rounded-[15px] overflow-hidden",
+      "inline-flex items-center justify-center gap-1.5 cursor-pointer",
+      "text-[10.5px] min-[375px]:text-[11.5px] leading-[1.1] font-semibold text-center",
+      "hover:brightness-[1.08] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100",
+      PRESS, FOCUS_RING,
+      variant === 'brand' ? "text-white" : material.text
+    )}
+    style={variant === 'brand' ? { background: BRAND_GRADIENT, boxShadow: material.brandShadow } : { ...material.action, ...style }}
+    {...rest}
+  >
+    {variant === 'brand' && (
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.28), transparent)' }} />
+    )}
+    <Icon className={cn("relative w-[17px] h-[17px] shrink-0", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+    <span className="relative min-w-0 whitespace-normal">{label}</span>
+  </button>
+));
+ActionButton.displayName = 'ActionButton';
+
+/** One row of an action menu. */
+const MenuItem = ({ icon: Icon, label, onClick, disabled = false, busy = false, isDark }) => (
+  <button
+    type="button"
+    role="menuitem"
+    tabIndex={-1}
+    onClick={onClick}
+    disabled={disabled}
+    aria-busy={busy || undefined}
+    className={cn(
+      "w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-[13px] font-medium text-left cursor-pointer",
+      "disabled:opacity-50 disabled:cursor-not-allowed",
+      PRESS, FOCUS_RING,
+      isDark ? "text-slate-100 hover:bg-white/[0.08] active:bg-white/[0.12]" : "text-slate-800 hover:bg-slate-900/[0.05] active:bg-slate-900/[0.08]"
+    )}
+  >
+    <Icon className={cn("w-4 h-4 shrink-0", isDark ? "text-slate-300" : "text-slate-500", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+    <span className="flex-1 min-w-0 truncate">{label}</span>
+  </button>
+);
+
+/**
+ * Disclosure menu used by both "QR / Passport" and "More": unique id, Escape and
+ * outside-press dismissal, arrow/Home/End navigation, focus in on open and back
+ * to the trigger on close. The panel stays mounted so it can fade; `invisible`
+ * keeps closed items out of the tab order.
+ */
+const ActionMenu = ({ icon, label, ariaLabel, items, isDark, material, align = 'right' }) => {
+  const menuId = useId();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const panelRef = useRef(null);
+  const triggerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    panelRef.current?.querySelector('[role="menuitem"]:not([disabled])')?.focus();
+    const onPointerDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const handleKeyDown = useCallback((e) => {
+    const enabled = Array.from(panelRef.current?.querySelectorAll('[role="menuitem"]:not([disabled])') || []);
+    if (!enabled.length) return;
+    const index = enabled.indexOf(document.activeElement);
+    let next = null;
+    if (e.key === 'ArrowDown') next = enabled[(index + 1) % enabled.length];
+    else if (e.key === 'ArrowUp') next = enabled[(index - 1 + enabled.length) % enabled.length];
+    else if (e.key === 'Home') next = enabled[0];
+    else if (e.key === 'End') next = enabled[enabled.length - 1];
+    else if (e.key === 'Tab') setOpen(false);
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
+  }, []);
+
+  const run = (fn) => () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+    fn?.();
+  };
 
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[500px] overflow-hidden"
-      style={{ maskImage: fade, WebkitMaskImage: fade, background: glow }}
-    >
-      {!isLite && (
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 500" preserveAspectRatio="xMidYMin slice" focusable="false">
-          <defs>
-            <linearGradient id={`${uid}-a`} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor={c1} />
-              <stop offset="0.55" stopColor={c2} />
-              <stop offset="1" stopColor={c3} />
-            </linearGradient>
-            <linearGradient id={`${uid}-b`} x1="1" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor={c3} />
-              <stop offset="0.5" stopColor={c2} />
-              <stop offset="1" stopColor={c1} />
-            </linearGradient>
-          </defs>
-          <path d="M-20 70 C 70 -10, 150 170, 270 110 S 410 20, 430 -10 L 430 -30 L -20 -30 Z" fill={`url(#${uid}-a)`} opacity={fillOpacity} />
-          <path d="M-20 300 C 60 220, 130 330, 210 260 S 360 190, 430 240 L 430 520 L -20 520 Z" fill={`url(#${uid}-b)`} opacity={fillOpacity * 0.45} />
-          <path d="M-20 140 C 80 60, 170 230, 280 160 S 400 70, 430 120" fill="none" stroke={`url(#${uid}-a)`} strokeWidth="1.2" opacity={strokeOpacity} />
-          <path d="M-20 200 C 90 120, 160 290, 290 220 S 410 150, 430 190" fill="none" stroke={`url(#${uid}-b)`} strokeWidth="1" opacity={strokeOpacity * 0.7} />
-          <path d="M-20 360 C 70 300, 150 390, 240 330 S 380 280, 430 320" fill="none" stroke={`url(#${uid}-a)`} strokeWidth="0.9" opacity={strokeOpacity * 0.5} />
-        </svg>
-      )}
+    <div ref={wrapRef} className="relative min-w-0">
+      <ActionButton
+        ref={triggerRef}
+        icon={icon}
+        label={label}
+        ariaLabel={ariaLabel}
+        material={material}
+        disabled={items.length === 0}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((o) => !o)}
+      />
+      <div
+        id={menuId}
+        ref={panelRef}
+        role="menu"
+        aria-label={ariaLabel || label}
+        onKeyDown={handleKeyDown}
+        className={cn(
+          "absolute top-full mt-1.5 z-30 w-[224px] max-w-[calc(100vw-24px)] max-h-[min(60vh,360px)] overflow-y-auto overscroll-contain p-1 rounded-2xl text-left",
+          align === 'right' ? "right-0 origin-top-right" : "left-0 origin-top-left",
+          "transition-[opacity,transform,visibility] duration-150 motion-reduce:transition-none",
+          open ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
+        )}
+        style={material.overlay}
+      >
+        {items.map(({ key, onClick, ...item }) => (
+          <MenuItem key={key} isDark={isDark} onClick={run(onClick)} {...item} />
+        ))}
+      </div>
     </div>
-  );
-});
-AmbientBackdrop.displayName = 'AmbientBackdrop';
-
-/** One tile of the secondary dock (icon over label). */
-const DockTile = forwardRef(({ icon: Icon, label, onClick, disabled = false, capabilityDenied = false, busy = false, style, isDark, title, ...rest }, ref) => {
-  const isDisabled = Boolean(disabled || capabilityDenied);
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={isDisabled ? undefined : onClick}
-      disabled={isDisabled}
-      aria-busy={busy || undefined}
-      title={title}
-      className={cn(
-        "w-full min-h-[64px] px-1 py-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer",
-        "text-[11.5px] leading-[1.15] font-medium text-center",
-        "hover:brightness-[1.08] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100",
-        PRESS, FOCUS_RING,
-        isDark ? "text-slate-100" : "text-slate-800"
-      )}
-      style={style}
-      {...rest}
-    >
-      <Icon className={cn("w-5 h-5 shrink-0", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-      <span>{label}</span>
-    </button>
-  );
-});
-DockTile.displayName = 'DockTile';
-
-/** One row of the More menu. */
-const MenuItem = ({ icon: Icon, label, onClick, disabled = false, capabilityDenied = false, busy = false, isDark }) => {
-  const isDisabled = Boolean(disabled || capabilityDenied);
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      tabIndex={-1}
-      onClick={isDisabled ? undefined : onClick}
-      disabled={isDisabled}
-      aria-busy={busy || undefined}
-      className={cn(
-        "w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-[13px] font-medium text-left cursor-pointer",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        PRESS, FOCUS_RING,
-        isDark ? "text-slate-100 hover:bg-white/[0.08] active:bg-white/[0.12]" : "text-slate-800 hover:bg-slate-900/[0.05] active:bg-slate-900/[0.08]"
-      )}
-    >
-      <Icon className={cn("w-4 h-4 shrink-0", isDark ? "text-slate-300" : "text-slate-500", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-      <span className="flex-1 min-w-0 truncate">{label}</span>
-    </button>
   );
 };
 
@@ -524,6 +604,8 @@ export const ProfileHeroSection = memo(({
   isOwner = false,
   level = null,
   theme = 'light',
+  vibes,
+  vibesLoading = false,
   onBack,
   onOpenQrCode,
   onOpenLocationSetup,
@@ -552,7 +634,6 @@ export const ProfileHeroSection = memo(({
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
   const callsEnabled = useFeatureFlag('messaging.calls');
-  const menuId = useId();
 
   const [isLite] = useState(() => {
     try {
@@ -567,23 +648,21 @@ export const ProfileHeroSection = memo(({
   const text = isDark ? 'text-white' : 'text-slate-900';
   const body = isDark ? 'text-slate-200' : 'text-slate-700';
   const muted = isDark ? 'text-slate-400' : 'text-slate-500';
-  const accent = isDark ? 'text-sky-300' : 'text-blue-600';
+  const accent = isDark ? 'text-sky-300' : 'text-[#055BFB]';
+  const divider = isDark ? 'bg-white/15' : 'bg-slate-300';
+  const edge = isDark ? EDGE_COLOR.dark : EDGE_COLOR.light;
 
   const [copiedHandle, setCopiedHandle] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [roadmapMounted, setRoadmapMounted] = useState(false);
   const [roadmapInitialTab, setRoadmapInitialTab] = useState('levels');
   const [bioExpanded, setBioExpanded] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [callPending, setCallPending] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState(null);
 
   const copiedTimerRef = useRef(null);
   const mountedRef = useRef(true);
   const callInFlightRef = useRef(false);
-  const menuWrapRef = useRef(null);
-  const menuPanelRef = useRef(null);
-  const menuTriggerRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -591,43 +670,6 @@ export const ProfileHeroSection = memo(({
       mountedRef.current = false;
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     };
-  }, []);
-
-  // Menu: outside press and Escape close it; focus moves in on open and back to the trigger on close.
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    menuPanelRef.current?.querySelector('[role="menuitem"]:not([disabled])')?.focus();
-    const onPointerDown = (e) => {
-      if (menuWrapRef.current && !menuWrapRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false);
-        menuTriggerRef.current?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [menuOpen]);
-
-  const handleMenuKeyDown = useCallback((e) => {
-    const items = Array.from(menuPanelRef.current?.querySelectorAll('[role="menuitem"]:not([disabled])') || []);
-    if (!items.length) return;
-    const index = items.indexOf(document.activeElement);
-    let next = null;
-    if (e.key === 'ArrowDown') next = items[(index + 1) % items.length];
-    else if (e.key === 'ArrowUp') next = items[(index - 1 + items.length) % items.length];
-    else if (e.key === 'Home') next = items[0];
-    else if (e.key === 'End') next = items[items.length - 1];
-    else if (e.key === 'Tab') setMenuOpen(false);
-    if (next) {
-      e.preventDefault();
-      next.focus();
-    }
   }, []);
 
   const handleOpenRoadmap = useCallback((tab = 'levels') => {
@@ -645,11 +687,12 @@ export const ProfileHeroSection = memo(({
   const presenceAllowed = isOwner || caps.canViewPresence === true;
   const levelAllowed = isOwner || (profile?.showLevel !== false && caps.canViewActivity === true);
 
-  // --- Action permissions (explicit denial blocks; callbacks must also exist) ---
-  const canShareAction = Boolean(onShare) && (isOwner || caps.canShare !== false);
-  const canCallAction = callsEnabled && Boolean(onOpenMessages) && caps.canCall !== false;
-  const followAllowed = isFollowing ? caps.canUnfollow !== false : caps.canFollow !== false;
-  const canFollowAction = Boolean(onFollowToggle) && followAllowed;
+  // --- Action permissions: callbacks must exist and visitors need an explicit grant ---
+  const grant = (key) => caps[key] === true;
+  const canShareAction = Boolean(onShare) && (isOwner || grant('canShare'));
+  const canMessageAction = Boolean(onOpenMessages) && grant('canMessage');
+  const canCallAction = callsEnabled && Boolean(onOpenMessages) && grant('canCall');
+  const canTipAction = Boolean(onOpenTipModal) && grant('canTip');
 
   const handleStartCall = useCallback(async () => {
     if (!profileUid || callInFlightRef.current) return;
@@ -682,46 +725,37 @@ export const ProfileHeroSection = memo(({
 
   const rawLevel = typeof profile?.level === 'number' ? profile.level : toFiniteNumber(level);
   const visibleLevel = levelAllowed && rawLevel !== null && rawLevel > 0 ? Math.floor(rawLevel) : null;
-  const rankTitle = useMemo(() => {
-    if (!visibleLevel) return null;
-    try {
-      return LevelModule.getRankTitle?.(visibleLevel) || null;
-    } catch {
-      return null;
-    }
-  }, [visibleLevel]);
-  const verificationLevelGate = LevelModule.LEVEL_GATES?.verifiedPriority ?? null;
   const isVerified = Boolean(resolveVerifiedFlag(profile));
-  const isCreator = creatorAllowed && Boolean(resolveCreatorFlag(profile || {}, {}, levelAllowed ? rawLevel : null));
+  // Relationship rules need the resolver result even when the creator badge itself is hidden.
+  const isCreatorResolved = Boolean(resolveCreatorFlag(profile || {}, {}, rawLevel));
+  const showCreator = creatorAllowed && isCreatorResolved;
   // Only an explicit flag counts; an arbitrary `subscription` object is not proof of an active plan.
   const isPremium = profile?.isPremium === true;
 
-  const creatorBadgeLabel = useMemo(
-    () => (levelAllowed ? getIdentityBadge(profile?.level, { isCreator })?.label : null) || 'Creator',
-    [levelAllowed, profile?.level, isCreator],
+  const creatorLabel = useMemo(
+    () => (levelAllowed ? getIdentityBadge(profile?.level, { isCreator: true })?.label : null) || 'Creator',
+    [levelAllowed, profile?.level],
   );
 
   // Royal designation: presentation of the resolver result on the projected profile only.
-  const royalTitleId = titlesAllowed && resolveRoyalFlag(profile) ? resolveActiveTitleId(profile) : null;
   const isRoyal = titlesAllowed && Boolean(resolveRoyalFlag(profile));
-  const royalLabel = typeof royalTitleId === 'string' && royalTitleId ? humanizeTitle(royalTitleId) : 'Royal Family';
-
-  // Crest aura = existing identity styling that complements (never replaces) the brand ring.
-  // It is NOT a story indicator; no story-availability prop exists on this component.
-  const sovereignGate = LevelModule.LEVEL_GATES?.sovereign ?? null;
-  const crestAuraRing = useMemo(() => {
-    const aura = titlesAllowed ? profile?.crestAura : null;
-    const sovereign = levelAllowed && sovereignGate !== null && rawLevel !== null && rawLevel >= sovereignGate;
-    if (aura === 'purple') return 'linear-gradient(135deg,#a855f7,#4f46e5,#d946ef)';
-    if (aura === 'royal' || sovereign) return 'linear-gradient(135deg,#3b82f6,#4338ca,#22d3ee)';
-    if (aura === 'cyan') return 'linear-gradient(135deg,#22d3ee,#14b8a6,#7dd3fc)';
-    if (aura === 'emerald') return 'linear-gradient(135deg,#34d399,#16a34a,#5eead4)';
-    if (aura === 'gold') return 'linear-gradient(135deg,#fbbf24,#eab308,#fcd34d)';
-    return null;
-  }, [titlesAllowed, profile?.crestAura, levelAllowed, sovereignGate, rawLevel]);
+  const royalLabel = useMemo(() => {
+    if (!isRoyal) return null;
+    const title = profile?.activeTitle ?? profile?.primaryTitle;
+    if (title && typeof title === 'object') {
+      const canonical = cleanString(title.name) || cleanString(title.label);
+      if (canonical) return canonical;
+    }
+    if (typeof title === 'string' && title.trim()) return humanizeTitle(title);
+    const id = resolveActiveTitleId(profile);
+    return typeof id === 'string' && id ? humanizeTitle(id) : 'Royal Family';
+  }, [isRoyal, profile]);
 
   // Presence: only when real presence data says online and the viewer may see it.
   const isOnline = presenceAllowed && Boolean(profile?.presence?.status === 'online' || profile?.isOnline === true);
+
+  // Vibes ring: only when active Vibes exist in the already-loaded, authorized stories.
+  const vibesState = useMemo(() => resolveVibesRingState(vibes, vibesLoading), [vibes, vibesLoading]);
 
   const handleCopyHandle = useCallback(async () => {
     if (!username) return;
@@ -743,142 +777,161 @@ export const ProfileHeroSection = memo(({
 
   // --- Supporting identity (deduplicated so no statement appears twice) ---
   const bio = cleanString(profile?.bio) || cleanString(profile?.about);
-  const motto = cleanString(profile?.heraldicMotto);
+  const rawMotto = titlesAllowed ? cleanString(profile?.heraldicMotto) : '';
   const rawTagline = cleanString(profile?.tagline);
   const sameText = (a, b) => a.toLowerCase() === b.toLowerCase();
-  const tagline = rawTagline && !sameText(rawTagline, motto) && !sameText(rawTagline, bio) ? rawTagline : '';
+  const tagline = rawTagline && !sameText(rawTagline, bio) ? rawTagline : '';
+  const motto = rawMotto && !sameText(rawMotto, bio) && !sameText(rawMotto, tagline) ? rawMotto : '';
   const profession = cleanString(profile?.profession);
   const location = cleanString(profile?.location);
   const website = cleanString(profile?.website);
   const websiteHref = website ? sanitizeProfileUrl(website) : null;
-  const websiteLabel = website.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const joinedDate = profile?.createdAt ? formatJoinedDate(profile.createdAt) : null;
   const isLongBio = bio.length > BIO_CLAMP_THRESHOLD;
 
   const showInlineBack = Boolean(onBack && !hasTopAppBar);
   const showHeroRefresh = Boolean(onRefresh && !showInlineBack);
+  const canOpenAvatar = Boolean(isOwner && onAvatarClick);
+  const passportUrl = isOwner ? '/passport' : (profileUid ? `/passport/${profileUid}` : null);
 
-  // Menu selection: close, restore focus to the trigger, then run the action.
-  const closeThen = (fn) => () => {
-    setMenuOpen(false);
-    menuTriggerRef.current?.focus();
-    fn?.();
-  };
-
-  // --- Primary action (visitor): below Level 3 (non-creator) uses Friend Request, Level 3+ unlocks Follow ---
-  const publicFollowersGate = LevelModule.LEVEL_GATES?.publicFollowers ?? LEVEL_GATES.publicFollowers;
-  const heroFollowersUnlocked = Boolean(
-    isCreator || (rawLevel !== null && rawLevel >= publicFollowersGate)
-  );
-  const acceptIsPrimary =
-    !isOwner &&
-    (friendshipStatus === 'received' || friendshipStatus === 'incoming_pending') &&
-    Boolean(onFriendRequestToggle);
-  const friendLabel = friendshipStatus === 'friends' ? 'Friends'
-    : friendshipStatus === 'pending' ? (onCancelFriendRequest ? 'Cancel Request' : 'Friend request sent')
+  // --- Visitor relationship: Friends-first below the follower gate, Followers after it ---
+  const followersGate = toFiniteNumber(LevelModule.LEVEL_GATES?.publicFollowers);
+  const friendsFirst = !isOwner
+    && followersGate !== null
+    && rawLevel !== null
+    && rawLevel < followersGate
+    && !isCreatorResolved;
+  const friendReceived = friendshipStatus === 'received';
+  const friendPrimary = !isOwner && Boolean(onFriendRequestToggle) && (friendsFirst || friendReceived);
+  const friendCancel = friendshipStatus === 'pending' && onCancelFriendRequest;
+  const friendAction = friendCancel ? onCancelFriendRequest : onFriendRequestToggle;
+  const friendDisabled = friendRequestLoading || friendshipStatus === 'friends' || !friendAction;
+  const friendLabelFull = friendshipStatus === 'friends' ? 'Friends'
+    : friendReceived ? 'Accept friend request'
+    : friendshipStatus === 'pending' ? (onCancelFriendRequest ? 'Cancel friend request' : 'Friend request sent')
     : 'Add friend';
+  const friendLabelShort = friendshipStatus === 'friends' ? 'Friends'
+    : friendReceived ? 'Accept'
+    : friendshipStatus === 'pending' ? (onCancelFriendRequest ? 'Cancel' : 'Sent')
+    : 'Add Friend';
   const FriendIcon = friendshipStatus === 'friends' ? UserCheck : friendshipStatus === 'pending' ? X : UserPlus;
-  const friendAction = friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle;
-  const friendIsInteractive = Boolean(friendAction) && friendshipStatus !== 'friends';
-  const followLabel = isFollowing ? 'Following' : requestStatus === 'pending' ? 'Requested' : 'Follow';
-  const FollowIcon = isFollowing ? UserCheck : requestStatus === 'pending' ? Clock : UserPlus;
 
-  const menuItems = (isOwner
+  const followPending = requestStatus === 'pending';
+  const canFollowAction = Boolean(onFollowToggle)
+    && (isFollowing ? grant('canUnfollow') : followPending ? grant('canCancelRequest') : grant('canFollow'));
+  const followLabel = isFollowing ? 'Following' : followPending ? 'Requested' : 'Follow';
+  const FollowIcon = isFollowing ? UserCheck : followPending ? Clock : UserPlus;
+
+  // --- Menus ---
+  const qrPassportItems = [
+    { key: 'qr', icon: QrCode, label: 'QR code', disabled: !onOpenQrCode, onClick: onOpenQrCode },
+    { key: 'passport', icon: ShieldCheck, label: 'Digital Passport', disabled: !passportUrl, onClick: () => passportUrl && navigate(passportUrl) },
+  ];
+
+  const moreItems = (isOwner
     ? [
-        onOpenQuickEdit && { key: 'quick', icon: Edit3, label: 'Quick edit', onClick: closeThen(() => onOpenQuickEdit('all')) },
-        onOpenLocationSetup && { key: 'loc', icon: MapPin, label: 'Location', onClick: closeThen(onOpenLocationSetup) },
-        { key: 'insights', icon: BarChart2, label: 'Insights', onClick: closeThen(onInsightsPress || (() => navigate('/profile/analytics'))) },
-        { key: 'coins', icon: Coins, label: 'Coins', onClick: closeThen(() => navigate('/coins')) },
-        { key: 'settings', icon: Settings, label: 'Settings', onClick: closeThen(() => navigate('/settings')) },
-        showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: closeThen(onRefresh) },
+        onOpenQuickEdit && { key: 'quick', icon: Edit3, label: 'Quick edit', onClick: () => onOpenQuickEdit('all') },
+        onOpenLocationSetup && { key: 'loc', icon: MapPin, label: 'Location', onClick: onOpenLocationSetup },
+        { key: 'insights', icon: BarChart2, label: 'Insights', onClick: onInsightsPress || (() => navigate('/profile/analytics')) },
+        { key: 'coins', icon: Coins, label: 'Coins', onClick: () => navigate('/coins') },
+        { key: 'settings', icon: Settings, label: 'Settings', onClick: () => navigate('/settings') },
+        showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: onRefresh },
+        onOpenOptions && { key: 'options', icon: MoreHorizontal, label: 'Profile options & View As', onClick: onOpenOptions },
       ]
     : [
-        heroFollowersUnlocked && acceptIsPrimary && { key: 'follow', icon: FollowIcon, label: followLabel, disabled: followLoading || !canFollowAction, busy: followLoading, onClick: closeThen(onFollowToggle) },
-        heroFollowersUnlocked && onFriendRequestToggle && !acceptIsPrimary && {
-          key: 'friend', icon: FriendIcon, label: friendLabel,
-          disabled: friendRequestLoading || friendshipStatus === 'friends' || !friendAction,
-          busy: friendRequestLoading, onClick: closeThen(friendAction),
+        // Whichever of Follow / Friend is not the primary action lives here.
+        friendPrimary && onFollowToggle && !friendsFirst && {
+          key: 'follow', icon: FollowIcon, label: followLabel, disabled: followLoading || !canFollowAction, busy: followLoading, onClick: onFollowToggle,
         },
-        callsEnabled && { key: 'call', icon: Phone, label: 'Audio call', disabled: !canCallAction || callPending, busy: callPending, onClick: closeThen(handleStartCall) },
-        showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: closeThen(onRefresh) },
+        !friendPrimary && onFriendRequestToggle && !friendsFirst && {
+          key: 'friend', icon: FriendIcon, label: friendLabelFull, disabled: friendDisabled, busy: friendRequestLoading, onClick: friendAction,
+        },
+        passportUrl && { key: 'passport', icon: ShieldCheck, label: 'Digital Passport', onClick: () => navigate(passportUrl) },
+        callsEnabled && { key: 'call', icon: Phone, label: 'Audio call', disabled: !canCallAction || callPending, busy: callPending, onClick: handleStartCall },
+        canTipAction && { key: 'gift', icon: Gift, label: 'Send coins', onClick: onOpenTipModal },
+        showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: onRefresh },
+        onOpenOptions && { key: 'options', icon: MoreHorizontal, label: 'More options', onClick: onOpenOptions },
       ]
   ).filter(Boolean);
-
-  const passportUrl = isOwner ? '/passport' : (profileUid ? `/passport/${profileUid}` : null);
 
   // --- Presentation pieces ---
   const designations = [
     isRoyal && { key: 'royal', label: royalLabel, icon: Crown, style: designationStyle.royal, onClick: () => handleOpenRoadmap('royals') },
-    isCreator && { key: 'creator', label: creatorBadgeLabel, icon: Star, style: designationStyle.creator },
+    showCreator && { key: 'creator', label: creatorLabel, icon: Star, style: designationStyle.creator },
     isPremium && { key: 'premium', label: 'Premium', icon: Gem, style: designationStyle.premium },
   ].filter(Boolean);
 
   const metaItems = [
-    profession && { key: 'profession', icon: Briefcase, node: <span className="truncate">{profession}</span> },
+    visibleLevel !== null && {
+      key: 'level',
+      node: (
+        <button
+          type="button"
+          onClick={() => handleOpenRoadmap('levels')}
+          aria-label={`Level ${visibleLevel}. Open level roadmap`}
+          className={cn("inline-flex items-center gap-1 h-[26px] pl-1 pr-2 rounded-full text-[11.5px] font-semibold cursor-pointer shrink-0", PRESS, FOCUS_RING, text)}
+          style={material.chip}
+        >
+          {LevelNumeralBadge ? (
+            <LevelNumeralBadge level={visibleLevel} theme={isDark ? 'dark' : 'light'} size="sm" />
+          ) : (
+            <span aria-hidden="true" className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-white text-[10px] font-semibold tabular-nums" style={{ background: BRAND_GRADIENT }}>
+              {visibleLevel}
+            </span>
+          )}
+          <span className="hidden min-[360px]:inline">Level {visibleLevel}</span>
+        </button>
+      ),
+      keep: true,
+    },
     location && {
       key: 'location', icon: MapPin,
       node: isOwner && onOpenLocationSetup ? (
-        <button type="button" onClick={onOpenLocationSetup} className={cn("truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}>
+        <button type="button" onClick={onOpenLocationSetup} title="Change location" className={cn("truncate rounded-md hover:underline underline-offset-2 cursor-pointer", FOCUS_RING)}>
           {location}
         </button>
       ) : <span className="truncate">{location}</span>,
     },
-    websiteLabel && {
+    website && {
       key: 'website', icon: Link2,
       node: websiteHref ? (
-        <a
-          href={websiteHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn("truncate rounded-md hover:underline underline-offset-2", accent, FOCUS_RING)}
-        >
-          {websiteLabel}
+        <a href={websiteHref} target="_blank" rel="noopener noreferrer" className={cn("truncate rounded-md hover:underline underline-offset-2", accent, FOCUS_RING)}>
+          {websiteDisplay(website, websiteHref)}
           <span className="sr-only"> (opens in a new tab)</span>
         </a>
-      ) : <span className="truncate">{websiteLabel}</span>,
+      ) : <span className="truncate">{websiteDisplay(website, null)}</span>,
     },
-    joinedDate && { key: 'joined', icon: Calendar, node: <span className="truncate">{joinedDate}</span> },
+    joinedDate && { key: 'joined', icon: Calendar, node: <span className="truncate">{joinedDate}</span>, keep: true },
   ].filter(Boolean);
 
-  const portraitSize = 'clamp(148px, calc(100px + 15vw), 200px)';
-  const pageBg = isDark ? PAGE_BG.dark : PAGE_BG.light;
+  // Outer 96-128px; the photo sits 6px inside so the ring (when present) never changes layout.
+  const outerSize = 'clamp(96px, 26vw, 128px)';
 
   const portraitFace = avatarFailed ? (
     <span
       aria-hidden="true"
-      className={cn("w-full h-full flex items-center justify-center text-[44px] font-semibold", isDark ? "bg-[#0B1438] text-slate-200" : "bg-slate-200 text-slate-600")}
+      className={cn("w-full h-full flex items-center justify-center text-[30px] font-semibold", isDark ? "bg-[#0B1438] text-slate-200" : "bg-slate-200 text-slate-600")}
     >
       {initials}
     </span>
   ) : (
     <LazyImage
       src={avatarUrl}
-      alt={isOwner && onAvatarClick ? '' : `${displayName} profile photo`}
+      alt={canOpenAvatar ? '' : `${displayName} profile photo`}
       className="w-full h-full object-cover"
       loading="eager"
       decoding="async"
       onError={() => setFailedAvatarUrl(avatarUrl)}
     />
   );
-  const portraitClip = "block relative w-full h-full rounded-full overflow-hidden";
-  const canOpenAvatar = Boolean(isOwner && onAvatarClick);
+  const portraitClip = cn("block absolute inset-[6px] rounded-full overflow-hidden", isDark ? "bg-[#080F2E]" : "bg-slate-100");
 
   const verifiedIcon = (
-    <BadgeCheck
-      className="w-6 h-6 min-[412px]:w-[26px] min-[412px]:h-[26px] text-white"
-      style={{ fill: tokens.color.semantic.verified }}
-      aria-hidden="true"
-    />
+    <BadgeCheck className="w-[18px] h-[18px] min-[412px]:w-5 min-[412px]:h-5 text-white" style={{ fill: '#055BFB' }} aria-hidden="true" />
   );
 
   return (
-    <div
-      role="group"
-      aria-label="Profile header"
-      className={cn("relative isolate z-20 w-full font-sans pt-2 pb-1", text)}
-    >
-      <AmbientBackdrop isDark={isDark} isLite={isLite} />
-
+    <div role="group" aria-label="Profile header" className={cn("relative z-20 w-full font-sans", text)}>
       {showInlineBack && (
         <div className="flex items-center justify-between gap-2 mb-1">
           <button
@@ -902,7 +955,8 @@ export const ProfileHeroSection = memo(({
               disabled={isRefreshing}
               aria-busy={isRefreshing}
               aria-label="Refresh profile"
-              className={cn("inline-flex items-center justify-center w-11 h-11 rounded-[14px] border cursor-pointer disabled:opacity-50", PRESS, FOCUS_RING, material.control)}
+              className={cn("inline-flex items-center justify-center w-11 h-11 rounded-[14px] cursor-pointer disabled:opacity-50", PRESS, FOCUS_RING, material.text)}
+              style={material.action}
             >
               <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
             </button>
@@ -910,60 +964,50 @@ export const ProfileHeroSection = memo(({
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-[560px] flex flex-col items-center text-center">
-        {/* 1. Portrait: orbital brand ring, optional crest ring, presence */}
-        <div className="relative shrink-0" style={{ width: portraitSize, aspectRatio: '1 / 1' }}>
-          <span aria-hidden="true" className="absolute inset-0 rounded-full" style={{ boxShadow: material.ringGlow }} />
-          <div
-            className={cn("relative w-full h-full rounded-full", crestAuraRing && "p-[2px]")}
-            style={crestAuraRing ? { background: crestAuraRing } : undefined}
-          >
-            <div
-              className="relative w-full h-full rounded-full"
-              style={crestAuraRing ? { background: pageBg, padding: 2, borderRadius: '9999px' } : undefined}
+      <div className="mx-auto w-full max-w-[440px] flex flex-col items-center text-center">
+        {/* 1. Avatar. The gradient ring exists only while active Vibes exist. */}
+        <div className="relative shrink-0" style={{ width: outerSize, aspectRatio: '1 / 1' }}>
+          {vibesState !== 'none' && (
+            <span aria-hidden="true" className="absolute inset-0" style={{ filter: material.ringShadow }}>
+              <span
+                className="block w-full h-full rounded-full"
+                style={{
+                  background: BRAND_GRADIENT,
+                  opacity: vibesState === 'seen' ? 0.45 : vibesState === 'active' ? 0.8 : 1,
+                  WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))',
+                  mask: 'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))',
+                }}
+              />
+            </span>
+          )}
+
+          {canOpenAvatar ? (
+            <button
+              type="button"
+              onClick={onAvatarClick}
+              aria-label={vibesState !== 'none' ? 'Update profile avatar (active Vibes)' : 'Update profile avatar'}
+              className={cn(portraitClip, "cursor-pointer", PRESS, FOCUS_RING)}
             >
-              <div className="w-full h-full rounded-full p-[4px]" style={{ background: BRAND_GRADIENT }}>
-                <div className="w-full h-full rounded-full p-[3px]" style={{ background: material.gap }}>
-                  {canOpenAvatar ? (
-                    <button
-                      type="button"
-                      onClick={onAvatarClick}
-                      aria-label="Update profile avatar"
-                      className={cn(portraitClip, "cursor-pointer", PRESS, FOCUS_RING, isDark ? "bg-[#080F2E]" : "bg-slate-100")}
-                    >
-                      {portraitFace}
-                      <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full" style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22)' }} />
-                    </button>
-                  ) : (
-                    <div className={cn(portraitClip, isDark ? "bg-[#080F2E]" : "bg-slate-100")}>
-                      {portraitFace}
-                      <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full" style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22)' }} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+              {portraitFace}
+            </button>
+          ) : (
+            <div className={portraitClip}>{portraitFace}</div>
+          )}
 
           {isOnline && (
             <span
               role="img"
               aria-label="Online"
-              className="absolute right-[9%] bottom-[9%] w-[18px] h-[18px] min-[412px]:w-5 min-[412px]:h-5 rounded-full bg-emerald-500"
-              style={{ boxShadow: `0 0 0 3px ${pageBg}` }}
+              className="absolute right-[7%] bottom-[7%] w-[14px] h-[14px] min-[412px]:w-4 min-[412px]:h-4 rounded-full bg-emerald-500"
+              style={{ boxShadow: `0 0 0 2.5px ${edge}` }}
             />
           )}
         </div>
 
         {/* 2. Display name + verification */}
         <h1
-          className={cn("mt-4 max-w-full font-sans font-bold [overflow-wrap:anywhere]", text)}
-          style={{
-            fontSize: 'clamp(26px, calc(14px + 4vw), 34px)',
-            lineHeight: 1.15,
-            letterSpacing: '-0.02em',
-            textWrap: 'balance',
-          }}
+          className={cn("mt-2.5 max-w-full font-sans font-bold [overflow-wrap:anywhere]", text)}
+          style={{ fontSize: 'clamp(21px, 5.8vw, 28px)', lineHeight: 1.15, letterSpacing: '-0.015em', textWrap: 'balance' }}
         >
           <span>{displayName}</span>
           {isVerified && (
@@ -972,12 +1016,12 @@ export const ProfileHeroSection = memo(({
                 type="button"
                 onClick={onOpenVerificationModal}
                 aria-label="Verified account credentials"
-                className={cn("relative inline-flex align-[-4px] ml-1.5 rounded-full cursor-pointer after:absolute after:-inset-2 after:content-['']", PRESS, FOCUS_RING)}
+                className={cn("relative inline-flex align-[-3px] ml-1.5 rounded-full cursor-pointer after:absolute after:-inset-2.5 after:content-['']", PRESS, FOCUS_RING)}
               >
                 {verifiedIcon}
               </button>
             ) : (
-              <span role="img" aria-label="Verified account" className="inline-flex align-[-4px] ml-1.5">{verifiedIcon}</span>
+              <span role="img" aria-label="Verified account" className="inline-flex align-[-3px] ml-1.5">{verifiedIcon}</span>
             )
           )}
         </h1>
@@ -989,75 +1033,29 @@ export const ProfileHeroSection = memo(({
             onClick={handleCopyHandle}
             aria-label={`Copy handle @${username}`}
             className={cn(
-              "mt-1 inline-flex items-center gap-1.5 max-w-full min-w-0 min-h-[32px] px-1 rounded-md text-[15px] font-medium cursor-pointer transition-colors motion-reduce:transition-none",
+              "mt-0.5 inline-flex items-center gap-1.5 max-w-full min-w-0 min-h-[28px] px-1 rounded-md text-[14px] font-medium cursor-pointer transition-colors motion-reduce:transition-none",
               isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900",
               FOCUS_RING
             )}
           >
             <span className="truncate">@{username}</span>
             {copiedHandle ? (
-              <Check className="w-4 h-4 text-emerald-500 shrink-0" aria-hidden="true" />
+              <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" aria-hidden="true" />
             ) : (
-              <Copy className="w-4 h-4 opacity-70 shrink-0" aria-hidden="true" />
+              <Copy className="w-3.5 h-3.5 opacity-70 shrink-0" aria-hidden="true" />
             )}
           </button>
         )}
         <span className="sr-only" role="status" aria-live="polite">{copiedHandle ? 'Handle copied' : ''}</span>
 
-        {/* 4. Level pill & Verification readiness (only when this viewer may see standing) */}
-        {(visibleLevel !== null || (isOwner && !isVerified && onOpenVerificationModal && verificationLevelGate !== null)) && (
-          <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
-            {visibleLevel !== null && (
-              <button
-                type="button"
-                onClick={() => handleOpenRoadmap('levels')}
-                aria-label={`Level ${visibleLevel}${rankTitle ? `, ${rankTitle}` : ''}. Open level roadmap`}
-                className={cn("inline-flex items-center gap-2 min-h-[36px] pl-1.5 pr-3 rounded-full text-[13.5px] font-semibold cursor-pointer", PRESS, FOCUS_RING, text)}
-                style={material.tile}
-              >
-                {LevelNumeralBadge ? (
-                  <LevelNumeralBadge level={visibleLevel} theme={isDark ? 'dark' : 'light'} size="sm" />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className="h-6 px-2 rounded-full flex items-center justify-center text-white text-[11px] font-semibold tabular-nums"
-                    style={{ background: BRAND_GRADIENT }}
-                  >
-                    Lvl {visibleLevel}
-                  </span>
-                )}
-                <span>{rankTitle || 'Standing'}</span>
-              </button>
-            )}
-            {isOwner && !isVerified && onOpenVerificationModal && verificationLevelGate !== null && (
-              <button
-                type="button"
-                onClick={onOpenVerificationModal}
-                className={cn(
-                  "inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-full text-[12px] font-medium cursor-pointer transition-colors",
-                  isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900",
-                  PRESS, FOCUS_RING
-                )}
-              >
-                <BadgeCheck className="w-3.5 h-3.5 opacity-80" aria-hidden="true" />
-                <span>
-                  {visibleLevel !== null && visibleLevel >= verificationLevelGate
-                    ? 'Apply for Verification'
-                    : `Verify at Lvl ${verificationLevelGate}`}
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* 5. Designations */}
+        {/* 4. Designations */}
         {designations.length > 0 && (
-          <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
+          <div className="mt-1.5 flex items-center justify-center gap-1.5 flex-wrap">
             {designations.map(({ key, label, icon: Icon, style, onClick }) => {
-              const pill = "inline-flex items-center gap-1.5 min-h-[32px] px-3 rounded-full text-[13px] font-semibold";
+              const pill = "inline-flex items-center gap-1 h-[28px] px-2.5 rounded-full text-[12px] leading-none font-semibold";
               const content = (
                 <>
-                  <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>{label}</span>
                 </>
               );
@@ -1072,241 +1070,112 @@ export const ProfileHeroSection = memo(({
           </div>
         )}
 
-        {/* 6. Motto divider */}
-        {motto && (
-          <div className="mt-4 w-full flex items-center gap-3">
-            <span aria-hidden="true" className="h-px flex-1" style={{ background: `linear-gradient(90deg, transparent, ${tokens.color.brand.violet})` }} />
-            <p className={cn("min-w-0 max-w-[80%] inline-flex items-center justify-center gap-2 text-[14px] italic font-medium leading-snug [overflow-wrap:anywhere]", isDark ? "text-slate-100" : "text-slate-800")}>
-              {isRoyal && <Crown className="w-4 h-4 shrink-0 text-amber-500" aria-hidden="true" />}
-              <span>{motto}</span>
-            </p>
-            <span aria-hidden="true" className="h-px flex-1" style={{ background: `linear-gradient(90deg, ${tokens.color.brand.cyan}, transparent)` }} />
-          </div>
-        )}
-
-        {/* 7. Bio and tagline */}
-        {(bio || tagline) && (
-          <div className={cn("mt-3.5 w-full max-w-[46ch] text-[14.5px] leading-[1.55] [overflow-wrap:anywhere]", body)}>
-            {bio && <p className={cn("whitespace-pre-line", isLongBio && !bioExpanded && "line-clamp-3")}>{bio}</p>}
-            {bio && isLongBio && (
-              <button
-                type="button"
-                onClick={() => setBioExpanded((v) => !v)}
-                aria-expanded={bioExpanded}
-                className={cn("mt-1 inline-flex items-center gap-1 min-h-[32px] px-2 rounded-md text-[13px] font-semibold cursor-pointer", accent, PRESS, FOCUS_RING)}
-              >
-                <span>{bioExpanded ? 'Less' : 'More'}</span>
-                <ChevronDown className={cn("w-4 h-4 transition-transform duration-150 motion-reduce:transition-none", bioExpanded && "rotate-180")} aria-hidden="true" />
-              </button>
-            )}
-            {tagline && <p className={cn("text-[13px] leading-snug", muted, bio && "mt-1.5")}>{tagline}</p>}
-          </div>
-        )}
-        {!bio && !tagline && isOwner && onOpenQuickEdit && (
-          <button
-            type="button"
-            onClick={() => onOpenQuickEdit('bio')}
-            className={cn("mt-3 min-h-[36px] px-2 rounded-md text-[13px] font-medium hover:underline underline-offset-2 cursor-pointer", accent, FOCUS_RING)}
-          >
-            Add a bio
-          </button>
-        )}
-
-        {/* 8. Metadata: icon + value, thin dividers on wider screens */}
+        {/* 5. One compact row: Level | Location | Website | Joined */}
         {metaItems.length > 0 && (
-          <div className={cn("mt-3.5 w-full flex items-center justify-center gap-x-3 gap-y-2 flex-wrap text-[13px] leading-5", muted)}>
-            {metaItems.map(({ key, icon: Icon, node }, index) => (
-              <span key={key} className="inline-flex items-center gap-3 min-w-0 max-w-full">
-                {index > 0 && <span aria-hidden="true" className={cn("hidden min-[480px]:block h-4 w-px", isDark ? "bg-white/15" : "bg-slate-300")} />}
-                <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
-                  <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  {node}
-                </span>
+          <div className={cn("mt-2.5 w-full flex flex-nowrap items-center justify-center gap-x-2 text-[11.5px] leading-4", muted)}>
+            {metaItems.map(({ key, icon: Icon, node, keep }, index) => (
+              <span key={key} className={cn("inline-flex items-center gap-2 min-w-0", keep ? "shrink-0" : "shrink")}>
+                {index > 0 && <span aria-hidden="true" className={cn("h-3.5 w-px shrink-0", divider)} />}
+                {Icon ? (
+                  <span className="inline-flex items-center gap-1 min-w-0">
+                    <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {node}
+                  </span>
+                ) : node}
               </span>
             ))}
           </div>
         )}
 
-        {/* 9. Primary action */}
-        <div className="mt-5 w-full max-w-[460px] space-y-2.5">
-          {isOwner ? (
-            <button
-              type="button"
-              onClick={onEditProfile || (() => navigate('/profile/edit'))}
-              className={cn(
-                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden border border-white/25",
-                "text-[15px] font-semibold tracking-tight text-white cursor-pointer hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0",
-                PRESS, FOCUS_RING
-              )}
-              style={{ background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
-            >
-              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
-              <span aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ background: 'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.16) 50%, transparent 75%)' }} />
-              <Edit3 className="relative w-[18px] h-[18px]" aria-hidden="true" />
-              <span className="relative">Edit Profile</span>
-            </button>
-          ) : acceptIsPrimary ? (
-            <button
-              type="button"
-              onClick={onFriendRequestToggle}
-              disabled={friendRequestLoading}
-              aria-busy={friendRequestLoading || undefined}
-              className={cn(
-                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden border border-white/25",
-                "text-[15px] font-semibold tracking-tight text-white cursor-pointer hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed",
-                PRESS, FOCUS_RING
-              )}
-              style={{ background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
-            >
-              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
-              <UserPlus className="relative w-[18px] h-[18px]" aria-hidden="true" />
-              <span className="relative">Accept Friend Request</span>
-            </button>
-          ) : !heroFollowersUnlocked ? (
-            <button
-              type="button"
-              onClick={friendIsInteractive ? friendAction : undefined}
-              disabled={friendRequestLoading || friendshipStatus === 'friends' || !friendAction}
-              aria-busy={friendRequestLoading || undefined}
-              title={!friendAction ? 'Preview only: this is how your profile looks to others' : undefined}
-              className={cn(
-                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
-                "text-[15px] font-semibold tracking-tight cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed", PRESS, FOCUS_RING,
-                friendshipStatus === 'friends' || friendshipStatus === 'pending'
-                  ? text
-                  : "border border-white/25 text-white hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0"
-              )}
-              style={friendshipStatus === 'friends' || friendshipStatus === 'pending'
-                ? material.tile
-                : { background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
-            >
-              {friendshipStatus !== 'friends' && friendshipStatus !== 'pending' && (
-                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
-              )}
-              <FriendIcon className="relative w-[18px] h-[18px]" aria-hidden="true" />
-              <span className="relative">{friendLabel}</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={canFollowAction ? onFollowToggle : undefined}
-              disabled={followLoading || !onFollowToggle}
-              aria-disabled={!followAllowed || undefined}
-              aria-busy={followLoading || undefined}
-              title={!onFollowToggle ? 'Preview only: this is how your profile looks to others' : (!followAllowed ? 'Follow is unavailable for this profile' : undefined)}
-              className={cn(
-                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
-                "text-[15px] font-semibold tracking-tight cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed", PRESS, FOCUS_RING,
-                !followAllowed && "opacity-60 cursor-not-allowed",
-                isFollowing || requestStatus === 'pending'
-                  ? text
-                  : "border border-white/25 text-white hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0"
-              )}
-              style={isFollowing || requestStatus === 'pending'
-                ? material.tile
-                : { background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
-            >
-              {!(isFollowing || requestStatus === 'pending') && (
-                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
-              )}
-              <FollowIcon className="relative w-[18px] h-[18px]" aria-hidden="true" />
-              <span className="relative">{followLabel}</span>
-            </button>
-          )}
+        {/* Profession stays available as a quiet secondary line */}
+        {profession && (
+          <p className={cn("mt-1 max-w-full inline-flex items-center justify-center gap-1 text-[11.5px] leading-4", muted)}>
+            <Briefcase className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{profession}</span>
+          </p>
+        )}
 
-          {/* 10. Secondary dock: four tiles; More is the last */}
-          <div className="grid grid-cols-4 gap-2">
-            {isOwner ? (
-              <DockTile
-                icon={ShieldCheck}
-                label="Digital Passport"
-                isDark={isDark}
-                style={material.tile}
-                disabled={!passportUrl}
-                onClick={() => passportUrl && navigate(passportUrl)}
+        {/* 6. Bio, tagline, motto: beneath the metadata row */}
+        {(bio || tagline || motto) && (
+          <div className={cn("mt-2 w-full max-w-[44ch] text-[13.5px] leading-[1.45] [overflow-wrap:anywhere]", body)}>
+            {bio && <p className={cn("whitespace-pre-line", isLongBio && !bioExpanded && "line-clamp-2")}>{bio}</p>}
+            {bio && isLongBio && (
+              <button
+                type="button"
+                onClick={() => setBioExpanded((v) => !v)}
+                aria-expanded={bioExpanded}
+                className={cn("inline-flex items-center gap-0.5 min-h-[28px] px-2 rounded-md text-[12.5px] font-semibold cursor-pointer", accent, PRESS, FOCUS_RING)}
+              >
+                <span>{bioExpanded ? 'Less' : 'More'}</span>
+                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-150 motion-reduce:transition-none", bioExpanded && "rotate-180")} aria-hidden="true" />
+              </button>
+            )}
+            {tagline && <p className={cn("text-[12.5px] leading-snug", muted, bio && "mt-1")}>{tagline}</p>}
+            {motto && <p className={cn("text-[12.5px] italic leading-snug", muted, (bio || tagline) && "mt-1")}>{motto}</p>}
+          </div>
+        )}
+        {!bio && !tagline && !motto && isOwner && onOpenQuickEdit && (
+          <button
+            type="button"
+            onClick={() => onOpenQuickEdit('bio')}
+            className={cn("mt-1.5 min-h-[32px] px-2 rounded-md text-[13px] font-medium hover:underline underline-offset-2 cursor-pointer", accent, FOCUS_RING)}
+          >
+            Add a bio
+          </button>
+        )}
+
+        {/* 7. Four compact glass actions in one row */}
+        <div className="mt-3.5 w-full grid grid-cols-4 gap-1.5">
+          {isOwner ? (
+            <>
+              <ActionButton
+                icon={Edit3}
+                label="Edit Profile"
+                variant="brand"
+                material={material}
+                onClick={onEditProfile || (() => navigate('/profile/edit'))}
               />
-            ) : (
-              <DockTile
+              <ActionMenu icon={QrCode} label="QR / Passport" ariaLabel="QR code and Digital Passport" items={qrPassportItems} isDark={isDark} material={material} align="left" />
+              <ActionButton icon={Share2} label="Share" material={material} disabled={!canShareAction} onClick={onShare} />
+              <ActionMenu icon={MoreHorizontal} label="More" ariaLabel="More profile actions" items={moreItems} isDark={isDark} material={material} />
+            </>
+          ) : (
+            <>
+              {friendPrimary || friendsFirst ? (
+                <ActionButton
+                  icon={FriendIcon}
+                  label={friendLabelShort}
+                  ariaLabel={friendLabelFull}
+                  variant={friendshipStatus === 'friends' || friendshipStatus === 'pending' ? 'glass' : 'brand'}
+                  material={material}
+                  disabled={friendDisabled}
+                  busy={friendRequestLoading}
+                  onClick={friendAction}
+                />
+              ) : (
+                <ActionButton
+                  icon={FollowIcon}
+                  label={followLabel}
+                  variant={isFollowing || followPending ? 'glass' : 'brand'}
+                  material={material}
+                  disabled={followLoading || !canFollowAction}
+                  busy={followLoading}
+                  title={!onFollowToggle ? 'Preview only: this is how your profile looks to others' : undefined}
+                  onClick={onFollowToggle}
+                />
+              )}
+              <ActionButton
                 icon={MessageSquare}
                 label="Message"
-                isDark={isDark}
-                style={material.tile}
-                disabled={!onOpenMessages}
-                capabilityDenied={caps.canMessage === false}
-                title={!onOpenMessages ? 'Preview only' : (caps.canMessage === false ? 'Messaging is not available' : undefined)}
+                material={material}
+                disabled={!canMessageAction}
+                title={!onOpenMessages ? 'Preview only' : (!grant('canMessage') ? 'Messaging is not available' : undefined)}
                 onClick={onOpenMessages}
               />
-            )}
-
-            {isOwner ? (
-              <DockTile icon={Share2} label="Share" isDark={isDark} style={material.tile} disabled={!canShareAction} onClick={onShare} />
-            ) : (
-              <DockTile
-                icon={ShieldCheck}
-                label="Digital Passport"
-                isDark={isDark}
-                style={material.tile}
-                disabled={!passportUrl}
-                onClick={() => passportUrl && navigate(passportUrl)}
-              />
-            )}
-
-            {isOwner ? (
-              <DockTile icon={QrCode} label="QR Code" isDark={isDark} style={material.tile} disabled={!onOpenQrCode} onClick={onOpenQrCode} />
-            ) : (
-              <DockTile icon={Share2} label="Share" isDark={isDark} style={material.tile} disabled={!canShareAction} onClick={onShare} />
-            )}
-
-            <div ref={menuWrapRef} className="relative min-w-0">
-              <DockTile
-                ref={menuTriggerRef}
-                icon={MoreHorizontal}
-                label="More"
-                isDark={isDark}
-                style={material.tile}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                aria-controls={menuId}
-                onClick={() => setMenuOpen((open) => !open)}
-              />
-              <div
-                id={menuId}
-                ref={menuPanelRef}
-                role="menu"
-                aria-label="More profile actions"
-                onKeyDown={handleMenuKeyDown}
-                className={cn(
-                  "absolute right-0 top-full mt-1.5 z-30 w-[232px] max-w-[calc(100vw-24px)] max-h-[min(60vh,360px)] overflow-y-auto overscroll-contain p-1 rounded-2xl text-left origin-top-right",
-                  "transition-[opacity,transform,visibility] duration-150 motion-reduce:transition-none",
-                  menuOpen ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible pointer-events-none"
-                )}
-                style={material.overlay}
-              >
-                {menuItems.map(({ key, ...item }) => (
-                  <MenuItem key={key} isDark={isDark} {...item} />
-                ))}
-                {!isOwner && (
-                  <MenuItem
-                    key="gift"
-                    icon={Gift}
-                    label="Send coins"
-                    disabled={!onOpenTipModal}
-                    capabilityDenied={caps.canTip === false}
-                    onClick={closeThen(onOpenTipModal)}
-                    isDark={isDark}
-                  />
-                )}
-                <MenuItem
-                  key="options"
-                  icon={MoreHorizontal}
-                  label={isOwner ? 'Profile options & View As' : 'More options'}
-                  disabled={!onOpenOptions}
-                  onClick={closeThen(onOpenOptions)}
-                  isDark={isDark}
-                />
-              </div>
-            </div>
-          </div>
+              <ActionButton icon={Share2} label="Share" material={material} disabled={!canShareAction} onClick={onShare} />
+              <ActionMenu icon={MoreHorizontal} label="More" ariaLabel="More profile actions" items={moreItems} isDark={isDark} material={material} />
+            </>
+          )}
         </div>
       </div>
 
