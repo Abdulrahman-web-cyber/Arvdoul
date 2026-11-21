@@ -10,11 +10,11 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
-import { getStoredUid } from '../../utils/security';
 import { cn } from '../../lib/utils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight } from "lucide-react";
 import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
+import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 
 /**
  * Format number with K, M suffix
@@ -35,11 +35,20 @@ export default function CreatorDashboardScreen() {
   const { theme } = useTheme();
   const { user: authUser, userProfile } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
-  const currentUser = authUser || storeUser;
-  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
-  // The canonical active-day count lives on the user profile
-  // (`users/{uid}.activeDaysCount`); an unmeasured value stays null → '—'.
-  const activeDaysCount = userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null;
+  // Only the Firebase Auth session establishes identity. Store/profile data is
+  // supplementary and accepted only when its UID matches that session.
+  const currentUserId = authUser?.uid || null;
+  const profileSupplement = currentUserId && userProfile?.uid === currentUserId
+    ? userProfile
+    : (currentUserId && storeUser?.uid === currentUserId ? storeUser : null);
+  // The canonical active-day count lives on the authenticated user's profile.
+  const activeDaysCount = profileSupplement?.activeDaysCount ?? null;
+  const isCreator = resolveCreatorFlag(profileSupplement || {}, authUser || {}, profileSupplement?.level ?? authUser?.level ?? null);
+
+  useEffect(() => {
+    if (!currentUserId) navigate('/login', { replace: true });
+    else if (!isCreator) navigate('/profile', { replace: true });
+  }, [currentUserId, isCreator, navigate]);
   
   const {
     analytics,
