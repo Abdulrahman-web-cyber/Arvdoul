@@ -194,6 +194,13 @@ export const useProfileStore = create(
       set((state) => {
         state.requestSeq = requestId;
         state.viewerUid = currentUserId || null;
+        // Every profile target/refresh invalidates older secondary loaders.
+        // Otherwise a slow posts/highlights/stories response can land after a
+        // newer route has begun loading, even when the profile request token
+        // itself correctly rejects the stale profile response.
+        for (const key of ['posts', 'highlights', 'saved', 'shop', 'stories', 'level', 'balance', 'position', 'followStatus', 'mutualFriends']) {
+          state.loadSeq[key] = (state.loadSeq[key] || 0) + 1;
+        }
         state.loading = true;
         state.error = null;
         // A new profile load invalidates any prior mutual-friends result.
