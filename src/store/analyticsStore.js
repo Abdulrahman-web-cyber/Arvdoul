@@ -18,6 +18,9 @@ import { logger } from '../utils/Logger.js';
 const initialState = {
   // Analytics data
   analytics: null,
+  analyticsUserId: null,
+  analyticsTimeframe: null,
+  requestSeq: 0,
   loading: false,
   error: null,
   
@@ -51,18 +54,33 @@ export const useAnalyticsStore = create(
       if (!userId) return;
       
       const selectedTimeframe = timeframe || get().timeframe;
-      
+      const requestId = (get().requestSeq || 0) + 1;
+      const dataScopeChanged = get().analyticsUserId !== userId || get().analyticsTimeframe !== selectedTimeframe;
+
       set((state) => {
+        state.requestSeq = requestId;
+        state.analyticsUserId = userId;
+        state.analyticsTimeframe = selectedTimeframe;
         state.loading = true;
         state.error = null;
         state.timeframe = selectedTimeframe;
+        if (dataScopeChanged) {
+          state.analytics = null;
+          state.dailyStats = [];
+          state.topPosts = [];
+          state.ranking = null;
+          state.demographics = null;
+          state.growthRate = null;
+          state.activeDays = null;
+        }
       });
       
       try {
         const analyticsService = (await import('../services/analyticsService.js')).getAnalyticsService();
         
         const analytics = await analyticsService.getUserAnalytics(userId, selectedTimeframe);
-        
+        if (get().requestSeq !== requestId || get().analyticsUserId !== userId) return;
+
         set((state) => {
           state.analytics = analytics;
           state.loading = false;
@@ -80,6 +98,7 @@ export const useAnalyticsStore = create(
         // as if measured, and cleared `error` so the dashboard's error branch
         // was unreachable. Surface the failure and leave analytics null.
         logger.error('Analytics load failed', { userId, error: error?.message });
+        if (get().requestSeq !== requestId || get().analyticsUserId !== userId) return;
         set((state) => {
           state.analytics = null;
           state.loading = false;
@@ -182,7 +201,9 @@ export const useAnalyticsStore = create(
      */
     clear: () => {
       set((state) => {
+        const nextSeq = (state.requestSeq || 0) + 1;
         Object.assign(state, initialState);
+        state.requestSeq = nextSeq;
       });
     },
   }))

@@ -10,13 +10,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
-import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Edit3, Shield, Sparkles, Mail, HeartHandshake, Palette, RefreshCw, Zap } from "lucide-react";
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { Skeleton } from '../../components/UI/Skeleton';
-import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
 import { getUserService } from '../../services/userService.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine.js';
@@ -38,27 +36,31 @@ export default function AboutScreen() {
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
-  const { user: authUser } = useAuth();
-  const storeUser = useAppStore((state) => state.currentUser);
+  const { user: authUser, authInitialized } = useAuth();
   const { profile: storeProfile, loading: storeLoading, error: storeError, loadProfile } = useProfileStore();
   const [relationship, setRelationship] = useState(null);
+  const [relationshipError, setRelationshipError] = useState(false);
+  const [relationshipTargetId, setRelationshipTargetId] = useState(null);
 
-  const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
+  const currentUserId = authUser?.uid || null;
   const cleanParam = userId ? String(userId).replace(/^@/, '').trim() : '';
   const targetId = (!cleanParam || cleanParam.toLowerCase() === 'me') ? currentUserId : cleanParam;
 
+  const storeProfileMatchesTarget = Boolean(storeProfile && targetId && (
+    storeProfile.id === targetId ||
+    storeProfile.uid === targetId ||
+    (cleanParam && storeProfile.username?.toLowerCase() === cleanParam.toLowerCase())
+  ));
   const isActualOwner = Boolean(
     currentUserId &&
-    targetId && (
-      currentUserId === targetId ||
-      (storeProfile &&
-        (storeProfile.uid === currentUserId || storeProfile.id === currentUserId) &&
-        (storeProfile.username?.toLowerCase() === targetId.toLowerCase() || storeProfile.id === targetId))
-    )
+    targetId &&
+    (currentUserId === targetId ||
+      (storeProfileMatchesTarget &&
+        (storeProfile.uid === currentUserId || storeProfile.id === currentUserId)))
   );
 
   useEffect(() => {
-    if (!targetId) return;
+    if (!authInitialized || !targetId) return;
     const currentProfile = useProfileStore.getState().profile;
     const matchesStore = currentProfile && (
       currentProfile.id === targetId ||
@@ -68,30 +70,51 @@ export default function AboutScreen() {
     if (!matchesStore) {
       loadProfile(targetId, currentUserId);
     }
-  }, [targetId, currentUserId, loadProfile]);
+  }, [targetId, currentUserId, authInitialized, loadProfile]);
 
   useEffect(() => {
     let mounted = true;
-    const resolvedUid = storeProfile?.uid || storeProfile?.id || targetId;
+    const resolvedUid = storeProfileMatchesTarget
+      ? (storeProfile?.uid || storeProfile?.id)
+      : (targetId === currentUserId ? currentUserId : null);
     if (!currentUserId || !resolvedUid || isActualOwner || resolvedUid === currentUserId) {
       setRelationship(null);
+      setRelationshipError(false);
+      setRelationshipTargetId(resolvedUid || targetId || null);
       return;
     }
 
+    setRelationship(null);
+    setRelationshipError(false);
+    setRelationshipTargetId(null);
     getUserService()
       .getRelationshipState(currentUserId, resolvedUid)
       .then((rel) => {
-        if (mounted) setRelationship(rel);
+        if (mounted) {
+          setRelationship(rel);
+          setRelationshipError(false);
+          setRelationshipTargetId(resolvedUid);
+        }
       })
       .catch(() => {
-        if (mounted) setRelationship(null);
+        // A missing safety graph is not an empty relationship. Withhold this
+        // visitor's About surface rather than applying public defaults.
+        if (mounted) {
+          setRelationship(null);
+          setRelationshipError(true);
+          setRelationshipTargetId(resolvedUid);
+        }
       });
 
     return () => { mounted = false; };
-  }, [currentUserId, targetId, storeProfile?.uid, storeProfile?.id, isActualOwner]);
+  }, [currentUserId, targetId, storeProfile?.uid, storeProfile?.id, storeProfile?.username, storeProfileMatchesTarget, isActualOwner]);
 
   const effectiveProfile = useMemo(() => {
-    const base = (isActualOwner ? (storeProfile || authUser || storeUser || getStoredUser()) : storeProfile) || {};
+    const ownerProfile = isActualOwner && storeProfileMatchesTarget &&
+      (storeProfile?.uid === currentUserId || storeProfile?.id === currentUserId)
+      ? storeProfile
+      : (isActualOwner ? authUser : null);
+    const base = (isActualOwner ? ownerProfile : (storeProfileMatchesTarget ? storeProfile : null)) || {};
     const fallbackHandle = isActualOwner ? deriveHandle(authUser?.email) : null;
     const resolvedId = base.id || base.uid || targetId;
     return {
@@ -99,13 +122,13 @@ export default function AboutScreen() {
       id: resolvedId,
       uid: base.uid || base.id || targetId,
       displayName: pickDisplayName([base.displayName, base.name], { fallback: null }) || (targetId ? `user ${String(targetId).slice(0, 6)}` : '—'),
-      username: pickHandle([base.username]) || fallbackHandle || 'citizen',
+      username: pickHandle([base.username]) || fallbackHandle || null,
       bio: base.bio || '',
       location: base.location || '',
       website: base.website || '',
       level: resolveLevelValue(base.level),
     };
-  }, [storeProfile, storeUser, authUser, targetId, isActualOwner]);
+  }, [storeProfile, authUser, targetId, isActualOwner, storeProfileMatchesTarget, currentUserId]);
 
   // The About screen renders the descriptive identity card (bio/location/website/
   // links), so it must honour the `profileInfo` scope. It resolves the capability
@@ -113,8 +136,8 @@ export default function AboutScreen() {
   const capabilities = useMemo(() => resolveCapabilities({
     viewer: currentUserId ? { uid: currentUserId } : null,
     target: effectiveProfile,
-    relationship: isActualOwner ? { isOwner: true } : (relationship || { isOwner: false }),
-  }), [currentUserId, effectiveProfile, isActualOwner, relationship]);
+    relationship: isActualOwner ? { isOwner: true } : (relationshipTargetId === (storeProfileMatchesTarget ? (storeProfile?.uid || storeProfile?.id) : targetId) && relationship ? relationship : { isBlocked: true }),
+  }), [currentUserId, effectiveProfile, isActualOwner, relationship, relationshipTargetId, storeProfileMatchesTarget, storeProfile?.uid, storeProfile?.id, targetId]);
 
   const displayedProfile = useMemo(
     () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isActualOwner }),
@@ -138,6 +161,61 @@ export default function AboutScreen() {
       return [];
     }
   }, [displayedProfile?.level]);
+
+  if (!authInitialized) {
+    return (
+      <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')} role="status" aria-label="Restoring session">
+        <div className="w-full max-w-md space-y-3">
+          <Skeleton className="h-7 w-44 rounded-lg" />
+          <Skeleton className="h-4 w-full rounded-md" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  const expectedRelationshipTarget = storeProfileMatchesTarget
+    ? (storeProfile?.uid || storeProfile?.id)
+    : targetId;
+  const relationshipReady = isActualOwner || !currentUserId ||
+    (relationshipTargetId === expectedRelationshipTarget && Boolean(relationship));
+
+  if (currentUserId && !isActualOwner && !relationshipReady && !relationshipError) {
+    return (
+      <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')}>
+        <div className="w-full max-w-md space-y-3" role="status" aria-label="Verifying profile privacy">
+          <Skeleton className="h-7 w-44 rounded-lg" />
+          <Skeleton className="h-4 w-full rounded-md" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (relationshipError) {
+    return (
+      <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')}>
+        <div className={cn('max-w-md w-full p-8 rounded-2xl border text-center space-y-4', isDark ? 'bg-[#080F2E]/95 border-white/10' : 'bg-white border-slate-200')}>
+          <Shield className="w-8 h-8 mx-auto text-amber-500" />
+          <h2 className="font-display text-xl font-bold">Profile Access Could Not Be Verified</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Arvdoul could not verify this profile's privacy and safety relationship. Its details are withheld until verification succeeds.</p>
+          <button type="button" onClick={() => {
+            const resolvedUid = storeProfile?.uid || storeProfile?.id;
+            if (!currentUserId || !resolvedUid) return;
+            getUserService().getRelationshipState(currentUserId, resolvedUid)
+              .then((rel) => {
+                setRelationship(rel);
+                setRelationshipTargetId(resolvedUid);
+                setRelationshipError(false);
+              })
+              .catch(() => setRelationshipError(true));
+          }} className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient cursor-pointer">
+            Retry verification
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleEdit = () => {
     navigate('/profile/edit');

@@ -10,11 +10,11 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
-import { getStoredUid } from '../../utils/security';
 import { cn } from '../../lib/utils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight } from "lucide-react";
 import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
+import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 
 /**
  * Format number with K, M suffix
@@ -33,26 +33,36 @@ const formatNumber = (num) => {
 export default function CreatorDashboardScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user: authUser, userProfile } = useAuth();
+  const { user: authUser, userProfile, authInitialized } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
-  const currentUser = authUser || storeUser;
-  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
-  // The canonical active-day count lives on the user profile
-  // (`users/{uid}.activeDaysCount`); an unmeasured value stays null → '—'.
-  const activeDaysCount = userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null;
+  // Only the Firebase Auth session establishes identity. Store/profile data is
+  // supplementary and accepted only when its UID matches that session.
+  const currentUserId = authUser?.uid || null;
+  const profileSupplement = currentUserId && userProfile?.uid === currentUserId
+    ? userProfile
+    : (currentUserId && storeUser?.uid === currentUserId ? storeUser : null);
+  // The canonical active-day count lives on the authenticated user's profile.
+  const activeDaysCount = profileSupplement?.activeDaysCount ?? null;
+  const isCreator = resolveCreatorFlag(profileSupplement || {}, authUser || {}, profileSupplement?.level ?? authUser?.level ?? null);
+
+  useEffect(() => {
+    if (!authInitialized) return;
+    if (!currentUserId) navigate('/login', { replace: true });
+    else if (profileSupplement && !isCreator) navigate('/profile', { replace: true });
+  }, [authInitialized, currentUserId, isCreator, navigate]);
   
-  const {
-    analytics,
-    loading,
-    error,
-    timeframe,
-    dailyStats,
-    ranking,
-    demographics,
-    loadAnalytics,
-    setTimeframe,
-    refresh,
-  } = useAnalyticsStore();
+  const analyticsState = useAnalyticsStore();
+  const timeframe = analyticsState.timeframe;
+  const isAnalyticsForCurrentUser = analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe;
+  const analytics = isAnalyticsForCurrentUser ? analyticsState.analytics : null;
+  const loading = analyticsState.loading;
+  const error = isAnalyticsForCurrentUser ? analyticsState.error : null;
+  const dailyStats = isAnalyticsForCurrentUser ? analyticsState.dailyStats : [];
+  const ranking = isAnalyticsForCurrentUser ? analyticsState.ranking : null;
+  const demographics = isAnalyticsForCurrentUser ? analyticsState.demographics : null;
+  const loadAnalytics = analyticsState.loadAnalytics;
+  const setTimeframe = analyticsState.setTimeframe;
+  const refresh = analyticsState.refresh;
   
   // Load analytics
   useEffect(() => {
@@ -81,6 +91,10 @@ export default function CreatorDashboardScreen() {
     linkElement.click();
   }, [analytics, timeframe]);
   
+  if (!authInitialized) {
+    return <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Restoring session"><div className="h-8 w-8 rounded-full border-2 border-current border-t-transparent animate-spin" /></div>;
+  }
+
   // Metrics cards
   const num = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : null);
   const metrics = [

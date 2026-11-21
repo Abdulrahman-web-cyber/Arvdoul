@@ -19,6 +19,37 @@ const AUTH_CONFIG = {
   SERVER_RATE_LIMIT_FUNCTION: null
 };
 
+const GOOGLE_REDIRECT_PENDING_KEY = 'arvdoul_google_redirect_pending';
+
+const markGoogleRedirectPending = () => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, '1');
+    }
+  } catch (error) {
+    logger.warn('Google redirect marker could not be persisted', { message: error?.message });
+  }
+};
+
+const hasGoogleRedirectPending = () => {
+  try {
+    return typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const clearGoogleRedirectPending = () => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+    }
+  } catch {
+    // Session marker cleanup is best-effort; it contains no credential data.
+  }
+};
+
 class AuthError extends Error {
   constructor(code, message, originalError = null) {
     super(message);
@@ -33,6 +64,8 @@ class ProductionAuthService {
     this.auth = null;
     this.firebase = null;
     this.initialized = false;
+    this.initializationPromise = null;
+    this.googleRedirectError = null;
     this.verificationStates = new Map();
     this.recaptchaVerifiers = new Map();
   }
@@ -43,11 +76,26 @@ class ProductionAuthService {
 
   async initialize() {
     if (this.initialized) return this.auth;
+    if (this.initializationPromise) return this.initializationPromise;
+
+    this.initializationPromise = this._initialize();
+    try {
+      return await this.initializationPromise;
+    } finally {
+      this.initializationPromise = null;
+    }
+  }
+
+  async _initialize() {
+    if (this.initialized) return this.auth;
     logger.info('Initializing auth service');
     try {
       const firebaseApp = await import('../firebase/firebase.js');
       const authInstance = firebaseApp.auth || (await firebaseApp.getAuthInstance?.());
       this.auth = authInstance;
+      // Firebase Auth persistence must settle before getRedirectResult and
+      // before AuthContext installs its initial auth-state observer.
+      this.authPersistenceMode = await firebaseApp.authPersistenceReady;
       
       // Ensure auth.settings object exists.
       if (!this.auth.settings) {
@@ -55,60 +103,79 @@ class ProductionAuthService {
       }
 
       this.firebase = firebaseApp;
-      this.initialized = true;
 
-      // Handle Google redirect auth result in background without blocking startup
-      (async () => {
-        try {
-          const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
-          // getRedirectResult resolves null when no redirect is pending. Do not
-          // swallow real OAuth/configuration failures as if there were no result.
-          const redirectResult = await getRedirectResult(this.auth);
-          if (redirectResult?.user) {
-            logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
-            const user = redirectResult.user;
-            await user.getIdToken(true).catch(() => {});
-            const additionalInfo = getAdditionalUserInfo(redirectResult);
-            const isNewUser = additionalInfo?.isNewUser || false;
-            if (isNewUser && additionalInfo?.profile) {
-              try {
-                await updateProfile(user, {
-                  displayName: additionalInfo.profile.name || user.displayName,
-                  photoURL: additionalInfo.profile.picture || user.photoURL
-                });
-              } catch (e) {
-                logger.warn('Google redirect auth profile sync failed', { uid: user.uid, error: e?.message });
-              }
+      // Resolve a pending OAuth redirect BEFORE AuthContext subscribes to
+      // onAuthStateChanged. Otherwise the observer can publish an initial
+      // signed-out state, clear session markers, and leave LoginScreen mounted
+      // while Firebase is still consuming the Google redirect response.
+      this.googleRedirectError = null;
+      try {
+        const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
+        const hadPendingGoogleRedirect = hasGoogleRedirectPending();
+        const redirectResult = await getRedirectResult(this.auth);
+        const redirectUser = redirectResult?.user || this.auth.currentUser || null;
+        if (redirectUser) {
+          clearGoogleRedirectPending();
+        } else if (hadPendingGoogleRedirect) {
+          clearGoogleRedirectPending();
+          const missingResult = new Error(
+            'Google account selection returned to Arvdoul without a completed Firebase session. Check the Firebase authorized domains and try again in Chrome.'
+          );
+          missingResult.code = 'auth/redirect-result-missing';
+          this.googleRedirectError = missingResult;
+          logger.error('Google redirect returned without an authenticated user', { code: missingResult.code });
+        }
+        if (redirectResult?.user) {
+          const user = redirectResult.user;
+          logger.info('Google redirect sign-in completed', { uid: user.uid });
+          await user.getIdToken(true).catch((tokenError) => {
+            logger.warn('Google redirect token refresh deferred', { uid: user.uid, error: tokenError?.message });
+          });
+
+          const additionalInfo = getAdditionalUserInfo(redirectResult);
+          if (additionalInfo?.isNewUser && additionalInfo?.profile) {
+            try {
+              await updateProfile(user, {
+                displayName: additionalInfo.profile.name || user.displayName,
+                photoURL: additionalInfo.profile.picture || user.photoURL,
+              });
+            } catch (profileError) {
+              logger.warn('Google redirect auth profile sync failed', { uid: user.uid, error: profileError?.message });
+            }
+
+            const profilePayload = {
+              displayName: user.displayName,
+              email: user.email || '',
+              photoURL: user.photoURL,
+              authProvider: 'google',
+              emailVerified: Boolean(user.emailVerified),
+              phoneVerified: Boolean(user.phoneNumber),
+              isProfileComplete: false,
+            };
+            try {
               const { createUserProfile } = await import('./userService.js');
-              try {
-                await createUserProfile(user.uid, {
-                  displayName: user.displayName,
-                  email: user.email || '',
-                  photoURL: user.photoURL,
-                  authProvider: 'google',
-                  emailVerified: Boolean(user.emailVerified),
-                  phoneVerified: Boolean(user.phoneNumber),
-                  isProfileComplete: false
-                });
-              } catch (pErr) {
-                logger.warn('Google redirect profile bootstrap failed', { uid: user.uid, error: pErr?.message });
-                this._storePendingProfile(user.uid, {
-                  displayName: user.displayName,
-                  email: user.email || '',
-                  photoURL: user.photoURL,
-                  authProvider: 'google',
-                  emailVerified: Boolean(user.emailVerified),
-                  phoneVerified: Boolean(user.phoneNumber),
-                  isProfileComplete: false
-                });
-              }
+              await createUserProfile(user.uid, profilePayload);
+            } catch (profileError) {
+              logger.warn('Google redirect profile bootstrap deferred', { uid: user.uid, error: profileError?.message });
+              this._storePendingProfile(user.uid, profilePayload);
             }
           }
-        } catch (redirectError) {
-          logger.error('Google redirect sign-in error:', redirectError);
         }
-      })();
+      } catch (redirectError) {
+        // A malformed/expired redirect must not prevent an already-restored
+        // Firebase session from being observed. Keep the original error for
+        // diagnostics instead of disguising it as a popup-permission failure.
+        clearGoogleRedirectPending();
+        this.googleRedirectError = redirectError;
+        logger.error('Google redirect result processing failed', {
+          code: redirectError?.code || null,
+          message: redirectError?.message || String(redirectError),
+        });
+      }
 
+      // Only mark initialization complete after redirect consumption has
+      // settled. Concurrent initialize() callers share initializationPromise.
+      this.initialized = true;
       logger.warn('// Auth service ready');
       return this.auth;
     } catch (error) {
@@ -815,6 +882,7 @@ class ProductionAuthService {
   }
 
   async signInWithGoogle(options = {}) {
+    this.googleRedirectError = null;
     try {
       await this.initialize();
       const {
@@ -836,8 +904,14 @@ class ProductionAuthService {
       const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
       const prefersRedirect = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
       if (prefersRedirect) {
-        await signInWithRedirect(this.auth, provider);
-        return { success: true, redirecting: true };
+        markGoogleRedirectPending();
+        try {
+          await signInWithRedirect(this.auth, provider);
+          return { success: true, redirecting: true };
+        } catch (redirectError) {
+          clearGoogleRedirectPending();
+          throw redirectError;
+        }
       }
 
       let result;
@@ -849,9 +923,11 @@ class ProductionAuthService {
         if (popupError.code === 'auth/popup-blocked') {
           logger.warn('Popup blocked; attempting signInWithRedirect fallback...');
           try {
+            markGoogleRedirectPending();
             await signInWithRedirect(this.auth, provider);
             return { success: true, redirecting: true };
           } catch (redirectError) {
+            clearGoogleRedirectPending();
             // Preserve the real fallback failure. Re-throwing popupError here
             // masked domain/storage/network failures as a popup issue.
             logger.error('signInWithRedirect failed:', redirectError);

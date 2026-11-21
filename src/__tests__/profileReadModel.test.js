@@ -223,8 +223,8 @@ describe('profileReadModel - capability projection', () => {
     expect(projected.location).toBe('');
     expect(projected.website).toBe('');
     expect(projected.canViewIdentity).toBe(false);
-    // `links` has its own scope and stays when that scope allows it.
-    expect(projected.links).toEqual(['a']);
+    // Website/links metadata is withheld unless both profile-info and links scopes allow it.
+    expect(projected.links).toEqual([]);
     // The account identity is never masked — only the descriptive card.
     expect(projected.id).toBe('u1');
   });
@@ -666,6 +666,103 @@ describe('friends scope is resolved once and consumed everywhere (N046 follow-up
     expect(src).toContain('caps.canViewFriends');
     // The old hand-rolled AND of the two resolved booleans is gone.
     expect(src).not.toContain('const canViewFriends = canViewFollowers && canViewFollowing;');
+  });
+});
+
+describe('website fields obey both identity and links scopes', () => {
+  it('hides website aliases when the links scope is denied', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      website: 'https://example.test',
+      websiteUrl: 'https://example.test',
+      links: [{ label: 'Site', url: 'https://example.test' }],
+    }, { canViewIdentity: true, canViewLinks: false });
+    expect(projected.website).toBe('');
+    expect(projected.websiteUrl).toBe('');
+    expect(projected.links).toEqual([]);
+  });
+
+  it('does not re-expose website aliases when profile-info is denied', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      website: 'https://example.test',
+      websiteUrl: 'https://example.test',
+    }, { canViewIdentity: false, canViewLinks: true });
+    expect(projected.website).toBe('');
+    expect(projected.websiteUrl).toBe('');
+  });
+});
+
+describe('presence privacy masks all activity timestamps', () => {
+  it('does not expose last-login/last-seen timestamps when presence is hidden', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      lastLogin: '2026-11-21T10:00:00.000Z',
+      lastSeenAt: '2026-11-21T10:00:00.000Z',
+      lastActiveAt: '2026-11-21T10:00:00.000Z',
+      lastOnlineAt: '2026-11-21T10:00:00.000Z',
+    }, { canViewPresence: false });
+    expect(projected.lastLogin).toBeNull();
+    expect(projected.lastSeenAt).toBeNull();
+    expect(projected.lastActiveAt).toBeNull();
+    expect(projected.lastOnlineAt).toBeNull();
+  });
+});
+
+describe('profile-info privacy masks every raw personal identity alias', () => {
+  it('masks names, location, and birth-date aliases while preserving public display identity', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      displayName: 'Ada Lovelace',
+      username: 'ada',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      dob: { day: 10, month: 12, year: 1815 },
+      birthday: '1815-12-10',
+      dateOfBirth: '1815-12-10',
+      city: 'London',
+      country: 'UK',
+      websiteUrl: 'https://example.test',
+    }, { canViewIdentity: false });
+    expect(projected.displayName).toBe('Ada Lovelace');
+    expect(projected.username).toBe('ada');
+    for (const field of ['firstName', 'lastName', 'dob', 'birthday', 'dateOfBirth', 'city', 'country', 'websiteUrl']) {
+      expect(projected[field]).toBe('');
+    }
+  });
+});
+
+describe('profile projection masks private social metrics', () => {
+  it('does not expose follower/following/friend counts when their scopes are denied', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      followerCount: 120,
+      followingCount: 80,
+      friendCount: 45,
+      followersCount: 120,
+      friendsCount: 45,
+    }, {
+      canViewFollowers: false,
+      canViewFollowing: true,
+      canViewFriends: false,
+    });
+    expect(projected.followerCount).toBeNull();
+    expect(projected.followingCount).toBe(80);
+    expect(projected.friendCount).toBeNull();
+    expect(projected.followersCount).toBeNull();
+    expect(projected.friendsCount).toBeNull();
+  });
+
+  it('preserves social counts for the owner', () => {
+    const projected = projectProfileForViewer({
+      id: 'owner',
+      followerCount: 120,
+      followingCount: 80,
+      friendCount: 45,
+    }, {}, { isOwner: true });
+    expect(projected.followerCount).toBe(120);
+    expect(projected.followingCount).toBe(80);
+    expect(projected.friendCount).toBe(45);
   });
 });
 

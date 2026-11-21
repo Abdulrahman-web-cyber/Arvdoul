@@ -176,9 +176,9 @@ export default function ProfileMyScreen() {
   const experience = useProfileStore((state) => state.experience);
   const balance = useProfileStore((state) => state.balance);
 
-  const analytics = useAnalyticsStore((state) => state.analytics);
+  const analytics = useAnalyticsStore((state) => state.analyticsUserId === currentUserId && state.analyticsTimeframe === state.timeframe ? state.analytics : null);
   const timeframe = useAnalyticsStore((state) => state.timeframe);
-  const ranking = useAnalyticsStore((state) => state.ranking);
+  const ranking = useAnalyticsStore((state) => state.analyticsUserId === currentUserId && state.analyticsTimeframe === state.timeframe ? state.ranking : null);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
   // A profile left in the store by a previous account must never be shown.
@@ -201,7 +201,14 @@ export default function ProfileMyScreen() {
     setViewAs(mode);
     if (mode !== 'owner') closeOwnerModals();
     if (!currentUserId) return;
-    useProfileStore.getState().loadProfile(currentUserId, currentUserId, {
+    const profileStore = useProfileStore.getState();
+    profileStore.loadProfile(currentUserId, currentUserId, {
+      viewAs: mode === 'owner' ? null : mode,
+    });
+    // Reload from the server for simulated visitors. The owner-only local
+    // optimistic cache must never appear in a public/follower preview.
+    profileStore.loadPosts(currentUserId, {
+      limit: 12,
       viewAs: mode === 'owner' ? null : mode,
     });
   }, [currentUserId, closeOwnerModals]);
@@ -244,8 +251,9 @@ export default function ProfileMyScreen() {
       try {
         const userServiceModule = await import('../../services/userService.js');
         const userService = userServiceModule.getUserService();
-        const base = authDisplayName || profileDisplayName || 'citizen';
-        const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'citizen';
+        const uidFallback = currentUserId ? `user${String(currentUserId).slice(0, 6)}` : '';
+        const base = authDisplayName || profileDisplayName || uidFallback;
+        const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || uidFallback;
         const generated = await userService.generateUniqueUsername(cleanBase, uid);
         if (!generated) return;
         await userService.updateUserProfile(uid, { username: generated });
@@ -283,27 +291,27 @@ export default function ProfileMyScreen() {
       viewer,
       handleCandidates: [base.username, viewer.username],
       handleFallbacks: [viewer.displayName, base.displayName],
-      handleFallback: 'citizen',
+      handleFallback: null,
       displayCandidates: [viewer.displayName, viewer.name, base.displayName, base.name],
       displayFallback: currentUserId ? `user ${String(currentUserId).slice(0, 6)}` : '—',
       followerCandidates: [base.followerCount, base.followersCount, viewer.followerCount],
       followingCandidates: [base.followingCount, viewer.followingCount],
       postCandidates: [reconciledPostCount, base.postCount],
       levelCandidates: [level, base.level, viewer.level],
-      coinCandidates: [
-        Number.isFinite(balance) ? balance : undefined,
-        base.coins,
-        base.coinBalance,
-        viewer.coins,
-      ],
+      withCoins: false,
       userId: currentUserId,
     });
     const pickString = (a, b) => (typeof a === 'string' ? a : (typeof b === 'string' ? b : ''));
-    const resolvedExperience = Number.isFinite(Number(experience))
-      ? Number(experience)
-      : (Number.isFinite(Number(base.experience))
-        ? Number(base.experience)
-        : (Number.isFinite(Number(base.xp)) ? Number(base.xp) : undefined));
+    const experienceCandidates = [experience, base.experience, base.xp];
+    const knownExperience = experienceCandidates.find((value) =>
+      value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+    );
+    const resolvedExperience = knownExperience === undefined ? undefined : Number(knownExperience);
+    const coinCandidates = [balance, base.coins, base.coinBalance, viewer.coins];
+    const knownCoins = coinCandidates.find((value) =>
+      value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+    );
+    const resolvedCoins = knownCoins === undefined ? null : Number(knownCoins);
     const resolvedLikes =
       typeof postsLikesCount === 'number' && Number.isFinite(postsLikesCount)
         ? postsLikesCount
@@ -315,6 +323,7 @@ export default function ProfileMyScreen() {
     return {
       ...base,
       ...identity,
+      coins: resolvedCoins,
       ...(resolvedExperience !== undefined ? { experience: resolvedExperience } : {}),
       ...(resolvedLikes !== null ? { likesReceived: resolvedLikes } : {}),
       ...(resolvedFriends !== null ? { friendCount: resolvedFriends } : {}),

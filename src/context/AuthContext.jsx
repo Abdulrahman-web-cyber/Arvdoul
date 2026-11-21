@@ -782,15 +782,31 @@ export function AuthProvider({ children }) {
       localStorage.getItem('arvdoul_uid') ||
       localStorage.getItem('uid')
     );
+    let pendingGoogleRedirect = false;
+    try {
+      pendingGoogleRedirect = sessionStorage.getItem('arvdoul_google_redirect_pending') === '1';
+    } catch {
+      pendingGoogleRedirect = false;
+    }
     const authReadyTimer = setTimeout(() => {
+      // Google redirect responses need a longer window for Firebase to consume
+      // the provider callback. Do not release profile surfaces as anonymous
+      // while that hand-off is still pending.
+      if (pendingGoogleRedirect) {
+        setAuthError('Google sign-in is taking too long to return. Check your connection, then retry sign-in in Chrome.');
+      }
       setAuthInitialized(true);
-    }, storedSession ? 8000 : 3500);
+    }, pendingGoogleRedirect ? 20000 : (storedSession ? 8000 : 3500));
     
     const setupAuthListener = async () => {
       try {
         await authService.initialize();
         if (!isMounted.current || abortController.signal.aborted) return;
-        
+        if (authService.googleRedirectError) {
+          const redirectMessage = authService.googleRedirectError.message || 'Google sign-in could not be completed.';
+          setAuthError(`Google sign-in could not be completed: ${redirectMessage}`);
+        }
+
         const firebaseAuth = await import('firebase/auth');
         const { onAuthStateChanged, onIdTokenChanged } = firebaseAuth;
         const auth = authService.auth;
@@ -1126,6 +1142,7 @@ export function AuthProvider({ children }) {
       try {
         setIsSignupInProgress(true);
         setError(null);
+        setAuthError(null);
         const result = await authService.signInWithGoogle(options);
         if (result?.redirecting) {
           toast.info('Redirecting to Google Sign-In...');

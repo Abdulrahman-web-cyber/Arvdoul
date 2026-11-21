@@ -18,7 +18,6 @@ import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
-import { getStoredUser, getStoredUid } from '../utils/security.js';
 import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 import { getUserService } from '../services/userService.js';
 import { socialGraphService } from '../services/socialGraphService.js';
@@ -43,7 +42,7 @@ function isApprovedFollowerView(get, userId, options) {
   const profile = options.profile || state.profile;
   if (!profile || (profile.id !== userId && profile.uid !== userId)) return false;
   if (profile.isPrivate !== true) return false;
-  const viewerUid = getStoredUid() || useAppStore.getState().currentUser?.uid || null;
+  const viewerUid = state.viewerUid || null;
   if (!viewerUid || viewerUid === userId) return false;
   return state.followStatus?.isFollowing === true;
 }
@@ -51,12 +50,14 @@ function isApprovedFollowerView(get, userId, options) {
 const initialState = {
   // Profile data
   profile: null,
+  viewerUid: null,
   loading: false,
   error: null,
   isOwner: false,
   
   // Follow status
   followStatus: null,
+  followStatusTargetId: null,
   followLoading: false,
   
   // Mutual friends
@@ -92,7 +93,8 @@ const initialState = {
   levelLoading: false,
   
   // Balance
-  balance: 0,
+  // Unknown until the economy service resolves; zero is a real balance.
+  balance: null,
   balanceLoading: false,
   
   // Position
@@ -191,6 +193,14 @@ export const useProfileStore = create(
       const requestId = get().requestSeq + 1;
       set((state) => {
         state.requestSeq = requestId;
+        state.viewerUid = currentUserId || null;
+        // Every profile target/refresh invalidates older secondary loaders.
+        // Otherwise a slow posts/highlights/stories response can land after a
+        // newer route has begun loading, even when the profile request token
+        // itself correctly rejects the stale profile response.
+        for (const key of ['posts', 'highlights', 'saved', 'shop', 'stories', 'level', 'balance', 'position', 'followStatus', 'mutualFriends']) {
+          state.loadSeq[key] = (state.loadSeq[key] || 0) + 1;
+        }
         state.loading = true;
         state.error = null;
         // A new profile load invalidates any prior mutual-friends result.
@@ -213,6 +223,7 @@ export const useProfileStore = create(
           state.stories = [];
           state.savedPosts = [];
           state.followStatus = null;
+          state.followStatusTargetId = null;
           state.experience = null;
           state.levelInfo = null;
         }
@@ -299,9 +310,9 @@ export const useProfileStore = create(
         }
 
         // Resolve profile strictly separating owner auth context from visited public profiles.
-        const appCurrentUser = isOwner ? (useAppStore.getState().currentUser || getStoredUser()) : null;
-        const storedUid = getStoredUid();
-        const effectiveUid = isOwner ? (currentUserId || storedUid) : null;
+        const appStoreUser = useAppStore.getState().currentUser;
+        const appCurrentUser = isOwner && appStoreUser?.uid === currentUserId ? appStoreUser : null;
+        const effectiveUid = isOwner ? currentUserId : null;
         const fallbackDisplayName = isOwner
           ? pickDisplayName(
               [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
@@ -351,12 +362,13 @@ export const useProfileStore = create(
           state.error = null;
           state.isOwner = isOwner;
           state.followStatus = followStatus;
+          state.followStatusTargetId = resolvedUid || userId;
           state.mutualFriends = mutualFriends;
           state.mutualFriendsResolved = mutualFriendsResolved;
           state.friendCount = friendCount;
           state.level = resolvedProfile.level ?? level ?? null;
           const rawXp = resolvedProfile.experience ?? resolvedProfile.xp ?? null;
-          state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : state.experience;
+          state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : null;
           state.balance = balance;
           state.position = position;
         });
@@ -372,10 +384,10 @@ export const useProfileStore = create(
         }
       } catch (error) {
         console.warn('Load profile handled gracefully with fallback:', error?.message);
-        const storedUid = getStoredUid();
-        const effectiveUid = currentUserId || storedUid;
-        const isOwner = !userId || userId === effectiveUid;
-        const localAuth = isOwner ? (getStoredUser() || {}) : {};
+        const effectiveUid = currentUserId || null;
+        const isOwner = Boolean(currentUserId && (!userId || userId === effectiveUid));
+        const appStoreUser = useAppStore.getState().currentUser;
+        const localAuth = isOwner && appStoreUser?.uid === currentUserId ? appStoreUser : {};
 
         const rawDisplayName = isOwner ? (localAuth.displayName || localAuth.name) : null;
         const fallbackDisplayName = isOwner
@@ -527,7 +539,7 @@ export const useProfileStore = create(
       });
       
       try {
-        const viewerId = getStoredUid() || useAppStore.getState().currentUser?.uid || null;
+        const viewerId = get().viewerUid || null;
         const constrainAuthorIsPrivate = !isApprovedFollowerView(get, userId, options);
         const queryOpts = {
           limit: options.limit || 12,
@@ -544,7 +556,14 @@ export const useProfileStore = create(
             // Match only this author's posts. The previous `|| !p.authorId`
             // clause injected another account's (or an unattributed) cached
             // post into every profile's feed.
-            const localUserPosts = localPosts.filter(p => p && p.authorId === userId);
+            // Device-local optimistic posts are not an authorization source.
+            // Only merge them into the owner's own profile; a visitor's server
+            // query is already privacy-filtered and must never be widened by a
+            // shared, uid-unscoped localStorage cache.
+            const localUserPosts = viewerId === userId && (!options.viewAs || options.viewAs === 'owner')
+              ? localPosts.filter((p) => p && p.authorId === userId &&
+                  p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled')
+              : [];
             if (localUserPosts.length > 0) {
               const existingIds = new Set(userPosts.map(p => p.id));
               for (const lp of localUserPosts) {
@@ -637,7 +656,7 @@ export const useProfileStore = create(
         const result = await fsSvc.getPostsByUser(userId, {
           limit: 12,
           cursor: postsCursor,
-          viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
+          viewerId: get().viewerUid || null,
           constrainAuthorIsPrivate: !isApprovedFollowerView(get, userId, {}),
         });
 
@@ -801,8 +820,8 @@ export const useProfileStore = create(
           (s) => s && (
             s.userId === userId ||
             s.authorId === userId ||
-            s.uid === userId ||
-            (!s.userId && !s.authorId && !s.uid)
+            s.ownerId === userId ||
+            s.uid === userId
           )
         );
 
@@ -929,6 +948,7 @@ export const useProfileStore = create(
         if (!get()._isLoadCurrent('followStatus', __seq)) return;
         set((state) => {
           state.followStatus = followStatus;
+          state.followStatusTargetId = followingId;
         });
       } catch (error) {
         console.error('❌ Load follow status failed:', error);
@@ -980,22 +1000,20 @@ export const useProfileStore = create(
       // Idempotent & concurrency-safe: ignore double-taps while loading or
       // already following.
       if (get().followLoading) return;
-      if (get().followStatus?.isFollowing === true) return;
+      if (get().followStatusTargetId === followingId && get().followStatus?.isFollowing === true) return;
 
-      // Snapshot before the optimistic write so rollback restores the
-      // real previous state instead of a hard-coded guess. Immer copy-on-writes
-      // the draft, so the reference is not mutated by the optimistic `set`.
-      const previousFollowStatus = get().followStatus;
-      const previousFollowerCount = get().profile?.followerCount || 0;
+      const isCurrentProfileTarget = (get().profile?.uid || get().profile?.id) === followingId;
+      const previousFollowStatus = get().followStatusTargetId === followingId ? get().followStatus : null;
+      const previousFollowerCount = isCurrentProfileTarget ? (get().profile?.followerCount ?? null) : null;
 
-      // Optimistic update
       set((state) => {
         state.followLoading = true;
-        if (state.followStatus) {
-          state.followStatus.isFollowing = true;
-        }
-        if (state.profile) {
-          state.profile.followerCount = (state.profile.followerCount || 0) + 1;
+        if (isCurrentProfileTarget) {
+          state.followStatusTargetId = followingId;
+          state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
+          if (typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+            state.profile.followerCount += 1;
+          }
         }
       });
       
@@ -1005,8 +1023,12 @@ export const useProfileStore = create(
         if (result?.requested || result?.requestStatus === 'pending') {
           set((state) => {
             state.followLoading = false;
-            state.followStatus = { isFollowing: false, requestStatus: 'pending' };
-            if (state.profile) state.profile.followerCount = previousFollowerCount;
+            if (state.followStatusTargetId === followingId) {
+              state.followStatus = { isFollowing: false, requestStatus: 'pending' };
+            }
+            if ((state.profile?.uid || state.profile?.id) === followingId) {
+              state.profile.followerCount = previousFollowerCount;
+            }
           });
           toast.success('Follow request sent');
           return { requested: true, requestStatus: 'pending' };
@@ -1014,7 +1036,9 @@ export const useProfileStore = create(
         
         set((state) => {
           state.followLoading = false;
-          state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = { ...state.followStatus, isFollowing: true, requestStatus: null };
+          }
         });
         
         toast.success('Following!');
@@ -1025,8 +1049,10 @@ export const useProfileStore = create(
         // Rollback to the captured snapshot.
         set((state) => {
           state.followLoading = false;
-          state.followStatus = previousFollowStatus;
-          if (state.profile) {
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = previousFollowStatus;
+          }
+          if ((state.profile?.uid || state.profile?.id) === followingId) {
             state.profile.followerCount = previousFollowerCount;
           }
         });
@@ -1045,21 +1071,22 @@ export const useProfileStore = create(
       if (get().followLoading) return;
       // Idempotent: a double-tap while not following must not decrement the
       // optimistic counter a second time.
-      if (get().followStatus?.isFollowing === false) return;
+      if (get().followStatusTargetId === followingId && get().followStatus?.isFollowing === false) return;
       
       // Store previous state for rollback. Immer copy-on-writes the draft, so
       // the reference is not mutated by the optimistic `set`.
-      const previousFollowStatus = get().followStatus;
-      const previousFollowerCount = get().profile?.followerCount || 0;
-      
-      // Optimistic update
+      const isCurrentProfileTarget = (get().profile?.uid || get().profile?.id) === followingId;
+      const previousFollowStatus = get().followStatusTargetId === followingId ? get().followStatus : null;
+      const previousFollowerCount = isCurrentProfileTarget ? (get().profile?.followerCount ?? null) : null;
+
       set((state) => {
         state.followLoading = true;
-        if (state.followStatus) {
-          state.followStatus.isFollowing = false;
-        }
-        if (state.profile) {
-          state.profile.followerCount = Math.max(0, (state.profile.followerCount || 1) - 1);
+        if (isCurrentProfileTarget) {
+          state.followStatusTargetId = followingId;
+          state.followStatus = { ...state.followStatus, isFollowing: false, requestStatus: null };
+          if (typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+            state.profile.followerCount = Math.max(0, state.profile.followerCount - 1);
+          }
         }
       });
       
@@ -1069,7 +1096,9 @@ export const useProfileStore = create(
         
         set((state) => {
           state.followLoading = false;
-          state.followStatus = { ...state.followStatus, isFollowing: false };
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = { ...state.followStatus, isFollowing: false, requestStatus: null };
+          }
         });
         
         toast.success('Unfollowed');
@@ -1079,8 +1108,10 @@ export const useProfileStore = create(
         // Rollback
         set((state) => {
           state.followLoading = false;
-          state.followStatus = previousFollowStatus;
-          if (state.profile) {
+          if (state.followStatusTargetId === followingId) {
+            state.followStatus = previousFollowStatus;
+          }
+          if ((state.profile?.uid || state.profile?.id) === followingId) {
             state.profile.followerCount = previousFollowerCount;
           }
         });
@@ -1097,17 +1128,19 @@ export const useProfileStore = create(
      */
     updateFollowStatus: (followerId, followingId, isFollowing) => {
       set((state) => {
-        // Idempotent: only adjust the counter on an actual transition,
-        // so repeated calls with the same state cannot double-count (N012).
-        const wasFollowing = state.followStatus?.isFollowing === true;
-        state.followStatus = {
-          ...state.followStatus,
-          isFollowing,
-        };
-        if (state.profile && wasFollowing !== Boolean(isFollowing)) {
+        // Ignore a late edge event for a profile that is no longer active.
+        if ((state.profile?.uid || state.profile?.id) !== followingId) return;
+        const wasFollowing = state.followStatusTargetId === followingId && state.followStatus?.isFollowing === true;
+        state.followStatusTargetId = followingId;
+        state.followStatus = { ...state.followStatus, isFollowing };
+        if (
+          wasFollowing !== Boolean(isFollowing) &&
+          typeof state.profile.followerCount === 'number' &&
+          Number.isFinite(state.profile.followerCount)
+        ) {
           state.profile.followerCount = isFollowing
-            ? (state.profile.followerCount || 0) + 1
-            : Math.max(0, (state.profile.followerCount || 0) - 1);
+            ? state.profile.followerCount + 1
+            : Math.max(0, state.profile.followerCount - 1);
         }
       });
     },
@@ -1119,11 +1152,13 @@ export const useProfileStore = create(
     cancelFollowRequest: async (fromUserId, toUserId) => {
       if (!fromUserId || !toUserId) return;
       if (get().followLoading) return;
-      if (get().followStatus?.requestStatus !== 'pending') return;
+      if (get().followStatusTargetId !== toUserId || get().followStatus?.requestStatus !== 'pending') return;
       const previousFollowStatus = get().followStatus;
       set((state) => {
         state.followLoading = true;
-        state.followStatus = { isFollowing: false, requestStatus: null };
+        if (state.followStatusTargetId === toUserId) {
+          state.followStatus = { isFollowing: false, requestStatus: null };
+        }
       });
       try {
         const userService = (await import('../services/userService.js')).getUserService();
@@ -1135,7 +1170,9 @@ export const useProfileStore = create(
       } catch (error) {
         set((state) => {
           state.followLoading = false;
-          state.followStatus = previousFollowStatus;
+          if (state.followStatusTargetId === toUserId) {
+            state.followStatus = previousFollowStatus;
+          }
         });
         toast.error('Could not withdraw request');
       }

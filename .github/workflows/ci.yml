@@ -292,6 +292,9 @@ jobs:
           src/__tests__/rulesWriterFieldGuard.test.js
           src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js
+          src/__tests__/profileCachePrivacyGuard.test.js
+          src/__tests__/friendAcceptanceCounterGuard.test.js
+          src/__tests__/authGoogleFlowGuard.test.js
           src/__tests__/userServicePrivacyProjection.test.js
           src/__tests__/profileSystemHardening.test.js
           src/__tests__/serviceReachability.test.js

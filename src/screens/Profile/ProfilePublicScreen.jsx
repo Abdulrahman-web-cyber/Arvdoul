@@ -24,7 +24,6 @@ import {
   OFFLINE_PRESENCE,
 } from '../../services/profileReadModel.js';
 import { shareProfile } from '../../utils/shareUtils';
-import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getUserService } from '../../services/userService.js';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
@@ -62,8 +61,8 @@ const ProfileVerificationModal = lazyDefault(() => import('../../components/prof
 export default function ProfilePublicScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
-  const currentUserId = currentUser?.uid || getStoredUid();
+  const { user: currentUser, authInitialized } = useAuth();
+  const currentUserId = currentUser?.uid || null;
   const routeUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -93,6 +92,8 @@ export default function ProfilePublicScreen() {
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [relationship, setRelationship] = useState(null);
+  const [relationshipResolved, setRelationshipResolved] = useState(false);
+  const [relationshipError, setRelationshipError] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     try {
       return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
@@ -118,6 +119,10 @@ export default function ProfilePublicScreen() {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   const loadPublicProfile = useCallback(async (isMountedRef = { current: true }) => {
+    if (!authInitialized) {
+      setLocalLoading(true);
+      return;
+    }
     const cleanUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
     if (!cleanUserId) {
       if (isMountedRef.current) setLocalLoading(false);
@@ -126,6 +131,8 @@ export default function ProfilePublicScreen() {
 
     setLocalLoading(true);
     setRelationship(null);
+    setRelationshipResolved(false);
+    setRelationshipError(false);
     setFriendshipStatus('none');
     setPendingRequestId(null);
     setFriendRequestLoading(false);
@@ -153,51 +160,60 @@ export default function ProfilePublicScreen() {
       // 2. Load posts, highlights, and relationship context in parallel
       if (currentUserId && resolvedUid !== currentUserId) {
         const userService = getUserService();
-        const [relSettled, friendsSettled] = await Promise.allSettled([
+        const relSettled = await Promise.allSettled([
           userService.getRelationshipState(currentUserId, resolvedUid),
-          userService.areFriends(currentUserId, resolvedUid),
+        ]);
+
+        // A failed safety-graph read is not equivalent to "no block". Do not
+        // issue content/list queries or render relationship actions until the
+        // graph has been resolved successfully.
+        if (relSettled[0].status !== 'fulfilled' || !relSettled[0].value) {
+          if (isMountedRef.current) setRelationshipError(true);
+          return;
+        }
+        const rel = relSettled[0].value;
+        if (isMountedRef.current) {
+          setRelationship(rel);
+          setRelationshipResolved(true);
+        }
+
+        if (rel.isBlockedBy || rel.isBlocking) {
+          return;
+        }
+
+        const areFriends = Boolean(rel.isMutualFriend);
+        await Promise.allSettled([
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
           store.loadStories(resolvedUid),
           store.loadMutualFriends(currentUserId, resolvedUid),
         ]);
-
-        const rel = relSettled.status === 'fulfilled' ? relSettled.value : null;
-        if (rel && isMountedRef.current) {
-          setRelationship(rel);
-        }
-
-        if (rel?.isBlockedBy || rel?.isBlocking) {
-          return;
-        }
-
-        const areFriends = friendsSettled.status === 'fulfilled' ? Boolean(friendsSettled.value) : false;
         if (areFriends) {
           if (isMountedRef.current) setFriendshipStatus('friends');
         } else {
           try {
-            const [sent, received] = await Promise.all([
-              userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] })),
-              userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] })),
-            ]);
-            const sentReq = sent.requests?.find((r) => r.toUserId === resolvedUid);
-            const recReq = received.requests?.find((r) => r.fromUserId === resolvedUid);
+            const requestState = await userService.getFriendRequestStatus(currentUserId, resolvedUid);
             if (isMountedRef.current) {
-              if (sentReq) {
+              if (requestState.sent) {
                 setFriendshipStatus('pending');
-                setPendingRequestId(sentReq.id);
-              } else if (recReq) {
+                setPendingRequestId(requestState.sent.id);
+              } else if (requestState.received) {
                 setFriendshipStatus('received');
-                setPendingRequestId(recReq.id);
+                setPendingRequestId(requestState.received.id);
               } else {
                 setFriendshipStatus('none');
               }
             }
-          } catch (reqErr) {
-            console.warn('Friend request status note:', reqErr);
+          } catch (requestError) {
+            // A failed request-state read must not render an actionable Add
+            // Friend button that could duplicate or contradict a pending edge.
+            console.warn('Friend request status could not be verified:', requestError);
+            if (isMountedRef.current) setRelationshipError(true);
+            return;
           }
         }
       } else {
+        if (isMountedRef.current) setRelationshipResolved(true);
         await Promise.allSettled([
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
@@ -210,7 +226,7 @@ export default function ProfilePublicScreen() {
       clearTimeout(safetyTimer);
       if (isMountedRef.current) setLocalLoading(false);
     }
-  }, [userId, currentUserId]);
+  }, [userId, currentUserId, authInitialized]);
 
   // Load profile and related data using useProfileStore
   useEffect(() => {
@@ -247,13 +263,15 @@ export default function ProfilePublicScreen() {
     if (!targetUid) return;
     useProfileStore.getState().loadMorePosts(targetUid);
   }, [targetUid]);
+  // Only the resolved relationship graph is authoritative. A profile's
+  // denormalized isFollowing field can be stale and must not enable actions.
   const isFollowing = Boolean(
-    isMatchingTarget && (storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing)
+    isMatchingTarget && currentUserId && (relationship?.isFollowing ?? storeFollowStatus?.isFollowing ?? false)
   );
   // A private target records a pending follow request rather than an edge; the
   // control must show "Requested" (and offer withdrawal), not "Follow".
-  const requestStatus = isMatchingTarget
-    ? (storeFollowStatus?.requestStatus ?? relationship?.requestStatus ?? null)
+  const requestStatus = isMatchingTarget && currentUserId
+    ? (relationship?.requestStatus ?? storeFollowStatus?.requestStatus ?? null)
     : null;
   const followLoading = storeFollowLoading;
 
@@ -400,7 +418,7 @@ export default function ProfilePublicScreen() {
     const identity = deriveProfileIdentity(profileData, {
       handleCandidates: [profileData.username, profileData.handle],
       handleFallbacks: [profileData.displayName, profileData.email],
-      handleFallback: 'creator',
+      handleFallback: null,
       displayCandidates: [profileData.displayName, profileData.name],
       displayFallback: null,
       followerCandidates: [profileData.followerCount, profileData.followersCount],
@@ -519,6 +537,46 @@ export default function ProfilePublicScreen() {
     return (
       <div className="w-full pb-20">
         <ProfileSkeleton theme={theme} variant="public" />
+      </div>
+    );
+  }
+
+  // The six-second content fallback must never release a signed-in visitor
+  // profile while its block/privacy relationship read is still pending.
+  if (!loading && baseProfile && !isOwner && currentUserId && !relationshipResolved && !relationshipError) {
+    return (
+      <div className="w-full pb-20" role="status" aria-label="Verifying profile access">
+        <ProfileSkeleton theme={theme} variant="public" />
+      </div>
+    );
+  }
+
+  if (!loading && relationshipError) {
+    return (
+      <div className={cn(
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="font-display text-xl font-bold">Profile Access Could Not Be Verified</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Arvdoul could not verify the relationship and safety settings for this profile. Its contents and actions are withheld until that check succeeds.
+          </p>
+          <button
+            type="button"
+            onClick={() => loadPublicProfile()}
+            className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity inline-flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Retry verification</span>
+          </button>
+        </div>
       </div>
     );
   }

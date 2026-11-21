@@ -1,0 +1,189 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
+const store = read('src/store/profileStore.js');
+const ownerProfile = read('src/screens/Profile/ProfileMyScreen.jsx');
+const publicProfile = read('src/screens/Profile/ProfilePublicScreen.jsx');
+const userService = read('src/services/userService.js');
+const connections = read('src/screens/Profile/ConnectionsScreen.jsx');
+const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
+const about = read('src/screens/Profile/AboutScreen.jsx');
+const creatorDashboard = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+const analyticsStore = read('src/store/analyticsStore.js');
+
+describe('profile cache and unknown-value isolation', () => {
+  test('device-local optimistic posts never widen a visitor profile query', () => {
+    const start = store.indexOf('const localUserPosts');
+    const end = store.indexOf('if (localUserPosts.length > 0)', start);
+    const merge = store.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(merge).toMatch(/viewerId === userId/);
+    expect(merge).toMatch(/p\.authorId === userId/);
+    expect(merge).toMatch(/p\.isDeleted !== true/);
+    expect(merge).toMatch(/p\.status !== 'scheduled'/);
+  });
+
+  test('connections identity is sourced only from AuthContext and failed reads withhold lists', () => {
+    expect(connections).toContain('const currentUser = authUser || null');
+    expect(connections).toContain('const currentUserId = authUser?.uid || null');
+    expect(connections).not.toContain('getStoredUid');
+    expect(connections).not.toContain('storeUser');
+    expect(connections).toContain('if (!profile)');
+    expect(connections).toContain('setPermissionDenied(true)');
+    expect(connections).toContain('setFollowers([])');
+    expect(connections).toContain('setFriends([])');
+  });
+
+  test('optimistic follow actions cannot mutate a different route target', () => {
+    expect(store).toContain('followStatusTargetId: null');
+    expect(store).toContain('state.followStatusTargetId = resolvedUid || userId');
+    expect(store).toContain('get().followStatusTargetId === followingId');
+    expect(store).toContain("(state.profile?.uid || state.profile?.id) === followingId");
+    expect(store).toContain("if ((state.profile?.uid || state.profile?.id) !== followingId) return");
+  });
+
+  test('public profile follow controls never trust denormalized profile flags', () => {
+    expect(publicProfile).toContain('relationship?.isFollowing ?? storeFollowStatus?.isFollowing ?? false');
+    expect(publicProfile).not.toContain('profileData?.isFollowing');
+    expect(publicProfile).toContain('isMatchingTarget && currentUserId');
+  });
+
+  test('connection pagination fails closed and discards responses after a target switch', () => {
+    const start = connections.indexOf('const hydrateFollowStates');
+    const end = connections.indexOf('}, [currentUserId]);', start);
+    expect(connections.slice(start, end)).not.toContain('catch (e)');
+    expect(connections).toContain('targetKeyRef.current !== requestedTargetId');
+    expect(connections).toContain('if (!isMounted) return');
+  });
+
+  test('a profile refresh invalidates every secondary loader from the previous target', () => {
+    const start = store.indexOf('loadProfile: async');
+    const end = store.indexOf('const runLoad', start);
+    const loader = store.slice(start, end);
+    expect(loader).toContain("state.loadSeq[key] = (state.loadSeq[key] || 0) + 1");
+    for (const key of ['posts', 'highlights', 'saved', 'shop', 'stories', 'level', 'balance', 'position', 'followStatus', 'mutualFriends']) {
+      expect(loader).toContain("'" + key + "'");
+    }
+  });
+
+  test('profile store viewer identity comes from AuthContext parameters, not persisted UID mirrors', () => {
+    expect(store).toContain('viewerUid: null');
+    expect(store).toContain('state.viewerUid = currentUserId || null');
+    expect(store).not.toContain('getStoredUid');
+    expect(store).not.toContain('getStoredUser');
+    expect(store).toContain('state.followStatusTargetId = resolvedUid || userId');
+    expect(store).toContain('appStoreUser?.uid === currentUserId');
+  });
+
+  test('profile preview never renders a profile cached for a different authenticated UID', () => {
+    expect(preview).toContain('const currentUserId = authUser?.uid || null');
+    expect(preview).toContain('authInitialized');
+    expect(preview).toContain('if (!authInitialized || propLoading || (!effectiveProfile && currentUserId))');
+    expect(preview).toContain('explicitProfileId === currentUserId');
+    expect(preview).toContain('storeProfileId === currentUserId');
+    expect(preview).not.toContain('getStoredUid');
+    expect(preview).not.toContain('getStoredUser');
+    expect(preview).not.toContain('storeUser');
+  });
+
+  test('owner-only local posts are excluded from public/follower perspective previews', () => {
+    expect(store).toMatch(/viewerId === userId && \(!options\.viewAs \|\| options\.viewAs === 'owner'\)/);
+    expect(ownerProfile).toContain('profileStore.loadPosts(currentUserId, {');
+    expect(ownerProfile).toContain('viewAs: mode === \'owner\' ? null : mode');
+  });
+
+  test('profile story hydration requires an explicit matching author', () => {
+    const start = store.indexOf('const userStories = rawList.filter');
+    const end = store.indexOf('if (!get()._isLoadCurrent', start);
+    const filter = store.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(filter).toMatch(/s\.userId === userId/);
+    expect(filter).toMatch(/s\.authorId === userId/);
+    expect(filter).toMatch(/s\.ownerId === userId/);
+    expect(filter).toMatch(/s\.uid === userId/);
+    expect(filter).not.toMatch(/!s\.userId|!s\.authorId|!s\.uid/);
+  });
+
+  test('profile surfaces wait for Firebase auth restoration before treating a viewer as anonymous', () => {
+    for (const source of [publicProfile, connections, about, creatorDashboard]) {
+      expect(source).toContain('authInitialized');
+    }
+    expect(publicProfile).toContain('if (!authInitialized)');
+    expect(connections).toContain('if (!authInitialized)');
+    expect(about).toContain('if (!authInitialized)');
+    expect(creatorDashboard).toContain('if (!authInitialized) return');
+  });
+
+  test('visitor profile is withheld when relationship and block state cannot be verified', () => {
+    expect(publicProfile).toContain('const [relationshipResolved, setRelationshipResolved] = useState(false)');
+    expect(publicProfile).toContain('const [relationshipError, setRelationshipError] = useState(false)');
+    expect(publicProfile).toContain("relSettled[0].status !== 'fulfilled' || !relSettled[0].value");
+    expect(publicProfile).toContain('setRelationshipError(true)');
+    expect(publicProfile).toContain('!relationshipResolved && !relationshipError');
+    expect(publicProfile).toContain('setRelationshipResolved(true)');
+    expect(publicProfile).toContain('Profile Access Could Not Be Verified');
+    expect(publicProfile).toContain('Its contents and actions are withheld until that check succeeds.');
+    expect(publicProfile).not.toContain('userService.areFriends(currentUserId, resolvedUid)');
+  });
+
+  test('profile friend-request state uses participant-scoped point reads, not inbox scans', () => {
+    const start = userService.indexOf('async getFriendRequestStatus(');
+    const end = userService.indexOf('async getFriendRequests(', start);
+    const method = userService.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(method).toContain('getDoc(sentRef)');
+    expect(method).toContain('getDoc(receivedRef)');
+    expect(publicProfile).toContain('userService.getFriendRequestStatus(currentUserId, resolvedUid)');
+    expect(publicProfile).not.toContain("userService.getFriendRequests(currentUserId, 'sent')");
+    expect(publicProfile).not.toContain("userService.getFriendRequests(currentUserId, 'received')");
+    expect(publicProfile).toContain('setRelationshipError(true)');
+  });
+
+  test('About screen does not trust stale identity or unresolved relationship state', () => {
+    expect(about).toContain('const currentUserId = authUser?.uid || null');
+    expect(about).toContain('storeProfileMatchesTarget');
+    expect(about).toContain('relationshipError');
+    expect(about).toContain('Profile Access Could Not Be Verified');
+    expect(about).not.toContain('getStoredUid');
+    expect(about).not.toContain('getStoredUser');
+    expect(about).not.toContain('storeUser');
+  });
+
+  test('analytics results cannot overwrite or render another account timeframe', () => {
+    expect(analyticsStore).toContain('analyticsUserId: null');
+    expect(analyticsStore).toContain('analyticsTimeframe: null');
+    expect(analyticsStore).toContain('const requestId = (get().requestSeq || 0) + 1');
+    expect(analyticsStore).toContain('get().requestSeq !== requestId || get().analyticsUserId !== userId');
+    expect(analyticsStore).toContain('state.requestSeq = nextSeq');
+    expect(ownerProfile).toContain('state.analyticsUserId === currentUserId && state.analyticsTimeframe === state.timeframe ? state.analytics : null');
+    expect(creatorDashboard).toContain('analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe');
+  });
+
+  test('creator dashboard requires the authenticated creator identity', () => {
+    expect(creatorDashboard).toContain('const currentUserId = authUser?.uid || null');
+    expect(creatorDashboard).toContain('resolveCreatorFlag');
+    expect(creatorDashboard).toContain("navigate('/login', { replace: true })");
+    expect(creatorDashboard).toContain("navigate('/profile', { replace: true })");
+    expect(creatorDashboard).not.toContain('getStoredUid');
+    expect(creatorDashboard).toContain('userProfile?.uid === currentUserId');
+  });
+
+  test('unknown wallet balance is not initialized as a measured zero', () => {
+    expect(store).toMatch(/balance: null,/);
+    expect(store).toContain('balance = typeof balanceResult === \'number\' ? balanceResult : null');
+  });
+
+  test('profile refresh clears stale XP instead of carrying it forward', () => {
+    expect(store).toContain("state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : null");
+  });
+
+  test('unknown XP and coin balance remain unavailable until numeric data exists', () => {
+    expect(ownerProfile).toContain('withCoins: false');
+    expect(ownerProfile).toMatch(/value !== null && value !== undefined && value !== '' && Number\.isFinite\(Number\(value\)\)/);
+    expect(ownerProfile).toContain('coins: resolvedCoins');
+    expect(ownerProfile).toContain('resolvedExperience !== undefined');
+  });
+});

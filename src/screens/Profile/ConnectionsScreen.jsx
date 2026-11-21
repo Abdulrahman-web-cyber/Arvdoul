@@ -4,7 +4,7 @@
 // Unifies Followers, Following, Mutual Friends, and Owner Discover tabs with real backend telemetry,
 // cursor pagination, and privacy capability governance.
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -25,10 +25,8 @@ import {
 } from "lucide-react";
 import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
-import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { pickHandle, deriveHandle, resolveActorName } from '../../services/profileReadModel.js';
-import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import { toast } from 'sonner';
@@ -46,13 +44,21 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
-  const { user: authUser, userProfile } = useAuth();
-  const storeUser = useAppStore((state) => state.currentUser);
-  const currentUser = authUser || storeUser || userProfile;
-  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
+  const { user: authUser, userProfile, authInitialized } = useAuth();
+  // AuthContext is the sole identity authority; persisted store data cannot
+  // turn a signed-out viewer into an authenticated graph actor.
+  const currentUser = authUser || null;
+  const currentUserId = authUser?.uid || null;
 
   const targetUserId = userId || currentUserId;
   const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
+  const targetKeyRef = useRef(targetUserId);
+  useEffect(() => {
+    targetKeyRef.current = targetUserId;
+    return () => {
+      if (targetKeyRef.current === targetUserId) targetKeyRef.current = null;
+    };
+  }, [targetUserId]);
 
   const [targetProfile, setTargetProfile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,11 +83,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   // list must not reach another through a shared screen-level gate.
   const [capabilities, setCapabilities] = useState(null);
 
-  const rawLvl = targetProfile?.level ?? (isOwner ? (userProfile?.level ?? currentUser?.level) : null);
+  const ownerProfile = isOwner && userProfile?.uid === currentUserId ? userProfile : null;
+  const rawLvl = targetProfile?.level ?? (isOwner ? (ownerProfile?.level ?? currentUser?.level) : null);
   const effectiveLevel = rawLvl != null && Number.isFinite(Number(rawLvl)) ? Number(rawLvl) : null;
   const isCreatorOrAdvanced = Boolean(
     targetProfile?.isCreator ||
-    (isOwner && userProfile?.isCreator) ||
+    (isOwner && ownerProfile?.isCreator) ||
     (effectiveLevel != null && effectiveLevel >= LEVEL_GATES.publicFollowers)
   );
 
@@ -111,11 +118,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     )];
     let followStates = new Map();
     if (currentUserId && allIds.length) {
-      try {
-        followStates = await userService.getFollowStates(currentUserId, allIds);
-      } catch (e) {
-        console.warn('Follow-state hydration failed:', e?.message);
-      }
+      // A failed graph read is not "not following". Reject the page so it
+      // cannot render actionable Follow buttons with fabricated false state.
+      followStates = await userService.getFollowStates(currentUserId, allIds);
     }
     return (list) => list.map((u) => {
       const id = u?.id || u?.uid;
@@ -132,22 +137,46 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
+      if (!authInitialized) {
+        setLoading(true);
+        return;
+      }
       if (!targetUserId) {
         setLoading(false);
         return;
       }
       setLoading(true);
       setPermissionDenied(false);
+      // Route changes must not display the previous target's social graph
+      // while the next profile and its permissions are being resolved.
+      setTargetProfile(null);
+      setCapabilities(null);
+      setFollowers([]);
+      setFollowing([]);
+      setFriends([]);
+      setSuggestions([]);
+      setCursors({ followers: null, following: null, friends: null });
+      setHasMore({ followers: false, following: false, friends: false });
 
       try {
         const userService = getUserService();
 
         const [profile, rel] = await Promise.all([
-          userService.getUserProfile(targetUserId, currentUserId).catch(() => null),
+          userService.getUserProfile(targetUserId, currentUserId),
           currentUserId && currentUserId !== targetUserId
-            ? userService.getRelationshipState(currentUserId, targetUserId).catch(() => null)
+            ? userService.getRelationshipState(currentUserId, targetUserId)
             : Promise.resolve({ isOwner: Boolean(currentUserId && targetUserId === currentUserId) }),
         ]);
+
+        if (!isMounted) return;
+        if (!profile) {
+          setPermissionDenied(true);
+          return;
+        }
+        if (currentUserId && currentUserId !== targetUserId && !rel) {
+          if (isMounted) setPermissionDenied(true);
+          return;
+        }
 
         if (isMounted) {
           setTargetProfile(profile);
@@ -191,6 +220,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           discoverPromise,
           sentRequestsPromise,
         ]);
+        if (!isMounted) return;
+        if ([followersRes, followingRes, friendsRes].some((result) => result.status === 'rejected')) {
+          setPermissionDenied(true);
+          return;
+        }
 
         if (isMounted) {
           const followersVal = followersRes.status === 'fulfilled' ? followersRes.value : null;
@@ -230,8 +264,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               followStates = await userService.getFollowStates(currentUserId, allIds);
             } catch (e) {
               console.warn('Follow-state hydration failed:', e?.message);
+              setPermissionDenied(true);
+              return;
             }
           }
+          if (!isMounted) return;
           const withState = (list) => list.map((u) => {
             const id = u?.id || u?.uid;
             const s = followStates instanceof Map ? followStates.get(id) : followStates?.[id];
@@ -253,6 +290,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         }
       } catch (err) {
         console.error('Failed to load connection graph:', err);
+        // Profile or safety-relationship failure must never be interpreted as
+        // a public/empty graph and then used to enable social actions.
+        if (isMounted) setPermissionDenied(true);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -262,7 +302,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     return () => {
       isMounted = false;
     };
-  }, [targetUserId, currentUserId, isOwner, currentUser, refreshNonce]);
+  }, [targetUserId, currentUserId, isOwner, currentUser, refreshNonce, authInitialized]);
 
   // Cursor-based Load More for active list tab
   const handleLoadMore = useCallback(async () => {
@@ -270,6 +310,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     const cursor = cursors[activeTab];
     if (!cursor || !hasMore[activeTab] || !targetUserId) return;
 
+    const requestedTargetId = targetUserId;
     setLoadingMoreTab(activeTab);
     try {
       const userService = getUserService();
@@ -288,6 +329,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
       }
 
       const withState = await hydrateFollowStates(userService, [rawNext]);
+      if (targetKeyRef.current !== requestedTargetId) return;
       const hydrated = withState(rawNext);
 
       const mergeUnique = (prev) => {

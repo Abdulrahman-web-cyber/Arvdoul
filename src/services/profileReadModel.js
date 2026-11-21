@@ -222,11 +222,24 @@ export function deriveProfileIdentity(profile = {}, opts = {}) {
 export const IDENTITY_INFO_FIELDS = Object.freeze([
   'bio',
   'location',
+  'city',
+  'country',
+  'address',
   'website',
+  'websiteUrl',
   'pronouns',
   'profession',
   'education',
+  // Names used by the two-name identity editor remain available through
+  // displayName, but raw first/last and every birth-date alias are private
+  // descriptive identity fields when profileInfo is restricted.
+  'firstName',
+  'lastName',
   'birthday',
+  'dob',
+  'birthDate',
+  'dateOfBirth',
+  'birthdate',
   'gender',
 ]);
 
@@ -358,6 +371,10 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   const mayViewStanding = isOwner || Boolean(caps.canViewActivity);
   const mayViewAchievements = isOwner || Boolean(caps.canViewAchievements);
   const mayViewTitles = isOwner || Boolean(caps.canViewTitles);
+  const mayViewFollowers = isOwner || Boolean(caps.canViewFollowers);
+  const mayViewFollowing = isOwner || Boolean(caps.canViewFollowing);
+  const mayViewFriends = isOwner || Boolean(caps.canViewFriends);
+  const mayViewLinks = isOwner || Boolean(caps.canViewLinks);
   const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
@@ -367,8 +384,11 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     isBlockedByTarget: Boolean(caps.isBlockedBy),
     isBlockedByViewer: Boolean(caps.isBlocking),
     isRestricted: blocked || Boolean(caps.isRestricted),
-    followerCount: blocked ? 0 : profile.followerCount,
-    followingCount: blocked ? 0 : profile.followingCount,
+    // Privacy scopes must mask the data itself, not only hide the metric
+    // component. Other profile surfaces may read these projected fields.
+    followerCount: blocked ? 0 : (mayViewFollowers ? profile.followerCount : null),
+    followingCount: blocked ? 0 : (mayViewFollowing ? profile.followingCount : null),
+    friendCount: blocked ? 0 : (mayViewFriends ? profile.friendCount : null),
     postCount: blocked ? 0 : profile.postCount,
     canViewIdentity: Boolean(caps.canViewIdentity),
     canViewCreatorInfo: Boolean(caps.canViewCreatorInfo),
@@ -378,11 +398,35 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     canViewFollowersList: Boolean(caps.canViewFollowers),
     canViewFollowingList: Boolean(caps.canViewFollowing),
     canViewFriendsList: Boolean(caps.canViewFriends),
-    links: caps.canViewLinks ? (profile.links || []) : [],
+    links: !blocked && mayViewIdentity && mayViewLinks ? (profile.links || []) : [],
+    website: !blocked && mayViewIdentity && mayViewLinks ? profile.website : '',
+    websiteUrl: !blocked && mayViewIdentity && mayViewLinks ? profile.websiteUrl : '',
     presence: presenceVisible ? profile.presence : OFFLINE_PRESENCE,
     isOnline: presenceVisible ? profile.isOnline : false,
     lastActive: presenceVisible ? profile.lastActive : null,
+    lastLogin: presenceVisible ? profile.lastLogin : null,
+    lastSeenAt: presenceVisible ? profile.lastSeenAt : null,
+    lastActiveAt: presenceVisible ? profile.lastActiveAt : null,
+    lastOnlineAt: presenceVisible ? profile.lastOnlineAt : null,
   };
+  // Legacy aliases are read by older profile widgets and analytics cards.
+  // Mask them alongside the canonical counters so no consumer can bypass the
+  // resolved social-list scopes by reading an alternate field name.
+  if (!mayViewFollowers || blocked) {
+    for (const field of ['followersCount', 'followers']) {
+      if (field in projected) projected[field] = Array.isArray(projected[field]) ? [] : (blocked ? 0 : null);
+    }
+  }
+  if (!mayViewFollowing || blocked) {
+    for (const field of ['followingCount', 'following']) {
+      if (field in projected) projected[field] = Array.isArray(projected[field]) ? [] : (blocked ? 0 : null);
+    }
+  }
+  if (!mayViewFriends || blocked) {
+    for (const field of ['friendsCount', 'friends']) {
+      if (field in projected) projected[field] = Array.isArray(projected[field]) ? [] : (blocked ? 0 : null);
+    }
+  }
   // The `profileInfo` scope gates the descriptive identity card. Masking it here
   // (rather than in each screen) is what makes the control real: the About screen
   // renders bio/location/website/links straight from the projected profile.

@@ -1508,15 +1508,15 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
     expect(src).toContain('parsed.uid !== sessionUid');
   });
 
-  test('profile screens prefer the live auth user over the store mirror', () => {
-    for (const rel of [
-      'src/screens/Profile/HighlightsScreen.jsx',
-      'src/screens/Profile/CreatorDashboardScreen.jsx',
-    ]) {
-      const src = fs.readFileSync(path.join(root, rel), 'utf8');
-      expect(src).toContain('const currentUser = authUser || storeUser;');
-      expect(src).not.toContain('const currentUser = storeUser || authUser;');
-    }
+  test('profile identity is bound to the live auth session', () => {
+    const highlights = fs.readFileSync(path.join(root, 'src/screens/Profile/HighlightsScreen.jsx'), 'utf8');
+    expect(highlights).toContain('const currentUser = authUser || storeUser;');
+    expect(highlights).not.toContain('const currentUser = storeUser || authUser;');
+
+    const creatorDashboard = fs.readFileSync(path.join(root, 'src/screens/Profile/CreatorDashboardScreen.jsx'), 'utf8');
+    expect(creatorDashboard).toContain('const currentUserId = authUser?.uid || null');
+    expect(creatorDashboard).not.toContain('getStoredUid');
+    expect(creatorDashboard).toContain('userProfile?.uid === currentUserId');
   });
 
   test('the delegating connections screens do not re-derive identity', () => {
@@ -1533,7 +1533,10 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
       expect(src).not.toContain('storeUser');
     }
     const connections = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
-    expect(connections).toContain('const currentUser = authUser || storeUser');
+    expect(connections).toContain('const currentUser = authUser || null');
+    expect(connections).toContain('const currentUserId = authUser?.uid || null');
+    expect(connections).not.toContain('getStoredUid');
+    expect(connections).not.toContain('storeUser');
   });
 });
 
@@ -3705,7 +3708,7 @@ describe('Creator dashboard never fabricates growth rate or active days (N172)',
     const s = read('src/screens/Profile/CreatorDashboardScreen.jsx');
     expect(s).not.toContain('{analytics.activeDays} days');
     expect(s).toContain('typeof activeDaysCount === \'number\' ? `${activeDaysCount} days` : \'—\'');
-    expect(s).toContain('userProfile?.activeDaysCount ?? storeUser?.activeDaysCount ?? null');
+    expect(s).toContain('profileSupplement?.activeDaysCount ?? null');
   });
 
   test('the identity mirror carries the canonical activeDaysCount', () => {
