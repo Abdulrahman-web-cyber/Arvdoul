@@ -30,6 +30,16 @@ describe('Google OAuth browser flow', () => {
     expect(initialize.indexOf('await firebaseApp.authPersistenceReady')).toBeLessThan(initialize.indexOf('await getRedirectResult(this.auth)'));
   });
 
+  test('redirect attempts are tracked across navigation and missing results are surfaced', () => {
+    expect(auth).toContain('markGoogleRedirectPending()');
+    expect(auth).toContain('auth/redirect-result-missing');
+    expect(auth).toContain('clearGoogleRedirectPending()');
+    expect(authContext).toContain('arvdoul_google_redirect_pending');
+    expect(authContext).toContain('Google sign-in is taking too long to return');
+    expect(login).toContain('authError');
+    expect(login).toContain("authError.startsWith('Google sign-in')");
+  });
+
   test('redirect result is consumed before auth initialization resolves', () => {
     const initialize = auth.slice(auth.indexOf('async initialize()'), auth.indexOf('async _sendWelcomeNotification'));
     expect(initialize).toContain('if (this.initializationPromise) return this.initializationPromise');
