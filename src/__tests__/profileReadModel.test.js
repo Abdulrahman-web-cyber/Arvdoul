@@ -669,6 +669,36 @@ describe('friends scope is resolved once and consumed everywhere (N046 follow-up
   });
 });
 
+describe('profile projection masks private social metrics', () => {
+  it('does not expose follower/following/friend counts when their scopes are denied', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      followerCount: 120,
+      followingCount: 80,
+      friendCount: 45,
+    }, {
+      canViewFollowers: false,
+      canViewFollowing: true,
+      canViewFriends: false,
+    });
+    expect(projected.followerCount).toBeNull();
+    expect(projected.followingCount).toBe(80);
+    expect(projected.friendCount).toBeNull();
+  });
+
+  it('preserves social counts for the owner', () => {
+    const projected = projectProfileForViewer({
+      id: 'owner',
+      followerCount: 120,
+      followingCount: 80,
+      friendCount: 45,
+    }, {}, { isOwner: true });
+    expect(projected.followerCount).toBe(120);
+    expect(projected.followingCount).toBe(80);
+    expect(projected.friendCount).toBe(45);
+  });
+});
+
 describe('ConnectionsScreen gates each list on its own scope (N046)', () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
