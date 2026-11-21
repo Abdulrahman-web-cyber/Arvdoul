@@ -994,7 +994,7 @@ export const useProfileStore = create(
       // real previous state instead of a hard-coded guess. Immer copy-on-writes
       // the draft, so the reference is not mutated by the optimistic `set`.
       const previousFollowStatus = get().followStatus;
-      const previousFollowerCount = get().profile?.followerCount || 0;
+      const previousFollowerCount = get().profile?.followerCount ?? null;
 
       // Optimistic update
       set((state) => {
@@ -1002,8 +1002,8 @@ export const useProfileStore = create(
         if (state.followStatus) {
           state.followStatus.isFollowing = true;
         }
-        if (state.profile) {
-          state.profile.followerCount = (state.profile.followerCount || 0) + 1;
+        if (state.profile && typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+          state.profile.followerCount += 1;
         }
       });
       
@@ -1058,7 +1058,7 @@ export const useProfileStore = create(
       // Store previous state for rollback. Immer copy-on-writes the draft, so
       // the reference is not mutated by the optimistic `set`.
       const previousFollowStatus = get().followStatus;
-      const previousFollowerCount = get().profile?.followerCount || 0;
+      const previousFollowerCount = get().profile?.followerCount ?? null;
       
       // Optimistic update
       set((state) => {
@@ -1066,8 +1066,8 @@ export const useProfileStore = create(
         if (state.followStatus) {
           state.followStatus.isFollowing = false;
         }
-        if (state.profile) {
-          state.profile.followerCount = Math.max(0, (state.profile.followerCount || 1) - 1);
+        if (state.profile && typeof state.profile.followerCount === 'number' && Number.isFinite(state.profile.followerCount)) {
+          state.profile.followerCount = Math.max(0, state.profile.followerCount - 1);
         }
       });
       
@@ -1112,10 +1112,15 @@ export const useProfileStore = create(
           ...state.followStatus,
           isFollowing,
         };
-        if (state.profile && wasFollowing !== Boolean(isFollowing)) {
+        if (
+          state.profile &&
+          wasFollowing !== Boolean(isFollowing) &&
+          typeof state.profile.followerCount === 'number' &&
+          Number.isFinite(state.profile.followerCount)
+        ) {
           state.profile.followerCount = isFollowing
-            ? (state.profile.followerCount || 0) + 1
-            : Math.max(0, (state.profile.followerCount || 0) - 1);
+            ? state.profile.followerCount + 1
+            : Math.max(0, state.profile.followerCount - 1);
         }
       });
     },
