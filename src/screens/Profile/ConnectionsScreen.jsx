@@ -44,7 +44,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const { hasTopAppBar } = useLayoutChrome();
   const isDark = theme === 'dark';
 
-  const { user: authUser, userProfile } = useAuth();
+  const { user: authUser, userProfile, authInitialized } = useAuth();
   // AuthContext is the sole identity authority; persisted store data cannot
   // turn a signed-out viewer into an authenticated graph actor.
   const currentUser = authUser || null;
