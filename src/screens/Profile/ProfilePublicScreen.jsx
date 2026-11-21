@@ -61,7 +61,7 @@ const ProfileVerificationModal = lazyDefault(() => import('../../components/prof
 export default function ProfilePublicScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, authInitialized } = useAuth();
   const currentUserId = currentUser?.uid || null;
   const routeUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
   const { theme } = useTheme();
@@ -119,6 +119,10 @@ export default function ProfilePublicScreen() {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   const loadPublicProfile = useCallback(async (isMountedRef = { current: true }) => {
+    if (!authInitialized) {
+      setLocalLoading(true);
+      return;
+    }
     const cleanUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
     if (!cleanUserId) {
       if (isMountedRef.current) setLocalLoading(false);
@@ -222,7 +226,7 @@ export default function ProfilePublicScreen() {
       clearTimeout(safetyTimer);
       if (isMountedRef.current) setLocalLoading(false);
     }
-  }, [userId, currentUserId]);
+  }, [userId, currentUserId, authInitialized]);
 
   // Load profile and related data using useProfileStore
   useEffect(() => {
