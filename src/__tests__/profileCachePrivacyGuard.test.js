@@ -57,6 +57,15 @@ describe('profile cache and unknown-value isolation', () => {
     expect(connections).toContain('if (!isMounted) return');
   });
 
+  test('profile store viewer identity comes from AuthContext parameters, not persisted UID mirrors', () => {
+    expect(store).toContain('viewerUid: null');
+    expect(store).toContain('state.viewerUid = currentUserId || null');
+    expect(store).not.toContain('getStoredUid');
+    expect(store).not.toContain('getStoredUser');
+    expect(store).toContain('state.followStatusTargetId !== userId');
+    expect(store).toContain('appStoreUser?.uid === currentUserId');
+  });
+
   test('profile preview never renders a profile cached for a different authenticated UID', () => {
     expect(preview).toContain('const currentUserId = authUser?.uid || null');
     expect(preview).toContain('explicitProfileId === currentUserId');
