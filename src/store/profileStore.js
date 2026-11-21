@@ -1120,15 +1120,12 @@ export const useProfileStore = create(
      */
     updateFollowStatus: (followerId, followingId, isFollowing) => {
       set((state) => {
-        // Idempotent: only adjust the counter on an actual transition,
-        // so repeated calls with the same state cannot double-count (N012).
-        const wasFollowing = state.followStatus?.isFollowing === true;
-        state.followStatus = {
-          ...state.followStatus,
-          isFollowing,
-        };
+        // Ignore a late edge event for a profile that is no longer active.
+        if ((state.profile?.uid || state.profile?.id) !== followingId) return;
+        const wasFollowing = state.followStatusTargetId === followingId && state.followStatus?.isFollowing === true;
+        state.followStatusTargetId = followingId;
+        state.followStatus = { ...state.followStatus, isFollowing };
         if (
-          state.profile &&
           wasFollowing !== Boolean(isFollowing) &&
           typeof state.profile.followerCount === 'number' &&
           Number.isFinite(state.profile.followerCount)
@@ -1147,11 +1144,13 @@ export const useProfileStore = create(
     cancelFollowRequest: async (fromUserId, toUserId) => {
       if (!fromUserId || !toUserId) return;
       if (get().followLoading) return;
-      if (get().followStatus?.requestStatus !== 'pending') return;
+      if (get().followStatusTargetId !== toUserId || get().followStatus?.requestStatus !== 'pending') return;
       const previousFollowStatus = get().followStatus;
       set((state) => {
         state.followLoading = true;
-        state.followStatus = { isFollowing: false, requestStatus: null };
+        if (state.followStatusTargetId === toUserId) {
+          state.followStatus = { isFollowing: false, requestStatus: null };
+        }
       });
       try {
         const userService = (await import('../services/userService.js')).getUserService();
@@ -1163,7 +1162,9 @@ export const useProfileStore = create(
       } catch (error) {
         set((state) => {
           state.followLoading = false;
-          state.followStatus = previousFollowStatus;
+          if (state.followStatusTargetId === toUserId) {
+            state.followStatus = previousFollowStatus;
+          }
         });
         toast.error('Could not withdraw request');
       }
