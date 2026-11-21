@@ -176,9 +176,9 @@ export default function ProfileMyScreen() {
   const experience = useProfileStore((state) => state.experience);
   const balance = useProfileStore((state) => state.balance);
 
-  const analytics = useAnalyticsStore((state) => state.analyticsUserId === currentUserId ? state.analytics : null);
+  const analytics = useAnalyticsStore((state) => state.analyticsUserId === currentUserId && state.analyticsTimeframe === state.timeframe ? state.analytics : null);
   const timeframe = useAnalyticsStore((state) => state.timeframe);
-  const ranking = useAnalyticsStore((state) => state.analyticsUserId === currentUserId ? state.ranking : null);
+  const ranking = useAnalyticsStore((state) => state.analyticsUserId === currentUserId && state.analyticsTimeframe === state.timeframe ? state.ranking : null);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
   // A profile left in the store by a previous account must never be shown.
