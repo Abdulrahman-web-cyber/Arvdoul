@@ -858,8 +858,23 @@ service cloud.firestore {
         request.resource.data.toUserId != uid() &&
         requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
         request.resource.data.status == 'pending';
-      allow update, delete: if isSignedIn() &&
-        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      allow update: if isSignedIn() &&
+        request.resource.data.fromUserId == resource.data.fromUserId &&
+        request.resource.data.toUserId == resource.data.toUserId &&
+        (
+          (resource.data.fromUserId == uid() && resource.data.status == 'pending' &&
+            request.resource.data.status == 'cancelled' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+          (resource.data.fromUserId == uid() && resource.data.status in ['cancelled', 'declined'] &&
+            request.resource.data.status == 'pending' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'updatedAt', 'createdAt', 'fromUserDisplayName', 'fromUserPhotoURL'
+            ])) ||
+          (resource.data.toUserId == uid() && resource.data.status == 'pending' &&
+            request.resource.data.status in ['accepted', 'declined', 'blocked'] &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if false;
     }
     match /blocks/{blockId} {
       // Only the two parties may read a block edge. A world-readable block
@@ -893,17 +908,9 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.restricterId == uid();
     }
     match /friend_requests/{requestId} {
-      // The sender/recipient perform a transactional point read BEFORE the
-      // deterministic document exists. resource.data is null for that read,
-      // so authorize only ids whose sender or recipient segment is the caller;
-      // existing legacy rows still receive the payload-party check.
-      allow read: if isSignedIn() && (
-        requestId.matches('^' + uid() + '_.*$') ||
-        requestId.matches('^.*_' + uid() + '$') ||
-        resource.data.fromUserId == uid() ||
-        resource.data.toUserId == uid()
-      );
-      // friendRequestFrom() trusts the deterministic id
+      allow read: if isSignedIn() &&
+        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      // `friendRequestFrom()` trusts the deterministic id
       // `${fromUserId}_${toUserId}`; pin the create to it so a forged id cannot
       // masquerade as (or shadow) a request, and a user cannot request
       // themselves.
@@ -912,22 +919,8 @@ service cloud.firestore {
         request.resource.data.toUserId != uid() &&
         requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
         request.resource.data.status == 'pending';
-      // Only the sender may withdraw or re-send a declined/cancelled request;
-      // only the recipient may accept/decline. Party ids remain immutable.
-      allow update: if isSignedIn() &&
-        request.resource.data.fromUserId == resource.data.fromUserId &&
-        request.resource.data.toUserId == resource.data.toUserId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'updatedAt', 'createdAt', 'fromUserDisplayName', 'fromUserPhotoURL'
-        ]) &&
-        (
-          (resource.data.fromUserId == uid() &&
-            ((resource.data.status == 'pending' && request.resource.data.status == 'cancelled') ||
-             (resource.data.status in ['cancelled', 'declined'] && request.resource.data.status == 'pending'))) ||
-          (resource.data.toUserId == uid() && resource.data.status == 'pending' &&
-            request.resource.data.status in ['accepted', 'declined', 'blocked'])
-        );
-      allow delete: if false;
+      allow update, delete: if isSignedIn() &&
+        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
     }
 
     // ==================== STORIES ====================
