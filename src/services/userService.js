@@ -1170,7 +1170,10 @@ class ProfessionalUserService {
       const targetSnap = await getDoc(doc(this.firestore, 'users', followingId));
       targetIsPrivate = targetSnap.exists() && targetSnap.data()?.isPrivate === true;
     } catch (privacyErr) {
-      logger.warn('Follow target privacy lookup failed; treating as public', { error: privacyErr?.message });
+      // Unknown privacy is not public. Abort instead of creating an edge that
+      // could bypass a private account's approval boundary.
+      logger.warn('Follow target privacy lookup failed; refusing the follow', { followingId, error: privacyErr?.message });
+      throw privacyErr;
     }
 
     if (targetIsPrivate) {
@@ -1979,8 +1982,10 @@ class ProfessionalUserService {
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (err) {
-      this.logger?.warn?.('[UserService] Block check failed (defaulting to not blocked)', { error: err?.message });
-      return { success: false, blocked: false, error: err?.message };
+      // This result gates follow/friend-request writes. Returning blocked:false
+      // on a failed graph read would fail open.
+      logger.warn('[UserService] Block check failed; refusing the operation', { blockerId, blockedId, error: err?.message });
+      throw err;
     }
   }
 
