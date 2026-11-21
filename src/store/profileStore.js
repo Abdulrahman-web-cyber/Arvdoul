@@ -809,6 +809,7 @@ export const useProfileStore = create(
           (s) => s && (
             s.userId === userId ||
             s.authorId === userId ||
+            s.ownerId === userId ||
             s.uid === userId
           )
         );
