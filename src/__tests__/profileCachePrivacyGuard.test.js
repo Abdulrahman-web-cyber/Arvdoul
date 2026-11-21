@@ -10,6 +10,8 @@ const publicProfile = read('src/screens/Profile/ProfilePublicScreen.jsx');
 const userService = read('src/services/userService.js');
 const connections = read('src/screens/Profile/ConnectionsScreen.jsx');
 const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
+const about = read('src/screens/Profile/AboutScreen.jsx');
+const creatorDashboard = read('src/screens/Profile/CreatorDashboardScreen.jsx');
 
 describe('profile cache and unknown-value isolation', () => {
   test('device-local optimistic posts never widen a visitor profile query', () => {
@@ -95,6 +97,25 @@ describe('profile cache and unknown-value isolation', () => {
     expect(publicProfile).not.toContain("userService.getFriendRequests(currentUserId, 'sent')");
     expect(publicProfile).not.toContain("userService.getFriendRequests(currentUserId, 'received')");
     expect(publicProfile).toContain('setRelationshipError(true)');
+  });
+
+  test('About screen does not trust stale identity or unresolved relationship state', () => {
+    expect(about).toContain('const currentUserId = authUser?.uid || null');
+    expect(about).toContain('storeProfileMatchesTarget');
+    expect(about).toContain('relationshipError');
+    expect(about).toContain('Profile Access Could Not Be Verified');
+    expect(about).not.toContain('getStoredUid');
+    expect(about).not.toContain('getStoredUser');
+    expect(about).not.toContain('storeUser');
+  });
+
+  test('creator dashboard requires the authenticated creator identity', () => {
+    expect(creatorDashboard).toContain('const currentUserId = authUser?.uid || null');
+    expect(creatorDashboard).toContain('resolveCreatorFlag');
+    expect(creatorDashboard).toContain("navigate('/login', { replace: true })");
+    expect(creatorDashboard).toContain("navigate('/profile', { replace: true })");
+    expect(creatorDashboard).not.toContain('getStoredUid');
+    expect(creatorDashboard).toContain('userProfile?.uid === currentUserId');
   });
 
   test('unknown wallet balance is not initialized as a measured zero', () => {
