@@ -457,7 +457,6 @@ class EnterpriseFirestoreService {
       // Always bound: a caller that omits `limit` must not pull the author's
       // entire post history in one read.
       const effectiveLimit = Math.max(1, Number(options.limit) || 20);
-      conditions.push(limit(effectiveLimit));
       
       let lastDocSnap = null;
       // Callers pass the cursor as `cursor` (the store's public name); accept
@@ -471,7 +470,7 @@ class EnterpriseFirestoreService {
         }
       }
       
-      const q = query(postsRef, ...conditions);
+      const q = query(postsRef, ...conditions, limit(effectiveLimit));
       const snap = await getDocs(q);
       const posts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       // Batched shard overlay (one `getAll` per field-chunk) — `comments` is
@@ -561,9 +560,7 @@ class EnterpriseFirestoreService {
         conditions.push(where('visibility', '==', 'public'));
       }
       const effectiveLimit = Math.min(250, Math.max(1, Number(options.limit) || 250));
-      conditions.push(limit(effectiveLimit));
-
-      const snap = await getDocs(query(postsRef, ...conditions));
+      const snap = await getDocs(query(postsRef, ...conditions, limit(effectiveLimit)));
       const posts = snap.docs
         .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
         .filter((p) => p && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled');
