@@ -669,6 +669,29 @@ describe('friends scope is resolved once and consumed everywhere (N046 follow-up
   });
 });
 
+describe('profile-info privacy masks every raw personal identity alias', () => {
+  it('masks names, location, and birth-date aliases while preserving public display identity', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      displayName: 'Ada Lovelace',
+      username: 'ada',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      dob: { day: 10, month: 12, year: 1815 },
+      birthday: '1815-12-10',
+      dateOfBirth: '1815-12-10',
+      city: 'London',
+      country: 'UK',
+      websiteUrl: 'https://example.test',
+    }, { canViewIdentity: false });
+    expect(projected.displayName).toBe('Ada Lovelace');
+    expect(projected.username).toBe('ada');
+    for (const field of ['firstName', 'lastName', 'dob', 'birthday', 'dateOfBirth', 'city', 'country', 'websiteUrl']) {
+      expect(projected[field]).toBe('');
+    }
+  });
+});
+
 describe('profile projection masks private social metrics', () => {
   it('does not expose follower/following/friend counts when their scopes are denied', () => {
     const projected = projectProfileForViewer({
