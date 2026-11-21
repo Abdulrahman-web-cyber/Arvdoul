@@ -669,6 +669,30 @@ describe('friends scope is resolved once and consumed everywhere (N046 follow-up
   });
 });
 
+describe('website fields obey both identity and links scopes', () => {
+  it('hides website aliases when the links scope is denied', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      website: 'https://example.test',
+      websiteUrl: 'https://example.test',
+      links: [{ label: 'Site', url: 'https://example.test' }],
+    }, { canViewIdentity: true, canViewLinks: false });
+    expect(projected.website).toBe('');
+    expect(projected.websiteUrl).toBe('');
+    expect(projected.links).toEqual([]);
+  });
+
+  it('does not re-expose website aliases when profile-info is denied', () => {
+    const projected = projectProfileForViewer({
+      id: 'target',
+      website: 'https://example.test',
+      websiteUrl: 'https://example.test',
+    }, { canViewIdentity: false, canViewLinks: true });
+    expect(projected.website).toBe('');
+    expect(projected.websiteUrl).toBe('');
+  });
+});
+
 describe('presence privacy masks all activity timestamps', () => {
   it('does not expose last-login/last-seen timestamps when presence is hidden', () => {
     const projected = projectProfileForViewer({
