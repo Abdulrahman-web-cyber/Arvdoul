@@ -19,6 +19,7 @@ const initialState = {
   // Analytics data
   analytics: null,
   analyticsUserId: null,
+  analyticsTimeframe: null,
   requestSeq: 0,
   loading: false,
   error: null,
@@ -54,15 +55,16 @@ export const useAnalyticsStore = create(
       
       const selectedTimeframe = timeframe || get().timeframe;
       const requestId = (get().requestSeq || 0) + 1;
-      const accountChanged = get().analyticsUserId !== userId;
+      const dataScopeChanged = get().analyticsUserId !== userId || get().analyticsTimeframe !== selectedTimeframe;
 
       set((state) => {
         state.requestSeq = requestId;
         state.analyticsUserId = userId;
+        state.analyticsTimeframe = selectedTimeframe;
         state.loading = true;
         state.error = null;
         state.timeframe = selectedTimeframe;
-        if (accountChanged) {
+        if (dataScopeChanged) {
           state.analytics = null;
           state.dailyStats = [];
           state.topPosts = [];
