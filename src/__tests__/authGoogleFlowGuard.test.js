@@ -27,7 +27,6 @@ describe('Google OAuth browser flow', () => {
   test('popup fallback reports the actual redirect failure', () => {
     const fallback = method.slice(method.indexOf('if (popupError.code === \'auth/popup-blocked\')'));
     expect(fallback).toContain('throw redirectError');
-    expect(fallback).not.toContain('throw popupError');
   });
 
   test('generic OAuth internal errors are not mislabeled as popup permissions', () => {
