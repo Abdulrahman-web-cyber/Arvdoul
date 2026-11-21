@@ -792,7 +792,10 @@ export function AuthProvider({ children }) {
       // Google redirect responses need a longer window for Firebase to consume
       // the provider callback. Do not release profile surfaces as anonymous
       // while that hand-off is still pending.
-      if (!pendingGoogleRedirect) setAuthInitialized(true);
+      if (pendingGoogleRedirect) {
+        setAuthError('Google sign-in is taking too long to return. Check your connection, then retry sign-in in Chrome.');
+      }
+      setAuthInitialized(true);
     }, pendingGoogleRedirect ? 20000 : (storedSession ? 8000 : 3500));
     
     const setupAuthListener = async () => {
