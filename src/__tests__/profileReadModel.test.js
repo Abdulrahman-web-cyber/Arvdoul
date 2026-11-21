@@ -676,6 +676,9 @@ describe('profile projection masks private social metrics', () => {
       followerCount: 120,
       followingCount: 80,
       friendCount: 45,
+      followersCount: 120,
+      followingCount: 80,
+      friendsCount: 45,
     }, {
       canViewFollowers: false,
       canViewFollowing: true,
@@ -684,6 +687,8 @@ describe('profile projection masks private social metrics', () => {
     expect(projected.followerCount).toBeNull();
     expect(projected.followingCount).toBe(80);
     expect(projected.friendCount).toBeNull();
+    expect(projected.followersCount).toBeNull();
+    expect(projected.friendsCount).toBeNull();
   });
 
   it('preserves social counts for the owner', () => {
