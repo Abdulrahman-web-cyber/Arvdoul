@@ -895,38 +895,11 @@ service cloud.firestore {
     }
     match /friend_requests/{requestId} {
       // The sender/recipient perform a transactional point read BEFORE the
-      // deterministic document exists. `resource.data` is null for that read,
+      // deterministic document exists. resource.data is null for that read,
       // so authorize only ids whose sender or recipient segment is the caller;
       // existing legacy rows still receive the payload-party check.
       allow read: if isSignedIn() && (
         requestId.matches('^' + uid() + '_.*
-        resource.data.fromUserId == uid() ||
-        resource.data.toUserId == uid()
-      );
-      // `friendRequestFrom()` trusts the deterministic id
-      // `${fromUserId}_${toUserId}`; pin the create to it so a forged id cannot
-      // masquerade as (or shadow) a request, and a user cannot request
-      // themselves.
-      allow create: if isSignedIn() &&
-        request.resource.data.fromUserId == uid() &&
-        request.resource.data.toUserId != uid() &&
-        requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
-        request.resource.data.status == 'pending';
-      // Only the sender may withdraw; only the recipient may accept/decline.
-      // Parties and immutable identity fields cannot be rewritten. No client
-      // flow deletes request history.
-      allow update: if isSignedIn() &&
-        request.resource.data.fromUserId == resource.data.fromUserId &&
-        request.resource.data.toUserId == resource.data.toUserId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
-        resource.data.status == 'pending' &&
-        (
-          (resource.data.fromUserId == uid() && request.resource.data.status == 'cancelled') ||
-          (resource.data.toUserId == uid() &&
-            request.resource.data.status in ['accepted', 'declined', 'blocked'])
-        );
-      allow delete: if false;
-    }
 
     // ==================== STORIES ====================
     // ==================== VIBES (ephemeral content) ====================
@@ -2588,33 +2561,6 @@ service cloud.firestore {
 }
 ) ||
         requestId.matches('^.*_' + uid() + '
-        resource.data.fromUserId == uid() ||
-        resource.data.toUserId == uid()
-      );
-      // `friendRequestFrom()` trusts the deterministic id
-      // `${fromUserId}_${toUserId}`; pin the create to it so a forged id cannot
-      // masquerade as (or shadow) a request, and a user cannot request
-      // themselves.
-      allow create: if isSignedIn() &&
-        request.resource.data.fromUserId == uid() &&
-        request.resource.data.toUserId != uid() &&
-        requestId == request.resource.data.fromUserId + '_' + request.resource.data.toUserId &&
-        request.resource.data.status == 'pending';
-      // Only the sender may withdraw; only the recipient may accept/decline.
-      // Parties and immutable identity fields cannot be rewritten. No client
-      // flow deletes request history.
-      allow update: if isSignedIn() &&
-        request.resource.data.fromUserId == resource.data.fromUserId &&
-        request.resource.data.toUserId == resource.data.toUserId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
-        resource.data.status == 'pending' &&
-        (
-          (resource.data.fromUserId == uid() && request.resource.data.status == 'cancelled') ||
-          (resource.data.toUserId == uid() &&
-            request.resource.data.status in ['accepted', 'declined', 'blocked'])
-        );
-      allow delete: if false;
-    }
 
     // ==================== STORIES ====================
     // ==================== VIBES (ephemeral content) ====================
@@ -4278,7 +4224,7 @@ service cloud.firestore {
         resource.data.fromUserId == uid() ||
         resource.data.toUserId == uid()
       );
-      // `friendRequestFrom()` trusts the deterministic id
+      // friendRequestFrom() trusts the deterministic id
       // `${fromUserId}_${toUserId}`; pin the create to it so a forged id cannot
       // masquerade as (or shadow) a request, and a user cannot request
       // themselves.
