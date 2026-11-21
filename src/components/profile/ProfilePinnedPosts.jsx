@@ -54,10 +54,10 @@ const ProfilePinnedPosts = memo(({
     if (!isOwner) return null;
     return (
       <div className={cn(
-        "w-full rounded-2xl px-4 py-3.5 border flex items-center justify-between gap-3",
+        "w-full rounded-[22px] px-4 py-4 border flex items-center justify-between gap-3 shadow-[0_10px_28px_rgba(0,0,0,0.08)]",
         isDark
-          ? "bg-[#080F2E]/65 border-white/[0.08] text-white"
-          : "bg-white/80 border-slate-200/90 text-slate-900"
+          ? "bg-white/[0.045] border-white/[0.12] text-white"
+          : "bg-white/65 border-white/90 text-slate-900"
       )}>
         <div className="flex items-center gap-2.5 min-w-0">
           <Pin className="w-4 h-4 text-arvdoul-purple rotate-45 shrink-0" />
@@ -70,7 +70,7 @@ const ProfilePinnedPosts = memo(({
   }
 
   return (
-    <section aria-label="Pinned Posts" className="w-full py-1">
+    <section aria-label="Pinned Posts" className={cn("w-full rounded-[24px] border p-4 sm:p-5", isDark ? "bg-white/[0.035] border-white/[0.10]" : "bg-white/45 border-white/85")}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Pin className="w-4 h-4 text-arvdoul-purple rotate-45" />
