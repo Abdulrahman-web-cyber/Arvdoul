@@ -368,7 +368,7 @@ export const useProfileStore = create(
           state.friendCount = friendCount;
           state.level = resolvedProfile.level ?? level ?? null;
           const rawXp = resolvedProfile.experience ?? resolvedProfile.xp ?? null;
-          state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : state.experience;
+          state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : null;
           state.balance = balance;
           state.position = position;
         });
