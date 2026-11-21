@@ -571,7 +571,13 @@ class ProfessionalUserService {
       viewAs: isOwner ? viewAs : null
     });
 
-    return projectProfileForViewer(full, capabilities, { isOwner });
+    const projectedProfile = projectProfileForViewer(full, capabilities, { isOwner });
+    // Cache only uid-addressed reads. The key includes requester + perspective,
+    // so an owner projection can never be reused for a different viewer.
+    if (String(userId) === String(resolvedUserId)) {
+      this.cache.set(cacheKey, { data: projectedProfile, timestamp: Date.now() });
+    }
+    return projectedProfile;
   }
 
   /**
@@ -631,7 +637,9 @@ class ProfessionalUserService {
     if (profileData.username && profileData.username.trim()) {
       username = profileData.username.toLowerCase().trim();
       usernameProvided = true;
-      const check = await this.checkUsernameAvailability(username);
+      // Existing users may retain their own reserved handle. Excluding the
+      // current uid prevents setup from generating a new username on every save.
+      const check = await this.checkUsernameAvailability(username, userId);
       if (!check.available) {
         username = await this.generateUniqueUsername(username);
       }
