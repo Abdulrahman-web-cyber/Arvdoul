@@ -25,10 +25,8 @@ import {
 } from "lucide-react";
 import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
-import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { pickHandle, deriveHandle, resolveActorName } from '../../services/profileReadModel.js';
-import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import { toast } from 'sonner';
@@ -47,9 +45,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const isDark = theme === 'dark';
 
   const { user: authUser, userProfile } = useAuth();
-  const storeUser = useAppStore((state) => state.currentUser);
-  const currentUser = authUser || storeUser || userProfile;
-  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
+  // AuthContext is the sole identity authority; persisted store data cannot
+  // turn a signed-out viewer into an authenticated graph actor.
+  const currentUser = authUser || null;
+  const currentUserId = authUser?.uid || null;
 
   const targetUserId = userId || currentUserId;
   const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
@@ -77,11 +76,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   // list must not reach another through a shared screen-level gate.
   const [capabilities, setCapabilities] = useState(null);
 
-  const rawLvl = targetProfile?.level ?? (isOwner ? (userProfile?.level ?? currentUser?.level) : null);
+  const ownerProfile = isOwner && userProfile?.uid === currentUserId ? userProfile : null;
+  const rawLvl = targetProfile?.level ?? (isOwner ? (ownerProfile?.level ?? currentUser?.level) : null);
   const effectiveLevel = rawLvl != null && Number.isFinite(Number(rawLvl)) ? Number(rawLvl) : null;
   const isCreatorOrAdvanced = Boolean(
     targetProfile?.isCreator ||
-    (isOwner && userProfile?.isCreator) ||
+    (isOwner && ownerProfile?.isCreator) ||
     (effectiveLevel != null && effectiveLevel >= LEVEL_GATES.publicFollowers)
   );
 
