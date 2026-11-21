@@ -13,12 +13,22 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const auth = fs.readFileSync(path.join(root, 'src/services/authService.js'), 'utf8');
 const login = fs.readFileSync(path.join(root, 'src/screens/LoginScreen.jsx'), 'utf8');
 const authContext = fs.readFileSync(path.join(root, 'src/context/AuthContext.jsx'), 'utf8');
+const firebase = fs.readFileSync(path.join(root, 'src/firebase/firebase.js'), 'utf8');
 
 describe('Google OAuth browser flow', () => {
   const methodStart = auth.indexOf('async signInWithGoogle(');
   const methodEnd = auth.indexOf('async createRecaptchaVerifier', methodStart);
   const method = auth.slice(methodStart, methodEnd);
 
+
+  test('Firebase persistence is awaited and has a session fallback', () => {
+    expect(firebase).toContain('export const authPersistenceReady');
+    expect(firebase).toContain('await _fbSetPersistence(auth, _fbBrowserLocalPersistence)');
+    expect(firebase).toContain('await _fbSetPersistence(auth, _fbBrowserSessionPersistence)');
+    const initialize = auth.slice(auth.indexOf('async _initialize()'), auth.indexOf('async _sendWelcomeNotification'));
+    expect(initialize).toContain('await firebaseApp.authPersistenceReady');
+    expect(initialize.indexOf('await firebaseApp.authPersistenceReady')).toBeLessThan(initialize.indexOf('await getRedirectResult(this.auth)'));
+  });
 
   test('redirect result is consumed before auth initialization resolves', () => {
     const initialize = auth.slice(auth.indexOf('async initialize()'), auth.indexOf('async _sendWelcomeNotification'));
