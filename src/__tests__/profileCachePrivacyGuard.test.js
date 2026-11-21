@@ -12,6 +12,7 @@ const connections = read('src/screens/Profile/ConnectionsScreen.jsx');
 const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
 const about = read('src/screens/Profile/AboutScreen.jsx');
 const creatorDashboard = read('src/screens/Profile/CreatorDashboardScreen.jsx');
+const analyticsStore = read('src/store/analyticsStore.js');
 
 describe('profile cache and unknown-value isolation', () => {
   test('device-local optimistic posts never widen a visitor profile query', () => {
@@ -107,6 +108,15 @@ describe('profile cache and unknown-value isolation', () => {
     expect(about).not.toContain('getStoredUid');
     expect(about).not.toContain('getStoredUser');
     expect(about).not.toContain('storeUser');
+  });
+
+  test('analytics results cannot overwrite or render another account timeframe', () => {
+    expect(analyticsStore).toContain('analyticsUserId: null');
+    expect(analyticsStore).toContain('const requestId = (get().requestSeq || 0) + 1');
+    expect(analyticsStore).toContain('get().requestSeq !== requestId || get().analyticsUserId !== userId');
+    expect(analyticsStore).toContain('state.requestSeq = nextSeq');
+    expect(ownerProfile).toContain('state.analyticsUserId === currentUserId ? state.analytics : null');
+    expect(creatorDashboard).toContain('analyticsState.analyticsUserId === currentUserId');
   });
 
   test('creator dashboard requires the authenticated creator identity', () => {
