@@ -7,6 +7,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const store = read('src/store/profileStore.js');
 const ownerProfile = read('src/screens/Profile/ProfileMyScreen.jsx');
 const publicProfile = read('src/screens/Profile/ProfilePublicScreen.jsx');
+const userService = read('src/services/userService.js');
 
 describe('profile cache and unknown-value isolation', () => {
   test('device-local optimistic posts never widen a visitor profile query', () => {
@@ -39,6 +40,19 @@ describe('profile cache and unknown-value isolation', () => {
     expect(publicProfile).toContain('Profile Access Could Not Be Verified');
     expect(publicProfile).toContain('Its contents and actions are withheld until that check succeeds.');
     expect(publicProfile).not.toContain('userService.areFriends(currentUserId, resolvedUid)');
+  });
+
+  test('profile friend-request state uses participant-scoped point reads, not inbox scans', () => {
+    const start = userService.indexOf('async getFriendRequestStatus(');
+    const end = userService.indexOf('async getFriendRequests(', start);
+    const method = userService.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(method).toContain('getDoc(sentRef)');
+    expect(method).toContain('getDoc(receivedRef)');
+    expect(publicProfile).toContain('userService.getFriendRequestStatus(currentUserId, resolvedUid)');
+    expect(publicProfile).not.toContain("userService.getFriendRequests(currentUserId, 'sent')");
+    expect(publicProfile).not.toContain("userService.getFriendRequests(currentUserId, 'received')");
+    expect(publicProfile).toContain('setRelationshipError(true)');
   });
 
   test('unknown wallet balance is not initialized as a measured zero', () => {
