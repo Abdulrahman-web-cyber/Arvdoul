@@ -290,20 +290,20 @@ export default function ProfileMyScreen() {
       followingCandidates: [base.followingCount, viewer.followingCount],
       postCandidates: [reconciledPostCount, base.postCount],
       levelCandidates: [level, base.level, viewer.level],
-      coinCandidates: [
-        Number.isFinite(balance) ? balance : undefined,
-        base.coins,
-        base.coinBalance,
-        viewer.coins,
-      ],
+      withCoins: false,
       userId: currentUserId,
     });
     const pickString = (a, b) => (typeof a === 'string' ? a : (typeof b === 'string' ? b : ''));
-    const resolvedExperience = Number.isFinite(Number(experience))
-      ? Number(experience)
-      : (Number.isFinite(Number(base.experience))
-        ? Number(base.experience)
-        : (Number.isFinite(Number(base.xp)) ? Number(base.xp) : undefined));
+    const experienceCandidates = [experience, base.experience, base.xp];
+    const knownExperience = experienceCandidates.find((value) =>
+      value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+    );
+    const resolvedExperience = knownExperience === undefined ? undefined : Number(knownExperience);
+    const coinCandidates = [balance, base.coins, base.coinBalance, viewer.coins];
+    const knownCoins = coinCandidates.find((value) =>
+      value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+    );
+    const resolvedCoins = knownCoins === undefined ? null : Number(knownCoins);
     const resolvedLikes =
       typeof postsLikesCount === 'number' && Number.isFinite(postsLikesCount)
         ? postsLikesCount
@@ -315,6 +315,7 @@ export default function ProfileMyScreen() {
     return {
       ...base,
       ...identity,
+      coins: resolvedCoins,
       ...(resolvedExperience !== undefined ? { experience: resolvedExperience } : {}),
       ...(resolvedLikes !== null ? { likesReceived: resolvedLikes } : {}),
       ...(resolvedFriends !== null ? { friendCount: resolvedFriends } : {}),
