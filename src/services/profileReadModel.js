@@ -401,6 +401,10 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     presence: presenceVisible ? profile.presence : OFFLINE_PRESENCE,
     isOnline: presenceVisible ? profile.isOnline : false,
     lastActive: presenceVisible ? profile.lastActive : null,
+    lastLogin: presenceVisible ? profile.lastLogin : null,
+    lastSeenAt: presenceVisible ? profile.lastSeenAt : null,
+    lastActiveAt: presenceVisible ? profile.lastActiveAt : null,
+    lastOnlineAt: presenceVisible ? profile.lastOnlineAt : null,
   };
   // Legacy aliases are read by older profile widgets and analytics cards.
   // Mask them alongside the canonical counters so no consumer can bypass the
