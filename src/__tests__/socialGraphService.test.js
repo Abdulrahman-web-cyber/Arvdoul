@@ -228,11 +228,10 @@ describe('getHiddenAuthorIds + suggestions safety (N225)', () => {
     expect([...hidden].sort()).toEqual(['x', 'y', 'z']);
   });
 
-  test('fails open (empty set) when the graph read throws', async () => {
+  test('fails closed when the graph read throws', async () => {
     const svc = getSocialGraphService();
     const spy = jest.spyOn(svc, 'listEdges').mockRejectedValue(new Error('offline'));
-    const hidden = await svc.getHiddenAuthorIds('me');
-    expect(hidden.size).toBe(0);
+    await expect(svc.getHiddenAuthorIds('me')).rejects.toThrow('offline');
     spy.mockRestore();
   });
 
