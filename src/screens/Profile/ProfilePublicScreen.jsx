@@ -186,25 +186,24 @@ export default function ProfilePublicScreen() {
           if (isMountedRef.current) setFriendshipStatus('friends');
         } else {
           try {
-            const [sent, received] = await Promise.all([
-              userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] })),
-              userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] })),
-            ]);
-            const sentReq = sent.requests?.find((r) => r.toUserId === resolvedUid);
-            const recReq = received.requests?.find((r) => r.fromUserId === resolvedUid);
+            const requestState = await userService.getFriendRequestStatus(currentUserId, resolvedUid);
             if (isMountedRef.current) {
-              if (sentReq) {
+              if (requestState.sent) {
                 setFriendshipStatus('pending');
-                setPendingRequestId(sentReq.id);
-              } else if (recReq) {
+                setPendingRequestId(requestState.sent.id);
+              } else if (requestState.received) {
                 setFriendshipStatus('received');
-                setPendingRequestId(recReq.id);
+                setPendingRequestId(requestState.received.id);
               } else {
                 setFriendshipStatus('none');
               }
             }
-          } catch (reqErr) {
-            console.warn('Friend request status note:', reqErr);
+          } catch (requestError) {
+            // A failed request-state read must not render an actionable Add
+            // Friend button that could duplicate or contradict a pending edge.
+            console.warn('Friend request status could not be verified:', requestError);
+            if (isMountedRef.current) setRelationshipError(true);
+            return;
           }
         }
       } else {
