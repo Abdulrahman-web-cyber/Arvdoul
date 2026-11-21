@@ -93,6 +93,7 @@ export default function ProfilePublicScreen() {
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [relationship, setRelationship] = useState(null);
+  const [relationshipError, setRelationshipError] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     try {
       return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
@@ -126,6 +127,7 @@ export default function ProfilePublicScreen() {
 
     setLocalLoading(true);
     setRelationship(null);
+    setRelationshipError(false);
     setFriendshipStatus('none');
     setPendingRequestId(null);
     setFriendRequestLoading(false);
@@ -153,25 +155,31 @@ export default function ProfilePublicScreen() {
       // 2. Load posts, highlights, and relationship context in parallel
       if (currentUserId && resolvedUid !== currentUserId) {
         const userService = getUserService();
-        const [relSettled, friendsSettled] = await Promise.allSettled([
+        const [relSettled] = await Promise.allSettled([
           userService.getRelationshipState(currentUserId, resolvedUid),
-          userService.areFriends(currentUserId, resolvedUid),
           store.loadPosts(resolvedUid, { limit: 30 }),
           store.loadHighlights(resolvedUid),
           store.loadStories(resolvedUid),
           store.loadMutualFriends(currentUserId, resolvedUid),
         ]);
 
-        const rel = relSettled.status === 'fulfilled' ? relSettled.value : null;
-        if (rel && isMountedRef.current) {
+        // A failed safety-graph read is not equivalent to "no block". Do not
+        // render a visitor profile or relationship actions until the graph has
+        // been resolved successfully.
+        if (relSettled.status !== 'fulfilled' || !relSettled.value) {
+          if (isMountedRef.current) setRelationshipError(true);
+          return;
+        }
+        const rel = relSettled.value;
+        if (isMountedRef.current) {
           setRelationship(rel);
         }
 
-        if (rel?.isBlockedBy || rel?.isBlocking) {
+        if (rel.isBlockedBy || rel.isBlocking) {
           return;
         }
 
-        const areFriends = friendsSettled.status === 'fulfilled' ? Boolean(friendsSettled.value) : false;
+        const areFriends = Boolean(rel.isMutualFriend);
         if (areFriends) {
           if (isMountedRef.current) setFriendshipStatus('friends');
         } else {
@@ -519,6 +527,36 @@ export default function ProfilePublicScreen() {
     return (
       <div className="w-full pb-20">
         <ProfileSkeleton theme={theme} variant="public" />
+      </div>
+    );
+  }
+
+  if (!loading && relationshipError) {
+    return (
+      <div className={cn(
+        "min-h-[70vh] flex items-center justify-center p-4",
+        isDark ? "text-white" : "text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="font-display text-xl font-bold">Profile Access Could Not Be Verified</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Arvdoul could not verify the relationship and safety settings for this profile. Its contents and actions are withheld until that check succeeds.
+          </p>
+          <button
+            type="button"
+            onClick={() => loadPublicProfile()}
+            className="min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-arvdoul-gradient hover:opacity-90 shadow-md transition-opacity inline-flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Retry verification</span>
+          </button>
+        </div>
       </div>
     );
   }
