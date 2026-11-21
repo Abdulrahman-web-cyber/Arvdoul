@@ -8,6 +8,8 @@ const store = read('src/store/profileStore.js');
 const ownerProfile = read('src/screens/Profile/ProfileMyScreen.jsx');
 const publicProfile = read('src/screens/Profile/ProfilePublicScreen.jsx');
 const userService = read('src/services/userService.js');
+const connections = read('src/screens/Profile/ConnectionsScreen.jsx');
+const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
 
 describe('profile cache and unknown-value isolation', () => {
   test('device-local optimistic posts never widen a visitor profile query', () => {
@@ -19,6 +21,26 @@ describe('profile cache and unknown-value isolation', () => {
     expect(merge).toMatch(/p\.authorId === userId/);
     expect(merge).toMatch(/p\.isDeleted !== true/);
     expect(merge).toMatch(/p\.status !== 'scheduled'/);
+  });
+
+  test('connections identity is sourced only from AuthContext and failed reads withhold lists', () => {
+    expect(connections).toContain('const currentUser = authUser || null');
+    expect(connections).toContain('const currentUserId = authUser?.uid || null');
+    expect(connections).not.toContain('getStoredUid');
+    expect(connections).not.toContain('storeUser');
+    expect(connections).toContain('if (!profile)');
+    expect(connections).toContain('setPermissionDenied(true)');
+    expect(connections).toContain('setFollowers([])');
+    expect(connections).toContain('setFriends([])');
+  });
+
+  test('profile preview never renders a profile cached for a different authenticated UID', () => {
+    expect(preview).toContain('const currentUserId = authUser?.uid || null');
+    expect(preview).toContain('explicitProfileId === currentUserId');
+    expect(preview).toContain('storeProfileId === currentUserId');
+    expect(preview).not.toContain('getStoredUid');
+    expect(preview).not.toContain('getStoredUser');
+    expect(preview).not.toContain('storeUser');
   });
 
   test('profile story hydration requires an explicit matching author', () => {
