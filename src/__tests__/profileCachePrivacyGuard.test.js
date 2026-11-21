@@ -118,11 +118,12 @@ describe('profile cache and unknown-value isolation', () => {
 
   test('analytics results cannot overwrite or render another account timeframe', () => {
     expect(analyticsStore).toContain('analyticsUserId: null');
+    expect(analyticsStore).toContain('analyticsTimeframe: null');
     expect(analyticsStore).toContain('const requestId = (get().requestSeq || 0) + 1');
     expect(analyticsStore).toContain('get().requestSeq !== requestId || get().analyticsUserId !== userId');
     expect(analyticsStore).toContain('state.requestSeq = nextSeq');
     expect(ownerProfile).toContain('state.analyticsUserId === currentUserId ? state.analytics : null');
-    expect(creatorDashboard).toContain('analyticsState.analyticsUserId === currentUserId');
+    expect(creatorDashboard).toContain('analyticsState.analyticsUserId === currentUserId && analyticsState.analyticsTimeframe === timeframe');
   });
 
   test('creator dashboard requires the authenticated creator identity', () => {
