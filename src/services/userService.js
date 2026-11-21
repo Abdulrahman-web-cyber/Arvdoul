@@ -1170,7 +1170,10 @@ class ProfessionalUserService {
       const targetSnap = await getDoc(doc(this.firestore, 'users', followingId));
       targetIsPrivate = targetSnap.exists() && targetSnap.data()?.isPrivate === true;
     } catch (privacyErr) {
-      logger.warn('Follow target privacy lookup failed; treating as public', { error: privacyErr?.message });
+      // Unknown privacy is not public. Abort instead of creating an edge that
+      // could bypass a private account's approval boundary.
+      logger.warn('Follow target privacy lookup failed; refusing the follow', { followingId, error: privacyErr?.message });
+      throw privacyErr;
     }
 
     if (targetIsPrivate) {
@@ -1299,9 +1302,10 @@ class ProfessionalUserService {
       ]);
       return new Set([...(blocked.ids || []), ...(blockedBy.ids || [])]);
     } catch (err) {
-      // Fail open: an unreadable graph must not empty the request inbox.
-      logger.warn('[UserService] blocked-pair read failed; not filtering requests', { error: err?.message });
-      return new Set();
+      // If safety edges cannot be resolved, an actionable request inbox could
+      // expose or approve a request across a block. Withhold the inbox instead.
+      logger.warn('[UserService] blocked-pair read failed; withholding requests', { error: err?.message });
+      throw err;
     }
   }
 
@@ -1702,12 +1706,25 @@ class ProfessionalUserService {
       if (snap.exists() && snap.data().status === 'pending') {
         return { success: true, alreadyRequested: true, requestId };
       }
-      // Re-sending after decline/cancel is allowed (status resets to pending).
-      transaction.set(requestRef, {
-        fromUserId, toUserId, fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
-        fromUserPhotoURL: fromUser?.photoURL || null, status: 'pending',
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-      });
+      const requestData = {
+        fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
+        fromUserPhotoURL: fromUser?.photoURL || null,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (snap.exists()) {
+        // A declined/cancelled request can be sent again. Update only mutable
+        // request fields so immutable sender/recipient identity and any
+        // compatible historical metadata remain intact under Firestore rules.
+        const previousStatus = snap.data().status;
+        if (!['declined', 'cancelled'].includes(previousStatus)) {
+          throw new Error('This friend request can no longer be re-sent.');
+        }
+        transaction.update(requestRef, requestData);
+      } else {
+        transaction.set(requestRef, { fromUserId, toUserId, ...requestData });
+      }
       return { success: true, alreadyRequested: false, requestId };
     });
 
@@ -1979,8 +1996,10 @@ class ProfessionalUserService {
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (err) {
-      this.logger?.warn?.('[UserService] Block check failed (defaulting to not blocked)', { error: err?.message });
-      return { success: false, blocked: false, error: err?.message };
+      // This result gates follow/friend-request writes. Returning blocked:false
+      // on a failed graph read would fail open.
+      logger.warn('[UserService] Block check failed; refusing the operation', { blockerId, blockedId, error: err?.message });
+      throw err;
     }
   }
 

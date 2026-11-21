@@ -311,6 +311,19 @@ describe('firestore.rules economy accounting (regression guards)', () => {
 
     const folr = blockBody('follow_requests');
     expect(folr).toMatch(/requestId == request\.resource\.data\.fromUserId \+ '_' \+ request\.resource\.data\.toUserId/);
+
+    // The send flow transaction reads this deterministic id before it exists.
+    // The old resource.data-only rule denied that first read.
+    expect(fr).toMatch(/requestId\.matches\('\^' \+ uid\(\) \+ '_\.\*\$'\)/);
+    expect(fr).toMatch(/requestId\.matches\('\^\.\*_' \+ uid\(\) \+ '\$'\)/);
+    expect(fr).toMatch(/affectedKeys\(\)\.hasOnly\(\[[\s\S]*'fromUserPhotoURL'[\s\S]*\]\)/);
+    expect(fr).toContain('allow delete: if false;');
+
+    // Accepting a friend request creates both follow directions. The accepting
+    // user may create their own edge to a private requester only when that
+    // requester explicitly asked to become friends.
+    const follows = blockBody('follows');
+    expect(follows).toMatch(/friendRequestFrom\(request\.resource\.data\.followingId, uid\(\)\)/);
   });
 });
 
@@ -360,6 +373,100 @@ describe('firestore.rules messaging membership (regression guards)', () => {
 describe('firestore.rules adversarial checks (emulator)', () => {
   let reachable = false;
   beforeAll(async () => { reachable = await emulatorReachable(); });
+
+  test('friend request transactions can read missing ids and accept mutual friendship safely', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, getDoc, runTransaction, updateDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(ctx.firestore(), 'users/alice'), { uid: 'alice', isPrivate: true });
+        await setDoc(doc(ctx.firestore(), 'users/bob'), { uid: 'bob', isPrivate: false });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+      const mallory = env.authenticatedContext('mallory').firestore();
+      const requestRef = doc(alice, 'friend_requests/alice_bob');
+
+      // This is the exact first operation in sendFriendRequest(): read the
+      // deterministic document inside a transaction before creating it.
+      await assertSucceeds(runTransaction(alice, async (transaction) => {
+        const existing = await transaction.get(requestRef);
+        if (existing.exists()) throw new Error('Expected a new friend request');
+        transaction.set(requestRef, {
+          fromUserId: 'alice',
+          toUserId: 'bob',
+          status: 'pending',
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }));
+
+      // Only either participant may inspect the request; a third party cannot
+      // probe it even though missing participant-keyed ids are readable.
+      await assertSucceeds(getDoc(doc(bob, 'friend_requests/alice_bob')));
+      await assertFails(getDoc(doc(mallory, 'friend_requests/alice_bob')));
+      await assertFails(updateDoc(doc(alice, 'friend_requests/alice_bob'), {
+        status: 'accepted',
+        updatedAt: 2,
+      }));
+      // Only the recipient may decline; the sender may then re-send the
+      // terminal request using the explicitly allowed mutable fields.
+      await assertSucceeds(updateDoc(doc(bob, 'friend_requests/alice_bob'), {
+        status: 'declined',
+        updatedAt: 2,
+      }));
+      await assertSucceeds(updateDoc(doc(alice, 'friend_requests/alice_bob'), {
+        status: 'pending',
+        createdAt: 3,
+        updatedAt: 3,
+        fromUserDisplayName: 'Alice Updated',
+        fromUserPhotoURL: null,
+      }));
+      await assertFails(updateDoc(doc(mallory, 'friend_requests/alice_bob'), {
+        status: 'pending',
+        updatedAt: 4,
+      }));
+
+      // Accepting a request must create BOTH follow edges, even when the
+      // requester is private. The request itself is the explicit consent.
+      await assertSucceeds(runTransaction(bob, async (transaction) => {
+        const request = await transaction.get(doc(bob, 'friend_requests/alice_bob'));
+        if (!request.exists() || request.data().status !== 'pending') {
+          throw new Error('Expected a pending friend request');
+        }
+        transaction.update(doc(bob, 'friend_requests/alice_bob'), {
+          status: 'accepted',
+          updatedAt: 2,
+        });
+        transaction.set(doc(bob, 'follows/alice_bob'), {
+          followerId: 'alice',
+          followingId: 'bob',
+          createdAt: 2,
+        });
+        transaction.set(doc(bob, 'follows/bob_alice'), {
+          followerId: 'bob',
+          followingId: 'alice',
+          createdAt: 2,
+        });
+      }));
+      await assertSucceeds(getDoc(doc(alice, 'follows/alice_bob')));
+      await assertSucceeds(getDoc(doc(alice, 'follows/bob_alice')));
+    } finally {
+      await env.cleanup();
+    }
+  });
 
   test('rules compile and enforce the profile-analytics boundary', async () => {
     if (!reachable) {

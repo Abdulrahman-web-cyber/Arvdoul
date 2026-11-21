@@ -780,7 +780,9 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
       let friendlyMessage = "Google authentication failed";
       const code = error?.code || '';
       if (code === 'auth/popup-blocked') {
-        friendlyMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this page or sign in with Email/Phone.";
+        friendlyMessage = "Your browser blocked the Google sign-in window. Arvdoul will retry with a full-page sign-in; if it still fails, open this page in your main browser rather than an embedded browser.";
+      } else if (code === 'auth/operation-not-supported-in-this-environment' || code === 'auth/web-storage-unsupported') {
+        friendlyMessage = "Google sign-in is not supported in this browser context. Open Arvdoul in Chrome or another supported browser and try again.";
       } else if (code === 'auth/user-not-found' || error?.message?.includes('No Arvdoul account found')) {
         friendlyMessage = "No Arvdoul account found with this Google account. Please sign up to create an account.";
       } else if (code === 'auth/unauthorized-domain') {

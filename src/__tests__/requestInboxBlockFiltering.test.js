@@ -142,13 +142,12 @@ describe('request inboxes hide blocked parties', () => {
     expect(res.requests.map((r) => r.fromUserId)).toEqual(['stranger']);
   });
 
-  test('fails open (keeps requests) when the graph read throws', async () => {
+  test('withholds the request inbox when the graph read throws', async () => {
     globalThis.__docs = { r1: { fromUserId: 'x', toUserId: 'owner', status: 'pending' } };
     listEdges.mockRejectedValue(new Error('graph offline'));
     const svc = primeService(getUserService());
 
-    const res = await svc.getFollowRequests('owner');
-    expect(res.requests.map((r) => r.fromUserId)).toEqual(['x']);
+    await expect(svc.getFollowRequests('owner')).rejects.toThrow('graph offline');
   });
 });
 

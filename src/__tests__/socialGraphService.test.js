@@ -10,6 +10,7 @@ import fs from 'fs';
 const store = new Map(); // "collection/id" -> data
 
 const capturedQueries = [];
+let readError = null;
 
 const idOf = (key) => key.slice(key.indexOf('/') + 1);
 const colOf = (key) => key.slice(0, key.indexOf('/'));
@@ -30,6 +31,7 @@ jest.unstable_mockModule('firebase/firestore', () => ({
   startAfter: (c) => ({ __type: 'startAfter', c }),
   documentId: () => '__name__',
   getDocs: async (q) => {
+    if (readError) throw readError;
     const constraints = q.constraints || [];
     capturedQueries.push({ name: q.name, constraints });
     const filters = constraints.filter((c) => c.__type === 'where');
@@ -86,6 +88,7 @@ beforeAll(async () => {
 beforeEach(() => {
   store.clear();
   capturedQueries.length = 0;
+  readError = null;
   const svc = getSocialGraphService();
   svc.initialized = true;
   svc.firestore = {};
@@ -122,6 +125,11 @@ describe('getRelationship (single pair, bounded)', () => {
     store.set('restricts/me_r', { restricterId: 'me', restrictedId: 'r' });
     expect((await getSocialGraphService().getRelationship('me', 'm')).isMuted).toBe(true);
     expect((await getSocialGraphService().getRelationship('me', 'r')).isRestricted).toBe(true);
+  });
+
+  test('fails closed when any relationship edge query is denied', async () => {
+    readError = new Error('permission-denied');
+    await expect(getSocialGraphService().getRelationship('me', 'target')).rejects.toThrow('permission-denied');
   });
 
   test('self is the owner with no follow edges', async () => {
@@ -164,10 +172,22 @@ describe('getEdgeSet (batch, no N+1)', () => {
     expect(map.get('p')).toMatchObject({ isFollowing: false, requestStatus: 'pending' });
   });
 
+  test('rejects the whole batch when a safety-edge query fails', async () => {
+    readError = new Error('permission-denied');
+    await expect(getSocialGraphService().getEdgeSet('me', ['x', 'y'])).rejects.toThrow('permission-denied');
+  });
+
   test('does not read follow_requests when the caller excludes the follow edge', async () => {
     capturedQueries.length = 0;
     await getSocialGraphService().getEdgeSet('me', ['x', 'y'], { include: ['block'] });
     expect(capturedQueries.some((q) => q.name === 'follow_requests')).toBe(false);
+  });
+});
+
+describe('hidden-author filtering', () => {
+  test('rejects rather than returning an empty hidden set when safety reads fail', async () => {
+    readError = new Error('permission-denied');
+    await expect(getSocialGraphService().getHiddenAuthorIds('me')).rejects.toThrow('permission-denied');
   });
 });
 
@@ -208,11 +228,10 @@ describe('getHiddenAuthorIds + suggestions safety (N225)', () => {
     expect([...hidden].sort()).toEqual(['x', 'y', 'z']);
   });
 
-  test('fails open (empty set) when the graph read throws', async () => {
+  test('fails closed when the graph read throws', async () => {
     const svc = getSocialGraphService();
     const spy = jest.spyOn(svc, 'listEdges').mockRejectedValue(new Error('offline'));
-    const hidden = await svc.getHiddenAuthorIds('me');
-    expect(hidden.size).toBe(0);
+    await expect(svc.getHiddenAuthorIds('me')).rejects.toThrow('offline');
     spy.mockRestore();
   });
 
