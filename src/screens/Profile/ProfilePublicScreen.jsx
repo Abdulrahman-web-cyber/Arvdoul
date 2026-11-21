@@ -24,7 +24,6 @@ import {
   OFFLINE_PRESENCE,
 } from '../../services/profileReadModel.js';
 import { shareProfile } from '../../utils/shareUtils';
-import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getUserService } from '../../services/userService.js';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
@@ -63,7 +62,7 @@ export default function ProfilePublicScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const currentUserId = currentUser?.uid || getStoredUid();
+  const currentUserId = currentUser?.uid || null;
   const routeUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
   const { theme } = useTheme();
   const isDark = theme === 'dark';
