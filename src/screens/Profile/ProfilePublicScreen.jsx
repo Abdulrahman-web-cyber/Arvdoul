@@ -155,22 +155,18 @@ export default function ProfilePublicScreen() {
       // 2. Load posts, highlights, and relationship context in parallel
       if (currentUserId && resolvedUid !== currentUserId) {
         const userService = getUserService();
-        const [relSettled] = await Promise.allSettled([
+        const relSettled = await Promise.allSettled([
           userService.getRelationshipState(currentUserId, resolvedUid),
-          store.loadPosts(resolvedUid, { limit: 30 }),
-          store.loadHighlights(resolvedUid),
-          store.loadStories(resolvedUid),
-          store.loadMutualFriends(currentUserId, resolvedUid),
         ]);
 
         // A failed safety-graph read is not equivalent to "no block". Do not
-        // render a visitor profile or relationship actions until the graph has
-        // been resolved successfully.
-        if (relSettled.status !== 'fulfilled' || !relSettled.value) {
+        // issue content/list queries or render relationship actions until the
+        // graph has been resolved successfully.
+        if (relSettled[0].status !== 'fulfilled' || !relSettled[0].value) {
           if (isMountedRef.current) setRelationshipError(true);
           return;
         }
-        const rel = relSettled.value;
+        const rel = relSettled[0].value;
         if (isMountedRef.current) {
           setRelationship(rel);
         }
@@ -180,6 +176,12 @@ export default function ProfilePublicScreen() {
         }
 
         const areFriends = Boolean(rel.isMutualFriend);
+        await Promise.allSettled([
+          store.loadPosts(resolvedUid, { limit: 30 }),
+          store.loadHighlights(resolvedUid),
+          store.loadStories(resolvedUid),
+          store.loadMutualFriends(currentUserId, resolvedUid),
+        ]);
         if (areFriends) {
           if (isMountedRef.current) setFriendshipStatus('friends');
         } else {
