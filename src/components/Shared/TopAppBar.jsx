@@ -10,9 +10,7 @@ import { cn } from "../../lib/utils.js";
 import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
-import { useProfileStore } from "../../store/profileStore";
-import { getSafeAvatarUrl } from "../../utils/avatarUtils";
-import { pickHandle, deriveHandle, resolveActorName } from "../../services/profileReadModel.js";
+import { resolveActorName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
@@ -273,7 +271,6 @@ export const TopAppBar = ({
   const [storiesSearchOpen, setStoriesSearchOpen] = useState(false);
   const [storiesSearchQuery, setStoriesSearchQuery] = useState("");
   const [chatHeaderState, setChatHeaderState] = useState(null);
-  const [profileHeaderState, setProfileHeaderState] = useState(null);
   const [notificationsHeaderState, setNotificationsHeaderState] = useState({
     unreadCount: 0,
     pendingNetworkCount: 0,
@@ -306,13 +303,6 @@ export const TopAppBar = ({
         setChatHeaderState(e.detail);
       }
     };
-    const onProfileState = (e) => {
-      if (e?.detail === null) {
-        setProfileHeaderState(null);
-      } else if (e?.detail && typeof e.detail === "object") {
-        setProfileHeaderState(e.detail);
-      }
-    };
     const onNotificationsState = (e) => {
       if (e?.detail === null) {
         setNotificationsHeaderState({
@@ -343,14 +333,12 @@ export const TopAppBar = ({
     };
     window.addEventListener("arvdoul:inbox_header_state", onInboxState);
     window.addEventListener("arvdoul:chat_header_state", onChatState);
-    window.addEventListener("arvdoul:profile_header_state", onProfileState);
     window.addEventListener("arvdoul:notifications_header_state", onNotificationsState);
     window.addEventListener("arvdoul:network_header_state", onNetworkState);
     window.addEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
     return () => {
       window.removeEventListener("arvdoul:inbox_header_state", onInboxState);
       window.removeEventListener("arvdoul:chat_header_state", onChatState);
-      window.removeEventListener("arvdoul:profile_header_state", onProfileState);
       window.removeEventListener("arvdoul:notifications_header_state", onNotificationsState);
       window.removeEventListener("arvdoul:network_header_state", onNetworkState);
       window.removeEventListener("arvdoul:focus_inbox_search", onFocusInboxSearch);
@@ -423,19 +411,8 @@ export const TopAppBar = ({
     }
   };
 
-  const { user: authUser } = useAuth();
-  const appStoreUser = useAppStore((state) => state.currentUser);
-  const profileStoreProfile = useProfileStore((state) => state.profile);
-  const effectiveUser = profileStoreProfile || appStoreUser || authUser;
-  const rawUsername = effectiveUser?.username || '';
-  const cleanUsername = pickHandle([rawUsername])
-    || deriveHandle(effectiveUser?.displayName)
-    || null;
-  const userDisplayName = resolveActorName(
-    [effectiveUser?.displayName, effectiveUser?.name],
-    effectiveUser?.uid
-  );
-  const userAvatarUrl = getSafeAvatarUrl(effectiveUser?.photoURL, userDisplayName, effectiveUser?.uid || '');
+  useAuth();
+  useAppStore((state) => state.currentUser);
 
   // Determine mode
   const currentMode = useMemo(() => {
@@ -981,13 +958,6 @@ export const TopAppBar = ({
                         theme={theme}
                         onClick={handleBack}
                       />
-                      {networkHeaderState?.photoURL && (
-                        <LazyImage
-                          src={networkHeaderState.photoURL}
-                          alt={networkHeaderState?.title || "Citizen Network"}
-                          className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/35 shrink-0"
-                        />
-                      )}
                       <div className="flex flex-col min-w-0">
                         <h2
                           className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
@@ -1114,22 +1084,6 @@ export const TopAppBar = ({
                 ) : (
                   <div className="flex items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <button
-                        type="button"
-                        aria-label="Open my profile"
-                        onClick={() => navigate("/profile")}
-                        className="relative shrink-0 rounded-full p-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-                        style={{ background: BRAND_GRADIENT }}
-                      >
-                        <LazyImage
-                          src={userAvatarUrl}
-                          alt={userDisplayName}
-                          className={cn(
-                            "w-9 h-9 rounded-full object-cover border-2",
-                            isDark ? "border-[#03071B]" : "border-white"
-                          )}
-                        />
-                      </button>
                       <div className="flex flex-col min-w-0">
                         <h2
                           className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
@@ -1373,7 +1327,7 @@ export const TopAppBar = ({
                             className="text-sm sm:text-base font-bold truncate leading-tight"
                             style={{ color: tokens.textPrimary }}
                           >
-                            {chatHeaderState?.title || contextualTitle}
+                            {resolveActorName([chatHeaderState?.title, contextualTitle], chatHeaderState?.peerId || chatHeaderState?.conversationId)}
                           </span>
                           {chatHeaderState?.verified && (
                             <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
@@ -1451,7 +1405,8 @@ export const TopAppBar = ({
 
               {currentMode === "profile_me" && (
                 <div className="flex items-center justify-between gap-2 sm:gap-3">
-                  <div
+                  <button
+                    type="button"
                     onClick={() => {
                       if (scrollContainerRef?.current) {
                         scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
@@ -1459,39 +1414,15 @@ export const TopAppBar = ({
                         window.scrollTo({ top: 0, behavior: "smooth" });
                       }
                     }}
-                    className="flex items-center gap-2.5 cursor-pointer select-none group min-w-0"
+                    className="flex items-center gap-2 text-left select-none min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded-lg px-1 py-0.5"
                   >
-                    <div className="relative shrink-0">
-                      <LazyImage
-                        src={userAvatarUrl}
-                        alt={userDisplayName}
-                        className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/50 group-hover:scale-105 transition-transform"
-                      />
-                      {Boolean(effectiveUser?.isVerified) && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center text-white">
-                          <Check className="w-2.5 h-2.5 stroke-[3]" aria-hidden="true" />
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <h2
-                          className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
-                          style={{ color: tokens.textPrimary }}
-                        >
-                          Profile
-                        </h2>
-                        {cleanUsername && (
-                          <span className="font-mono text-xs font-semibold text-purple-600 dark:text-purple-300 truncate">
-                            @{cleanUsername}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">
-                        My Profile
-                      </span>
-                    </div>
-                  </div>
+                    <h2
+                      className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                      style={{ color: tokens.textPrimary }}
+                    >
+                      Profile
+                    </h2>
+                  </button>
 
                   <div className="flex items-center gap-1 sm:gap-1.5">
                     <CircularButton
@@ -1532,51 +1463,21 @@ export const TopAppBar = ({
                 </div>
               )}
 
-              {(currentMode === "profile_visitor" || currentMode === "detail") && (
+              {currentMode === "profile_visitor" && (
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <CircularButton
                       icon={ChevronLeft}
                       label="Back"
                       theme={theme}
                       onClick={handleBack}
                     />
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {currentMode === "profile_visitor" && profileHeaderState?.photoURL ? (
-                        <LazyImage
-                          src={profileHeaderState.photoURL}
-                          alt={profileHeaderState.displayName || contextualTitle}
-                          className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/40 shrink-0 shadow-sm"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-arvdoul-gradient flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
-                          {(profileHeaderState?.displayName || contextualTitle).charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex flex-col min-w-0">
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span
-                            className="text-sm sm:text-base font-bold truncate leading-tight"
-                            style={{ color: tokens.textPrimary }}
-                          >
-                            {currentMode === "profile_visitor" && profileHeaderState?.displayName
-                              ? profileHeaderState.displayName
-                              : contextualTitle}
-                          </span>
-                          {currentMode === "profile_visitor" && profileHeaderState?.isVerified && (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" aria-hidden="true" />
-                          )}
-                        </div>
-                        <span
-                          className="text-[11px] font-medium truncate"
-                          style={{ color: tokens.textSecondary }}
-                        >
-                          {currentMode === "profile_visitor" && profileHeaderState?.username
-                            ? `@${profileHeaderState.username}`
-                            : (propSubtitle || (currentMode === "profile_visitor" ? "Citizen Profile" : "Details"))}
-                        </span>
-                      </div>
-                    </div>
+                    <h2
+                      className="text-base sm:text-lg font-black truncate leading-tight tracking-tight"
+                      style={{ color: tokens.textPrimary }}
+                    >
+                      Profile
+                    </h2>
                   </div>
                   <div className="flex items-center gap-1 sm:gap-1.5">
                     <CircularButton
@@ -1601,6 +1502,52 @@ export const TopAppBar = ({
                       theme={theme}
                       onClick={() => {
                         window.dispatchEvent(new CustomEvent('arvdoul:open_profile_options'));
+                      }}
+                    />
+                    <CircularButton
+                      icon={Menu}
+                      label="Menu"
+                      theme={theme}
+                      onClick={() => {
+                        if (onOpenMenu) onOpenMenu();
+                        else navigate(ROUTES.menu);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentMode === "detail" && (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <CircularButton
+                      icon={ChevronLeft}
+                      label="Back"
+                      theme={theme}
+                      onClick={handleBack}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span
+                        className="text-sm sm:text-base font-bold truncate leading-tight"
+                        style={{ color: tokens.textPrimary }}
+                      >
+                        {contextualTitle}
+                      </span>
+                      <span
+                        className="text-[11px] font-medium truncate"
+                        style={{ color: tokens.textSecondary }}
+                      >
+                        {propSubtitle || "Details"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <CircularButton
+                      icon={Share2}
+                      label="Share"
+                      theme={theme}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('arvdoul:share_profile'));
                       }}
                     />
                     <CircularButton

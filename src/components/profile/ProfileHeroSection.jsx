@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
+import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
 import * as ReadModel from '../../services/profileReadModel.js';
 import * as DeviceCaps from '../../utils/deviceCapabilities.js';
 import * as LevelNumeralModule from './LevelNumeralBadge';
@@ -66,10 +67,18 @@ import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
-import { BRAND_GRADIENT } from '../../design-system/tokens.js';
+import { BRAND_GRADIENT, brandRgba, brandHexRgba, tokens } from '../../design-system/tokens.js';
 import { useLayoutChrome } from '../../context/LayoutChromeContext.jsx';
 
-const ProfileSystemRoadmapModal = lazy(() => import('./ProfileSystemRoadmapModal'));
+const lazyDefault = (loader) => lazy(async () => {
+  const mod = await loader();
+  const comp = mod?.default?.default || mod?.default || Object.values(mod || {}).find(
+    (v) => typeof v === 'function' || (v && typeof v === 'object' && v.$$typeof)
+  );
+  return { default: comp };
+});
+
+const ProfileSystemRoadmapModal = lazyDefault(() => import('./ProfileSystemRoadmapModal'));
 
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getIdentityBadge = LevelModule.getIdentityBadge || (() => null);
@@ -83,13 +92,13 @@ const LevelNumeralBadge = LevelNumeralModule.default || LevelNumeralModule.Level
 
 const COPIED_RESET_MS = 2000;
 const BIO_CLAMP_THRESHOLD = 140;
-const PAGE_BG = { dark: '#03071B', light: '#F6F8FC' };
+const PAGE_BG = { dark: tokens.color.bg.dark, light: tokens.color.bg.light };
 
 const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4431F7] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple focus-visible:ring-offset-1 focus-visible:ring-offset-transparent';
 
 const PRESS =
-  'active:scale-[0.98] motion-reduce:active:scale-100 transition-[transform,background-color,border-color,color,opacity,filter] duration-150 motion-reduce:transition-none';
+  'active:scale-[0.985] motion-reduce:active:scale-100 transition-[transform,background-color,border-color,color,opacity,filter,box-shadow] duration-150 motion-reduce:transition-none';
 
 /**
  * Single source of glass materials for the hero. Lite mode drops every
@@ -97,6 +106,9 @@ const PRESS =
  */
 const buildMaterial = (isDark, isLite) => {
   const blur = (px) => (isLite ? {} : { backdropFilter: `blur(${px}px) saturate(150%)`, WebkitBackdropFilter: `blur(${px}px) saturate(150%)` });
+  const indigo = tokens.color.brand.indigo;
+  const blue = tokens.color.brand.blue;
+
   return isDark
     ? {
         tile: {
@@ -107,28 +119,30 @@ const buildMaterial = (isDark, isLite) => {
         },
         panel: {
           background:
-            'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.05) 50%, rgba(5,91,251,0.09) 100%), rgba(255,255,255,0.04)',
+            `linear-gradient(145deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(indigo, 0.05)} 50%, ${brandHexRgba(blue, 0.09)} 100%), rgba(255,255,255,0.04)`,
           border: '1px solid rgba(255,255,255,0.11)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
           ...blur(20),
         },
         passport: {
-          background: 'linear-gradient(135deg, rgba(139,30,243,0.24) 0%, rgba(68,49,247,0.16) 55%, rgba(5,91,251,0.22) 100%)',
+          background: `linear-gradient(135deg, ${brandRgba(0.24)} 0%, ${brandHexRgba(indigo, 0.16)} 55%, ${brandHexRgba(blue, 0.22)} 100%)`,
           border: '1px solid rgba(255,255,255,0.14)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
         },
         overlay: {
           background: isLite
             ? 'rgb(14,20,48)'
-            : 'linear-gradient(145deg, rgba(139,30,243,0.10) 0%, rgba(5,91,251,0.08) 100%), rgba(12,18,44,0.92)',
+            : `linear-gradient(145deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(blue, 0.08)} 100%), rgba(12,18,44,0.92)`,
           border: '1px solid rgba(255,255,255,0.14)',
           boxShadow: '0 14px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
           ...blur(22),
         },
-        primaryShadow: isLite ? '0 6px 14px -8px rgba(68,49,247,0.6)' : '0 12px 26px -8px rgba(68,49,247,0.6)',
+        primaryShadow: isLite
+          ? `0 6px 14px -8px ${brandHexRgba(indigo, 0.6)}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.18)`
+          : `0 12px 28px -8px ${brandHexRgba(indigo, 0.58)}, 0 4px 12px -4px ${brandRgba(0.32)}, inset 0 1px 0 rgba(255,255,255,0.36), inset 0 -1px 0 rgba(0,0,0,0.2)`,
         ringGlow: isLite
-          ? '0 0 14px rgba(68,49,247,0.35)'
-          : '0 0 26px rgba(139,30,243,0.42), 0 0 46px rgba(5,91,251,0.30)',
+          ? `0 0 14px ${brandHexRgba(indigo, 0.35)}`
+          : `0 0 26px ${brandRgba(0.42)}, 0 0 46px ${brandHexRgba(blue, 0.30)}`,
         gap: 'rgba(3,7,27,0.9)',
         reflection: 'via-white/30',
         control: 'bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] border-white/[0.10] text-slate-100',
@@ -142,29 +156,31 @@ const buildMaterial = (isDark, isLite) => {
         },
         panel: {
           background:
-            'linear-gradient(145deg, rgba(139,30,243,0.07) 0%, rgba(68,49,247,0.04) 50%, rgba(5,91,251,0.07) 100%), rgba(255,255,255,0.66)',
+            `linear-gradient(145deg, ${brandRgba(0.07)} 0%, ${brandHexRgba(indigo, 0.04)} 50%, ${brandHexRgba(blue, 0.07)} 100%), rgba(255,255,255,0.66)`,
           border: '1px solid rgba(120,140,170,0.22)',
           boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(30,41,90,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
           ...blur(20),
         },
         passport: {
           background:
-            'linear-gradient(135deg, rgba(139,30,243,0.10) 0%, rgba(68,49,247,0.06) 55%, rgba(5,91,251,0.10) 100%), rgba(255,255,255,0.7)',
-          border: '1px solid rgba(68,49,247,0.20)',
+            `linear-gradient(135deg, ${brandRgba(0.10)} 0%, ${brandHexRgba(indigo, 0.06)} 55%, ${brandHexRgba(blue, 0.10)} 100%), rgba(255,255,255,0.7)`,
+          border: `1px solid ${brandHexRgba(indigo, 0.20)}`,
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.95)',
         },
         overlay: {
           background: isLite
             ? 'rgb(255,255,255)'
-            : 'linear-gradient(145deg, rgba(139,30,243,0.06) 0%, rgba(5,91,251,0.06) 100%), rgba(255,255,255,0.94)',
+            : `linear-gradient(145deg, ${brandRgba(0.06)} 0%, ${brandHexRgba(blue, 0.06)} 100%), rgba(255,255,255,0.94)`,
           border: '1px solid rgba(120,140,170,0.22)',
           boxShadow: '0 14px 34px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.95)',
           ...blur(22),
         },
-        primaryShadow: isLite ? '0 6px 14px -8px rgba(68,49,247,0.5)' : '0 12px 24px -10px rgba(68,49,247,0.5)',
+        primaryShadow: isLite
+          ? `0 6px 14px -8px ${brandHexRgba(indigo, 0.5)}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.12)`
+          : `0 12px 26px -10px ${brandHexRgba(indigo, 0.48)}, 0 4px 12px -4px ${brandRgba(0.24)}, inset 0 1px 0 rgba(255,255,255,0.36), inset 0 -1px 0 rgba(0,0,0,0.14)`,
         ringGlow: isLite
-          ? '0 4px 14px rgba(68,49,247,0.22)'
-          : '0 10px 30px rgba(68,49,247,0.28), 0 0 24px rgba(139,30,243,0.16)',
+          ? `0 4px 14px ${brandHexRgba(indigo, 0.22)}`
+          : `0 10px 30px ${brandHexRgba(indigo, 0.28)}, 0 0 24px ${brandRgba(0.16)}`,
         gap: 'rgba(246,248,252,0.92)',
         reflection: 'via-white',
         control: 'bg-white/70 hover:bg-white active:bg-white border-slate-300/60 text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.05)]',
@@ -175,12 +191,12 @@ const buildMaterial = (isDark, isLite) => {
 const DESIGNATION_STYLE = {
   dark: {
     royal: { background: 'linear-gradient(180deg, rgba(245,184,59,0.18), rgba(245,184,59,0.06))', border: '1px solid rgba(245,184,59,0.45)', color: '#F6D58A' },
-    creator: { background: 'linear-gradient(180deg, rgba(139,30,243,0.28), rgba(68,49,247,0.14))', border: '1px solid rgba(168,85,247,0.45)', color: '#E9D5FF' },
+    creator: { background: `linear-gradient(180deg, ${brandRgba(0.28)}, ${brandHexRgba(tokens.color.brand.indigo, 0.14)})`, border: '1px solid rgba(168,85,247,0.45)', color: '#E9D5FF' },
     premium: { background: 'rgba(226,232,240,0.09)', border: '1px solid rgba(226,232,240,0.28)', color: '#E2E8F0' },
   },
   light: {
     royal: { background: 'linear-gradient(180deg, #FFF8E6, #FFF1CC)', border: '1px solid rgba(217,160,30,0.5)', color: '#8A5A00' },
-    creator: { background: 'linear-gradient(180deg, #F5EBFF, #EDE4FF)', border: '1px solid rgba(139,30,243,0.3)', color: '#6B21A8' },
+    creator: { background: 'linear-gradient(180deg, #F5EBFF, #EDE4FF)', border: `1px solid ${brandRgba(0.3)}`, color: '#6B21A8' },
     premium: { background: 'linear-gradient(180deg, #F8FAFC, #EEF2F7)', border: '1px solid #CBD5E1', color: '#334155' },
   },
 };
@@ -257,10 +273,12 @@ export const ProfileLevelProgressCard = memo(({
   }, [levelNumber]);
 
   const isMaxLevel = Boolean(levelInfo?.isMaxLevel) || levelInfo?.nextLevelXp === null;
-  const nextXp = toFiniteNumber(levelInfo?.nextLevelXp);
-  const currentXp = toFiniteNumber(levelInfo?.currentLevelXp);
+  const hasSpan =
+    !isMaxLevel &&
+    toFiniteNumber(levelInfo?.nextLevelXp) !== null &&
+    toFiniteNumber(levelInfo?.currentLevelXp) !== null;
+  const span = hasSpan ? (levelInfo.nextLevelXp - levelInfo.currentLevelXp) : null;
   const xpInto = toFiniteNumber(levelInfo?.xpIntoLevel);
-  const span = !isMaxLevel && nextXp !== null && currentXp !== null ? nextXp - currentXp : null;
   const hasProgress = Boolean(levelInfo) && span !== null && span > 0 && xpInto !== null && xpInto >= 0;
   const percent = hasProgress
     ? Math.min(100, Math.max(0, Math.round(toFiniteNumber(levelInfo.progress) ?? (xpInto / span) * 100)))
@@ -408,11 +426,11 @@ const AmbientBackdrop = memo(({ isDark, isLite }) => {
   const uid = useId().replace(/:/g, '');
   const fade = 'radial-gradient(ellipse 100% 100% at 50% 38%, #000 55%, transparent 100%)';
   const glow = isDark
-    ? 'radial-gradient(55% 40% at 50% 30%, rgba(68,49,247,0.22), transparent 70%), radial-gradient(40% 32% at 8% 8%, rgba(139,30,243,0.22), transparent 70%), radial-gradient(40% 32% at 96% 18%, rgba(0,136,255,0.18), transparent 70%)'
-    : 'radial-gradient(55% 40% at 50% 30%, rgba(99,102,241,0.14), transparent 70%), radial-gradient(40% 32% at 8% 8%, rgba(200,43,255,0.12), transparent 70%), radial-gradient(40% 32% at 96% 18%, rgba(0,136,255,0.14), transparent 70%)';
-  const c1 = isDark ? '#8B1EF3' : '#B07CFF';
-  const c2 = isDark ? '#4431F7' : '#7C8CFF';
-  const c3 = isDark ? '#00B7FF' : '#5AB4FF';
+    ? `radial-gradient(55% 40% at 50% 30%, ${brandHexRgba(tokens.color.brand.indigo, 0.22)}, transparent 70%), radial-gradient(40% 32% at 8% 8%, ${brandRgba(0.22)}, transparent 70%), radial-gradient(40% 32% at 96% 18%, ${brandHexRgba(tokens.color.brand.cyan, 0.18)}, transparent 70%)`
+    : `radial-gradient(55% 40% at 50% 30%, rgba(99,102,241,0.14), transparent 70%), radial-gradient(40% 32% at 8% 8%, ${brandHexRgba(tokens.color.brand.pink, 0.12)}, transparent 70%), radial-gradient(40% 32% at 96% 18%, ${brandHexRgba(tokens.color.brand.cyan, 0.14)}, transparent 70%)`;
+  const c1 = isDark ? tokens.color.brand.violet : '#B07CFF';
+  const c2 = isDark ? tokens.color.brand.indigo : '#7C8CFF';
+  const c3 = isDark ? tokens.color.brand.cyan : '#5AB4FF';
   const fillOpacity = isDark ? 0.34 : 0.28;
   const strokeOpacity = isDark ? 0.55 : 0.45;
 
@@ -449,50 +467,56 @@ const AmbientBackdrop = memo(({ isDark, isLite }) => {
 AmbientBackdrop.displayName = 'AmbientBackdrop';
 
 /** One tile of the secondary dock (icon over label). */
-const DockTile = forwardRef(({ icon: Icon, label, onClick, disabled = false, busy = false, style, isDark, title, ...rest }, ref) => (
-  <button
-    ref={ref}
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    aria-busy={busy || undefined}
-    title={title}
-    className={cn(
-      "w-full min-h-[64px] px-1 py-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer",
-      "text-[11.5px] leading-[1.15] font-medium text-center",
-      "hover:brightness-[1.08] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100",
-      PRESS, FOCUS_RING,
-      isDark ? "text-slate-100" : "text-slate-800"
-    )}
-    style={style}
-    {...rest}
-  >
-    <Icon className={cn("w-5 h-5 shrink-0", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-    <span>{label}</span>
-  </button>
-));
+const DockTile = forwardRef(({ icon: Icon, label, onClick, disabled = false, capabilityDenied = false, busy = false, style, isDark, title, ...rest }, ref) => {
+  const isDisabled = Boolean(disabled || capabilityDenied);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={isDisabled ? undefined : onClick}
+      disabled={isDisabled}
+      aria-busy={busy || undefined}
+      title={title}
+      className={cn(
+        "w-full min-h-[64px] px-1 py-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer",
+        "text-[11.5px] leading-[1.15] font-medium text-center",
+        "hover:brightness-[1.08] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100",
+        PRESS, FOCUS_RING,
+        isDark ? "text-slate-100" : "text-slate-800"
+      )}
+      style={style}
+      {...rest}
+    >
+      <Icon className={cn("w-5 h-5 shrink-0", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+      <span>{label}</span>
+    </button>
+  );
+});
 DockTile.displayName = 'DockTile';
 
 /** One row of the More menu. */
-const MenuItem = ({ icon: Icon, label, onClick, disabled = false, busy = false, isDark }) => (
-  <button
-    type="button"
-    role="menuitem"
-    tabIndex={-1}
-    onClick={onClick}
-    disabled={disabled}
-    aria-busy={busy || undefined}
-    className={cn(
-      "w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-[13px] font-medium text-left cursor-pointer",
-      "disabled:opacity-50 disabled:cursor-not-allowed",
-      PRESS, FOCUS_RING,
-      isDark ? "text-slate-100 hover:bg-white/[0.08] active:bg-white/[0.12]" : "text-slate-800 hover:bg-slate-900/[0.05] active:bg-slate-900/[0.08]"
-    )}
-  >
-    <Icon className={cn("w-4 h-4 shrink-0", isDark ? "text-slate-300" : "text-slate-500", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-    <span className="flex-1 min-w-0 truncate">{label}</span>
-  </button>
-);
+const MenuItem = ({ icon: Icon, label, onClick, disabled = false, capabilityDenied = false, busy = false, isDark }) => {
+  const isDisabled = Boolean(disabled || capabilityDenied);
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      tabIndex={-1}
+      onClick={isDisabled ? undefined : onClick}
+      disabled={isDisabled}
+      aria-busy={busy || undefined}
+      className={cn(
+        "w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-[13px] font-medium text-left cursor-pointer",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        PRESS, FOCUS_RING,
+        isDark ? "text-slate-100 hover:bg-white/[0.08] active:bg-white/[0.12]" : "text-slate-800 hover:bg-slate-900/[0.05] active:bg-slate-900/[0.08]"
+      )}
+    >
+      <Icon className={cn("w-4 h-4 shrink-0", isDark ? "text-slate-300" : "text-slate-500", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+    </button>
+  );
+};
 
 /** Main ProfileHeroSection */
 export const ProfileHeroSection = memo(({
@@ -543,7 +567,7 @@ export const ProfileHeroSection = memo(({
   const text = isDark ? 'text-white' : 'text-slate-900';
   const body = isDark ? 'text-slate-200' : 'text-slate-700';
   const muted = isDark ? 'text-slate-400' : 'text-slate-500';
-  const accent = isDark ? 'text-sky-300' : 'text-[#055BFB]';
+  const accent = isDark ? 'text-sky-300' : 'text-blue-600';
 
   const [copiedHandle, setCopiedHandle] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
@@ -623,10 +647,9 @@ export const ProfileHeroSection = memo(({
 
   // --- Action permissions (explicit denial blocks; callbacks must also exist) ---
   const canShareAction = Boolean(onShare) && (isOwner || caps.canShare !== false);
-  const canMessageAction = Boolean(onOpenMessages) && caps.canMessage !== false;
   const canCallAction = callsEnabled && Boolean(onOpenMessages) && caps.canCall !== false;
-  const canTipAction = Boolean(onOpenTipModal) && caps.canTip !== false;
-  const canFollowAction = Boolean(onFollowToggle) && (isFollowing ? caps.canUnfollow !== false : caps.canFollow !== false);
+  const followAllowed = isFollowing ? caps.canUnfollow !== false : caps.canFollow !== false;
+  const canFollowAction = Boolean(onFollowToggle) && followAllowed;
 
   const handleStartCall = useCallback(async () => {
     if (!profileUid || callInFlightRef.current) return;
@@ -659,12 +682,21 @@ export const ProfileHeroSection = memo(({
 
   const rawLevel = typeof profile?.level === 'number' ? profile.level : toFiniteNumber(level);
   const visibleLevel = levelAllowed && rawLevel !== null && rawLevel > 0 ? Math.floor(rawLevel) : null;
+  const rankTitle = useMemo(() => {
+    if (!visibleLevel) return null;
+    try {
+      return LevelModule.getRankTitle?.(visibleLevel) || null;
+    } catch {
+      return null;
+    }
+  }, [visibleLevel]);
+  const verificationLevelGate = LevelModule.LEVEL_GATES?.verifiedPriority ?? null;
   const isVerified = Boolean(resolveVerifiedFlag(profile));
   const isCreator = creatorAllowed && Boolean(resolveCreatorFlag(profile || {}, {}, levelAllowed ? rawLevel : null));
   // Only an explicit flag counts; an arbitrary `subscription` object is not proof of an active plan.
   const isPremium = profile?.isPremium === true;
 
-  const creatorLabel = useMemo(
+  const creatorBadgeLabel = useMemo(
     () => (levelAllowed ? getIdentityBadge(profile?.level, { isCreator })?.label : null) || 'Creator',
     [levelAllowed, profile?.level, isCreator],
   );
@@ -733,13 +765,21 @@ export const ProfileHeroSection = memo(({
     fn?.();
   };
 
-  // --- Primary action (visitor): a received friend request takes priority over Follow ---
-  const acceptIsPrimary = !isOwner && friendshipStatus === 'received' && Boolean(onFriendRequestToggle);
+  // --- Primary action (visitor): below Level 3 (non-creator) uses Friend Request, Level 3+ unlocks Follow ---
+  const publicFollowersGate = LevelModule.LEVEL_GATES?.publicFollowers ?? LEVEL_GATES.publicFollowers;
+  const heroFollowersUnlocked = Boolean(
+    isCreator || (rawLevel !== null && rawLevel >= publicFollowersGate)
+  );
+  const acceptIsPrimary =
+    !isOwner &&
+    (friendshipStatus === 'received' || friendshipStatus === 'incoming_pending') &&
+    Boolean(onFriendRequestToggle);
   const friendLabel = friendshipStatus === 'friends' ? 'Friends'
-    : friendshipStatus === 'pending' ? (onCancelFriendRequest ? 'Cancel friend request' : 'Friend request sent')
+    : friendshipStatus === 'pending' ? (onCancelFriendRequest ? 'Cancel Request' : 'Friend request sent')
     : 'Add friend';
   const FriendIcon = friendshipStatus === 'friends' ? UserCheck : friendshipStatus === 'pending' ? X : UserPlus;
   const friendAction = friendshipStatus === 'pending' && onCancelFriendRequest ? onCancelFriendRequest : onFriendRequestToggle;
+  const friendIsInteractive = Boolean(friendAction) && friendshipStatus !== 'friends';
   const followLabel = isFollowing ? 'Following' : requestStatus === 'pending' ? 'Requested' : 'Follow';
   const FollowIcon = isFollowing ? UserCheck : requestStatus === 'pending' ? Clock : UserPlus;
 
@@ -751,19 +791,16 @@ export const ProfileHeroSection = memo(({
         { key: 'coins', icon: Coins, label: 'Coins', onClick: closeThen(() => navigate('/coins')) },
         { key: 'settings', icon: Settings, label: 'Settings', onClick: closeThen(() => navigate('/settings')) },
         showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: closeThen(onRefresh) },
-        onOpenOptions && { key: 'options', icon: MoreHorizontal, label: 'Profile options & View As', onClick: closeThen(onOpenOptions) },
       ]
     : [
-        acceptIsPrimary && { key: 'follow', icon: FollowIcon, label: followLabel, disabled: followLoading || !canFollowAction, busy: followLoading, onClick: closeThen(onFollowToggle) },
-        onFriendRequestToggle && !acceptIsPrimary && {
+        heroFollowersUnlocked && acceptIsPrimary && { key: 'follow', icon: FollowIcon, label: followLabel, disabled: followLoading || !canFollowAction, busy: followLoading, onClick: closeThen(onFollowToggle) },
+        heroFollowersUnlocked && onFriendRequestToggle && !acceptIsPrimary && {
           key: 'friend', icon: FriendIcon, label: friendLabel,
           disabled: friendRequestLoading || friendshipStatus === 'friends' || !friendAction,
           busy: friendRequestLoading, onClick: closeThen(friendAction),
         },
         callsEnabled && { key: 'call', icon: Phone, label: 'Audio call', disabled: !canCallAction || callPending, busy: callPending, onClick: closeThen(handleStartCall) },
-        canTipAction && { key: 'gift', icon: Gift, label: 'Send coins', onClick: closeThen(onOpenTipModal) },
         showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: closeThen(onRefresh) },
-        onOpenOptions && { key: 'options', icon: MoreHorizontal, label: 'More options', onClick: closeThen(onOpenOptions) },
       ]
   ).filter(Boolean);
 
@@ -772,7 +809,7 @@ export const ProfileHeroSection = memo(({
   // --- Presentation pieces ---
   const designations = [
     isRoyal && { key: 'royal', label: royalLabel, icon: Crown, style: designationStyle.royal, onClick: () => handleOpenRoadmap('royals') },
-    isCreator && { key: 'creator', label: creatorLabel, icon: Star, style: designationStyle.creator },
+    isCreator && { key: 'creator', label: creatorBadgeLabel, icon: Star, style: designationStyle.creator },
     isPremium && { key: 'premium', label: 'Premium', icon: Gem, style: designationStyle.premium },
   ].filter(Boolean);
 
@@ -829,7 +866,7 @@ export const ProfileHeroSection = memo(({
   const verifiedIcon = (
     <BadgeCheck
       className="w-6 h-6 min-[412px]:w-[26px] min-[412px]:h-[26px] text-white"
-      style={{ fill: '#055BFB' }}
+      style={{ fill: tokens.color.semantic.verified }}
       aria-hidden="true"
     />
   );
@@ -967,28 +1004,50 @@ export const ProfileHeroSection = memo(({
         )}
         <span className="sr-only" role="status" aria-live="polite">{copiedHandle ? 'Handle copied' : ''}</span>
 
-        {/* 4. Level pill (only when this viewer may see standing) */}
-        {visibleLevel !== null && (
-          <button
-            type="button"
-            onClick={() => handleOpenRoadmap('levels')}
-            aria-label={`Level ${visibleLevel}. Open level roadmap`}
-            className={cn("mt-2 inline-flex items-center gap-2 min-h-[36px] pl-1.5 pr-3.5 rounded-full text-[14px] font-semibold cursor-pointer", PRESS, FOCUS_RING, text)}
-            style={material.tile}
-          >
-            {LevelNumeralBadge ? (
-              <LevelNumeralBadge level={visibleLevel} theme={isDark ? 'dark' : 'light'} size="sm" />
-            ) : (
-              <span
-                aria-hidden="true"
-                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[12px] font-semibold tabular-nums"
-                style={{ background: BRAND_GRADIENT }}
+        {/* 4. Level pill & Verification readiness (only when this viewer may see standing) */}
+        {(visibleLevel !== null || (isOwner && !isVerified && onOpenVerificationModal && verificationLevelGate !== null)) && (
+          <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
+            {visibleLevel !== null && (
+              <button
+                type="button"
+                onClick={() => handleOpenRoadmap('levels')}
+                aria-label={`Level ${visibleLevel}${rankTitle ? `, ${rankTitle}` : ''}. Open level roadmap`}
+                className={cn("inline-flex items-center gap-2 min-h-[36px] pl-1.5 pr-3 rounded-full text-[13.5px] font-semibold cursor-pointer", PRESS, FOCUS_RING, text)}
+                style={material.tile}
               >
-                {visibleLevel}
-              </span>
+                {LevelNumeralBadge ? (
+                  <LevelNumeralBadge level={visibleLevel} theme={isDark ? 'dark' : 'light'} size="sm" />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="h-6 px-2 rounded-full flex items-center justify-center text-white text-[11px] font-semibold tabular-nums"
+                    style={{ background: BRAND_GRADIENT }}
+                  >
+                    Lvl {visibleLevel}
+                  </span>
+                )}
+                <span>{rankTitle || 'Standing'}</span>
+              </button>
             )}
-            <span>Level {visibleLevel}</span>
-          </button>
+            {isOwner && !isVerified && onOpenVerificationModal && verificationLevelGate !== null && (
+              <button
+                type="button"
+                onClick={onOpenVerificationModal}
+                className={cn(
+                  "inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-full text-[12px] font-medium cursor-pointer transition-colors",
+                  isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900",
+                  PRESS, FOCUS_RING
+                )}
+              >
+                <BadgeCheck className="w-3.5 h-3.5 opacity-80" aria-hidden="true" />
+                <span>
+                  {visibleLevel !== null && visibleLevel >= verificationLevelGate
+                    ? 'Apply for Verification'
+                    : `Verify at Lvl ${verificationLevelGate}`}
+                </span>
+              </button>
+            )}
+          </div>
         )}
 
         {/* 5. Designations */}
@@ -1016,12 +1075,12 @@ export const ProfileHeroSection = memo(({
         {/* 6. Motto divider */}
         {motto && (
           <div className="mt-4 w-full flex items-center gap-3">
-            <span aria-hidden="true" className="h-px flex-1" style={{ background: 'linear-gradient(90deg, transparent, #8B1EF3)' }} />
+            <span aria-hidden="true" className="h-px flex-1" style={{ background: `linear-gradient(90deg, transparent, ${tokens.color.brand.violet})` }} />
             <p className={cn("min-w-0 max-w-[80%] inline-flex items-center justify-center gap-2 text-[14px] italic font-medium leading-snug [overflow-wrap:anywhere]", isDark ? "text-slate-100" : "text-slate-800")}>
               {isRoyal && <Crown className="w-4 h-4 shrink-0 text-amber-500" aria-hidden="true" />}
               <span>{motto}</span>
             </p>
-            <span aria-hidden="true" className="h-px flex-1" style={{ background: 'linear-gradient(90deg, #0088FF, transparent)' }} />
+            <span aria-hidden="true" className="h-px flex-1" style={{ background: `linear-gradient(90deg, ${tokens.color.brand.cyan}, transparent)` }} />
           </div>
         )}
 
@@ -1075,12 +1134,14 @@ export const ProfileHeroSection = memo(({
               type="button"
               onClick={onEditProfile || (() => navigate('/profile/edit'))}
               className={cn(
-                "relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
-                "text-[15px] font-semibold text-white cursor-pointer hover:brightness-110", PRESS, FOCUS_RING
+                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden border border-white/25",
+                "text-[15px] font-semibold tracking-tight text-white cursor-pointer hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0",
+                PRESS, FOCUS_RING
               )}
               style={{ background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
             >
-              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.28), transparent)' }} />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ background: 'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.16) 50%, transparent 75%)' }} />
               <Edit3 className="relative w-[18px] h-[18px]" aria-hidden="true" />
               <span className="relative">Edit Profile</span>
             </button>
@@ -1091,33 +1152,62 @@ export const ProfileHeroSection = memo(({
               disabled={friendRequestLoading}
               aria-busy={friendRequestLoading || undefined}
               className={cn(
-                "relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
-                "text-[15px] font-semibold text-white cursor-pointer hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed", PRESS, FOCUS_RING
+                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden border border-white/25",
+                "text-[15px] font-semibold tracking-tight text-white cursor-pointer hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed",
+                PRESS, FOCUS_RING
               )}
               style={{ background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
             >
-              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.28), transparent)' }} />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
               <UserPlus className="relative w-[18px] h-[18px]" aria-hidden="true" />
               <span className="relative">Accept Friend Request</span>
+            </button>
+          ) : !heroFollowersUnlocked ? (
+            <button
+              type="button"
+              onClick={friendIsInteractive ? friendAction : undefined}
+              disabled={friendRequestLoading || friendshipStatus === 'friends' || !friendAction}
+              aria-busy={friendRequestLoading || undefined}
+              title={!friendAction ? 'Preview only: this is how your profile looks to others' : undefined}
+              className={cn(
+                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
+                "text-[15px] font-semibold tracking-tight cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed", PRESS, FOCUS_RING,
+                friendshipStatus === 'friends' || friendshipStatus === 'pending'
+                  ? text
+                  : "border border-white/25 text-white hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0"
+              )}
+              style={friendshipStatus === 'friends' || friendshipStatus === 'pending'
+                ? material.tile
+                : { background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
+            >
+              {friendshipStatus !== 'friends' && friendshipStatus !== 'pending' && (
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
+              )}
+              <FriendIcon className="relative w-[18px] h-[18px]" aria-hidden="true" />
+              <span className="relative">{friendLabel}</span>
             </button>
           ) : (
             <button
               type="button"
-              onClick={onFollowToggle}
-              disabled={followLoading || !canFollowAction}
+              onClick={canFollowAction ? onFollowToggle : undefined}
+              disabled={followLoading || !onFollowToggle}
+              aria-disabled={!followAllowed || undefined}
               aria-busy={followLoading || undefined}
-              title={!onFollowToggle ? 'Preview only: this is how your profile looks to others' : undefined}
+              title={!onFollowToggle ? 'Preview only: this is how your profile looks to others' : (!followAllowed ? 'Follow is unavailable for this profile' : undefined)}
               className={cn(
-                "relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
-                "text-[15px] font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed", PRESS, FOCUS_RING,
-                isFollowing || requestStatus === 'pending' ? text : "text-white hover:brightness-110"
+                "group relative w-full min-h-[52px] min-[412px]:min-h-[54px] rounded-[18px] inline-flex items-center justify-center gap-2 overflow-hidden",
+                "text-[15px] font-semibold tracking-tight cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed", PRESS, FOCUS_RING,
+                !followAllowed && "opacity-60 cursor-not-allowed",
+                isFollowing || requestStatus === 'pending'
+                  ? text
+                  : "border border-white/25 text-white hover:brightness-[1.06] hover:-translate-y-[0.5px] active:translate-y-0"
               )}
               style={isFollowing || requestStatus === 'pending'
                 ? material.tile
                 : { background: BRAND_GRADIENT, boxShadow: material.primaryShadow }}
             >
               {!(isFollowing || requestStatus === 'pending') && (
-                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.28), transparent)' }} />
+                <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/2" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.30), transparent)' }} />
               )}
               <FollowIcon className="relative w-[18px] h-[18px]" aria-hidden="true" />
               <span className="relative">{followLabel}</span>
@@ -1141,7 +1231,8 @@ export const ProfileHeroSection = memo(({
                 label="Message"
                 isDark={isDark}
                 style={material.tile}
-                disabled={!canMessageAction}
+                disabled={!onOpenMessages}
+                capabilityDenied={caps.canMessage === false}
                 title={!onOpenMessages ? 'Preview only' : (caps.canMessage === false ? 'Messaging is not available' : undefined)}
                 onClick={onOpenMessages}
               />
@@ -1173,7 +1264,6 @@ export const ProfileHeroSection = memo(({
                 label="More"
                 isDark={isDark}
                 style={material.tile}
-                disabled={menuItems.length === 0}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 aria-controls={menuId}
@@ -1195,6 +1285,25 @@ export const ProfileHeroSection = memo(({
                 {menuItems.map(({ key, ...item }) => (
                   <MenuItem key={key} isDark={isDark} {...item} />
                 ))}
+                {!isOwner && (
+                  <MenuItem
+                    key="gift"
+                    icon={Gift}
+                    label="Send coins"
+                    disabled={!onOpenTipModal}
+                    capabilityDenied={caps.canTip === false}
+                    onClick={closeThen(onOpenTipModal)}
+                    isDark={isDark}
+                  />
+                )}
+                <MenuItem
+                  key="options"
+                  icon={MoreHorizontal}
+                  label={isOwner ? 'Profile options & View As' : 'More options'}
+                  disabled={!onOpenOptions}
+                  onClick={closeThen(onOpenOptions)}
+                  isDark={isDark}
+                />
               </div>
             </div>
           </div>

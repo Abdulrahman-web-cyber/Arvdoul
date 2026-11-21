@@ -645,6 +645,29 @@ class SocialGraphService {
     return this.hydrateProfiles(top, { viewerId: userId });
   }
 
+  /**
+   * Bounded mutual-friend count (intersection of outgoing following and incoming
+   * followers). Returns null on error so callers stay fail-closed.
+   */
+  async getFriendCount(userId, { maxEdges = 500 } = {}) {
+    if (!userId) return null;
+    try {
+      const [followingPage, followerPage] = await Promise.all([
+        this.listEdges(userId, 'following', { limit: maxEdges }),
+        this.listEdges(userId, 'followers', { limit: maxEdges }),
+      ]);
+      const followerSet = new Set(followerPage?.ids || []);
+      let count = 0;
+      for (const id of followingPage?.ids || []) {
+        if (followerSet.has(id)) count += 1;
+      }
+      return count;
+    } catch (err) {
+      logger.warn('[SocialGraph] getFriendCount failed', { userId, error: err?.message });
+      return null;
+    }
+  }
+
   /** Graph summary for a profile header: counts plus the viewer's edge. */
   async getSummary(userId, viewerId = null) {
     if (!userId) return null;

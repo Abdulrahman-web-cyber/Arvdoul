@@ -177,7 +177,8 @@ const normalizeFirebaseError = (error) => {
     'auth/requires-recent-login': 'Session expired. Please sign in again.',
     'auth/app-not-authorized': 'Phone authentication not enabled. Contact support.',
     'auth/operation-not-allowed': 'SMS not enabled for this region. Enable phone auth in Firebase console.',
-    'auth/recaptcha-failed': 'reCAPTCHA setup failed. Check your domain configuration.'
+    'auth/recaptcha-failed': 'reCAPTCHA setup failed. Check your domain configuration.',
+    'permission-denied': 'Missing permissions to complete account setup. Please try signing in again.'
   };
   return commonMap[code] || error?.message || 'Authentication failed. Please try again.';
 };
@@ -1139,7 +1140,7 @@ export function AuthProvider({ children }) {
             method: 'google',
             userData: result.user,
             timestamp: Date.now(),
-            emailVerified: true,
+            emailVerified: Boolean(result.user?.emailVerified),
             requiresProfile: true
           });
           toast.success('Welcome to Arvdoul! Complete your profile.');
@@ -1269,6 +1270,7 @@ export function AuthProvider({ children }) {
           // verified email on every profile (and the `|| true` meant a false
           // Firebase value could never be represented). Carry the real value.
           emailVerified: Boolean(user.emailVerified),
+          phoneVerified: Boolean(user.phoneNumber),
           authProvider: user.authProvider || 'email',
           isProfileComplete: true
         });
@@ -1289,14 +1291,28 @@ export function AuthProvider({ children }) {
     });
   }, [userService, user]);
 
-  const updateUserProfile = useCallback(async (updates) => {
+  const updateUserProfile = useCallback(async (updates, options = {}) => {
     if (!userService || !user) throw new Error('Services not ready');
     try {
-      await userService.updateUserProfile(user.uid, updates);
-      toast.success('Profile updated!');
+      const result = await userService.updateUserProfile(user.uid, updates);
+      const patched = result?.updatedFields || updates;
+      if (isMounted.current) {
+        setUserProfile((prev) => {
+          const next = { ...(prev || {}), ...patched };
+          prevProfileRef.current = next;
+          syncUserWithAppStore(user, next, setCurrentUserRef.current);
+          return next;
+        });
+      }
+      if (!options?.silent) {
+        toast.success('Profile updated!');
+      }
+      return result;
     } catch (error) {
-      const errorMessage = normalizeFirebaseError(error);
-      debouncedToast(errorMessage, 'error');
+      if (!options?.silent) {
+        const errorMessage = normalizeFirebaseError(error);
+        debouncedToast(errorMessage, 'error');
+      }
       throw error;
     }
   }, [userService, user]);

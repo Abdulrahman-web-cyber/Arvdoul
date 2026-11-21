@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
+import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { useNavBadges } from '../../hooks/useNavBadges';
 import { fetchAdminStatus } from '../../services/callableService';
@@ -32,8 +33,9 @@ import { cn } from '../../lib/utils';
 
 export default function DesktopNavRail() {
   const { isDark } = useTheme();
-  const { user } = useAuth();
-  const currentProfile = useProfileStore((s) => s.profile);
+  const { user, userProfile } = useAuth();
+  const appUser = useAppStore((s) => s.currentUser);
+  const storeProfile = useProfileStore((s) => s.profile);
   const badges = useNavBadges();
   const location = useLocation();
   const navigate = useNavigate();
@@ -82,18 +84,25 @@ export default function DesktopNavRail() {
     });
   }
 
+  const ownerUid = user?.uid || userProfile?.uid || appUser?.uid || null;
+  const ownerProfile =
+    (storeProfile && ownerUid && (storeProfile.id === ownerUid || storeProfile.uid === ownerUid) ? storeProfile : null) ||
+    (userProfile && (!ownerUid || userProfile.uid === ownerUid || userProfile.id === ownerUid) ? userProfile : null) ||
+    (appUser && (!ownerUid || appUser.uid === ownerUid || appUser.id === ownerUid) ? appUser : null) ||
+    user;
+
   const displayName = pickDisplayName(
-    [currentProfile?.displayName, user?.displayName],
-    { fallback: user?.uid ? `user ${String(user.uid).slice(0, 6)}` : 'Account' }
+    [ownerProfile?.displayName, user?.displayName],
+    { fallback: ownerUid ? `user ${String(ownerUid).slice(0, 6)}` : 'Account' }
   );
   const handle = pickHandle(
-    [currentProfile?.username, deriveHandle(user?.email)],
+    [ownerProfile?.username, deriveHandle(user?.email)],
     { fallback: '' }
   );
   const avatarUrl = getSafeAvatarUrl(
-    currentProfile?.photoURL || user?.photoURL,
+    ownerProfile?.photoURL || user?.photoURL,
     displayName,
-    user?.uid
+    ownerUid
   );
 
   return (

@@ -65,30 +65,38 @@ class ProductionAuthService {
           if (redirectResult?.user) {
             logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
             const user = redirectResult.user;
+            await user.getIdToken(true).catch(() => {});
             const additionalInfo = getAdditionalUserInfo(redirectResult);
             const isNewUser = additionalInfo?.isNewUser || false;
             if (isNewUser && additionalInfo?.profile) {
-              await updateProfile(user, {
-                displayName: additionalInfo.profile.name || user.displayName,
-                photoURL: additionalInfo.profile.picture || user.photoURL
-              });
+              try {
+                await updateProfile(user, {
+                  displayName: additionalInfo.profile.name || user.displayName,
+                  photoURL: additionalInfo.profile.picture || user.photoURL
+                });
+              } catch (e) {
+                logger.warn('Google redirect auth profile sync failed', { uid: user.uid, error: e?.message });
+              }
               const { createUserProfile } = await import('./userService.js');
               try {
                 await createUserProfile(user.uid, {
                   displayName: user.displayName,
-                  email: user.email,
+                  email: user.email || '',
                   photoURL: user.photoURL,
                   authProvider: 'google',
-                  emailVerified: user.emailVerified,
+                  emailVerified: Boolean(user.emailVerified),
+                  phoneVerified: Boolean(user.phoneNumber),
                   isProfileComplete: false
                 });
               } catch (pErr) {
+                logger.warn('Google redirect profile bootstrap failed', { uid: user.uid, error: pErr?.message });
                 this._storePendingProfile(user.uid, {
                   displayName: user.displayName,
-                  email: user.email,
+                  email: user.email || '',
                   photoURL: user.photoURL,
                   authProvider: 'google',
-                  emailVerified: user.emailVerified,
+                  emailVerified: Boolean(user.emailVerified),
+                  phoneVerified: Boolean(user.phoneNumber),
                   isProfileComplete: false
                 });
               }
@@ -816,7 +824,9 @@ class ProductionAuthService {
       const provider = new GoogleAuthProvider();
       provider.addScope('profile');
       provider.addScope('email');
-      provider.setCustomParameters({ prompt: 'select_account', login_hint: options.email || '' });
+      const customParams = { prompt: 'select_account' };
+      if (options.email) customParams.login_hint = options.email;
+      provider.setCustomParameters(customParams);
       await setPersistence(this.auth, browserLocalPersistence);
 
       let result;
@@ -861,10 +871,14 @@ class ProductionAuthService {
         }
       }
 
+      // Ensure Firestore receives an up-to-date ID token with verified claims
+      // immediately after OAuth login before reading/writing owner-only docs.
+      await user.getIdToken(true).catch(() => {});
+
       const { getUserProfile, createUserProfile } = await import('./userService.js');
       let profile = null;
       try {
-        profile = await getUserProfile(user.uid);
+        profile = await getUserProfile(user.uid, user.uid);
       } catch (e) {
         logger.warn('Profile lookup during Google auth failed', { uid: user.uid, error: e?.message });
       }
@@ -872,42 +886,60 @@ class ProductionAuthService {
       const isAccountNew = isNewUser || !profile;
       let profileCreated = false;
       if (!profile) {
+        const step1 = this._getSignupStep1Data();
+        const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();
+        const lastName = (step1.lastName || additionalInfo?.profile?.family_name || '').trim();
+        const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
+
+        const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || `user ${String(user.uid).slice(0, 6)}`;
+        const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
+
+        let nameCandidate = (firstName && lastName)
+          ? `${firstName}_${lastName}`
+          : (firstName || user.email?.split('@')[0] || initialDisplayName);
+        nameCandidate = nameCandidate.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+
+        let initialUsername = '';
         try {
-          const step1 = this._getSignupStep1Data();
-          const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();
-          const lastName = (step1.lastName || additionalInfo?.profile?.family_name || '').trim();
-          const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
+          const { generateUniqueUsername } = await import('./userService.js');
+          initialUsername = await generateUniqueUsername(nameCandidate || 'user', user.uid);
+        } catch (uErr) {
+          initialUsername = nameCandidate && nameCandidate.length >= 3 ? nameCandidate : `user_${user.uid.slice(0, 6)}`;
+        }
 
-          const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || `user ${String(user.uid).slice(0, 6)}`;
-          const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
-          
-          let nameCandidate = (firstName && lastName)
-            ? `${firstName}_${lastName}`
-            : (firstName || user.email?.split('@')[0] || initialDisplayName);
-          nameCandidate = nameCandidate.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+        const createPayload = {
+          displayName: initialDisplayName,
+          firstName,
+          lastName,
+          gender: step1.gender || '',
+          dob: step1.dob || {},
+          username: initialUsername,
+          email: user.email || '',
+          photoURL: initialPhoto,
+          authProvider: 'google',
+          emailVerified: Boolean(user.emailVerified),
+          phoneVerified: Boolean(user.phoneNumber),
+          isProfileComplete: false,
+          accountStatus: 'active'
+        };
 
-          let initialUsername = '';
+        const attemptCreate = async () => {
+          await createUserProfile(user.uid, createPayload);
+        };
+
+        try {
           try {
-            const { generateUniqueUsername } = await import('./userService.js');
-            initialUsername = await generateUniqueUsername(nameCandidate || 'user', user.uid);
-          } catch (uErr) {
-            initialUsername = nameCandidate && nameCandidate.length >= 3 ? nameCandidate : `user_${user.uid.slice(0, 6)}`;
+            await attemptCreate();
+          } catch (firstErr) {
+            if (firstErr?.code === 'permission-denied' || String(firstErr?.message || '').toLowerCase().includes('permission')) {
+              await user.getIdToken(true).catch(() => {});
+              createPayload.emailVerified = Boolean(user.emailVerified);
+              createPayload.phoneVerified = Boolean(user.phoneNumber);
+              await attemptCreate();
+            } else {
+              throw firstErr;
+            }
           }
-
-          await createUserProfile(user.uid, {
-            displayName: initialDisplayName,
-            firstName,
-            lastName,
-            gender: step1.gender || '',
-            dob: step1.dob || {},
-            username: initialUsername,
-            email: user.email || '',
-            photoURL: initialPhoto,
-            authProvider: 'google',
-            emailVerified: true,
-            isProfileComplete: false,
-            accountStatus: 'active'
-          });
           profileCreated = true;
           logger.warn('// User profile created in Firestore for Google signup/login with username:', initialUsername);
           try {
@@ -917,18 +949,19 @@ class ProductionAuthService {
             logger.warn('markOnboardingRequired failed for Google signup', { uid: user.uid, error: e?.message });
           }
           try {
-            profile = await getUserProfile(user.uid);
+            profile = await getUserProfile(user.uid, user.uid);
           } catch (e) {
             logger.warn('Profile re-read after Google creation failed', { uid: user.uid, error: e?.message });
           }
         } catch (profileError) {
           logger.error('❌ Profile creation failed', profileError);
           this._storePendingProfile(user.uid, {
-            displayName: user.displayName || `user ${String(user.uid).slice(0, 6)}`,
-            email: user.email,
-            photoURL: user.photoURL,
+            displayName: initialDisplayName,
+            email: user.email || '',
+            photoURL: initialPhoto,
             authProvider: 'google',
-            emailVerified: true,
+            emailVerified: Boolean(user.emailVerified),
+            phoneVerified: Boolean(user.phoneNumber),
             isProfileComplete: false
           });
         }
@@ -949,7 +982,7 @@ class ProductionAuthService {
           uid: user.uid,
           userId: user.uid,
           email: user.email,
-          emailVerified: true,
+          emailVerified: Boolean(user.emailVerified),
           displayName: user.displayName || profile?.displayName || `user ${String(user.uid).slice(0, 6)}`,
           photoURL: user.photoURL || profile?.photoURL || null,
           isNewUser: isAccountNew,
@@ -1235,7 +1268,8 @@ class ProductionAuthService {
         : 'Pop-up blocked by browser. Please allow pop-ups for this site.',
       'auth/unauthorized-domain': 'This domain is not authorized for OAuth in Firebase. Please use Email or Phone authentication.',
       'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in method.',
-      'auth/credential-already-in-use': 'This credential is already associated with a different user account.'
+      'auth/credential-already-in-use': 'This credential is already associated with a different user account.',
+      'permission-denied': 'Missing permissions while setting up your account. Please refresh and sign in again.'
     };
     errorMessage = map[errorCode] || errorMessage;
     return new AuthError(errorCode, errorMessage, error);

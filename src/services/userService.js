@@ -657,6 +657,8 @@ class ProfessionalUserService {
       bio: sanitise(profileData.bio || ''),
       website: sanitise(profileData.website || ''),
       location: sanitise(profileData.location || ''),
+      ...(profileData.gender ? { gender: sanitise(profileData.gender) } : {}),
+      ...(profileData.dob && typeof profileData.dob === 'object' ? { dob: profileData.dob } : {}),
       publicKey: profileData.publicKey || null,
 
       followerCount: 0,
@@ -692,9 +694,22 @@ class ProfessionalUserService {
       updatedAt: serverTimestamp(),
       lastLogin: serverTimestamp(),
       profileCompletedAt: profileData.isProfileComplete ? serverTimestamp() : null,
-      emailVerified: profileData.emailVerified || false,
-      phoneVerified: profileData.phoneVerified || false
+      emailVerified: Boolean(profileData.emailVerified),
+      phoneVerified: Boolean(profileData.phoneVerified)
     };
+
+    // Align verification booleans with live Firebase Auth token claims so
+    // `users_private` create/update rules never fail on stale caller booleans.
+    try {
+      const firebase = await import('../firebase/firebase.js');
+      const auth = await firebase.getAuthInstance();
+      if (auth?.currentUser && auth.currentUser.uid === userId) {
+        profile.emailVerified = Boolean(auth.currentUser.emailVerified);
+        profile.phoneVerified = Boolean(auth.currentUser.phoneNumber);
+        if (!profile.email && auth.currentUser.email) profile.email = auth.currentUser.email;
+        if (!profile.phoneNumber && auth.currentUser.phoneNumber) profile.phoneNumber = auth.currentUser.phoneNumber;
+      }
+    } catch { /* non-blocking in non-browser/test environments */ }
 
     const userDoc = doc(this.firestore, 'users', userId);
     const usernameDoc = doc(this.firestore, 'usernames', username);
@@ -707,11 +722,20 @@ class ProfessionalUserService {
     // private half (or vice versa).
     const { publicFields, privateFields } = splitProfileFields(profile);
 
+    const presenceDoc = doc(this.firestore, 'user_presence', userId);
+
     await runTransaction(this.firestore, async (transaction) => {
-      // Execute all reads first before any writes
+      // Execute ALL reads first before any writes
       const existingUsername = await transaction.get(usernameDoc);
       const existingUser = await transaction.get(userDoc);
       const existingPrivate = await transaction.get(privateDoc);
+      const existingPresence = await transaction.get(presenceDoc);
+
+      const oldUsername = existingUser.exists() ? existingUser.data()?.username : null;
+      const oldUsernameDoc = (oldUsername && oldUsername !== username)
+        ? doc(this.firestore, 'usernames', oldUsername)
+        : null;
+      const existingOldUsernameSnap = oldUsernameDoc ? await transaction.get(oldUsernameDoc) : null;
 
       if (existingUsername.exists() && existingUsername.data()?.userId !== userId) {
         throw new Error(`Username "${username}" is already taken. Please choose another one.`);
@@ -740,10 +764,8 @@ class ProfessionalUserService {
         if (publicFields.gender !== undefined) userUpdate.gender = publicFields.gender;
         if (publicFields.dob !== undefined) userUpdate.dob = publicFields.dob;
         if (publicFields.photoURL !== undefined && publicFields.photoURL) userUpdate.photoURL = publicFields.photoURL;
-        const oldUsername = existingUser.data()?.username;
-        if (oldUsername && oldUsername !== username) {
-          const oldDoc = doc(this.firestore, 'usernames', oldUsername);
-          transaction.delete(oldDoc);
+        if (oldUsernameDoc && existingOldUsernameSnap?.exists() && existingOldUsernameSnap.data()?.userId === userId) {
+          transaction.delete(oldUsernameDoc);
         }
         transaction.update(userDoc, userUpdate);
       } else {
@@ -773,38 +795,50 @@ class ProfessionalUserService {
         transaction.set(privateDoc, seed);
       }
 
-      transaction.set(usernameDoc, {
-        userId,
-        username,
-        createdAt: serverTimestamp()
-      }, { merge: true });
+      if (existingUsername.exists()) {
+        transaction.update(usernameDoc, {
+          userId,
+          username,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        transaction.set(usernameDoc, {
+          userId,
+          username,
+          createdAt: serverTimestamp()
+        });
+      }
 
       // Presence is scope-gated (user_presence/{uid}), not on the world-readable
       // users/{uid} doc. Written here so a brand-new account is online at signup.
-      transaction.set(doc(this.firestore, 'user_presence', userId), {
-        isOnline: true,
-        lastActive: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      if (existingPresence.exists()) {
+        transaction.update(presenceDoc, {
+          isOnline: true,
+          lastActive: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        transaction.set(presenceDoc, {
+          isOnline: true,
+          lastActive: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
     });
 
-    // Non‑critical side document (outside transaction). The `notifications` /
-    // `privacy` / `appearance` groups that used to be seeded here were read by
-    // nothing: notification prefs live under `notificationPreferences`
-    // (`notificationsService`), the Settings screen writes `users/{uid}.settings`,
-    // and profile privacy lives on the profile (AGENTS.md single-source rule).
+    // Non‑critical side document (outside transaction).
     const settingsDoc = doc(this.firestore, 'user_settings', userId);
     await setDoc(settingsDoc, {
       userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    }).catch((e) => logger.warn('Default settings seed failed', { userId, error: e?.message }));
+    }, { merge: true }).catch((e) => logger.warn('Default settings seed failed', { userId, error: e?.message }));
 
     const prefsDoc = doc(this.firestore, 'user_preferences', userId);
     await setDoc(prefsDoc, {
       muted: false, blockedTypes: [], priorityMap: {}, soundEnabled: true, vibrationEnabled: true,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    }).catch((e) => {
+    }, { merge: true }).catch((e) => {
       logger.debug('Default notification preferences write failed', { userId, error: e?.message });
     });
 
@@ -833,6 +867,8 @@ class ProfessionalUserService {
 
     const sanitizedUpdates = { ...validation.sanitized };
 
+    let resolvedRenamedUsername = null;
+
     if (updates.username) {
       const newUsername = updates.username.toLowerCase().trim();
       const { MIN_LENGTH, MAX_LENGTH, PATTERN } = PROFILE_CONSTRAINTS.USERNAME;
@@ -851,39 +887,59 @@ class ProfessionalUserService {
         if (!check.available) throw new Error(`Username "${newUsername}" not available`);
 
         const userDoc = doc(this.firestore, 'users', userId);
-        const oldDoc = doc(this.firestore, 'usernames', oldUsername);
         const newDoc = doc(this.firestore, 'usernames', newUsername);
-        const prevDoc = doc(this.firestore, 'previous_usernames', oldUsername);
+        const oldDoc = oldUsername ? doc(this.firestore, 'usernames', oldUsername) : null;
+        const prevDoc = oldUsername ? doc(this.firestore, 'previous_usernames', oldUsername) : null;
         await runTransaction(this.firestore, async (transaction) => {
+          // Execute ALL reads before any writes
           const snap = await transaction.get(newDoc);
-          if (snap.exists()) throw new Error(`Username "${newUsername}" taken.`);
-          if (oldUsername) {
-            transaction.set(prevDoc, {
-              userId,
-              oldUsername,
-              currentUsername: newUsername,
-              replacedAt: serverTimestamp()
-            });
+          const oldSnap = oldDoc ? await transaction.get(oldDoc) : null;
+          const prevSnap = prevDoc ? await transaction.get(prevDoc) : null;
+
+          if (snap.exists() && snap.data()?.userId !== userId) {
+            throw new Error(`Username "${newUsername}" taken.`);
+          }
+          if (oldUsername && oldDoc && prevDoc && oldSnap?.exists() && oldSnap.data()?.userId === userId) {
+            if (!prevSnap?.exists()) {
+              transaction.set(prevDoc, {
+                userId,
+                oldUsername,
+                currentUsername: newUsername,
+                replacedAt: serverTimestamp()
+              });
+            }
             transaction.delete(oldDoc);
           }
-          transaction.set(newDoc, { userId, username: newUsername, updatedAt: serverTimestamp() });
+          if (snap.exists()) {
+            transaction.update(newDoc, { userId, username: newUsername, updatedAt: serverTimestamp() });
+          } else {
+            transaction.set(newDoc, { userId, username: newUsername, updatedAt: serverTimestamp() });
+          }
           transaction.update(userDoc, { username: newUsername, updatedAt: serverTimestamp(), 'metadata.usernameUpdatedAt': serverTimestamp() });
         });
+        resolvedRenamedUsername = newUsername;
         delete sanitizedUpdates.username;
       }
     }
 
-    if (sanitizedUpdates.photoURL) {
-      sanitizedUpdates.metadata = { ...(sanitizedUpdates.metadata || {}), hasCustomAvatar: true, avatarUpdatedAt: serverTimestamp() };
+    if (sanitizedUpdates.photoURL === '') {
+      const current = await this.getUserProfile(userId, userId);
+      const resetAvatar = this.getAvatarUrl(userId, sanitizedUpdates.displayName || current?.displayName || current?.username, null);
+      sanitizedUpdates.photoURL = resetAvatar;
+      sanitizedUpdates['metadata.hasCustomAvatar'] = false;
+      sanitizedUpdates['metadata.avatarUpdatedAt'] = serverTimestamp();
+      this.avatarCache.set(`avatar_${userId}`, resetAvatar);
+    } else if (sanitizedUpdates.photoURL) {
+      sanitizedUpdates['metadata.hasCustomAvatar'] = true;
+      sanitizedUpdates['metadata.avatarUpdatedAt'] = serverTimestamp();
       this.avatarCache.delete(`avatar_${userId}`);
-    }
-
-    if (sanitizedUpdates.displayName && !sanitizedUpdates.photoURL) {
-      const current = await this.getUserProfile(userId);
+    } else if (sanitizedUpdates.displayName) {
+      const current = await this.getUserProfile(userId, userId);
       if (current && !current.metadata?.hasCustomAvatar) {
         const newAvatar = this.getAvatarUrl(userId, sanitizedUpdates.displayName, null);
         sanitizedUpdates.photoURL = newAvatar;
-        sanitizedUpdates.metadata = { ...(sanitizedUpdates.metadata || {}), hasCustomAvatar: false, avatarGeneratedAt: serverTimestamp() };
+        sanitizedUpdates['metadata.hasCustomAvatar'] = false;
+        sanitizedUpdates['metadata.avatarGeneratedAt'] = serverTimestamp();
         this.avatarCache.set(`avatar_${userId}`, newAvatar);
       }
     }
@@ -901,9 +957,11 @@ class ProfessionalUserService {
     if (sanitizedUpdates.locationCoordinates === null) {
       updatePayload.locationCoordinates = deleteField();
     }
-    await updateDoc(userRef, updatePayload);
+    if (Object.keys(sanitizedUpdates).length > 0) {
+      await updateDoc(userRef, updatePayload);
+    }
 
-    // Keep Firebase Auth current user in sync if displayName or photoURL was updated
+    // Keep Firebase Auth current user in sync if displayName or short http(s) photoURL changed
     try {
       const firebase = await import('../firebase/firebase.js');
       const auth = await firebase.getAuthInstance();
@@ -911,11 +969,32 @@ class ProfessionalUserService {
         const { updateProfile } = await import('firebase/auth');
         const authPatch = {};
         if (sanitizedUpdates.displayName) authPatch.displayName = sanitizedUpdates.displayName;
-        if (sanitizedUpdates.photoURL) authPatch.photoURL = sanitizedUpdates.photoURL;
-        await updateProfile(auth.currentUser, authPatch);
+        if (sanitizedUpdates.photoURL && /^https?:\/\//i.test(sanitizedUpdates.photoURL) && sanitizedUpdates.photoURL.length < 1800) {
+          authPatch.photoURL = sanitizedUpdates.photoURL;
+        }
+        if (Object.keys(authPatch).length > 0) {
+          await updateProfile(auth.currentUser, authPatch);
+        }
       }
     } catch (authSyncErr) {
       logger.warn('Firebase Auth profile sync failed (non-blocking)', { error: authSyncErr?.message });
+    }
+
+    const storeUpdates = {
+      ...sanitizedUpdates,
+      ...(resolvedRenamedUsername ? { username: resolvedRenamedUsername } : {}),
+    };
+    if ('metadata.hasCustomAvatar' in storeUpdates) {
+      delete storeUpdates['metadata.hasCustomAvatar'];
+    }
+    if ('metadata.avatarUpdatedAt' in storeUpdates) {
+      delete storeUpdates['metadata.avatarUpdatedAt'];
+    }
+    if ('metadata.avatarGeneratedAt' in storeUpdates) {
+      delete storeUpdates['metadata.avatarGeneratedAt'];
+    }
+    if (sanitizedUpdates.locationCoordinates === null) {
+      delete storeUpdates.locationCoordinates;
     }
 
     try {
@@ -923,7 +1002,7 @@ class ProfessionalUserService {
       const storeProfile = useProfileStore.getState().profile;
       if (storeProfile && (storeProfile.id === userId || storeProfile.uid === userId)) {
         useProfileStore.setState((state) => ({
-          profile: { ...(state.profile || {}), ...sanitizedUpdates }
+          profile: { ...(state.profile || {}), ...storeUpdates }
         }));
       }
     } catch (e) {
@@ -945,7 +1024,7 @@ class ProfessionalUserService {
       }
     }
 
-    return { success: true };
+    return { success: true, updatedFields: storeUpdates };
   }
 
   /**
@@ -1023,7 +1102,7 @@ class ProfessionalUserService {
   }
 
   async _getCurrentUsername(userId) {
-    const profile = await this.getUserProfile(userId);
+    const profile = await this.getUserProfile(userId, userId);
     if (!profile) throw new Error('User not found');
     return profile.username;
   }
@@ -1615,18 +1694,21 @@ class ProfessionalUserService {
     }
 
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
-    const requestRef = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
-    const fromUser = await this.getUserProfile(fromUserId);
+    const requestId = `${fromUserId}_${toUserId}`;
+    const requestRef = doc(this.firestore, 'friend_requests', requestId);
+    const fromUser = await this.getUserProfile(fromUserId, fromUserId);
     const result = await runTransaction(this.firestore, async (transaction) => {
       const snap = await transaction.get(requestRef);
-      if (snap.exists() && snap.data().status === 'pending') return { success: true, alreadyRequested: true };
+      if (snap.exists() && snap.data().status === 'pending') {
+        return { success: true, alreadyRequested: true, requestId };
+      }
       // Re-sending after decline/cancel is allowed (status resets to pending).
       transaction.set(requestRef, {
         fromUserId, toUserId, fromUserDisplayName: resolveActorName([fromUser?.displayName, fromUser?.username], fromUserId),
         fromUserPhotoURL: fromUser?.photoURL || null, status: 'pending',
         createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
-      return { success: true, alreadyRequested: false };
+      return { success: true, alreadyRequested: false, requestId };
     });
 
     // Notify the recipient (best-effort, never breaks the request).
@@ -1706,9 +1788,13 @@ class ProfessionalUserService {
     });
 
     if (requesterId && result.success) {
+      countersManager.invalidate({ docPath: `users/${requesterId}`, field: 'followingCount' });
+      countersManager.invalidate({ docPath: `users/${requesterId}`, field: 'followerCount' });
+      countersManager.invalidate({ docPath: `users/${userId}`, field: 'followingCount' });
+      countersManager.invalidate({ docPath: `users/${userId}`, field: 'followerCount' });
       try {
         const notif = await this._getNotificationsService();
-        const accepter = await this.getUserProfile(userId);
+        const accepter = await this.getUserProfile(userId, userId);
         await notif.sendNotification({
           type: 'friend_accepted', recipientId: requesterId, senderId: userId,
           title: 'Friend request accepted',
@@ -1768,9 +1854,44 @@ class ProfessionalUserService {
     // party who blocked the viewer) must not stay actionable in the inbox.
     const hidden = await this._blockedPairIds(userId);
     const otherField = type === 'received' ? 'fromUserId' : 'toUserId';
-    const requests = snap.docs
+    const rawRequests = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(r => !hidden.has(r[otherField]));
+
+    const otherIds = [...new Set(rawRequests.map(r => r[otherField]).filter(Boolean))];
+    let hydrated = new Map();
+    if (otherIds.length > 0) {
+      try {
+        hydrated = await socialGraphService.hydrateProfiles(otherIds);
+      } catch (e) {
+        logger.warn('Friend request profile hydration failed', { userId, error: e?.message });
+      }
+    }
+
+    const requests = rawRequests.map((req) => {
+      const peerId = req[otherField];
+      const peer = hydrated.get(peerId) || null;
+      if (!peer) return req;
+      const peerName = resolveActorName([peer.displayName, peer.username, req.fromUserDisplayName], peerId);
+      return {
+        ...req,
+        ...(type === 'received'
+          ? {
+              fromUserDisplayName: peerName,
+              fromUserUsername: peer.username || '',
+              fromUserPhotoURL: peer.photoURL || req.fromUserPhotoURL || null,
+              fromUserLevel: peer.level ?? null,
+            }
+          : {
+              toUserDisplayName: peerName,
+              toUserUsername: peer.username || '',
+              toUserPhotoURL: peer.photoURL || null,
+              toUserLevel: peer.level ?? null,
+            }),
+        peerProfile: peer,
+      };
+    });
+
     return { success: true, requests };
   }
 

@@ -21,6 +21,7 @@ import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
 import { pickDisplayName, pickHandle, deriveHandle, resolveActorName } from '../services/profileReadModel.js';
 import { getUserService } from '../services/userService.js';
+import { socialGraphService } from '../services/socialGraphService.js';
 import { getMonetizationService } from '../services/monetizationService.js';
 import { getAnalyticsService } from '../services/analyticsService.js';
 import { firestoreService } from '../services/firestoreService.js';
@@ -68,10 +69,13 @@ const initialState = {
   
   // Posts
   posts: [],
+  postsCount: null,
+  postsLikesCount: null,
   postsLoading: false,
   postsHasMore: true,
   postsCursor: null,
   postsError: null,
+  friendCount: null,
   
   // Highlights
   highlights: [],
@@ -193,7 +197,15 @@ export const useProfileStore = create(
         state.mutualFriends = [];
         state.mutualFriendsResolved = false;
         if (isSwitchingTarget) {
+          state.profile = null;
+          state.isOwner = Boolean(currentUserId && userId === currentUserId);
+          state.level = null;
+          state.balance = null;
+          state.position = null;
+          state.friendCount = null;
           state.posts = [];
+          state.postsCount = null;
+          state.postsLikesCount = null;
           state.postsHasMore = true;
           state.postsCursor = null;
           state.postsError = null;
@@ -219,14 +231,22 @@ export const useProfileStore = create(
         const profile = await userService.getUserProfile(userId, currentUserId, options);
         const resolvedUid = profile?.id || profile?.uid || userId;
 
-        // Fetch viewer-scoped follow status, mutual friends, balance, and position in parallel
-        const [followSettled, mutualSettled, balanceSettled, positionSettled] = await Promise.allSettled([
+        const canReadFriendsCount =
+          Boolean(resolvedUid) &&
+          !profile?.isBlocked &&
+          (isOwner || profile?.canViewFriendsList !== false);
+
+        // Fetch viewer-scoped follow status, mutual friends, friend count, balance, and position in parallel
+        const [followSettled, mutualSettled, friendCountSettled, balanceSettled, positionSettled] = await Promise.allSettled([
           (!isOwner && currentUserId)
             ? userService.getFollowStatus(currentUserId, resolvedUid)
             : Promise.resolve(null),
           (!isOwner && currentUserId)
             ? userService.getMutualFriends(currentUserId, resolvedUid)
             : Promise.resolve({ mutualFriends: [] }),
+          canReadFriendsCount && typeof socialGraphService.getFriendCount === 'function'
+            ? socialGraphService.getFriendCount(resolvedUid)
+            : Promise.resolve(null),
           isOwner
             ? monetizationService.getBalance(resolvedUid)
             : Promise.resolve(null),
@@ -254,6 +274,11 @@ export const useProfileStore = create(
           mutualFriendsResolved = true;
         }
 
+        const friendCount =
+          friendCountSettled.status === 'fulfilled' && typeof friendCountSettled.value === 'number'
+            ? friendCountSettled.value
+            : null;
+
         const level = profile?.level || null;
 
         let balance = null;
@@ -272,37 +297,35 @@ export const useProfileStore = create(
         } else {
           console.warn('Could not fetch position:', positionSettled.reason);
         }
-        
-        // Resolve profile with safe fallback guarantee & real auth user linkage.
-        // Identity fallbacks go through the canonical read model so a
-        // placeholder handle/name is never surfaced as if it were real (the
-        // read model returns null and the UI shows an honest unavailable state).
-        const appCurrentUser = useAppStore.getState().currentUser || getStoredUser();
+
+        // Resolve profile strictly separating owner auth context from visited public profiles.
+        const appCurrentUser = isOwner ? (useAppStore.getState().currentUser || getStoredUser()) : null;
         const storedUid = getStoredUid();
-        const effectiveUid = currentUserId || storedUid;
-        const fallbackDisplayName = pickDisplayName(
-          [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
-          { fallback: resolveActorName([], effectiveUid || userId) }
-        );
+        const effectiveUid = isOwner ? (currentUserId || storedUid) : null;
+        const fallbackDisplayName = isOwner
+          ? pickDisplayName(
+              [appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)],
+              { fallback: resolveActorName([], effectiveUid || userId) }
+            )
+          : resolveActorName([], userId);
         const fallbackUsername = isOwner
           ? pickHandle([appCurrentUser?.username, deriveHandle(appCurrentUser?.email)])
           : null;
 
         const resolvedProfile = profile ? {
           ...profile,
-          displayName: pickDisplayName([profile.displayName, appCurrentUser?.displayName], { fallback: fallbackDisplayName }),
+          displayName: isOwner
+            ? pickDisplayName([profile.displayName, appCurrentUser?.displayName], { fallback: fallbackDisplayName })
+            : pickDisplayName([profile.displayName, profile.name], { fallback: resolveActorName([], resolvedUid || userId) }),
           username: pickHandle([profile.username]) || fallbackUsername,
+          ...(friendCount !== null && canReadFriendsCount ? { friendCount } : {}),
         } : {
-          // No profile document was returned. Never invent standing: omit
-          // coins/level/reputation and deny every viewer-gated section rather
-          // than rendering fabricated values as real. A null username tells the
-          // UI to show an unavailable state instead of a synthetic `user_*` id.
           id: userId || effectiveUid || null,
           uid: userId || effectiveUid || null,
           username: fallbackUsername,
           displayName: fallbackDisplayName,
-          bio: typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
-          photoURL: appCurrentUser?.photoURL || null,
+          bio: isOwner && typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
+          photoURL: isOwner ? (appCurrentUser?.photoURL || null) : null,
           isVerified: false,
           isCreator: false,
           canViewActivity: false,
@@ -310,7 +333,14 @@ export const useProfileStore = create(
           canViewTitles: false,
           canViewFollowersList: false,
           canViewFollowingList: false,
+          canViewFriendsList: false,
         };
+
+        // Preserve previously computed post likes if posts loaded faster than profile
+        const existingLikesCount = get().postsLikesCount;
+        if (typeof existingLikesCount === 'number' && (resolvedProfile.id === userId || resolvedProfile.uid === userId)) {
+          resolvedProfile.likesReceived = existingLikesCount;
+        }
 
         // Drop a stale response (account switch / newer navigation) — N013.
         if (get().requestSeq !== requestId) return;
@@ -323,6 +353,7 @@ export const useProfileStore = create(
           state.followStatus = followStatus;
           state.mutualFriends = mutualFriends;
           state.mutualFriendsResolved = mutualFriendsResolved;
+          state.friendCount = friendCount;
           state.level = resolvedProfile.level ?? level ?? null;
           const rawXp = resolvedProfile.experience ?? resolvedProfile.xp ?? null;
           state.experience = rawXp !== null && Number.isFinite(Number(rawXp)) ? Number(rawXp) : state.experience;
@@ -344,26 +375,26 @@ export const useProfileStore = create(
         const storedUid = getStoredUid();
         const effectiveUid = currentUserId || storedUid;
         const isOwner = !userId || userId === effectiveUid;
-        const localAuth = getStoredUser() || {};
+        const localAuth = isOwner ? (getStoredUser() || {}) : {};
 
-        const rawDisplayName = localAuth.displayName || localAuth.name;
-        const fallbackDisplayName = pickDisplayName(
-          [rawDisplayName, deriveHandle(localAuth.email)],
-          { fallback: resolveActorName([], effectiveUid || userId) }
-        );
+        const rawDisplayName = isOwner ? (localAuth.displayName || localAuth.name) : null;
+        const fallbackDisplayName = isOwner
+          ? pickDisplayName(
+              [rawDisplayName, deriveHandle(localAuth.email)],
+              { fallback: resolveActorName([], effectiveUid || userId) }
+            )
+          : resolveActorName([], userId);
         const fallbackUsername = isOwner
           ? pickHandle([localAuth.username, deriveHandle(localAuth.email)])
           : null;
 
         const fallbackProfile = {
-          // Load failed: surface a not-found state instead of inventing
-          // coins/level/reputation or granting viewer-gated sections.
           id: userId || effectiveUid || null,
           uid: userId || effectiveUid || null,
           username: fallbackUsername,
           displayName: fallbackDisplayName,
-          bio: typeof localAuth.bio === 'string' ? localAuth.bio : '',
-          photoURL: localAuth.photoURL || null,
+          bio: isOwner && typeof localAuth.bio === 'string' ? localAuth.bio : '',
+          photoURL: isOwner ? (localAuth.photoURL || null) : null,
           isVerified: false,
           isCreator: false,
           canViewActivity: false,
@@ -371,6 +402,7 @@ export const useProfileStore = create(
           canViewTitles: false,
           canViewFollowersList: false,
           canViewFollowingList: false,
+          canViewFriendsList: false,
         };
 
         if (get().requestSeq !== requestId) return;
@@ -380,6 +412,7 @@ export const useProfileStore = create(
           state.loading = false;
           state.error = error?.message || 'Profile unavailable';
           state.isOwner = isOwner;
+          state.friendCount = null;
           state.balance = null;
           state.level = null;
           state.experience = null;
@@ -494,16 +527,15 @@ export const useProfileStore = create(
       });
       
       try {
-        const result = await firestoreService.getPostsByUser(userId, {
+        const viewerId = getStoredUid() || useAppStore.getState().currentUser?.uid || null;
+        const constrainAuthorIsPrivate = !isApprovedFollowerView(get, userId, options);
+        const queryOpts = {
           limit: options.limit || 12,
-          viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
-          // A private author's approved follower reads the grid through the
-          // follower shape, which must NOT constrain `authorIsPrivate` (the rule
-          // proves the edge from `authorId`). Everyone else keeps the public
-          // shape — an unconstrained list is denied wholesale.
-          constrainAuthorIsPrivate: !isApprovedFollowerView(get, userId, options),
+          viewerId,
+          constrainAuthorIsPrivate,
           ...options,
-        });
+        };
+        const result = await firestoreService.getPostsByUser(userId, queryOpts);
 
         let userPosts = result?.posts || [];
         try {
@@ -526,10 +558,51 @@ export const useProfileStore = create(
         } catch (e) {
           console.warn('Local post merge into profile failed', e?.message);
         }
+
+        const livePosts = (userPosts || []).filter(
+          (p) => p && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled'
+        );
+        const liveLoadedCount = livePosts.length;
+        let nextPostsCount = null;
+        if (!result?.hasMore && liveLoadedCount > 0) {
+          nextPostsCount = liveLoadedCount;
+        } else if (typeof firestoreService.getUserPostsCount === 'function') {
+          const counted = await firestoreService.getUserPostsCount(userId, queryOpts).catch(() => null);
+          if (typeof counted === 'number' && Number.isFinite(counted)) {
+            nextPostsCount = Math.max(counted, liveLoadedCount);
+          }
+        } else if (!result?.hasMore && liveLoadedCount === 0) {
+          nextPostsCount = 0;
+        }
+
+        let nextLikesCount = null;
+        if (!result?.hasMore) {
+          nextLikesCount = livePosts.reduce((sum, p) => {
+            const likes = Number(p?.stats?.likes ?? p?.likes ?? 0);
+            return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
+          }, 0);
+        } else if (typeof firestoreService.getUserTotalPostLikes === 'function') {
+          nextLikesCount = await firestoreService.getUserTotalPostLikes(userId, queryOpts).catch(() => null);
+        }
         
         if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
           state.posts = userPosts;
+          if (nextPostsCount !== null) {
+            state.postsCount = nextPostsCount;
+            if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
+              const existingCount = Number(state.profile.postCount);
+              if (!result?.hasMore || !Number.isFinite(existingCount) || nextPostsCount > existingCount) {
+                state.profile.postCount = nextPostsCount;
+              }
+            }
+          }
+          if (typeof nextLikesCount === 'number' && Number.isFinite(nextLikesCount)) {
+            state.postsLikesCount = nextLikesCount;
+            if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
+              state.profile.likesReceived = nextLikesCount;
+            }
+          }
           state.postsLoading = false;
           state.postsHasMore = result.hasMore || false;
           state.postsCursor = result.nextCursor || null;
@@ -559,9 +632,9 @@ export const useProfileStore = create(
       });
 
       try {
-        const firestoreService = (await import('../services/firestoreService.js')).firestoreService;
+        const fsSvc = (await import('../services/firestoreService.js')).firestoreService;
 
-        const result = await firestoreService.getPostsByUser(userId, {
+        const result = await fsSvc.getPostsByUser(userId, {
           limit: 12,
           cursor: postsCursor,
           viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
@@ -575,6 +648,30 @@ export const useProfileStore = create(
           const seen = new Set(state.posts.map((p) => p.id));
           const fresh = (result.posts || []).filter((p) => p && !seen.has(p.id));
           state.posts = [...state.posts, ...fresh];
+          const livePosts = state.posts.filter(
+            (p) => p && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled'
+          );
+          const liveCount = livePosts.length;
+          if (state.postsCount !== null || (!result.hasMore && liveCount > 0)) {
+            const reconciled = Math.max(state.postsCount || 0, liveCount);
+            state.postsCount = reconciled;
+            if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
+              const existingCount = Number(state.profile.postCount);
+              if (!Number.isFinite(existingCount) || reconciled > existingCount) {
+                state.profile.postCount = reconciled;
+              }
+            }
+          }
+          if (!result.hasMore) {
+            const fullLikesTotal = livePosts.reduce((sum, p) => {
+              const likes = Number(p?.stats?.likes ?? p?.likes ?? 0);
+              return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
+            }, 0);
+            state.postsLikesCount = fullLikesTotal;
+            if (state.profile && (state.profile.id === userId || state.profile.uid === userId)) {
+              state.profile.likesReceived = fullLikesTotal;
+            }
+          }
           state.postsLoading = false;
           state.postsHasMore = result.hasMore || false;
           state.postsCursor = result.nextCursor || null;

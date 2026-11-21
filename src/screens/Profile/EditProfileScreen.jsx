@@ -30,7 +30,6 @@ import {
   Plus, 
   Trash2, 
   Lock, 
-  Eye, 
   Sparkles, 
   RefreshCw, 
   CheckCircle2, 
@@ -156,6 +155,7 @@ export default function EditProfileScreen() {
   });
 
   const [saving, setSaving] = useState(false);
+  const [removingAvatar, setRemovingAvatar] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -164,7 +164,6 @@ export default function EditProfileScreen() {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [usernameAvailability, setUsernameAvailability] = useState(null);
   const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
-  const [activeSection, setActiveSection] = useState('all');
 
   // Prevent background snapshot pulses from wiping unsaved edits & track dirty state
   const initializedUidRef = useRef(null);
@@ -179,22 +178,6 @@ export default function EditProfileScreen() {
       }
     };
   }, []);
-
-  // Profile completeness calculation
-  const completeness = useMemo(() => {
-    let score = 0;
-    const checks = [
-      { id: 'avatar', label: 'Citizen Avatar', completed: Boolean(avatarPreview && !avatarPreview.includes('default') && !avatarPreview.includes('placeholder')), weight: 20 },
-      { id: 'displayName', label: 'Display Name', completed: Boolean(formData.displayName?.trim()), weight: 20 },
-      { id: 'username', label: 'Unique Handle', completed: Boolean(formData.username?.trim() && !isPlaceholderHandle(formData.username)), weight: 20 },
-      { id: 'bio', label: 'Civic Bio', completed: Boolean(formData.bio?.trim()), weight: 20 },
-      { id: 'details', label: 'Coordinates or Links', completed: Boolean(formData.location?.trim() || formData.website?.trim() || formData.links?.length > 0), weight: 20 },
-    ];
-    checks.forEach(c => {
-      if (c.completed) score += c.weight;
-    });
-    return { score, checks };
-  }, [avatarPreview, formData.displayName, formData.username, formData.bio, formData.location, formData.website, formData.links]);
 
   const isDirty = useMemo(() => {
     if (avatarFile) return true;
@@ -276,7 +259,8 @@ export default function EditProfileScreen() {
       setUsernameAvailability(null);
       return;
     }
-    if (raw === (userProfile?.username || user?.username)) {
+    const existingUsername = (userProfile?.username || user?.username || '').trim().toLowerCase();
+    if (existingUsername && raw === existingUsername) {
       setUsernameAvailability('current');
       return;
     }
@@ -417,28 +401,37 @@ export default function EditProfileScreen() {
   }, []);
 
   const handleRemoveAvatar = useCallback(async () => {
-    if (!currentUid) return;
+    if (!currentUid || removingAvatar) return;
+    setRemovingAvatar(true);
     if (avatarObjectUrlRef.current) {
       URL.revokeObjectURL(avatarObjectUrlRef.current);
       avatarObjectUrlRef.current = null;
     }
+    const prevPreview = avatarPreview;
     const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || null, currentUid);
     setAvatarFile(null);
     setAvatarPreview(defaultAvatar);
-    if (updateUserProfile) {
-      await updateUserProfile({ photoURL: '' });
-    } else if (userService?.updateUserProfile) {
-      await userService.updateUserProfile(currentUid, { photoURL: '' });
+    try {
+      if (updateUserProfile) {
+        await updateUserProfile({ photoURL: '' }, { silent: true });
+      } else if (userService?.updateUserProfile) {
+        await userService.updateUserProfile(currentUid, { photoURL: '' });
+      }
+      useProfileStore.setState((s) => ({
+        profile: s.profile ? { ...s.profile, photoURL: '' } : s.profile,
+      }));
+      const appUser = useAppStore.getState().currentUser;
+      if (appUser && (appUser.uid === currentUid || appUser.id === currentUid)) {
+        useAppStore.getState().setCurrentUser({ ...appUser, photoURL: '' });
+      }
+      toast.success('Avatar reset to default citizen monogram');
+    } catch (err) {
+      setAvatarPreview(prevPreview);
+      toast.error(err?.message || 'Could not reset avatar');
+    } finally {
+      setRemovingAvatar(false);
     }
-    useProfileStore.setState((s) => ({
-      profile: s.profile ? { ...s.profile, photoURL: '' } : s.profile,
-    }));
-    const appUser = useAppStore.getState().currentUser;
-    if (appUser && (appUser.uid === currentUid || appUser.id === currentUid)) {
-      useAppStore.getState().setCurrentUser({ ...appUser, photoURL: '' });
-    }
-    toast.success('Avatar reset to default citizen monogram');
-  }, [currentUid, formData.displayName, updateUserProfile, userService]);
+  }, [currentUid, removingAvatar, avatarPreview, formData.displayName, updateUserProfile, userService]);
 
   // Save changes handler
   const handleSave = useCallback(async () => {
@@ -496,7 +489,8 @@ export default function EditProfileScreen() {
     setFieldErrors({});
     setSaving(true);
     try {
-      if (rawUser !== userProfile?.username && userService?.checkUsernameAvailability) {
+      const currentUsername = (userProfile?.username || user?.username || '').trim().toLowerCase();
+      if (rawUser !== currentUsername && userService?.checkUsernameAvailability) {
         const check = await userService.checkUsernameAvailability(rawUser);
         if (!check.available) {
           setFieldErrors({ username: `@${rawUser} is already taken.` });
@@ -511,7 +505,7 @@ export default function EditProfileScreen() {
         username: rawUser,
         bio: formData.bio?.trim() || '',
         tagline: formData.tagline?.trim() || '',
-        location: formData.location?.trim() || '',
+        location: formData.locationPrivacy === 'hidden' ? '' : (formData.location?.trim() || ''),
         locationPrivacy: formData.locationPrivacy || 'public',
         website: cleanWebsite,
         pronouns: formData.pronouns?.trim() || '',
@@ -536,16 +530,36 @@ export default function EditProfileScreen() {
       // Canonical validation via profileContracts
       const validation = validateProfileUpdate(rawUpdates);
       if (!validation.valid) {
+        const mappedErrors = {};
+        for (const msg of validation.errors || []) {
+          const lower = String(msg).toLowerCase();
+          if (lower.includes('display name')) mappedErrors.displayName = msg;
+          else if (lower.includes('username')) mappedErrors.username = msg;
+          else if (lower.includes('bio')) mappedErrors.bio = msg;
+          else if (lower.includes('website') || lower.includes('url')) mappedErrors.website = msg;
+          else if (lower.includes('email')) mappedErrors.inquiriesEmail = msg;
+          else if (lower.includes('link')) mappedErrors.links = msg;
+          else if (lower.includes('location')) mappedErrors.location = msg;
+        }
+        if (Object.keys(mappedErrors).length > 0) setFieldErrors(mappedErrors);
         toast.error(validation.errors?.[0] || 'Please correct the invalid fields.');
         setSaving(false);
         return;
       }
 
-      const sanitizedUpdates = validation.sanitized;
+      const sanitizedUpdates = { ...validation.sanitized };
 
-      // Upload avatar if changed
+      // Upload avatar first if changed and capture canonical URL
+      let uploadedAvatarUrl = null;
       if (avatarFile && currentUid && userService?.uploadAvatar) {
-        await userService.uploadAvatar(currentUid, avatarFile);
+        const uploadResult = await userService.uploadAvatar(currentUid, avatarFile);
+        uploadedAvatarUrl =
+          typeof uploadResult === 'string'
+            ? uploadResult
+            : (uploadResult?.downloadURL || uploadResult?.photoURL || uploadResult?.url || null);
+        if (uploadedAvatarUrl) {
+          sanitizedUpdates.photoURL = uploadedAvatarUrl;
+        }
       }
 
       // Immediate optimistic save: snapshot previous state for rollback
@@ -554,24 +568,34 @@ export default function EditProfileScreen() {
         profile: {
           ...(state.profile || {}),
           ...sanitizedUpdates,
-        }
+        },
       }));
 
       // Authoritative backend sync
       try {
         if (updateUserProfile) {
-          await updateUserProfile(sanitizedUpdates);
+          await updateUserProfile(sanitizedUpdates, { silent: true });
         } else if (userService?.updateUserProfile && currentUid) {
           await userService.updateUserProfile(currentUid, sanitizedUpdates);
         }
 
-        // Refresh store profile to ensure canonical sync
+        const appUser = useAppStore.getState().currentUser;
+        if (appUser && (appUser.uid === currentUid || appUser.id === currentUid)) {
+          useAppStore.getState().setCurrentUser({ ...appUser, ...sanitizedUpdates });
+        }
+
+        // Force fresh store sync so returning to /profile/me reflects every edit immediately
         if (currentUid && loadStoreProfile) {
-          await loadStoreProfile(currentUid, currentUid);
+          await loadStoreProfile(currentUid, currentUid, { force: true });
         }
 
         try {
-          initialSnapshotRef.current = JSON.stringify({ ...formData, links: cleanedLinks, website: cleanWebsite });
+          initialSnapshotRef.current = JSON.stringify({
+            ...formData,
+            location: sanitizedUpdates.location ?? formData.location,
+            links: cleanedLinks,
+            website: cleanWebsite,
+          });
         } catch {
           /* ignore */
         }
@@ -584,11 +608,11 @@ export default function EditProfileScreen() {
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
-      toast.error(error.message || 'Failed to update profile');
+      toast.error(error?.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
-  }, [formData, usernameAvailability, avatarFile, currentUid, userService, updateUserProfile, loadStoreProfile, navigate, userProfile?.username]);
+  }, [formData, usernameAvailability, avatarFile, currentUid, userService, updateUserProfile, loadStoreProfile, navigate, userProfile?.username, user?.username]);
 
   const handleCancel = useCallback(() => {
     if (isDirty && !saving) {
@@ -630,152 +654,37 @@ export default function EditProfileScreen() {
         }}
       />
 
-      {/* Sub-Toolbar & Section Navigation (TopAppBar handles main app title and back navigation) */}
-      <div className={cn(
-        "sticky top-0 z-30 w-full backdrop-blur-2xl border-b transition-colors mb-2",
-        isDark
-          ? "bg-[#03071B]/90 border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.5)]"
-          : "bg-white/90 border-slate-200/90 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
-      )}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
-            <span className="font-mono text-arvdoul-purple dark:text-[#B978FF] font-bold">@{formData.username || 'citizen'}</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">{completeness.score}% complete</span>
-            {isCreatorAccount && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">
-                  Creator
-                </span>
-              </>
-            )}
-            {isRoyalOrNoble && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
-                  Heraldic
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => navigate('/profile/me')}
-              className={cn(
-                "hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer active:scale-95",
-                isDark
-                  ? "bg-white/[0.03] border-white/10 text-slate-300 hover:bg-white/10"
-                  : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-              )}
-              title="View current profile"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Preview</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || usernameAvailability === 'taken'}
-              aria-label="Save Profile Changes"
-              className="min-h-[44px] inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md shadow-purple-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-              style={{
-                background: BRAND_GRADIENT
-              }}
-            >
-              {saving ? (
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Save className="w-3.5 h-3.5" />
-              )}
-              <span>Save</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Section Navigation Tabs (Unified all sections tab + quick filters) */}
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {[
-            { id: 'all', label: 'All Sections' },
-            { id: 'identity', label: 'Identity & Bio' },
-            { id: 'coordinates', label: 'Coordinates & Web' },
-            { id: 'links', label: 'Custom Links' },
-            ...(isCreatorAccount ? [{ id: 'creator', label: 'Creator Suite' }] : []),
-            ...(isRoyalOrNoble ? [{ id: 'royal', label: 'Heraldic Crown' }] : []),
-            { id: 'civic', label: 'Civic Display' },
-            { id: 'privacy', label: 'Privacy & Scopes' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveSection(tab.id)}
-              className={cn(
-                "min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer",
-                activeSection === tab.id
-                  ? "text-white shadow-sm"
-                  : isDark
-                  ? "bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]"
-                  : "bg-slate-200/60 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-              )}
-              style={activeSection === tab.id ? { background: BRAND_GRADIENT } : undefined}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Main Content Form */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6 relative z-10">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 space-y-6 relative z-10">
 
-        {/* Profile Completeness Card */}
-        <div className={cn(
-          "rounded-[22px] border p-4 sm:p-5 backdrop-blur-2xl transition-all relative overflow-hidden",
-          isDark
-            ? "bg-[#070D27]/80 border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
-            : "bg-white/90 border-slate-200/90 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
-        )}>
-          <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-arvdoul-purple" />
-              <span className="text-xs sm:text-sm font-black tracking-tight">Citizen Presence Completeness</span>
-            </div>
-            <span className="text-xs font-mono font-bold text-purple-400">{completeness.score}%</span>
+        {/* Clean Top Save Action Row */}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg sm:text-xl font-black tracking-tight">Edit Profile</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Update your profile details, links, and privacy preferences.
+            </p>
           </div>
-
-          <div className="relative w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/[0.08]">
-            <div 
-              className="h-full rounded-full transition-all duration-500 ease-out"
-              style={{
-                width: `${completeness.score}%`,
-                background: `linear-gradient(90deg, ${tokens.color.brand.violet} 0%, ${tokens.color.brand.indigo} 50%, ${tokens.color.brand.cyan} 100%)`
-              }}
-            />
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap mt-3 pt-1 border-t border-slate-100 dark:border-white/[0.04]">
-            {completeness.checks.map((chk) => (
-              <div 
-                key={chk.id}
-                className={cn(
-                  "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border",
-                  chk.completed
-                    ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400"
-                    : "bg-slate-500/10 border-slate-500/20 text-slate-500 dark:text-slate-400"
-                )}
-              >
-                {chk.completed ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <AlertCircle className="w-3 h-3 text-slate-400" />}
-                <span>{chk.label}</span>
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || usernameAvailability === 'taken'}
+            aria-label="Save Profile Changes"
+            className="min-h-[44px] inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md shadow-purple-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple shrink-0"
+            style={{
+              background: BRAND_GRADIENT
+            }}
+          >
+            {saving ? (
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span>Save</span>
+          </button>
         </div>
 
         {/* 1. CITIZEN AVATAR STUDIO (Arvdoul does NOT support background images) */}
-        {(activeSection === 'all' || activeSection === 'identity') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 relative overflow-hidden",
           isDark
@@ -836,16 +745,17 @@ export default function EditProfileScreen() {
                 {avatarPreview && (
                   <button
                     type="button"
+                    disabled={removingAvatar}
                     onClick={handleRemoveAvatar}
                     className={cn(
-                      "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all cursor-pointer active:scale-95",
+                      "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all cursor-pointer active:scale-95 disabled:opacity-50",
                       isDark 
                         ? "border-white/10 hover:bg-white/[0.05] text-slate-300" 
                         : "border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm"
                     )}
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Reset Avatar</span>
+                    <span>{removingAvatar ? 'Resetting...' : 'Reset Avatar'}</span>
                   </button>
                 )}
               </div>
@@ -853,10 +763,8 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
-        )}
 
         {/* 2. UNIQUE USERNAME & CIVIC IDENTITY */}
-        {(activeSection === 'all' || activeSection === 'identity') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -1151,10 +1059,8 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
-        )}
 
         {/* 3. CIVIC COORDINATES & LOCATION */}
-        {(activeSection === 'all' || activeSection === 'coordinates') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -1192,11 +1098,12 @@ export default function EditProfileScreen() {
                 <input aria-label="Location"
                   type="text"
                   value={formData.location}
+                  disabled={formData.locationPrivacy === 'hidden'}
                   onChange={(e) => handleInputChange('location', e.target.value)}
-                  placeholder="e.g. Neo Tokyo, Global, London"
+                  placeholder={formData.locationPrivacy === 'hidden' ? 'Hidden on your profile' : 'e.g. Neo Tokyo, Global, London'}
                   maxLength={PROFILE_CONSTRAINTS.LOCATION.MAX_LENGTH}
                   className={cn(
-                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                    "w-full px-4 py-2.5 min-h-[44px] rounded-2xl text-sm font-medium outline-none transition-all border focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60 disabled:cursor-not-allowed",
                     isDark
                       ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-emerald-500"
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-emerald-500"
@@ -1220,6 +1127,14 @@ export default function EditProfileScreen() {
                   <option value="hidden">Keep Hidden</option>
                 </select>
               </div>
+              {formData.locationPrivacy === 'hidden' && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Location is hidden from your profile while Keep Hidden is selected.
+                </p>
+              )}
+              {fieldErrors.location && (
+                <p className="text-xs text-rose-500 font-medium">{fieldErrors.location}</p>
+              )}
             </div>
 
             {/* Official Website */}
@@ -1249,10 +1164,8 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
-        )}
 
         {/* 4. CUSTOM SOCIAL LINKS HUB (Up to 10) */}
-        {(activeSection === 'all' || activeSection === 'links') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -1378,10 +1291,9 @@ export default function EditProfileScreen() {
             </div>
           )}
         </section>
-        )}
 
         {/* 5. CREATOR SUITE SETTINGS (gated by the canonical resolveCreatorFlag) */}
-        {isCreatorAccount && (activeSection === 'all' || activeSection === 'creator') && (
+        {isCreatorAccount && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
           isDark
@@ -1505,7 +1417,7 @@ export default function EditProfileScreen() {
         )}
 
         {/* 6. ROYAL & NOBILITY HERALDIC SETTINGS (gated by isRoyalOrNoble / LEVEL_GATES.sovereign) */}
-        {isRoyalOrNoble && (activeSection === 'all' || activeSection === 'royal') && (
+        {isRoyalOrNoble && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
           isDark
@@ -1581,7 +1493,6 @@ export default function EditProfileScreen() {
         )}
 
         {/* 7. CIVIC PRESENTATION & DISPLAY TOGGLES */}
-        {(activeSection === 'all' || activeSection === 'civic') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -1703,10 +1614,8 @@ export default function EditProfileScreen() {
             </div>
           </div>
         </section>
-        )}
 
         {/* 8. PRIVACY & AUDIENCE GOVERNANCE */}
-        {(activeSection === 'all' || activeSection === 'privacy') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -1964,7 +1873,6 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
-        )}
 
         {/* Bottom Save Action Bar */}
         <div className="flex items-center justify-end gap-3 pt-4">

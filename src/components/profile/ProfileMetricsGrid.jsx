@@ -50,11 +50,11 @@ const ProfileMetricsGrid = memo(({
   const canShowFriends = Boolean(capabilities?.canViewFriends);
   const canShowEconomic = isOwner || Boolean(capabilities?.canViewEconomicStatus);
 
-  // Enforce Friends (< Level 3) -> Followers (Level 3+ / Creator)
+  // Enforce Friends (< Level 3) -> Followers (Level 3+ / Creator), fail CLOSED when level unavailable
   const rawLevel = profile?.level != null && Number.isFinite(Number(profile.level)) ? Number(profile.level) : null;
   const isCreator = resolveCreatorFlag(profile || {}, {}, rawLevel);
   const followersTierUnlocked = Boolean(
-    isCreator || rawLevel === null || rawLevel >= LEVEL_GATES.publicFollowers
+    isCreator || (rawLevel !== null && rawLevel >= LEVEL_GATES.publicFollowers)
   );
 
   const followerGrowth = analytics?.followerGrowth ? Number(analytics.followerGrowth) : null;
@@ -101,16 +101,27 @@ const ProfileMetricsGrid = memo(({
       clickable: canShowFriends && friendsCount !== null && Boolean(onMetricPress),
       trend: null,
     },
+    ...(isOwner
+      ? [
+          {
+            key: 'views',
+            label: 'Profile Views',
+            value: profileViews === null ? '—' : formatNumber(profileViews),
+            icon: Eye,
+            accentClass: 'text-cyan-600 dark:text-cyan-400',
+            clickable: Boolean(onMetricPress),
+            trend: viewsGrowth ? `+${viewsGrowth}%` : null,
+          },
+        ]
+      : []),
     {
-      key: isOwner ? 'views' : 'likes',
-      label: isOwner ? 'Profile Views' : 'Likes',
-      value: isOwner
-        ? (profileViews === null ? '—' : formatNumber(profileViews))
-        : (likesCount === null ? '—' : formatNumber(likesCount)),
-      icon: isOwner ? Eye : Heart,
-      accentClass: isOwner ? 'text-cyan-600 dark:text-cyan-400' : 'text-rose-500 dark:text-rose-400',
-      clickable: isOwner && Boolean(onMetricPress),
-      trend: isOwner && viewsGrowth ? `+${viewsGrowth}%` : null,
+      key: 'likes',
+      label: 'Likes',
+      value: likesCount === null ? '—' : formatNumber(likesCount),
+      icon: Heart,
+      accentClass: 'text-rose-500 dark:text-rose-400',
+      clickable: false,
+      trend: null,
     },
     ...(showCoins
       ? [
@@ -153,8 +164,8 @@ const ProfileMetricsGrid = memo(({
           const cellClass = cn(
             "min-h-[82px] sm:min-h-[92px] px-3 sm:px-4 py-3.5 sm:py-4 transition-colors flex flex-col justify-between gap-2 text-left select-none",
             isDark
-              ? "bg-[#080F2E]/72 text-white"
-              : "bg-white/72 text-slate-900",
+              ? "bg-[#080F2E]/75 text-white"
+              : "bg-white/75 text-slate-900",
             isClickable && (
               isDark
                 ? "cursor-pointer hover:bg-[#0D1742] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-arvdoul-purple"

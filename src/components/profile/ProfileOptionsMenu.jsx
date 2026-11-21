@@ -1,8 +1,9 @@
 // src/components/profile/ProfileOptionsMenu.jsx
 //
-// Production-grade Arvdoul Options Modal Sheet.
-// Full screen backdrop with responsive centered dialog,
-// Arvdoul design tokens, and comprehensive citizen action controls.
+// Refined iOS-grade Grouped Action Sheet for Arvdoul Profiles.
+// Features mobile top drag indicator, inset hairline-divided sections,
+// crisp 18px monochrome/accent icons, zero decorative pill clutter,
+// Lite Mode backdrop gating, and accessible keyboard focus controls.
 
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
@@ -11,12 +12,14 @@ import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
   Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus,
-  Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle, Phone, Gift, UserPlus, UserCheck, Coins, BarChart2
+  Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle, Phone, Gift, UserPlus, UserCheck,
+  Coins, BarChart2, ChevronRight,
 } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
+import { getAdaptiveTuning } from '../../utils/deviceCapabilities.js';
 
 const REPORT_PRESETS = [
   'Harassment or bullying',
@@ -24,6 +27,101 @@ const REPORT_PRESETS = [
   'Impersonation',
   'Inappropriate content',
 ];
+
+const ActionRow = ({
+  icon: Icon,
+  label,
+  subtitle = null,
+  onClick,
+  disabled = false,
+  busy = false,
+  tone = 'default',
+  isDark = false,
+  trailing = true,
+}) => {
+  const toneIcon =
+    tone === 'danger'
+      ? 'text-rose-500 dark:text-rose-400'
+      : tone === 'success'
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : tone === 'amber'
+          ? 'text-amber-600 dark:text-amber-400'
+          : isDark
+            ? 'text-slate-300'
+            : 'text-slate-600';
+
+  const toneText =
+    tone === 'danger'
+      ? 'text-rose-600 dark:text-rose-400'
+      : isDark
+        ? 'text-slate-100'
+        : 'text-slate-900';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={busy || undefined}
+      className={cn(
+        'w-full min-h-[48px] px-4 py-3 flex items-center justify-between gap-3 text-left transition-colors cursor-pointer',
+        'disabled:opacity-50 disabled:cursor-not-allowed',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-arvdoul-purple',
+        isDark
+          ? 'hover:bg-white/[0.06] active:bg-white/[0.10]'
+          : 'hover:bg-slate-50 active:bg-slate-100/80'
+      )}
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        {busy ? (
+          <Loader2 className={cn('w-[18px] h-[18px] shrink-0 animate-spin', toneIcon)} aria-hidden="true" />
+        ) : (
+          <Icon className={cn('w-[18px] h-[18px] shrink-0', toneIcon)} aria-hidden="true" />
+        )}
+        <span className="min-w-0">
+          <span className={cn('block text-[14px] font-medium leading-tight truncate', toneText)}>
+            {label}
+          </span>
+          {subtitle && (
+            <span className={cn('block text-[11.5px] leading-snug truncate mt-0.5', isDark ? 'text-slate-400' : 'text-slate-500')}>
+              {subtitle}
+            </span>
+          )}
+        </span>
+      </span>
+
+      {trailing && (
+        <ChevronRight
+          className={cn('w-4 h-4 shrink-0', isDark ? 'text-slate-500' : 'text-slate-400')}
+          aria-hidden="true"
+        />
+      )}
+    </button>
+  );
+};
+
+const ActionGroup = ({ title, children, isDark }) => (
+  <div className="space-y-1.5">
+    {title && (
+      <p className={cn(
+        'px-1.5 text-[11px] font-semibold uppercase tracking-[0.07em]',
+        isDark ? 'text-slate-400' : 'text-slate-500'
+      )}>
+        {title}
+      </p>
+    )}
+    <div
+      className={cn(
+        'rounded-2xl border overflow-hidden divide-y',
+        isDark
+          ? 'bg-white/[0.04] border-white/[0.08] divide-white/[0.07]'
+          : 'bg-white border-slate-200/80 divide-slate-100 shadow-[0_1px_2px_rgba(15,23,42,0.03)]'
+      )}
+    >
+      {children}
+    </div>
+  </div>
+);
 
 const ProfileOptionsMenu = ({
   profile,
@@ -49,6 +147,7 @@ const ProfileOptionsMenu = ({
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [reportReason, setReportReason] = useState('');
 
+  const isLiteMode = getAdaptiveTuning().isLiteMode;
   const userId = profile?.uid || profile?.id;
 
   useEffect(() => {
@@ -59,7 +158,7 @@ const ProfileOptionsMenu = ({
         Promise.all([
           svc.isBlocked(user.uid, userId).catch(() => null),
           svc.isMuted(user.uid, userId).catch(() => null),
-          svc.isRestricted(user.uid, userId).catch(() => null)
+          svc.isRestricted(user.uid, userId).catch(() => null),
         ]).then(([bRes, mRes, rRes]) => {
           if (!active) return;
           if (bRes?.blocked !== undefined) setBlocked(Boolean(bRes.blocked));
@@ -87,13 +186,6 @@ const ProfileOptionsMenu = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showReportDialog, onClose]);
-
-  const itemCls = cn(
-    'w-full min-h-[44px] flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
-    isDark
-      ? 'text-white hover:bg-white/[0.07] border border-transparent hover:border-white/10'
-      : 'text-slate-800 hover:bg-slate-100 border border-transparent hover:border-slate-200 shadow-sm hover:shadow'
-  );
 
   const handleShare = useCallback(async () => {
     try {
@@ -219,9 +311,20 @@ const ProfileOptionsMenu = ({
     }
   }, [user?.uid, userId, reportReason, busy, onClose]);
 
+  const friendLabel = friendshipStatus === 'friends'
+    ? 'Friends'
+    : friendshipStatus === 'received'
+      ? 'Accept Friend Request'
+      : friendshipStatus === 'pending'
+        ? (onCancelFriendRequest ? 'Cancel Friend Request' : 'Friend Request Sent')
+        : 'Add Friend';
+
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 animate-in fade-in duration-150"
+      className={cn(
+        'fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 animate-in fade-in duration-150',
+        !isLiteMode && 'backdrop-blur-md'
+      )}
       onClick={onClose}
     >
       <div
@@ -229,31 +332,41 @@ const ProfileOptionsMenu = ({
         aria-modal="true"
         aria-label="Profile options"
         className={cn(
-          "w-full max-w-sm max-sm:rounded-b-none max-sm:rounded-t-[30px] sm:rounded-[28px] overflow-hidden shadow-2xl border transition-all relative z-[10000]",
+          'w-full max-w-[400px] max-sm:rounded-b-none max-sm:rounded-t-[28px] sm:rounded-[26px] overflow-hidden border relative z-[10000]',
           isDark
-            ? "bg-[#080F2E] border-white/[0.15] text-white shadow-[0_24px_64px_rgba(0,0,0,0.9)]"
-            : "bg-white border-slate-200 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.22)]"
+            ? 'bg-[#080F2E]/95 border-white/[0.12] text-white shadow-[0_24px_64px_rgba(0,0,0,0.85)]'
+            : 'bg-[#F8FAFD] border-slate-200/90 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.22)]'
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Optical Hairline Highlight */}
+        {/* Top optical hairline */}
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
           style={{ background: BRAND_GRADIENT }}
         />
 
-        {/* Dialog Header */}
+        {/* Mobile sheet drag handle */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+          <span
+            aria-hidden="true"
+            className={cn('w-9 h-1 rounded-full', isDark ? 'bg-white/25' : 'bg-slate-300')}
+          />
+        </div>
+
+        {/* Sheet Header */}
         <div className={cn(
-          "flex items-center justify-between px-5 py-4 border-b",
-          isDark ? "border-white/[0.08]" : "border-slate-100"
+          'flex items-center justify-between px-5 py-3.5 border-b',
+          isDark ? 'border-white/[0.08]' : 'border-slate-200/70 bg-white/80'
         )}>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black tracking-tight">Profile Options</span>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold tracking-tight leading-tight">
+              Profile Options
+            </h2>
             {profile?.username && (
-              <span className="text-xs font-mono text-arvdoul-purple dark:text-[#B978FF]">
+              <p className={cn('text-xs font-medium truncate mt-0.5', isDark ? 'text-slate-400' : 'text-slate-500')}>
                 @{profile.username}
-              </span>
+              </p>
             )}
           </div>
           <button
@@ -261,41 +374,139 @@ const ProfileOptionsMenu = ({
             onClick={onClose}
             aria-label="Close menu"
             className={cn(
-              "min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-              isDark ? "hover:bg-white/10 text-slate-400 hover:text-white" : "hover:bg-slate-100 text-slate-500 hover:text-slate-900"
+              'min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+              isDark ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
             )}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Action List */}
-        <div className="p-3 space-y-1 max-h-[75vh] overflow-y-auto">
-          <button type="button" className={itemCls} onClick={handleShare}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                <Share2 className="w-4 h-4" />
-              </div>
-              <span>Share Profile</span>
-            </div>
-          </button>
+        {/* Grouped Action Sections */}
+        <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto overscroll-contain">
+          {/* Group 1: Identity & Sharing */}
+          <ActionGroup title="Identity & Sharing" isDark={isDark}>
+            <ActionRow
+              icon={Share2}
+              label="Share Profile"
+              onClick={handleShare}
+              isDark={isDark}
+            />
+            <ActionRow
+              icon={Link2}
+              label="Copy Profile Link"
+              onClick={handleCopy}
+              isDark={isDark}
+              trailing={false}
+            />
+            {isOwner && (
+              <>
+                <ActionRow
+                  icon={QrCode}
+                  label="Identity QR Code"
+                  onClick={() => {
+                    onClose?.();
+                    window.dispatchEvent(new CustomEvent('arvdoul:open_qr_code'));
+                  }}
+                  isDark={isDark}
+                />
+                <ActionRow
+                  icon={Crown}
+                  label="Digital Passport"
+                  onClick={() => {
+                    onClose?.();
+                    navigate('/passport');
+                  }}
+                  isDark={isDark}
+                />
+                <ActionRow
+                  icon={Award}
+                  label="Civic Titles & Provenance"
+                  onClick={() => {
+                    onClose?.();
+                    navigate('/titles');
+                  }}
+                  isDark={isDark}
+                />
+                <ActionRow
+                  icon={MapPin}
+                  label="Civic Location"
+                  onClick={() => {
+                    onClose?.();
+                    if (onOpenLocationSetup) onOpenLocationSetup();
+                    else window.dispatchEvent(new CustomEvent('arvdoul:open_location_setup'));
+                  }}
+                  isDark={isDark}
+                />
+              </>
+            )}
+            {!isOwner && (
+              <ActionRow
+                icon={Crown}
+                label="Inspect Passport"
+                onClick={() => {
+                  onClose?.();
+                  navigate(`/passport/${userId}`);
+                }}
+                isDark={isDark}
+              />
+            )}
+          </ActionGroup>
 
-          <button type="button" className={itemCls} onClick={handleCopy}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
-                <Link2 className="w-4 h-4" />
-              </div>
-              <span>Copy Profile Link</span>
-            </div>
-          </button>
+          {/* Group 2 (Owner): Perspectives & Studio */}
+          {isOwner && (
+            <ActionGroup title="Perspectives & Studio" isDark={isDark}>
+              <ActionRow
+                icon={Eye}
+                label="View Profile As..."
+                subtitle="Preview how visitors, followers, or connections see you"
+                onClick={() => {
+                  onClose?.();
+                  window.dispatchEvent(new CustomEvent('arvdoul:open_perspective_modal'));
+                }}
+                isDark={isDark}
+              />
+              <ActionRow
+                icon={BarChart2}
+                label="Profile Insights & Views"
+                onClick={() => {
+                  onClose?.();
+                  navigate('/profile/analytics');
+                }}
+                isDark={isDark}
+              />
+              <ActionRow
+                icon={Coins}
+                label="Coins Treasury"
+                tone="amber"
+                onClick={() => {
+                  onClose?.();
+                  navigate('/coins');
+                }}
+                isDark={isDark}
+              />
+              <ActionRow
+                icon={Settings}
+                label="Account Settings"
+                onClick={() => {
+                  onClose?.();
+                  navigate('/settings');
+                }}
+                isDark={isDark}
+              />
+            </ActionGroup>
+          )}
 
-          {!isOwner && (
-            <>
+          {/* Group 2 (Visitor): Connect & Patronage */}
+          {!isOwner && (onFriendRequestToggle || callsEnabled || onOpenTipModal || userId) && (
+            <ActionGroup title="Connect & Patronage" isDark={isDark}>
               {onFriendRequestToggle && (
-                <button
-                  type="button"
+                <ActionRow
+                  icon={friendshipStatus === 'friends' ? UserCheck : UserPlus}
+                  label={friendLabel}
+                  busy={friendRequestLoading}
                   disabled={friendRequestLoading || friendshipStatus === 'friends'}
-                  className={itemCls}
+                  tone={friendshipStatus === 'friends' ? 'success' : 'default'}
                   onClick={() => {
                     const action = friendshipStatus === 'pending' && onCancelFriendRequest
                       ? onCancelFriendRequest
@@ -303,32 +514,14 @@ const ProfileOptionsMenu = ({
                     onClose?.();
                     action?.();
                   }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                      {friendRequestLoading
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : friendshipStatus === 'friends'
-                          ? <UserCheck className="w-4 h-4 text-emerald-400" />
-                          : <UserPlus className="w-4 h-4" />}
-                    </div>
-                    <span>
-                      {friendshipStatus === 'friends'
-                        ? 'Friends'
-                        : friendshipStatus === 'received'
-                          ? 'Accept Friend Request'
-                          : friendshipStatus === 'pending'
-                            ? (onCancelFriendRequest ? 'Cancel Friend Request' : 'Friend Request Sent')
-                            : 'Add Friend'}
-                    </span>
-                  </div>
-                </button>
+                  isDark={isDark}
+                />
               )}
-
               {callsEnabled && (
-                <button
-                  type="button"
-                  className={itemCls}
+                <ActionRow
+                  icon={Phone}
+                  label="Audio Call"
+                  busy={busy === 'call'}
                   disabled={busy === 'call'}
                   onClick={async () => {
                     if (!userId || busy) return;
@@ -344,250 +537,71 @@ const ProfileOptionsMenu = ({
                       setBusy(null);
                     }
                   }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                      {busy === 'call' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
-                    </div>
-                    <span>Audio Call</span>
-                  </div>
-                </button>
+                  isDark={isDark}
+                />
               )}
-
               {onOpenTipModal && (
-                <button
-                  type="button"
-                  className={itemCls}
+                <ActionRow
+                  icon={Gift}
+                  label="Send Coins / Gift"
+                  tone="amber"
                   onClick={() => {
                     onClose?.();
                     onOpenTipModal();
                   }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                      <Gift className="w-4 h-4" />
-                    </div>
-                    <span>Send Coins / Gift</span>
-                  </div>
-                </button>
+                  isDark={isDark}
+                />
               )}
-
-              <button
-                type="button"
-                className={itemCls}
+              <ActionRow
+                icon={MessageCircle}
+                label="Send via Direct Message"
                 onClick={() => {
                   onClose?.();
                   navigate(`/messages/new?shareProfile=${userId}`);
                 }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                    <MessageCircle className="w-4 h-4" />
-                  </div>
-                  <span>Send via Direct Message</span>
-                </div>
-              </button>
-            </>
+                isDark={isDark}
+              />
+            </ActionGroup>
           )}
 
-          {isOwner && (
-            <>
-              <div className={cn("my-2 h-px", isDark ? "bg-white/[0.08]" : "bg-slate-100")} />
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  window.dispatchEvent(new CustomEvent('arvdoul:open_perspective_modal'));
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                    <Eye className="w-4 h-4" />
-                  </div>
-                  <span>View Profile As...</span>
-                </div>
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-2 py-0.5 rounded-md">
-                  Preview
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  window.dispatchEvent(new CustomEvent('arvdoul:open_qr_code'));
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                    <QrCode className="w-4 h-4" />
-                  </div>
-                  <span>Identity QR Code</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  navigate('/passport');
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                    <Crown className="w-4 h-4" />
-                  </div>
-                  <span>Digital Passport</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  navigate('/titles');
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                    <Award className="w-4 h-4" />
-                  </div>
-                  <span>Civic Titles & Provenance</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  if (onOpenLocationSetup) onOpenLocationSetup();
-                  else window.dispatchEvent(new CustomEvent('arvdoul:open_location_setup'));
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                    <MapPin className="w-4 h-4" />
-                  </div>
-                  <span>Civic Location</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  navigate('/profile/analytics');
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
-                    <BarChart2 className="w-4 h-4" />
-                  </div>
-                  <span>Profile Insights &amp; Views</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  navigate('/coins');
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                    <Coins className="w-4 h-4" />
-                  </div>
-                  <span>Coins Treasury</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  navigate('/settings');
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-slate-500/10 text-slate-400 flex items-center justify-center">
-                    <Settings className="w-4 h-4" />
-                  </div>
-                  <span>Account Settings</span>
-                </div>
-              </button>
-            </>
-          )}
-
+          {/* Group 3 (Visitor): Safety & Moderation */}
           {!isOwner && (
-            <>
-              <div className={cn("my-2 h-px", isDark ? "bg-white/[0.08]" : "bg-slate-100")} />
-
-              <button
-                type="button"
-                className={itemCls}
-                onClick={() => {
-                  onClose?.();
-                  navigate(`/passport/${userId}`);
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                    <Crown className="w-4 h-4" />
-                  </div>
-                  <span>Inspect Passport</span>
-                </div>
-              </button>
-
-              <button type="button" className={itemCls} onClick={handleMute}>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                    {busy === 'mute' ? <Loader2 className="w-4 h-4 animate-spin" /> : muted ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
-                  </div>
-                  <span>{muted ? 'Unmute Profile' : 'Mute Profile'}</span>
-                </div>
-              </button>
-
-              <button type="button" className={itemCls} onClick={handleRestrict}>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                    {busy === 'restrict' ? <Loader2 className="w-4 h-4 animate-spin" /> : restricted ? <BadgeCheck className="w-4 h-4 text-emerald-400" /> : <ShieldMinus className="w-4 h-4" />}
-                  </div>
-                  <span>{restricted ? 'Unrestrict Profile' : 'Restrict Profile'}</span>
-                </div>
-              </button>
-
-              <button type="button" className={itemCls} onClick={handleBlock}>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                    {busy === 'block' ? <Loader2 className="w-4 h-4 animate-spin" /> : blocked ? <BadgeCheck className="w-4 h-4 text-emerald-400" /> : <UserX className="w-4 h-4" />}
-                  </div>
-                  <span>{blocked ? 'Unblock User' : 'Block User'}</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={cn(itemCls, "text-rose-400 hover:text-rose-300")}
+            <ActionGroup title="Safety & Moderation" isDark={isDark}>
+              <ActionRow
+                icon={muted ? Volume2 : VolumeX}
+                label={muted ? 'Unmute Profile' : 'Mute Profile'}
+                busy={busy === 'mute'}
+                tone={muted ? 'success' : 'default'}
+                onClick={handleMute}
+                isDark={isDark}
+                trailing={false}
+              />
+              <ActionRow
+                icon={restricted ? BadgeCheck : ShieldMinus}
+                label={restricted ? 'Unrestrict Profile' : 'Restrict Profile'}
+                busy={busy === 'restrict'}
+                tone={restricted ? 'success' : 'default'}
+                onClick={handleRestrict}
+                isDark={isDark}
+                trailing={false}
+              />
+              <ActionRow
+                icon={blocked ? BadgeCheck : UserX}
+                label={blocked ? 'Unblock User' : 'Block User'}
+                busy={busy === 'block'}
+                tone={blocked ? 'success' : 'danger'}
+                onClick={handleBlock}
+                isDark={isDark}
+                trailing={false}
+              />
+              <ActionRow
+                icon={ShieldAlert}
+                label="Report Profile"
+                tone="danger"
                 onClick={() => setShowReportDialog(true)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                    <ShieldAlert className="w-4 h-4" />
-                  </div>
-                  <span>Report Profile</span>
-                </div>
-              </button>
-            </>
+                isDark={isDark}
+              />
+            </ActionGroup>
           )}
         </div>
       </div>
@@ -595,7 +609,10 @@ const ProfileOptionsMenu = ({
       {/* Report Profile Sub-Modal */}
       {showReportDialog && (
         <div
-          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+          className={cn(
+            'fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70',
+            !isLiteMode && 'backdrop-blur-md'
+          )}
           onClick={(e) => { e.stopPropagation(); setShowReportDialog(false); }}
         >
           <div
@@ -603,8 +620,8 @@ const ProfileOptionsMenu = ({
             aria-modal="true"
             aria-label="Report Profile"
             className={cn(
-              "w-full max-w-sm rounded-[28px] p-6 shadow-2xl border relative",
-              isDark ? "bg-[#080F2E] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
+              'w-full max-w-sm rounded-[26px] p-6 shadow-2xl border relative',
+              isDark ? 'bg-[#080F2E] border-white/12 text-white' : 'bg-white border-slate-200 text-slate-900'
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -634,12 +651,12 @@ const ProfileOptionsMenu = ({
                     type="button"
                     onClick={() => setReportReason(preset)}
                     className={cn(
-                      "px-2.5 py-1.5 min-h-[36px] rounded-lg text-[11px] font-semibold border transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                      'px-2.5 py-1.5 min-h-[36px] rounded-xl text-[11px] font-semibold border transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
                       selected
-                        ? "border-amber-500 bg-amber-500/15 text-amber-500"
+                        ? 'border-amber-500 bg-amber-500/15 text-amber-500'
                         : isDark
-                          ? "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                          ? 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                     )}
                   >
                     {preset}
@@ -656,8 +673,8 @@ const ProfileOptionsMenu = ({
                 rows={3}
                 maxLength={300}
                 className={cn(
-                  "w-full p-3 text-sm rounded-2xl border resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                  isDark ? "bg-black/20 border-white/10 text-white placeholder-slate-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400"
+                  'w-full p-3 text-sm rounded-2xl border resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'bg-black/20 border-white/10 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
                 )}
               />
               <div className="flex items-center gap-2 justify-end pt-1">
@@ -665,8 +682,8 @@ const ProfileOptionsMenu = ({
                   type="button"
                   onClick={() => setShowReportDialog(false)}
                   className={cn(
-                    "px-4 py-2 min-h-[44px] rounded-2xl text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark ? "bg-white/10 text-slate-300 hover:bg-white/15" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    'px-4 py-2 min-h-[44px] rounded-2xl text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    isDark ? 'bg-white/10 text-slate-300 hover:bg-white/15' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   )}
                 >
                   Cancel

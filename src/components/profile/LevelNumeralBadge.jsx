@@ -3,7 +3,8 @@
  *
  * Every integer level renders a distinct sculpted geometric housing,
  * noble palette (independent of the Arvdoul brand gradient), and
- * precision micro-facets/pips so no two consecutive levels look identical.
+ * precision micro-facets/pips so no two consecutive levels look identical,
+ * with explicit `Lvl {n}` labeling across compact and full sizes.
  *
  * Strictly zero fabricated levels: renders null when level is absent or invalid.
  *
@@ -13,7 +14,7 @@
 import { memo, useMemo } from 'react';
 import { cn } from '../../lib/utils';
 
-// Curated noble palettes by decade (0 = Lv 1-9 ... 9 = Lv 90-100+), intentionally
+// Curated noble palettes by decade (0 = Lvl 1-9 ... 9 = Lvl 90-100+), intentionally
 // distinct from the primary Arvdoul brand gradient.
 const NOBLE_PALETTES = [
   // 1-9: Verdant Mint & Slate
@@ -99,10 +100,10 @@ function getFrameGeometry(level) {
 }
 
 const SIZE_CLASSES = {
-  xs: { box: 'w-6 h-6', text: 'text-[10px]', prefix: false },
-  sm: { box: 'w-7 h-7', text: 'text-[11px]', prefix: false },
-  md: { box: 'w-11 h-11', text: 'text-[13px]', prefix: true },
-  lg: { box: 'w-14 h-14', text: 'text-base', prefix: true },
+  xs: { inlineHeight: 'h-6 px-1.5 gap-1 text-[10px]', crestBox: 'w-4 h-4', box: 'w-6 h-6', text: 'text-[10px]' },
+  sm: { inlineHeight: 'h-7 px-2 gap-1.5 text-[11.5px]', crestBox: 'w-[18px] h-[18px]', box: 'w-7 h-7', text: 'text-[11px]' },
+  md: { box: 'w-11 h-11', text: 'text-[13px]' },
+  lg: { box: 'w-14 h-14', text: 'text-base' },
 };
 
 const LevelNumeralBadge = memo(({
@@ -110,7 +111,7 @@ const LevelNumeralBadge = memo(({
   theme = 'light',
   size = 'md',
   className = '',
-  showPrefix,
+  showPrefix = true,
   onClick,
   title,
 }) => {
@@ -132,18 +133,75 @@ const LevelNumeralBadge = memo(({
       const offset = (i - (pipCount - 1) / 2) * 5.2;
       pips.push({ cx: 20 + offset, cy: 33.2 });
     }
-    // Slight angular accent tick derived from unit digit
-    const tickAngle = (unit * 36) % 360;
-    return { palette, pathD, pips, tickAngle, unit };
+    return { palette, pathD, pips, unit };
   }, [intLevel, theme]);
 
   if (!intLevel || !visual) return null;
 
   const sizeCfg = SIZE_CLASSES[size] || SIZE_CLASSES.md;
-  const displayPrefix = showPrefix ?? sizeCfg.prefix;
+  const isCompact = size === 'xs' || size === 'sm';
   const { palette, pathD, pips } = visual;
 
-  const inner = (
+  const svgCrest = (boxClass, strokeScaled) => (
+    <svg
+      viewBox="0 0 40 40"
+      className={cn(boxClass, 'overflow-visible shrink-0')}
+      aria-hidden="true"
+    >
+      <path
+        d={pathD}
+        fill={palette.bg}
+        stroke={palette.border}
+        strokeWidth={strokeScaled}
+        strokeLinejoin="round"
+      />
+      {intLevel >= 10 && (
+        <path
+          d={pathD}
+          fill="none"
+          stroke={palette.accent}
+          strokeOpacity="0.34"
+          strokeWidth="0.95"
+          transform="translate(20,20) scale(0.82) translate(-20,-20)"
+        />
+      )}
+      {pips.map((p, idx) => (
+        <circle
+          key={idx}
+          cx={p.cx}
+          cy={p.cy}
+          r={isCompact ? 1.35 : 1.15}
+          fill={palette.accent}
+          opacity="0.9"
+        />
+      ))}
+    </svg>
+  );
+
+  // Compact sizes render the sculpted level crest paired with crisp "Lvl {n}" lockup
+  // so the number is always immediately recognizable as a user level (e.g. Lvl 1).
+  const inner = isCompact && showPrefix ? (
+    <span
+      className={cn(
+        'relative inline-flex items-center justify-center rounded-lg border shrink-0 select-none font-display font-bold leading-none tabular-nums tracking-tight',
+        sizeCfg.inlineHeight,
+        className
+      )}
+      style={{
+        backgroundColor: palette.bg,
+        borderColor: palette.border,
+        color: palette.text,
+      }}
+      aria-label={`Level ${intLevel}`}
+      title={title || `Civic Level ${intLevel}`}
+    >
+      {svgCrest(sizeCfg.crestBox, '2.4')}
+      <span className="inline-flex items-baseline gap-0.5">
+        <span className="text-[9.5px] font-semibold opacity-80">Lvl</span>
+        <span>{intLevel}</span>
+      </span>
+    </span>
+  ) : (
     <span
       className={cn(
         'relative inline-flex items-center justify-center shrink-0 select-none',
@@ -153,52 +211,18 @@ const LevelNumeralBadge = memo(({
       aria-label={`Level ${intLevel}`}
       title={title || `Civic Level ${intLevel}`}
     >
-      <svg
-        viewBox="0 0 40 40"
-        className="w-full h-full overflow-visible"
-        aria-hidden="true"
-      >
-        <path
-          d={pathD}
-          fill={palette.bg}
-          stroke={palette.border}
-          strokeWidth={intLevel >= 50 ? '2' : '1.75'}
-          strokeLinejoin="round"
-        />
-        {/* Inner engraved facet line tailored by parity & tier */}
-        {intLevel >= 10 && (
-          <path
-            d={pathD}
-            fill="none"
-            stroke={palette.accent}
-            strokeOpacity="0.32"
-            strokeWidth="0.9"
-            transform="translate(20,20) scale(0.82) translate(-20,-20)"
-          />
-        )}
-        {/* Unique level micro-pips at crown base */}
-        {pips.map((p, idx) => (
-          <circle
-            key={idx}
-            cx={p.cx}
-            cy={p.cy}
-            r={size === 'xs' || size === 'sm' ? 1 : 1.15}
-            fill={palette.accent}
-            opacity="0.85"
-          />
-        ))}
-      </svg>
+      {svgCrest('w-full h-full', intLevel >= 50 ? '2' : '1.75')}
 
       <span
         className={cn(
           'absolute inset-0 flex flex-col items-center justify-center font-display font-extrabold leading-none tabular-nums tracking-tight',
           sizeCfg.text
         )}
-        style={{ color: palette.text, paddingBottom: displayPrefix ? '1px' : '2px' }}
+        style={{ color: palette.text, paddingBottom: showPrefix ? '1px' : '2px' }}
       >
-        {displayPrefix && (
-          <span className="text-[7px] font-bold uppercase tracking-widest opacity-70 leading-none mb-[1px]">
-            LV
+        {showPrefix && (
+          <span className="text-[7.5px] font-bold tracking-wide opacity-80 leading-none mb-[1px]">
+            Lvl
           </span>
         )}
         <span>{intLevel}</span>
@@ -212,7 +236,7 @@ const LevelNumeralBadge = memo(({
         type="button"
         onClick={onClick}
         aria-label={`Level ${intLevel} progression`}
-        className="inline-flex items-center justify-center rounded-lg cursor-pointer transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+        className="relative inline-flex items-center justify-center rounded-lg cursor-pointer transition-transform active:scale-95 after:absolute after:-inset-2 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
       >
         {inner}
       </button>

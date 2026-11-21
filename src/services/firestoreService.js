@@ -456,7 +456,8 @@ class EnterpriseFirestoreService {
 
       // Always bound: a caller that omits `limit` must not pull the author's
       // entire post history in one read.
-      conditions.push(limit(Math.max(1, Number(options.limit) || 20)));
+      const effectiveLimit = Math.max(1, Number(options.limit) || 20);
+      conditions.push(limit(effectiveLimit));
       
       let lastDocSnap = null;
       // Callers pass the cursor as `cursor` (the store's public name); accept
@@ -480,7 +481,7 @@ class EnterpriseFirestoreService {
         collection: 'posts',
         fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'],
       });
-      const hasMore = snap.docs.length === (options.limit || 10);
+      const hasMore = snap.docs.length === effectiveLimit;
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
       
       const result = { success: true, posts, hasMore, nextCursor, total: posts.length };
@@ -488,6 +489,109 @@ class EnterpriseFirestoreService {
       return result;
     } catch (error) {
       throw enhanceError(error, `Failed to fetch posts for user ${userId}`);
+    }
+  }
+
+  async getUserPostsCount(userId, options = {}) {
+    if (!userId) return null;
+    const cacheKey = `user_posts_count_${userId}_${options.viewerId || 'anon'}_${options.constrainAuthorIsPrivate === false ? 'priv_ok' : 'pub'}`;
+    if (!options.forceRefresh) {
+      const cached = this.cache.get(cacheKey);
+      if (typeof cached === 'number') return cached;
+    }
+    try {
+      await this.ensureInitialized();
+      const { collection, query, where, getCountFromServer } = this.firestoreMethods || {};
+      if (typeof getCountFromServer !== 'function') return null;
+
+      const postsRef = collection(this.firestore, 'posts');
+      const viewerId = options.viewerId || null;
+      const isOwnerView = Boolean(viewerId && viewerId === userId);
+      const conditions = [
+        where('authorId', '==', userId),
+        where('isDeleted', '==', false),
+      ];
+      if (!isOwnerView) {
+        if (options.constrainAuthorIsPrivate !== false) {
+          conditions.push(where('authorIsPrivate', '==', false));
+        }
+        conditions.push(where('status', '==', 'published'));
+        conditions.push(where('visibility', '==', 'public'));
+      }
+      const snap = await getCountFromServer(query(postsRef, ...conditions));
+      const count = snap?.data?.()?.count;
+      if (typeof count === 'number' && Number.isFinite(count)) {
+        this.cache.set(cacheKey, count);
+        return count;
+      }
+      return null;
+    } catch (error) {
+      logger.debug('getUserPostsCount fallback to null', { userId, error: error?.message });
+      return null;
+    }
+  }
+
+  async getUserTotalPostLikes(userId, options = {}) {
+    if (!userId) return null;
+    const viewerId = options.viewerId || null;
+    const isOwnerView = Boolean(viewerId && viewerId === userId);
+    const cacheKey = `user_posts_likes_${userId}_${viewerId || 'anon'}_${options.constrainAuthorIsPrivate === false ? 'priv_ok' : 'pub'}`;
+    if (!options.forceRefresh) {
+      const cached = this.cache.get(cacheKey);
+      if (typeof cached === 'number') return cached;
+    }
+    try {
+      await this.ensureInitialized();
+      const { collection, query, where, orderBy, limit, getDocs } = this.firestoreMethods || {};
+      if (typeof getDocs !== 'function') return null;
+
+      const postsRef = collection(this.firestore, 'posts');
+      const conditions = [
+        where('authorId', '==', userId),
+        orderBy('createdAt', 'desc'),
+      ];
+      if (isOwnerView) {
+        conditions.push(where('isDeleted', '==', false));
+      } else {
+        if (options.constrainAuthorIsPrivate !== false) {
+          conditions.push(where('authorIsPrivate', '==', false));
+        }
+        conditions.push(where('status', '==', 'published'));
+        conditions.push(where('isDeleted', '==', false));
+        conditions.push(where('visibility', '==', 'public'));
+      }
+      const effectiveLimit = Math.min(250, Math.max(1, Number(options.limit) || 250));
+      conditions.push(limit(effectiveLimit));
+
+      const snap = await getDocs(query(postsRef, ...conditions));
+      const posts = snap.docs
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .filter((p) => p && p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled');
+
+      if (posts.length === 0) {
+        this.cache.set(cacheKey, 0);
+        return 0;
+      }
+
+      await countersManager.applyAll({
+        items: posts,
+        collection: 'posts',
+        fields: ['likes', 'comments', 'saves', 'shares', 'gifts', 'giftValue'],
+      });
+
+      let totalLikes = 0;
+      for (const post of posts) {
+        const likes = Number(post?.stats?.likes ?? post?.likes ?? 0);
+        if (Number.isFinite(likes) && likes > 0) {
+          totalLikes += likes;
+        }
+      }
+
+      this.cache.set(cacheKey, totalLikes);
+      return totalLikes;
+    } catch (error) {
+      logger.debug('getUserTotalPostLikes fallback to null', { userId, error: error?.message });
+      return null;
     }
   }
 
@@ -1343,6 +1447,8 @@ const firestoreService = {
   createPost: (data) => getFirestoreService().createPost(data),
   getPost: (id, opts) => getFirestoreService().getPost(id, opts),
   getPostsByUser: (uid, opts) => getFirestoreService().getPostsByUser(uid, opts),
+  getUserPostsCount: (uid, opts) => getFirestoreService().getUserPostsCount(uid, opts),
+  getUserTotalPostLikes: (uid, opts) => getFirestoreService().getUserTotalPostLikes(uid, opts),
   updatePost: (id, updates) => getFirestoreService().updatePost(id, updates),
   deletePost: (id, uid) => getFirestoreService().deletePost(id, uid),
   restorePost: (id, uid) => getFirestoreService().restorePost(id, uid),

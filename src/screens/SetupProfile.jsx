@@ -1081,7 +1081,7 @@ export default function SetupProfile() {
     if (!user?.uid) return;
     setRefreshing(true);
     try {
-      const freshProfile = await getUserProfile(user.uid);
+      const freshProfile = await getUserProfile(user.uid, user.uid);
       if (freshProfile) {
         try {
           const { useProfileStore } = await import("../store/profileStore.js");
@@ -1135,20 +1135,26 @@ export default function SetupProfile() {
         bio: bio.trim(),
         photoURL: finalAvatar,
         email: user?.email || "",
-        emailVerified: user?.emailVerified || false,
+        emailVerified: Boolean(user?.emailVerified),
         phoneNumber: user?.phoneNumber || "",
+        phoneVerified: Boolean(user?.phoneNumber),
         isProfileComplete: true,
         authProvider: authProvider || "email",
       });
 
       if (!result.success) throw new Error(result.error || "Profile creation failed");
 
-      // Update Firebase Auth user profile
+      // Update Firebase Auth user profile safely (skip oversized data: URLs)
       if (authService?.auth?.currentUser) {
-        await updateFirebaseAuthProfile(authService.auth.currentUser, {
-          displayName: displayName.trim(),
-          photoURL: finalAvatar,
-        });
+        try {
+          const authPatch = { displayName: displayName.trim() };
+          if (avatarUrl && /^https?:\/\//i.test(avatarUrl) && avatarUrl.length < 1800) {
+            authPatch.photoURL = avatarUrl;
+          }
+          await updateFirebaseAuthProfile(authService.auth.currentUser, authPatch);
+        } catch (authSyncErr) {
+          console.warn("Firebase Auth profile sync skipped:", authSyncErr?.message);
+        }
       }
 
       await refreshUserProfile();
@@ -1196,17 +1202,23 @@ export default function SetupProfile() {
         bio: bio.trim(),
         photoURL: finalAvatar,
         email: user?.email || "",
-        emailVerified: user?.emailVerified || false,
+        emailVerified: Boolean(user?.emailVerified),
         phoneNumber: user?.phoneNumber || "",
+        phoneVerified: Boolean(user?.phoneNumber),
         isProfileComplete: true,
         authProvider: authProvider || "email",
       });
       if (!result.success) throw new Error(result.error || "Profile creation failed");
       if (authService?.auth?.currentUser) {
-        await updateFirebaseAuthProfile(authService.auth.currentUser, {
-          displayName: displayName.trim(),
-          photoURL: finalAvatar,
-        });
+        try {
+          const authPatch = { displayName: displayName.trim() };
+          if (avatarUrl && /^https?:\/\//i.test(avatarUrl) && avatarUrl.length < 1800) {
+            authPatch.photoURL = avatarUrl;
+          }
+          await updateFirebaseAuthProfile(authService.auth.currentUser, authPatch);
+        } catch (authSyncErr) {
+          console.warn("Firebase Auth profile sync skipped:", authSyncErr?.message);
+        }
       }
       await refreshUserProfile();
       sessionStorage.removeItem("signup_step1");

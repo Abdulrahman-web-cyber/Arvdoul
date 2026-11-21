@@ -410,7 +410,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     }
   }, [currentUserId, friendBusyIds, sentFriendIds]);
 
-  const followersUnlocked = effectiveLevel === null || isCreatorOrAdvanced;
+  const followersUnlocked = Boolean(isCreatorOrAdvanced);
 
   const tabVisible = useMemo(() => ({
     followers: followersUnlocked && (isOwner || Boolean(capabilities?.canViewFollowers)),
@@ -466,7 +466,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     return isOwner ? 'Friends' : 'Mutual Friends';
   }, [activeTab, isOwner]);
 
-  // Coordinate title, subtitle, search, and refresh with TopAppBar
+  // Coordinate title, subtitle, search, and refresh with TopAppBar (without avatar)
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('arvdoul:network_header_state', {
       detail: {
@@ -474,10 +474,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         subtitle: loading
           ? `${activeTabLabel} · Syncing…`
           : `${activeTabLabel} · ${currentItems.length}`,
-        photoURL: !isOwner ? (targetProfile?.photoURL || null) : null,
       },
     }));
-  }, [isOwner, targetDisplayName, targetProfile?.photoURL, activeTabLabel, currentItems.length, loading]);
+  }, [isOwner, targetDisplayName, activeTabLabel, currentItems.length, loading]);
 
   useEffect(() => {
     const onSearchQuery = (e) => {
@@ -722,6 +721,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
               const isFriendRequested = sentFriendIds.has(rowId);
               const isFriendBusy = friendBusyIds.has(rowId);
 
+              const rowLevel = rowUser.level != null && Number.isFinite(Number(rowUser.level)) ? Number(rowUser.level) : null;
+              const rowFollowersUnlocked = Boolean(
+                rowUser.isCreator || (rowLevel !== null && rowLevel >= LEVEL_GATES.publicFollowers)
+              );
+
               return (
                 <div
                   key={rowId}
@@ -807,7 +811,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
 
                   {/* Right Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {!isSelf && activeTab === 'discover' && (
+                    {!isSelf && (activeTab === 'discover' || !rowFollowersUnlocked) && activeTab !== 'friends' && (
                       <button
                         type="button"
                         onClick={() => handleFriendRequestToggle(rowId)}
@@ -856,7 +860,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                       </button>
                     )}
 
-                    {!isSelf && (
+                    {!isSelf && rowFollowersUnlocked && (
                       <FollowButton
                         isFollowing={rowUser.isFollowing}
                         requested={rowUser.requestStatus === 'pending'}

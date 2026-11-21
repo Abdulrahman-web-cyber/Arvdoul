@@ -34,6 +34,7 @@ import notificationsService from '../services/notificationsService';
 import { getUserService } from '../services/userService.js';
 import { socialGraphService } from '../services/socialGraphService.js';
 import { pickDisplayName, resolveActorName } from '../services/profileReadModel';
+import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import Button from '../design-system/Button.jsx';
@@ -248,9 +249,22 @@ export default function NotificationsScreen() {
         await svc.declineFriendRequest(requestId, user.uid);
         toast.success('Friend request declined');
       }
+      setRequests((prev) => prev.filter((r) => (r.id || r.requestId) !== requestId));
+      setNotifications((prev) =>
+        prev.map((n) => (n.requestId === requestId || n.id === requestId ? { ...n, unread: false } : n))
+      );
+      window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
+        detail: { requestId, action: accept ? 'accepted' : 'declined' },
+      }));
       await loadNetwork();
-    } catch {
-      toast.error('Action failed');
+    } catch (err) {
+      const msg = err?.message || 'Could not update the friend request.';
+      if (/already processed/i.test(msg)) {
+        setRequests((prev) => prev.filter((r) => (r.id || r.requestId) !== requestId));
+        toast.info('This friend request was already processed');
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setPendingNetworkAction(null);
     }
@@ -409,14 +423,18 @@ export default function NotificationsScreen() {
         type,
         timeGroup,
         user: {
-          id: fn.senderId || null,
+          id: fn.senderId || fn.metadata?.fromUserId || null,
           name: fn.senderName || fn.title || '',
           username: fn.senderUsername || '',
-          avatar: fn.senderAvatar || '/assets/default-profile.png',
+          avatar: getSafeAvatarUrl(fn.senderAvatar, fn.senderName, fn.senderId),
           verified: !!fn.senderVerified,
         },
         message: fn.body || fn.message || '',
-        requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
+        requestId:
+          fn.metadata?.requestId ||
+          ((fn.metadata?.fromUserId || fn.senderId) && user?.uid
+            ? `${fn.metadata?.fromUserId || fn.senderId}_${user.uid}`
+            : null),
         postId: fn.metadata?.postId || null,
         storyId: fn.metadata?.storyId || null,
         actionUrl: fn.actionUrl || fn.metadata?.actionUrl || null,
@@ -497,7 +515,8 @@ export default function NotificationsScreen() {
   };
 
   const handleFriendRequest = async (notifId, action, targetUser, requestId) => {
-    const rid = requestId || notifId;
+    const fallbackSender = targetUser?.id || targetUser?.uid;
+    const rid = requestId || (fallbackSender && user?.uid ? `${fallbackSender}_${user.uid}` : notifId);
     if (!user?.uid || friendActions[notifId]) return;
     setFriendActions((prev) => ({ ...prev, [notifId]: action }));
     try {
@@ -509,14 +528,25 @@ export default function NotificationsScreen() {
         await svc.declineFriendRequest(rid, user.uid);
         toast.info(`Declined friend request from ${targetUser?.name || 'this account'}`);
       }
+      setRequests((prev) => prev.filter((r) => (r.id || r.requestId) !== rid));
+      window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
+        detail: { requestId: rid, action },
+      }));
       handleMarkRead(notifId);
     } catch (err) {
-      setFriendActions((prev) => {
-        const next = { ...prev };
-        delete next[notifId];
-        return next;
-      });
-      toast.error(err?.message || 'Could not update the friend request.');
+      const msg = err?.message || 'Could not update the friend request.';
+      if (/already processed/i.test(msg)) {
+        setRequests((prev) => prev.filter((r) => (r.id || r.requestId) !== rid));
+        handleMarkRead(notifId);
+        toast.info('This friend request was already processed');
+      } else {
+        setFriendActions((prev) => {
+          const next = { ...prev };
+          delete next[notifId];
+          return next;
+        });
+        toast.error(msg);
+      }
     }
   };
 
@@ -1066,9 +1096,19 @@ export default function NotificationsScreen() {
               ) : (
                 <div className="space-y-2.5">
                   {filteredRequests.map((req) => {
-                    const reqUser = req.sender || req.user || req;
+                    const rawReqUser = req.peerProfile || req.sender || req.user || req;
                     const reqId = req.id || req.requestId;
+                    const peerUid = req.fromUserId || rawReqUser.id || rawReqUser.uid;
+                    const reqUser = {
+                      ...rawReqUser,
+                      id: rawReqUser.id || rawReqUser.uid || req.fromUserId,
+                      displayName: rawReqUser.displayName || req.fromUserDisplayName,
+                      username: rawReqUser.username || req.fromUserUsername,
+                      name: rawReqUser.name || req.senderName,
+                    };
                     const reqName = resolveActorName([reqUser.displayName, reqUser.username, reqUser.name], reqUser.id || reqUser.uid || reqId);
+                    const reqAvatar = reqUser.photoURL || reqUser.avatar || req.fromUserPhotoURL || req.senderAvatar || null;
+                    const reqHandle = reqUser.username || req.fromUserUsername || null;
                     return (
                       <div
                         key={reqId}
@@ -1078,12 +1118,12 @@ export default function NotificationsScreen() {
                         )}
                       >
                         <div
-                          onClick={() => navigate(`/profile/${reqUser.id || reqUser.uid}`)}
+                          onClick={() => peerUid && navigate(`/profile/${peerUid}`)}
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
-                          {reqUser.photoURL || reqUser.avatar ? (
+                          {reqAvatar ? (
                             <LazyImage
-                              src={reqUser.photoURL || reqUser.avatar}
+                              src={reqAvatar}
                               alt={reqName}
                               className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
                             />
@@ -1098,7 +1138,7 @@ export default function NotificationsScreen() {
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{reqName}</p>
                             <p className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
-                              {reqUser.bio || 'Wants to connect with you'}
+                              {reqHandle ? `@${reqHandle}` : (reqUser.bio || 'Wants to connect with you')}
                             </p>
                           </div>
                         </div>

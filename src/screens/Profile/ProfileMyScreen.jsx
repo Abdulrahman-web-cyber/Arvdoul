@@ -43,10 +43,10 @@ import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileProgression from '../../components/profile/ProfileProgression';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
-import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
+import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 const lazyDefault = (loader) => lazy(async () => {
   const mod = await loader();
@@ -56,7 +56,8 @@ const lazyDefault = (loader) => lazy(async () => {
   return { default: comp };
 });
 
-// Modal Surfaces (lazy-loaded strictly when opened to minimize low-RAM memory footprint)
+// Heavy below-the-fold panel & modal surfaces (lazy-loaded for fast low-RAM paint)
+const ProfileCreatorDashboard = lazyDefault(() => import('../../components/profile/ProfileCreatorDashboard'));
 const ProfileQRCodeModal = lazyDefault(() => import('../../components/profile/ProfileQRCodeModal'));
 const ProfileLocationModal = lazyDefault(() => import('../../components/profile/ProfileLocationModal'));
 const ProfilePerspectiveModal = lazyDefault(() => import('../../components/profile/ProfilePerspectiveModal'));
@@ -160,6 +161,9 @@ export default function ProfileMyScreen() {
   const loading = useProfileStore((state) => state.loading);
   const error = useProfileStore((state) => state.error);
   const posts = useProfileStore((state) => state.posts);
+  const postsCount = useProfileStore((state) => state.postsCount);
+  const postsLikesCount = useProfileStore((state) => state.postsLikesCount);
+  const friendCount = useProfileStore((state) => state.friendCount);
   const postsLoading = useProfileStore((state) => state.postsLoading);
   const postsHasMore = useProfileStore((state) => state.postsHasMore);
   const postsCursor = useProfileStore((state) => state.postsCursor);
@@ -263,6 +267,18 @@ export default function ProfileMyScreen() {
   const effectiveProfile = useMemo(() => {
     const base = ownedProfile && typeof ownedProfile === 'object' ? ownedProfile : {};
     const viewer = currentUser || {};
+    const livePostCount = Array.isArray(posts)
+      ? posts.filter((p) => !p?.isDeleted && p?.status !== 'scheduled').length
+      : 0;
+    const reconciledPostCount =
+      typeof postsCount === 'number' && Number.isFinite(postsCount)
+        ? Math.max(postsCount, livePostCount)
+        : typeof base.postCount === 'number' && (base.postCount > 0 || !posts?.length)
+          ? base.postCount
+          : postsHasMore === false && posts
+            ? livePostCount
+            : base.postCount;
+
     const identity = deriveProfileIdentity(base, {
       viewer,
       handleCandidates: [base.username, viewer.username],
@@ -272,7 +288,7 @@ export default function ProfileMyScreen() {
       displayFallback: currentUserId ? `user ${String(currentUserId).slice(0, 6)}` : '—',
       followerCandidates: [base.followerCount, base.followersCount, viewer.followerCount],
       followingCandidates: [base.followingCount, viewer.followingCount],
-      postCandidates: [base.postCount],
+      postCandidates: [reconciledPostCount, base.postCount],
       levelCandidates: [level, base.level, viewer.level],
       coinCandidates: [
         Number.isFinite(balance) ? balance : undefined,
@@ -288,15 +304,25 @@ export default function ProfileMyScreen() {
       : (Number.isFinite(Number(base.experience))
         ? Number(base.experience)
         : (Number.isFinite(Number(base.xp)) ? Number(base.xp) : undefined));
+    const resolvedLikes =
+      typeof postsLikesCount === 'number' && Number.isFinite(postsLikesCount)
+        ? postsLikesCount
+        : (base.likesReceived ?? base.likesCount ?? null);
+    const resolvedFriends =
+      typeof friendCount === 'number' && Number.isFinite(friendCount)
+        ? friendCount
+        : (base.friendCount ?? null);
     return {
       ...base,
       ...identity,
       ...(resolvedExperience !== undefined ? { experience: resolvedExperience } : {}),
+      ...(resolvedLikes !== null ? { likesReceived: resolvedLikes } : {}),
+      ...(resolvedFriends !== null ? { friendCount: resolvedFriends } : {}),
       bio: pickString(base.bio, viewer.bio).trim(),
       location: pickString(base.location, viewer.location),
       website: pickString(base.website, viewer.website),
     };
-  }, [ownedProfile, currentUser, currentUserId, balance, level, experience]);
+  }, [ownedProfile, currentUser, currentUserId, balance, level, experience, posts, postsCount, postsHasMore, postsLikesCount, friendCount]);
 
   // Capabilities resolved by the existing engine for the active perspective.
   const capabilities = useMemo(() => resolveCapabilities({
@@ -596,6 +622,16 @@ export default function ProfileMyScreen() {
 
   const showPrivateState = !isOwnerView && !capabilities.canViewContent;
 
+  if (loading && !ownedProfile && !error) {
+    return (
+      <ErrorBoundary>
+        <div className="w-full pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
+          <ProfileSkeleton theme={theme} variant="owner" />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <div
@@ -610,8 +646,8 @@ export default function ProfileMyScreen() {
           className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px]"
           style={{
             background: isDark
-              ? 'radial-gradient(60% 45% at 12% 0%, rgba(200,43,255,0.16), transparent 70%), radial-gradient(55% 45% at 92% 6%, rgba(0,136,255,0.14), transparent 70%)'
-              : 'radial-gradient(60% 45% at 12% 0%, rgba(200,43,255,0.09), transparent 70%), radial-gradient(55% 45% at 92% 6%, rgba(0,136,255,0.08), transparent 70%)',
+              ? `radial-gradient(60% 45% at 12% 0%, ${brandHexRgba(tokens.color.brand.pink, 0.16)}, transparent 70%), radial-gradient(55% 45% at 92% 6%, ${brandHexRgba(tokens.color.brand.cyan, 0.14)}, transparent 70%)`
+              : `radial-gradient(60% 45% at 12% 0%, ${brandHexRgba(tokens.color.brand.pink, 0.09)}, transparent 70%), radial-gradient(55% 45% at 92% 6%, ${brandHexRgba(tokens.color.brand.cyan, 0.08)}, transparent 70%)`,
           }}
         />
 
@@ -628,7 +664,7 @@ export default function ProfileMyScreen() {
               )}
             >
               <span className="min-w-0 font-semibold">
-                We couldn't load everything on your profile. Please try again.
+                We couldn&apos;t load everything on your profile. Please try again.
               </span>
               <button
                 type="button"
@@ -649,9 +685,9 @@ export default function ProfileMyScreen() {
           </div>
         )}
 
-        {/* Master container */}
+        {/* Master container — Owner Studio & Identity Command Hub */}
         <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 space-y-4 sm:space-y-5 lg:space-y-6">
-          {/* Instant-paint background sync bar while Firestore profile hydrates */}
+          {/* Sync indicator during background refreshes */}
           {loading && !ownedProfile && (
             <div
               role="status"
@@ -684,69 +720,76 @@ export default function ProfileMyScreen() {
             />
           </section>
 
-          {/* 02. Social presence */}
-          <section aria-label="Social presence" className="min-w-0">
-            <ProfileMetricsGrid
-              isOwner={isOwnerView}
-              theme={theme}
-              profile={displayedProfile}
-              analytics={analytics}
-              capabilities={capabilities}
-              showCoins={false}
-              onMetricPress={handleMetricPress}
-            />
-          </section>
+          {/* 02. Studio Telemetry & Treasury Command Grid */}
+          <div className={cn(
+            "grid grid-cols-1 gap-4 sm:gap-5 items-stretch",
+            canShowTreasury && "lg:grid-cols-12"
+          )}>
+            <section
+              aria-label="Social presence"
+              className={cn("min-w-0", canShowTreasury ? "lg:col-span-7" : "w-full")}
+            >
+              <ProfileMetricsGrid
+                isOwner={isOwnerView}
+                theme={theme}
+                profile={displayedProfile}
+                analytics={analytics}
+                capabilities={capabilities}
+                showCoins={false}
+                onMetricPress={handleMetricPress}
+              />
+            </section>
 
-          {/* 02b. Dedicated Coins Treasury Vault (non-duplicated from metrics ledger) */}
-          {canShowTreasury && (
-            <section aria-label="Arvdoul Coins Treasury" className="min-w-0">
-              <div
-                className={cn(
-                  "rounded-[24px] border px-4 py-4 sm:px-5 sm:py-4 flex flex-wrap items-center justify-between gap-3 transition-all duration-200 shadow-[0_10px_28px_rgba(0,0,0,0.10)]",
-                  isDark
-                    ? "bg-[#080F2E]/78 border-amber-300/25 text-white"
-                    : "bg-white/70 border-amber-200/80 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.07)]"
-                )}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-500 flex items-center justify-center shrink-0">
-                    <Coins className="w-5 h-5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">
-                      Arvdoul Coins Treasury
-                    </p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg sm:text-xl font-bold tabular-nums">
-                        {treasuryBalance !== null && !Number.isNaN(treasuryBalance) ? treasuryBalance.toLocaleString() : '—'}
-                      </span>
-                      <span className={cn("text-xs", isDark ? "text-slate-400" : "text-slate-500")}>
-                        Coins available
-                      </span>
+            {canShowTreasury && (
+              <section aria-label="Arvdoul Coins Treasury" className="min-w-0 lg:col-span-5">
+                <div
+                  className={cn(
+                    "h-full rounded-[24px] border px-4 py-4 sm:px-5 flex flex-wrap lg:flex-nowrap items-center justify-between gap-3 transition-all duration-200 shadow-[0_10px_28px_rgba(0,0,0,0.10)]",
+                    isDark
+                      ? "bg-[#080F2E]/78 border-amber-300/25 text-white"
+                      : "bg-white/75 border-amber-200/80 text-slate-900 shadow-[0_10px_28px_rgba(38,56,120,0.07)]"
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-500 flex items-center justify-center shrink-0">
+                      <Coins className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 truncate">
+                        Coins Treasury
+                      </p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg sm:text-xl font-bold tabular-nums">
+                          {treasuryBalance !== null && !Number.isNaN(treasuryBalance) ? treasuryBalance.toLocaleString() : '—'}
+                        </span>
+                        <span className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-slate-500")}>
+                          Available
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {isOwnerView && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/coins')}
-                    className={cn(
-                      "min-h-[44px] px-4 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors cursor-pointer",
-                      isDark
-                        ? "bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25"
-                        : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100",
-                      FOCUS_RING
-                    )}
-                  >
-                    <Wallet className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>Open Treasury</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-            </section>
-          )}
+                  {isOwnerView && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/coins')}
+                      className={cn(
+                        "min-h-[44px] px-3.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors cursor-pointer shrink-0",
+                        isDark
+                          ? "bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25"
+                          : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100",
+                        FOCUS_RING
+                      )}
+                    >
+                      <Wallet className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Treasury</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
 
           {showPrivateState ? (
             <section
@@ -778,9 +821,9 @@ export default function ProfileMyScreen() {
             </section>
           ) : (
             <>
-              {/* 03. Digital standing: side by side only on large screens */}
-              <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
-                <section aria-label="Progression" className="min-w-0">
+              {/* 03. Civic standing & Highlights command split */}
+              <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12 lg:items-start">
+                <section aria-label="Progression" className="min-w-0 lg:col-span-7">
                   <ProfileProgression
                     level={displayedProfile?.level}
                     experience={displayedProfile?.experience}
@@ -794,7 +837,7 @@ export default function ProfileMyScreen() {
                   />
                 </section>
 
-                <section aria-label="Story highlights" className="min-w-0">
+                <section aria-label="Story highlights" className="min-w-0 lg:col-span-5">
                   <ProfileHighlightsSection
                     highlights={highlights}
                     userId={currentUserId}
@@ -808,18 +851,29 @@ export default function ProfileMyScreen() {
                 </section>
               </div>
 
-              {/* 04. Creator intelligence (owner perspective only) */}
+              {/* 04. Creator intelligence (owner perspective only, lazy-loaded for low-RAM startup) */}
               {isOwnerView && (
                 <section aria-label="Creator dashboard" className="min-w-0">
-                  <ProfileCreatorDashboard
-                    analytics={analytics}
-                    ranking={ranking}
-                    userLevel={effectiveProfile?.level ?? null}
-                    isCreator={effectiveProfile?.isCreator}
-                    theme={theme}
-                    timeframe={timeframe}
-                    onTimeframeChange={setTimeframe}
-                  />
+                  <Suspense
+                    fallback={
+                      <div
+                        className={cn(
+                          "w-full h-36 rounded-[24px] border animate-pulse",
+                          isDark ? "bg-white/[0.04] border-white/[0.08]" : "bg-white/60 border-slate-200/70"
+                        )}
+                      />
+                    }
+                  >
+                    <ProfileCreatorDashboard
+                      analytics={analytics}
+                      ranking={ranking}
+                      userLevel={effectiveProfile?.level ?? null}
+                      isCreator={effectiveProfile?.isCreator}
+                      theme={theme}
+                      timeframe={timeframe}
+                      onTimeframeChange={setTimeframe}
+                    />
+                  </Suspense>
                 </section>
               )}
 

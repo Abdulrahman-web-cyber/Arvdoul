@@ -57,6 +57,8 @@ export default function ProfilePreviewScreen({
   const storeUser = useAppStore((state) => state.currentUser);
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
+  const storePostsCount = useProfileStore((state) => state.postsCount);
+  const storePostsHasMore = useProfileStore((state) => state.postsHasMore);
   const storeHighlights = useProfileStore((state) => state.highlights);
   const storeStories = useProfileStore((state) => state.stories);
   const storeFollowStatus = useProfileStore((state) => state.followStatus);
@@ -95,6 +97,18 @@ export default function ProfilePreviewScreen({
   const effectiveProfile = useMemo(() => {
     if (!rawProfile && !currentUserId) return null;
     const p = rawProfile || {};
+    const livePostCount = Array.isArray(storePosts)
+      ? storePosts.filter((item) => !item?.isDeleted && item?.status !== 'scheduled').length
+      : 0;
+    const reconciledPostCount =
+      typeof storePostsCount === 'number' && Number.isFinite(storePostsCount)
+        ? Math.max(storePostsCount, livePostCount)
+        : typeof p.postCount === 'number' && (p.postCount > 0 || !storePosts?.length)
+          ? p.postCount
+          : storePostsHasMore === false && storePosts
+            ? livePostCount
+            : p.postCount;
+
     const identity = deriveProfileIdentity(p, {
       viewer: authUser || storeUser || {},
       handleCandidates: [p.username],
@@ -104,7 +118,7 @@ export default function ProfilePreviewScreen({
       displayFallback: null,
       followerCandidates: [p.followerCount, p.followersCount],
       followingCandidates: [p.followingCount],
-      postCandidates: [p.postCount, storePosts?.length],
+      postCandidates: [reconciledPostCount, p.postCount, storePosts?.length],
       levelCandidates: [p.level, p.creatorLevel],
       coinCandidates: [p.coins, p.coinBalance],
       userId: currentUserId,
@@ -117,7 +131,7 @@ export default function ProfilePreviewScreen({
       website: p.website || '',
       isPrivate: Boolean(p.isPrivate),
     };
-  }, [rawProfile, currentUserId, authUser, storeUser, storePosts?.length]);
+  }, [rawProfile, currentUserId, authUser, storeUser, storePosts, storePostsCount, storePostsHasMore]);
 
   const isOwnerMode = viewPerspective === 'owner';
 
@@ -175,7 +189,7 @@ export default function ProfilePreviewScreen({
         'min-h-screen pb-20',
         isDark ? 'bg-[#03071B]' : 'bg-[#F6F8FC]'
       )}>
-        <ProfileSkeleton theme={theme} />
+        <ProfileSkeleton theme={theme} variant={isOwnerMode ? 'owner' : 'public'} />
       </div>
     );
   }

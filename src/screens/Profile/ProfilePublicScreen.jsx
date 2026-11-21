@@ -20,6 +20,7 @@ import {
   pickDisplayName,
   deriveProfileIdentity,
   projectProfileForViewer,
+  resolveCreatorFlag,
   OFFLINE_PRESENCE,
 } from '../../services/profileReadModel.js';
 import { shareProfile } from '../../utils/shareUtils';
@@ -27,6 +28,7 @@ import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getUserService } from '../../services/userService.js';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
+import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
 import { unknownNumber } from '../../lib/unknownNumber';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -69,6 +71,9 @@ export default function ProfilePublicScreen() {
   // Read state authoritatively from Profile Store
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
+  const storePostsCount = useProfileStore((state) => state.postsCount);
+  const storePostsLikesCount = useProfileStore((state) => state.postsLikesCount);
+  const storeFriendCount = useProfileStore((state) => state.friendCount);
   const storePostsLoading = useProfileStore((state) => state.postsLoading);
   const storePostsHasMore = useProfileStore((state) => state.postsHasMore);
   const storePostsCursor = useProfileStore((state) => state.postsCursor);
@@ -214,20 +219,42 @@ export default function ProfilePublicScreen() {
     return () => { isMountedRef.current = false; };
   }, [loadPublicProfile]);
 
-  const profileData = storeProfile;
-  const posts = storePosts;
-  const mutualFriends = storeMutualFriends;
-  const mutualFriendsResolved = storeMutualFriendsResolved;
+  // Ensure visiting another profile NEVER flashes a previously cached owner/other profile
+  const isMatchingTarget = useMemo(() => {
+    if (!storeProfile || !routeUserId) return false;
+    const normalizedRoute = routeUserId.toLowerCase();
+    const idMatch =
+      String(storeProfile.id || '').toLowerCase() === normalizedRoute ||
+      String(storeProfile.uid || '').toLowerCase() === normalizedRoute;
+    const usernameMatch =
+      Boolean(storeProfile.username) &&
+      String(storeProfile.username).replace(/^@/, '').toLowerCase() === normalizedRoute;
+    return idMatch || usernameMatch;
+  }, [storeProfile, routeUserId]);
+
+  const profileData = isMatchingTarget ? storeProfile : null;
+  const posts = isMatchingTarget ? storePosts : [];
+  const postsCountForTarget = isMatchingTarget ? storePostsCount : null;
+  const likesCountForTarget = isMatchingTarget ? storePostsLikesCount : null;
+  const friendCountForTarget = isMatchingTarget ? storeFriendCount : null;
+  const mutualFriends = isMatchingTarget ? storeMutualFriends : [];
+  const mutualFriendsResolved = isMatchingTarget ? storeMutualFriendsResolved : false;
+  const highlightsForTarget = isMatchingTarget ? storeHighlights : [];
+  const storiesForTarget = isMatchingTarget ? storeStories : [];
   const loading = localLoading || storeLoading;
-  const targetUid = storeProfile?.id || storeProfile?.uid || routeUserId;
+  const targetUid = profileData?.id || profileData?.uid || routeUserId;
   const handleLoadMorePosts = useCallback(() => {
     if (!targetUid) return;
     useProfileStore.getState().loadMorePosts(targetUid);
   }, [targetUid]);
-  const isFollowing = Boolean(storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing);
+  const isFollowing = Boolean(
+    isMatchingTarget && (storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing)
+  );
   // A private target records a pending follow request rather than an edge; the
   // control must show "Requested" (and offer withdrawal), not "Follow".
-  const requestStatus = storeFollowStatus?.requestStatus ?? relationship?.requestStatus ?? null;
+  const requestStatus = isMatchingTarget
+    ? (storeFollowStatus?.requestStatus ?? relationship?.requestStatus ?? null)
+    : null;
   const followLoading = storeFollowLoading;
 
   // Optimistic Follow / Unfollow / Withdraw-request via Profile Store
@@ -296,12 +323,29 @@ export default function ProfilePublicScreen() {
       if (friendshipStatus === 'received' && pendingRequestId) {
         await userService.acceptFriendRequest(pendingRequestId, currentUser.uid);
         setFriendshipStatus('friends');
+        setPendingRequestId(null);
+        window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
+          detail: { targetUid: friendTargetUid, action: 'accepted', requestId: pendingRequestId },
+        }));
+        const store = useProfileStore.getState();
+        store.loadProfile(friendTargetUid, currentUser.uid, { force: true });
+        store.loadPosts(friendTargetUid, { limit: 30 });
+        store.loadHighlights(friendTargetUid);
+        store.loadStories(friendTargetUid);
         toast.success(`You and @${profileData?.username || 'user'} are now friends!`);
       } else if (friendshipStatus === 'none') {
         const res = await userService.sendFriendRequest(currentUser.uid, friendTargetUid);
-        setFriendshipStatus('pending');
-        if (res?.requestId) setPendingRequestId(res.requestId);
-        toast.success(`Friend request sent to @${profileData?.username || 'user'}`);
+        if (res?.alreadyFriends) {
+          setFriendshipStatus('friends');
+          toast.info(`You and @${profileData?.username || 'user'} are already friends!`);
+        } else {
+          setFriendshipStatus('pending');
+          if (res?.requestId) setPendingRequestId(res.requestId);
+          window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
+            detail: { targetUid: friendTargetUid, action: 'sent', requestId: res?.requestId || null },
+          }));
+          toast.success(`Friend request sent to @${profileData?.username || 'user'}`);
+        }
       }
     } catch (e) {
       console.error('Friend request error:', e);
@@ -323,6 +367,9 @@ export default function ProfilePublicScreen() {
       await getUserService().cancelFriendRequest(currentUser.uid, friendTargetUid);
       setFriendshipStatus('none');
       setPendingRequestId(null);
+      window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed', {
+        detail: { targetUid: friendTargetUid, action: 'cancelled' },
+      }));
       toast.success('Friend request withdrawn.');
     } catch (e) {
       toast.error(e?.message || 'Could not withdraw the friend request.');
@@ -338,6 +385,18 @@ export default function ProfilePublicScreen() {
   // drift from the owner/preview screens.
   const baseProfile = useMemo(() => {
     if (!profileData) return null;
+    const livePostCount = Array.isArray(posts)
+      ? posts.filter((p) => !p?.isDeleted && p?.status !== 'scheduled').length
+      : 0;
+    const reconciledPostCount =
+      typeof postsCountForTarget === 'number' && Number.isFinite(postsCountForTarget)
+        ? Math.max(postsCountForTarget, livePostCount)
+        : typeof profileData.postCount === 'number' && (profileData.postCount > 0 || !posts?.length)
+          ? profileData.postCount
+          : storePostsHasMore === false && posts
+            ? livePostCount
+            : profileData.postCount;
+
     const identity = deriveProfileIdentity(profileData, {
       handleCandidates: [profileData.username, profileData.handle],
       handleFallbacks: [profileData.displayName, profileData.email],
@@ -346,20 +405,20 @@ export default function ProfilePublicScreen() {
       displayFallback: null,
       followerCandidates: [profileData.followerCount, profileData.followersCount],
       followingCandidates: [profileData.followingCount],
-      postCandidates: [posts?.length, profileData.postCount],
+      postCandidates: [reconciledPostCount, profileData.postCount, posts?.length],
       levelCandidates: [profileData.level],
       coinCandidates: [profileData.coins, profileData.coinBalance],
       userId,
     });
+    const resolvedLikes =
+      typeof likesCountForTarget === 'number' && Number.isFinite(likesCountForTarget)
+        ? likesCountForTarget
+        : unknownNumber(profileData.likesReceived ?? profileData.likesCount);
     return {
       ...profileData,
       ...identity,
-      bio: typeof profileData.bio === 'string' ? profileData.bio : '',
-      // `likesReceived`/`likesCount` have no writer anywhere (the metric is not
-      // computed), so a `resolveCount` here coerced an absent value to a
-      // measured "0 likes" on every public profile. The grid renders unknown as
-      // '—'; keep an absent value unknown rather than fabricating a count.
-      likesReceived: unknownNumber(profileData.likesReceived ?? profileData.likesCount),
+      ...(typeof friendCountForTarget === 'number' ? { friendCount: friendCountForTarget } : {}),
+      likesReceived: resolvedLikes,
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
       links: Array.isArray(profileData.links) ? profileData.links : [],
@@ -370,7 +429,7 @@ export default function ProfilePublicScreen() {
       location: typeof profileData.location === 'string' ? profileData.location : (typeof profileData.city === 'string' ? profileData.city : ''),
       website: typeof profileData.website === 'string' ? profileData.website : (typeof profileData.link === 'string' ? profileData.link : ''),
     };
-  }, [profileData, userId, posts?.length]);
+  }, [profileData, userId, posts, postsCountForTarget, likesCountForTarget, friendCountForTarget, storePostsHasMore]);
 
   const capabilities = useMemo(() => {
     return resolveCapabilities({
@@ -439,40 +498,7 @@ export default function ProfilePublicScreen() {
     }
   }, [effectiveProfile, userId, profileData?.username]);
 
-  // Sync visitor profile identity into TopAppBar
-  useEffect(() => {
-    const canExposeIdentity =
-      Boolean(effectiveProfile) &&
-      !capabilities?.isBlockedBy &&
-      capabilities?.canViewProfile !== false;
-
-    if (!canExposeIdentity) {
-      window.dispatchEvent(new CustomEvent('arvdoul:profile_header_state', { detail: null }));
-      return undefined;
-    }
-
-    window.dispatchEvent(new CustomEvent('arvdoul:profile_header_state', {
-      detail: {
-        userId: effectiveProfile.id || effectiveProfile.uid || routeUserId || null,
-        displayName: effectiveProfile.displayName || effectiveProfile.name || null,
-        username: effectiveProfile.username || null,
-        photoURL: effectiveProfile.photoURL || null,
-        isVerified: Boolean(effectiveProfile.isVerified),
-      },
-    }));
-    return undefined;
-  }, [
-    effectiveProfile,
-    capabilities?.isBlockedBy,
-    capabilities?.canViewProfile,
-    routeUserId,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      window.dispatchEvent(new CustomEvent('arvdoul:profile_header_state', { detail: null }));
-    };
-  }, []);
+  // Clearer separation: TopAppBar displays plain "Profile" on visitor routes without avatar or visitor name.
 
   // Cross-component event listeners for TopAppBar & Header actions
   useEffect(() => {
@@ -492,7 +518,7 @@ export default function ProfilePublicScreen() {
   if (loading && !profileData) {
     return (
       <div className="w-full pb-20">
-        <ProfileSkeleton theme={theme} />
+        <ProfileSkeleton theme={theme} variant="public" />
       </div>
     );
   }
@@ -681,8 +707,8 @@ export default function ProfilePublicScreen() {
           </div>
         )}
 
-        {/* Master Container */}
-        <div className="w-full max-w-[1160px] mx-auto px-1 sm:px-2 py-2 sm:py-4 space-y-5 sm:space-y-6">
+        {/* Master Container — Visitor Social Proof & Content-First Discovery */}
+        <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 space-y-5 sm:space-y-6">
           {/* 1. Master Identity Header */}
           <ProfileHeroSection
             profile={effectiveProfile}
@@ -726,13 +752,11 @@ export default function ProfilePublicScreen() {
             theme={theme}
             capabilities={capabilities}
             // The mutual-friends card is a summary, and `ProfileSocialContext`
-            // invokes the handler with no argument — the old
-            // `(friend) => navigate(...friend.id)` dereferenced `undefined` and
-            // threw on every click. Route to the full friends list instead.
+            // invokes the handler with no argument — route to the full friends list.
             onFriendPress={() => navigate(`/profile/${effectiveProfile?.id || effectiveProfile?.uid || userId}/friends`)}
           />
 
-          {/* 3. Civic Metrics Grid (Coins moved to Patronage Vault below) */}
+          {/* 3. Public Civic Ledger Summary */}
           <ProfileMetricsGrid
             isOwner={false}
             theme={theme}
@@ -750,107 +774,79 @@ export default function ProfilePublicScreen() {
             }}
           />
 
-          {/* 3b. Patronage & Coins Vault Strip */}
-          {(Boolean(capabilities?.canViewEconomicStatus) || Boolean(currentUserId)) && (
-            <div
-              className={cn(
-                "rounded-2xl border px-4 py-3 sm:px-5 sm:py-3.5 flex flex-wrap items-center justify-between gap-3 transition-colors",
-                isDark
-                  ? "bg-[#080F2E]/85 border-amber-400/20 text-white"
-                  : "bg-white border-amber-200/80 text-slate-900 shadow-xs"
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-500 flex items-center justify-center shrink-0">
-                  <Coins className="w-4 h-4" aria-hidden="true" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">
-                    Arvdoul Patronage
-                  </p>
-                  {capabilities?.canViewEconomicStatus && effectiveProfile?.coins != null ? (
-                    <p className="text-sm font-bold tabular-nums">
-                      {Number(effectiveProfile.coins).toLocaleString()} <span className="font-normal text-xs opacity-75">Coins in treasury</span>
-                    </p>
-                  ) : (
-                    <p className={cn("text-xs", isDark ? "text-slate-400" : "text-slate-600")}>
-                      Support this citizen directly with Arvdoul Coins
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {currentUserId && !isOwner && (
-                <button
-                  type="button"
-                  onClick={() => setShowTipModal(true)}
-                  className={cn(
-                    "min-h-[44px] px-4 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                    isDark
-                      ? "bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25"
-                      : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
-                  )}
-                >
-                  <Gift className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Send Coins</span>
-                </button>
-              )}
-            </div>
-          )}
-
           {!capabilities.canViewContent ? (
             /* Restricted / Private Account Access Gate */
-            <div className={cn(
-              "rounded-2xl p-8 sm:p-12 text-center border space-y-4 my-2",
-              isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-white border-slate-200/90 shadow-sm"
-            )}>
-              <div className="w-14 h-14 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
-                <Lock className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">This Account is Private</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                  Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
-                </p>
-              </div>
-              <div className="pt-2 flex justify-center">
-                <button
-                  type="button"
-                  disabled={followLoading}
-                  onClick={handleFollowToggle}
-                  className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
-                </button>
-              </div>
-            </div>
+            (() => {
+              const gateRawLevel =
+                effectiveProfile?.level != null && Number.isFinite(Number(effectiveProfile.level))
+                  ? Number(effectiveProfile.level)
+                  : null;
+              const canFollowPrivateTarget = Boolean(
+                resolveCreatorFlag(effectiveProfile || {}, {}, gateRawLevel) ||
+                (gateRawLevel !== null && gateRawLevel >= LEVEL_GATES.publicFollowers)
+              );
+
+              return (
+                <div className={cn(
+                  "rounded-[24px] p-8 sm:p-12 text-center border space-y-4 my-2",
+                  isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-white border-slate-200/90 shadow-sm"
+                )}>
+                  <div className="w-14 h-14 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">This Account is Private</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                      {canFollowPrivateTarget
+                        ? `Follow @${effectiveProfile.username} to view their media gallery, highlights, and activity feed.`
+                        : `Send a friend request to @${effectiveProfile.username} to view their media gallery, highlights, and activity feed.`}
+                    </p>
+                  </div>
+                  <div className="pt-2 flex justify-center">
+                    {canFollowPrivateTarget ? (
+                      <button
+                        type="button"
+                        disabled={followLoading}
+                        onClick={handleFollowToggle}
+                        className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span>{requestStatus === 'pending' ? 'Requested' : 'Follow to View'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={friendRequestLoading || friendshipStatus === 'friends'}
+                        onClick={friendshipStatus === 'pending' ? handleCancelFriendRequest : handleFriendRequestToggle}
+                        className="min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-arvdoul-gradient hover:brightness-110 shadow-md transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span>
+                          {friendshipStatus === 'received'
+                            ? 'Accept Friend Request'
+                            : friendshipStatus === 'pending'
+                              ? 'Cancel Request'
+                              : friendshipStatus === 'friends'
+                                ? 'Friends'
+                                : 'Add friend'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
           ) : (
             <>
-              {/* 4. Citizen Progression & Civic Standing (level / XP / streak /
-                  reputation — each gated by the owner's show* privacy toggles) */}
-              <ProfileProgression
-                level={effectiveProfile?.level}
-                experience={effectiveProfile?.experience}
-                streak={effectiveProfile?.activeStreak}
-                reputation={effectiveProfile?.reputation}
-                showLevel={effectiveProfile?.showLevel !== false}
-                showReputation={effectiveProfile?.showReputation !== false}
-                showStreak={effectiveProfile?.showStreak !== false}
-                isOwner={false}
-                theme={theme}
-              />
-
-              {/* 5. Story Highlights Carousel */}
+              {/* 4. Content-First Showcase: Vibes Highlights & Featured Creations */}
               <ProfileHighlightsSection
-                highlights={storeHighlights}
+                highlights={highlightsForTarget}
                 userId={targetUid}
                 isOwner={false}
                 managedByParent={true}
                 theme={theme}
               />
 
-              {/* 5. Featured by Creator 4-Card Section */}
               <ProfileFeaturedSection
                 profile={effectiveProfile}
                 posts={posts}
@@ -860,7 +856,7 @@ export default function ProfilePublicScreen() {
                 onViewAll={() => setActiveTab('posts')}
               />
 
-              {/* 6. Sticky Underline Tabs Bar with Multi-View Switcher */}
+              {/* 5. Sticky Underline Tabs Bar + Pinned & Media Feed Grid */}
               <div className="sticky top-0 z-30">
                 <ProfileTabsBar
                   activeTab={activeTab}
@@ -873,7 +869,7 @@ export default function ProfilePublicScreen() {
                     const list = posts || [];
                     const vibePosts = list.filter((p) => p.type === 'story' || p.type === 'vibe' || p.isStory || p.isVibe);
                     const mergedVibeIds = new Set([
-                      ...((storeStories || []).map((s) => s?.id).filter(Boolean)),
+                      ...((storiesForTarget || []).map((s) => s?.id).filter(Boolean)),
                       ...vibePosts.map((p) => p?.id).filter(Boolean),
                     ]);
                     return {
@@ -884,7 +880,7 @@ export default function ProfilePublicScreen() {
                         const isVidOrAudio = p.type === 'video' || p.type === 'reel' || p.type === 'spark' || p.type === 'audio' || p.type === 'track' || Boolean(p.videoURL || p.videoUrl || p.audioURL || p.audioUrl);
                         return !isVidOrAudio && (p.type === 'image' || p.type === 'photo' || p.type === 'gallery' || Boolean(p.mediaURL || p.imageUrl || (Array.isArray(p.media) && p.media.length > 0)));
                       }).length,
-                      stories: Math.max(mergedVibeIds.size, (storeStories || []).length),
+                      stories: Math.max(mergedVibeIds.size, (storiesForTarget || []).length),
                       audio: list.filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
                       saved: 0,
                       tagged: list.filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
@@ -893,7 +889,6 @@ export default function ProfilePublicScreen() {
                 />
               </div>
 
-              {/* 7. Pinned Posts 4-Card Section (shown on 'posts' tab) */}
               {activeTab === 'posts' && (
                 <ProfilePinnedPosts
                   posts={posts}
@@ -905,10 +900,9 @@ export default function ProfilePublicScreen() {
                 />
               )}
 
-              {/* 8. Media Feed Grid with Multi-View Mode */}
               <ProfileFeedGrid
                 posts={posts}
-                stories={storeStories}
+                stories={storiesForTarget}
                 activeTab={activeTab}
                 viewMode={viewMode}
                 loading={storePostsLoading || (activeTab === 'stories' && storeStoriesLoading)}
@@ -920,6 +914,78 @@ export default function ProfilePublicScreen() {
                 loadingMore={storePostsLoading}
                 onLoadMore={handleLoadMorePosts}
               />
+
+              {/* 6. Civic Standing & Patronage Ledger */}
+              <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12 items-stretch pt-2">
+                <div className={cn(
+                  "min-w-0",
+                  (Boolean(capabilities?.canViewEconomicStatus) || Boolean(currentUserId))
+                    ? "lg:col-span-7"
+                    : "lg:col-span-12"
+                )}>
+                  <ProfileProgression
+                    level={effectiveProfile?.level}
+                    experience={effectiveProfile?.experience}
+                    streak={effectiveProfile?.activeStreak}
+                    reputation={effectiveProfile?.reputation}
+                    showLevel={effectiveProfile?.showLevel !== false}
+                    showReputation={effectiveProfile?.showReputation !== false}
+                    showStreak={effectiveProfile?.showStreak !== false}
+                    isOwner={false}
+                    theme={theme}
+                    className="h-full"
+                  />
+                </div>
+
+                {(Boolean(capabilities?.canViewEconomicStatus) || Boolean(currentUserId)) && (
+                  <div className="min-w-0 lg:col-span-5">
+                    <div
+                      className={cn(
+                        "h-full rounded-[24px] border px-4 py-4 sm:px-5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 transition-colors",
+                        isDark
+                          ? "bg-[#080F2E]/85 border-amber-400/20 text-white"
+                          : "bg-white border-amber-200/80 text-slate-900 shadow-xs"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-500 flex items-center justify-center shrink-0">
+                          <Coins className="w-4 h-4" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 truncate">
+                            Arvdoul Patronage
+                          </p>
+                          {capabilities?.canViewEconomicStatus && effectiveProfile?.coins != null ? (
+                            <p className="text-sm font-bold tabular-nums truncate">
+                              {Number(effectiveProfile.coins).toLocaleString()} <span className="font-normal text-xs opacity-75">Coins</span>
+                            </p>
+                          ) : (
+                            <p className={cn("text-xs leading-snug", isDark ? "text-slate-400" : "text-slate-600")}>
+                              Send Arvdoul Coins to support this creator
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {currentUserId && !isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTipModal(true)}
+                          className={cn(
+                            "min-h-[44px] px-4 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                            isDark
+                              ? "bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25"
+                              : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
+                          )}
+                        >
+                          <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Send Coins</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

@@ -7,7 +7,6 @@ import { useAuth } from "@context/AuthContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useAppStore } from "../../store/appStore";
-import { useProfileStore } from "../../store/profileStore";
 import { useNavBadges } from "../../hooks/useNavBadges";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
@@ -881,8 +880,11 @@ function BottomNav() {
 
   const { user: authUser, userProfile } = useAuth();
   const currentUser = useAppStore((state) => state.currentUser);
-  const profileStoreProfile = useProfileStore((state) => state.profile);
-  const effectiveUser = profileStoreProfile || userProfile || currentUser || authUser;
+  const ownerUid = authUser?.uid || userProfile?.uid || currentUser?.uid || null;
+  const effectiveUser =
+    (userProfile && (!ownerUid || userProfile.uid === ownerUid || userProfile.id === ownerUid) ? userProfile : null) ||
+    (currentUser && (!ownerUid || currentUser.uid === ownerUid || currentUser.id === ownerUid) ? currentUser : null) ||
+    authUser;
   const unreadCounts = useNavBadges();
 
   const reducedMotion = useReducedMotion();
