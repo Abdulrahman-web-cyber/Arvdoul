@@ -62,6 +62,9 @@ class ProductionAuthService {
       const firebaseApp = await import('../firebase/firebase.js');
       const authInstance = firebaseApp.auth || (await firebaseApp.getAuthInstance?.());
       this.auth = authInstance;
+      // Firebase Auth persistence must settle before getRedirectResult and
+      // before AuthContext installs its initial auth-state observer.
+      this.authPersistenceMode = await firebaseApp.authPersistenceReady;
       
       // Ensure auth.settings object exists.
       if (!this.auth.settings) {
