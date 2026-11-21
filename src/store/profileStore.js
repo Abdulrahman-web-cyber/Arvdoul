@@ -552,7 +552,7 @@ export const useProfileStore = create(
             // Only merge them into the owner's own profile; a visitor's server
             // query is already privacy-filtered and must never be widened by a
             // shared, uid-unscoped localStorage cache.
-            const localUserPosts = viewerId === userId
+            const localUserPosts = viewerId === userId && (!options.viewAs || options.viewAs === 'owner')
               ? localPosts.filter((p) => p && p.authorId === userId &&
                   p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled')
               : [];
