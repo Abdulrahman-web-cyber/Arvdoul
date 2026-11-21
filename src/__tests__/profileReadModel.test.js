@@ -677,7 +677,6 @@ describe('profile projection masks private social metrics', () => {
       followingCount: 80,
       friendCount: 45,
       followersCount: 120,
-      followingCount: 80,
       friendsCount: 45,
     }, {
       canViewFollowers: false,
