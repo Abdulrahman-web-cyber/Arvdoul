@@ -410,7 +410,7 @@ export default function ProfilePublicScreen() {
     const identity = deriveProfileIdentity(profileData, {
       handleCandidates: [profileData.username, profileData.handle],
       handleFallbacks: [profileData.displayName, profileData.email],
-      handleFallback: 'creator',
+      handleFallback: null,
       displayCandidates: [profileData.displayName, profileData.name],
       displayFallback: null,
       followerCandidates: [profileData.followerCount, profileData.followersCount],
