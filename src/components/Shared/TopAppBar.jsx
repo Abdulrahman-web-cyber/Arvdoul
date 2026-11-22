@@ -583,7 +583,9 @@ export const TopAppBar = ({
             "mx-auto flex flex-col items-center gap-1.5 pointer-events-auto",
             currentMode === "messages_inbox" || currentMode === "messages_chat" || currentMode === "stories"
               ? "max-w-6xl"
-              : "max-w-4xl"
+              : currentMode === "profile_me" || currentMode === "profile_visitor"
+                ? "max-w-[1040px]"
+                : "max-w-4xl"
           )}
         >
           {/* Glass pill with optical layers */}
@@ -647,7 +649,7 @@ export const TopAppBar = ({
                     <div className="flex flex-col">
                       <div className="flex items-center gap-1.5">
                         <ArvdoulWordmark
-                          variant={isDark ? "gradient" : "auto"}
+                          variant="auto"
                           size="md"
                         />
                       </div>

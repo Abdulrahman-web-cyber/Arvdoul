@@ -212,7 +212,12 @@ class ProfessionalUserService {
       maxSize: 2 * 1024 * 1024,
       userId,
     });
-    await this.updateUserProfile(userId, { photoURL: result.downloadURL });
+    await this._ensureInitialized();
+    const { doc, getDoc } = await import('firebase/firestore');
+    const userSnap = await getDoc(doc(this.firestore, 'users', userId)).catch(() => null);
+    if (userSnap?.exists()) {
+      await this.updateUserProfile(userId, { photoURL: result.downloadURL });
+    }
     this.avatarCache.set(`avatar_${userId}`, result.downloadURL);
     return result;
   }
@@ -450,35 +455,58 @@ class ProfessionalUserService {
     const rawData = snap.data();
     const full = { id: snap.id, uid: snap.id, ...rawData };
 
-    // PII lives in users_private/{uid} (owner/admin readable). Merge it only for
-    // the owner: the public doc is world-signed-in readable and PII-free, so a
-    // cross-viewer read must not even attempt the private fetch (rules deny it).
-    const isSelfUser = Boolean((requesterId && requesterId === userId) || options.forSelf === true);
-    if (isSelfUser) {
-      try {
-        const { doc: fsDoc, getDoc: fsGetDoc } = await import('firebase/firestore');
-        const privateSnap = await fsGetDoc(fsDoc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId));
-        if (privateSnap.exists()) {
-          const privateData = privateSnap.data();
-          for (const key of PRIVATE_PROFILE_FIELDS) {
-            if (privateData[key] !== undefined) full[key] = privateData[key];
-          }
-        }
-      } catch (e) {
-        logger.warn('Private profile merge skipped', { userId, error: e?.message });
+    const targetUid = resolvedUserId || snap.id || userId;
+    const isSelfUser = Boolean((requesterId && (requesterId === userId || requesterId === targetUid)) || options.forSelf === true);
+    const isOwner = Boolean(requesterId && (requesterId === userId || requesterId === targetUid));
+
+    const [{ doc: fsDoc, getDoc: fsGetDoc }, firebaseMod] = await Promise.all([
+      import('firebase/firestore'),
+      import('../firebase/firebase.js'),
+    ]);
+
+    const privatePromise = isSelfUser
+      ? fsGetDoc(fsDoc(this.firestore, PRIVATE_PROFILE_COLLECTION, targetUid)).catch((e) => {
+          logger.warn('Private profile merge skipped', { userId: targetUid, error: e?.message });
+          return null;
+        })
+      : Promise.resolve(null);
+
+    const presencePromise = fsGetDoc(fsDoc(this.firestore, 'user_presence', snap.id)).catch((e) => {
+      logger.debug('presence read skipped (scope denied or offline)', { userId: snap.id, error: e?.message });
+      return null;
+    });
+
+    const countersPromise = countersManager.apply({
+      data: full,
+      docPath: `users/${targetUid}`,
+      fields: ['followerCount', 'followingCount'],
+      scope: 'top',
+    }).catch(() => full);
+
+    const relationPromise = (requesterId && !isOwner)
+      ? socialGraphService.getRelationship(requesterId, targetUid).catch(() => null)
+      : Promise.resolve(null);
+
+    const authPromise = firebaseMod.getAuthInstance().catch(() => null);
+
+    const [privateSnap, presenceSnap, , relationEdge, auth] = await Promise.all([
+      privatePromise,
+      presencePromise,
+      countersPromise,
+      relationPromise,
+      authPromise,
+    ]);
+
+    if (privateSnap && privateSnap.exists()) {
+      const privateData = privateSnap.data();
+      for (const key of PRIVATE_PROFILE_FIELDS) {
+        if (privateData[key] !== undefined) full[key] = privateData[key];
       }
     }
 
-    // Resolve real displayName & username if missing or generic in document
     let authUser = null;
-    try {
-      const firebase = await import('../firebase/firebase.js');
-      const auth = await firebase.getAuthInstance();
-      if (auth?.currentUser && (auth.currentUser.uid === userId || requesterId === userId)) {
-        authUser = auth.currentUser;
-      }
-    } catch (e) {
-      logger.warn('Auth instance unavailable while building profile', { userId, error: e?.message });
+    if (auth?.currentUser && (auth.currentUser.uid === targetUid || requesterId === targetUid)) {
+      authUser = auth.currentUser;
     }
 
     // An identity with no stored name, no auth name and no email derives from
@@ -490,32 +518,18 @@ class ProfessionalUserService {
         ? full.name
         : (isSelfUser && authUser?.displayName)
           ? authUser.displayName
-          : (full.email ? full.email.split('@')[0] : `user ${String(userId).slice(0, 6)}`);
+          : (full.email ? full.email.split('@')[0] : `user ${String(targetUid).slice(0, 6)}`);
 
     full.username = (full.username && !full.username.startsWith('user_'))
       ? full.username
       : (isSelfUser && authUser?.email?.split('@')[0])
         ? authUser.email.split('@')[0]
-        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : `user_${String(userId).slice(0, 6)}`)));
+        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : `user_${String(targetUid).slice(0, 6)}`)));
 
-    full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
+    full.photoURL = this.getAvatarUrl(targetUid, full.displayName || full.username, full.photoURL);
 
-    // Overlay shard-backed follower/following counts (legacy fallback).
-    await countersManager.apply({ data: full, docPath: `users/${userId}`, fields: ['followerCount', 'followingCount'], scope: 'top' });
-
-    // Live presence is scope-gated in `user_presence/{uid}` (the world-readable
-    // users/{uid} doc no longer carries isOnline/lastActive — N321). Read it for
-    // the requester; a denied (scope) or failed read leaves presence offline,
-    // never a fabricated "online". Honest online = flag set AND activity within
-    // 5 minutes (Spec §42).
-    let presenceDoc = null;
-    try {
-      const { doc: fsDoc, getDoc: fsGetDoc } = await import('firebase/firestore');
-      const presenceSnap = await fsGetDoc(fsDoc(this.firestore, 'user_presence', snap.id));
-      if (presenceSnap.exists()) presenceDoc = presenceSnap.data();
-    } catch (e) {
-      logger.debug('presence read skipped (scope denied or offline)', { userId: snap.id, error: e?.message });
-    }
+    // Live presence is scope-gated in `user_presence/{uid}` (Spec §42).
+    const presenceDoc = presenceSnap && presenceSnap.exists() ? presenceSnap.data() : null;
     const rawLastActive = presenceDoc?.lastActive;
     const lastActiveDate = rawLastActive?.toDate ? rawLastActive.toDate() : (rawLastActive ? new Date(rawLastActive) : null);
     const isRecent = lastActiveDate && (Date.now() - lastActiveDate.getTime() < 5 * 60 * 1000);
@@ -528,11 +542,6 @@ class ProfessionalUserService {
       lastActive: lastActiveDate ? lastActiveDate.toISOString() : null
     };
 
-    // Evaluate Relationship & Bidirectional Block enforcement. The relation
-    // flags are resolved here; the *decision* is made once, by the capability
-    // engine below — this method must not run a second privacy layer (N007).
-    const targetUid = resolvedUserId || userId;
-    const isOwner = Boolean(requesterId && (requesterId === userId || requesterId === targetUid));
     const relationshipFlags = {};
 
     // Auto-record active day in server-authoritative ledger for owner
@@ -547,17 +556,13 @@ class ProfessionalUserService {
       }
     }
 
-    if (requesterId && !isOwner) {
-      // Single graph read. `isBlocking` = the viewer blocked the target;
-      // `isBlockedBy` = the target blocked the viewer. The engine derives the
-      // aggregate `isBlocked` from these two, so direction is preserved (N007).
-      const edge = await socialGraphService.getRelationship(requesterId, targetUid);
-      relationshipFlags.isBlocking = edge.isBlocking;
-      relationshipFlags.isBlockedBy = edge.isBlockedBy;
-      relationshipFlags.isMuted = edge.isMuted;
-      relationshipFlags.isRestricted = edge.isRestricted;
-      relationshipFlags.isFollowing = edge.isFollowing;
-      relationshipFlags.isMutualFriend = edge.isMutualFriend;
+    if (relationEdge) {
+      relationshipFlags.isBlocking = relationEdge.isBlocking;
+      relationshipFlags.isBlockedBy = relationEdge.isBlockedBy;
+      relationshipFlags.isMuted = relationEdge.isMuted;
+      relationshipFlags.isRestricted = relationEdge.isRestricted;
+      relationshipFlags.isFollowing = relationEdge.isFollowing;
+      relationshipFlags.isMutualFriend = relationEdge.isMutualFriend;
     }
 
     // Single decision: the engine resolves capabilities from the relation,
@@ -566,7 +571,7 @@ class ProfessionalUserService {
     // diverge from the engine (N007/N018).
     const capabilities = resolveCapabilities({
       viewer: requesterId ? { uid: requesterId } : null,
-      target: { ...full, uid: userId, id: userId },
+      target: { ...full, uid: targetUid, id: targetUid },
       relationship: { isOwner, ...relationshipFlags },
       viewAs: isOwner ? viewAs : null
     });
@@ -711,11 +716,15 @@ class ProfessionalUserService {
     // claims before the transaction or recently verified accounts can receive
     // permission-denied while completing SetupProfile.
     let liveAuthUser = null;
-    try {
+    const refreshLiveAuthClaims = async () => {
       const firebase = await import('../firebase/firebase.js');
       const auth = await firebase.getAuthInstance();
       if (auth?.currentUser && auth.currentUser.uid === userId) {
         liveAuthUser = auth.currentUser;
+        await liveAuthUser.reload?.().catch(() => {});
+        if (typeof liveAuthUser.getIdToken === 'function') {
+          await liveAuthUser.getIdToken(true);
+        }
         if (typeof liveAuthUser.getIdTokenResult === 'function') {
           const tokenResult = await liveAuthUser.getIdTokenResult(true);
           const claims = tokenResult?.claims || {};
@@ -728,6 +737,10 @@ class ProfessionalUserService {
         if (!profile.email && liveAuthUser.email) profile.email = liveAuthUser.email;
         if (!profile.phoneNumber && liveAuthUser.phoneNumber) profile.phoneNumber = liveAuthUser.phoneNumber;
       }
+    };
+
+    try {
+      await refreshLiveAuthClaims();
     } catch (refreshError) {
       logger.error('Auth token refresh failed before profile transaction', {
         userId, code: refreshError?.code || null, error: refreshError?.message || 'unknown',
@@ -743,119 +756,126 @@ class ProfessionalUserService {
     const userDoc = doc(this.firestore, 'users', userId);
     const usernameDoc = doc(this.firestore, 'usernames', username);
     const privateDoc = doc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId);
-
-    // Split the payload: PII (email, phone, verification flags, Stripe ids)
-    // goes to users_private/{uid}, which only the owner and admins may read.
-    // `users/{uid}` is world-signed-in readable and must stay PII-free. Both
-    // writes share one transaction so a profile can never exist without its
-    // private half (or vice versa).
-    const { publicFields, privateFields } = splitProfileFields(profile);
-
     const presenceDoc = doc(this.firestore, 'user_presence', userId);
 
-    await runTransaction(this.firestore, async (transaction) => {
-      // Execute ALL reads first before any writes
-      const existingUsername = await transaction.get(usernameDoc);
-      const existingUser = await transaction.get(userDoc);
-      const existingPrivate = await transaction.get(privateDoc);
-      const existingPresence = await transaction.get(presenceDoc);
+    const runCreateTransaction = async () => {
+      // Split the payload after each claim sync: PII (email, phone, verification
+      // flags, coins) goes to users_private/{uid}, while users/{uid} stays PII-free.
+      const { publicFields, privateFields } = splitProfileFields(profile);
 
-      const oldUsername = existingUser.exists() ? existingUser.data()?.username : null;
-      const oldUsernameDoc = (oldUsername && oldUsername !== username)
-        ? doc(this.firestore, 'usernames', oldUsername)
-        : null;
-      const existingOldUsernameSnap = oldUsernameDoc ? await transaction.get(oldUsernameDoc) : null;
+      await runTransaction(this.firestore, async (transaction) => {
+        // Execute ALL reads first before any writes
+        const existingUsername = await transaction.get(usernameDoc);
+        const existingUser = await transaction.get(userDoc);
+        const existingPrivate = await transaction.get(privateDoc);
+        const existingPresence = await transaction.get(presenceDoc);
 
-      if (existingUsername.exists() && existingUsername.data()?.userId !== userId) {
-        throw new Error(`Username "${username}" is already taken. Please choose another one.`);
-      }
+        const rawOldUsername = existingUser.exists() ? String(existingUser.data()?.username || '').toLowerCase().trim() : '';
+        const oldUsernameDoc = (rawOldUsername && rawOldUsername !== username && /^[a-z0-9._]+$/.test(rawOldUsername))
+          ? doc(this.firestore, 'usernames', rawOldUsername)
+          : null;
+        const existingOldUsernameSnap = oldUsernameDoc ? await transaction.get(oldUsernameDoc) : null;
 
-      // Execute writes only after all reads have completed
-      if (existingUser.exists()) {
-        // Document already exists! This is an update on users/{userId}.
-        // Only update user-editable fields so we NEVER touch server-authoritative
-        // fields or reset counters (followers, following, posts, etc.).
-        const isComplete = profileData.isProfileComplete !== undefined ? !!profileData.isProfileComplete : true;
-        const userUpdate = {
-          updatedAt: serverTimestamp(),
-          isProfileComplete: isComplete,
-        };
-        if (isComplete) {
-          userUpdate.profileCompletedAt = serverTimestamp();
+        if (existingUsername.exists() && existingUsername.data()?.userId !== userId) {
+          throw new Error(`Username "${username}" is already taken. Please choose another one.`);
         }
-        if (publicFields.displayName !== undefined && publicFields.displayName) userUpdate.displayName = publicFields.displayName;
-        if (publicFields.firstName !== undefined) userUpdate.firstName = publicFields.firstName;
-        if (publicFields.lastName !== undefined) userUpdate.lastName = publicFields.lastName;
-        if (publicFields.username !== undefined && publicFields.username) userUpdate.username = publicFields.username;
-        if (publicFields.bio !== undefined) userUpdate.bio = publicFields.bio;
-        if (publicFields.website !== undefined) userUpdate.website = publicFields.website;
-        if (publicFields.location !== undefined) userUpdate.location = publicFields.location;
-        if (publicFields.gender !== undefined) userUpdate.gender = publicFields.gender;
-        if (publicFields.dob !== undefined) userUpdate.dob = publicFields.dob;
-        if (publicFields.photoURL !== undefined && publicFields.photoURL) userUpdate.photoURL = publicFields.photoURL;
-        if (oldUsernameDoc && existingOldUsernameSnap?.exists() && existingOldUsernameSnap.data()?.userId === userId) {
-          transaction.delete(oldUsernameDoc);
+
+        // Execute writes only after all reads have completed
+        if (existingUser.exists()) {
+          const isComplete = profileData.isProfileComplete !== undefined ? !!profileData.isProfileComplete : true;
+          const userUpdate = {
+            updatedAt: serverTimestamp(),
+            isProfileComplete: isComplete,
+          };
+          if (isComplete) {
+            userUpdate.profileCompletedAt = serverTimestamp();
+          }
+          if (publicFields.displayName !== undefined && publicFields.displayName) userUpdate.displayName = publicFields.displayName;
+          if (publicFields.firstName !== undefined) userUpdate.firstName = publicFields.firstName;
+          if (publicFields.lastName !== undefined) userUpdate.lastName = publicFields.lastName;
+          if (publicFields.username !== undefined && publicFields.username) userUpdate.username = publicFields.username;
+          if (publicFields.bio !== undefined) userUpdate.bio = publicFields.bio;
+          if (publicFields.website !== undefined) userUpdate.website = publicFields.website;
+          if (publicFields.location !== undefined) userUpdate.location = publicFields.location;
+          if (publicFields.gender !== undefined) userUpdate.gender = publicFields.gender;
+          if (publicFields.dob !== undefined) userUpdate.dob = publicFields.dob;
+          if (publicFields.photoURL !== undefined && publicFields.photoURL) userUpdate.photoURL = publicFields.photoURL;
+          if (oldUsernameDoc && existingOldUsernameSnap?.exists() && existingOldUsernameSnap.data()?.userId === userId) {
+            transaction.delete(oldUsernameDoc);
+          }
+          transaction.update(userDoc, userUpdate);
+        } else {
+          transaction.set(userDoc, publicFields);
         }
-        transaction.update(userDoc, userUpdate);
-      } else {
-        // New document creation - publicFields has the exact required NEW_USER_DEFAULTS
-        transaction.set(userDoc, publicFields);
-      }
 
-      // Safe private fields handling according to firestore.rules
-      const safePrivateData = {
-        updatedAt: serverTimestamp()
-      };
-      if (privateFields.email !== undefined) safePrivateData.email = privateFields.email;
-      if (privateFields.phoneNumber !== undefined) safePrivateData.phoneNumber = privateFields.phoneNumber;
-      if (privateFields.emailVerified !== undefined) safePrivateData.emailVerified = Boolean(privateFields.emailVerified);
-      if (privateFields.phoneVerified !== undefined) safePrivateData.phoneVerified = Boolean(privateFields.phoneVerified);
-
-      if (existingPrivate.exists()) {
-        transaction.update(privateDoc, safePrivateData);
-      } else {
-        // The starting balance is seeded ONLY when the private doc is created
-        // (N324) — never on an update, or a repeated createUserProfile call
-        // would reset a real balance to the default. The world-readable
-        // users/{uid} never carries a financial figure; the rules pin the
-        // create to NEW_USER_DEFAULTS.coins.
-        const seed = { uid: userId, ...safePrivateData };
-        if (privateFields.coins !== undefined) seed.coins = privateFields.coins;
-        transaction.set(privateDoc, seed);
-      }
-
-      if (existingUsername.exists()) {
-        transaction.update(usernameDoc, {
-          userId,
-          username,
+        const safePrivateData = {
           updatedAt: serverTimestamp()
-        });
-      } else {
-        transaction.set(usernameDoc, {
-          userId,
-          username,
-          createdAt: serverTimestamp()
-        });
-      }
+        };
+        if (privateFields.email !== undefined) safePrivateData.email = privateFields.email;
+        if (privateFields.phoneNumber !== undefined) safePrivateData.phoneNumber = privateFields.phoneNumber;
 
-      // Presence is scope-gated (user_presence/{uid}), not on the world-readable
-      // users/{uid} doc. Written here so a brand-new account is online at signup.
-      if (existingPresence.exists()) {
-        transaction.update(presenceDoc, {
-          isOnline: true,
-          lastActive: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        transaction.set(presenceDoc, {
-          isOnline: true,
-          lastActive: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-    });
+        if (existingPrivate.exists()) {
+          const curPriv = existingPrivate.data() || {};
+          if (privateFields.emailVerified !== undefined && Boolean(privateFields.emailVerified) !== Boolean(curPriv.emailVerified)) {
+            safePrivateData.emailVerified = Boolean(privateFields.emailVerified);
+          }
+          if (privateFields.phoneVerified !== undefined && Boolean(privateFields.phoneVerified) !== Boolean(curPriv.phoneVerified)) {
+            safePrivateData.phoneVerified = Boolean(privateFields.phoneVerified);
+          }
+          transaction.update(privateDoc, safePrivateData);
+        } else {
+          if (privateFields.emailVerified !== undefined) safePrivateData.emailVerified = Boolean(privateFields.emailVerified);
+          if (privateFields.phoneVerified !== undefined) safePrivateData.phoneVerified = Boolean(privateFields.phoneVerified);
+          const seed = { uid: userId, ...safePrivateData };
+          if (privateFields.coins !== undefined) seed.coins = privateFields.coins;
+          transaction.set(privateDoc, seed);
+        }
 
-    // Non‑critical side document (outside transaction).
+        if (existingUsername.exists()) {
+          transaction.update(usernameDoc, {
+            userId,
+            username,
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          transaction.set(usernameDoc, {
+            userId,
+            username,
+            createdAt: serverTimestamp()
+          });
+        }
+
+        if (existingPresence.exists()) {
+          transaction.update(presenceDoc, {
+            isOnline: true,
+            lastActive: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          transaction.set(presenceDoc, {
+            isOnline: true,
+            lastActive: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+    };
+
+    try {
+      await runCreateTransaction();
+    } catch (txErr) {
+      const isPermissionDenied =
+        txErr?.code === 'permission-denied' ||
+        String(txErr?.message || '').toLowerCase().includes('permission');
+      if (!isPermissionDenied || !liveAuthUser) {
+        throw txErr;
+      }
+      logger.warn('Retrying createUserProfile transaction after fresh ID token refresh', { userId });
+      await refreshLiveAuthClaims().catch(() => {});
+      await runCreateTransaction();
+    }
+
+    // Non-critical side document (outside transaction).
     const settingsDoc = doc(this.firestore, 'user_settings', userId);
     await setDoc(settingsDoc, {
       userId,
@@ -876,7 +896,7 @@ class ProfessionalUserService {
 
     try {
       const { useProfileStore } = await import('../store/profileStore.js');
-      useProfileStore.getState().loadProfile(userId, userId);
+      useProfileStore.getState().loadProfile(userId, userId, { force: true });
     } catch (e) {
       logger.warn('Profile store sync after create failed', { userId, error: e?.message });
     }

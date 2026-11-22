@@ -9,9 +9,13 @@ import {
 } from "../utils/profileCompletion.js";
 import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 
+import { useTheme } from "../context/ThemeContext.jsx";
+import { tokens } from "../design-system/tokens.js";
+
 export default function AppStateGuard({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isDark } = useTheme();
   const {
     user,
     loading: authLoading,
@@ -71,28 +75,35 @@ export default function AppStateGuard({ children }) {
     }
   }, [decision, navigate, user]);
 
-  // When auth state is resolving during cold-start:
-  // If on splash, allow splash to render.
-  // If on another route, show a clean branded transition screen.
+  // Never render mismatched children beneath a guard transition: painting
+  // unauthenticated (/intro) or wrong-state children before replace navigation
+  // causes a visible frame blink across cold starts and route switches.
   if (decision.wait) {
     if (location.pathname === "/") {
       return children;
     }
     return (
-      <>
+      <div
+        className="min-h-[100dvh] w-full"
+        style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
+        aria-busy="true"
+        aria-label="Preparing screen"
+      >
         <RouteProgressBar isAnimating={true} />
-        {children}
-      </>
+      </div>
     );
   }
 
-  // If redirecting, render ambient top progress line while route updates smoothly
   if (decision.destination && !decision.wait) {
     return (
-      <>
+      <div
+        className="min-h-[100dvh] w-full"
+        style={{ backgroundColor: isDark ? tokens.color.bg.dark : tokens.color.bg.light }}
+        aria-busy="true"
+        aria-label="Navigating"
+      >
         <RouteProgressBar isAnimating={true} />
-        {children}
-      </>
+      </div>
     );
   }
 

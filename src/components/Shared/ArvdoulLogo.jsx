@@ -1,8 +1,9 @@
-import { memo } from "react";
+import { memo, useId } from "react";
 import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import { LOGO, WORDMARK } from './ArvdoulBrandAssets.js';
 
 /**
  * ArvdoulEmblem - Brand Insignia using official light & dark high-resolution assets
@@ -35,9 +36,6 @@ export const ArvdoulEmblem = memo(({
     : (theme === 'dark' ? 'dark' : (isDarkTheme ? 'dark' : 'light'));
 
   const isLight = effectiveTheme === 'light';
-  // Use the exact transparent master logo matching Splash & Intro screens.
-  // The asset name is URL-safe (no space, lowercase) so it resolves on every
-  // CDN/filesystem; it is the same master mark.
   const logoSrc = '/icons/arvdoul-mark.svg';
 
   return (
@@ -74,43 +72,95 @@ ArvdoulEmblem.propTypes = {
   alt: PropTypes.string,
 };
 
+const WORDMARK_HEIGHTS = Object.freeze({
+  xs: 13,
+  sm: 15,
+  md: 18,
+  lg: 22,
+  xl: 28,
+});
+
 /**
- * ArvdoulWordmark - Clean, geometric, tracking-wide brand typography wordmark
+ * ArvdoulWordmark - Exact static monoline vector wordmark matching SplashScreen
  */
 export const ArvdoulWordmark = memo(({ 
-  variant = 'gradient', // 'gradient' | 'white' | 'dark' | 'auto'
+  variant = 'auto', // 'gradient' | 'white' | 'dark' | 'auto'
   size = 'md', // 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   className = '',
 }) => {
-  const sizeClasses = {
-    xs: 'text-xs tracking-[0.2em]',
-    sm: 'text-sm tracking-[0.22em]',
-    md: 'text-base sm:text-lg tracking-[0.24em]',
-    lg: 'text-xl sm:text-2xl tracking-[0.26em]',
-    xl: 'text-2xl sm:text-3xl tracking-[0.28em]',
-  };
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const gradId = `av-wm-grad-${uid}`;
 
-  const variantClasses = {
-    gradient: 'bg-gradient-to-r from-white via-purple-200 to-[#00F0FF] bg-clip-text text-transparent drop-shadow-[0_2px_12px_rgba(139,30,243,0.35)]',
-    white: 'text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.4)]',
-    dark: 'text-slate-900 dark:text-white',
-    auto: 'bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-900 dark:from-white dark:via-purple-200 dark:to-cyan-200 bg-clip-text text-transparent',
-  };
+  let isDarkTheme = false;
+  try {
+    const themeCtx = useTheme?.();
+    if (themeCtx) {
+      isDarkTheme = themeCtx.isDark ?? (themeCtx.resolvedTheme === 'dark' || themeCtx.theme === 'dark');
+    }
+  } catch {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      isDarkTheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+  }
+
+  const strokeColor =
+    variant === 'white'
+      ? '#FFFFFF'
+      : variant === 'gradient'
+        ? `url(#${gradId})`
+        : isDarkTheme
+          ? '#F3F5FF'
+          : '#0C1130';
+
+  const heightPx = typeof size === 'number' ? size : (WORDMARK_HEIGHTS[size] || WORDMARK_HEIGHTS.md);
 
   return (
-    <span
-      className={`font-black font-sans select-none uppercase inline-block leading-none ${sizeClasses[size] || sizeClasses.md} ${variantClasses[variant] || variantClasses.gradient} ${className}`}
-      style={{ letterSpacing: '0.24em' }}
+    <svg
+      role="img"
+      aria-label={WORDMARK.label}
+      viewBox={`-6 -10 ${WORDMARK.width + 12} ${WORDMARK.height + 20}`}
+      className={`block shrink-0 select-none overflow-visible ${className}`}
+      style={{ height: `${heightPx}px`, width: 'auto' }}
     >
-      ARVDOUL
-    </span>
+      {variant === 'gradient' && (
+        <defs>
+          <linearGradient
+            id={gradId}
+            gradientUnits="userSpaceOnUse"
+            x1="0"
+            y1="0"
+            x2={WORDMARK.width}
+            y2={WORDMARK.height}
+          >
+            {LOGO.gradient.stops.map(([offset, color]) => (
+              <stop key={offset} offset={offset} stopColor={color} />
+            ))}
+          </linearGradient>
+        </defs>
+      )}
+      <g
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={WORDMARK.stroke}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {WORDMARK.letters.map((letter) => (
+          <g key={letter.ch + letter.x} transform={`translate(${letter.x} 0)`}>
+            {letter.paths.map((d) => (
+              <path key={d} d={d} />
+            ))}
+          </g>
+        ))}
+      </g>
+    </svg>
   );
 });
 
 ArvdoulWordmark.displayName = 'ArvdoulWordmark';
 ArvdoulWordmark.propTypes = {
   variant: PropTypes.oneOf(['gradient', 'white', 'dark', 'auto']),
-  size: PropTypes.oneOf(['xs', 'sm', 'md', 'lg', 'xl']),
+  size: PropTypes.oneOfType([PropTypes.oneOf(['xs', 'sm', 'md', 'lg', 'xl']), PropTypes.number]),
   className: PropTypes.string,
 };
 

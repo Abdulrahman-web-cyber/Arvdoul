@@ -57,11 +57,11 @@ describe('Google OAuth browser flow', () => {
     expect(initialize).not.toContain('ensure pop-ups are allowed');
   });
 
-  test('mobile browsers use redirect instead of a popup', () => {
-    expect(method).toMatch(/prefersRedirect = \/Android|iPhone|iPad|iPod|Mobile\//);
-    const mobileBranch = method.slice(method.indexOf('if (prefersRedirect)'), method.indexOf('let result;'));
-    expect(mobileBranch).toContain('await signInWithRedirect');
-    expect(mobileBranch).not.toContain('signInWithPopup');
+  test('browsers try signInWithPopup first and block redirect inside iframes', () => {
+    expect(method).toContain('await signInWithPopup(this.auth, provider)');
+    expect(method).toContain('window.self !== window.top');
+    expect(method).toContain('!isInIframe && redirectFallbackCodes.has(popupError.code)');
+    expect(method).not.toMatch(/if\s*\(prefersRedirect\)/);
     expect(method).not.toMatch(/await setPersistence\(/);
   });
 

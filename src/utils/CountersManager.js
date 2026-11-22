@@ -135,14 +135,16 @@ class CountersManager {
    * @returns {Promise<Object>} same data object
    */
   async apply({ data, docPath, fields, scope = 'stats' }) {
-    if (!data || !Array.isArray(fields)) return data;
+    if (!data || !Array.isArray(fields) || fields.length === 0) return data;
     if (scope === 'stats') data.stats = data.stats || {};
-    for (const field of fields) {
-      const legacy = (scope === 'stats' ? data.stats[field] : data[field]) || 0;
-      const value = await this.get({ docPath, field, fallback: legacy });
-      if (scope === 'stats') data.stats[field] = value;
-      else data[field] = value;
-    }
+    await Promise.all(
+      fields.map(async (field) => {
+        const legacy = (scope === 'stats' ? data.stats[field] : data[field]) || 0;
+        const value = await this.get({ docPath, field, fallback: legacy });
+        if (scope === 'stats') data.stats[field] = value;
+        else data[field] = value;
+      })
+    );
     return data;
   }
 

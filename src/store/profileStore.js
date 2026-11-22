@@ -123,12 +123,103 @@ const initialState = {
   loadSeq: {},
 };
 
-// Module-level deduplication so rapid double-mounts or duplicate callers share
-// a single network pass instead of doubling Firestore reads on low-RAM devices.
+// Module-level deduplication and bounded LRU SWR cache so revisiting
+// profiles paints instantly on low-RAM devices without leaking across accounts
+// or viewAs perspectives.
+const MAX_SWR_PROFILE_ENTRIES = 15;
+const SWR_FRESH_MS = 60_000;
+const SWR_MAX_AGE_MS = 300_000;
+
 let _inFlightProfileKey = null;
 let _inFlightProfilePromise = null;
 let _lastCompletedProfileKey = null;
 let _lastCompletedProfileAt = 0;
+let _activeSwrKey = null;
+let _activeSwrAliasKey = null;
+const _swrProfileCache = new Map();
+
+function buildSwrKey(userId, currentUserId, viewAs) {
+  return `${String(userId || '').trim()}::${currentUserId ? String(currentUserId).trim() : ''}::${viewAs || 'default'}`;
+}
+
+function readSwrEntry(key) {
+  if (!key) return null;
+  const entry = _swrProfileCache.get(key);
+  if (!entry) return null;
+  const age = Date.now() - (entry.timestamp || 0);
+  if (age > SWR_MAX_AGE_MS) {
+    _swrProfileCache.delete(key);
+    return null;
+  }
+  // Refresh LRU recency
+  _swrProfileCache.delete(key);
+  _swrProfileCache.set(key, entry);
+  return { entry, isFresh: age <= SWR_FRESH_MS };
+}
+
+function writeSwrEntry(key, patch, { touchTimestamp = false } = {}) {
+  if (!key || !patch) return;
+  const prev = _swrProfileCache.get(key) || {};
+  const next = {
+    ...prev,
+    ...patch,
+    timestamp: touchTimestamp ? Date.now() : (prev.timestamp || Date.now()),
+  };
+  _swrProfileCache.delete(key);
+  _swrProfileCache.set(key, next);
+  while (_swrProfileCache.size > MAX_SWR_PROFILE_ENTRIES) {
+    const oldestKey = _swrProfileCache.keys().next().value;
+    _swrProfileCache.delete(oldestKey);
+  }
+}
+
+function syncActiveSwrCache(targetUid, patch) {
+  if (!targetUid) return;
+  const matchesPrimary = _activeSwrKey && _activeSwrKey.startsWith(`${targetUid}::`);
+  const matchesAlias = _activeSwrAliasKey && _activeSwrAliasKey.startsWith(`${targetUid}::`);
+  if (matchesPrimary) writeSwrEntry(_activeSwrKey, patch);
+  if (matchesAlias && _activeSwrAliasKey !== _activeSwrKey) {
+    writeSwrEntry(_activeSwrAliasKey, patch);
+  }
+}
+
+function applySwrToDraft(state, entry, userId, currentUserId) {
+  const cachedProfile = entry.profile;
+  const resolvedId = cachedProfile?.id || cachedProfile?.uid || userId;
+  state.profile = cachedProfile || null;
+  state.viewerUid = currentUserId || null;
+  state.loading = false;
+  state.error = null;
+  state.isOwner = Boolean(currentUserId && (resolvedId === currentUserId || userId === currentUserId));
+  state.followStatus = entry.followStatus ?? null;
+  state.followStatusTargetId = entry.followStatusTargetId ?? resolvedId ?? null;
+  state.mutualFriends = Array.isArray(entry.mutualFriends) ? entry.mutualFriends : [];
+  state.mutualFriendsResolved = Boolean(entry.mutualFriendsResolved);
+  state.friendCount = entry.friendCount ?? null;
+  state.level = entry.level ?? cachedProfile?.level ?? null;
+  state.experience = entry.experience ?? null;
+  state.balance = state.isOwner ? (entry.balance ?? null) : null;
+  state.position = entry.position ?? null;
+  if (Array.isArray(entry.posts)) {
+    state.posts = entry.posts;
+    state.postsCount = entry.postsCount ?? null;
+    state.postsLikesCount = entry.postsLikesCount ?? null;
+    state.postsHasMore = entry.postsHasMore ?? false;
+    state.postsCursor = entry.postsCursor ?? null;
+    state.postsError = null;
+  }
+  if (Array.isArray(entry.highlights)) {
+    state.highlights = entry.highlights;
+  }
+  if (Array.isArray(entry.stories)) {
+    state.stories = entry.stories;
+  }
+}
+
+export function isSwrFreshForTarget(userId, currentUserId, viewAs = 'default') {
+  const hit = readSwrEntry(buildSwrKey(userId, currentUserId, viewAs));
+  return Boolean(hit && hit.isFresh);
+}
 
 export const useProfileStore = create(
   immer((set, get) => ({
@@ -155,9 +246,10 @@ export const useProfileStore = create(
     loadProfile: async (userId, currentUserId, options = {}) => {
       if (!userId) return;
 
-      const dedupeKey = `${userId}::${currentUserId || ''}::${options?.viewAs || 'default'}`;
+      const dedupeKey = buildSwrKey(userId, currentUserId, options?.viewAs);
+      let swrHit = null;
       if (!options?.force) {
-        if (_inFlightProfileKey === dedupeKey && _inFlightProfilePromise && get().loading) {
+        if (_inFlightProfileKey === dedupeKey && _inFlightProfilePromise) {
           return _inFlightProfilePromise;
         }
         if (
@@ -168,11 +260,29 @@ export const useProfileStore = create(
         ) {
           return;
         }
+        swrHit = readSwrEntry(dedupeKey);
       } else {
         _inFlightProfileKey = null;
         _inFlightProfilePromise = null;
         _lastCompletedProfileKey = null;
         _lastCompletedProfileAt = 0;
+        _swrProfileCache.delete(dedupeKey);
+      }
+
+      const isBackgroundRevalidate = Boolean(swrHit && swrHit.entry?.profile && !swrHit.isFresh);
+
+      if (swrHit?.entry?.profile) {
+        _activeSwrKey = dedupeKey;
+        const cachedUid = swrHit.entry.profile.id || swrHit.entry.profile.uid;
+        _activeSwrAliasKey = cachedUid ? buildSwrKey(cachedUid, currentUserId, options?.viewAs) : null;
+        set((state) => {
+          applySwrToDraft(state, swrHit.entry, userId, currentUserId);
+        });
+        if (swrHit.isFresh) {
+          _lastCompletedProfileKey = dedupeKey;
+          _lastCompletedProfileAt = Date.now();
+          return;
+        }
       }
 
       const prevProfile = get().profile;
@@ -180,6 +290,7 @@ export const useProfileStore = create(
       const prevUsername = prevProfile?.username?.toLowerCase();
       const normalizedTarget = String(userId).replace(/^@/, '').toLowerCase().trim();
       const isSwitchingTarget = Boolean(
+        !isBackgroundRevalidate &&
         prevProfile &&
         prevId !== userId &&
         prevId?.toLowerCase() !== normalizedTarget &&
@@ -194,18 +305,20 @@ export const useProfileStore = create(
       set((state) => {
         state.requestSeq = requestId;
         state.viewerUid = currentUserId || null;
-        // Every profile target/refresh invalidates older secondary loaders.
-        // Otherwise a slow posts/highlights/stories response can land after a
-        // newer route has begun loading, even when the profile request token
-        // itself correctly rejects the stale profile response.
-        for (const key of ['posts', 'highlights', 'saved', 'shop', 'stories', 'level', 'balance', 'position', 'followStatus', 'mutualFriends']) {
-          state.loadSeq[key] = (state.loadSeq[key] || 0) + 1;
+        if (!isBackgroundRevalidate) {
+          // Every profile target/refresh invalidates older secondary loaders.
+          // Otherwise a slow posts/highlights/stories response can land after a
+          // newer route has begun loading, even when the profile request token
+          // itself correctly rejects the stale profile response.
+          for (const key of ['posts', 'highlights', 'saved', 'shop', 'stories', 'level', 'balance', 'position', 'followStatus', 'mutualFriends']) {
+            state.loadSeq[key] = (state.loadSeq[key] || 0) + 1;
+          }
+          state.loading = true;
+          state.error = null;
+          // A new profile load invalidates any prior mutual-friends result.
+          state.mutualFriends = [];
+          state.mutualFriendsResolved = false;
         }
-        state.loading = true;
-        state.error = null;
-        // A new profile load invalidates any prior mutual-friends result.
-        state.mutualFriends = [];
-        state.mutualFriendsResolved = false;
         if (isSwitchingTarget) {
           state.profile = null;
           state.isOwner = Boolean(currentUserId && userId === currentUserId);
@@ -373,6 +486,31 @@ export const useProfileStore = create(
           state.position = position;
         });
 
+        const swrPayload = {
+          profile: resolvedProfile,
+          followStatus,
+          followStatusTargetId: resolvedUid || userId,
+          mutualFriends,
+          mutualFriendsResolved,
+          friendCount,
+          level: resolvedProfile.level ?? level ?? null,
+          experience:
+            resolvedProfile.experience !== undefined && resolvedProfile.experience !== null && Number.isFinite(Number(resolvedProfile.experience))
+              ? Number(resolvedProfile.experience)
+              : resolvedProfile.xp !== undefined && resolvedProfile.xp !== null && Number.isFinite(Number(resolvedProfile.xp))
+                ? Number(resolvedProfile.xp)
+                : null,
+          balance,
+          position,
+        };
+        const aliasKey = resolvedUid ? buildSwrKey(resolvedUid, currentUserId, options?.viewAs) : null;
+        _activeSwrKey = dedupeKey;
+        _activeSwrAliasKey = aliasKey;
+        writeSwrEntry(dedupeKey, swrPayload, { touchTimestamp: true });
+        if (aliasKey && aliasKey !== dedupeKey) {
+          writeSwrEntry(aliasKey, swrPayload, { touchTimestamp: true });
+        }
+
         _lastCompletedProfileKey = dedupeKey;
         _lastCompletedProfileAt = Date.now();
         
@@ -383,6 +521,10 @@ export const useProfileStore = create(
           });
         }
       } catch (error) {
+        if (isBackgroundRevalidate) {
+          console.warn('Background profile revalidation failed:', error?.message);
+          return;
+        }
         console.warn('Load profile handled gracefully with fallback:', error?.message);
         const effectiveUid = currentUserId || null;
         const isOwner = Boolean(currentUserId && (!userId || userId === effectiveUid));
@@ -546,6 +688,7 @@ export const useProfileStore = create(
           viewerId,
           constrainAuthorIsPrivate,
           ...options,
+          ...(options.force ? { cacheFirst: false, forceRefresh: true } : {}),
         };
         const result = await firestoreService.getPostsByUser(userId, queryOpts);
 
@@ -553,13 +696,6 @@ export const useProfileStore = create(
         try {
           if (typeof window !== 'undefined' && window.localStorage) {
             const localPosts = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-            // Match only this author's posts. The previous `|| !p.authorId`
-            // clause injected another account's (or an unattributed) cached
-            // post into every profile's feed.
-            // Device-local optimistic posts are not an authorization source.
-            // Only merge them into the owner's own profile; a visitor's server
-            // query is already privacy-filtered and must never be widened by a
-            // shared, uid-unscoped localStorage cache.
             const localUserPosts = viewerId === userId && (!options.viewAs || options.viewAs === 'owner')
               ? localPosts.filter((p) => p && p.authorId === userId &&
                   p.isDeleted !== true && p.status !== 'deleted' && p.status !== 'scheduled')
@@ -583,25 +719,30 @@ export const useProfileStore = create(
         );
         const liveLoadedCount = livePosts.length;
         let nextPostsCount = null;
-        if (!result?.hasMore && liveLoadedCount > 0) {
+        if (result && result.hasMore === false) {
+          // When all pages are loaded (including 0 posts), the loaded count is exact.
           nextPostsCount = liveLoadedCount;
         } else if (typeof firestoreService.getUserPostsCount === 'function') {
           const counted = await firestoreService.getUserPostsCount(userId, queryOpts).catch(() => null);
           if (typeof counted === 'number' && Number.isFinite(counted)) {
             nextPostsCount = Math.max(counted, liveLoadedCount);
+          } else if (liveLoadedCount > 0) {
+            nextPostsCount = liveLoadedCount;
           }
-        } else if (!result?.hasMore && liveLoadedCount === 0) {
-          nextPostsCount = 0;
         }
 
+        const loadedLikesTotal = livePosts.reduce((sum, p) => {
+          const likes = Number(p?.stats?.likes ?? p?.likes ?? 0);
+          return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
+        }, 0);
         let nextLikesCount = null;
-        if (!result?.hasMore) {
-          nextLikesCount = livePosts.reduce((sum, p) => {
-            const likes = Number(p?.stats?.likes ?? p?.likes ?? 0);
-            return sum + (Number.isFinite(likes) && likes > 0 ? likes : 0);
-          }, 0);
+        if (result && result.hasMore === false) {
+          nextLikesCount = loadedLikesTotal;
         } else if (typeof firestoreService.getUserTotalPostLikes === 'function') {
-          nextLikesCount = await firestoreService.getUserTotalPostLikes(userId, queryOpts).catch(() => null);
+          const aggregatedLikes = await firestoreService.getUserTotalPostLikes(userId, queryOpts).catch(() => null);
+          if (typeof aggregatedLikes === 'number' && Number.isFinite(aggregatedLikes)) {
+            nextLikesCount = Math.max(aggregatedLikes, loadedLikesTotal);
+          }
         }
         
         if (!get()._isLoadCurrent('posts', __seq)) return;
@@ -625,6 +766,13 @@ export const useProfileStore = create(
           state.postsLoading = false;
           state.postsHasMore = result.hasMore || false;
           state.postsCursor = result.nextCursor || null;
+        });
+        syncActiveSwrCache(userId, {
+          posts: userPosts,
+          postsCount: nextPostsCount,
+          postsLikesCount: nextLikesCount,
+          postsHasMore: result?.hasMore || false,
+          postsCursor: result?.nextCursor || null,
         });
       } catch (error) {
         console.error('❌ Load posts failed:', error);
@@ -728,6 +876,7 @@ export const useProfileStore = create(
           state.highlights = highlights;
           state.highlightsLoading = false;
         });
+        syncActiveSwrCache(userId, { highlights });
       } catch (error) {
         console.error('❌ Load highlights failed:', error);
         if (!get()._isLoadCurrent('highlights', __seq)) return;
@@ -830,6 +979,7 @@ export const useProfileStore = create(
           state.stories = userStories;
           state.storiesLoading = false;
         });
+        syncActiveSwrCache(userId, { stories: userStories });
       } catch (error) {
         console.error('❌ Load stories failed:', error);
         if (!get()._isLoadCurrent('stories', __seq)) return;
@@ -1196,6 +1346,9 @@ export const useProfileStore = create(
       _inFlightProfilePromise = null;
       _lastCompletedProfileKey = null;
       _lastCompletedProfileAt = 0;
+      _activeSwrKey = null;
+      _activeSwrAliasKey = null;
+      _swrProfileCache.clear();
       set((state) => {
         const nextSeq = (state.requestSeq || 0) + 1;
         const nextLoads = {};
@@ -1216,6 +1369,9 @@ export const useProfileStore = create(
       _inFlightProfilePromise = null;
       _lastCompletedProfileKey = null;
       _lastCompletedProfileAt = 0;
+      _activeSwrKey = null;
+      _activeSwrAliasKey = null;
+      _swrProfileCache.clear();
       set(() => ({ ...initialState }));
     },
   }))

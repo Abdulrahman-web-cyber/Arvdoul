@@ -182,16 +182,22 @@ export default function ProfilePublicScreen() {
         }
 
         const areFriends = Boolean(rel.isMutualFriend);
-        await Promise.allSettled([
-          store.loadPosts(resolvedUid, { limit: 30 }),
-          store.loadHighlights(resolvedUid),
-          store.loadStories(resolvedUid),
-        ]);
         if (areFriends) {
           if (isMountedRef.current) setFriendshipStatus('friends');
+          await Promise.allSettled([
+            store.loadPosts(resolvedUid, { limit: 30 }),
+            store.loadHighlights(resolvedUid),
+            store.loadStories(resolvedUid),
+          ]);
         } else {
-          try {
-            const requestState = await userService.getFriendRequestStatus(currentUserId, resolvedUid);
+          const [, , , reqResult] = await Promise.allSettled([
+            store.loadPosts(resolvedUid, { limit: 30 }),
+            store.loadHighlights(resolvedUid),
+            store.loadStories(resolvedUid),
+            userService.getFriendRequestStatus(currentUserId, resolvedUid),
+          ]);
+          if (reqResult?.status === 'fulfilled' && reqResult.value) {
+            const requestState = reqResult.value;
             if (isMountedRef.current) {
               if (requestState.sent) {
                 setFriendshipStatus('pending');
@@ -203,10 +209,8 @@ export default function ProfilePublicScreen() {
                 setFriendshipStatus('none');
               }
             }
-          } catch (requestError) {
-            // A failed request-state read must not render an actionable Add
-            // Friend button that could duplicate or contradict a pending edge.
-            console.warn('Friend request status could not be verified:', requestError);
+          } else {
+            console.warn('Friend request status could not be verified:', reqResult?.reason);
             if (isMountedRef.current) setRelationshipError(true);
             return;
           }
@@ -257,6 +261,19 @@ export default function ProfilePublicScreen() {
   const highlightsForTarget = isMatchingTarget ? storeHighlights : [];
   const storiesForTarget = isMatchingTarget ? storeStories : [];
   const loading = localLoading || storeLoading;
+  const isSyncingPublic = Boolean(profileData && (loading || storePostsLoading));
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('arvdoul:sync_progress', {
+      detail: { source: 'profile-public', active: isSyncingPublic },
+    }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('arvdoul:sync_progress', {
+        detail: { source: 'profile-public', active: false },
+      }));
+    };
+  }, [isSyncingPublic]);
+
   const targetUid = profileData?.id || profileData?.uid || routeUserId;
   const handleLoadMorePosts = useCallback(() => {
     if (!targetUid) return;
@@ -765,7 +782,7 @@ export default function ProfilePublicScreen() {
         )}
 
         {/* Master Container — Visitor Social Proof & Content-First Discovery */}
-        <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 space-y-5 sm:space-y-6">
+        <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 pt-2 pb-4 sm:pt-3 sm:pb-6 space-y-5 sm:space-y-6">
           {/* 1. Master Identity Header */}
           <ProfileHeroSection
             profile={effectiveProfile}

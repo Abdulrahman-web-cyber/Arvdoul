@@ -108,10 +108,6 @@ const SHELL_STYLE = Object.freeze({
   '--pms-brand-soft': brandRgba(0.22),
   '--pms-blue-soft': brandHexRgba(tokens.color.brand.blue, 0.2),
 });
-const AMBIENT = Object.freeze({
-  dark: `radial-gradient(60% 45% at 12% 0%, ${brandRgba(0.14)}, transparent 70%), radial-gradient(55% 45% at 92% 6%, ${brandHexRgba(tokens.color.brand.blue, 0.12)}, transparent 70%)`,
-  light: `radial-gradient(60% 45% at 12% 0%, ${brandRgba(0.08)}, transparent 70%), radial-gradient(55% 45% at 92% 6%, ${brandHexRgba(tokens.color.brand.blue, 0.07)}, transparent 70%)`,
-});
 
 /* ── pure helpers ──────────────────────────────────────────────────────── */
 
@@ -360,11 +356,6 @@ const PMS_CSS = `
 .pms-pulse{animation:pms-pulse 1.6s ease-in-out infinite}
 @keyframes pms-pulse{0%,100%{opacity:1}50%{opacity:.55}}
 
-/* sync indicator: overlaid on the container edge, so showing or hiding it never shifts the layout */
-.pms-sync{position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px;overflow:hidden;background:var(--sk);pointer-events:none;z-index:1}
-.pms-sync > div{height:100%;width:34%;border-radius:2px;background:var(--pms-brand);animation:pms-slide 1.3s ease-in-out infinite}
-@keyframes pms-slide{from{transform:translateX(-100%)}to{transform:translateX(294%)}}
-
 /* gentle section entrance (opacity + 8px rise; never persists a transform after it ends) */
 .pms-rise{animation:pms-rise .38s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i,0) * 45ms)}
 @keyframes pms-rise{from{opacity:0;transform:translateY(8px)}}
@@ -408,12 +399,10 @@ button.pms-treasury:active{transform:scale(.985)}
 @media (forced-colors:active){
   .pms-glass,.pms-btn,.pms-btn.pms-glass,.pms-treasury{border:1px solid CanvasText;background:Canvas;color:CanvasText}
   .pms-glass::before,.pms-glass::after{display:none}
-  .pms-sync > div{background:Highlight}
 }
 @media (prefers-reduced-motion:reduce){
   .pms *,.pms *::before,.pms *::after{transition:none!important}
-  .pms-pulse,.pms-rise,.pms-sync > div{animation:none}
-  .pms-sync > div{width:100%;opacity:.5}
+  .pms-pulse,.pms-rise{animation:none}
   .pms-btn:active:not(:disabled),button.pms-treasury:active{transform:none}
   button.pms-treasury:hover .pms-chev{transform:none}
 }
@@ -763,7 +752,7 @@ export default function ProfileMyScreen() {
    * Owner: profile, highlights, stories, level, balance, position, posts. Preview: only the
    * perspective-aware profile and posts. Resolves to { slice: boolean } built from real outcomes.
    */
-  const loadContext = useCallback(async (uid, mode, gen, { refresh = false, only = null } = {}) => {
+  const loadContext = useCallback(async (uid, mode, gen, { refresh = false, quiet = false, only = null } = {}) => {
     const store = useProfileStore.getState();
     const isOwnerCtx = mode === 'owner';
     const key = `${uid}|${mode}`;
@@ -773,7 +762,9 @@ export default function ProfileMyScreen() {
     add('profile', () => (isOwnerCtx
       ? (refresh ? store.refreshProfile(uid, uid) : store.loadProfile(uid, uid))
       : store.loadProfile(uid, uid, { viewAs: mode })));
-    add('posts', () => (isOwnerCtx ? store.loadPosts(uid) : store.loadPosts(uid, { limit: PREVIEW_POST_LIMIT, viewAs: mode })));
+    add('posts', () => (isOwnerCtx
+      ? store.loadPosts(uid, refresh ? { force: true } : {})
+      : store.loadPosts(uid, { limit: PREVIEW_POST_LIMIT, viewAs: mode })));
     if (isOwnerCtx) {
       add('highlights', () => store.loadHighlights(uid));
       add('stories', () => store.loadStories(uid));
@@ -782,7 +773,7 @@ export default function ProfileMyScreen() {
       add('position', () => store.loadPosition(uid));
     }
 
-    if (!refresh) tasks.forEach((task) => markSlice(key, gen, task.name, 'loading'));
+    if (!refresh && !quiet) tasks.forEach((task) => markSlice(key, gen, task.name, 'loading'));
 
     const results = {};
     await Promise.all(tasks.map(async (task) => {
@@ -792,10 +783,10 @@ export default function ProfileMyScreen() {
       results[task.name] = success;
       if (success) {
         markSlice(key, gen, task.name, 'ok');
-      } else if (!refresh) {
+      } else if (!refresh && !quiet) {
         markSlice(key, gen, task.name, 'error');
       } else {
-        // A failed refresh keeps data that was already loaded for this account.
+        // A failed refresh or background sync keeps data that was already loaded.
         setLoadState((prev) => (prev.key === key && prev.slices[task.name] !== 'ok' && ctxGenRef.current === gen
           ? { ...prev, slices: { ...prev.slices, [task.name]: 'error' } }
           : prev));
@@ -810,7 +801,31 @@ export default function ProfileMyScreen() {
     if (!currentUserId) return;
     const gen = ctxGenRef.current + 1;
     ctxGenRef.current = gen;
-    setLoadState({ key: `${currentUserId}|${viewAs}`, slices: EMPTY_SLICES });
+    const key = `${currentUserId}|${viewAs}`;
+    const snap = useProfileStore.getState();
+    const hasWarmOwnerStore = Boolean(
+      viewAs === 'owner' &&
+      snap.profile &&
+      (snap.profile.uid === currentUserId || snap.profile.id === currentUserId) &&
+      !snap.error
+    );
+    if (hasWarmOwnerStore) {
+      setLoadState({
+        key,
+        slices: {
+          profile: 'ok',
+          ...(snap.postsCount !== null || (Array.isArray(snap.posts) && snap.posts.length > 0) ? { posts: 'ok' } : {}),
+          ...(Array.isArray(snap.highlights) ? { highlights: 'ok' } : {}),
+          ...(Array.isArray(snap.stories) ? { stories: 'ok' } : {}),
+          ...(snap.level !== null || snap.profile?.level != null ? { level: 'ok' } : {}),
+          ...(snap.balance !== null || snap.profile?.coins != null ? { balance: 'ok' } : {}),
+          ...(snap.position !== null ? { position: 'ok' } : {}),
+        },
+      });
+      loadContext(currentUserId, viewAs, gen, { quiet: true });
+      return;
+    }
+    setLoadState({ key, slices: EMPTY_SLICES });
     loadContext(currentUserId, viewAs, gen);
   }, [currentUserId, viewAs, loadContext]);
 
@@ -1160,6 +1175,17 @@ export default function ProfileMyScreen() {
   const failedSlices = Object.entries(sliceMap).filter(([, status]) => status === 'error').map(([name]) => name);
   const isSyncing = Boolean(ownedProfile) && (loading || Object.values(sliceMap).includes('loading'));
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('arvdoul:sync_progress', {
+      detail: { source: 'profile-my', active: isSyncing },
+    }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('arvdoul:sync_progress', {
+        detail: { source: 'profile-my', active: false },
+      }));
+    };
+  }, [isSyncing]);
+
   const shell = (children, extraClass) => (
     <ErrorBoundary>
       <div
@@ -1230,16 +1256,11 @@ export default function ProfileMyScreen() {
       'aria-busy': treasuryLoading || undefined,
     }
     : {};
-  const ambient = isDark ? AMBIENT.dark : AMBIENT.light;
-
   return shell(
     <>
-      {/* Ambient brand lighting: one static layer, no blur filter, never intercepts input */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px]" style={{ background: ambient }} />
-
       {/* Load failures: sanitized; details are logged, never shown */}
       {failedSlices.length > 0 && (
-        <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 pt-3">
+        <div className="w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 pt-2">
           <div role="alert" className="pms-glass pms-banner" data-tier="subtle" data-tone="error">
             <span className="min-w-0">
               {failedSlices.includes('profile')
@@ -1255,12 +1276,7 @@ export default function ProfileMyScreen() {
       )}
 
       {/* Master container */}
-      <div className="relative w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 space-y-4 sm:space-y-5 lg:space-y-6">
-        {isSyncing && (
-          <div role="status" aria-label="Syncing profile details" className="pms-sync">
-            <div />
-          </div>
-        )}
+      <div className="relative w-full max-w-[1040px] mx-auto px-3 sm:px-5 lg:px-7 pt-2 pb-4 sm:pt-3 sm:pb-6 space-y-4 sm:space-y-5 lg:space-y-6">
 
         {/* 01. Identity */}
         <section aria-label="Profile identity" className="min-w-0">

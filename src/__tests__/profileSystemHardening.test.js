@@ -289,7 +289,7 @@ describe('Profile default tab - persisted setting is actually consumed', () => {
       const src = fs.readFileSync(path.join(root, 'src', rel), 'utf8');
       expect(src).toContain('PROFILE_TABS');
       expect(src).toMatch(/defaultTab/);
-      expect(src).toContain('setActiveTab');
+      expect(src).toMatch(/setActiveTab|setTabState/);
     }
   });
 });

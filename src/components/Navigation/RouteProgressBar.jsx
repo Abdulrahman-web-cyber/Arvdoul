@@ -92,4 +92,24 @@ export const TopAppLoadingBanner = ({ isAnimating = true, label = null }) => {
   );
 };
 
+export const UnifiedSyncProgressBar = () => {
+  const [activeSources, setActiveSources] = useState([]);
+
+  useEffect(() => {
+    const sources = new Set();
+    const handleSync = (event) => {
+      const source = String(event?.detail?.source || 'default');
+      const active = Boolean(event?.detail?.active);
+      if (active) sources.add(source);
+      else sources.delete(source);
+      setActiveSources(Array.from(sources));
+    };
+    window.addEventListener('arvdoul:sync_progress', handleSync);
+    return () => window.removeEventListener('arvdoul:sync_progress', handleSync);
+  }, []);
+
+  if (activeSources.length === 0) return null;
+  return <RouteProgressBar isAnimating={true} />;
+};
+
 export default RouteProgressBar;

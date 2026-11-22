@@ -313,7 +313,7 @@ describe('Profile navigation, skeleton isolation, friends-only gate & real likes
     expect(screen.getByText('Friends')).toBeInTheDocument();
     expect(screen.getByText('Posts')).toBeInTheDocument();
     expect(screen.getByText('Likes')).toBeInTheDocument();
-    expect(screen.getByText('32')).toBeInTheDocument();
+    expect(screen.getAllByText('32').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Followers')).not.toBeInTheDocument();
     expect(screen.queryByText('Following')).not.toBeInTheDocument();
 

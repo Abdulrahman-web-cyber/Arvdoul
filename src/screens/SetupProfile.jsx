@@ -12,6 +12,7 @@ import {
   createUserProfile,
   checkUsernameAvailability,
   generateDefaultAvatar,
+  generateUniqueUsername,
   getUserProfile,
 } from "../services/userService.js";
 import storageService from "../services/storageService.js";
@@ -1191,10 +1192,15 @@ export default function SetupProfile() {
 
   const handleSkip = async () => {
     if (!displayName.trim()) return toast.error("Display name required");
-    const finalUsername = username || `user_${Date.now().toString(36).slice(-8)}`;
-    setUsername(finalUsername);
     setLoading(true);
+    let setupStage = 'username-generation';
     try {
+      const cleanTyped = (username || '').toLowerCase().trim();
+      const finalUsername = cleanTyped.length >= 3
+        ? cleanTyped
+        : await generateUniqueUsername(displayName || 'user', user?.uid);
+      setUsername(finalUsername);
+
       const finalAvatar = avatarUrl || generateDefaultAvatar(user.uid, displayName);
       const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
         try {
@@ -1202,6 +1208,7 @@ export default function SetupProfile() {
         } catch { return {}; }
       })());
 
+      setupStage = 'profile-transaction';
       const result = await createUserProfile(user.uid, {
         uid: user.uid,
         displayName: displayName.trim(),
@@ -1220,6 +1227,7 @@ export default function SetupProfile() {
         authProvider: authProvider || "email",
       });
       if (!result.success) throw new Error(result.error || "Profile creation failed");
+      setupStage = 'auth-profile-sync';
       if (authService?.auth?.currentUser) {
         try {
           const authPatch = { displayName: displayName.trim() };
@@ -1231,7 +1239,11 @@ export default function SetupProfile() {
           console.warn("Firebase Auth profile sync skipped:", authSyncErr?.message);
         }
       }
-      await refreshUserProfile();
+      setupStage = 'profile-refresh';
+      await refreshUserProfile().catch((refreshErr) => {
+        console.warn("Non-fatal profile refresh skipped after skip save:", refreshErr?.message);
+      });
+      setupStage = 'onboarding-cleanup';
       sessionStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_step1");
@@ -1242,9 +1254,15 @@ export default function SetupProfile() {
       toast.success("🎉 Profile setup complete!");
       setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 500);
     } catch (err) {
+      const errorCode = err?.code || err?.cause?.code || 'unknown';
+      console.error('[ProfileSetup] skip save failed', {
+        stage: setupStage, code: errorCode, message: err?.message || 'unknown',
+      });
       const msg = err?.message?.includes("does not exist") || err?.message?.includes("datastore/setup")
         ? "Database connection updating. Please tap again."
-        : (err?.message || "Profile creation failed");
+        : errorCode === 'permission-denied'
+          ? `Firebase denied the profile save during ${setupStage}. Refresh and retry; the error code is recorded for diagnosis.`
+          : (err?.message || "Profile creation failed");
       toast.error(msg);
     } finally {
       setLoading(false);

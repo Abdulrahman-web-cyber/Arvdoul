@@ -91,8 +91,7 @@ describe('profile cache and unknown-value isolation', () => {
 
   test('owner-only local posts are excluded from public/follower perspective previews', () => {
     expect(store).toMatch(/viewerId === userId && \(!options\.viewAs \|\| options\.viewAs === 'owner'\)/);
-    expect(ownerProfile).toContain('profileStore.loadPosts(currentUserId, {');
-    expect(ownerProfile).toContain('viewAs: mode === \'owner\' ? null : mode');
+    expect(ownerProfile).toContain('store.loadPosts(uid, { limit: PREVIEW_POST_LIMIT, viewAs: mode })');
   });
 
   test('profile story hydration requires an explicit matching author', () => {
@@ -182,8 +181,10 @@ describe('profile cache and unknown-value isolation', () => {
 
   test('unknown XP and coin balance remain unavailable until numeric data exists', () => {
     expect(ownerProfile).toContain('withCoins: false');
-    expect(ownerProfile).toMatch(/value !== null && value !== undefined && value !== '' && Number\.isFinite\(Number\(value\)\)/);
+    expect(ownerProfile).toContain('const toNumber = (value) => {');
+    expect(ownerProfile).toContain('if (!text) return null;');
+    expect(ownerProfile).toContain('Number.isFinite(parsed) ? parsed : null');
     expect(ownerProfile).toContain('coins: resolvedCoins');
-    expect(ownerProfile).toContain('resolvedExperience !== undefined');
+    expect(ownerProfile).toContain('resolvedExperience !== null');
   });
 });

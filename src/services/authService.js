@@ -127,39 +127,15 @@ class ProductionAuthService {
         }
         if (redirectResult?.user) {
           const user = redirectResult.user;
-          logger.info('Google redirect sign-in completed', { uid: user.uid });
-          await user.getIdToken(true).catch((tokenError) => {
-            logger.warn('Google redirect token refresh deferred', { uid: user.uid, error: tokenError?.message });
-          });
-
           const additionalInfo = getAdditionalUserInfo(redirectResult);
-          if (additionalInfo?.isNewUser && additionalInfo?.profile) {
-            try {
-              await updateProfile(user, {
-                displayName: additionalInfo.profile.name || user.displayName,
-                photoURL: additionalInfo.profile.picture || user.photoURL,
-              });
-            } catch (profileError) {
-              logger.warn('Google redirect auth profile sync failed', { uid: user.uid, error: profileError?.message });
-            }
-
-            const profilePayload = {
-              displayName: user.displayName,
-              email: user.email || '',
-              photoURL: user.photoURL,
-              authProvider: 'google',
-              emailVerified: Boolean(user.emailVerified),
-              phoneVerified: Boolean(user.phoneNumber),
-              isProfileComplete: false,
-            };
-            try {
-              const { createUserProfile } = await import('./userService.js');
-              await createUserProfile(user.uid, profilePayload);
-            } catch (profileError) {
-              logger.warn('Google redirect profile bootstrap deferred', { uid: user.uid, error: profileError?.message });
-              this._storePendingProfile(user.uid, profilePayload);
-            }
-          }
+          logger.info('Google redirect sign-in completed', { uid: user.uid });
+          await this._finalizeGoogleAuthUser(user, additionalInfo, { updateProfile }).catch((bootstrapErr) => {
+            logger.warn('Google redirect profile bootstrap failed', {
+              uid: user.uid,
+              code: bootstrapErr?.code || null,
+              error: bootstrapErr?.message,
+            });
+          });
         }
       } catch (redirectError) {
         // A malformed/expired redirect must not prevent an already-restored
@@ -551,6 +527,7 @@ class ProductionAuthService {
       }
       await reload(user);
       if (user.emailVerified) {
+        await user.getIdToken(true).catch(() => {});
         const { getUserProfile, createUserProfile } = await import('./userService.js');
         let profile = null;
         try { profile = await getUserProfile(user.uid); } catch (e) {
@@ -730,6 +707,7 @@ class ProductionAuthService {
       const credential = PhoneAuthProvider.credential(verificationId, cleanOTP);
       const userCredential = await signInWithCredential(this.auth, credential);
       const user = userCredential.user;
+      await user.getIdToken(true).catch(() => {});
       logger.warn('// Phone verification successful:', user.uid);
 
       const step1 = optionalStep1Data || this._getSignupStep1Data();
@@ -881,6 +859,161 @@ class ProductionAuthService {
     }
   }
 
+  async _finalizeGoogleAuthUser(user, additionalInfo = null, { updateProfile } = {}) {
+    const isNewUser = additionalInfo?.isNewUser || false;
+
+    if (additionalInfo?.profile && typeof updateProfile === 'function') {
+      const updateData = {};
+      if (additionalInfo.profile.name && !user.displayName) {
+        updateData.displayName = additionalInfo.profile.name;
+      }
+      if (additionalInfo.profile.picture && !user.photoURL) {
+        updateData.photoURL = additionalInfo.profile.picture;
+      }
+      if (Object.keys(updateData).length > 0) {
+        try {
+          await updateProfile(user, updateData);
+        } catch (e) {
+          logger.warn('Google display-name/photo update failed', { uid: user.uid, error: e?.message });
+        }
+      }
+    }
+
+    // Ensure Firestore receives an up-to-date ID token with verified claims
+    // immediately after OAuth login before reading/writing owner-only docs.
+    await user.reload?.().catch(() => {});
+    await user.getIdToken(true).catch(() => {});
+
+    const { getUserProfile, createUserProfile } = await import('./userService.js');
+    let profile = null;
+    try {
+      profile = await getUserProfile(user.uid, user.uid);
+    } catch (e) {
+      logger.warn('Profile lookup during Google auth failed', { uid: user.uid, error: e?.message });
+    }
+
+    const isAccountNew = isNewUser || !profile;
+    let profileCreated = false;
+    if (!profile) {
+      const step1 = this._getSignupStep1Data();
+      const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();
+      const lastName = (step1.lastName || additionalInfo?.profile?.family_name || '').trim();
+      const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
+
+      const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || `user ${String(user.uid).slice(0, 6)}`;
+      const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
+
+      let nameCandidate = (firstName && lastName)
+        ? `${firstName}_${lastName}`
+        : (firstName || user.email?.split('@')[0] || initialDisplayName);
+      nameCandidate = nameCandidate.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+
+      let initialUsername = '';
+      try {
+        const { generateUniqueUsername } = await import('./userService.js');
+        initialUsername = await generateUniqueUsername(nameCandidate || 'user', user.uid);
+      } catch (uErr) {
+        initialUsername = nameCandidate && nameCandidate.length >= 3 ? nameCandidate : `user_${user.uid.slice(0, 6)}`;
+      }
+
+      const createPayload = {
+        displayName: initialDisplayName,
+        firstName,
+        lastName,
+        gender: step1.gender || '',
+        dob: step1.dob || {},
+        username: initialUsername,
+        email: user.email || '',
+        photoURL: initialPhoto,
+        authProvider: 'google',
+        emailVerified: Boolean(user.emailVerified),
+        phoneVerified: Boolean(user.phoneNumber),
+        isProfileComplete: false,
+        accountStatus: 'active'
+      };
+
+      const attemptCreate = async () => {
+        await createUserProfile(user.uid, createPayload);
+      };
+
+      try {
+        try {
+          await attemptCreate();
+        } catch (firstErr) {
+          if (firstErr?.code === 'permission-denied' || String(firstErr?.message || '').toLowerCase().includes('permission')) {
+            await user.reload?.().catch(() => {});
+            await user.getIdToken(true).catch(() => {});
+            createPayload.emailVerified = Boolean(user.emailVerified);
+            createPayload.phoneVerified = Boolean(user.phoneNumber);
+            await attemptCreate();
+          } else {
+            throw firstErr;
+          }
+        }
+        profileCreated = true;
+        logger.warn('// User profile created in Firestore for Google signup/login with username:', initialUsername);
+        try {
+          const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
+          markOnboardingRequired(user.uid, { method: 'google', isSignup: true, step1Data: step1 });
+        } catch (e) {
+          logger.warn('markOnboardingRequired failed for Google signup', { uid: user.uid, error: e?.message });
+        }
+        try {
+          profile = await getUserProfile(user.uid, user.uid);
+        } catch (e) {
+          logger.warn('Profile re-read after Google creation failed', { uid: user.uid, error: e?.message });
+        }
+      } catch (profileError) {
+        logger.error('❌ Profile creation failed', profileError);
+        this._storePendingProfile(user.uid, {
+          displayName: initialDisplayName,
+          firstName,
+          lastName,
+          gender: step1.gender || '',
+          dob: step1.dob || {},
+          username: initialUsername,
+          email: user.email || '',
+          photoURL: initialPhoto,
+          authProvider: 'google',
+          emailVerified: Boolean(user.emailVerified),
+          phoneVerified: Boolean(user.phoneNumber),
+          isProfileComplete: false
+        });
+      }
+    }
+
+    const isProfileDone = Boolean(profile && profile.isProfileComplete === true && !profileCreated);
+    if (isProfileDone) {
+      clearOnboardingRequired();
+    }
+
+    if (profileCreated) {
+      this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
+    }
+
+    return {
+      success: true,
+      user: {
+        uid: user.uid,
+        userId: user.uid,
+        email: user.email,
+        emailVerified: Boolean(user.emailVerified),
+        displayName: user.displayName || profile?.displayName || `user ${String(user.uid).slice(0, 6)}`,
+        photoURL: user.photoURL || profile?.photoURL || null,
+        isNewUser: isAccountNew,
+        hasExistingProfile: Boolean(profile && !profileCreated),
+        requiresProfileCompletion: !isProfileDone,
+        authProvider: 'google',
+        coins: profile?.coins,
+        level: profile?.level,
+        isProfileComplete: isProfileDone,
+        username: profile?.username
+      },
+      isNewUser: isAccountNew,
+      hasExistingProfile: Boolean(profile && !profileCreated)
+    };
+  }
+
   async signInWithGoogle(options = {}) {
     this.googleRedirectError = null;
     try {
@@ -898,43 +1031,39 @@ class ProductionAuthService {
       if (options.email) customParams.login_hint = options.email;
       provider.setCustomParameters(customParams);
 
-      // Persistence is configured once by firebase/firebase.js. Re-awaiting
-      // setPersistence here is redundant and can consume the browser's transient
-      // user activation before signInWithPopup opens its window.
-      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-      const prefersRedirect = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
-      if (prefersRedirect) {
-        markGoogleRedirectPending();
+      // Always try signInWithPopup first across desktop & mobile: modern
+      // third-party cookie / ITP restrictions and embedded preview iframes break
+      // signInWithRedirect, whereas popups preserve user activation cleanly.
+      const isInIframe = typeof window !== 'undefined' && (() => {
         try {
-          await signInWithRedirect(this.auth, provider);
-          return { success: true, redirecting: true };
-        } catch (redirectError) {
-          clearGoogleRedirectPending();
-          throw redirectError;
+          return window.self !== window.top;
+        } catch {
+          return true;
         }
-      }
+      })();
 
       let result;
       try {
         result = await signInWithPopup(this.auth, provider);
       } catch (popupError) {
         logger.warn('signInWithPopup error:', popupError.code || popupError.message);
-        // Redirect also works where Firebase cannot create a popup at all.
+        // Never attempt signInWithRedirect inside an iframe (Google blocks
+        // accounts.google.com framing and preview origins are not redirect-allowlisted).
         // Do not redirect on popup-closed/cancelled: those are deliberate user actions.
         const redirectFallbackCodes = new Set([
           'auth/popup-blocked',
           'auth/operation-not-supported-in-this-environment',
+          'auth/web-storage-unsupported',
+          'auth/internal-error',
         ]);
-        if (redirectFallbackCodes.has(popupError.code)) {
-          logger.warn('Popup blocked; attempting signInWithRedirect fallback...');
+        if (!isInIframe && redirectFallbackCodes.has(popupError.code)) {
+          logger.warn('Popup blocked outside iframe; attempting signInWithRedirect fallback...');
           try {
             markGoogleRedirectPending();
             await signInWithRedirect(this.auth, provider);
             return { success: true, redirecting: true };
           } catch (redirectError) {
             clearGoogleRedirectPending();
-            // Preserve the real fallback failure. Re-throwing popupError here
-            // masked domain/storage/network failures as a popup issue.
             logger.error('signInWithRedirect failed:', redirectError);
             throw redirectError;
           }
@@ -944,152 +1073,9 @@ class ProductionAuthService {
 
       const user = result.user;
       const additionalInfo = getAdditionalUserInfo(result);
-      const isNewUser = additionalInfo?.isNewUser || false;
-      logger.warn('// Google auth successful. New user:', isNewUser);
+      logger.warn('// Google auth successful. New user:', additionalInfo?.isNewUser || false);
 
-      if (additionalInfo?.profile) {
-        const updateData = {};
-        if (additionalInfo.profile.name && !user.displayName) {
-          updateData.displayName = additionalInfo.profile.name;
-        }
-        if (additionalInfo.profile.picture && !user.photoURL) {
-          updateData.photoURL = additionalInfo.profile.picture;
-        }
-        if (Object.keys(updateData).length > 0) {
-          try {
-            await updateProfile(user, updateData);
-          } catch (e) {
-            logger.warn('Google display-name/photo update failed', { uid: user.uid, error: e?.message });
-          }
-        }
-      }
-
-      // Ensure Firestore receives an up-to-date ID token with verified claims
-      // immediately after OAuth login before reading/writing owner-only docs.
-      await user.getIdToken(true).catch(() => {});
-
-      const { getUserProfile, createUserProfile } = await import('./userService.js');
-      let profile = null;
-      try {
-        profile = await getUserProfile(user.uid, user.uid);
-      } catch (e) {
-        logger.warn('Profile lookup during Google auth failed', { uid: user.uid, error: e?.message });
-      }
-
-      const isAccountNew = isNewUser || !profile;
-      let profileCreated = false;
-      if (!profile) {
-        const step1 = this._getSignupStep1Data();
-        const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();
-        const lastName = (step1.lastName || additionalInfo?.profile?.family_name || '').trim();
-        const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
-
-        const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || `user ${String(user.uid).slice(0, 6)}`;
-        const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
-
-        let nameCandidate = (firstName && lastName)
-          ? `${firstName}_${lastName}`
-          : (firstName || user.email?.split('@')[0] || initialDisplayName);
-        nameCandidate = nameCandidate.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
-
-        let initialUsername = '';
-        try {
-          const { generateUniqueUsername } = await import('./userService.js');
-          initialUsername = await generateUniqueUsername(nameCandidate || 'user', user.uid);
-        } catch (uErr) {
-          initialUsername = nameCandidate && nameCandidate.length >= 3 ? nameCandidate : `user_${user.uid.slice(0, 6)}`;
-        }
-
-        const createPayload = {
-          displayName: initialDisplayName,
-          firstName,
-          lastName,
-          gender: step1.gender || '',
-          dob: step1.dob || {},
-          username: initialUsername,
-          email: user.email || '',
-          photoURL: initialPhoto,
-          authProvider: 'google',
-          emailVerified: Boolean(user.emailVerified),
-          phoneVerified: Boolean(user.phoneNumber),
-          isProfileComplete: false,
-          accountStatus: 'active'
-        };
-
-        const attemptCreate = async () => {
-          await createUserProfile(user.uid, createPayload);
-        };
-
-        try {
-          try {
-            await attemptCreate();
-          } catch (firstErr) {
-            if (firstErr?.code === 'permission-denied' || String(firstErr?.message || '').toLowerCase().includes('permission')) {
-              await user.getIdToken(true).catch(() => {});
-              createPayload.emailVerified = Boolean(user.emailVerified);
-              createPayload.phoneVerified = Boolean(user.phoneNumber);
-              await attemptCreate();
-            } else {
-              throw firstErr;
-            }
-          }
-          profileCreated = true;
-          logger.warn('// User profile created in Firestore for Google signup/login with username:', initialUsername);
-          try {
-            const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
-            markOnboardingRequired(user.uid, { method: 'google', isSignup: true, step1Data: step1 });
-          } catch (e) {
-            logger.warn('markOnboardingRequired failed for Google signup', { uid: user.uid, error: e?.message });
-          }
-          try {
-            profile = await getUserProfile(user.uid, user.uid);
-          } catch (e) {
-            logger.warn('Profile re-read after Google creation failed', { uid: user.uid, error: e?.message });
-          }
-        } catch (profileError) {
-          logger.error('❌ Profile creation failed', profileError);
-          this._storePendingProfile(user.uid, {
-            displayName: initialDisplayName,
-            email: user.email || '',
-            photoURL: initialPhoto,
-            authProvider: 'google',
-            emailVerified: Boolean(user.emailVerified),
-            phoneVerified: Boolean(user.phoneNumber),
-            isProfileComplete: false
-          });
-        }
-      }
-
-      const isProfileDone = Boolean(profile && profile.isProfileComplete === true && !profileCreated);
-      if (isProfileDone) {
-        clearOnboardingRequired();
-      }
-
-      if (profileCreated) {
-        this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
-      }
-
-      return {
-        success: true,
-        user: {
-          uid: user.uid,
-          userId: user.uid,
-          email: user.email,
-          emailVerified: Boolean(user.emailVerified),
-          displayName: user.displayName || profile?.displayName || `user ${String(user.uid).slice(0, 6)}`,
-          photoURL: user.photoURL || profile?.photoURL || null,
-          isNewUser: isAccountNew,
-          hasExistingProfile: Boolean(profile && !profileCreated),
-          requiresProfileCompletion: !isProfileDone,
-          authProvider: 'google',
-          coins: profile?.coins,
-          level: profile?.level,
-          isProfileComplete: isProfileDone,
-          username: profile?.username
-        },
-        isNewUser: isAccountNew,
-        hasExistingProfile: Boolean(profile && !profileCreated)
-      };
+      return await this._finalizeGoogleAuthUser(user, additionalInfo, { updateProfile });
     } catch (error) {
       logger.error('❌ Google authentication failed:', error);
       throw this.formatAuthError(error);
@@ -1361,6 +1347,7 @@ class ProductionAuthService {
       'auth/popup-blocked': typeof window !== 'undefined' && window.self !== window.top
         ? 'Pop-up blocked by browser or preview iframe. Open in a new tab or use Email / Phone.'
         : 'Pop-up blocked by browser. Please allow pop-ups for this site.',
+      'auth/redirect-result-missing': 'Google sign-in could not finish returning to Arvdoul. Allow pop-ups or open Arvdoul in a standalone browser tab and try again.',
       'auth/unauthorized-domain': 'This domain is not authorized for Google OAuth. Add the current Arvdoul domain in Firebase Authentication > Settings > Authorized domains.',
       'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in method.',
       'auth/credential-already-in-use': 'This credential is already associated with a different user account.',

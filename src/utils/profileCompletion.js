@@ -306,9 +306,15 @@ export function resolvePostAuthDestination({
   return { wait: false, destination: null, allow: true };
 }
 
-export function resolveSplashDestination({ isAuthenticated, needsOnboarding: onboarding, hasStoredSession }) {
+export function resolveSplashDestination({
+  isAuthenticated,
+  needsOnboarding: onboarding,
+  needsEmailVerification = false,
+  hasStoredSession,
+}) {
   const isAuth = Boolean(isAuthenticated || (hasStoredSession ?? hasStoredAuthSession()));
   if (isAuth) {
+    if (needsEmailVerification) return '/verify-email';
     if (onboarding) return '/setup-profile';
     return '/home';
   }

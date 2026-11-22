@@ -686,27 +686,30 @@ export function AuthProvider({ children }) {
               ? `${step1Data.firstName} ${step1Data.lastName}`.trim()
               : (step1Data?.firstName || step1Data?.lastName || '');
 
-            const onboarding = true;
-            markOnboardingRequired(firebaseUser.uid, { method: isGoogle ? 'google' : 'phone', isSignup: true, step1Data });
+            const pending = authService?._getPendingProfile?.(uid) || null;
+            const onboarding = pending?.isProfileComplete ? false : true;
+            if (onboarding) {
+              markOnboardingRequired(firebaseUser.uid, { method: isGoogle ? 'google' : 'phone', isSignup: true, step1Data });
+            } else {
+              clearOnboardingRequired();
+            }
 
-            const basicName = step1FullName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
+            const basicName = step1FullName || pending?.displayName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
             let candidateBase = step1FullName
               ? step1FullName.toLowerCase().replace(/[^a-z0-9_]/g, '')
               : (firebaseUser.email?.split('@')[0] || firebaseUser.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'arvdoul_member');
-            const fallbackUsername = (candidateBase || 'member').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+            const fallbackUsername = pending?.username || (candidateBase || 'member').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
             const fallbackProfile = {
               uid: firebaseUser.uid,
               displayName: basicName,
-              firstName: step1Data?.firstName || '',
-              lastName: step1Data?.lastName || '',
+              firstName: step1Data?.firstName || pending?.firstName || '',
+              lastName: step1Data?.lastName || pending?.lastName || '',
               username: fallbackUsername,
               email: firebaseUser.email || '',
               phoneNumber: firebaseUser.phoneNumber || '',
-              photoURL: firebaseUser.photoURL || null,
-              authProvider: firebaseUser.providerData?.[0]?.providerId || 'phone',
+              photoURL: pending?.photoURL || firebaseUser.photoURL || null,
+              authProvider: pending?.authProvider || firebaseUser.providerData?.[0]?.providerId || 'phone',
               isProfileComplete: !onboarding,
-              // Unknown until the private doc (owner-readable) is read; a
-              // fabricated 0 would claim a measured empty wallet (N324).
               coins: null,
               level: null,
               accountStatus: 'active'
@@ -715,16 +718,19 @@ export function AuthProvider({ children }) {
             syncUserWithAppStore(firebaseUser, fallbackProfile, setCurrentUserRef.current);
             setAuthState(onboarding ? AuthState.PROFILE_INCOMPLETE : AuthState.AUTHENTICATED);
 
-            if (!onboarding) {
+            if (pending) {
               userService.createUserProfile(uid, {
+                ...pending,
                 displayName: basicName,
                 username: fallbackUsername,
-                email: firebaseUser.email || '',
-                phoneNumber: firebaseUser.phoneNumber || '',
-                photoURL: firebaseUser.photoURL || null,
-                authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
-                isProfileComplete: true
-              }).catch(e => console.warn('Background profile bootstrap failed:', e));
+                email: firebaseUser.email || pending.email || '',
+                phoneNumber: firebaseUser.phoneNumber || pending.phoneNumber || '',
+                photoURL: pending.photoURL || firebaseUser.photoURL || null,
+                emailVerified: Boolean(firebaseUser.emailVerified),
+                phoneVerified: Boolean(firebaseUser.phoneNumber),
+              }).then(() => {
+                authService?._clearPendingProfile?.(uid);
+              }).catch((e) => console.warn('Deferred pending profile recovery failed:', e?.message));
             }
           }
 

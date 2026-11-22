@@ -8,6 +8,7 @@ import BottomNav from "@components/Shared/BottomNav";
 import DesktopNavRail from "@components/Shared/DesktopNavRail";
 import useScreenView from "../hooks/useScreenView.js";
 import { LayoutChromeProvider } from "../context/LayoutChromeContext.jsx";
+import { UnifiedSyncProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 import { cn } from "../lib/utils";
 import { brandCanvasBackground } from "../design-system/tokens.js";
 
@@ -69,10 +70,16 @@ export default function MainLayout({ children }) {
   const hideBottomNav = isMessagesSubroute || isDedicatedStudioOrCall || isCreateStory;
   const showDesktopRail = !isDedicatedStudioOrCall && !isCreateStory;
   const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || isMessagesRoute;
+  const isProfileRoute = (
+    location.pathname === "/profile" ||
+    location.pathname.startsWith("/profile/") ||
+    location.pathname.startsWith("/u/")
+  );
   const hasTopAppBar = !hideTopAppBar;
 
   return (
     <LayoutChromeProvider hasTopAppBar={hasTopAppBar}>
+      <UnifiedSyncProgressBar />
       <div
         className={cn(
           // The viewport-width utility overflows by the scrollbar width on
@@ -129,7 +136,14 @@ export default function MainLayout({ children }) {
                 {children}
               </main>
             ) : (
-              <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-24 lg:pb-8 w-full">
+              <main
+                id="main-content"
+                tabIndex={-1}
+                className={cn(
+                  "flex-1 overflow-y-auto overscroll-contain pb-24 lg:pb-8 w-full",
+                  isProfileRoute ? "pt-1 sm:pt-2" : "pt-4"
+                )}
+              >
                 <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
                   {children}
                 </div>
