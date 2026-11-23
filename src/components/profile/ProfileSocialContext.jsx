@@ -57,9 +57,9 @@ const ProfileSocialContext = memo(({
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border overflow-hidden",
+        "w-full rounded-2xl border backdrop-blur-xl overflow-hidden",
         isDark
-          ? "border-white/[0.08] bg-white/[0.06]"
+          ? "border-white/[0.08] bg-[#0B1234]/36 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
           : "border-slate-200/90 bg-slate-200/75 shadow-[0_2px_10px_rgba(15,23,42,0.03)]"
       )}
     >
@@ -70,7 +70,7 @@ const ProfileSocialContext = memo(({
             onClick={() => onFriendClick?.()}
             className={cn(
               "flex items-center gap-3 px-4 py-3 transition-colors cursor-pointer group text-left w-full",
-              isDark ? "bg-[#080F2E] hover:bg-[#0D1742]" : "bg-white hover:bg-slate-50"
+              isDark ? "bg-[#0B1234]/42 hover:bg-[#101A4A]/52" : "bg-white hover:bg-slate-50"
             )}
           >
             <div className="flex items-center -space-x-2 shrink-0">
@@ -78,7 +78,7 @@ const ProfileSocialContext = memo(({
                 friendsList.map((f, idx) => (
                   <div
                     key={f.id || f.uid || idx}
-                    className="w-7 h-7 rounded-full ring-2 ring-white dark:ring-[#080F2E] overflow-hidden bg-slate-800"
+                    className="w-7 h-7 rounded-full ring-2 ring-white dark:ring-[#0B1234] overflow-hidden bg-slate-800"
                     style={{ zIndex: 10 - idx }}
                   >
                     {f.photoURL ? (
@@ -91,7 +91,7 @@ const ProfileSocialContext = memo(({
                   </div>
                 ))
               ) : (
-                <div className="w-7 h-7 rounded-full ring-2 ring-white dark:ring-[#080F2E] bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
+                <div className="w-7 h-7 rounded-full ring-2 ring-white dark:ring-[#0B1234] bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
                   <Users className="w-3.5 h-3.5" />
                 </div>
               )}
@@ -116,7 +116,7 @@ const ProfileSocialContext = memo(({
           <div
             className={cn(
               "flex items-center gap-3 px-4 py-3",
-              isDark ? "bg-[#080F2E]" : "bg-white"
+              isDark ? "bg-[#0B1234]/42" : "bg-white"
             )}
           >
             <div className={cn(
@@ -141,7 +141,7 @@ const ProfileSocialContext = memo(({
           <div
             className={cn(
               "flex items-center gap-3 px-4 py-3",
-              isDark ? "bg-[#080F2E]" : "bg-white",
+              isDark ? "bg-[#0B1234]/42" : "bg-white",
               (!showFriends || !canShowCommunities) && "md:col-span-1"
             )}
           >

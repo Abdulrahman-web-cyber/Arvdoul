@@ -138,7 +138,7 @@ const ProfileQRCodeModal = memo(({
           className={cn(
             "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all max-h-[95vh] overflow-y-auto",
             isDark
-              ? "bg-[#080F2E] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
+              ? "bg-[#0B1234]/72 backdrop-blur-2xl border-white/[0.09] text-white shadow-[0_14px_40px_rgba(3,7,27,0.45)]"
               : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
           )}
         >

@@ -58,44 +58,44 @@ const STYLES = `
 }
 .ppr-root *,.ppr-root *::before,.ppr-root *::after{box-sizing:border-box}
 
-/* ---------- Dark: transparent deep-indigo glass, violet/blue light, silver highlights ---------- */
+/* ---------- Dark: transparent deep-indigo glass, balanced highlights ---------- */
 .ppr-root[data-theme="dark"]{
-  --ppr-base:rgba(18,24,80,0.20);
+  --ppr-base:rgba(14,20,60,0.26);
   --ppr-layers:
-    radial-gradient(60% 150% at 0% 0%,rgba(200,43,255,0.20),transparent 64%),
-    radial-gradient(60% 150% at 100% 100%,rgba(0,136,255,0.20),transparent 64%),
-    radial-gradient(50% 100% at 55% -40%,rgba(139,30,243,0.18),transparent 70%),
-    linear-gradient(160deg,rgba(60,72,170,0.30),rgba(20,28,92,0.24) 52%,rgba(8,14,54,0.34));
-  --ppr-border:rgba(175,184,255,0.26);
+    radial-gradient(60% 150% at 0% 0%,rgba(200,43,255,0.12),transparent 64%),
+    radial-gradient(60% 150% at 100% 100%,rgba(0,136,255,0.14),transparent 64%),
+    radial-gradient(50% 100% at 55% -40%,rgba(139,30,243,0.10),transparent 70%),
+    linear-gradient(160deg,rgba(44,54,136,0.22),rgba(16,24,78,0.22) 52%,rgba(8,14,50,0.28));
+  --ppr-border:rgba(175,184,255,0.16);
   --ppr-shadow:
-    0 14px 30px -20px rgba(1,3,22,0.70),
-    0 2px 8px -4px rgba(5,10,40,0.30),
-    inset 0 1px 0 rgba(255,255,255,0.26),
-    inset 0 -1px 0 rgba(0,136,255,0.20),
-    inset 1px 0 0 rgba(200,43,255,0.16),
-    inset -1px 0 0 rgba(0,136,255,0.14),
-    inset 0 0 32px rgba(130,120,255,0.10),
-    inset 0 -14px 24px -16px rgba(0,136,255,0.26);
+    0 12px 24px -18px rgba(1,3,22,0.52),
+    0 2px 6px -4px rgba(5,10,40,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(0,136,255,0.14),
+    inset 1px 0 0 rgba(200,43,255,0.10),
+    inset -1px 0 0 rgba(0,136,255,0.10),
+    inset 0 0 24px rgba(130,120,255,0.07),
+    inset 0 -10px 18px -14px rgba(0,136,255,0.18);
   --ppr-shadow-hover:
-    0 16px 32px -20px rgba(1,3,22,0.75),
-    0 2px 8px -4px rgba(5,10,40,0.30),
-    inset 0 1px 0 rgba(255,255,255,0.34),
-    inset 0 -1px 0 rgba(0,136,255,0.26),
-    inset 0 0 36px rgba(140,130,255,0.14);
-  --ppr-press:linear-gradient(180deg,rgba(190,180,255,0.14),rgba(110,140,255,0.08));
+    0 14px 26px -18px rgba(1,3,22,0.58),
+    0 2px 6px -4px rgba(5,10,40,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.24),
+    inset 0 -1px 0 rgba(0,136,255,0.20),
+    inset 0 0 28px rgba(140,130,255,0.10);
+  --ppr-press:linear-gradient(180deg,rgba(190,180,255,0.10),rgba(110,140,255,0.06));
   --ppr-caustic:
-    radial-gradient(34% 90% at 9% 0%,rgba(255,255,255,0.14),transparent 74%),
-    radial-gradient(26% 80% at 92% 100%,rgba(140,210,255,0.14),transparent 74%);
+    radial-gradient(34% 90% at 9% 0%,rgba(255,255,255,0.10),transparent 74%),
+    radial-gradient(26% 80% at 92% 100%,rgba(140,210,255,0.10),transparent 74%);
   --ppr-spec:
-    linear-gradient(90deg,transparent,rgba(235,240,255,0.70) 20%,rgba(235,240,255,0.70) 72%,transparent) center top/86% 1px no-repeat,
-    linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.04) 60%,transparent);
-  --ppr-streak:linear-gradient(90deg,transparent,rgba(255,255,255,0.09) 46%,rgba(255,255,255,0.03) 62%,transparent);
-  --ppr-rim:conic-gradient(from 200deg at 50% 50%,rgba(245,248,255,0.62),rgba(139,30,243,0.40) 22%,rgba(5,91,251,0.58) 46%,rgba(210,220,255,0.16) 66%,rgba(200,43,255,0.38) 84%,rgba(245,248,255,0.62));
+    linear-gradient(90deg,transparent,rgba(235,240,255,0.42) 20%,rgba(235,240,255,0.42) 72%,transparent) center top/86% 1px no-repeat,
+    linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03) 60%,transparent);
+  --ppr-streak:linear-gradient(90deg,transparent,rgba(255,255,255,0.06) 46%,rgba(255,255,255,0.02) 62%,transparent);
+  --ppr-rim:conic-gradient(from 200deg at 50% 50%,rgba(245,248,255,0.36),rgba(139,30,243,0.24) 22%,rgba(5,91,251,0.34) 46%,rgba(210,220,255,0.10) 66%,rgba(200,43,255,0.22) 84%,rgba(245,248,255,0.36));
   --ppr-sat:90%;--ppr-fl:52%;--ppr-tl:70%;
   --ppr-title:#F6F8FF;--ppr-sub:#BAC4E2;--ppr-meta:#AEB9DA;--ppr-accent:#D3C4FF;
-  --ppr-track:rgba(255,255,255,0.12);--ppr-track-edge:rgba(255,255,255,0.10);--ppr-track-inset:rgba(2,4,30,0.40);
+  --ppr-track:rgba(255,255,255,0.10);--ppr-track-edge:rgba(255,255,255,0.08);--ppr-track-inset:rgba(2,4,30,0.34);
   --ppr-rep:#8EC1FF;--ppr-streak-c:#E2A9FF;--ppr-reward:#D5DCF5;
-  --ppr-focus:#A79BFF;--ppr-icon-tile:rgba(255,255,255,0.10);--ppr-crown:#D8B4FE;
+  --ppr-focus:#A79BFF;--ppr-icon-tile:rgba(255,255,255,0.08);--ppr-crown:#D8B4FE;
 }
 
 /* ---------- Light: transparent bright glass, soft neutral reflections, violet/blue accents ---------- */

@@ -60,16 +60,16 @@ const MAX_SPARK_POINTS = 400;
 const PCD_CSS = `
 .pcd{
   --pcd-v:200,43,255;--pcd-b:0,136,255;
-  --pcd-tx:#F5F7FF;--pcd-tx2:#B4BFDE;--pcd-link:#8EC3FF;--pcd-focus:#7DB6FF;--pcd-edge:rgba(255,255,255,.12);
-  --pcd-up:#6EE7B7;--pcd-down:#FCA5A5;--pcd-line:rgba(255,255,255,.08);
-  --pcd-cell:rgba(10,16,52,.28);--pcd-cell-hover:rgba(60,76,170,.26);--pcd-cell-press:rgba(70,86,184,.36);
-  --pcd-base:rgba(14,22,66,.34);--pcd-solid:#0C1440;
-  --pcd-ctl:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.03));--pcd-ctl-solid:#16205A;
-  --pcd-spec:.22;--pcd-spec2:.05;--pcd-cv:.12;--pcd-cb:.18;--pcd-gloss:.08;
-  --pcd-shadow:0 18px 30px -24px rgba(0,0,0,.6),0 2px 6px -3px rgba(0,0,0,.28);
-  --pcd-inset:inset 0 1px 1px rgba(255,255,255,.24),inset 0 -12px 18px -16px rgba(var(--pcd-b),.28),inset 0 0 16px rgba(130,110,255,.06);
-  --pcd-rim:linear-gradient(140deg,rgba(255,255,255,.42),rgba(255,255,255,.08) 30%,rgba(255,255,255,.02) 56%,rgba(var(--pcd-b),.38));
-  --pcd-ring-in:rgba(8,15,46,.88);--pcd-opt-bg:#0C1440;--pcd-opt-tx:#F5F7FF;
+  --pcd-tx:#F5F7FF;--pcd-tx2:#B4BFDE;--pcd-link:#8EC3FF;--pcd-focus:#7DB6FF;--pcd-edge:rgba(255,255,255,.10);
+  --pcd-up:#6EE7B7;--pcd-down:#FCA5A5;--pcd-line:rgba(255,255,255,.07);
+  --pcd-cell:rgba(10,16,52,.22);--pcd-cell-hover:rgba(60,76,170,.20);--pcd-cell-press:rgba(70,86,184,.28);
+  --pcd-base:rgba(14,20,60,.28);--pcd-solid:#0B1234;
+  --pcd-ctl:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03));--pcd-ctl-solid:#16205A;
+  --pcd-spec:.13;--pcd-spec2:.03;--pcd-cv:.08;--pcd-cb:.12;--pcd-gloss:.05;
+  --pcd-shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
+  --pcd-inset:inset 0 1px 1px rgba(255,255,255,.15),inset 0 -10px 16px -14px rgba(var(--pcd-b),.20),inset 0 0 14px rgba(130,110,255,.04);
+  --pcd-rim:linear-gradient(140deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--pcd-b),.26));
+  --pcd-ring-in:rgba(8,15,46,.82);--pcd-opt-bg:#0B1234;--pcd-opt-tx:#F5F7FF;
   --pcd-spark-a:var(--arv-brand-violet,#8B1EF3);--pcd-spark-b:var(--pcd-blue,#055BFB);
   display:block;width:100%;min-width:0;color:var(--pcd-tx);color-scheme:dark;
   font-family:inherit;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
@@ -454,7 +454,8 @@ const ProfileCreatorDashboard = memo(({
   analytics,
   ranking,
   userLevel = null,
-  isCreator, // true / false / undefined (unknown): an omitted prop is NOT a confirmed non-creator
+  isCreator, // true / false / undefined (unknown)
+  isOwner = false,
   theme = 'light',
   timeframe,
   onTimeframeChange,
@@ -470,10 +471,10 @@ const ProfileCreatorDashboard = memo(({
   const level = positiveInteger(userLevel);
   const milestone = positiveInteger(LEVEL_GATES?.creatorProfile);
 
-  // Keep the resolver's raw answer: null/undefined means "could not be decided", not "no".
+  // Level 1+ accounts and profile owners have direct access to Creator Dashboard insights.
   const resolved = resolveCreatorFlag({ isCreator }, {}, level);
   const eligibilityKnown = resolved !== null && resolved !== undefined;
-  const isEligibleCreator = eligibilityKnown && Boolean(resolved);
+  const isEligibleCreator = Boolean(resolved) || Boolean(isOwner) || (level !== null && level >= 1);
 
   // A supported parent value controls; otherwise a local default is used. While the parent controls,
   // the local copy follows it during render, so dropping control never resurrects a stale selection.

@@ -452,16 +452,16 @@ service cloud.firestore {
         ) &&
         request.resource.data.get('coins', null) == 100 &&
         !request.resource.data.keys().hasAny(['lockedCoins']) &&
-        request.resource.data.get('emailVerified', false) == (request.auth.token.email_verified == true) &&
-        request.resource.data.get('phoneVerified', false) == (request.auth.token.phone_number != null);
+        request.resource.data.get('emailVerified', false) == (request.auth.token.get('email_verified', false) == true) &&
+        request.resource.data.get('phoneVerified', false) == (request.auth.token.get('phone_number', null) != null);
       allow update: if isOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(
           ['email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
         ) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['emailVerified']) ||
-          request.resource.data.emailVerified == (request.auth.token.email_verified == true)) &&
+          request.resource.data.emailVerified == (request.auth.token.get('email_verified', false) == true)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneVerified']) ||
-          request.resource.data.phoneVerified == (request.auth.token.phone_number != null));
+          request.resource.data.phoneVerified == (request.auth.token.get('phone_number', null) != null));
       allow delete: if false;
     }
 
@@ -1837,7 +1837,7 @@ service cloud.firestore {
       // are server-only (createCollaborationInvite / accept / decline).
       allow read: if isSignedIn() && (
         resource.data.invitedBy == uid() ||
-        (resource.data.email != null && resource.data.email == request.auth.token.email)
+        (resource.data.email != null && resource.data.email == request.auth.token.get('email', null))
       );
       allow write: if false;
     }

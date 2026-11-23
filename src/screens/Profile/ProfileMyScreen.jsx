@@ -268,12 +268,12 @@ const PMS_CSS = `
   --v:200,43,255;--b:0,136,255;--gold:241,205,115;
   --tx:#F5F7FF;--tx2:#B4BFDE;--link:#8EC3FF;--focus:#7DB6FF;
   --err:#FCA5A5;--err-bg:rgba(239,68,68,.10);--err-bd:rgba(239,68,68,.30);
-  --base:rgba(255,255,255,.06);--solid:#0C1332;
-  --spec:.15;--spec2:.04;--cv:.12;--cb:.16;--cg:.14;--gloss:.06;--blur:22px;
-  --shadow:0 18px 30px -24px rgba(0,0,0,.6),0 2px 6px -3px rgba(0,0,0,.28);
-  --inset:inset 0 1px 1px rgba(255,255,255,.22),inset 0 -12px 18px -16px rgba(var(--b),.26),inset 0 0 16px rgba(130,110,255,.05);
-  --rim:linear-gradient(140deg,rgba(255,255,255,.38),rgba(255,255,255,.08) 30%,rgba(255,255,255,.02) 56%,rgba(var(--b),.36));
-  --chip:linear-gradient(160deg,rgba(255,255,255,.14),rgba(255,255,255,.03));--chip-rim:rgba(255,255,255,.14);
+  --base:rgba(14,20,60,.28);--solid:#0B1234;
+  --spec:.12;--spec2:.03;--cv:.08;--cb:.12;--cg:.11;--gloss:.045;--blur:20px;
+  --shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
+  --inset:inset 0 1px 1px rgba(255,255,255,.15),inset 0 -10px 16px -14px rgba(var(--b),.20),inset 0 0 14px rgba(130,110,255,.04);
+  --rim:linear-gradient(140deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--b),.26));
+  --chip:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.03));--chip-rim:rgba(255,255,255,.12);
   --coin:#F1CD73;--sk:rgba(255,255,255,.07);
   color:var(--tx);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
 }
@@ -1091,12 +1091,18 @@ export default function ProfileMyScreen() {
     try {
       const { getUserService } = await import('../../services/userService.js');
       const uploadRes = await getUserService().uploadAvatar(uid, croppedFile);
-      const nextUrl = safeHttpUrl(typeof uploadRes === 'string' ? uploadRes : (uploadRes?.photoURL || uploadRes?.url));
+      const nextUrl = safeHttpUrl(
+        typeof uploadRes === 'string'
+          ? uploadRes
+          : (uploadRes?.downloadURL || uploadRes?.photoURL || uploadRes?.url)
+      );
       if (uidRef.current !== uid) { toast.dismiss(toastId); return; }
       if (!nextUrl) {
-        toast.error('We could not confirm the new avatar. Please try again.', { id: toastId });
+        const confirmErr = new Error('We could not confirm the new avatar. Please try again.');
+        confirmErr._toastShown = true;
+        toast.error(confirmErr.message, { id: toastId });
         reloadOwnerProfile();
-        return;
+        throw confirmErr;
       }
       // The visible avatar must not depend on AuthContext's (older) photo URL.
       setAvatarOverride({ uid, url: nextUrl });
@@ -1106,8 +1112,17 @@ export default function ProfileMyScreen() {
       reloadOwnerProfile();
     } catch (err) {
       console.warn('[ProfileMyScreen] avatar upload failed:', err?.code || err?.name || 'error');
-      if (uidRef.current === uid) toast.error('Failed to upload avatar. Please try again.', { id: toastId });
-      else toast.dismiss(toastId);
+      if (uidRef.current === uid) {
+        if (!err?._toastShown) {
+          toast.error('Failed to upload avatar. Please try again.', { id: toastId });
+        }
+      } else {
+        toast.dismiss(toastId);
+      }
+      if (err && typeof err === 'object') {
+        err._toastShown = true;
+      }
+      throw err;
     } finally {
       avatarBusyRef.current = false;
     }
@@ -1131,6 +1146,10 @@ export default function ProfileMyScreen() {
       console.warn('[ProfileMyScreen] avatar removal failed:', err?.code || err?.name || 'error');
       if (uidRef.current === uid) toast.error('Failed to remove avatar. Please try again.', { id: toastId });
       else toast.dismiss(toastId);
+      if (err && typeof err === 'object') {
+        err._toastShown = true;
+      }
+      throw err;
     } finally {
       avatarBusyRef.current = false;
     }
@@ -1423,6 +1442,7 @@ export default function ProfileMyScreen() {
                       ranking={ranking}
                       userLevel={effectiveProfile?.level ?? null}
                       isCreator={effectiveProfile?.isCreator}
+                      isOwner={isOwnerView}
                       theme={theme}
                       timeframe={timeframe}
                       onTimeframeChange={setTimeframe}
@@ -1435,7 +1455,7 @@ export default function ProfileMyScreen() {
             {/* 05. Content hub */}
             <section aria-label="Profile content" className="min-w-0 space-y-4 sm:space-y-5">
               <SectionGuard label="Profile tabs" resetKey={ctxKey}>
-                <div className="pms-glass pms-tabs" data-tier="subtle">
+                <div className="pms-tabs">
                   <ProfileTabsBar
                     activeTab={activeTab}
                     onTabChange={handleTabChange}

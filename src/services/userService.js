@@ -206,20 +206,34 @@ class ProfessionalUserService {
   }
 
   async uploadAvatar(userId, file) {
+    if (!userId || !file) {
+      throw new Error('User ID and avatar image are required.');
+    }
     const storageService = getStorageService();
     const result = await storageService.uploadFileWithProgress(file, `avatars/${userId}/avatar_${Date.now()}`, {
       compressImages: true,
       maxSize: 2 * 1024 * 1024,
       userId,
     });
+    const downloadURL = typeof result?.downloadURL === 'string' && result.downloadURL.trim()
+      ? result.downloadURL.trim()
+      : null;
+    if (!downloadURL) {
+      throw new Error('Avatar upload succeeded without a download URL. Please try again.');
+    }
     await this._ensureInitialized();
     const { doc, getDoc } = await import('firebase/firestore');
     const userSnap = await getDoc(doc(this.firestore, 'users', userId)).catch(() => null);
     if (userSnap?.exists()) {
-      await this.updateUserProfile(userId, { photoURL: result.downloadURL });
+      await this.updateUserProfile(userId, { photoURL: downloadURL });
     }
-    this.avatarCache.set(`avatar_${userId}`, result.downloadURL);
-    return result;
+    this.avatarCache.set(`avatar_${userId}`, downloadURL);
+    return {
+      ...result,
+      downloadURL,
+      photoURL: downloadURL,
+      url: downloadURL,
+    };
   }
 
   async checkUsernameAvailability(username, excludeUserId = null) {

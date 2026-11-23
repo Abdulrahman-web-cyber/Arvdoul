@@ -575,7 +575,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -605,7 +605,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
             <UserX className="w-8 h-8" />
@@ -643,7 +643,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -674,7 +674,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
             {storeError ? <ShieldAlert className="w-8 h-8" /> : <UserX className="w-8 h-8" />}
@@ -725,7 +725,7 @@ export default function ProfilePublicScreen() {
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-2xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#080F2E]/95 border-white/[0.08]" : "bg-white border-slate-200"
+          isDark ? "bg-[#0B1234]/42 backdrop-blur-xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -862,8 +862,8 @@ export default function ProfilePublicScreen() {
 
               return (
                 <div className={cn(
-                  "rounded-[24px] p-8 sm:p-12 text-center border space-y-4 my-2",
-                  isDark ? "bg-[#080F2E]/85 border-white/[0.08]" : "bg-white border-slate-200/90 shadow-sm"
+                  "rounded-[24px] p-8 sm:p-12 text-center border backdrop-blur-xl space-y-4 my-2",
+                  isDark ? "bg-[#0B1234]/36 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200/90 shadow-sm"
                 )}>
                   <div className="w-14 h-14 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
                     <Lock className="w-6 h-6" />
@@ -1015,9 +1015,9 @@ export default function ProfilePublicScreen() {
                   <div className="min-w-0 lg:col-span-5">
                     <div
                       className={cn(
-                        "h-full rounded-[24px] border px-4 py-4 sm:px-5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 transition-colors",
+                        "h-full rounded-[24px] border backdrop-blur-xl px-4 py-4 sm:px-5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 transition-colors",
                         isDark
-                          ? "bg-[#080F2E]/85 border-amber-400/20 text-white"
+                          ? "bg-[#0B1234]/36 border-amber-400/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           : "bg-white border-amber-200/80 text-slate-900 shadow-xs"
                       )}
                     >

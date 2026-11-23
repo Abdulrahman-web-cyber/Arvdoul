@@ -215,7 +215,7 @@ export default function ProfilePreviewScreen({
             hasTopAppBar
               ? cn(
                   'px-3 sm:px-4 py-2.5 rounded-2xl border backdrop-blur-xl',
-                  isDark ? 'bg-[#080F2E]/85 border-white/[0.08]' : 'bg-white/90 border-slate-200/90 shadow-xs'
+                  isDark ? 'bg-[#0B1234]/38 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'bg-white/90 border-slate-200/90 shadow-xs'
                 )
               : 'max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-2'
           )}>

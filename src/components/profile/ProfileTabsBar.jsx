@@ -41,14 +41,12 @@ const TABS = [
   { id: 'audio', label: 'Audio' },
   { id: 'saved', label: 'Saved', ownerOnly: true },
   { id: 'tagged', label: 'Tagged' },
-  { id: 'citizenship', label: 'Citizenship' },
-  { id: 'about', label: 'About' },
 ];
 const OWNER_TABS = TABS;
 const VISITOR_TABS = TABS.filter((tab) => !tab.ownerOnly);
 
-/** Sections with no Grid/Feed presentation (existing rule, unchanged). */
-const NO_VIEW_MODE_TABS = new Set(['about', 'citizenship', 'audio']);
+/** Sections with no Grid/Feed presentation. */
+const NO_VIEW_MODE_TABS = new Set(['audio']);
 
 const VIEW_MODES = [
   { id: 'grid', label: 'Grid view', icon: LayoutGrid },
@@ -74,11 +72,7 @@ try {
   fullFormatter = null;
 }
 
-const readCount = (counts, id) => {
-  if (!counts || typeof counts !== 'object' || !Object.prototype.hasOwnProperty.call(counts, id)) return null;
-  const value = counts[id];
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
-};
+// Numeric tab count check is evaluated inline per visible tab using `counts[tab.id]`
 /** Compact label. Values under 1,000 are exact; larger values round to the nearest tenth of a
  *  thousand-unit, so a positive count can never display as zero. */
 const formatCompact = (n) => {
@@ -136,47 +130,51 @@ const revealInList = (list, el) => {
 const STYLES = `
 .ptb-wrap{container-type:inline-size;width:100%;min-width:0}
 .ptb-root{
-  --ptb-blur:blur(14px) saturate(140%);
+  --ptb-blur:blur(18px) saturate(165%);
   position:relative;isolation:isolate;display:flex;align-items:stretch;box-sizing:border-box;
-  width:100%;min-width:0;margin:0;padding:0;border-radius:0;
+  width:100%;min-width:0;margin:0;padding:0;border-radius:18px;
   -webkit-backdrop-filter:var(--ptb-blur);backdrop-filter:var(--ptb-blur);
   background:var(--ptb-surface);box-shadow:var(--ptb-hairline);
   color:var(--ptb-active);font-family:inherit;-webkit-text-size-adjust:100%;
 }
 .ptb-root *,.ptb-root *::before,.ptb-root *::after{box-sizing:border-box}
 
-/* Dark: low-contrast translucent deep-navy glass (unchanged contrast) */
+/* Dark: low-contrast translucent deep-navy liquid glass */
 .ptb-root[data-theme='dark']{
   --ptb-surface:
-    linear-gradient(90deg,rgba(139,30,243,0.05),transparent 38%,transparent 62%,rgba(0,136,255,0.05)),
-    linear-gradient(90deg,transparent,rgba(255,255,255,0.07) 50%,transparent) top/100% 1px no-repeat,
-    linear-gradient(180deg,rgba(14,20,60,0.30),rgba(6,10,38,0.36));
-  --ptb-hairline:inset 0 -1px 0 rgba(165,175,255,0.12);
-  --ptb-active:#F4F6FF;--ptb-muted:#98A4C6;--ptb-hover:#D3DAF2;--ptb-count:#8591B6;
-  --ptb-accent:#7C6BFF;--ptb-tint:0.30;--ptb-focus:#A79BFF;
-  --ptb-edge:inset 0 0 0 1px rgba(170,160,255,0.38),inset 0 1px 0 rgba(255,255,255,0.18);
-  --ptb-hover-bg:rgba(255,255,255,0.05);--ptb-mode-on:rgba(255,255,255,0.10);
+    radial-gradient(120% 90% at 14% -40%,rgba(255,255,255,0.10),transparent 60%),
+    linear-gradient(90deg,rgba(139,30,243,0.06),transparent 38%,transparent 62%,rgba(0,136,255,0.06)),
+    linear-gradient(90deg,transparent,rgba(255,255,255,0.10) 50%,transparent) top/100% 1px no-repeat,
+    linear-gradient(180deg,rgba(14,20,60,0.28),rgba(6,10,38,0.34));
+  --ptb-hairline:inset 0 0 0 1px rgba(165,175,255,0.12),inset 0 1px 0 rgba(255,255,255,0.12),0 14px 26px -20px rgba(0,0,0,0.55);
+  --ptb-active:#FFFFFF;--ptb-muted:#98A4C6;--ptb-hover:#D8E0F6;--ptb-count:#8591B6;
+  --ptb-accent:#4431F7;--ptb-focus:#A79BFF;
+  --ptb-sig-rim:inset 0 0 0 1px rgba(255,255,255,0.34),inset 0 1px 0 rgba(255,255,255,0.58),inset 0 -8px 14px -10px rgba(5,20,120,0.55);
+  --ptb-sig-shadow:0 10px 22px -10px rgba(68,49,247,0.72),0 0 18px -6px rgba(0,136,255,0.48);
+  --ptb-hover-bg:rgba(255,255,255,0.05);--ptb-mode-on:rgba(255,255,255,0.11);
   --ptb-mode-edge:inset 0 0 0 1px rgba(190,198,255,0.26),inset 0 1px 0 rgba(255,255,255,0.14);
   --ptb-sep:rgba(165,175,255,0.16);
 }
-/* Light: clean translucent white, cool-neutral hairlines, deeper text for contrast */
+/* Light: clean translucent white liquid glass, crisp active DNA */
 .ptb-root[data-theme='light']{
   --ptb-surface:
+    radial-gradient(120% 90% at 14% -40%,rgba(255,255,255,0.95),transparent 60%),
     linear-gradient(90deg,rgba(139,30,243,0.04),transparent 38%,transparent 62%,rgba(5,91,251,0.05)),
     linear-gradient(90deg,transparent,rgba(255,255,255,0.95) 50%,transparent) top/100% 1px no-repeat,
-    linear-gradient(180deg,rgba(255,255,255,0.78),rgba(246,248,252,0.68));
-  --ptb-hairline:inset 0 -1px 0 rgba(100,116,170,0.26);
-  --ptb-active:#0B1226;--ptb-muted:#4F5B7C;--ptb-hover:#18233F;--ptb-count:#5C6886;
-  --ptb-accent:#4431F7;--ptb-tint:0.17;--ptb-focus:#4431F7;
-  --ptb-edge:inset 0 0 0 1px rgba(68,49,247,0.30),inset 0 1px 0 rgba(255,255,255,0.90);
+    linear-gradient(180deg,rgba(255,255,255,0.76),rgba(246,248,252,0.68));
+  --ptb-hairline:inset 0 0 0 1px rgba(100,116,170,0.20),inset 0 1px 0 rgba(255,255,255,0.95),0 12px 24px -18px rgba(40,50,150,0.28);
+  --ptb-active:#FFFFFF;--ptb-muted:#4F5B7C;--ptb-hover:#18233F;--ptb-count:#5C6886;
+  --ptb-accent:#4431F7;--ptb-focus:#4431F7;
+  --ptb-sig-rim:inset 0 0 0 1px rgba(255,255,255,0.38),inset 0 1px 0 rgba(255,255,255,0.65),inset 0 -8px 14px -10px rgba(5,20,120,0.45);
+  --ptb-sig-shadow:0 10px 20px -10px rgba(68,49,247,0.52),0 0 14px -6px rgba(5,91,251,0.36);
   --ptb-hover-bg:rgba(40,60,140,0.06);--ptb-mode-on:rgba(68,49,247,0.10);
   --ptb-mode-edge:inset 0 0 0 1px rgba(68,49,247,0.24),inset 0 1px 0 rgba(255,255,255,0.85);
-  --ptb-sep:rgba(100,116,170,0.26);
+  --ptb-sep:rgba(100,116,170,0.24);
 }
 
 /* ---------- Tab strip: full labels, horizontal scroll only when needed ---------- */
 .ptb-list{
-  position:relative;flex:1 1 auto;min-width:0;display:flex;align-items:stretch;
+  position:relative;flex:1 1 auto;min-width:0;display:flex;align-items:stretch;gap:2px;
   padding:0 8px;scroll-padding-inline:24px;
   overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
@@ -187,28 +185,37 @@ const STYLES = `
 
 .ptb-tab{
   position:relative;flex:1 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:5px;
-  min-height:44px;margin:0;padding:0 8px;border:0;border-radius:10px;background:none;
+  min-height:44px;margin:0;padding:0 10px;border:0;border-radius:12px;background:none;
   font:inherit;font-size:13px;font-weight:600;line-height:1;letter-spacing:0;white-space:nowrap;
   color:var(--ptb-muted);cursor:pointer;user-select:none;-webkit-user-select:none;
   -webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
-  transition:color .15s ease;
+  transition:color .15s ease,transform .15s ease;
 }
 .ptb-tab:disabled{cursor:default}
-.ptb-tab[aria-selected='true']{color:var(--ptb-active)}
+.ptb-tab:active:not(:disabled){transform:scale(0.97)}
+.ptb-tab[aria-selected='true']{color:var(--ptb-active);font-weight:700}
 .ptb-label,.ptb-count{position:relative;z-index:1}
 .ptb-count{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ptb-count)}
-.ptb-tab[aria-selected='true'] .ptb-count{color:var(--ptb-active);opacity:.82}
+.ptb-tab[aria-selected='true'] .ptb-count{color:rgba(255,255,255,0.88);opacity:1}
 
-/* Arvdoul DNA selection: a soft brand-gradient surface with a fine edge and a faint top highlight.
- * ::before carries the tint (solid accent underneath, gradient on top); ::after carries the edge.
- * Both are absolutely positioned, so selecting a tab never shifts the layout. */
-.ptb-tab::before,.ptb-tab::after{content:'';position:absolute;inset:6px 1px;border-radius:10px;pointer-events:none;z-index:0}
+/* Arvdoul DNA signature liquid-glass pill matching Edit Profile / Add Friend CTA */
+.ptb-tab::before,.ptb-tab::after{content:'';position:absolute;inset:5px 0;border-radius:12px;pointer-events:none;z-index:0}
 .ptb-tab::before{background:var(--ptb-hover-bg);opacity:0;transition:opacity .18s ease}
-.ptb-tab::after{box-shadow:var(--ptb-edge);opacity:0;transition:opacity .18s ease}
+.ptb-tab::after{opacity:0;transition:opacity .18s ease,box-shadow .18s ease}
 .ptb-tab[aria-selected='true']::before{
-  background-color:var(--ptb-accent);background-image:var(--ptb-grad);opacity:var(--ptb-tint);
+  background-color:var(--ptb-accent);
+  background-image:
+    radial-gradient(130% 95% at 16% -28%,rgba(255,255,255,.54) 0%,rgba(255,255,255,.08) 36%,transparent 58%),
+    radial-gradient(85% 75% at 102% 122%,rgba(0,210,255,.55) 0%,transparent 62%),
+    radial-gradient(75% 65% at -6% 122%,rgba(200,43,255,.50) 0%,transparent 60%),
+    var(--ptb-grad);
+  opacity:1;
 }
-.ptb-tab[aria-selected='true']::after{opacity:1}
+.ptb-tab[aria-selected='true']::after{
+  opacity:1;
+  box-shadow:var(--ptb-sig-shadow),var(--ptb-sig-rim);
+  background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,0) 48%);
+}
 
 .ptb-tab:focus,.ptb-mode:focus{outline:none}
 .ptb-tab:focus-visible,.ptb-mode:focus-visible{outline:2px solid var(--ptb-focus);outline-offset:-2px}
@@ -224,7 +231,7 @@ const STYLES = `
 .ptb-modes::before{content:'';position:absolute;left:0;top:50%;height:20px;margin-top:-10px;width:1px;background:var(--ptb-sep)}
 .ptb-mode{
   position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;
-  width:34px;min-height:44px;margin:0;padding:0;border:0;border-radius:8px;background:none;
+  width:34px;min-height:44px;margin:0;padding:0;border:0;border-radius:10px;background:none;
   color:var(--ptb-muted);cursor:pointer;
   -webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
   transition:color .15s ease;
@@ -381,7 +388,11 @@ const ProfileTabsBar = memo(({
         >
           {visibleTabs.map((tab) => {
             const isActive = tab.id === activeId;
-            const count = readCount(counts, tab.id);
+            const rawCount =
+              counts && typeof counts === 'object' && Object.prototype.hasOwnProperty.call(counts, tab.id)
+                ? counts[tab.id]
+                : null;
+            const count = typeof rawCount === 'number' && Number.isSafeInteger(rawCount) && rawCount > 0 ? rawCount : null;
 
             return (
               <button

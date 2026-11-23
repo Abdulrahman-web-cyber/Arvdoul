@@ -167,7 +167,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
           className={cn(
             "relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10",
             isDark
-              ? "bg-[#080F2E] border-white/10 text-white"
+              ? "bg-[#0B1234]/74 backdrop-blur-2xl border-white/[0.09] text-white"
               : "bg-white border-slate-200 text-slate-900"
           )}
         >

@@ -67,7 +67,7 @@ export default function ProfileSkeleton({ theme = 'light', variant = 'public' })
                     key={i}
                     className={cn(
                       'min-h-[84px] px-3.5 py-3.5 space-y-2.5',
-                      isDark ? 'bg-[#080F2E]/75' : 'bg-white/75'
+                      isDark ? 'bg-[#0B1234]/34' : 'bg-white/75'
                     )}
                   >
                     <Skeleton className="h-3 w-14 rounded" />

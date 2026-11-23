@@ -69,6 +69,7 @@ import {
   Clock,
   X,
   RefreshCw,
+  Info,
 } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
@@ -410,12 +411,12 @@ ProfileMetricsBar.displayName = 'ProfileMetricsBar';
 const PHS_CSS = `
 .phs{
   --v:200,43,255;--b:0,136,255;
-  --g-title:#F5F7FF;--g-text:#E9EDFF;--g-muted:#B4BFDE;--g-body:#D2D9F1;--g-link:#8FC4FF;--g-hover:rgba(255,255,255,.09);--g-pop:rgba(10,16,48,.96);
-  --lg-spec:.38;--lg-spec2:.08;--lg-v:.30;--lg-b:.38;--lg-gloss:.20;
-  --lg-base:rgba(14,22,66,.55);--lg-solid:#0F1744;
-  --lg-shadow:0 16px 30px -16px rgba(0,0,0,.85),0 3px 8px -3px rgba(0,0,0,.45),0 0 22px -8px rgba(var(--b),.38);
-  --lg-inset:inset 0 1px 1px rgba(255,255,255,.44),inset 0 -1px 1px rgba(150,170,255,.28),inset 0 0 20px rgba(130,110,255,.16),inset 0 -14px 20px -14px rgba(var(--b),.46);
-  --lg-rim:linear-gradient(140deg,rgba(255,255,255,.72),rgba(255,255,255,.14) 28%,rgba(255,255,255,.04) 56%,rgba(var(--b),.65));
+  --g-title:#F5F7FF;--g-text:#E9EDFF;--g-muted:#B4BFDE;--g-body:#D2D9F1;--g-link:#8FC4FF;--g-hover:rgba(255,255,255,.08);--g-pop:rgba(11,18,52,.84);
+  --lg-spec:.22;--lg-spec2:.05;--lg-v:.16;--lg-b:.22;--lg-gloss:.10;
+  --lg-base:rgba(14,20,60,.30);--lg-solid:#0B1234;
+  --lg-shadow:0 12px 24px -18px rgba(0,0,0,.55),0 2px 6px -3px rgba(0,0,0,.25),0 0 18px -10px rgba(var(--b),.24);
+  --lg-inset:inset 0 1px 1px rgba(255,255,255,.22),inset 0 -1px 1px rgba(150,170,255,.14),inset 0 0 16px rgba(130,110,255,.08),inset 0 -10px 16px -14px rgba(var(--b),.26);
+  --lg-rim:linear-gradient(140deg,rgba(255,255,255,.36),rgba(255,255,255,.09) 28%,rgba(255,255,255,.03) 56%,rgba(var(--b),.34));
   --sig-shadow:0 16px 30px -12px rgba(68,49,247,.85),0 0 26px -6px rgba(var(--b),.55);
   --lv-a:#D9A0FF;--lv-b:#5FB2FF;
   --focus:#B2A6FF;--edge:#03071B;--photo-bg:#0B1438;--online:#2EE59D;--ring-glow:rgba(88,70,255,.55);
@@ -461,7 +462,7 @@ const PHS_CSS = `
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 .phs-lg::after{content:"";position:absolute;z-index:-1;left:5%;right:5%;top:1px;height:46%;border-radius:inherit;pointer-events:none;
   background:linear-gradient(180deg,rgba(255,255,255,var(--lg-gloss)),rgba(255,255,255,0))}
-.phs-lg[data-tier="subtle"]{--lg-v:.22;--lg-b:.28;--lg-spec:.34}
+.phs-lg[data-tier="subtle"]{--lg-v:.12;--lg-b:.16;--lg-spec:.18}
 .phs[data-theme="light"] .phs-lg[data-tier="subtle"]{--lg-v:.12;--lg-b:.16;--lg-spec:.92}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .phs-lg{background:var(--lg-layers),var(--lg-solid);background-origin:border-box}
@@ -1080,6 +1081,8 @@ export const ProfileHeroSection = memo(({
     ? [
         onOpenQuickEdit && { key: 'quick', icon: Edit3, label: 'Quick edit', onClick: () => onOpenQuickEdit('all') },
         onOpenLocationSetup && { key: 'loc', icon: MapPin, label: 'Location', onClick: onOpenLocationSetup },
+        passportUrl && { key: 'passport', icon: ShieldCheck, label: 'Digital Passport', onClick: openPassport },
+        { key: 'about', icon: Info, label: 'About profile', onClick: () => navigate('/profile/about') },
         { key: 'insights', icon: BarChart2, label: 'Insights', onClick: onInsightsPress || (() => navigate('/profile/analytics')) },
         { key: 'coins', icon: Coins, label: 'Coins', onClick: () => navigate('/coins') },
         { key: 'settings', icon: Settings, label: 'Settings', onClick: () => navigate('/settings') },
@@ -1096,6 +1099,8 @@ export const ProfileHeroSection = memo(({
           onClick: secondaryRelation.onClick,
         },
         onOpenQrCode && { key: 'qr', icon: QrCode, label: 'QR code', onClick: onOpenQrCode },
+        passportUrl && { key: 'passport', icon: ShieldCheck, label: 'Digital Passport', onClick: openPassport },
+        profileUid && { key: 'about', icon: Info, label: 'About profile', onClick: () => navigate(`/profile/${profileUid}/about`) },
         callsEnabled && { key: 'call', icon: Phone, label: 'Audio call', disabled: !canCallAction || callPending, busy: callPending, onClick: handleStartCall },
         canTipAction && { key: 'gift', icon: Gift, label: 'Send coins', onClick: onOpenTipModal },
         showHeroRefresh && { key: 'refresh', icon: RefreshCw, label: 'Refresh', disabled: isRefreshing, busy: isRefreshing, onClick: onRefresh },
@@ -1271,12 +1276,19 @@ export const ProfileHeroSection = memo(({
         {(bio || tagline || motto) && (
           <div className="phs-bio">
             {bio && <p data-clamp={isLongBio && !bioExpanded ? 'true' : 'false'}>{bio}</p>}
-            {bio && isLongBio && (
-              <button type="button" className="phs-more" onClick={() => setBioExpanded((v) => !v)} aria-expanded={bioExpanded}>
-                <span>{bioExpanded ? 'Less' : 'More'}</span>
-                <ChevronDown aria-hidden="true" />
-              </button>
-            )}
+            <div className="inline-flex items-center justify-center gap-2 flex-wrap">
+              {bio && isLongBio && (
+                <button type="button" className="phs-more" onClick={() => setBioExpanded((v) => !v)} aria-expanded={bioExpanded}>
+                  <span>{bioExpanded ? 'Less' : 'More'}</span>
+                  <ChevronDown aria-hidden="true" />
+                </button>
+              )}
+              {isOwner && onOpenQuickEdit && (
+                <button type="button" onClick={() => onOpenQuickEdit('bio')} className="phs-more">
+                  <span>{bio ? 'Edit bio' : 'Add a bio'}</span>
+                </button>
+              )}
+            </div>
             {tagline && <p className="phs-tag">{tagline}</p>}
             {motto && <p className="phs-motto">{motto}</p>}
           </div>

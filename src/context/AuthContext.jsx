@@ -1155,8 +1155,12 @@ export function AuthProvider({ children }) {
           return result;
         }
         if (!result.success) throw new Error(result.error || 'Google auth failed');
-        const isLoginFlow = options.isLogin === true || options.flow === 'login' || !result.isNewUser;
-        if (result.isNewUser && !isLoginFlow) {
+        const needsSetup = Boolean(
+          result.isNewUser ||
+          result.user?.isProfileComplete === false ||
+          result.user?.requiresProfileCompletion === true
+        );
+        if (needsSetup) {
           markOnboardingRequired(result.user?.uid, { method: 'google' });
           AuthStorageManager.set('pending_profile_creation', {
             userId: result.user.uid,
@@ -1513,6 +1517,7 @@ export function AuthProvider({ children }) {
     verifyMFAAndSignIn,
     signUpWithEmailPassword,
     signInWithGoogle,
+    prewarmGoogleAuth: () => authService?.prewarmGoogleAuth?.() ?? Promise.resolve(false),
     sendPhoneVerificationCode,
     verifyPhoneOTP,
     signOut,

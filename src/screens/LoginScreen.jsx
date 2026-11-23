@@ -751,7 +751,18 @@ UltimatePhoneInput.displayName = 'UltimatePhoneInput';
 const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState(null);
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, prewarmGoogleAuth } = useAuth();
+  const isInIframe = typeof window !== 'undefined' && (() => {
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  })();
+
+  useEffect(() => {
+    prewarmGoogleAuth?.();
+  }, [prewarmGoogleAuth]);
 
   const handleGoogleSignIn = async () => {
     if (loading || isAuthenticating) return;
@@ -829,11 +840,35 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
           className="av2-alert"
-          style={{ marginTop: 0, marginBottom: 14, textAlign: "left" }}
+          style={{ marginTop: 0, marginBottom: 14, textAlign: "left", flexDirection: "column", alignItems: "flex-start", gap: 8 }}
           role="alert"
         >
-          <AlertIcon size={16} />
-          <span>{error}</span>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <AlertIcon size={16} />
+            <span>{error}</span>
+          </div>
+          {isInIframe && typeof window !== 'undefined' && (
+            <a
+              href={window.location.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 700,
+                background: "rgba(255,255,255,0.14)",
+                color: "inherit",
+                textDecoration: "none",
+                border: "1px solid rgba(255,255,255,0.22)"
+              }}
+            >
+              Open in New Tab
+            </a>
+          )}
         </motion.div>
       )}
 

@@ -7,11 +7,10 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, RefreshCw, QrCode, Share2, MoreVertical, Plus, Phone, Video, Gift, Info, CheckCircle2, Camera, Calendar, Settings } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { resolveActorName } from "../../services/profileReadModel.js";
-import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
@@ -245,7 +244,7 @@ export const TopAppBar = ({
   onAction, // generic action for contextual More / Publish / etc.
   onSearch,
   onOpenMenu, // better than hardcoded /menu
-  showOfflineBanner = true,
+  showOfflineBanner: _showOfflineBanner = true,
   scrollContainerRef,
 }) => {
   const navigate = useNavigate();
@@ -261,9 +260,6 @@ export const TopAppBar = ({
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
-  const [pendingCount, setPendingCount] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncSuccess, setSyncSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [inboxHeaderState, setInboxHeaderState] = useState({ totalUnread: 0, activeCount: 0 });
   const [inboxSearchOpen, setInboxSearchOpen] = useState(false);
@@ -362,54 +358,17 @@ export const TopAppBar = ({
     };
   }, [location.search]);
 
-  // Sync status (event-driven, no polling)
+  // Online indicator dot on brand emblem (event-driven; OfflineIndicator owns the global banner)
   useEffect(() => {
-    const updateConn = () => {
-      setIsOnline(navigator.onLine);
-      if (typeof backgroundSyncService?.getPendingCount === "function") {
-        setPendingCount(backgroundSyncService.getPendingCount());
-      }
-    };
-    const onQueueChanged = (e) => {
-      setIsOnline(navigator.onLine);
-      if (typeof e?.detail?.count === "number") {
-        setPendingCount(e.detail.count);
-      } else if (typeof backgroundSyncService?.getPendingCount === "function") {
-        setPendingCount(backgroundSyncService.getPendingCount());
-      }
-    };
-
+    const updateConn = () => setIsOnline(navigator.onLine);
     updateConn();
     window.addEventListener("online", updateConn);
     window.addEventListener("offline", updateConn);
-    window.addEventListener("arvdoul:sync_queue_changed", onQueueChanged);
-
     return () => {
       window.removeEventListener("online", updateConn);
       window.removeEventListener("offline", updateConn);
-      window.removeEventListener("arvdoul:sync_queue_changed", onQueueChanged);
     };
   }, []);
-
-  const handleManualSync = async () => {
-    if (!isOnline || isSyncing) return;
-    setIsSyncing(true);
-    setSyncSuccess(false);
-    try {
-      if (typeof backgroundSyncService?.triggerSync === "function") {
-        const result = await backgroundSyncService.triggerSync();
-        setPendingCount(backgroundSyncService.getPendingCount());
-        if (result?.syncedCount > 0) {
-          setSyncSuccess(true);
-          setTimeout(() => setSyncSuccess(false), 3500);
-        }
-      }
-    } catch {
-      // gracefully handled
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   useAuth();
   useAppStore((state) => state.currentUser);
@@ -1654,65 +1613,6 @@ export const TopAppBar = ({
               )}
             </div>
           </div>
-
-          {/* Offline / sync status pill */}
-          <AnimatePresence>
-            {showOfflineBanner && (!isOnline || syncSuccess || pendingCount > 0) && (
-              <motion.div
-                initial={{ y: -10, opacity: 0, scale: 0.95 }}
-                animate={{ y: 0, opacity: 1, scale: 1 }}
-                exit={{ y: -10, opacity: 0, scale: 0.95 }}
-                transition={SPRING.snappy}
-                className={cn(
-                  "flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-xl shadow-lg border",
-                  !isOnline
-                    ? "bg-red-950/85 text-red-200 border-red-500/40 shadow-red-950/40 cursor-pointer hover:bg-red-900/90 active:scale-95 transition-all"
-                    : syncSuccess
-                    ? "bg-emerald-950/85 text-emerald-200 border-emerald-500/40 shadow-emerald-950/40"
-                    : "bg-[#090F2D]/95 text-slate-100 border-white/15 shadow-black/40"
-                )}
-                onClick={() => {
-                  if (!isOnline) {
-                    navigate('/offline');
-                  }
-                }}
-              >
-                {!isOnline ? (
-                  <>
-                    <WifiOff className="w-3.5 h-3.5 text-red-400" />
-                    <span>
-                      Offline Mode ·{" "}
-                      {pendingCount > 0 ? `${pendingCount} saved` : "Viewing cache"}
-                    </span>
-                    <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20">Inspect →</span>
-                  </>
-                ) : syncSuccess ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Synced with cloud</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw
-                      className={cn(
-                        "w-3.5 h-3.5 text-purple-400",
-                        isSyncing && "animate-spin"
-                      )}
-                    />
-                    <span>{pendingCount} changes waiting to sync</span>
-                    <button
-                      type="button"
-                      onClick={handleManualSync}
-                      disabled={isSyncing}
-                      className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold transition"
-                    >
-                      {isSyncing ? "Syncing..." : "Sync"}
-                    </button>
-                  </>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </motion.header>
 

@@ -128,12 +128,12 @@ const CSS = `
 .phl{
   --v:200,43,255;--b:0,136,255;
   --tx:#F5F7FF;--tx2:#B4BFDE;--link:#8EC3FF;--focus:#7DB6FF;--err:#FCA5A5;
-  --base:rgba(14,22,66,.34);--solid:#0C1440;
-  --spec:.22;--spec2:.05;--cv:.14;--cb:.20;--gloss:.08;
-  --shadow:0 16px 28px -22px rgba(0,0,0,.6),0 2px 6px -3px rgba(0,0,0,.3);
-  --inset:inset 0 1px 1px rgba(255,255,255,.26),inset 0 -12px 18px -16px rgba(var(--b),.30),inset 0 0 16px rgba(130,110,255,.07);
-  --rim:linear-gradient(140deg,rgba(255,255,255,.44),rgba(255,255,255,.08) 30%,rgba(255,255,255,.02) 56%,rgba(var(--b),.40));
-  --chip:linear-gradient(160deg,rgba(255,255,255,.15),rgba(255,255,255,.03));--chip-rim:rgba(255,255,255,.15);
+  --base:rgba(14,20,60,.28);--solid:#0B1234;
+  --spec:.14;--spec2:.03;--cv:.09;--cb:.13;--gloss:.05;
+  --shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
+  --inset:inset 0 1px 1px rgba(255,255,255,.16),inset 0 -10px 16px -14px rgba(var(--b),.22),inset 0 0 14px rgba(130,110,255,.04);
+  --rim:linear-gradient(140deg,rgba(255,255,255,.26),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--b),.28));
+  --chip:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.03));--chip-rim:rgba(255,255,255,.12);
   --face:#0B1438;--sk:rgba(255,255,255,.07);
   --size:clamp(52px,14.5vw,60px);
   display:block;width:100%;min-width:0;color:var(--tx);

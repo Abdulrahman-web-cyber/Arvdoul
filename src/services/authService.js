@@ -1264,6 +1264,18 @@ class ProductionAuthService {
     throw new AuthError('auth/not-implemented', 'Use verifyMFAAndSignIn with resolver');
   }
 
+  async prewarmGoogleAuth() {
+    try {
+      await Promise.all([
+        this.initialize(),
+        import('firebase/auth'),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async signOut() {
     try {
       await this.initialize();
@@ -1348,7 +1360,7 @@ class ProductionAuthService {
         ? 'Pop-up blocked by browser or preview iframe. Open in a new tab or use Email / Phone.'
         : 'Pop-up blocked by browser. Please allow pop-ups for this site.',
       'auth/redirect-result-missing': 'Google sign-in could not finish returning to Arvdoul. Allow pop-ups or open Arvdoul in a standalone browser tab and try again.',
-      'auth/unauthorized-domain': 'This domain is not authorized for Google OAuth. Add the current Arvdoul domain in Firebase Authentication > Settings > Authorized domains.',
+      'auth/unauthorized-domain': `This domain${typeof window !== 'undefined' && window.location?.hostname ? ` (${window.location.hostname})` : ''} is not authorized for Google OAuth. Add it in Firebase Authentication > Settings > Authorized domains.`,
       'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in method.',
       'auth/credential-already-in-use': 'This credential is already associated with a different user account.',
       'permission-denied': 'Missing permissions while setting up your account. Please refresh and sign in again.'
@@ -1456,6 +1468,11 @@ export async function signInWithEmailPassword(email, password) {
     auditLogger.log('auth.login_failed', { correlationId, meta: { identifierHash: _piiHash(email), method: 'email', code: err?.code || null } });
     throw err;
   }
+}
+
+export async function prewarmGoogleAuth() {
+  const service = getAuthService();
+  return await service.prewarmGoogleAuth();
 }
 
 export async function signInWithGoogle(options = {}) {

@@ -73,24 +73,35 @@ export const ProfileQuickEditModal = memo(({
 
   if (!isOpen) return null;
 
+  const singleField =
+    initialField === 'bio' || initialField === 'displayName' || initialField === 'website'
+      ? initialField
+      : null;
+  const showDisplayName = !singleField || singleField === 'displayName';
+  const showBio = !singleField || singleField === 'bio';
+  const showTagline = !singleField;
+  const showWebsite = !singleField || singleField === 'website';
+
   const validate = () => {
     const newErrors = {};
-    const trimmedName = displayName.trim();
-    if (!trimmedName) {
-      newErrors.displayName = 'Display Name is required';
-    } else if (trimmedName.length > PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH) {
-      newErrors.displayName = `Max ${PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH} characters`;
+    if (showDisplayName) {
+      const trimmedName = displayName.trim();
+      if (!trimmedName) {
+        newErrors.displayName = 'Display Name is required';
+      } else if (trimmedName.length > PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH) {
+        newErrors.displayName = `Max ${PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH} characters`;
+      }
     }
 
-    if (bio && bio.length > PROFILE_CONSTRAINTS.BIO.MAX_LENGTH) {
+    if (showBio && bio && bio.length > PROFILE_CONSTRAINTS.BIO.MAX_LENGTH) {
       newErrors.bio = `Bio cannot exceed ${PROFILE_CONSTRAINTS.BIO.MAX_LENGTH} characters`;
     }
 
-    if (tagline && tagline.length > PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH) {
+    if (showTagline && tagline && tagline.length > PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH) {
       newErrors.tagline = `Tagline cannot exceed ${PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH} characters`;
     }
 
-    if (website && website.trim()) {
+    if (showWebsite && website && website.trim()) {
       const trimmedUrl = website.trim();
       const withProto = trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://') ? trimmedUrl : `https://${trimmedUrl}`;
       if (!isValidWebUrl(withProto)) {
@@ -107,21 +118,21 @@ export const ProfileQuickEditModal = memo(({
     if (!validate() || isSaving) return;
 
     setIsSaving(true);
-    const toastId = toast.loading('Saving profile changes...');
+    const toastId = toast.loading(singleField === 'bio' ? 'Saving bio...' : 'Saving profile changes...');
 
     try {
       const userService = getUserService();
-      let cleanWebsite = website.trim();
-      if (cleanWebsite && !cleanWebsite.startsWith('http://') && !cleanWebsite.startsWith('https://')) {
-        cleanWebsite = `https://${cleanWebsite}`;
+      const updates = {};
+      if (showDisplayName) updates.displayName = displayName.trim();
+      if (showBio) updates.bio = bio.trim();
+      if (showTagline) updates.tagline = tagline.trim();
+      if (showWebsite) {
+        let cleanWebsite = website.trim();
+        if (cleanWebsite && !cleanWebsite.startsWith('http://') && !cleanWebsite.startsWith('https://')) {
+          cleanWebsite = `https://${cleanWebsite}`;
+        }
+        updates.website = cleanWebsite;
       }
-
-      const updates = {
-        displayName: displayName.trim(),
-        bio: bio.trim(),
-        tagline: tagline.trim(),
-        website: cleanWebsite,
-      };
 
       await userService.updateUserProfile(userId, updates);
 
@@ -137,14 +148,11 @@ export const ProfileQuickEditModal = memo(({
       if (appStoreUser && (appStoreUser.id === userId || appStoreUser.uid === userId)) {
         useAppStore.getState().setCurrentUser({
           ...appStoreUser,
-          displayName: updates.displayName,
-          bio: updates.bio,
-          tagline: updates.tagline,
-          website: updates.website,
+          ...updates,
         });
       }
 
-      toast.success('Profile updated successfully', { id: toastId });
+      toast.success(singleField === 'bio' ? 'Bio updated' : 'Profile updated successfully', { id: toastId });
       onProfileUpdated?.(updates);
       onClose();
     } catch (err) {
@@ -163,19 +171,19 @@ export const ProfileQuickEditModal = memo(({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={initialField === 'bio' ? 'Edit Bio' : initialField === 'displayName' ? 'Edit Display Name' : 'Edit Profile Details'}
+        aria-label={initialField === 'bio' ? 'Edit Bio' : initialField === 'displayName' ? 'Edit Display Name' : initialField === 'website' ? 'Edit Website' : 'Edit Profile Details'}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "relative w-full max-w-lg rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]",
+          "relative w-full max-w-lg rounded-2xl sm:rounded-3xl border overflow-hidden flex flex-col max-h-[90vh] backdrop-blur-2xl",
           isDark
-            ? "bg-[#080F2E] border-white/10 text-white"
-            : "bg-white border-slate-200 text-slate-900"
+            ? "bg-[#0B1234]/70 border-white/[0.10] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_20px_42px_-18px_rgba(0,0,0,0.62)]"
+            : "bg-white/95 border-slate-200/80 text-slate-900 shadow-2xl"
         )}
       >
         {/* Header */}
         <div className={cn(
           "px-6 py-4 border-b flex items-center justify-between shrink-0",
-          isDark ? "border-white/10 bg-white/[0.02]" : "border-slate-100 bg-slate-50/50"
+          isDark ? "border-white/[0.08] bg-white/[0.02]" : "border-slate-100 bg-slate-50/50"
         )}>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
@@ -183,10 +191,10 @@ export const ProfileQuickEditModal = memo(({
             </div>
             <div>
               <h2 className="text-base font-bold leading-tight">
-                {initialField === 'bio' ? 'Edit Bio' : initialField === 'displayName' ? 'Edit Display Name' : 'Edit Profile Details'}
+                {initialField === 'bio' ? 'Edit Bio' : initialField === 'displayName' ? 'Edit Display Name' : initialField === 'website' ? 'Edit Website' : 'Edit Profile Details'}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Update your public profile identity
+                {singleField === 'bio' ? 'Tell people who you are on Arvdoul' : 'Update your public profile identity'}
               </p>
             </div>
           </div>
@@ -204,109 +212,117 @@ export const ProfileQuickEditModal = memo(({
         {/* Form Body */}
         <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-4 text-sm">
           {/* Display Name */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-arvdoul-purple" />
-                <span>Display Name</span>
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {displayName.length}/{PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
-              </span>
-            </div>
-            <input
-              ref={displayNameRef}
-              aria-label="Display Name"
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              maxLength={PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
-              placeholder="Your full or display name"
-              className={cn(
-                "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                errors.displayName ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+          {showDisplayName && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-arvdoul-purple" />
+                  <span>Display Name</span>
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  {displayName.length}/{PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
+                </span>
+              </div>
+              <input
+                ref={displayNameRef}
+                aria-label="Display Name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
+                placeholder="Your full or display name"
+                className={cn(
+                  "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  errors.displayName ? "border-rose-500" : (isDark ? "bg-[#0B1234]/45 border-white/[0.10] text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+                )}
+              />
+              {errors.displayName && (
+                <p className="text-[11px] text-rose-500">{errors.displayName}</p>
               )}
-            />
-            {errors.displayName && (
-              <p className="text-[11px] text-rose-500">{errors.displayName}</p>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Bio */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <AlignLeft className="w-3.5 h-3.5 text-purple-500" />
-                <span>Bio</span>
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
-              </span>
-            </div>
-            <textarea
-              ref={bioRef}
-              aria-label="Bio"
-              rows={4}
-              value={bio}
-              onChange={(e) => setBio(e.target.value.slice(0, PROFILE_CONSTRAINTS.BIO.MAX_LENGTH))}
-              placeholder="Tell the community about yourself, your creative passions, or what you build..."
-              className={cn(
-                "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition resize-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                errors.bio ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+          {showBio && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <AlignLeft className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Bio</span>
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  {bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
+                </span>
+              </div>
+              <textarea
+                ref={bioRef}
+                aria-label="Bio"
+                rows={4}
+                value={bio}
+                onChange={(e) => setBio(e.target.value.slice(0, PROFILE_CONSTRAINTS.BIO.MAX_LENGTH))}
+                placeholder="Tell the community about yourself, your creative passions, or what you build..."
+                className={cn(
+                  "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition resize-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  errors.bio ? "border-rose-500" : (isDark ? "bg-[#0B1234]/45 border-white/[0.10] text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+                )}
+              />
+              {errors.bio && (
+                <p className="text-[11px] text-rose-500">{errors.bio}</p>
               )}
-            />
-            {errors.bio && (
-              <p className="text-[11px] text-rose-500">{errors.bio}</p>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Tagline / Subtitle */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-arvdoul-purple" />
-                <span>Tagline / Status</span>
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {tagline.length}/{PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH}
-              </span>
+          {showTagline && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-arvdoul-purple" />
+                  <span>Tagline / Status</span>
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  {tagline.length}/{PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH}
+                </span>
+              </div>
+              <input aria-label="Tagline / Status"
+                type="text"
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value.slice(0, PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH))}
+                placeholder="e.g. Building audio synths & exploring Web3"
+                className={cn(
+                  "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  errors.tagline ? "border-rose-500" : (isDark ? "bg-[#0B1234]/45 border-white/[0.10] text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+                )}
+              />
             </div>
-            <input aria-label="Tagline / Status"
-              type="text"
-              value={tagline}
-              onChange={(e) => setTagline(e.target.value.slice(0, PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH))}
-              placeholder="e.g. Building audio synths & exploring Web3"
-              className={cn(
-                "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                errors.tagline ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
-              )}
-            />
-          </div>
+          )}
 
           {/* Website Link */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-arvdoul-purple" />
-                <span>Website / Link</span>
-              </label>
-            </div>
-            <input
-              ref={websiteRef}
-              aria-label="Website / Link"
-              type="text"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="e.g. yourwebsite.com or https://..."
-              className={cn(
-                "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
-                errors.website ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+          {showWebsite && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-arvdoul-purple" />
+                  <span>Website / Link</span>
+                </label>
+              </div>
+              <input
+                ref={websiteRef}
+                aria-label="Website / Link"
+                type="text"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="e.g. yourwebsite.com or https://..."
+                className={cn(
+                  "w-full px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm border outline-none transition focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  errors.website ? "border-rose-500" : (isDark ? "bg-[#0B1234]/45 border-white/[0.10] text-white focus:border-arvdoul-purple" : "bg-white border-slate-200 text-slate-900 focus:border-arvdoul-purple")
+                )}
+              />
+              {errors.website && (
+                <p className="text-[11px] text-rose-500">{errors.website}</p>
               )}
-            />
-            {errors.website && (
-              <p className="text-[11px] text-rose-500">{errors.website}</p>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="pt-3 flex items-center gap-3">
@@ -317,7 +333,7 @@ export const ProfileQuickEditModal = memo(({
               className={cn(
                 "flex-1 py-2.5 min-h-[44px] rounded-xl text-xs font-bold border transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
                 isDark 
-                  ? "border-white/10 hover:bg-white/5 text-slate-300" 
+                  ? "border-white/[0.10] hover:bg-white/[0.06] text-slate-300" 
                   : "border-slate-200 hover:bg-slate-50 text-slate-700"
               )}
             >

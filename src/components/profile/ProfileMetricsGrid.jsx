@@ -56,39 +56,39 @@ const STYLES = `
 .pmg-root *,.pmg-root *::before,.pmg-root *::after{box-sizing:border-box}
 .pmg-root.pmg-has-trend{padding-top:6px}
 
-/* ---------- Dark: deep navy glass, violet/blue light only at edges ---------- */
+/* ---------- Dark: deep navy liquid glass, balanced contrast matching ProfileTabsBar ---------- */
 .pmg-root[data-theme="dark"]{
-  --pmg-base:rgba(8,12,38,0.46);
+  --pmg-base:rgba(14,20,60,0.28);
   --pmg-layers:
-    radial-gradient(120% 78% at 50% -24%,rgba(124,108,255,0.24),transparent 62%),
-    radial-gradient(85% 70% at 108% 112%,rgba(40,125,255,0.20),transparent 64%),
-    radial-gradient(70% 60% at -8% 105%,rgba(150,60,240,0.14),transparent 66%),
-    linear-gradient(165deg,rgba(26,34,86,0.58),rgba(8,12,40,0.60) 58%,rgba(5,8,28,0.66));
-  --pmg-border:rgba(140,150,255,0.20);
+    radial-gradient(120% 78% at 50% -24%,rgba(124,108,255,0.14),transparent 62%),
+    radial-gradient(85% 70% at 108% 112%,rgba(40,125,255,0.12),transparent 64%),
+    radial-gradient(70% 60% at -8% 105%,rgba(150,60,240,0.09),transparent 66%),
+    linear-gradient(165deg,rgba(22,30,78,0.34),rgba(10,14,46,0.36) 58%,rgba(6,10,38,0.40));
+  --pmg-border:rgba(165,175,255,0.14);
   --pmg-shadow:
-    0 12px 24px -14px rgba(0,0,0,0.80),
-    0 2px 6px rgba(2,4,20,0.42),
-    inset 0 1px 0 rgba(255,255,255,0.15),
-    inset 0 -1px 0 rgba(90,110,255,0.12),
-    inset 1px 0 0 rgba(160,140,255,0.10),
-    inset -1px 0 0 rgba(60,140,255,0.10),
-    inset 0 0 20px rgba(80,90,230,0.07);
+    0 10px 22px -16px rgba(0,0,0,0.52),
+    0 2px 6px rgba(2,4,20,0.24),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 -1px 0 rgba(90,110,255,0.09),
+    inset 1px 0 0 rgba(160,140,255,0.07),
+    inset -1px 0 0 rgba(60,140,255,0.07),
+    inset 0 0 16px rgba(80,90,230,0.05);
   --pmg-shadow-hover:
-    0 14px 28px -14px rgba(0,0,0,0.85),
-    0 2px 6px rgba(2,4,20,0.42),
-    inset 0 1px 0 rgba(255,255,255,0.22),
-    inset 0 -1px 0 rgba(110,130,255,0.18),
-    inset 0 0 24px rgba(100,110,255,0.12);
+    0 12px 24px -16px rgba(0,0,0,0.60),
+    0 2px 6px rgba(2,4,20,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(110,130,255,0.14),
+    inset 0 0 20px rgba(100,110,255,0.09);
   --pmg-spec:
-    linear-gradient(90deg,transparent,rgba(255,255,255,0.55) 50%,transparent) center top/70% 1px no-repeat,
-    linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04) 55%,transparent);
-  --pmg-glow:radial-gradient(90% 80% at 50% 0%,rgba(150,135,255,0.26),transparent 70%);
-  --pmg-rim:linear-gradient(145deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.08) 32%,rgba(139,92,246,0.30) 66%,rgba(59,130,246,0.55) 100%);
+    linear-gradient(90deg,transparent,rgba(255,255,255,0.32) 50%,transparent) center top/70% 1px no-repeat,
+    linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.02) 55%,transparent);
+  --pmg-glow:radial-gradient(90% 80% at 50% 0%,rgba(150,135,255,0.16),transparent 70%);
+  --pmg-rim:linear-gradient(145deg,rgba(255,255,255,0.28) 0%,rgba(255,255,255,0.06) 32%,rgba(139,92,246,0.18) 66%,rgba(59,130,246,0.32) 100%);
   --pmg-value:#FFFFFF;
   --pmg-label:#AEB9D6;
   --pmg-focus:#8F83FF;
-  --pmg-badge-bg:rgba(6,10,34,0.88);
-  --pmg-badge-border:rgba(150,160,255,0.28);
+  --pmg-badge-bg:rgba(8,14,44,0.82);
+  --pmg-badge-border:rgba(150,160,255,0.20);
   --pmg-up:#6EE7B7;--pmg-down:#FDA4AF;--pmg-zero:#A8B3CC;
   --pmg-a-posts:#C4B5FD;--pmg-a-followers:#D8B4FE;--pmg-a-following:#67E8F9;
   --pmg-a-friends:#7DD3FC;--pmg-a-views:#5EEAD4;--pmg-a-likes:#FDA4AF;--pmg-a-coins:#FCD34D;

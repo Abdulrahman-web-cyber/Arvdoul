@@ -68,29 +68,31 @@ const AvatarUploadModal = memo(({
     try {
       const croppedFile = await getCroppedImg(imageSrc, croppedAreaPixels, 512);
       await onUpload(croppedFile);
-      toast.success('Avatar updated successfully!');
       handleClose();
     } catch (err) {
       console.error('Error cropping/uploading image:', err);
-      toast.error('Failed to process avatar. Please try again.');
+      if (!err?._toastShown) {
+        toast.error(err?.message || 'Failed to upload avatar. Please try again.');
+      }
     } finally {
       setIsProcessing(false);
     }
-  }, [imageSrc, croppedAreaPixels, onUpload]);
+  }, [imageSrc, croppedAreaPixels, onUpload, handleClose]);
 
   const handleRemove = useCallback(async () => {
     if (!onRemoveAvatar) return;
     setIsProcessing(true);
     try {
       await onRemoveAvatar();
-      toast.success('Avatar reset to default');
       handleClose();
     } catch (err) {
-      toast.error('Failed to remove avatar');
+      if (!err?._toastShown) {
+        toast.error(err?.message || 'Failed to remove avatar');
+      }
     } finally {
       setIsProcessing(false);
     }
-  }, [onRemoveAvatar]);
+  }, [onRemoveAvatar, handleClose]);
 
   const handleClose = useCallback(() => {
     setImageSrc(null);
@@ -133,10 +135,10 @@ const AvatarUploadModal = memo(({
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', damping: 25, stiffness: 350 }}
           className={cn(
-            'relative w-full max-w-md rounded-3xl p-6 shadow-2xl z-10 overflow-hidden',
+            'relative w-full max-w-md rounded-3xl p-6 z-10 overflow-hidden backdrop-blur-2xl',
             isDark
-              ? 'bg-[#080F2E] border border-white/10 text-white'
-              : 'bg-white border border-slate-200 text-slate-900'
+              ? 'bg-[#0B1234]/72 border border-white/[0.10] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_20px_44px_-18px_rgba(0,0,0,0.62)]'
+              : 'bg-white/90 border border-slate-200/80 text-slate-900 shadow-2xl'
           )}
         >
           {/* Header */}

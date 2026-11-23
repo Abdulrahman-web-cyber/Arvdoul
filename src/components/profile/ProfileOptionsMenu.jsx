@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils';
 import {
   Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus,
   Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle, Phone, Gift, UserPlus, UserCheck,
-  Coins, BarChart2, ChevronRight,
+  Coins, BarChart2, ChevronRight, Info,
 } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
@@ -114,7 +114,7 @@ const ActionGroup = ({ title, children, isDark }) => (
       className={cn(
         'rounded-2xl border overflow-hidden divide-y',
         isDark
-          ? 'bg-white/[0.04] border-white/[0.08] divide-white/[0.07]'
+          ? 'bg-white/[0.035] border-white/[0.08] divide-white/[0.06]'
           : 'bg-white border-slate-200/80 divide-slate-100 shadow-[0_1px_2px_rgba(15,23,42,0.03)]'
       )}
     >
@@ -334,7 +334,7 @@ const ProfileOptionsMenu = ({
         className={cn(
           'w-full max-w-[400px] max-sm:rounded-b-none max-sm:rounded-t-[28px] sm:rounded-[26px] overflow-hidden border relative z-[10000]',
           isDark
-            ? 'bg-[#080F2E]/95 border-white/[0.12] text-white shadow-[0_24px_64px_rgba(0,0,0,0.85)]'
+            ? 'bg-[#0B1234]/74 backdrop-blur-2xl border-white/[0.10] text-white shadow-[0_18px_46px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
             : 'bg-[#F8FAFD] border-slate-200/90 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.22)]'
         )}
         onClick={(e) => e.stopPropagation()}
@@ -420,6 +420,15 @@ const ProfileOptionsMenu = ({
                   isDark={isDark}
                 />
                 <ActionRow
+                  icon={Info}
+                  label="About Profile"
+                  onClick={() => {
+                    onClose?.();
+                    navigate('/profile/about');
+                  }}
+                  isDark={isDark}
+                />
+                <ActionRow
                   icon={Award}
                   label="Civic Titles & Provenance"
                   onClick={() => {
@@ -441,15 +450,28 @@ const ProfileOptionsMenu = ({
               </>
             )}
             {!isOwner && (
-              <ActionRow
-                icon={Crown}
-                label="Inspect Passport"
-                onClick={() => {
-                  onClose?.();
-                  navigate(`/passport/${userId}`);
-                }}
-                isDark={isDark}
-              />
+              <>
+                <ActionRow
+                  icon={Crown}
+                  label="Inspect Passport"
+                  onClick={() => {
+                    onClose?.();
+                    navigate(`/passport/${userId}`);
+                  }}
+                  isDark={isDark}
+                />
+                {userId && (
+                  <ActionRow
+                    icon={Info}
+                    label="About Profile"
+                    onClick={() => {
+                      onClose?.();
+                      navigate(`/profile/${userId}/about`);
+                    }}
+                    isDark={isDark}
+                  />
+                )}
+              </>
             )}
           </ActionGroup>
 
@@ -620,8 +642,10 @@ const ProfileOptionsMenu = ({
             aria-modal="true"
             aria-label="Report Profile"
             className={cn(
-              'w-full max-w-sm rounded-[26px] p-6 shadow-2xl border relative',
-              isDark ? 'bg-[#080F2E] border-white/12 text-white' : 'bg-white border-slate-200 text-slate-900'
+              'w-full max-w-sm rounded-[26px] p-6 border relative',
+              isDark
+                ? 'bg-[#0B1234]/78 backdrop-blur-2xl border-white/[0.10] text-white shadow-[0_18px_46px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]'
+                : 'bg-white border-slate-200 text-slate-900 shadow-2xl'
             )}
             onClick={(e) => e.stopPropagation()}
           >

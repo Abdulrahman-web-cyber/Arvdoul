@@ -195,7 +195,7 @@ export default function AboutScreen() {
   if (relationshipError) {
     return (
       <div className={cn('min-h-[70vh] flex items-center justify-center p-4', isDark ? 'text-white' : 'text-slate-900')}>
-        <div className={cn('max-w-md w-full p-8 rounded-2xl border text-center space-y-4', isDark ? 'bg-[#080F2E]/95 border-white/10' : 'bg-white border-slate-200')}>
+        <div className={cn('max-w-md w-full p-8 rounded-2xl border backdrop-blur-xl text-center space-y-4', isDark ? 'bg-[#0B1234]/42 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'bg-white border-slate-200')}>
           <Shield className="w-8 h-8 mx-auto text-amber-500" />
           <h2 className="font-display text-xl font-bold">Profile Access Could Not Be Verified</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">Arvdoul could not verify this profile's privacy and safety relationship. Its details are withheld until verification succeeds.</p>
@@ -235,7 +235,7 @@ export default function AboutScreen() {
         <div className={cn(
           'flex items-center justify-between gap-3',
           hasTopAppBar
-            ? cn('px-4 py-3 rounded-2xl border backdrop-blur-xl', isDark ? 'bg-[#080F2E]/85 border-white/[0.08]' : 'bg-white/90 border-slate-200/90 shadow-xs')
+            ? cn('px-4 py-3 rounded-2xl border backdrop-blur-xl', isDark ? 'bg-[#0B1234]/38 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'bg-white/90 border-slate-200/90 shadow-xs')
             : 'max-w-3xl mx-auto px-4 h-14'
         )}>
           <div className="flex items-center gap-2.5 min-w-0">
@@ -303,8 +303,8 @@ export default function AboutScreen() {
 
         {storeLoading && !storeProfile ? (
           <div className={cn(
-            'p-5 rounded-2xl border space-y-3',
-            isDark ? 'bg-[#080F2E] border-white/10' : 'bg-white border-slate-200'
+            'p-5 rounded-2xl border backdrop-blur-xl space-y-3',
+            isDark ? 'bg-[#0B1234]/36 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'bg-white border-slate-200'
           )}>
             <Skeleton className="h-6 w-40 rounded-lg" />
             <Skeleton className="h-4 w-full rounded-md" />
@@ -323,8 +323,8 @@ export default function AboutScreen() {
             {/* Creator Suite — gated by the `creatorInfo` scope */}
             {displayedProfile?.canViewCreatorInfo === true && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
               <div className={cn(
-                'p-5 rounded-2xl border space-y-4',
-                isDark ? 'bg-[#080F2E] border-white/10' : 'bg-white border-slate-200'
+                'p-5 rounded-2xl border backdrop-blur-xl space-y-4',
+                isDark ? 'bg-[#0B1234]/36 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'bg-white border-slate-200'
               )}>
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
@@ -361,8 +361,8 @@ export default function AboutScreen() {
 
             {/* Citizenship & Standing Strip */}
             <div className={cn(
-              "p-5 rounded-2xl border space-y-4 transition-all",
-              isDark ? "bg-[#080F2E] border-white/10" : "bg-white border-slate-200"
+              "p-5 rounded-2xl border backdrop-blur-xl space-y-4 transition-all",
+              isDark ? "bg-[#0B1234]/36 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white border-slate-200"
             )}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
