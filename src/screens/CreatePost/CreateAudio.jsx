@@ -1,102 +1,153 @@
 // src/screens/CreatePost/CreateAudio.jsx
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useCreatePostState, useCreatePostServices } from "../CreatePost";
-import * as Icons from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "../../lib/utils";
-import { useTheme } from "../../context/ThemeContext";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import * as Icons from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
+import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { useCreatePostState, useCreatePostServices } from './CreatePostContext.jsx';
+import { MAX_FILE_SIZE_BYTES, SURFACE_GLASS_CLASS } from './createPostConstants.js';
+import { mediaUrlToFile } from './postMediaPipeline.js';
 
 const AUDIO_GENRES = [
-  "✨ Original", "🎵 Electronic", "🎤 Hip-Hop", "🎸 Acoustic",
-  "🎷 Jazz & Soul", "☕ Lo-Fi", "🎙️ Podcast", "🌌 Ambient"
+  'Original',
+  'Electronic',
+  'Hip-Hop',
+  'Acoustic',
+  'Jazz & Soul',
+  'Lo-Fi',
+  'Podcast',
+  'Ambient',
 ];
+
+const MAX_CAPTION_LENGTH = 2200;
 
 export default function CreateAudio() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = useTheme();
-  const isDark = theme !== "light";
   const { state, dispatch } = useCreatePostState();
-  const { saveDraft } = useCreatePostServices();
+  const { saveDraft, isDark, autoSaveStatus, lastSavedAt } = useCreatePostServices();
 
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
-  // Seed from state so a track handed over from the Sounds library or the
-  // editor (which only carries a persisted URL, no File) is not blanked out.
-  const seed = state.typeData.audio || {};
-  const [audioFile, setAudioFile] = useState(null);
+  const seed = state.typeData?.audio || {};
+  const [audioFile, setAudioFile] = useState(seed.file || null);
   const [previewUrl, setPreviewUrl] = useState(seed.previewUrl || seed.url || null);
   const [coverUrl, setCoverUrl] = useState(seed.coverUrl || null);
-  const [trackTitle, setTrackTitle] = useState(seed.title || "");
-  const [artistName, setArtistName] = useState(seed.artist || "");
-  const [selectedGenre, setSelectedGenre] = useState(seed.genre || "✨ Original");
+  const [coverFile, setCoverFile] = useState(seed.coverFile || null);
+  const [trackTitle, setTrackTitle] = useState(seed.title || '');
+  const [artistName, setArtistName] = useState(seed.artist || '');
+  const [selectedGenre, setSelectedGenre] = useState(seed.genre || 'Original');
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
+
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const activeStreamRef = useRef(null);
   const timerRef = useRef(null);
+  const ownedPreviewUrlRef = useRef(null);
+  const ownedCoverUrlRef = useRef(null);
 
-  const persistedAudioUrl = state.typeData.audio?.url || "";
+  const persistedAudioUrl = state.typeData?.audio?.url || '';
+  const hasAudio = Boolean(audioFile || previewUrl || persistedAudioUrl);
+
+  // Sync audio state into parent reducer without overwriting persisted url
   useEffect(() => {
     dispatch({
-      type: "SET_TYPE_DATA",
+      type: 'SET_TYPE_DATA',
       payload: {
         audio: {
           file: audioFile,
+          url: audioFile ? '' : persistedAudioUrl,
           previewUrl,
           coverUrl,
+          coverFile,
           title: trackTitle,
           artist: artistName,
           genre: selectedGenre,
         },
       },
     });
-    // The track must travel through mediaItems: that is the only array the
-    // publish pipeline uploads to Storage, and the audio post's `url` is read
-    // back from the first uploaded media item. A handed-over track already has a
-    // persisted URL and no File, so pass it through untouched.
+
     dispatch({
-      type: "SET_MEDIA_ITEMS",
+      type: 'SET_MEDIA_ITEMS',
       payload: audioFile
-        ? [{
-            id: "audio-main",
-            type: "audio",
-            file: audioFile,
-            preview: previewUrl,
-            url: "",
-            name: trackTitle || audioFile.name || "audio",
-            alt: "",
-          }]
-        : (persistedAudioUrl
-          ? [{ id: "audio-main", type: "audio", file: null, url: persistedAudioUrl, preview: persistedAudioUrl, name: trackTitle || "audio", alt: "" }]
-          : []),
+        ? [
+            {
+              id: 'audio-main',
+              type: 'audio',
+              file: audioFile,
+              preview: previewUrl,
+              url: '',
+              name: trackTitle || audioFile.name || 'audio',
+              alt: trackTitle || 'Audio track',
+            },
+          ]
+        : persistedAudioUrl
+        ? [
+            {
+              id: 'audio-main',
+              type: 'audio',
+              file: null,
+              url: persistedAudioUrl,
+              preview: previewUrl || persistedAudioUrl,
+              name: trackTitle || 'audio',
+              alt: trackTitle || 'Audio track',
+            },
+          ]
+        : [],
     });
-    dispatch({ type: "SET_CONTENT_READY", payload: !!(audioFile || persistedAudioUrl) });
-  }, [audioFile, previewUrl, coverUrl, trackTitle, artistName, selectedGenre, persistedAudioUrl, dispatch]);
 
-  const handleFile = useCallback((file) => {
-    if (!file.type.startsWith("audio/")) {
-      toast.error("Please select a valid audio file (MP3, WAV, AAC)");
-      return;
-    }
-    const preview = URL.createObjectURL(file);
-    setAudioFile(file);
-    setPreviewUrl(preview);
-    if (!trackTitle) {
-      setTrackTitle(file.name.replace(/\.[^/.]+$/, ""));
-    }
-    toast.success("Audio loaded successfully");
-  }, [trackTitle]);
+    dispatch({
+      type: 'SET_CONTENT_READY',
+      payload: Boolean(audioFile || persistedAudioUrl),
+    });
+  }, [
+    audioFile,
+    previewUrl,
+    coverUrl,
+    coverFile,
+    trackTitle,
+    artistName,
+    selectedGenre,
+    persistedAudioUrl,
+    dispatch,
+  ]);
 
-  // Load incoming audio from AudioEditor or other screens
+  const handleFile = useCallback(
+    (file) => {
+      if (!file?.type?.startsWith('audio/')) {
+        toast.error('Please select a valid audio file (MP3, WAV, AAC, WebM)');
+        return;
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast.error('Audio file must be under 100MB');
+        return;
+      }
+      if (ownedPreviewUrlRef.current) {
+        URL.revokeObjectURL(ownedPreviewUrlRef.current);
+      }
+      const nextPreview = URL.createObjectURL(file);
+      ownedPreviewUrlRef.current = nextPreview;
+      setAudioFile(file);
+      setPreviewUrl(nextPreview);
+      if (!trackTitle) {
+        setTrackTitle(file.name.replace(/\.[^/.]+$/, ''));
+      }
+      toast.success('Audio loaded');
+    },
+    [trackTitle]
+  );
+
+  // Hand-offs from AudioEditor (audioFile, audioBlob, or audioDataUrl)
   const initialLoadedRef = useRef(false);
   useEffect(() => {
     if (initialLoadedRef.current) return;
+    let cancelled = false;
+
     if (location.state?.audioFile) {
       initialLoadedRef.current = true;
       handleFile(location.state.audioFile);
@@ -108,25 +159,80 @@ export default function CreateAudio() {
         { type: location.state.audioBlob.type || 'audio/wav' }
       );
       handleFile(file);
+    } else if (location.state?.audioDataUrl) {
+      initialLoadedRef.current = true;
+      mediaUrlToFile(
+        location.state.audioDataUrl,
+        location.state.fileName || `audio-${Date.now()}.wav`,
+        'audio/wav'
+      )
+        .then((file) => {
+          if (!cancelled) handleFile(file);
+        })
+        .catch((err) => {
+          console.warn('[CreateAudio] Failed converting exported audio URL:', err?.message);
+          if (!cancelled) toast.error('Could not load exported audio from Studio');
+        });
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [location.state, handleFile]);
 
   const handleCover = useCallback((file) => {
-    if (!file.type.startsWith("image/")) return;
+    if (!file?.type?.startsWith('image/')) {
+      toast.error('Please select a valid image file for cover art');
+      return;
+    }
+    if (ownedCoverUrlRef.current) {
+      URL.revokeObjectURL(ownedCoverUrlRef.current);
+    }
     const url = URL.createObjectURL(file);
+    ownedCoverUrlRef.current = url;
+    setCoverFile(file);
     setCoverUrl(url);
   }, []);
 
   const removeAudio = useCallback(() => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (ownedPreviewUrlRef.current) {
+      URL.revokeObjectURL(ownedPreviewUrlRef.current);
+      ownedPreviewUrlRef.current = null;
+    }
+    if (ownedCoverUrlRef.current) {
+      URL.revokeObjectURL(ownedCoverUrlRef.current);
+      ownedCoverUrlRef.current = null;
+    }
     setAudioFile(null);
     setPreviewUrl(null);
-  }, [previewUrl]);
+    setCoverFile(null);
+    setCoverUrl(null);
+    setTrackTitle('');
+    setArtistName('');
+    dispatch({
+      type: 'SET_TYPE_DATA',
+      payload: {
+        audio: {
+          file: null,
+          url: '',
+          previewUrl: null,
+          coverUrl: null,
+          coverFile: null,
+          title: '',
+          artist: '',
+          genre: selectedGenre,
+          sourceSoundId: null,
+          duration: 0,
+        },
+      },
+    });
+    dispatch({ type: 'SET_MEDIA_ITEMS', payload: [] });
+  }, [dispatch, selectedGenre]);
 
-  // Voice recording logic
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      activeStreamRef.current = stream;
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
@@ -135,10 +241,13 @@ export default function CreateAudio() {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const recordedFile = new File([audioBlob], `Recording_${Date.now()}.webm`, { type: "audio/webm" });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const recordedFile = new File([audioBlob], `Recording_${Date.now()}.webm`, {
+          type: 'audio/webm',
+        });
         handleFile(recordedFile);
         stream.getTracks().forEach((t) => t.stop());
+        activeStreamRef.current = null;
       };
 
       mediaRecorderRef.current.start();
@@ -147,9 +256,9 @@ export default function CreateAudio() {
       timerRef.current = setInterval(() => {
         setRecordDuration((d) => d + 1);
       }, 1000);
-      toast.info("Recording started. Speak now...");
+      toast.info('Recording started');
     } catch {
-      toast.error("Microphone permission denied or unavailable");
+      toast.error('Microphone permission denied or unavailable');
     }
   };
 
@@ -161,256 +270,352 @@ export default function CreateAudio() {
     }
   };
 
+  // Cleanup active mic, timers, and owned object URLs on unmount
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (err) {
+          console.warn('[CreateAudio] Recorder stop notice:', err?.message);
+        }
+      }
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((t) => t.stop());
+        activeStreamRef.current = null;
+      }
+      if (ownedPreviewUrlRef.current) {
+        URL.revokeObjectURL(ownedPreviewUrlRef.current);
+      }
+      if (ownedCoverUrlRef.current) {
+        URL.revokeObjectURL(ownedCoverUrlRef.current);
+      }
+    };
+  }, []);
+
+  const insertTag = useCallback(
+    (tag) => {
+      const current = state.content || '';
+      const next = `${current}${current && !current.endsWith(' ') ? ' ' : ''}${tag} `;
+      if (next.length <= MAX_CAPTION_LENGTH) {
+        dispatch({ type: 'SET_CONTENT', payload: next });
+      }
+    },
+    [state.content, dispatch]
+  );
+
   return (
-    <div className="space-y-5 max-w-xl mx-auto py-2">
-      {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/15 flex items-center justify-center text-purple-400">
-            <Icons.Music className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Audio Creation Studio</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Record, upload or arrange multitrack audio</p>
-          </div>
+    <div className="max-w-3xl mx-auto w-full py-4 space-y-4">
+      {/* Studio Subheader */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+            Audio Studio
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Record voice notes, upload tracks, or master audio
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate("/audio-editor")}
-            className="px-3.5 py-1.5 text-xs font-bold rounded-xl text-white shadow-md flex items-center gap-1.5 hover:scale-105 active:scale-95 transition cursor-pointer"
-            style={{ background: BRAND_GRADIENT }}
-          >
-            <Icons.Sliders className="w-3.5 h-3.5" />
-            <span>Open Studio</span>
-          </button>
-          <button
-            onClick={saveDraft}
-            className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-white/15 transition cursor-pointer"
-          >
-            💾 Draft
-          </button>
-        </div>
-      </div>
-
-      {/* Audio Uploader / Record Selector Card */}
-      {!audioFile && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* File Upload Box */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              "p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition hover:border-purple-500 hover:scale-[1.01]",
-              isDark ? "border-white/15 bg-white/5" : "border-gray-300 bg-gray-50/50"
-            )}
-          >
-            <div className="w-12 h-12 rounded-2xl bg-purple-600/20 text-purple-400 flex items-center justify-center">
-              <Icons.Upload className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-900 dark:text-white">Choose Audio File</p>
-              <p className="text-[11px] text-gray-500">MP3, WAV, AAC up to 100MB</p>
-            </div>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files?.[0]) handleFile(e.target.files[0]);
-              e.target.value = "";
-            }}
-          />
-
-          {/* Record Live Microphone Box */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            aria-pressed={isRecording}
-            aria-label={isRecording ? 'Stop recording' : 'Record live voice'}
-            onClick={isRecording ? stopRecording : startRecording}
-            className={cn(
-              "w-full p-6 rounded-2xl border-2 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition",
-              isRecording
-                ? "border-rose-500 bg-rose-500/10 animate-pulse"
-                : isDark
-                ? "border-white/15 bg-white/5 hover:border-rose-500"
-                : "border-gray-300 bg-gray-50/50 hover:border-rose-500"
-            )}
+            onClick={() => navigate('/audio-editor')}
+            className="min-h-[40px] px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/12 bg-white/80 dark:bg-[#080F2E]/80 text-xs font-semibold text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-white/10 transition-colors flex items-center gap-1.5 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
           >
-            <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center transition-transform",
-              isRecording ? "bg-rose-500 text-white scale-110" : "bg-rose-500/20 text-rose-400"
-            )}>
-              <Icons.Mic className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-900 dark:text-white">
-                {isRecording ? `Recording... (${recordDuration}s)` : "Record Live Voice"}
-              </p>
-              <p className="text-[11px] text-gray-500">
-                {isRecording ? "Tap to Stop & Use" : "Record voice note or acoustic beat"}
-              </p>
-            </div>
+            <Icons.Sliders className="w-3.5 h-3.5 text-arvdoul-purple" />
+            <span>Open Studio</span>
           </button>
-        </div>
-      )}
 
-      {/* Active Audio Player & Details Card */}
-      {audioFile && (
-        <div className={cn(
-          "p-4 rounded-2xl border space-y-4 shadow-lg",
-          isDark ? "bg-[#060B24] border-white/10" : "bg-white border-gray-200"
-        )}>
-          <div className="flex items-start gap-3">
-            {/* Album Cover preview or upload */}
-            <div
-              onClick={() => coverInputRef.current?.click()}
-              className={cn(
-                "w-20 h-20 rounded-xl overflow-hidden border flex flex-col items-center justify-center flex-shrink-0 cursor-pointer group relative",
-                isDark ? "bg-[#03071B] border-white/10" : "bg-gray-100 border-gray-300"
-              )}
-            >
-              {coverUrl ? (
-                <LazyImage src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
-              ) : (
-                <div className="text-center p-1 text-gray-400">
-                  <Icons.Image className="w-5 h-5 mx-auto mb-1 opacity-70 group-hover:text-purple-400" />
-                  <span className="text-[9px] block">Cover</span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold">
-                Change
-              </div>
-            </div>
-            <input
-              ref={coverInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) handleCover(e.target.files[0]);
-                e.target.value = "";
-              }}
-            />
-
-            <div className="flex-1 min-w-0 space-y-2">
-              <div className="flex items-center justify-between">
-                <input aria-label="Track title..."
-                  type="text"
-                  value={trackTitle}
-                  onChange={(e) => setTrackTitle(e.target.value)}
-                  placeholder="Track title..."
-                  className="text-sm font-bold bg-transparent border-b border-transparent hover:border-purple-500 focus:border-purple-500 outline-none w-full text-gray-900 dark:text-white"
-                />
-                <button
-                  onClick={removeAudio}
-                  className="text-gray-400 hover:text-rose-500 p-1 cursor-pointer"
-                  title="Remove audio"
-                >
-                  <Icons.Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              <input aria-label="Artist or creator name..."
-                type="text"
-                value={artistName}
-                onChange={(e) => setArtistName(e.target.value)}
-                placeholder="Artist or creator name..."
-                className="text-xs bg-transparent border-b border-transparent hover:border-purple-500 focus:border-purple-500 outline-none w-full text-gray-500 dark:text-gray-400"
-              />
-
-              <div className="flex items-center gap-2 text-[11px] text-purple-400">
-                <span className="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
-                  {selectedGenre}
-                </span>
-                <span className="text-gray-400 font-mono">
-                  {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* HTML5 Audio Player */}
-          <audio controls src={previewUrl} className="w-full h-10 rounded-xl" />
-
-          {/* Action to master or edit in Audio Studio */}
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-gray-400">Ready to publish or enhance</span>
-            <button
-              type="button"
-              onClick={() => navigate('/audio-editor', {
-                state: {
-                  audioUrl: previewUrl,
-                  title: trackTitle || audioFile?.name || 'Untitled Audio',
-                  artist: artistName,
-                },
-              })}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 hover:scale-105 active:scale-95 transition cursor-pointer"
-              style={{ background: BRAND_GRADIENT }}
-            >
-              <Icons.Sliders className="w-3.5 h-3.5" />
-              <span>Multi-Track Master Studio</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Genre pills selector */}
-      <div className="space-y-2">
-        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Audio Category / Vibe</label>
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
-          {AUDIO_GENRES.map((genre) => (
-            <button
-              key={genre}
-              onClick={() => setSelectedGenre(genre)}
-              className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer",
-                selectedGenre === genre
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-500/20"
-                  : isDark
-                  ? "bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10"
-                  : "bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200"
-              )}
-            >
-              {genre}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={saveDraft}
+            disabled={autoSaveStatus === 'saving'}
+            className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-95 flex items-center gap-1.5 disabled:opacity-50 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+            style={{ background: BRAND_GRADIENT }}
+          >
+            {autoSaveStatus === 'saving' ? (
+              <LoadingSpinner size="xs" color="white" />
+            ) : (
+              <Icons.Save className="w-3.5 h-3.5" />
+            )}
+            <span>Save Draft</span>
+          </button>
         </div>
       </div>
 
-      {/* Caption text area */}
-      <div className="space-y-2">
-        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Caption & Notes</label>
-        <div className={cn(
-          "rounded-2xl border p-3 focus-within:ring-2 focus-within:ring-purple-500 transition-all",
-          isDark ? "bg-[#060B24] border-white/10" : "bg-white border-gray-200"
-        )}>
-          <textarea aria-label="Caption &amp; Notes"
-            value={state.content}
-            onChange={(e) => dispatch({ type: "SET_CONTENT", payload: e.target.value })}
-            placeholder="Tell your listeners about this track, chords, inspiration, or gear used..."
-            className="w-full min-h-[90px] bg-transparent resize-none outline-none text-xs text-gray-900 dark:text-white placeholder:text-gray-500"
-          />
-          <div className="flex items-center justify-between pt-2 border-t border-inherit text-xs text-gray-400">
-            <div className="flex items-center gap-2">
+      {/* Main Audio Card */}
+      <div className={`${SURFACE_GLASS_CLASS} p-4 sm:p-5 space-y-5`}>
+        {!hasAudio ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                'p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 text-center transition-colors focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isDark
+                  ? 'border-white/15 bg-white/[0.03] hover:border-arvdoul-purple'
+                  : 'border-slate-300 bg-slate-50/70 hover:border-arvdoul-purple'
+              )}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-arvdoul-purple/15 text-arvdoul-purple flex items-center justify-center">
+                <Icons.Upload className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Choose Audio File</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  MP3, WAV, AAC up to 100MB
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={isRecording}
+              aria-label={isRecording ? 'Stop live voice recording' : 'Record live voice'}
+              onClick={isRecording ? stopRecording : startRecording}
+              className={cn(
+                'w-full p-6 rounded-2xl border-2 flex flex-col items-center justify-center gap-3 text-center transition-colors focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                isRecording
+                  ? 'border-rose-500 bg-rose-500/10'
+                  : isDark
+                  ? 'border-white/15 bg-white/[0.03] hover:border-rose-500'
+                  : 'border-slate-300 bg-slate-50/70 hover:border-rose-500'
+              )}
+            >
+              <div
+                className={cn(
+                  'w-12 h-12 rounded-2xl flex items-center justify-center transition-transform',
+                  isRecording ? 'bg-rose-500 text-white scale-105' : 'bg-rose-500/15 text-rose-500'
+                )}
+              >
+                {isRecording ? <Icons.Square className="w-5 h-5" /> : <Icons.Mic className="w-6 h-6" />}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                  {isRecording ? `Recording (${recordDuration}s)` : 'Record Live Voice'}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {isRecording ? 'Tap to stop and attach' : 'Capture voice note or acoustic clip'}
+                </p>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              'p-4 rounded-2xl border space-y-4',
+              isDark ? 'bg-[#03071B]/60 border-white/10' : 'bg-white/80 border-slate-200/80'
+            )}
+          >
+            <div className="flex items-start gap-3">
               <button
                 type="button"
-                onClick={() => dispatch({ type: "SET_CONTENT", payload: `${state.content} #NewMusic ` })}
-                className="hover:text-purple-400"
+                onClick={() => coverInputRef.current?.click()}
+                aria-label="Choose cover artwork"
+                className={cn(
+                  'w-20 h-20 rounded-xl overflow-hidden border flex flex-col items-center justify-center flex-shrink-0 group relative focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                  isDark ? 'bg-[#080F2E] border-white/15' : 'bg-slate-100 border-slate-200'
+                )}
               >
-                #NewMusic
+                {coverUrl ? (
+                  <LazyImage src={coverUrl} alt="Track cover art" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center p-1 text-slate-400">
+                    <Icons.Image className="w-5 h-5 mx-auto mb-1 opacity-75 group-hover:text-arvdoul-purple" />
+                    <span className="text-[11px] block font-medium">Cover</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold">
+                  Change
+                </div>
               </button>
+
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    aria-label="Track title"
+                    type="text"
+                    value={trackTitle}
+                    onChange={(e) => setTrackTitle(e.target.value)}
+                    placeholder="Track title..."
+                    className="text-sm font-bold bg-transparent border-b border-transparent hover:border-arvdoul-purple focus:border-arvdoul-purple outline-none w-full text-slate-900 dark:text-white py-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={removeAudio}
+                    className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                    aria-label="Remove audio"
+                  >
+                    <Icons.Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <input
+                  aria-label="Artist or creator name"
+                  type="text"
+                  value={artistName}
+                  onChange={(e) => setArtistName(e.target.value)}
+                  placeholder="Artist or creator name..."
+                  className="text-xs bg-transparent border-b border-transparent hover:border-arvdoul-purple focus:border-arvdoul-purple outline-none w-full text-slate-600 dark:text-slate-300 py-1"
+                />
+
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  <span className="font-medium text-arvdoul-purple">{selectedGenre}</span>
+                  {audioFile?.size && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{(audioFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <audio controls src={previewUrl || persistedAudioUrl} className="w-full h-10 rounded-xl" />
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Ready to publish or edit multitrack
+              </span>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "SET_CONTENT", payload: `${state.content} #ArvdoulAudio ` })}
-                className="hover:text-purple-400"
+                onClick={() =>
+                  navigate('/audio-editor', {
+                    state: {
+                      audioUrl: previewUrl || persistedAudioUrl,
+                      title: trackTitle || audioFile?.name || 'Untitled Audio',
+                      artist: artistName,
+                    },
+                  })
+                }
+                className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white shadow-sm flex items-center gap-1.5 hover:opacity-95 transition-opacity focus-visible:ring-2 focus-visible:ring-arvdoul-purple"
+                style={{ background: BRAND_GRADIENT }}
               >
-                #ArvdoulAudio
+                <Icons.Sliders className="w-3.5 h-3.5" />
+                <span>Multi-Track Master Studio</span>
               </button>
             </div>
-            <span>{state.content.length} / 2200</span>
           </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.[0]) handleFile(e.target.files[0]);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.[0]) handleCover(e.target.files[0]);
+            e.target.value = '';
+          }}
+        />
+
+        {/* Genre selector */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+            Audio Category
+          </p>
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
+            {AUDIO_GENRES.map((genre) => {
+              const active = selectedGenre === genre;
+              return (
+                <button
+                  key={genre}
+                  type="button"
+                  onClick={() => setSelectedGenre(genre)}
+                  aria-pressed={active}
+                  className={cn(
+                    'min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-arvdoul-purple',
+                    active
+                      ? 'bg-arvdoul-purple text-white shadow-sm'
+                      : isDark
+                      ? 'bg-white/[0.05] border border-white/10 text-slate-300 hover:bg-white/10'
+                      : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
+                  )}
+                >
+                  {genre}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Caption & Notes */}
+        <div className="space-y-2">
+          <label
+            htmlFor="audio-caption-input"
+            className="text-xs font-semibold text-slate-600 dark:text-slate-300 block"
+          >
+            Caption &amp; Notes
+          </label>
+          <div
+            className={cn(
+              'rounded-2xl border p-3.5 focus-within:ring-2 focus-within:ring-arvdoul-purple transition-shadow',
+              isDark ? 'bg-[#03071B]/60 border-white/10' : 'bg-white/80 border-slate-200/80'
+            )}
+          >
+            <textarea
+              id="audio-caption-input"
+              aria-label="Audio caption and notes"
+              value={state.content || ''}
+              maxLength={MAX_CAPTION_LENGTH}
+              onChange={(e) => dispatch({ type: 'SET_CONTENT', payload: e.target.value })}
+              placeholder="Share the story behind this track, recording gear, or collaborators..."
+              className="w-full min-h-[92px] bg-transparent resize-none outline-none text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-white/10 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => insertTag('#NewMusic')}
+                  className="hover:text-arvdoul-purple font-medium focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded"
+                >
+                  #NewMusic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertTag('#ArvdoulAudio')}
+                  className="hover:text-arvdoul-purple font-medium focus-visible:ring-2 focus-visible:ring-arvdoul-purple rounded"
+                >
+                  #ArvdoulAudio
+                </button>
+              </div>
+              <span>
+                {(state.content || '').length} / {MAX_CAPTION_LENGTH}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          aria-live="polite"
+          className="flex items-center justify-end gap-1.5 text-xs text-slate-500 dark:text-slate-400 tabular-nums"
+        >
+          {autoSaveStatus === 'saving' && (
+            <>
+              <LoadingSpinner size="xs" />
+              <span>Saving draft...</span>
+            </>
+          )}
+          {autoSaveStatus === 'saved' && lastSavedAt && (
+            <>
+              <Icons.CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>
+                Saved {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>

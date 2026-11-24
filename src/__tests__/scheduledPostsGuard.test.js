@@ -26,7 +26,11 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 const indexSrc = read('functions/index.js');
 const publisherSrc = read('functions/scheduledPosts.js');
-const createPost = read('src/screens/CreatePost.jsx');
+const createPost = [
+  read('src/screens/CreatePost.jsx'),
+  read('src/screens/CreatePost/postPublishPipeline.js'),
+  read('src/screens/CreatePost/createPostReducer.js'),
+].join('\n');
 const firestoreService = read('src/services/firestoreService.js');
 const indexes = JSON.parse(read('firestore.indexes.json'));
 
@@ -62,7 +66,7 @@ describe('scheduled posts actually publish', () => {
     // The composer must gate the device-local "just published" cache and the
     // published event on `!isScheduled`.
     expect(createPost).toMatch(/const isScheduled = Boolean\(/);
-    expect(createPost).toMatch(/if \(!isScheduled\) \{/);
+    expect(createPost).toMatch(/if \(!isScheduled[\s\S]*?\)\s*\{/);
   });
 });
 
@@ -108,17 +112,17 @@ describe('composer has no dead scheduling/collaboration controls', () => {
     // removed panels (SET_AUDIO_FILE / SET_VIDEO_FILE / SET_IS_DRAFT_LOADED were
     // exactly this; CLEAR_ERROR was wired up instead of deleted).
     const dir = path.join(root, 'src/screens');
-    const files = fs.readdirSync(dir).filter((f) => f.startsWith('CreatePost') && f.endsWith('.jsx'));
+    const files = fs.readdirSync(dir).filter((f) => f.startsWith('CreatePost') && /\.(jsx|js)$/.test(f));
     const subDir = path.join(dir, 'CreatePost');
     const all = [...files.map((f) => path.join(dir, f))];
     if (fs.existsSync(subDir)) {
-      all.push(...fs.readdirSync(subDir).filter((f) => f.endsWith('.jsx')).map((f) => path.join(subDir, f)));
+      all.push(...fs.readdirSync(subDir).filter((f) => /\.(jsx|js)$/.test(f)).map((f) => path.join(subDir, f)));
     }
     const source = all.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
-    const cases = new Set([...source.matchAll(/case "([A-Z_]+)"/g)].map((m) => m[1]));
+    const cases = new Set([...source.matchAll(/case\s+['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]));
     const dispatched = new Set([
-      ...[...source.matchAll(/type:\s*"([A-Z_]+)"/g)].map((m) => m[1]),
-      ...[...source.matchAll(/type:\s*`([A-Z_]+)\$\{/g)].map((m) => m[1]),
+      ...[...source.matchAll(/type:\s*['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]),
+      ...[...source.matchAll(/type:\s*`([A-Z0-9_]+)\$\{/g)].map((m) => m[1]),
     ]);
     const unreachable = [...cases].filter((c) => !dispatched.has(c));
     expect(unreachable).toEqual([]);

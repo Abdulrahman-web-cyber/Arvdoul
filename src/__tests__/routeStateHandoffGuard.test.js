@@ -70,7 +70,7 @@ const AUTH_FLOW_FILES = [
 describe('route-state handoff guard: producers and consumers agree', () => {
   test('SoundsScreen "Use in Reel" keys are consumed by CreatePost', () => {
     const producer = read('src/screens/Sounds/SoundsScreen.jsx');
-    const consumer = consumedKeys(read('src/screens/CreatePost.jsx'));
+    const consumer = consumedKeys(read('src/screens/CreatePost/EditPostLoader.jsx'));
     const match = producer.match(/navigate\('\/create-post',\s*\{\s*state:\s*\{([^}]*)\}/);
     expect(match).not.toBeNull();
     const keys = [...match[1].matchAll(/([A-Za-z_$][\w$]*)\s*:/g)].map((m) => m[1]);
@@ -82,7 +82,7 @@ describe('route-state handoff guard: producers and consumers agree', () => {
 
   test('VideoEditor "Share to Feed" keys are consumed by CreatePost', () => {
     const producer = read('src/screens/VideoEditor/components/ExportModal.jsx');
-    const consumer = consumedKeys(read('src/screens/CreatePost.jsx'));
+    const consumer = consumedKeys(read('src/screens/CreatePost/EditPostLoader.jsx'));
     const match = producer.match(/navigate\('\/create-post',\s*\{\s*state:\s*\{([\s\S]*?)\}\s*,?\s*\}\s*\)/);
     expect(match).not.toBeNull();
     const keys = [...match[1].matchAll(/([A-Za-z_$][\w$]*)\s*:/g)].map((m) => m[1]);

@@ -22,7 +22,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const createPost = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+const createPostDir = path.join(root, 'src/screens/CreatePost');
+const createPost = [
+  fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8'),
+  ...fs
+    .readdirSync(createPostDir)
+    .filter((f) => /\.(js|jsx)$/.test(f))
+    .map((f) => fs.readFileSync(path.join(createPostDir, f), 'utf8')),
+].join('\n');
 const monetizationService = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
 
 describe('composer has no dead paid controls', () => {

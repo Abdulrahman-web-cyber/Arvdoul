@@ -883,6 +883,9 @@ export function AuthProvider({ children }) {
               import('../services/notificationsService.js')
                 .then(({ getNotificationsService }) => getNotificationsService?.()?.clearCache?.())
                 .catch((err) => console.warn('[Auth] notification cache clear on switch failed', err?.message));
+              import('../screens/CreatePost/createPostStorage.js')
+                .then(({ purgeCreatePostStorageForOwner }) => purgeCreatePostStorageForOwner(lastProfileUidRef.current))
+                .catch((err) => console.warn('[Auth] create-post storage purge on switch failed', err?.message));
             }
             lastProfileUidRef.current = firebaseUser.uid;
             try {
@@ -942,6 +945,9 @@ export function AuthProvider({ children }) {
               import('../config/messagingContracts.js')
                 .then(({ purgeMessageDraftsForOwner }) => purgeMessageDraftsForOwner(departingUid))
                 .catch((err) => console.warn('[Auth] message-draft purge on logout failed', err?.message));
+              import('../screens/CreatePost/createPostStorage.js')
+                .then(({ purgeCreatePostStorageForOwner }) => purgeCreatePostStorageForOwner(departingUid))
+                .catch((err) => console.warn('[Auth] create-post storage purge on logout failed', err?.message));
             }
             lastProfileUidRef.current = null;
             try {

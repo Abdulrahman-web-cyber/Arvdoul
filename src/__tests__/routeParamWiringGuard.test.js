@@ -36,17 +36,19 @@ describe('event edit route edits the event', () => {
 });
 
 describe('post edit route updates the post', () => {
+  const loader = read('src/screens/CreatePost/EditPostLoader.jsx');
+  const pipeline = read('src/screens/CreatePost/postPublishPipeline.js');
   const screen = read('src/screens/CreatePost.jsx');
 
   test('EditPostLoader reads the :postId route param', () => {
-    expect(screen).toMatch(/useParams\(\)/);
-    expect(screen).toMatch(/postId:\s*routePostId/);
-    expect(screen).toMatch(/searchParams\.get\("edit"\)\s*\|\|\s*routePostId/);
+    expect(loader).toMatch(/useParams\(\)/);
+    expect(loader).toMatch(/postId:\s*routePostId/);
+    expect(loader).toMatch(/searchParams\.get\(['"]edit['"]\)\s*\|\|\s*routePostId/);
   });
 
   test('publishing in edit mode calls updatePost and never re-creates', () => {
-    expect(screen).toMatch(/firestoreService\.updatePost\(editPostId,/);
-    expect(screen).toMatch(/if \(editPostId\) \{/);
-    expect(screen).toMatch(/navigate\(`\/post\/\$\{editPostId\}`\)/);
+    expect(pipeline).toMatch(/firestoreService\.updatePost\(editPostId,/);
+    expect(pipeline).toMatch(/if \(editPostId\) \{/);
+    expect(screen).toMatch(/result\.status === ['"]updated['"][\s\S]*?navigate\(`\/post\/\$\{result\.postId\}`\)/);
   });
 });

@@ -262,13 +262,18 @@ describe('post-embedded poll voting is wired end-to-end', () => {
   });
 
   test('the composer persists poll closesAt and no unfunded reward field', () => {
-    const src = read('src/screens/CreatePost.jsx');
-    expect(src).toContain('SET_POLL_EXPIRY');
-    expect(src).toMatch(/poll:[\s\S]*?closesAt: current\.pollClosesAt/);
+    const composerSrc = [
+      read('src/screens/CreatePost.jsx'),
+      read('src/screens/CreatePost/CreatePoll.jsx'),
+      read('src/screens/CreatePost/createPostReducer.js'),
+      read('src/screens/CreatePost/postPublishPipeline.js'),
+    ].join('\n');
+    expect(composerSrc).toContain('SET_POLL_EXPIRY');
+    expect(composerSrc).toMatch(/poll:[\s\S]*?closesAt:\s*current\.pollClosesAt/);
     // The voter reward was an unfunded faucet (the server minted it without
     // debiting anyone), so neither the composer nor the payload may carry it.
-    expect(src).not.toContain('rewardCoins');
-    expect(src).not.toContain('pollReward');
+    expect(composerSrc).not.toContain('rewardCoins');
+    expect(composerSrc).not.toContain('pollReward');
   });
 });
 
@@ -277,8 +282,8 @@ describe('post-embedded Q&A is wired end-to-end', () => {
   // `question` as a bare string while the card renders `question.text`, answers
   // lived in a client array nothing read, and no answer control had a handler.
   test('the composer publishes a question object with an answers array', () => {
-    const src = read('src/screens/CreatePost.jsx');
-    expect(src).toMatch(/question: effectiveType === "question" \? \{ text: effectiveText/);
+    const src = read('src/screens/CreatePost/postPublishPipeline.js');
+    expect(src).toMatch(/question:\s*effectiveType === ['"]question['"]\s*\?\s*\{\s*text: effectiveText/);
     expect(src).toContain('answers: []');
   });
 

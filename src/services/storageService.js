@@ -498,7 +498,7 @@ class StorageSecurityService {
     
     // Image-specific validation
     if (file.type.startsWith('image/')) {
-      const imageValidation = this.validateImage(file);
+      const imageValidation = this.validateImage(file, options.maxSize);
       if (!imageValidation.valid) {
         errors.push(...imageValidation.errors);
       }
@@ -616,9 +616,9 @@ class StorageSecurityService {
     return { clean: true };
   }
 
-  validateImage(file) {
+  validateImage(file, maxSizeOverride = null) {
     const errors = [];
-    const maxImageSize = STORAGE_CONFIG.SECURITY.MAX_IMAGE_SIZE;
+    const maxImageSize = maxSizeOverride || STORAGE_CONFIG.SECURITY.MAX_IMAGE_SIZE;
     
     // Check if file is actually an image
     if (!file.type.startsWith('image/')) {
@@ -1091,7 +1091,32 @@ class EnterpriseStorageService {
         this.logger.startUploadLog(uploadId, fileToUpload, options.userId);
         this.activeUploads.set(uploadId, { startTime });
         
+        const signal = options.signal;
+        if (signal?.aborted) {
+          const abortErr = new Error('Upload cancelled');
+          abortErr.name = 'AbortError';
+          abortErr.code = 'storage/canceled';
+          reject(abortErr);
+          return;
+        }
+
         const uploadTask = uploadBytesResumable(storageRef, fileToUpload, fileMetadata);
+        let settled = false;
+        const onAbort = () => {
+          try {
+            uploadTask.cancel();
+          } catch (cancelErr) {
+            this.logger.warn('Upload cancel failed', { uploadId, error: cancelErr?.message });
+          }
+        };
+        if (signal && typeof signal.addEventListener === 'function') {
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
+        const cleanupSignal = () => {
+          if (signal && typeof signal.removeEventListener === 'function') {
+            signal.removeEventListener('abort', onAbort);
+          }
+        };
         let lastProgress = 0;
         let lastUpdate = Date.now();
         
@@ -1124,6 +1149,9 @@ class EnterpriseStorageService {
             }
           },
           (error) => {
+            if (settled) return;
+            settled = true;
+            cleanupSignal();
             this.metrics.errors.count++;
             this.metrics.errors.byType[error.code || 'unknown'] = 
               (this.metrics.errors.byType[error.code || 'unknown'] || 0) + 1;
@@ -1131,6 +1159,14 @@ class EnterpriseStorageService {
             // Fail upload log
             this.logger.failUploadLog(uploadId, error);
             this.activeUploads.delete(uploadId);
+            
+            if (error?.code === 'storage/canceled' || signal?.aborted) {
+              const abortErr = new Error('Upload cancelled');
+              abortErr.name = 'AbortError';
+              abortErr.code = 'storage/canceled';
+              reject(abortErr);
+              return;
+            }
             
             this.logger.error('Upload with progress failed', { 
               operationId,
@@ -1141,8 +1177,11 @@ class EnterpriseStorageService {
             reject(this.enhanceError(error, `Upload failed: ${error.message}`));
           },
           async () => {
+            if (settled) return;
             try {
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              settled = true;
+              cleanupSignal();
               
               // Update metrics
               this.metrics.uploads.count++;
@@ -1174,7 +1213,7 @@ class EnterpriseStorageService {
                 type: fileToUpload.type,
                 originalName: validation.originalName,
                 duration: Date.now() - startTime,
-                transferRate: (fileToUpload.size / (Date.now() - startTime) * 1000).toFixed(2)
+                transferRate: (fileToUpload.size / Math.max(1, Date.now() - startTime) * 1000).toFixed(2)
               };
               
               // Cache upload result
@@ -1191,6 +1230,8 @@ class EnterpriseStorageService {
               resolve(result);
               
             } catch (urlError) {
+              settled = true;
+              cleanupSignal();
               this.metrics.errors.count++;
               
               this.logger.error('Failed to get download URL after upload', { 

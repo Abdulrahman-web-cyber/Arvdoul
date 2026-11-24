@@ -69,7 +69,11 @@ describe('firestoreService - no fabricated cross-platform publish', () => {
     expect(src).not.toContain('Simulating cross-platform publication');
     expect(src).not.toContain('arvdoul_post_');
     // The selection UI collected a value nothing consumed (a dead prop).
-    const createPost = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+    const createPost = [
+      fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8'),
+      fs.readFileSync(path.join(root, 'src/screens/CreatePost/ComposerPanels.jsx'), 'utf8'),
+      fs.readFileSync(path.join(root, 'src/screens/CreatePost/createPostReducer.js'), 'utf8'),
+    ].join('\n');
     expect(createPost).not.toContain('CROSS_PLATFORMS');
     expect(createPost).not.toContain('TOGGLE_CROSS_PLATFORM');
     expect(createPost).not.toContain('CrossPlatformPanel');
@@ -2243,7 +2247,7 @@ describe('Action wiring - buttons call the real service signature', () => {
   test('draft cloud sync uses the real firestoreService signature', () => {
     const s = read('src/screens/CreatePost.jsx');
     // saveDraft(draftId, userId, draftData); get/deleteDraft(draftId).
-    expect(s).toContain('saveDraft(draft.id, userRef.current.uid, draft)');
+    expect(s).toContain('saveDraft(draftPayload.id, uid, draftPayload)');
     expect(s).toContain('getDraft(draftId)');
     expect(s).toContain('deleteDraft(draftId)');
     // The old calls passed (userId, draft) / (userId, draftId) and were silently
@@ -2808,7 +2812,10 @@ describe('Offline status screen reads the real queue, never a fixed count', () =
 });
 
 describe('Composer moderation never claims a pass it did not verify', () => {
-  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+  const src = [
+    fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8'),
+    fs.readFileSync(path.join(root, 'src/screens/CreatePost/ComposerPanels.jsx'), 'utf8'),
+  ].join('\n');
 
   test('a failed moderation call renders an "unavailable" state, not "passed"', () => {
     // The catch branch used to dispatch `{ approved: true, fallback: true }`,
@@ -2820,7 +2827,7 @@ describe('Composer moderation never claims a pass it did not verify', () => {
   });
 
   test('the approval copy is gated on a real approved flag', () => {
-    expect(src).toContain('state.moderationStatus.approved ? "Content passed moderation"');
+    expect(src).toMatch(/state\.moderationStatus\.approved\s*\?[\s\S]*?Content passed moderation/);
   });
 });
 
@@ -3082,7 +3089,7 @@ describe('Audio card media session shows the real author, not a fabricated one (
 
   test('PostCard passes the real author name into AudioCard', () => {
     const s = read('src/screens/PostCard.jsx');
-    expect(s).toContain('<AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />');
+    expect(s).toMatch(/<AudioCard[\s\S]*?authorName=\{post\.authorName\}[\s\S]*?\/>/);
   });
 });
 
@@ -3310,7 +3317,7 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
   });
 
   test('CreatePost analytics preview has no fabricated metrics or growth rate', () => {
-    const s = read('src/screens/CreatePost.jsx');
+    const s = read('src/screens/CreatePost/CreatorInsightsDrawer.jsx');
     expect(s).not.toContain('analyticsData?.totalViews ?? 0');
     expect(s).not.toContain('analyticsData?.coinsEarned ?? 0');
     // `: 12` invented a "+12% this week" growth rate when no delta was known.
@@ -3515,14 +3522,9 @@ describe('A count the ledger did not confirm is unknown, never 0 (N156)', () => 
 });
 
 describe('CreatePost publish fails closed without a real identity', () => {
-  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost/postPublishPipeline.js'), 'utf8');
 
   test('publishPost never mints a synthetic uid or placeholder author name', () => {
-    // The composer once fell back to
-    //   localStorage.getItem("arvdoul_uid") || `user_${Date.now().toString(36)}`
-    // with displayName "Arvdoul Creator" when no session was present, so a post
-    // could be written under a fabricated author that never matches the real
-    // account. It must fail closed instead.
     expect(src).not.toContain('arvdoul_uid');
     expect(src).not.toContain('`user_${Date.now().toString(36)}`');
     expect(src).not.toContain('"Arvdoul Creator"');
@@ -3534,7 +3536,7 @@ describe('Author identity is never fabricated across write + hydrate paths', () 
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
   test('CreatePost derives the author name/handle from real identity only', () => {
-    const src = read('src/screens/CreatePost.jsx');
+    const src = read('src/screens/CreatePost/postPublishPipeline.js');
     expect(src).not.toContain('"Arvdoul User"');
     expect(src).not.toContain('`user_${userNow.uid.slice(0, 8)}`');
     expect(src).toContain('pickDisplayName([userNow.displayName, userNow.name, userNow.username])');
@@ -3627,44 +3629,39 @@ describe('firestoreService.createPost fails closed on identity', () => {
 });
 
 describe('CreatePost media upload fails closed — never persists a session-scoped URL', () => {
-  const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+  const src = [
+    fs.readFileSync(path.join(root, 'src/screens/CreatePost/postMediaPipeline.js'), 'utf8'),
+    fs.readFileSync(path.join(root, 'src/screens/CreatePost/createPostStorage.js'), 'utf8'),
+  ].join('\n');
 
   test('a failed Storage upload does not fall back to a data: URL', () => {
-    // The composer once caught a failed/timed-out upload and persisted a
-    // base64 `data:` URL produced by `convertFileToDataURL`, so the post
-    // rendered only for the uploader, only for that session, and was broken
-    // for everyone else and after any reload.
     expect(src).not.toContain('convertFileToDataURL');
     expect(src).not.toContain('Storage upload fallback to data URL');
-    // The bare 7s Promise.race timeout that turned a slow upload into a
-    // fabricated success is gone; the real Storage timeout governs.
     expect(src).not.toContain('Storage upload timed out');
   });
 
   test('a `blob:`/`data:` URL is never stored as a post media URL', () => {
-    expect(src).toContain("!candidate.startsWith(\"blob:\")");
-    expect(src).toContain("!candidate.startsWith(\"data:\")");
+    expect(src).toMatch(/\.startsWith\(['"]blob:['"]\)/);
+    expect(src).toMatch(/\.startsWith\(['"]data:['"]\)/);
   });
 
   test('uploadMedia surfaces a failure instead of resolving partial media', () => {
     expect(src).toContain('failures.push(');
     expect(src).toContain('if (failures.length > 0)');
     expect(src).toContain('throw new Error(failures[0])');
-    // The background sync no longer swallows an upload failure and writes the
-    // optimistic blob: previews to Firestore.
     expect(src).not.toContain('Background media upload fallback');
   });
 
   test('a generated blob: thumbnail is uploaded or dropped, never persisted', () => {
-    expect(src).toContain('thumbnail.startsWith("blob:")');
-    expect(src).toContain('thumbRes?.downloadURL || null');
+    expect(src).toContain('generateVideoThumbnailBlob');
+    expect(src).toContain('thumbUrl = uploadedThumb.downloadURL');
   });
 
   test('firestoreService.createPost drops blob:/data: media as defense in depth', () => {
     // Even a caller that hand-builds a post must not be able to persist a
     // session-scoped URL into `posts/{id}.media`.
     const svc = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
-    expect(svc).toContain("url.startsWith('blob:') || url.startsWith('data:')");
+    expect(svc).toMatch(/val\.startsWith\(['"]blob:['"]\)\s*\|\|\s*val\.startsWith\(['"]data:['"]\)/);
   });
 });
 
@@ -4738,7 +4735,7 @@ describe('N417 — no generic person-word fallback ("Member"/"Creator") on named
   });
 
   test('the post-prediction panel reports a labeled window, never a fabricated "best time"', () => {
-    const s = read('src/screens/CreatePost.jsx');
+    const s = read('src/screens/CreatePost/ComposerPanels.jsx');
     expect(s).not.toContain('state.insights.bestTime');
     expect(s).not.toContain('Best time:');
     expect(s).toContain('suggestedWindow');
@@ -4765,7 +4762,7 @@ describe('N419 — the composer draft preview and social-context card assert no 
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
   test('the draft preview does not render a measured "0" like/comment count', () => {
-    const s = read('src/screens/CreatePost.jsx');
+    const s = read('src/screens/CreatePost/ComposerPanels.jsx');
     expect(s).not.toContain('{/* Mock interaction footer */}');
     expect(s).toContain('Preview — engagement appears after publishing');
     expect(s).not.toContain('<span>Just now</span>');

@@ -1254,6 +1254,10 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       toast.error('Please sign in to comment');
       return;
     }
+    if (post?.enableComments === false || post?.commentsEnabled === false || post?.allowComments === false) {
+      toast.error('Comments are turned off for this post');
+      return;
+    }
     const activeUser = currentUser;
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const optimistic = {
@@ -1801,34 +1805,41 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
             {/* Typing indicator */}
             <TypingIndicator typingUsers={typingUsers} />
 
-            {/* Reply composer */}
-            {replyTarget && (
-              <div className="border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm p-2">
-                <div className="flex justify-between items-center mb-1 px-2">
-                  <span className="text-xs text-purple-400">Replying to @{resolveActorName([replyTarget.userName], replyTarget.userId)}</span>
-                  <button onClick={() => setReplyTarget(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+            {/* Reply / Main composer */}
+            {post?.enableComments === false || post?.commentsEnabled === false || post?.allowComments === false ? (
+              <div className="px-4 py-3 border-t dark:border-gray-800 text-center text-xs text-gray-500 dark:text-gray-400">
+                Comments are turned off for this post.
+              </div>
+            ) : (
+              <>
+                {replyTarget && (
+                  <div className="border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm p-2">
+                    <div className="flex justify-between items-center mb-1 px-2">
+                      <span className="text-xs text-purple-400">Replying to @{resolveActorName([replyTarget.userName], replyTarget.userId)}</span>
+                      <button onClick={() => setReplyTarget(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <CommentComposer
+                      onSubmit={(content, _, type, blob) => handleSubmitComment(content, replyTarget.id, type, blob)}
+                      loading={false}
+                      placeholder={`Reply to ${resolveActorName([replyTarget.userName], replyTarget.userId)}...`}
+                      onTyping={handleTyping}
+                      currentUser={currentUser}
+                      draftKey={`reply_${replyTarget.id}`}
+                    />
+                  </div>
+                )}
+
                 <CommentComposer
-                  onSubmit={(content, _, type, blob) => handleSubmitComment(content, replyTarget.id, type, blob)}
+                  onSubmit={(content, _, type, blob) => handleSubmitComment(content, null, type, blob)}
                   loading={false}
-                  placeholder={`Reply to ${resolveActorName([replyTarget.userName], replyTarget.userId)}...`}
                   onTyping={handleTyping}
                   currentUser={currentUser}
-                  draftKey={`reply_${replyTarget.id}`}
+                  draftKey={draftKey}
                 />
-              </div>
+              </>
             )}
-
-            {/* Main composer */}
-            <CommentComposer
-              onSubmit={(content, _, type, blob) => handleSubmitComment(content, null, type, blob)}
-              loading={false}
-              onTyping={handleTyping}
-              currentUser={currentUser}
-              draftKey={draftKey}
-            />
 
             {/* Modals */}
             {reportingComment && (

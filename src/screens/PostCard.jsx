@@ -1220,15 +1220,41 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         </div>
       )}
       {isImage && <ImageCard images={post.media} onLike={handleLikeClick} onSave={handleSave} onReport={handleReportImage} postId={post.id} onAnalytics={handleAnalytics} />}
-      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} currentUser={currentUser} onAnalytics={handleAnalytics} />}
-      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} authorName={post.authorName} />}
+      {isVideo && (
+        <VideoCard
+          src={post.media?.[0]?.url || post.videoUrl || post.video?.url}
+          poster={post.media?.[0]?.thumbnail || post.thumbnailUrl || post.video?.thumbnail}
+          isVisible={isVisible}
+          onDoubleTap={handleLikeClick}
+          postId={post.id}
+          currentUser={currentUser}
+          onAnalytics={handleAnalytics}
+        />
+      )}
+      {isAudio && (
+        <AudioCard
+          audio={{
+            ...(post.audio || {}),
+            ...(post.media?.[0] || {}),
+            url: post.media?.[0]?.url || post.audio?.url,
+            name: post.audio?.title || post.media?.[0]?.title || post.media?.[0]?.name || 'Untitled Audio',
+            coverUrl: post.media?.[0]?.coverUrl || post.audio?.coverUrl || post.thumbnailUrl || null,
+          }}
+          isVisible={isVisible}
+          tokens={tokens}
+          postId={post.id}
+          authorName={post.authorName}
+        />
+      )}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
       {isEvent && <EventCard event={post.event} currentUser={currentUser} tokens={tokens} hostName={post.authorName} hostUsername={post.authorUsername} hostVerified={isVerified} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}
-      <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} currentUser={currentUser} />
+      {post.enableComments !== false && post.commentsEnabled !== false && post.allowComments !== false && (
+        <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} currentUser={currentUser} />
+      )}
 
       {/* ENGAGEMENT STATS (simplified – only analytics toggle for creators) */}
       <div className="px-3 py-1 flex justify-end items-center text-sm">
@@ -1315,20 +1341,22 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           </div>
 
           {/* Comment button with bubble */}
-          <button
-            type="button"
-            onClick={() => onOpenComments?.(post)}
-            className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
-            aria-label="Comment"
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span className="text-xs text-white/90">Comment</span>
-            {engagement.commentCount > 0 && (
-              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
-                {formatCount(engagement.commentCount)}
-              </span>
-            )}
-          </button>
+          {post.enableComments !== false && post.commentsEnabled !== false && post.allowComments !== false && (
+            <button
+              type="button"
+              onClick={() => onOpenComments?.(post)}
+              className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
+              aria-label="Comment"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="text-xs text-white/90">Comment</span>
+              {engagement.commentCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full flex items-center justify-center shadow-sm tabular-nums">
+                  {formatCount(engagement.commentCount)}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Share button with bubble */}
           <button
@@ -1358,8 +1386,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <span className="text-xs">Save</span>
           </button>
 
-          {/* Gift button (creator only) — opens the real gift picker */}
-          {isCreator && !isAuthor && (
+          {/* Gift button (creator only, unless disabled on post) */}
+          {isCreator && !isAuthor && post.enableGifts !== false && (
             <button
               type="button"
               onClick={() => setUi(prev => ({ ...prev, showGiftPicker: true }))}

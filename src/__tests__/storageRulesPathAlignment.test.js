@@ -37,14 +37,14 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const CLIENT_WRITE_PATHS = [
   { file: 'src/services/userService.js', path: 'avatars/{uid}/avatar_1' },
   { file: 'src/screens/SetupProfile.jsx', path: 'avatars/{uid}/1_x' },
-  { file: 'src/screens/CreatePost.jsx', path: 'posts/{uid}/1_x' },
+  { file: 'src/screens/CreatePost/postMediaPipeline.js', path: '${folder}/{uid}/1_x', helperPattern: /\$\{folder\}\/\$\{uid\}\// },
   { file: 'src/screens/CreatePost/CreateImage.jsx', path: 'posts/{uid}/1_x' },
   { file: 'src/services/storyService.js', path: 'stories/{uid}/1_x' },
   { file: 'src/services/messagesService.js', path: 'messages/{conversationId}/1_x', participantScoped: true },
-  { file: 'src/screens/CreatePost/CreateVideo.jsx', path: 'videos/{uid}/1_x' },
+  { file: 'src/screens/CreatePost/CreateVideo.jsx', path: 'videos/{uid}/1_x', usesHelperFolder: 'videos' },
   { file: 'src/services/soundService.js', path: 'sounds/{uid}/1_x' },
   { file: 'src/screens/CommentsDrawer.jsx', path: 'comments/{uid}/1_x' },
-  { file: 'src/screens/CreatePost/CreateEvent.jsx', path: 'events/{uid}/1_x' },
+  { file: 'src/screens/CreatePost/CreateEvent.jsx', path: 'events/{uid}/1_x', usesHelperFolder: 'events' },
   { file: 'src/screens/Event/CreateEventScreen.jsx', path: 'events/{uid}/cover_1' },
   { file: 'src/screens/NewConversationScreen.jsx', path: 'group-photos/{uid}/photo_1' },
   { file: 'src/screens/Community/CreateCommunityScreen.jsx', path: 'communities/{uid}/avatar_1' },
@@ -83,9 +83,19 @@ describe('storage.rules ↔ client write paths', () => {
 
   test('each client write site embeds an owner (uid) segment, not a bare namespace', () => {
     const offenders = [];
-    for (const { file, path: tmpl } of CLIENT_WRITE_PATHS) {
-      const ns = tmpl.split('/')[0];
+    for (const entry of CLIENT_WRITE_PATHS) {
+      const { file, path: tmpl, helperPattern, usesHelperFolder } = entry;
       const src = read(file);
+      if (helperPattern) {
+        if (!helperPattern.test(src)) offenders.push(`${file} -> missing owner-scoped helper path`);
+        continue;
+      }
+      if (usesHelperFolder) {
+        const callsHelper = new RegExp(`uploadSingleMediaAsset\\([\\s\\S]*?folder:\\s*['"]${usesHelperFolder}['"][\\s\\S]*?uid`);
+        if (!callsHelper.test(src)) offenders.push(`${file} -> ${usesHelperFolder}/ (missing owner-scoped helper call)`);
+        continue;
+      }
+      const ns = tmpl.split('/')[0];
       // The namespace must be immediately followed by a template interpolation
       // that carries an identity, never a timestamp/random value (which is what
       // the pre-N170 code did: `posts/${Date.now()}_...`).

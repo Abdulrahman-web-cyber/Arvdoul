@@ -1,671 +1,115 @@
 // src/screens/CreatePost.jsx
 
 import React, {
-  useReducer, useEffect, useCallback, useRef, useState,
-  createContext, useContext, useMemo, lazy, Suspense, useId
-} from "react";
-import { useNavigate, useSearchParams, useLocation, useParams } from "react-router-dom";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { toast } from "sonner";
-import { useTheme } from "../context/ThemeContext";
-import { useAuth } from "../context/AuthContext";
-import { useAppStore } from "../store/appStore";
-import { openDB } from "idb";
-import { v4 as uuidv4 } from "uuid";
-import * as Icons from "lucide-react";
-import DOMPurify from "dompurify";
-import { produce } from "immer";
-import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
-import { ErrorBoundary } from "../components/ErrorBoundary.jsx";
-import { CreatePostSkeleton } from "../components/UI/SkeletonLoaders.jsx";
-import { callFunction, FUNCTIONS } from "../services/callableService.js";
-import { usePrompt } from "../components/Shared/ConfirmProvider.jsx";
+  useReducer,
+  useEffect,
+  useCallback,
+  useRef,
+  useState,
+  useMemo,
+  lazy,
+  Suspense,
+} from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { toast } from 'sonner';
+import * as Icons from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import LoadingSpinner from '../components/Shared/LoadingSpinner.jsx';
+import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
+import { CreatePostSkeleton } from '../components/UI/SkeletonLoaders.jsx';
+import { callFunction, FUNCTIONS } from '../services/callableService.js';
+import { usePrompt } from '../components/Shared/ConfirmProvider.jsx';
+import { Virtuoso } from 'react-virtuoso';
+import { getFirestoreService } from '../services/firestoreService';
+import { getStorageService } from '../services/storageService';
+import { getSearchService } from '../services/searchService';
+import { getFeedService } from '../services/feedService';
+import { getUserService } from '../services/userService';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
+import {
+  ServicesContext,
+  StateContext,
+  useCreatePostServices,
+  useCreatePostState,
+} from './CreatePost/CreatePostContext.jsx';
+import {
+  POST_TYPES,
+  VISIBILITY_OPTIONS,
+  MEDIA_LIMITS,
+  SURFACE_GLASS_CLASS,
+  MEDIA_BLOB_STORE,
+} from './CreatePost/createPostConstants.js';
+import {
+  initialState,
+  reducer,
+  canProceedForState,
+} from './CreatePost/createPostReducer.js';
+import {
+  openCreatePostDB,
+  storeBlobWithDedup,
+  getOwnedBlob,
+  listDraftsForOwner,
+  getDraftForOwner,
+  saveDraftRecord,
+  deleteDraftRecord,
+  listDraftVersionsForOwner,
+  listTemplatesForOwner,
+  saveTemplateRecord,
+  getTemplateForOwner,
+  listOfflineQueueForOwner,
+  getOfflineQueueItemForOwner,
+  putOfflineQueueItem,
+  deleteOfflineQueueItem,
+  stripEphemeralUrlsFromMediaItems,
+} from './CreatePost/createPostStorage.js';
+import { uploadComposerMedia } from './CreatePost/postMediaPipeline.js';
+import { executePostPublish } from './CreatePost/postPublishPipeline.js';
+import {
+  Modal,
+  VisibilityPanel,
+  LocationPanel,
+  SchedulingPanel,
+  InsightsPanel,
+  ModerationStatus,
+  ReviewSummary,
+} from './CreatePost/ComposerPanels.jsx';
+import CreatorInsightsDrawer from './CreatePost/CreatorInsightsDrawer.jsx';
+import EditPostLoader from './CreatePost/EditPostLoader.jsx';
 
-// Lazy‑loaded editors
-const CreateText = lazy(() => import("./CreatePost/CreateText"));
-const CreateImage = lazy(() => import("./CreatePost/CreateImage"));
-const CreateVideo = lazy(() => import("./CreatePost/CreateVideo"));
-const CreatePoll = lazy(() => import("./CreatePost/CreatePoll"));
-const CreateQuestion = lazy(() => import("./CreatePost/CreateQuestion"));
-const CreateLink = lazy(() => import("./CreatePost/CreateLink"));
-const CreateAudio = lazy(() => import("./CreatePost/CreateAudio"));
-const CreateEvent = lazy(() => import("./CreatePost/CreateEvent"));
-
-const DateTimePicker = lazy(() => import("react-datepicker"));
-import "react-datepicker/dist/react-datepicker.css";
-
-import { Virtuoso } from "react-virtuoso";
-
-// Services
-import { getFirestoreService } from "../services/firestoreService";
-import { getStorageService } from "../services/storageService";
-import { getSearchService } from "../services/searchService";
-import { getVideoService } from "../services/videoService";
-import { getStoryService } from "../services/storyService";
-import { getNotificationsService } from "../services/notificationsService";
-import { getFeedService } from "../services/feedService";
-import { getUserService } from "../services/userService";
-import { LOCAL_POSTS_KEY } from "../utils/localContentCache.js";
-import { pickDisplayName, deriveHandle } from "../services/profileReadModel.js";
-import { BRAND_GRADIENT, tokens } from "../design-system/tokens.js";
-import { LazyImage } from '../components/Shared/LazyImage';
-
-// ── CONSTANTS & DESIGN TOKENS ──────────────────────────────────────────
-const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
-const DRAFT_DB_NAME = "arvdoul_create_post_v6";
-const OFFLINE_QUEUE_STORE = "offline_queue";
-const MEDIA_BLOB_STORE = "media_blobs";
-const BLOB_HASH_STORE = "blob_hashes";
-const VERSIONS_STORE = "draft_versions";
-const TEMPLATES_STORE = "templates";
-
-const INPUT_CLASS =
-  "w-full p-2.5 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-arvdoul-purple focus:outline-none";
-
-// ── EXACT CUSTOM SVG ICONS (100 % as provided, unique IDs) ─────────────
-const makeIconComponent = (renderSvg) => {
-  const Comp = () => {
-    const uid = useId().replace(/:/g, "");
-    return renderSvg(uid);
-  };
-  return Comp;
+export {
+  useCreatePostServices,
+  useCreatePostState,
+  VISIBILITY_OPTIONS,
+  MEDIA_LIMITS,
+  POST_TYPES,
+  VisibilityPanel,
+  LocationPanel,
+  SchedulingPanel,
+  InsightsPanel,
+  ModerationStatus,
+  ReviewSummary,
 };
 
-const PhotoIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <linearGradient id={`glass-${uid}`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.40"/>
-        <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.10"/>
-        <stop offset="100%" stopColor="#000000" stopOpacity="0.35"/>
-      </linearGradient>
-      <radialGradient id={`lens-${uid}`}>
-        <stop offset="0%" stopColor="#EAFBFF"/>
-        <stop offset="25%" stopColor="#7FE7FF"/>
-        <stop offset="55%" stopColor="#1B8CFF"/>
-        <stop offset="100%" stopColor="#050816"/>
-      </radialGradient>
-      <radialGradient id={`core-${uid}`}>
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1"/>
-        <stop offset="30%" stopColor="#9BE9FF" stopOpacity="0.55"/>
-        <stop offset="70%" stopColor={tokens.color.brand.cyan} stopOpacity="0.12"/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan} stopOpacity="0"/>
-      </radialGradient>
-      <filter id={`shadow-${uid}`} x="-60%" y="-60%" width="220%" height="220%">
-        <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="#000000" floodOpacity="0.55"/>
-      </filter>
-      <filter id={`glow-${uid}`}>
-        <feGaussianBlur stdDeviation="5" result="b"/>
-        <feMerge>
-          <feMergeNode in="b"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-      <filter id={`inner-${uid}`}>
-        <feOffset dx="0" dy="2"/>
-        <feGaussianBlur stdDeviation="3" result="b"/>
-        <feComposite in="SourceGraphic" in2="b" operator="arithmetic" k2="-1" k3="1"/>
-      </filter>
-    </defs>
-    <rect x="10" y="20" width="100" height="80" rx="28" fill={`url(#g-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <rect x="10" y="20" width="100" height="80" rx="28" fill={`url(#glass-${uid})`}/>
-    <rect x="12" y="22" width="96" height="76" rx="26" fill="none" stroke="#FFFFFF" strokeOpacity="0.16"/>
-    <rect x="18" y="28" width="84" height="10" rx="5" fill="#FFFFFF" opacity="0.16"/>
-    <rect x="22" y="30" width="42" height="6" rx="3" fill="#FFFFFF" opacity="0.10"/>
-    <circle cx="92" cy="33" r="2" fill="#7FE7FF" opacity="0.75"/>
-    <circle cx="60" cy="62" r="38" fill="none" stroke={tokens.color.brand.cyan} strokeOpacity="0.18" strokeWidth="2" filter={`url(#glow-${uid})`}/>
-    <circle cx="60" cy="62" r="34" fill="none" stroke={tokens.color.brand.blue} strokeOpacity="0.10" strokeWidth="2"/>
-    <circle cx="60" cy="62" r="33" fill="#050A14" filter={`url(#inner-${uid})`}/>
-    <circle cx="60" cy="62" r="26" fill={`url(#lens-${uid})`}/>
-    <circle cx="60" cy="62" r="21" fill="none" stroke="#BFEFFF" strokeOpacity="0.22" strokeWidth="2"/>
-    <circle cx="60" cy="62" r="17" fill="none" stroke={tokens.color.brand.cyan} strokeOpacity="0.14" strokeWidth="1.5"/>
-    <circle cx="60" cy="62" r="13" fill="#061022"/>
-    <circle cx="60" cy="62" r="11" fill={`url(#core-${uid})`}/>
-    <circle cx="53" cy="55" r="5" fill="#FFFFFF" opacity="0.25"/>
-    <circle cx="66" cy="50" r="2.5" fill="#FFFFFF" opacity="0.18"/>
-    <circle cx="63" cy="67" r="2" fill="#7FE7FF" opacity="0.3"/>
-    <rect x="48" y="58" width="24" height="1" fill="#7FE7FF" opacity="0.10"/>
-    <rect x="50" y="64" width="20" height="1" fill="#7FE7FF" opacity="0.08"/>
-    <rect x="44" y="18" width="32" height="6" rx="3" fill="#FFFFFF" opacity="0.12"/>
-  </svg>
-));
+// Lazy-loaded editors
+const CreateText = lazy(() => import('./CreatePost/CreateText'));
+const CreateImage = lazy(() => import('./CreatePost/CreateImage'));
+const CreateVideo = lazy(() => import('./CreatePost/CreateVideo'));
+const CreatePoll = lazy(() => import('./CreatePost/CreatePoll'));
+const CreateQuestion = lazy(() => import('./CreatePost/CreateQuestion'));
+const CreateLink = lazy(() => import('./CreatePost/CreateLink'));
+const CreateAudio = lazy(() => import('./CreatePost/CreateAudio'));
+const CreateEvent = lazy(() => import('./CreatePost/CreateEvent'));
 
-const EventIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <linearGradient id={`glass-${uid}`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.28"/>
-        <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0.08"/>
-        <stop offset="100%" stopColor="#000000" stopOpacity="0.40"/>
-      </linearGradient>
-      <radialGradient id={`corePulse-${uid}`}>
-        <stop offset="0%" stopColor="#7FE7FF" stopOpacity="0.95"/>
-        <stop offset="40%" stopColor={tokens.color.brand.blue} stopOpacity="0.25"/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan} stopOpacity="0"/>
-      </radialGradient>
-      <filter id={`shadow-${uid}`} x="-60%" y="-60%" width="220%" height="220%">
-        <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="#000000" floodOpacity="0.55"/>
-      </filter>
-      <filter id={`glow-${uid}`}>
-        <feGaussianBlur stdDeviation="4" result="b"/>
-        <feMerge>
-          <feMergeNode in="b"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-      <filter id={`inner-${uid}`}>
-        <feOffset dx="0" dy="2"/>
-        <feGaussianBlur stdDeviation="3" result="b"/>
-        <feComposite in="SourceGraphic" in2="b" operator="arithmetic" k2="-1" k3="1"/>
-      </filter>
-    </defs>
-    <rect x="14" y="16" width="92" height="88" rx="26" fill={`url(#g-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <rect x="14" y="16" width="92" height="88" rx="26" fill={`url(#glass-${uid})`}/>
-    <rect x="22" y="24" width="76" height="14" rx="7" fill="#FFFFFF" opacity="0.14"/>
-    <circle cx="32" cy="31" r="3" fill="#7FE7FF" opacity="0.9"/>
-    <circle cx="88" cy="31" r="3" fill="#FF4FD8" opacity="0.8"/>
-    <rect x="24" y="42" width="72" height="56" rx="18" fill="#08101A" opacity="0.65" filter={`url(#inner-${uid})`}/>
-    <rect x="24" y="60" width="72" height="1" fill="#FFFFFF" opacity="0.06"/>
-    <rect x="40" y="42" width="1" height="56" fill="#FFFFFF" opacity="0.06"/>
-    <rect x="64" y="42" width="1" height="56" fill="#FFFFFF" opacity="0.06"/>
-    <circle cx="60" cy="66" r="16" fill={`url(#corePulse-${uid})`} filter={`url(#glow-${uid})`}/>
-    <circle cx="60" cy="66" r="9" fill="#7FE7FF"/>
-    <circle cx="60" cy="66" r="3.5" fill="#FFFFFF"/>
-    <circle cx="38" cy="52" r="3.2" fill={tokens.color.brand.violet} filter={`url(#glow-${uid})`}/>
-    <circle cx="82" cy="52" r="3.2" fill={tokens.color.brand.blue} filter={`url(#glow-${uid})`}/>
-    <circle cx="38" cy="78" r="3.2" fill={tokens.color.brand.cyan} filter={`url(#glow-${uid})`}/>
-    <circle cx="82" cy="78" r="3.2" fill="#7FE7FF" filter={`url(#glow-${uid})`}/>
-    <rect x="38" y="52" width="44" height="1" fill="#7FE7FF" opacity="0.08"/>
-    <rect x="38" y="78" width="44" height="1" fill={tokens.color.brand.blue} opacity="0.06"/>
-    <circle cx="60" cy="52" r="2" fill="#FFFFFF" opacity="0.35"/>
-    <circle cx="60" cy="78" r="2" fill="#FFFFFF" opacity="0.25"/>
-    <rect x="36" y="100" width="48" height="4" rx="2" fill="#FFFFFF" opacity="0.12"/>
-  </svg>
-));
-
-const QuestionIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`arvdoul-gradient-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <radialGradient id={`core-bg-${uid}`} cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#0F1A33"/>
-        <stop offset="70%" stopColor="#070D1F"/>
-        <stop offset="100%" stopColor="#03060D"/>
-      </radialGradient>
-      <radialGradient id={`dot-glow-${uid}`} cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#7FE7FF" stopOpacity="1"/>
-        <stop offset="45%" stopColor={tokens.color.brand.blue} stopOpacity="0.35"/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan} stopOpacity="0"/>
-      </radialGradient>
-      <filter id={`shadow-${uid}`} x="-25%" y="-15%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="#000000" floodOpacity="0.6"/>
-      </filter>
-      <filter id={`glow-${uid}`} x="-40%" y="-40%" width="180%" height="180%">
-        <feGaussianBlur stdDeviation="2.2" result="b"/>
-        <feMerge>
-          <feMergeNode in="b"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-    </defs>
-    <circle cx="60" cy="60" r="52" fill={`url(#arvdoul-gradient-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <circle cx="60" cy="60" r="43.5" fill={`url(#core-bg-${uid})`}/>
-    <path d="M 46 44 C 46 33 57 27 66 30 C 74 33 76 42 71 48 C 65 55 60 59 60 68" fill="none" stroke={`url(#arvdoul-gradient-${uid})`} strokeWidth="9.2" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M 46 44 C 46 33 57 27 66 30 C 74 33 76 42 71 48 C 65 55 60 59 60 68" fill="none" stroke="#7FE7FF" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" opacity="0.28"/>
-    <circle cx="60" cy="86" r="9" fill={`url(#dot-glow-${uid})`} filter={`url(#glow-${uid})`}/>
-    <circle cx="60" cy="86" r="4.6" fill="#7FE7FF"/>
-    <circle cx="60" cy="86" r="2" fill="#FFFFFF"/>
-  </svg>
-));
-
-const PollIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`arvdoul-gradient-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <linearGradient id={`glass-highlight-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.24"/>
-        <stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.10"/>
-        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0"/>
-      </linearGradient>
-      <filter id={`depth-${uid}`} x="-25%" y="-20%" width="150%" height="160%">
-        <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#000000" floodOpacity="0.22"/>
-      </filter>
-    </defs>
-    <rect x="18" y="62" width="20" height="38" rx="10" fill={`url(#arvdoul-gradient-${uid})`} filter={`url(#depth-${uid})`}/>
-    <rect x="21" y="65" width="4.5" height="30" rx="2.25" fill={`url(#glass-highlight-${uid})`}/>
-    <rect x="50" y="24" width="20" height="76" rx="10" fill={`url(#arvdoul-gradient-${uid})`} filter={`url(#depth-${uid})`}/>
-    <rect x="53" y="27" width="4.5" height="66" rx="2.25" fill={`url(#glass-highlight-${uid})`}/>
-    <rect x="82" y="42" width="20" height="58" rx="10" fill={`url(#arvdoul-gradient-${uid})`} filter={`url(#depth-${uid})`}/>
-    <rect x="85" y="45" width="4.5" height="48" rx="2.25" fill={`url(#glass-highlight-${uid})`}/>
-  </svg>
-));
-
-const TextIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <linearGradient id={`glass-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.24"/>
-        <stop offset="40%" stopColor="#FFFFFF" stopOpacity="0.08"/>
-        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0"/>
-      </linearGradient>
-      <filter id={`depth-${uid}`} x="-20%" y="-20%" width="140%" height="150%">
-        <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#000000" floodOpacity="0.22"/>
-      </filter>
-    </defs>
-    <rect x="14" y="14" width="92" height="92" rx="24" fill={`url(#g-${uid})`} filter={`url(#depth-${uid})`}/>
-    <rect x="18" y="18" width="84" height="13" rx="6.5" fill={`url(#glass-${uid})`}/>
-    <rect x="28" y="37" width="64" height="10" rx="5" fill="#07101A" opacity="0.50"/>
-    <rect x="28" y="55" width="48" height="10" rx="5" fill="#07101A" opacity="0.50"/>
-    <rect x="28" y="73" width="58" height="10" rx="5" fill="#07101A" opacity="0.50"/>
-  </svg>
-));
-
-const VideoIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <radialGradient id={`glass-${uid}`} cx="35%" cy="30%" r="70%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.35"/>
-        <stop offset="35%" stopColor="#7FE7FF" stopOpacity="0.18"/>
-        <stop offset="100%" stopColor="#050914" stopOpacity="0"/>
-      </radialGradient>
-      <radialGradient id={`core-${uid}`} cx="50%" cy="50%" r="60%">
-        <stop offset="0%" stopColor="#121C36"/>
-        <stop offset="70%" stopColor="#070D1F"/>
-        <stop offset="100%" stopColor="#050914"/>
-      </radialGradient>
-      <linearGradient id={`edge-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.18"/>
-        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0"/>
-      </linearGradient>
-      <filter id={`shadow-${uid}`} x="-25%" y="-25%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#000000" floodOpacity="0.45"/>
-      </filter>
-      <filter id={`soft-${uid}`} x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur stdDeviation="1.6" result="b"/>
-        <feMerge>
-          <feMergeNode in="b"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-    </defs>
-    <circle cx="60" cy="60" r="52" fill={`url(#g-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <circle cx="60" cy="60" r="44" fill={`url(#glass-${uid})`}/>
-    <circle cx="60" cy="60" r="41.5" fill={`url(#core-${uid})`}/>
-    <circle cx="60" cy="60" r="30" fill="none" stroke={`url(#edge-${uid})`} strokeWidth="2" opacity="0.6"/>
-    <path d="M54 44 L84 60 L54 76 Z" fill={`url(#g-${uid})`}/>
-    <path d="M57 50 L74 60 L57 70 Z" fill="#FFFFFF" opacity="0.12" filter={`url(#soft-${uid})`}/>
-    <circle cx="50" cy="40" r="18" fill="#7FE7FF" opacity="0.08"/>
-  </svg>
-));
-
-const AudioIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <radialGradient id={`glass-${uid}`} cx="42%" cy="32%" r="70%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30"/>
-        <stop offset="45%" stopColor="#7FE7FF" stopOpacity="0.12"/>
-        <stop offset="100%" stopColor="#050914" stopOpacity="0"/>
-      </radialGradient>
-      <radialGradient id={`core-${uid}`} cx="50%" cy="50%" r="60%">
-        <stop offset="0%" stopColor="#121C36"/>
-        <stop offset="70%" stopColor="#070D1F"/>
-        <stop offset="100%" stopColor="#050914"/>
-      </radialGradient>
-      <filter id={`shadow-${uid}`} x="-20%" y="-20%" width="140%" height="150%">
-        <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000000" floodOpacity="0.28"/>
-      </filter>
-      <filter id={`soft-${uid}`} x="-25%" y="-25%" width="150%" height="150%">
-        <feGaussianBlur stdDeviation="1.15" result="b"/>
-        <feMerge>
-          <feMergeNode in="b"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-    </defs>
-    <circle cx="60" cy="60" r="52" fill={`url(#g-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <circle cx="60" cy="60" r="44" fill={`url(#glass-${uid})`}/>
-    <circle cx="60" cy="60" r="41.5" fill={`url(#core-${uid})`}/>
-    <rect x="26" y="60" width="10" height="22" rx="5" fill={`url(#g-${uid})`}/>
-    <rect x="28" y="62" width="3" height="16" rx="1.5" fill="#FFFFFF" opacity="0.18"/>
-    <rect x="42" y="44" width="10" height="54" rx="5" fill={`url(#g-${uid})`}/>
-    <rect x="44" y="46" width="3" height="46" rx="1.5" fill="#FFFFFF" opacity="0.18"/>
-    <rect x="55" y="30" width="10" height="70" rx="5" fill={`url(#g-${uid})`}/>
-    <rect x="57" y="32" width="3" height="62" rx="1.5" fill="#FFFFFF" opacity="0.18"/>
-    <rect x="68" y="44" width="10" height="54" rx="5" fill={`url(#g-${uid})`}/>
-    <rect x="70" y="46" width="3" height="46" rx="1.5" fill="#FFFFFF" opacity="0.18"/>
-    <rect x="84" y="60" width="10" height="22" rx="5" fill={`url(#g-${uid})`}/>
-    <rect x="86" y="62" width="3" height="16" rx="1.5" fill="#FFFFFF" opacity="0.18"/>
-    <ellipse cx="60" cy="40" rx="18" ry="14" fill="#7FE7FF" opacity="0.06" filter={`url(#soft-${uid})`}/>
-  </svg>
-));
-
-const VibeIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <radialGradient id={`glass-${uid}`} cx="40%" cy="30%" r="70%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30"/>
-        <stop offset="50%" stopColor="#7FE7FF" stopOpacity="0.10"/>
-        <stop offset="100%" stopColor="#050914" stopOpacity="0"/>
-      </radialGradient>
-      <radialGradient id={`core-${uid}`} cx="50%" cy="50%" r="60%">
-        <stop offset="0%" stopColor="#0F1A33"/>
-        <stop offset="75%" stopColor="#070D1F"/>
-        <stop offset="100%" stopColor="#050914"/>
-      </radialGradient>
-      <filter id={`shadow-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#000000" floodOpacity="0.35"/>
-      </filter>
-      <filter id={`soft-${uid}`} x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur stdDeviation="1.2"/>
-      </filter>
-    </defs>
-    <circle cx="60" cy="60" r="52" fill={`url(#g-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <circle cx="60" cy="60" r="46" fill="none" stroke={`url(#g-${uid})`} strokeWidth="7" strokeLinecap="round" strokeDasharray="18 10 22 10 26 10 22 10 18" opacity="0.95"/>
-    <circle cx="60" cy="60" r="41" fill={`url(#glass-${uid})`}/>
-    <circle cx="60" cy="60" r="37" fill={`url(#core-${uid})`}/>
-    <circle cx="60" cy="60" r="18" fill="none" stroke={`url(#g-${uid})`} strokeWidth="6" opacity="0.9"/>
-    <circle cx="60" cy="60" r="7" fill="#7FE7FF"/>
-    <ellipse cx="50" cy="42" rx="18" ry="14" fill="#7FE7FF" opacity="0.07" filter={`url(#soft-${uid})`}/>
-  </svg>
-));
-
-const LinkIcon = makeIconComponent((uid) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
-    <defs>
-      <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor={tokens.color.brand.violet}/>
-        <stop offset="35%" stopColor={tokens.color.brand.indigo}/>
-        <stop offset="70%" stopColor={tokens.color.brand.blue}/>
-        <stop offset="100%" stopColor={tokens.color.brand.cyan}/>
-      </linearGradient>
-      <radialGradient id={`glass-${uid}`} cx="40%" cy="30%" r="70%">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.25"/>
-        <stop offset="55%" stopColor="#7FE7FF" stopOpacity="0.10"/>
-        <stop offset="100%" stopColor="#050914" stopOpacity="0"/>
-      </radialGradient>
-      <filter id={`shadow-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#000000" floodOpacity="0.35"/>
-      </filter>
-    </defs>
-    <circle cx="60" cy="60" r="52" fill={`url(#g-${uid})`} filter={`url(#shadow-${uid})`}/>
-    <circle cx="60" cy="60" r="44" fill={`url(#glass-${uid})`}/>
-    <circle cx="60" cy="60" r="40" fill="#070D1F"/>
-    <rect x="26" y="48" width="36" height="24" rx="12" fill="none" stroke={`url(#g-${uid})`} strokeWidth="8"/>
-    <rect x="58" y="48" width="36" height="24" rx="12" fill="none" stroke={`url(#g-${uid})`} strokeWidth="8"/>
-    <rect x="52" y="56" width="16" height="8" rx="4" fill={`url(#g-${uid})`}/>
-    <rect x="54" y="58" width="12" height="4" rx="2" fill="#7FE7FF" opacity="0.6"/>
-  </svg>
-));
-
-const POST_TYPES = [
-  { id: "text", label: "Text", icon: TextIcon, subtitle: "Write your thoughts" },
-  { id: "image", label: "Photo", icon: PhotoIcon, subtitle: "Share moments" },
-  { id: "video", label: "Video", icon: VideoIcon, subtitle: "Record & share" },
-  { id: "vibe", label: "Vibe", icon: VibeIcon, isStory: true, subtitle: "Capture the moment" },
-  { id: "poll", label: "Poll", icon: PollIcon, subtitle: "Get opinions" },
-  { id: "question", label: "Questions", icon: QuestionIcon, subtitle: "Ask anything" },
-  { id: "link", label: "Links", icon: LinkIcon, subtitle: "Share resources" },
-  { id: "audio", label: "Audio", icon: AudioIcon, subtitle: "Sound & voice" },
-  { id: "event", label: "Events", icon: EventIcon, subtitle: "Plan together" },
-];
-
-// Only scopes with a real backing model are offered. `close_friends`,
-// `subscribers` and `custom_list` had no list/edge/tier collection and no
-// management UI, so choosing them produced a post nobody (or everybody) could
-// see; they are withheld until the model exists.
-const VISIBILITY_OPTIONS = [
-  { value: "public", label: "Public" },
-  { value: "followers", label: "Followers" },
-  { value: "friends", label: "Friends" },
-  { value: "only_me", label: "Only Me" },
-];
-
-const MEDIA_LIMITS = {
-  maxImages: 10,
-  maxVideos: 1,
-  maxVideoDurationSec: 600,
-  maxFileSizeMB: 100,
-  maxTotalMediaCount: 10,
-};
-
-// ── UTIL: SHA‑256 ──────────────────────────────────────────────────────
-async function sha256(blob) {
-  const buffer = await blob.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-// ── REDUCER (identical, stable) ────────────────────────────────────────
-const initialState = {
-  postType: null,
-  content: "",
-  contentJSON: null,
-  mediaItems: [],
-  visibility: "public",
-  location: null,
-  hashtags: [],
-  scheduledTime: null,
-  typeData: {
-    poll: { options: [], allowMultiple: false },
-    event: {
-      date: null, location: "", locationData: null, description: "",
-      coverImage: "", rsvpEnabled: false, capacity: null, timezone: null,
-    },
-    link: { url: "", title: "", metadata: null, thumbnail: "" },
-    audio: { file: null, url: "", previewUrl: null, coverUrl: null, title: "", artist: "", genre: "", sourceSoundId: null },
-    video: { file: null },
-  },
-  pollClosesAt: null,
-  step: 1,
-  loading: false,
-  progress: 0,
-  error: null,
-  draftId: null,
-  isDraftLoaded: false,
-  isDirty: false,
-  insights: null,
-  moderationStatus: null,
-  aiCaption: null,
-  aiHashtags: null,
-  isContentReady: false,
-  _past: [],
-  _future: [],
-};
-
-function reducer(state, action) {
-  if (action.type === "UNDO") {
-    if (state._past.length === 0) return state;
-    const previous = state._past[state._past.length - 1];
-    const newPast = state._past.slice(0, -1);
-    return { ...previous, _past: newPast, _future: [state, ...state._future] };
-  }
-  if (action.type === "REDO") {
-    if (state._future.length === 0) return state;
-    const next = state._future[0];
-    const newFuture = state._future.slice(1);
-    return { ...next, _past: [...state._past, state], _future: newFuture };
-  }
-
-  const newState = produce(state, (draft) => {
-    let pushHistory = false;
-    switch (action.type) {
-      case "SET_POST_TYPE": draft.postType = action.payload; draft.step = 1; draft.isDraftLoaded = false; pushHistory = true; break;
-      case "SET_CONTENT": draft.content = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_CONTENT_JSON": draft.contentJSON = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_MEDIA_ITEMS": draft.mediaItems = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "ADD_MEDIA_ITEMS": {
-        const newItems = action.payload.filter(m => {
-          if (m.type === "image" && draft.mediaItems.filter(i => i.type === "image").length >= MEDIA_LIMITS.maxImages) { toast.error(`Max ${MEDIA_LIMITS.maxImages} images`); return false; }
-          if (m.type === "video" && draft.mediaItems.filter(i => i.type === "video").length >= MEDIA_LIMITS.maxVideos) { toast.error(`Max ${MEDIA_LIMITS.maxVideos} video`); return false; }
-          return true;
-        });
-        if (draft.mediaItems.length + newItems.length > MEDIA_LIMITS.maxTotalMediaCount) { toast.error(`Maximum ${MEDIA_LIMITS.maxTotalMediaCount} media items`); return; }
-        draft.mediaItems.push(...newItems); draft.isDirty = true; pushHistory = true; break;
-      }
-      case "UPDATE_MEDIA_ITEM": {
-        const idx = action.payload?.id !== undefined
-          ? draft.mediaItems.findIndex(m => m.id === action.payload.id)
-          : (typeof action.payload?.index === "number" ? action.payload.index : -1);
-        if (idx >= 0 && idx < draft.mediaItems.length) {
-          draft.mediaItems[idx] = { ...draft.mediaItems[idx], ...action.payload.updates };
-          pushHistory = true;
-        }
-        break;
-      }
-      case "REMOVE_MEDIA_ITEM": draft.mediaItems.splice(action.payload, 1); draft.isDirty = true; pushHistory = true; break;
-      case "REORDER_MEDIA": { const [removed] = draft.mediaItems.splice(action.payload.from, 1); draft.mediaItems.splice(action.payload.to, 0, removed); draft.isDirty = true; pushHistory = true; break; }
-      case "SET_VISIBILITY": draft.visibility = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_LOCATION": draft.location = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_HASHTAGS": draft.hashtags = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_SCHEDULED_TIME": draft.scheduledTime = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_EVENT_DATE": draft.typeData.event.date = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_EVENT_LOCATION": draft.typeData.event.location = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_LINK_TITLE": draft.typeData.link.title = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_TYPE_DATA": {
-        // Deep-merge per-type data (CreateAudio dispatches the whole audio
-        // sub-object). A plain assign would drop sibling keys, so merge one
-        // level down and only for the keys the caller sends.
-        const patch = action.payload || {};
-        for (const [typeKey, value] of Object.entries(patch)) {
-          if (value && typeof value === "object" && !Array.isArray(value)) {
-            draft.typeData[typeKey] = { ...(draft.typeData[typeKey] || {}), ...value };
-          } else {
-            draft.typeData[typeKey] = value;
-          }
-        }
-        draft.isDirty = true;
-        pushHistory = true;
-        break;
-      }
-      // Timezone/locationData/metadata are derived or scraped, not edits the
-      // user made, so they must not flip the draft to "dirty" (CreateEvent
-      // dispatches the timezone on mount).
-      case "SET_EVENT_TIMEZONE": draft.typeData.event.timezone = action.payload; break;
-      case "SET_EVENT_LOCATION_DATA": draft.typeData.event.locationData = action.payload; break;
-      case "SET_EVENT_COVER": draft.typeData.event.coverImage = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_EVENT_DESCRIPTION": draft.typeData.event.description = action.payload; draft.isDirty = true; pushHistory = true; break;
-      case "SET_EVENT_RSVP": draft.typeData.event.rsvpEnabled = action.payload; draft.isDirty = true; break;
-      case "SET_EVENT_CAPACITY": draft.typeData.event.capacity = action.payload; draft.isDirty = true; break;
-      case "SET_LINK_METADATA": draft.typeData.link.metadata = action.payload; break;
-      case "SET_LINK_THUMBNAIL": draft.typeData.link.thumbnail = action.payload; draft.isDirty = true; break;
-      case "SET_STEP": draft.step = action.payload; break;
-      case "SET_LOADING": draft.loading = action.payload; break;
-      case "SET_PROGRESS": draft.progress = action.payload; break;
-      case "SET_ERROR": draft.error = action.payload; break;
-      case "SET_DRAFT_ID": draft.draftId = action.payload; break;
-      case "SET_IS_DIRTY": draft.isDirty = action.payload; break;
-      case "SET_INSIGHTS": draft.insights = action.payload; break;
-      case "SET_MODERATION_STATUS": draft.moderationStatus = action.payload; break;
-      case "SET_AI_CAPTION": draft.aiCaption = action.payload; break;
-      case "SET_AI_HASHTAGS": draft.aiHashtags = action.payload; break;
-      case "SET_CONTENT_READY": draft.isContentReady = action.payload; break;
-      case "LOAD_DRAFT": {
-        const { _past, _future, ...cleanState } = structuredClone(state);
-        Object.assign(draft, action.payload);
-        draft.isDraftLoaded = true;
-        draft.draftId = action.payload.draftId || null;
-        draft.isDirty = false;
-        draft._past = [cleanState];
-        draft._future = [];
-        draft.isContentReady = !!(draft.content || draft.mediaItems.length);
-        break;
-      }
-      case "RESET": return { ...initialState, postType: draft.postType };
-      case "CLEAR_ERROR": draft.error = null; break;
-      default: break;
-    }
-    if (pushHistory) {
-      const { _past, _future, ...rest } = state;
-      draft._past = [...state._past, rest];
-      if (draft._past.length > 50) draft._past.shift();
-      draft._future = [];
-    }
-  });
-  return newState;
-}
-
-// ── CONTEXTS ────────────────────────────────────────────────────────────
-const ServicesContext = createContext();
-const StateContext = createContext();
-
-export const useCreatePostServices = () => {
-  const ctx = useContext(ServicesContext);
-  if (!ctx) throw new Error("useCreatePostServices must be used within CreatePostProvider");
-  return ctx;
-};
-
-export const useCreatePostState = () => {
-  const ctx = useContext(StateContext);
-  if (!ctx) throw new Error("useCreatePostState must be used within CreatePostProvider");
-  return ctx;
-};
-
-// ── PROVIDER (ALL LOGIC, FULLY INTEGRATED) ─────────────────────────────
 function CreatePostProvider({ children }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  // CommunityDetailScreen links to /create-post?community=<id>. Nothing read
-  // the param, so a post composed from a community landed in the public feed
-  // and the server-authoritative createCommunityPost callable was never
-  // invoked (membership + content-approval + the community counters all live
-  // there). Capture it and route the publish through the callable.
   const communityIdParam = searchParams.get('community') || null;
   const { theme } = useTheme();
   const { user } = useAuth();
   const promptDialog = usePrompt();
-  const { setCurrentUser } = useAppStore();
-  const isDark = theme === "dark";
+  const isDark = theme === 'dark';
   const prefersReducedMotion = useReducedMotion();
 
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -674,114 +118,120 @@ function CreatePostProvider({ children }) {
   const [offlineQueueItems, setOfflineQueueItems] = useState([]);
   const [servicesReady, setServicesReady] = useState(false);
   const [serviceError, setServiceError] = useState(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle');
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+
   const mountedRef = useRef(true);
   const dbRef = useRef(null);
   const processingOfflineRef = useRef(false);
   const publishLockRef = useRef(false);
-  const completedRef = useRef(0);
   const mediaPreviewUrlsRef = useRef([]);
-
   const initLockRef = useRef(false);
   const initPromiseRef = useRef(null);
+  const autoSaveTimerRef = useRef(null);
 
   const stateRef = useRef(state);
   const isOfflineRef = useRef(isOffline);
   const draftsListRef = useRef(draftsList);
   const userRef = useRef(user);
 
-  useEffect(() => { stateRef.current = state; }, [state]);
-  useEffect(() => { isOfflineRef.current = isOffline; }, [isOffline]);
-  useEffect(() => { draftsListRef.current = draftsList; }, [draftsList]);
-  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+  useEffect(() => {
+    isOfflineRef.current = isOffline;
+  }, [isOffline]);
+  useEffect(() => {
+    draftsListRef.current = draftsList;
+  }, [draftsList]);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const services = useRef({
-    firestore: null, storage: null, search: null, video: null, story: null,
-    notifications: null, feed: null, user: null,
-    ai: null, moderation: null, analytics: null,
+    firestore: null,
+    storage: null,
+    search: null,
+    feed: null,
+    user: null,
   });
 
   useEffect(() => {
     return () => {
-      mediaPreviewUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      mountedRef.current = false;
+      clearTimeout(autoSaveTimerRef.current);
+      mediaPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
-  const refreshDraftsList = useCallback(async () => {
-    if (!dbRef.current) return;
-    const all = await dbRef.current.getAll("drafts");
-    all.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    setDraftsList(all);
+  const refreshDraftsList = useCallback(async (uidOverride) => {
+    const uid = uidOverride ?? userRef.current?.uid;
+    if (!dbRef.current || !uid) {
+      setDraftsList([]);
+      return;
+    }
+    const owned = await listDraftsForOwner(dbRef.current, uid);
+    setDraftsList(owned);
   }, []);
 
-  const refreshOfflineQueue = useCallback(async () => {
-    if (!dbRef.current) return;
-    const all = await dbRef.current.getAll(OFFLINE_QUEUE_STORE);
-    setOfflineQueueItems(all);
+  const refreshOfflineQueue = useCallback(async (uidOverride) => {
+    const uid = uidOverride ?? userRef.current?.uid;
+    if (!dbRef.current || !uid) {
+      setOfflineQueueItems([]);
+      return;
+    }
+    const owned = await listOfflineQueueForOwner(dbRef.current, uid);
+    setOfflineQueueItems(owned);
   }, []);
 
   const initServices = useCallback(async () => {
     if (initLockRef.current) return initPromiseRef.current;
     initLockRef.current = true;
 
-    const timedPromise = (promise, timeoutMs, label) => {
-      return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs))
-      ]);
-    };
-
     const initTask = (async () => {
       try {
-        const servicePromises = [
-          getFirestoreService(), getStorageService(), getSearchService(),
-          getVideoService(), getStoryService(),
-          getNotificationsService(), getFeedService(), getUserService(),
-        ];
-        const [fs, st, se, vs, ss, ns, fd, us] = await timedPromise(
-          Promise.all(servicePromises), 15000, "Service initialization"
-        );
+        // Initialize IndexedDB first and resolve core services resiliently so a
+        // secondary service failure never locks the entire creator studio.
+        const [db, fsSettled, stSettled, seSettled, fdSettled, usSettled] = await Promise.all([
+          openCreatePostDB(),
+          Promise.resolve().then(() => getFirestoreService()).catch((e) => {
+            console.warn('[CreatePost] Firestore init note:', e?.message);
+            return null;
+          }),
+          Promise.resolve().then(() => getStorageService()).catch((e) => {
+            console.warn('[CreatePost] Storage init note:', e?.message);
+            return null;
+          }),
+          Promise.resolve().then(() => getSearchService()).catch((e) => {
+            console.warn('[CreatePost] Search init note:', e?.message);
+            return null;
+          }),
+          Promise.resolve().then(() => getFeedService()).catch((e) => {
+            console.warn('[CreatePost] Feed init note:', e?.message);
+            return null;
+          }),
+          Promise.resolve().then(() => getUserService()).catch((e) => {
+            console.warn('[CreatePost] User service init note:', e?.message);
+            return null;
+          }),
+        ]);
 
+        if (!mountedRef.current) return;
+        dbRef.current = db;
         services.current = {
-          firestore: fs, storage: st, search: se, video: vs, story: ss,
-          notifications: ns, feed: fd, user: us,
+          firestore: fsSettled,
+          storage: stSettled,
+          search: seSettled,
+          feed: fdSettled,
+          user: usSettled,
         };
 
-        dbRef.current = await timedPromise(
-          openDB(DRAFT_DB_NAME, 4, {
-            allowDowngrade: true,
-            upgrade(db) {
-              if (!db.objectStoreNames.contains("drafts")) {
-                const draftStore = db.createObjectStore("drafts", { keyPath: "id" });
-                draftStore.createIndex("postType", "postType");
-                draftStore.createIndex("updatedAt", "updatedAt");
-              }
-              if (!db.objectStoreNames.contains(OFFLINE_QUEUE_STORE)) {
-                const queueStore = db.createObjectStore(OFFLINE_QUEUE_STORE, { keyPath: "id" });
-                queueStore.createIndex("postType", "postType");
-                queueStore.createIndex("createdAt", "createdAt");
-              }
-              if (!db.objectStoreNames.contains(MEDIA_BLOB_STORE)) db.createObjectStore(MEDIA_BLOB_STORE, { keyPath: "id" });
-              if (!db.objectStoreNames.contains(BLOB_HASH_STORE)) db.createObjectStore(BLOB_HASH_STORE, { keyPath: "hash" });
-              if (!db.objectStoreNames.contains(VERSIONS_STORE)) {
-                const versionsStore = db.createObjectStore(VERSIONS_STORE, { keyPath: "id" });
-                versionsStore.createIndex("draftId", "draftId");
-              }
-              if (!db.objectStoreNames.contains(TEMPLATES_STORE)) {
-                const templatesStore = db.createObjectStore(TEMPLATES_STORE, { keyPath: "id" });
-                templatesStore.createIndex("name", "name");
-              }
-            },
-          }),
-          10000, "IndexedDB open"
-        );
-
-        await refreshDraftsList();
-        await refreshOfflineQueue();
+        await Promise.all([refreshDraftsList(), refreshOfflineQueue()]);
         setServicesReady(true);
         setServiceError(null);
       } catch (err) {
-        console.error("Init error:", err);
-        setServiceError(err.message || "Initialization failed");
+        console.error('[CreatePost] Studio initialization error:', err);
+        setServiceError(err?.message || 'Initialization failed');
       } finally {
         initLockRef.current = false;
         initPromiseRef.current = null;
@@ -794,447 +244,454 @@ function CreatePostProvider({ children }) {
 
   useEffect(() => {
     initServices();
+  }, [initServices]);
 
-    const failSafeTimer = setTimeout(() => {
-      if (!servicesReady && !serviceError) {
-        console.error("Fail-safe kicked in: Init took too long.");
-        setServiceError("Creator Studio took too long to respond. Please refresh.");
-      }
-    }, 18000);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(failSafeTimer);
-    };
-  }, [initServices, servicesReady, serviceError]);
-
+  // Re-scope local drafts & queue immediately on account switch or sign-out
   useEffect(() => {
-    const online = () => { setIsOffline(false); processOfflineQueue(); };
-    const offline = () => setIsOffline(true);
-    window.addEventListener("online", online);
-    window.addEventListener("offline", offline);
-    return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); };
-  }, []);
+    if (!servicesReady || !dbRef.current) return;
+    refreshDraftsList(user?.uid);
+    refreshOfflineQueue(user?.uid);
+  }, [user?.uid, servicesReady, refreshDraftsList, refreshOfflineQueue]);
 
-  const storeBlobWithDedup = useCallback(async (file, type) => {
-    if (!dbRef.current) return null;
-    const hash = await sha256(file);
-    const hashStore = dbRef.current.transaction(BLOB_HASH_STORE, "readonly").objectStore(BLOB_HASH_STORE);
-    const existing = await hashStore.get(hash);
-    if (existing) return existing.blobId;
-    const blobId = uuidv4();
-    await dbRef.current.put(MEDIA_BLOB_STORE, { id: blobId, blob: file, type });
-    await dbRef.current.put(BLOB_HASH_STORE, { hash, blobId, type });
-    return blobId;
-  }, []);
-
-  const saveDraft = useCallback(async () => {
-    if (!dbRef.current || !stateRef.current.postType) return;
-    const data = stateRef.current;
-    const mediaToStore = [];
-    for (const m of data.mediaItems) {
-      if (m.file) {
-        const blobId = await storeBlobWithDedup(m.file, m.type);
-        mediaToStore.push({ ...m, file: null, preview: null, blobId });
-      } else { mediaToStore.push(m); }
-    }
-    const draft = {
-      id: data.draftId || `draft_${data.postType}_${Date.now()}`,
-      postType: data.postType,
-      data: { ...data, mediaItems: mediaToStore, draftId: undefined },
-      updatedAt: Date.now(),
-    };
-    await dbRef.current.put("drafts", draft);
-    if (!data.draftId) dispatch({ type: "SET_DRAFT_ID", payload: draft.id });
-    dispatch({ type: "SET_IS_DIRTY", payload: false });
-    await dbRef.current.put(VERSIONS_STORE, { id: uuidv4(), draftId: draft.id, data: draft.data, timestamp: Date.now() });
-    await refreshDraftsList();
-    if (!isOfflineRef.current && services.current.firestore) {
-      try {
-        await services.current.firestore.saveDraft(draft.id, userRef.current.uid, draft);
-        toast.success("Draft saved & synced");
-      } catch { toast.success("Draft saved locally"); }
-    } else { toast.success("Draft saved locally"); }
-  }, [storeBlobWithDedup, refreshDraftsList]);
-
-  const loadDraft = useCallback(async (draftId) => {
-    if (!dbRef.current) return;
-    let draft = await dbRef.current.get("drafts", draftId);
-    if (!draft && !isOfflineRef.current && services.current.firestore) {
-      try {
-        draft = await services.current.firestore.getDraft(draftId);
-      } catch (e) {
-        console.warn('Cloud draft fetch failed', e?.message);
-      }
-    }
-    if (!draft) { toast.error("Draft not found"); return; }
-    const restoredMedia = [];
-    for (const m of draft.data.mediaItems) {
-      if (m.blobId) {
-        const blobRecord = await dbRef.current.get(MEDIA_BLOB_STORE, m.blobId);
-        if (blobRecord) {
-          const file = new File([blobRecord.blob], m.name, { type: blobRecord.type });
+  const hydrateDraftMedia = useCallback(async (mediaItems, uid) => {
+    const restored = [];
+    for (const m of Array.isArray(mediaItems) ? mediaItems : []) {
+      if (m.blobId && dbRef.current && uid) {
+        const blobRec = await getOwnedBlob(dbRef.current, m.blobId, uid);
+        if (blobRec?.blob) {
+          const file = new File([blobRec.blob], m.name || 'media', {
+            type: blobRec.type || m.type || 'application/octet-stream',
+          });
           const preview = URL.createObjectURL(file);
           mediaPreviewUrlsRef.current.push(preview);
-          restoredMedia.push({ ...m, file, preview, blobId: null });
-        } else { restoredMedia.push({ ...m, error: "File missing" }); }
-      } else { restoredMedia.push(m); }
-    }
-    dispatch({ type: "LOAD_DRAFT", payload: { ...draft.data, mediaItems: restoredMedia, draftId: draft.id, postType: draft.postType } });
-    toast.success("Draft loaded");
-  }, []);
-
-  const deleteDraft = useCallback(async (draftId) => {
-    if (!dbRef.current) return;
-    await dbRef.current.delete("drafts", draftId);
-    await refreshDraftsList();
-    if (!isOfflineRef.current && services.current.firestore) {
-      try {
-        await services.current.firestore.deleteDraft(draftId);
-      } catch (e) {
-        console.warn('Cloud draft delete failed', e?.message);
+          restored.push({ ...m, file, preview, blobId: null });
+        } else {
+          restored.push({ ...m, error: 'Original file missing' });
+        }
+      } else {
+        restored.push(m);
       }
     }
-    toast.success("Draft deleted");
-  }, [refreshDraftsList]);
+    return restored;
+  }, []);
+
+  const persistDraft = useCallback(
+    async ({ silent = false } = {}) => {
+      const uid = userRef.current?.uid;
+      if (!dbRef.current || !uid || !stateRef.current.postType || stateRef.current.editPostId) {
+        return false;
+      }
+      const data = stateRef.current;
+      setAutoSaveStatus('saving');
+      try {
+        const mediaToStore = [];
+        for (const m of data.mediaItems || []) {
+          if (m.file) {
+            const blobId = await storeBlobWithDedup(dbRef.current, m.file, m.type, uid);
+            mediaToStore.push({
+              ...m,
+              file: null,
+              preview: null,
+              thumbnailUrl:
+                typeof m.thumbnailUrl === 'string' && !m.thumbnailUrl.startsWith('blob:')
+                  ? m.thumbnailUrl
+                  : null,
+              blobId,
+            });
+          } else {
+            mediaToStore.push(...stripEphemeralUrlsFromMediaItems([m]));
+          }
+        }
+
+        const { _past, _future, ...cleanState } = data;
+        const draftPayload = {
+          id: data.draftId || `draft_${uid}_${data.postType}_${Date.now()}`,
+          ownerUid: uid,
+          postType: data.postType,
+          data: {
+            ...cleanState,
+            mediaItems: mediaToStore,
+            draftId: undefined,
+            typeData: {
+              ...cleanState.typeData,
+              audio: {
+                ...(cleanState.typeData?.audio || {}),
+                file: null,
+                coverFile: null,
+                previewUrl:
+                  typeof cleanState.typeData?.audio?.url === 'string' &&
+                  cleanState.typeData.audio.url.startsWith('http')
+                    ? cleanState.typeData.audio.url
+                    : null,
+              },
+            },
+          },
+          updatedAt: Date.now(),
+        };
+
+        await saveDraftRecord(dbRef.current, draftPayload, uid);
+        if (!data.draftId) dispatch({ type: 'SET_DRAFT_ID', payload: draftPayload.id });
+        dispatch({ type: 'SET_IS_DIRTY', payload: false });
+        await refreshDraftsList(uid);
+
+        setAutoSaveStatus('saved');
+        setLastSavedAt(Date.now());
+
+        if (!isOfflineRef.current && services.current.firestore?.saveDraft) {
+          try {
+            await services.current.firestore.saveDraft(draftPayload.id, uid, draftPayload);
+            if (!silent) toast.success('Draft saved and synced');
+          } catch (cloudErr) {
+            console.warn('[CreatePost] Cloud draft sync note:', cloudErr?.message);
+            if (!silent) toast.success('Draft saved on this device');
+          }
+        } else if (!silent) {
+          toast.success('Draft saved on this device');
+        }
+        return true;
+      } catch (err) {
+        console.warn('[CreatePost] Save draft failed:', err?.message);
+        setAutoSaveStatus('error');
+        if (!silent) toast.error(err?.message || 'Failed to save draft');
+        return false;
+      }
+    },
+    [refreshDraftsList]
+  );
+
+  const saveDraft = useCallback(() => persistDraft({ silent: false }), [persistDraft]);
+
+  // Unified parent debounced autosave (replaces duplicate child autosave loops)
+  useEffect(() => {
+    if (!servicesReady || !state.postType || !state.isDirty || state.editPostId || state.loading) {
+      return;
+    }
+    clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      persistDraft({ silent: true });
+    }, 2200);
+    return () => clearTimeout(autoSaveTimerRef.current);
+  }, [
+    servicesReady,
+    state.postType,
+    state.isDirty,
+    state.editPostId,
+    state.loading,
+    state.content,
+    state.contentJSON,
+    state.mediaItems,
+    state.visibility,
+    state.location,
+    state.scheduledTime,
+    state.pollClosesAt,
+    state.typeData,
+    persistDraft,
+  ]);
+
+  const loadDraft = useCallback(
+    async (draftId) => {
+      const uid = userRef.current?.uid;
+      if (!dbRef.current || !uid) return;
+      let draft = await getDraftForOwner(dbRef.current, draftId, uid);
+      if (!draft && !isOfflineRef.current && services.current.firestore?.getDraft) {
+        try {
+          const cloudDraft = await services.current.firestore.getDraft(draftId);
+          if (cloudDraft && (!cloudDraft.ownerUid || cloudDraft.ownerUid === uid)) {
+            draft = cloudDraft;
+          }
+        } catch (e) {
+          console.warn('[CreatePost] Cloud draft fetch failed:', e?.message);
+        }
+      }
+      if (!draft) {
+        toast.error('Draft not found');
+        return;
+      }
+      const restoredMedia = await hydrateDraftMedia(draft.data?.mediaItems, uid);
+      dispatch({
+        type: 'LOAD_DRAFT',
+        payload: {
+          ...draft.data,
+          mediaItems: restoredMedia,
+          draftId: draft.id,
+          postType: draft.postType,
+        },
+      });
+      dispatch({ type: 'SET_POST_TYPE', payload: draft.postType });
+      dispatch({ type: 'SET_STEP', payload: 2 });
+      toast.success('Draft loaded');
+    },
+    [hydrateDraftMedia]
+  );
+
+  const deleteDraft = useCallback(
+    async (draftId, { silent = false } = {}) => {
+      const uid = userRef.current?.uid;
+      if (!dbRef.current || !uid || !draftId) return;
+      await deleteDraftRecord(dbRef.current, draftId, uid);
+      await refreshDraftsList(uid);
+      if (!isOfflineRef.current && services.current.firestore?.deleteDraft) {
+        try {
+          await services.current.firestore.deleteDraft(draftId);
+        } catch (e) {
+          console.warn('[CreatePost] Cloud draft delete failed:', e?.message);
+        }
+      }
+      if (!silent) toast.success('Draft deleted');
+    },
+    [refreshDraftsList]
+  );
 
   const resumeLatestDraft = useCallback(async () => {
     if (draftsListRef.current.length === 0) return;
-    const latest = draftsListRef.current[0];
-    await loadDraft(latest.id);
-    dispatch({ type: "SET_POST_TYPE", payload: latest.postType });
-    dispatch({ type: "SET_STEP", payload: 2 });
+    await loadDraft(draftsListRef.current[0].id);
   }, [loadDraft]);
 
   const saveAsTemplate = useCallback(async () => {
-    if (!dbRef.current || !stateRef.current.postType) return;
+    const uid = userRef.current?.uid;
+    if (!dbRef.current || !uid || !stateRef.current.postType) return;
     const name = await promptDialog({
-      title: "Save as Template",
-      message: "Enter a name for this reusable post template:",
-      placeholder: "e.g. Weekly Highlight",
-      confirmText: "Save Template",
+      title: 'Save as Template',
+      message: 'Enter a name for this reusable post template:',
+      placeholder: 'e.g. Weekly Update',
+      confirmText: 'Save Template',
     });
     if (!name || !name.trim()) return;
-    const template = { id: uuidv4(), name: name.trim(), postType: stateRef.current.postType, data: stateRef.current, createdAt: Date.now() };
-    await dbRef.current.put(TEMPLATES_STORE, template);
-    toast.success("Template saved");
+    await saveTemplateRecord(dbRef.current, {
+      name,
+      postType: stateRef.current.postType,
+      state: stateRef.current,
+      ownerUid: uid,
+    });
+    toast.success('Template saved');
   }, [promptDialog]);
 
   const loadTemplate = useCallback(async (templateId) => {
-    if (!dbRef.current) return;
-    const tpl = await dbRef.current.get(TEMPLATES_STORE, templateId);
-    if (!tpl) { toast.error("Template not found"); return; }
-    dispatch({ type: "LOAD_DRAFT", payload: { ...tpl.data, draftId: null, postType: tpl.postType } });
-    dispatch({ type: "SET_POST_TYPE", payload: tpl.postType });
-    dispatch({ type: "SET_STEP", payload: 2 });
-    toast.success("Template loaded");
+    const uid = userRef.current?.uid;
+    if (!dbRef.current || !uid) return;
+    const tpl = await getTemplateForOwner(dbRef.current, templateId, uid);
+    if (!tpl) {
+      toast.error('Template not found');
+      return;
+    }
+    dispatch({
+      type: 'LOAD_DRAFT',
+      payload: { ...tpl.data, draftId: null, postType: tpl.postType, isDirty: true },
+    });
+    dispatch({ type: 'SET_POST_TYPE', payload: tpl.postType });
+    dispatch({ type: 'SET_STEP', payload: 2 });
+    toast.success('Template loaded');
   }, []);
 
   const getDraftVersions = useCallback(async (draftId) => {
-    if (!dbRef.current) return [];
-    const versions = await dbRef.current.getAllFromIndex(VERSIONS_STORE, "draftId", draftId);
-    return versions.sort((a, b) => b.timestamp - a.timestamp);
+    const uid = userRef.current?.uid;
+    if (!dbRef.current || !uid) return [];
+    return listDraftVersionsForOwner(dbRef.current, draftId, uid);
   }, []);
 
-  const addToOfflineQueue = useCallback(async (postData) => {
-    if (!dbRef.current) return;
-    const id = uuidv4();
-    const mediaToStore = [];
-    for (const m of postData.mediaItems) {
-      if (m.file) {
-        const blobId = await storeBlobWithDedup(m.file, m.type);
-        mediaToStore.push({ ...m, file: null, preview: null, blobId });
-      } else { mediaToStore.push(m); }
-    }
-    await dbRef.current.put(OFFLINE_QUEUE_STORE, {
-      id, postType: stateRef.current.postType,
-      data: { ...postData, mediaItems: mediaToStore, communityId: communityIdParam },
-      createdAt: Date.now(), retries: 0,
-    });
-    await refreshOfflineQueue();
-    toast.success("Post queued for offline");
-  }, [storeBlobWithDedup, refreshOfflineQueue, communityIdParam]);
+  const addToOfflineQueue = useCallback(
+    async (postData) => {
+      const uid = userRef.current?.uid;
+      if (!dbRef.current || !uid) {
+        throw new Error('Sign in required to queue offline posts');
+      }
+      const id = postData.clientPostId || `queue_${uid}_${Date.now()}`;
+      const mediaToStore = [];
+      for (const m of postData.mediaItems || []) {
+        if (m.file) {
+          const blobId = await storeBlobWithDedup(dbRef.current, m.file, m.type, uid);
+          mediaToStore.push({ ...m, file: null, preview: null, blobId });
+        } else {
+          mediaToStore.push(...stripEphemeralUrlsFromMediaItems([m]));
+        }
+      }
+      await putOfflineQueueItem(
+        dbRef.current,
+        {
+          id,
+          ownerUid: uid,
+          postType: postData.postType || stateRef.current.postType,
+          data: { ...postData, mediaItems: mediaToStore, communityId: communityIdParam },
+          createdAt: Date.now(),
+          retries: 0,
+        },
+        uid
+      );
+      await refreshOfflineQueue(uid);
+    },
+    [refreshOfflineQueue, communityIdParam]
+  );
+
+  const uploadMedia = useCallback(
+    async (mediaItems, signal) => {
+      if (isOfflineRef.current) {
+        throw new Error('Cannot upload media while offline');
+      }
+      const uid = userRef.current?.uid;
+      if (!uid) throw new Error('You must be signed in to upload media');
+      return uploadComposerMedia(mediaItems, {
+        uid,
+        storageService: services.current.storage,
+        signal,
+        onItemProgress: (id, percent) =>
+          dispatch({ type: 'UPDATE_MEDIA_PROGRESS', payload: { id, updates: { progress: percent } } }),
+        onBatchProgress: (pct) => dispatch({ type: 'SET_PROGRESS', payload: pct }),
+      });
+    },
+    []
+  );
+
+  const publishPost = useCallback(
+    async (overrideState = null, isOfflineReplay = false) => {
+      if (publishLockRef.current) return null;
+      publishLockRef.current = true;
+      dispatch({ type: 'SET_LOADING', payload: true });
+      dispatch({ type: 'CLEAR_ERROR' });
+
+      const current = overrideState || stateRef.current;
+      const communityId = current.communityId || communityIdParam;
+
+      try {
+        const result = await executePostPublish({
+          current,
+          communityId,
+          userSnapshot: userRef.current,
+          services: services.current,
+          isOffline: isOfflineRef.current,
+          isOfflineReplay,
+          onMediaItemProgress: (id, percent) =>
+            dispatch({ type: 'UPDATE_MEDIA_PROGRESS', payload: { id, updates: { progress: percent } } }),
+          onMediaBatchProgress: (pct) => dispatch({ type: 'SET_PROGRESS', payload: pct }),
+          onDeleteDraft: (id) => deleteDraft(id, { silent: true }),
+          onEnqueueOffline: addToOfflineQueue,
+        });
+
+        if (!isOfflineReplay) {
+          if (result.status === 'queued') {
+            toast.info('You are offline — your post is queued and will publish automatically.');
+            navigate('/home');
+          } else if (result.status === 'updated') {
+            toast.success('Post updated');
+            navigate(`/post/${result.postId}`);
+          } else if (result.isScheduled) {
+            toast.success('Post scheduled');
+            navigate('/profile');
+          } else {
+            toast.success('Post published');
+            navigate(communityId ? `/community/${communityId}` : '/home');
+          }
+        }
+        return result;
+      } catch (err) {
+        console.error('[CreatePost] Publish error:', err);
+        if (!isOfflineReplay) {
+          dispatch({ type: 'SET_ERROR', payload: err?.message || 'Failed to publish post' });
+          toast.error(err?.message || 'Failed to publish post');
+        }
+        if (isOfflineReplay) throw err;
+        return null;
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        publishLockRef.current = false;
+      }
+    },
+    [communityIdParam, deleteDraft, addToOfflineQueue, navigate]
+  );
 
   const processOfflineQueue = useCallback(async () => {
-    if (!dbRef.current || isOfflineRef.current || processingOfflineRef.current) return;
+    const uid = userRef.current?.uid;
+    if (!dbRef.current || !uid || isOfflineRef.current || processingOfflineRef.current) return;
     processingOfflineRef.current = true;
-    const items = await dbRef.current.getAll(OFFLINE_QUEUE_STORE);
-    if (items.length === 0) { processingOfflineRef.current = false; return; }
-    toast.info(`Publishing ${items.length} queued posts...`);
-    for (const item of items) {
-      if (item.retries > 0) {
-        const delay = Math.min(2 ** item.retries * 1000, 30000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-      try {
-        const restoredMedia = [];
-        for (const m of item.data.mediaItems) {
-          if (m.blobId) {
-            const blobRecord = await dbRef.current.get(MEDIA_BLOB_STORE, m.blobId);
-            if (blobRecord) {
-              const file = new File([blobRecord.blob], m.name, { type: blobRecord.type });
-              restoredMedia.push({ ...m, file, preview: URL.createObjectURL(file), blobId: null });
-            } else { restoredMedia.push({ ...m, error: "File missing" }); }
-          } else { restoredMedia.push(m); }
-        }
-        const restoredData = { ...item.data, mediaItems: restoredMedia };
-        await publishPost(restoredData, true);
-        for (const m of restoredMedia) if (m.preview) URL.revokeObjectURL(m.preview);
-        await dbRef.current.delete(OFFLINE_QUEUE_STORE, item.id);
-      } catch (err) {
-        console.warn("Offline publish failed:", err);
-        await dbRef.current.put(OFFLINE_QUEUE_STORE, { ...item, retries: (item.retries || 0) + 1 });
-      }
-    }
-    await refreshOfflineQueue();
-    processingOfflineRef.current = false;
-  }, [refreshOfflineQueue]);
-
-  const retryOfflineItem = useCallback(async (itemId) => {
-    if (!dbRef.current) return;
-    const item = await dbRef.current.get(OFFLINE_QUEUE_STORE, itemId);
-    if (!item) return;
     try {
-      const restoredMedia = [];
-      for (const m of item.data.mediaItems) {
-        if (m.blobId) {
-          const blobRecord = await dbRef.current.get(MEDIA_BLOB_STORE, m.blobId);
-          if (blobRecord) {
-            const file = new File([blobRecord.blob], m.name, { type: blobRecord.type });
-            restoredMedia.push({ ...m, file, preview: URL.createObjectURL(file), blobId: null });
-          } else { restoredMedia.push({ ...m, error: "File missing" }); }
-        } else { restoredMedia.push(m); }
-      }
-      const restoredData = { ...item.data, mediaItems: restoredMedia };
-      await publishPost(restoredData, true);
-      for (const m of restoredMedia) if (m.preview) URL.revokeObjectURL(m.preview);
-      await dbRef.current.delete(OFFLINE_QUEUE_STORE, item.id);
-      await refreshOfflineQueue();
-      toast.success("Published queued post");
-    } catch (err) { toast.error("Failed to publish queued post"); }
-  }, [refreshOfflineQueue]);
-
-  const deleteOfflineItem = useCallback(async (itemId) => {
-    if (!dbRef.current) return;
-    await dbRef.current.delete(OFFLINE_QUEUE_STORE, itemId);
-    await refreshOfflineQueue();
-    toast.success("Removed queued post");
-  }, [refreshOfflineQueue]);
-
-
-  const uploadMedia = useCallback(async (mediaItems) => {
-    if (isOfflineRef.current) { toast.error("Cannot upload offline"); return []; }
-    const { getStorageService } = await import("../services/storageService.js");
-    const storageService = services.current.storage || getStorageService();
-    const results = [];
-    const validItems = mediaItems.filter(m => (m.file || m.url || m.preview) && !m.error);
-    const total = validItems.length;
-    completedRef.current = 0;
-    const failures = [];
-
-    const process = async (item) => {
-      try {
-        if (item.url && typeof item.url === 'string' && item.url.startsWith('http') && !item.url.startsWith('blob:')) {
-          results.push({ url: item.url, thumbnail: item.thumbnail || null, type: item.type || 'image', name: item.name || '', alt: item.alt || '' });
-          completedRef.current++;
-          dispatch({ type: "SET_PROGRESS", payload: (completedRef.current / total) * 100 });
-          return;
-        }
-
-        let thumbnail = null;
-        if (item.file) {
-          if (item.type === "image") thumbnail = await generateImageThumbnail(item.file);
-          else if (item.type === "video") thumbnail = await generateVideoThumbnail(item.file);
-        }
-
-        let downloadURL = null;
-        if (storageService && item.file) {
-          const uid = userRef.current?.uid;
-          if (!uid) throw new Error("You must be signed in to upload media");
-          const uploadRes = await storageService.uploadFileWithProgress(
-            item.file,
-            `posts/${uid}/${Date.now()}_${item.file.name}`,
-            {
-              userId: uid,
-              onProgress: (p) => dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { progress: p.progress || 0 } } })
-            }
+      const items = await listOfflineQueueForOwner(dbRef.current, uid);
+      if (items.length === 0) return;
+      toast.info(`Syncing ${items.length} queued post${items.length === 1 ? '' : 's'}...`);
+      for (const item of items) {
+        const restoredMedia = await hydrateDraftMedia(item.data?.mediaItems, uid);
+        try {
+          await publishPost({ ...item.data, mediaItems: restoredMedia }, true);
+          await deleteOfflineQueueItem(dbRef.current, item.id, uid);
+        } catch (err) {
+          console.warn('[CreatePost] Offline replay failed:', err?.message);
+          await putOfflineQueueItem(
+            dbRef.current,
+            { ...item, retries: (item.retries || 0) + 1 },
+            uid
           );
-          if (!uploadRes?.downloadURL) throw new Error("Upload did not return a URL");
-          downloadURL = uploadRes.downloadURL;
-        } else if (!item.file) {
-          // Already-hosted media (a remote URL picked from a library). A
-          // `blob:`/`data:` URL is session-scoped and must never be persisted
-          // as the post's media URL — it renders only for this uploader, this
-          // session, and is broken for everyone else and after a reload.
-          const candidate = item.url || item.preview || null;
-          if (candidate && !candidate.startsWith("blob:") && !candidate.startsWith("data:")) {
-            downloadURL = candidate;
+        } finally {
+          for (const m of restoredMedia) {
+            if (m.preview?.startsWith('blob:')) URL.revokeObjectURL(m.preview);
           }
         }
+      }
+      await refreshOfflineQueue(uid);
+    } finally {
+      processingOfflineRef.current = false;
+    }
+  }, [hydrateDraftMedia, publishPost, refreshOfflineQueue]);
 
-        if (!downloadURL) {
-          throw new Error(`Could not upload "${item.name || item.file?.name || "media"}"`);
-        }
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOffline(false);
+      processOfflineQueue();
+    };
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [processOfflineQueue]);
 
-        // A generated thumbnail is a `blob:` object URL. Persisting it would
-        // leave every grid/feed surface with a broken poster after reload, so
-        // it is uploaded alongside the media (or dropped if that fails).
-        if (thumbnail && thumbnail.startsWith("blob:") && storageService) {
-          try {
-            const thumbBlob = await (await fetch(thumbnail)).blob();
-            const thumbRes = await storageService.uploadFileWithProgress(
-              new File([thumbBlob], `thumb_${item.id || Date.now()}.jpg`, { type: "image/jpeg" }),
-              `posts/${userRef.current?.uid}/${Date.now()}_thumb_${item.id || "m"}.jpg`,
-              { userId: userRef.current?.uid }
-            );
-            thumbnail = thumbRes?.downloadURL || null;
-          } catch (thumbErr) {
-            console.warn("Thumbnail upload failed:", thumbErr?.message);
-            thumbnail = null;
-          }
-        } else if (thumbnail && thumbnail.startsWith("blob:")) {
-          thumbnail = null;
-        }
-
-        results.push({
-          url: downloadURL,
-          thumbnail: thumbnail || null,
-          type: item.type || (item.file?.type?.startsWith('video/') ? 'video' : 'image'),
-          name: item.name || item.file?.name || '',
-          alt: item.alt || '',
-        });
-        completedRef.current++;
-        dispatch({ type: "SET_PROGRESS", payload: (completedRef.current / total) * 100 });
+  const retryOfflineItem = useCallback(
+    async (itemId) => {
+      const uid = userRef.current?.uid;
+      if (!dbRef.current || !uid) return;
+      const item = await getOfflineQueueItemForOwner(dbRef.current, itemId, uid);
+      if (!item) return;
+      const restoredMedia = await hydrateDraftMedia(item.data?.mediaItems, uid);
+      try {
+        await publishPost({ ...item.data, mediaItems: restoredMedia }, true);
+        await deleteOfflineQueueItem(dbRef.current, item.id, uid);
+        await refreshOfflineQueue(uid);
+        toast.success('Published queued post');
       } catch (err) {
-        console.error(`Failed to process media item:`, err);
-        failures.push(err?.message || "Media upload failed");
-        dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { error: err.message } } });
-      }
-    };
-
-    for (let i = 0; i < validItems.length; i += 3) {
-      await Promise.all(validItems.slice(i, i + 3).map(process));
-    }
-    if (failures.length > 0) {
-      throw new Error(failures[0]);
-    }
-    return results;
-  }, []);
-
-  const generateImageThumbnail = (file) => new Promise((resolve) => {
-    let resolved = false;
-    const finish = (res) => { if (!resolved) { resolved = true; resolve(res); } };
-    const timer = setTimeout(() => finish(null), 2500);
-
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      clearTimeout(timer);
-      const canvas = document.createElement("canvas");
-      const maxDim = 512; let w = img.width, h = img.height;
-      if (w > h) { h = (h * maxDim) / w; w = maxDim; } else { w = (w * maxDim) / h; h = maxDim; }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        URL.revokeObjectURL(objectUrl);
-        finish(null);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl);
-        if (blob) {
-          const thumbUrl = URL.createObjectURL(blob);
-          mediaPreviewUrlsRef.current.push(thumbUrl);
-          finish(thumbUrl);
-        } else {
-          finish(null);
+        toast.error(err?.message || 'Failed to publish queued post');
+      } finally {
+        for (const m of restoredMedia) {
+          if (m.preview?.startsWith('blob:')) URL.revokeObjectURL(m.preview);
         }
-      }, "image/jpeg", 0.8);
-      img.onload = null; img.onerror = null;
-    };
-    img.onerror = () => {
-      clearTimeout(timer);
-      URL.revokeObjectURL(objectUrl);
-      finish(null);
-    };
-    img.src = objectUrl;
-  });
-
-  const generateVideoThumbnail = (file) => new Promise((resolve) => {
-    let resolved = false;
-    const finish = (res) => { if (!resolved) { resolved = true; resolve(res); } };
-    const timer = setTimeout(() => finish(null), 2500);
-
-    const video = document.createElement("video");
-    const objectUrl = URL.createObjectURL(file);
-    video.preload = "metadata";
-    video.onloadedmetadata = () => { video.currentTime = Math.min(1, video.duration / 2); };
-    video.onseeked = () => {
-      clearTimeout(timer);
-      const canvas = document.createElement("canvas");
-      canvas.width = 512; canvas.height = (512 / video.videoWidth) * video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        URL.revokeObjectURL(objectUrl);
-        finish(null);
-        return;
       }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl);
-        if (blob) {
-          const thumbUrl = URL.createObjectURL(blob);
-          mediaPreviewUrlsRef.current.push(thumbUrl);
-          finish(thumbUrl);
-        } else {
-          finish(null);
-        }
-      }, "image/jpeg", 0.8);
-      video.onloadedmetadata = null; video.onseeked = null; video.onerror = null;
-    };
-    video.onerror = () => {
-      clearTimeout(timer);
-      URL.revokeObjectURL(objectUrl);
-      finish(null);
-    };
-    video.src = objectUrl;
-  });
+    },
+    [hydrateDraftMedia, publishPost, refreshOfflineQueue]
+  );
 
-  const [aiLoading, setAiLoading] = useState(false);
-
-  const generateAICaption = useCallback(async (style = "casual") => {
-    setAiLoading(true);
-    try {
-      const result = await callFunction(FUNCTIONS.GENERATE_AI_CAPTION, { content: stateRef.current.content, mediaDescriptions: stateRef.current.mediaItems.map(m => m.name || ""), style });
-      dispatch({ type: "SET_AI_CAPTION", payload: result.caption });
-      toast.success("AI caption generated");
-    } catch { toast.error("AI caption failed"); }
-    finally { setAiLoading(false); }
-  }, []);
-
-  const generateAIHashtags = useCallback(async () => {
-    setAiLoading(true);
-    try {
-      const result = await callFunction(FUNCTIONS.GENERATE_AI_HASHTAGS, { content: stateRef.current.content, mediaTypes: stateRef.current.mediaItems.map(m => m.type) });
-      dispatch({ type: "SET_AI_HASHTAGS", payload: result.hashtags });
-      toast.success("AI hashtags generated");
-    } catch { toast.error("AI hashtags failed"); }
-    finally { setAiLoading(false); }
-  }, []);
+  const deleteOfflineItem = useCallback(
+    async (itemId) => {
+      const uid = userRef.current?.uid;
+      if (!dbRef.current || !uid) return;
+      await deleteOfflineQueueItem(dbRef.current, itemId, uid);
+      await refreshOfflineQueue(uid);
+      toast.success('Removed queued post');
+    },
+    [refreshOfflineQueue]
+  );
 
   const moderateContent = useCallback(async (content, mediaUrls) => {
     try {
       const result = await callFunction(FUNCTIONS.MODERATE_POST, { content, mediaUrls });
-      dispatch({ type: "SET_MODERATION_STATUS", payload: result });
+      dispatch({ type: 'SET_MODERATION_STATUS', payload: result });
       return result;
     } catch (e) {
-      // The check could not run — never claim the content "passed". The server
-      // itself returns `unknown` when the provider is unconfigured; a failed
-      // call is the same state, not an approval.
-      console.warn('Moderation check unavailable', e?.message);
-      const unknown = { approved: false, unknown: true, flags: [], reason: 'moderation_unavailable' };
-      dispatch({ type: "SET_MODERATION_STATUS", payload: unknown });
+      console.warn('[CreatePost] Moderation check unavailable:', e?.message);
+      const unknown = {
+        approved: false,
+        unknown: true,
+        flags: [],
+        reason: 'moderation_unavailable',
+      };
+      dispatch({ type: 'SET_MODERATION_STATUS', payload: unknown });
       return unknown;
     }
   }, []);
@@ -1242,387 +699,47 @@ function CreatePostProvider({ children }) {
   const getPredictions = useCallback(async () => {
     try {
       const result = await callFunction(FUNCTIONS.PREDICT_POST_PERFORMANCE, {
-        postType: stateRef.current.postType, content: stateRef.current.content,
-        mediaCount: stateRef.current.mediaItems.length, scheduledTime: stateRef.current.scheduledTime,
+        postType: stateRef.current.postType,
+        content: stateRef.current.content,
+        mediaCount: stateRef.current.mediaItems.length,
+        scheduledTime: stateRef.current.scheduledTime,
         visibility: stateRef.current.visibility,
       });
-      dispatch({ type: "SET_INSIGHTS", payload: result });
+      dispatch({ type: 'SET_INSIGHTS', payload: result });
     } catch (insightsErr) {
-      // Non-fatal: the composer still works without the performance preview.
-      console.warn("Post performance prediction unavailable:", insightsErr);
+      console.warn('[CreatePost] Post performance forecast unavailable:', insightsErr?.message);
     }
   }, []);
 
+  const searchUsers = useCallback(async (query) => {
+    const svc = services.current.search;
+    if (svc && typeof svc.searchUsers === 'function') {
+      const res = await svc.searchUsers(query, { limit: 7 });
+      return Array.isArray(res) ? res : res?.users || [];
+    }
+    return [];
+  }, []);
+
   const debounceTimerRef = useRef(null);
-  const lastContentRef = useRef(null);
-  const lastMediaRef = useRef(null);
+  const lastModInputRef = useRef('');
 
   useEffect(() => {
-    const contentChanged = state.content !== lastContentRef.current;
-    const mediaChanged = state.mediaItems.length !== lastMediaRef.current || state.mediaItems.some((m, i) => m.url !== lastMediaRef.current?.[i]?.url);
-    if (!contentChanged && !mediaChanged) return;
-    lastContentRef.current = state.content;
-    lastMediaRef.current = state.mediaItems;
+    if (!state.postType) return;
+    const hostedUrls = (state.mediaItems || [])
+      .map((m) => m.url)
+      .filter((u) => typeof u === 'string' && u.startsWith('http'));
+    const sig = `${state.content}::${hostedUrls.join(',')}`;
+    if (sig === lastModInputRef.current) return;
+    lastModInputRef.current = sig;
 
     clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      if (state.content || state.mediaItems.length > 0) {
-        getPredictions();
-        if (state.content.trim()) {
-          moderateContent(state.content, state.mediaItems.map(m => m.url || m.preview));
-        }
+      if (state.content?.trim()) {
+        moderateContent(state.content, hostedUrls);
       }
-    }, 800);
+    }, 900);
     return () => clearTimeout(debounceTimerRef.current);
-  }, [state.content, state.mediaItems, getPredictions, moderateContent]);
-
-  const publishPost = useCallback(async (overrideState = null, isOfflineReplay = false) => {
-    if (publishLockRef.current) return;
-    publishLockRef.current = true;
-    const current = overrideState || stateRef.current;
-    // The offline queue replays with the stored state, so prefer the id baked
-    // into the record and fall back to the live query param.
-    const communityId = current.communityId || communityIdParam;
-    let userNow = userRef.current;
-
-    try {
-      if (!userNow?.uid) {
-        try {
-          const { getAuthService } = await import('../services/authService.js');
-          const current = getAuthService().getCurrentUser();
-          if (current) {
-            userNow = {
-              uid: current.uid,
-              displayName: current.displayName || "",
-              email: current.email || "",
-              photoURL: current.photoURL || "",
-            };
-          }
-        } catch (e) {
-          console.warn('Stored auth-user read failed', e?.message);
-        }
-      }
-
-      if (!userNow?.uid) {
-        try {
-          const authData = localStorage.getItem("email_auth_data") || localStorage.getItem("user");
-          if (authData) {
-            const parsed = JSON.parse(authData);
-            if (parsed?.uid) {
-              userNow = parsed;
-            }
-          }
-        } catch (e) {
-          console.warn('Stored email-auth data read failed', e?.message);
-        }
-      }
-
-      // Fail closed: publishing requires a real authenticated identity. The old
-      // fallback minted a synthetic uid (`user_<timestamp>`) with the display
-      // name was a generic placeholder when no session existed, so a post
-      // written under a fabricated author and could never be attributed to the
-      // real account. The composer is behind a ProtectedRoute, so this is a
-      // guard against a raced sign-out, not a normal path.
-      if (!userNow?.uid) {
-        throw new Error("You must be signed in to publish. Please sign in and try again.");
-      }
-      if (!current.postType) throw new Error("Please select a post type.");
-
-      const rawContent = (typeof current.content === "string" ? current.content : "") || "";
-      const sanitizedContent = DOMPurify.sanitize(rawContent, { ALLOWED_TAGS: [] });
-
-      let sanitizedJSON = null;
-      let jsonExtractedText = "";
-      if (current.contentJSON) {
-        if (typeof current.contentJSON === "string") {
-          sanitizedJSON = DOMPurify.sanitize(current.contentJSON, { ALLOWED_TAGS: ['p','br','strong','em','u','s','blockquote','ul','ol','li','a','h1','h2','h3','h4','h5','h6'] });
-          jsonExtractedText = sanitizedJSON.replace(/<[^>]+>/g, '').trim();
-        } else if (typeof current.contentJSON === "object") {
-          sanitizedJSON = current.contentJSON;
-          const walk = (node) => {
-            if (!node) return "";
-            if (typeof node.text === "string") return node.text;
-            if (Array.isArray(node.content)) return node.content.map(walk).join(" ");
-            return "";
-          };
-          jsonExtractedText = walk(current.contentJSON).trim();
-        }
-      }
-
-      const effectiveText = sanitizedContent.trim() || jsonExtractedText || rawContent.trim();
-
-      // /edit/:postId (and legacy ?edit=) edits the existing document; the
-      // state carried `editPostId` but nothing consumed it, so "Edit post"
-      // silently published a duplicate. Update in place and return early.
-      const editPostId = current.editPostId || null;
-
-      // Auto-adapt post type if appropriate
-      let effectiveType = current.postType;
-      if ((effectiveType === "image" || effectiveType === "video") && current.mediaItems.length === 0 && effectiveText) {
-        effectiveType = "text";
-      } else if (effectiveType === "text" && !effectiveText && current.mediaItems.length > 0) {
-        effectiveType = current.mediaItems.some(m => m.type?.startsWith("video") || m.file?.type?.startsWith("video")) ? "video" : "image";
-      }
-
-      if (effectiveType === "text" && !effectiveText && current.mediaItems.length === 0) throw new Error("Please add some text or media to your post.");
-      if (effectiveType === "image" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add an image or caption.");
-      if (effectiveType === "video" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add a video or caption.");
-
-      if (editPostId) {
-        const { getFirestoreService } = await import("../services/firestoreService.js");
-        const firestoreService = services.current.firestore || getFirestoreService();
-        const media = await uploadMedia(current.mediaItems);
-        await firestoreService.updatePost(editPostId, {
-          type: effectiveType,
-          content: effectiveText,
-          contentJSON: sanitizedJSON,
-          media,
-          mediaUrl: media[0]?.url || "",
-          videoUrl: media.find((m) => m.type === "video")?.url || "",
-          thumbnailUrl: media[0]?.thumbnail || media[0]?.url || "",
-          visibility: current.visibility || "public",
-        });
-        if (current.draftId) deleteDraft(current.draftId).catch((e) => {
-          console.warn('Draft cleanup after publish failed', e?.message);
-        });
-        toast.success("Post updated!");
-        publishLockRef.current = false;
-        navigate(`/post/${editPostId}`);
-        return;
-      }
-      if (effectiveType === "poll" && current.typeData.poll.options.filter(o => o.trim()).length < 2) throw new Error("Please add at least 2 poll options.");
-      if (effectiveType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
-      if (effectiveType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
-
-      // Generate instant post ID and media references
-      const instantPostId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      // A future `scheduledTime` makes the server write `status: 'scheduled'`
-      // (see firestoreService.createPost); the `publishScheduledPosts` job
-      // flips it to `published` when due. A scheduled post must NOT be injected
-      // into the device-local "just published" cache or the feed now — it is
-      // not live yet.
-      const isScheduled = Boolean(current.scheduledTime && new Date(current.scheduledTime) > new Date());
-      const instantMedia = (current.mediaItems || []).map((m, idx) => ({
-        id: m.id || `media_${idx}`,
-        url: m.preview || m.url || "",
-        type: m.type || (m.file?.type?.startsWith("video") ? "video" : "image"),
-        name: m.name || m.file?.name || "media",
-        alt: m.alt || "",
-      }));
-      const firstInstantMedia = instantMedia[0] || null;
-      const videoInstantMedia = instantMedia.find(m => m.type === "video") || null;
-
-      const instantPublishedPost = {
-        id: instantPostId,
-        type: effectiveType,
-        content: effectiveText || sanitizedContent,
-        contentJSON: sanitizedJSON,
-        media: instantMedia,
-        mediaUrl: firstInstantMedia?.url || "",
-        videoUrl: videoInstantMedia?.url || current.typeData.video?.url || "",
-        thumbnailUrl: firstInstantMedia?.thumbnail || firstInstantMedia?.url || "",
-        authorId: userNow.uid,
-        // A display name falls back to a neutral, honest label ("Creator")
-        // rather than inventing a person; a handle is derived from the real
-        // name/email or left empty (the UI then renders no `@handle`) — never
-        // a synthetic `user_<uid>` that reads as a real account.
-        authorName: pickDisplayName([userNow.displayName, userNow.name, userNow.username]),
-        authorUsername: deriveHandle(userNow.username) || deriveHandle(userNow.email) || "",
-        authorPhoto: userNow.photoURL || userNow.photo || "",
-        visibility: communityId ? "community" : (current.visibility || "public"),
-        communityId: communityId || null,
-        location: current.location || null,
-        hashtags: current.hashtags || [],
-        scheduledTime: current.scheduledTime || null,
-        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null } : null,
-        event: effectiveType === "event" ? {
-          title: effectiveText,
-          date: current.typeData.event.date,
-          location: current.typeData.event.location,
-          locationData: current.typeData.event.locationData || null,
-          description: current.typeData.event.description || "",
-          coverImage: current.typeData.event.coverImage || "",
-          rsvpEnabled: !!current.typeData.event.rsvpEnabled,
-          capacity: current.typeData.event.capacity ?? null,
-          timezone: current.typeData.event.timezone || null,
-        } : null,
-        link: effectiveType === "link" ? {
-          url: current.typeData.link.url,
-          title: current.typeData.link.title || effectiveText,
-          thumbnail: current.typeData.link.thumbnail || "",
-          metadata: current.typeData.link.metadata || null,
-        } : null,
-        question: effectiveType === "question" ? { text: effectiveText, bounty: 0, closed: false, answers: [] } : null,
-        audio: effectiveType === "audio" ? {
-          url: current.typeData.audio?.url || instantMedia[0]?.url || "",
-          duration: current.typeData.audio?.duration || 0,
-          title: current.typeData.audio?.title || effectiveText,
-          artist: current.typeData.audio?.artist || "",
-          genre: current.typeData.audio?.genre || "",
-          coverUrl: current.typeData.audio?.coverUrl || "",
-          sourceSoundId: current.typeData.audio?.sourceSoundId || null,
-        } : null,
-        video: effectiveType === "video" ? {
-          url: videoInstantMedia?.url || instantMedia[0]?.url || current.typeData.video?.url || "",
-          duration: current.typeData.video?.duration || 0
-        } : null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        likesCount: 0,
-        commentsCount: 0,
-        sharesCount: 0,
-        viewsCount: 0,
-        stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
-        isOptimistic: true,
-      };
-
-      // 1. Immediately inject into client cache & emit event — but only for an
-      // immediately-published post. A scheduled post is not live yet, so it must
-      // not be written to the device-local "just published" cache (which
-      // `feedService` merges into the feed) or announced to the feed.
-      if (!isScheduled) {
-        try {
-          const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-          const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
-          localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated.slice(0, 50)));
-          window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
-        } catch (cacheErr) {
-          console.warn("Local post caching note:", cacheErr);
-        }
-      }
-
-      // 2. Clear draft
-      if (current.draftId) {
-        deleteDraft(current.draftId).catch((e) => {
-          console.warn('Draft cleanup after publish failed', e?.message);
-        });
-      }
-
-      // 3. Instant UI feedback & Navigation (User never waits!). The background
-      // write below still runs for both branches — a scheduled post must be
-      // persisted so `publishScheduledPosts` can find and publish it when due.
-      if (isScheduled) {
-        toast.success("Post scheduled! 📅");
-        publishLockRef.current = false;
-        navigate("/profile");
-      } else {
-        toast.success("Post published instantly! 🎉");
-        publishLockRef.current = false;
-        navigate(communityId ? `/community/${communityId}` : "/home");
-      }
-
-      // 4. Background Cloud Sync (Non-blocking)
-      (async () => {
-        try {
-          let uploadedMedia = instantMedia;
-          if (current.mediaItems?.length > 0) {
-            // Upload must succeed before the Firestore write: `instantMedia`
-            // holds session-scoped `blob:` preview URLs, and persisting those
-            // would leave a post that renders only for this uploader, this
-            // session. A failure falls through to the outer catch, which drops
-            // the optimistic entry and hands the post to the offline queue.
-            uploadedMedia = await uploadMedia(current.mediaItems);
-          }
-
-          const finalPostData = {
-            ...instantPublishedPost,
-            media: uploadedMedia,
-            mediaUrl: uploadedMedia[0]?.url || instantPublishedPost.mediaUrl,
-            videoUrl: (uploadedMedia.find(m => m.type === "video")?.url) || instantPublishedPost.videoUrl,
-            thumbnailUrl: uploadedMedia[0]?.thumbnail || uploadedMedia[0]?.url || instantPublishedPost.thumbnailUrl,
-            // The optimistic audio URL is a local blob; persist the Storage URL
-            // instead or the published track is unplayable after reload.
-            ...(instantPublishedPost.audio
-              ? { audio: { ...instantPublishedPost.audio, url: uploadedMedia.find(m => m.type === "audio")?.url || instantPublishedPost.audio.url } }
-              : {}),
-          };
-          delete finalPostData.isOptimistic;
-
-          let result;
-          if (communityId) {
-            // Community posts go through the callable: it verifies membership,
-            // applies the community's content-approval setting and increments
-            // the server-only counters. A direct createPost would bypass all
-            // three and write a post the community feed could never list.
-            const { getCommunityService } = await import("../services/communityService.js");
-            const communityService = services.current.community || getCommunityService();
-            const communityPost = await communityService.createCommunityPost(communityId, userNow.uid, finalPostData);
-            result = communityPost?.id ? { postId: communityPost.id } : null;
-          } else {
-            const { getFirestoreService } = await import("../services/firestoreService.js");
-            const firestoreService = services.current.firestore || getFirestoreService();
-            result = await firestoreService.createPost(finalPostData);
-          }
-
-          if (!result?.postId) {
-            // createPost resolved without an id: the server never persisted the
-            // post. Drop the optimistic entry so a ghost post does not linger in
-            // the device-local cache and reappear in every future feed load.
-            throw new Error("The post could not be saved.");
-          }
-
-          // Replace temporary optimistic ID with real Firestore doc ID
-          try {
-            const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-            const updated = localList.map(p => p.id === instantPostId ? { ...p, id: result.postId, isOptimistic: false } : p);
-            localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated));
-            window.dispatchEvent(new CustomEvent('arvdoul:post_id_synced', { detail: { oldId: instantPostId, newId: result.postId } }));
-          } catch (syncErr) {
-            // The optimistic id could not be swapped for the real one; the local
-            // cache may keep a ghost entry until the next feed reconciliation.
-            console.warn("Post id sync failed:", syncErr);
-          }
-
-          // Clear feed cache
-          try {
-            const { getFeedService } = await import("../services/feedService.js");
-            const feedService = services.current.feed || getFeedService();
-            feedService.clearUserCache(userNow.uid);
-          } catch (e) {
-            console.warn('Feed cache clear failed', e?.message);
-          }
-        } catch (bgErr) {
-          // The server write failed (offline or transient). The optimistic entry
-          // holds blob: URLs and no Firestore document, so leaving it in the
-          // device-local cache would show a broken post forever and then
-          // duplicate once the real one lands. Drop it and hand the post to the
-          // real IndexedDB offline queue, which the sync engine drains on
-          // reconnect (and which is uid-scoped, so it cannot bleed across
-          // accounts).
-          let queued = false;
-          try {
-            await addToOfflineQueue(current);
-            queued = true;
-          } catch (queueErr) {
-            console.warn("Offline queue enqueue failed:", queueErr);
-          }
-          try {
-            const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
-            localStorage.setItem(
-              LOCAL_POSTS_KEY,
-              JSON.stringify(localList.filter(p => p.id !== instantPostId))
-            );
-          } catch (e) {
-            console.warn('Local post cleanup failed', e?.message);
-          }
-          toast.error(
-            queued
-              ? "You're offline — this post will publish when you reconnect."
-              : (bgErr?.message || "Post could not be saved.")
-          );
-        }
-      })();
-
-      return;
-    } catch (err) {
-      console.error("Publish post error:", err);
-      dispatch({ type: "SET_ERROR", payload: err.message });
-      toast.error(err.message || "Failed to publish post");
-    } finally {
-      dispatch({ type: "SET_LOADING", payload: false });
-      publishLockRef.current = false;
-    }
-  }, [addToOfflineQueue, deleteDraft, navigate, setCurrentUser, uploadMedia, moderateContent, communityIdParam]);
+  }, [state.postType, state.content, state.mediaItems, moderateContent]);
 
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [pendingType, setPendingType] = useState(null);
@@ -1635,120 +752,280 @@ function CreatePostProvider({ children }) {
   const [versions, setVersions] = useState([]);
   const [selectedDraftId, setSelectedDraftId] = useState(null);
 
-  const selectPostType = useCallback((typeId) => {
-    if (typeId === "vibe") { navigate("/create-story"); return; }
-    if (stateRef.current.isDirty && stateRef.current.postType) {
-      setUnsavedAction("switch-type"); setPendingType(typeId); setShowUnsavedModal(true); return;
-    }
-    const existingDraft = draftsListRef.current.find(d => d.postType === typeId);
-    if (existingDraft) {
-      setPendingType(typeId); setDraftToResume(existingDraft); setShowDraftModal(true); return;
-    }
-    dispatch({ type: "RESET" }); dispatch({ type: "SET_POST_TYPE", payload: typeId }); dispatch({ type: "SET_STEP", payload: 2 });
-  }, [navigate]);
+  const selectPostType = useCallback(
+    (typeId) => {
+      if (typeId === 'vibe') {
+        navigate('/create-story');
+        return;
+      }
+      if (stateRef.current.isDirty && stateRef.current.postType) {
+        setUnsavedAction('switch-type');
+        setPendingType(typeId);
+        setShowUnsavedModal(true);
+        return;
+      }
+      const existingDraft = draftsListRef.current.find((d) => d.postType === typeId);
+      if (existingDraft) {
+        setPendingType(typeId);
+        setDraftToResume(existingDraft);
+        setShowDraftModal(true);
+        return;
+      }
+      dispatch({ type: 'RESET' });
+      dispatch({ type: 'SET_POST_TYPE', payload: typeId });
+      dispatch({ type: 'SET_STEP', payload: 2 });
+    },
+    [navigate]
+  );
 
   const confirmDiscard = useCallback(() => {
     setShowUnsavedModal(false);
-    if (unsavedAction === "back") {
-      dispatch({ type: "RESET" }); dispatch({ type: "SET_POST_TYPE", payload: null }); dispatch({ type: "SET_STEP", payload: 1 });
-    } else if (unsavedAction === "switch-type" && pendingType) {
-      const existingDraft = draftsListRef.current.find(d => d.postType === pendingType);
-      if (existingDraft) { setDraftToResume(existingDraft); setShowDraftModal(true); }
-      else { dispatch({ type: "RESET" }); dispatch({ type: "SET_POST_TYPE", payload: pendingType }); dispatch({ type: "SET_STEP", payload: 2 }); }
+    if (unsavedAction === 'back') {
+      dispatch({ type: 'RESET' });
+      dispatch({ type: 'SET_POST_TYPE', payload: null });
+      dispatch({ type: 'SET_STEP', payload: 1 });
+    } else if (unsavedAction === 'switch-type' && pendingType) {
+      const existingDraft = draftsListRef.current.find((d) => d.postType === pendingType);
+      if (existingDraft) {
+        setDraftToResume(existingDraft);
+        setShowDraftModal(true);
+      } else {
+        dispatch({ type: 'RESET' });
+        dispatch({ type: 'SET_POST_TYPE', payload: pendingType });
+        dispatch({ type: 'SET_STEP', payload: 2 });
+      }
     }
-    setUnsavedAction(null); setPendingType(null);
+    setUnsavedAction(null);
+    setPendingType(null);
   }, [unsavedAction, pendingType]);
 
-  const cancelDiscard = useCallback(() => { setShowUnsavedModal(false); setUnsavedAction(null); setPendingType(null); }, []);
+  const cancelDiscard = useCallback(() => {
+    setShowUnsavedModal(false);
+    setUnsavedAction(null);
+    setPendingType(null);
+  }, []);
 
-  const handleResumeDraft = useCallback(() => {
-    if (draftToResume) { loadDraft(draftToResume.id); dispatch({ type: "SET_POST_TYPE", payload: pendingType }); dispatch({ type: "SET_STEP", payload: 2 }); }
-    setShowDraftModal(false); setDraftToResume(null); setPendingType(null);
-  }, [draftToResume, pendingType, loadDraft]);
+  const handleResumeDraft = useCallback(async () => {
+    if (draftToResume) {
+      await loadDraft(draftToResume.id);
+    }
+    setShowDraftModal(false);
+    setDraftToResume(null);
+    setPendingType(null);
+  }, [draftToResume, loadDraft]);
 
   const handleStartFresh = useCallback(() => {
-    dispatch({ type: "RESET" }); dispatch({ type: "SET_POST_TYPE", payload: pendingType }); dispatch({ type: "SET_STEP", payload: 2 });
-    setShowDraftModal(false); setDraftToResume(null); setPendingType(null);
+    dispatch({ type: 'RESET' });
+    dispatch({ type: 'SET_POST_TYPE', payload: pendingType });
+    dispatch({ type: 'SET_STEP', payload: 2 });
+    setShowDraftModal(false);
+    setDraftToResume(null);
+    setPendingType(null);
   }, [pendingType]);
 
   const goBackToLauncher = useCallback(() => {
-    if (stateRef.current.isDirty) { setUnsavedAction("back"); setShowUnsavedModal(true); return; }
-    dispatch({ type: "RESET" }); dispatch({ type: "SET_POST_TYPE", payload: null }); dispatch({ type: "SET_STEP", payload: 1 });
+    if (stateRef.current.isDirty) {
+      setUnsavedAction('back');
+      setShowUnsavedModal(true);
+      return;
+    }
+    dispatch({ type: 'RESET' });
+    dispatch({ type: 'SET_POST_TYPE', payload: null });
+    dispatch({ type: 'SET_STEP', payload: 1 });
   }, []);
 
   const loadTemplates = useCallback(async () => {
-    if (!dbRef.current) return;
-    const all = await dbRef.current.getAll(TEMPLATES_STORE);
+    const uid = userRef.current?.uid;
+    if (!dbRef.current || !uid) return;
+    const all = await listTemplatesForOwner(dbRef.current, uid);
     setTemplates(all);
     setShowTemplates(true);
   }, []);
 
-  const loadVersions = useCallback(async (draftId) => {
-    if (!dbRef.current) return;
-    setSelectedDraftId(draftId);
-    const vers = await getDraftVersions(draftId);
-    setVersions(vers);
-    setShowVersions(true);
-  }, [getDraftVersions]);
+  const loadVersions = useCallback(
+    async (draftId) => {
+      setSelectedDraftId(draftId);
+      const vers = await getDraftVersions(draftId);
+      setVersions(vers);
+      setShowVersions(true);
+    },
+    [getDraftVersions]
+  );
 
-  const restoreVersion = useCallback(async (version) => {
-    dispatch({ type: "LOAD_DRAFT", payload: { ...version.data, draftId: selectedDraftId, postType: stateRef.current.postType } });
-    dispatch({ type: "SET_STEP", payload: 2 });
-    setShowVersions(false);
-    toast.success("Version restored");
-  }, [selectedDraftId]);
+  const restoreVersion = useCallback(
+    async (version) => {
+      const uid = userRef.current?.uid;
+      const restoredMedia = await hydrateDraftMedia(version.data?.mediaItems, uid);
+      dispatch({
+        type: 'LOAD_DRAFT',
+        payload: {
+          ...version.data,
+          mediaItems: restoredMedia,
+          draftId: selectedDraftId,
+          postType: version.data?.postType || stateRef.current.postType,
+          isDirty: true,
+        },
+      });
+      dispatch({
+        type: 'SET_POST_TYPE',
+        payload: version.data?.postType || stateRef.current.postType,
+      });
+      dispatch({ type: 'SET_STEP', payload: 2 });
+      setShowVersions(false);
+      toast.success('Version restored');
+    },
+    [selectedDraftId, hydrateDraftMedia]
+  );
 
   useEffect(() => {
     const handler = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (stateRef.current.postType) saveDraft(); else toast.info("Select a post type first"); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); if (stateRef.current.postType && stateRef.current.step === 3) publishPost(); else toast.info("Complete all steps first"); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); dispatch({ type: "UNDO" }); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "y") { e.preventDefault(); dispatch({ type: "REDO" }); }
-      if ((e.ctrlKey || e.metaKey) && e.key >= "1" && e.key <= "9") {
-        const idx = parseInt(e.key) - 1;
-        const type = POST_TYPES[idx];
-        if (type && !type.isStory) { e.preventDefault(); selectPostType(type.id); }
+      if (
+        e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'TEXTAREA' ||
+        e.target.isContentEditable
+      ) {
+        return;
       }
-      if (e.key === "Escape" && stateRef.current.postType) { e.preventDefault(); goBackToLauncher(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (stateRef.current.postType) saveDraft();
+        else toast.info('Select a post type first');
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (stateRef.current.postType && stateRef.current.step === 3) publishPost();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: 'UNDO' });
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        dispatch({ type: 'REDO' });
+      }
+      if (
+        e.key === 'Escape' &&
+        stateRef.current.postType &&
+        !showDraftModal &&
+        !showUnsavedModal &&
+        !showTemplates &&
+        !showVersions
+      ) {
+        e.preventDefault();
+        goBackToLauncher();
+      }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [saveDraft, publishPost, selectPostType, goBackToLauncher]);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [
+    saveDraft,
+    publishPost,
+    goBackToLauncher,
+    showDraftModal,
+    showUnsavedModal,
+    showTemplates,
+    showVersions,
+  ]);
 
   useEffect(() => {
-    const handler = (e) => { if (stateRef.current.isDirty) { e.preventDefault(); e.returnValue = ""; } };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
+    const handler = (e) => {
+      if (stateRef.current.isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
-  const servicesValue = useMemo(() => ({
-    services: services.current, isOffline, offlineQueueItems, isDark, prefersReducedMotion,
-    saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
-    generateAICaption, generateAIHashtags, getPredictions, moderateContent,
-    retryOfflineItem, deleteOfflineItem,
-    saveAsTemplate, loadTemplate, loadTemplates, getDraftVersions, loadVersions, restoreVersion,
-    showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
-    aiLoading,
-  }), [
-    isOffline, offlineQueueItems, isDark, prefersReducedMotion,
-    saveDraft, loadDraft, deleteDraft, publishPost, uploadMedia, selectPostType, resumeLatestDraft, goBackToLauncher,
-    generateAICaption, generateAIHashtags, getPredictions, moderateContent,
-    retryOfflineItem, deleteOfflineItem,
-    saveAsTemplate, loadTemplate, loadTemplates, getDraftVersions, loadVersions, restoreVersion,
-    showTemplates, setShowTemplates, templates, showVersions, setShowVersions, versions,
-    aiLoading,
-  ]);
+  const servicesValue = useMemo(
+    () => ({
+      services: services.current,
+      dbRef,
+      isOffline,
+      offlineQueueItems,
+      isDark,
+      prefersReducedMotion,
+      autoSaveStatus,
+      lastSavedAt,
+      searchUsers,
+      saveDraft,
+      loadDraft,
+      deleteDraft,
+      publishPost,
+      uploadMedia,
+      selectPostType,
+      resumeLatestDraft,
+      goBackToLauncher,
+      getPredictions,
+      moderateContent,
+      retryOfflineItem,
+      deleteOfflineItem,
+      saveAsTemplate,
+      loadTemplate,
+      loadTemplates,
+      getDraftVersions,
+      loadVersions,
+      restoreVersion,
+      showTemplates,
+      setShowTemplates,
+      templates,
+      showVersions,
+      setShowVersions,
+      versions,
+    }),
+    [
+      isOffline,
+      offlineQueueItems,
+      isDark,
+      prefersReducedMotion,
+      autoSaveStatus,
+      lastSavedAt,
+      searchUsers,
+      saveDraft,
+      loadDraft,
+      deleteDraft,
+      publishPost,
+      uploadMedia,
+      selectPostType,
+      resumeLatestDraft,
+      goBackToLauncher,
+      getPredictions,
+      moderateContent,
+      retryOfflineItem,
+      deleteOfflineItem,
+      saveAsTemplate,
+      loadTemplate,
+      loadTemplates,
+      getDraftVersions,
+      loadVersions,
+      restoreVersion,
+      showTemplates,
+      templates,
+      showVersions,
+      versions,
+    ]
+  );
 
   const stateValue = useMemo(() => ({ state, dispatch, draftsList }), [state, draftsList]);
 
   if (!servicesReady) {
     if (serviceError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-          <div className="text-center p-6 max-w-sm mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
-            <p className="text-red-500 text-sm mb-4 font-medium">Failed to initialize: {serviceError}</p>
-            <button onClick={initServices} className="px-5 py-2.5 rounded-xl bg-purple-600 text-white font-medium shadow-lg hover:bg-purple-700 transition">Retry</button>
+        <div className="min-h-[60vh] flex items-center justify-center p-4">
+          <div className={`${SURFACE_GLASS_CLASS} text-center p-6 max-w-sm w-full space-y-4`}>
+            <Icons.AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+              Could not open Studio: {serviceError}
+            </p>
+            <button
+              type="button"
+              onClick={initServices}
+              className="min-h-[44px] px-5 py-2.5 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-95"
+              style={{ background: BRAND_GRADIENT }}
+            >
+              Retry
+            </button>
           </div>
         </div>
       );
@@ -1761,1019 +1038,741 @@ function CreatePostProvider({ children }) {
       <StateContext.Provider value={stateValue}>
         {children}
         <AnimatePresence>
-          {showDraftModal && <Modal onClose={() => setShowDraftModal(false)}>
-            <h3 className="text-lg font-bold mb-2">Draft found</h3>
-            <p className="text-sm mb-4">You have a saved draft for {pendingType}. Resume it or start fresh?</p>
-            <div className="flex gap-3">
-              <button onClick={handleResumeDraft} className="flex-1 py-2 rounded-xl bg-gradient-to-r from-arvdoul-purple via-arvdoul-indigo to-arvdoul-glow-cyan text-white font-medium">Resume</button>
-              <button onClick={handleStartFresh} className="flex-1 py-2 rounded-xl border dark:border-gray-600">New</button>
-            </div>
-          </Modal>}
-          {showUnsavedModal && <Modal onClose={cancelDiscard}>
-            <h3 className="text-lg font-bold mb-2">Unsaved changes</h3>
-            <p className="text-sm mb-4">You have unsaved changes. Leave anyway?</p>
-            <div className="flex gap-3">
-              <button onClick={confirmDiscard} className="flex-1 py-2 rounded-xl bg-red-600 text-white font-medium">Discard</button>
-              <button onClick={cancelDiscard} className="flex-1 py-2 rounded-xl border dark:border-gray-600">Continue Editing</button>
-            </div>
-          </Modal>}
-          {showTemplates && <Modal onClose={() => setShowTemplates(false)}>
-            <h3 className="text-lg font-bold mb-3">Templates</h3>
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {templates.length === 0 && <p className="text-sm text-gray-500">No templates saved</p>}
-              {templates.map(tpl => (
-                <div key={tpl.id} className="flex items-center justify-between p-2 rounded-xl bg-white/10 dark:bg-black/20 border border-white/10 dark:border-gray-700/30">
-                  <div><p className="text-sm font-medium">{tpl.name}</p><p className="text-xs text-gray-400">{tpl.postType}</p></div>
-                  <button onClick={() => { loadTemplate(tpl.id); setShowTemplates(false); }} className="px-3 py-1 text-xs bg-purple-500 text-white rounded-full">Load</button>
-                </div>
-              ))}
-            </div>
-          </Modal>}
-          {showVersions && <Modal onClose={() => setShowVersions(false)}>
-            <h3 className="text-lg font-bold mb-3">Version History</h3>
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {versions.length === 0 && <p className="text-sm text-gray-500">No previous versions</p>}
-              {versions.map(ver => (
-                <div key={ver.id} className="flex items-center justify-between p-2 rounded-xl bg-white/10 dark:bg-black/20 border border-white/10 dark:border-gray-700/30">
-                  <div><p className="text-xs text-gray-400">{new Date(ver.timestamp).toLocaleString()}</p><p className="text-sm">{ver.data.content?.slice(0, 40) || "Untitled"}</p></div>
-                  <button onClick={() => restoreVersion(ver)} className="px-3 py-1 text-xs bg-purple-500 text-white rounded-full">Restore</button>
-                </div>
-              ))}
-            </div>
-          </Modal>}
+          {showDraftModal && (
+            <Modal onClose={() => setShowDraftModal(false)} labelledBy="draft-modal-title">
+              <h3 id="draft-modal-title" className="text-lg font-bold mb-1.5">
+                Resume saved draft?
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">
+                You have an unfinished {pendingType} draft saved. Would you like to continue where you left off?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleResumeDraft}
+                  className="min-h-[44px] flex-1 py-2.5 rounded-xl text-white font-semibold text-sm"
+                  style={{ background: BRAND_GRADIENT }}
+                >
+                  Resume Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartFresh}
+                  className="min-h-[44px] flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-white/15 font-medium text-sm"
+                >
+                  Start Fresh
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {showUnsavedModal && (
+            <Modal onClose={cancelDiscard} labelledBy="unsaved-modal-title">
+              <h3 id="unsaved-modal-title" className="text-lg font-bold mb-1.5">
+                Unsaved changes
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">
+                Leaving now will discard changes made since your last draft save.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={confirmDiscard}
+                  className="min-h-[44px] flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm"
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelDiscard}
+                  className="min-h-[44px] flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-white/15 font-medium text-sm"
+                >
+                  Keep Editing
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {showTemplates && (
+            <Modal onClose={() => setShowTemplates(false)} labelledBy="templates-modal-title">
+              <div className="flex items-center justify-between mb-3">
+                <h3 id="templates-modal-title" className="text-lg font-bold">
+                  Saved Templates
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplates(false)}
+                  aria-label="Close templates"
+                  className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                >
+                  <Icons.X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {templates.length === 0 && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
+                    No templates saved yet.
+                  </p>
+                )}
+                {templates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-slate-100/80 dark:bg-white/[0.05] border border-slate-200/70 dark:border-white/10"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{tpl.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                        {tpl.postType}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        loadTemplate(tpl.id);
+                        setShowTemplates(false);
+                      }}
+                      className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold text-white rounded-xl"
+                      style={{ background: BRAND_GRADIENT }}
+                    >
+                      Use
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Modal>
+          )}
+
+          {showVersions && (
+            <Modal onClose={() => setShowVersions(false)} labelledBy="versions-modal-title">
+              <div className="flex items-center justify-between mb-3">
+                <h3 id="versions-modal-title" className="text-lg font-bold">
+                  Version History
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowVersions(false)}
+                  aria-label="Close version history"
+                  className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                >
+                  <Icons.X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {versions.length === 0 && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">
+                    No previous versions recorded.
+                  </p>
+                )}
+                {versions.map((ver) => (
+                  <div
+                    key={ver.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-100/80 dark:bg-white/[0.05] border border-slate-200/70 dark:border-white/10"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {new Date(ver.timestamp).toLocaleString()}
+                      </p>
+                      <p className="text-sm truncate">{ver.data?.content?.slice(0, 50) || 'Untitled'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => restoreVersion(ver)}
+                      className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold text-white rounded-xl shrink-0"
+                      style={{ background: BRAND_GRADIENT }}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Modal>
+          )}
         </AnimatePresence>
       </StateContext.Provider>
     </ServicesContext.Provider>
   );
 }
 
-// ── MODAL & SHARED PANELS ──────────────────────────────────────────────
-function Modal({ children, onClose }) {
-  const ref = useRef();
-  const { prefersReducedMotion } = useCreatePostServices();
-
-  useEffect(() => {
-    const handleKey = (e) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleKey);
-    if (ref.current) ref.current.focus();
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const modal = ref.current;
-    if (!modal) return;
-    const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const trap = (e) => {
-      if (e.key !== "Tab") return;
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    modal.addEventListener("keydown", trap);
-    return () => modal.removeEventListener("keydown", trap);
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur-md" onClick={onClose}>
-      <motion.div initial={prefersReducedMotion ? {} : { scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={prefersReducedMotion ? {} : { scale: 0.9, opacity: 0 }}
-        className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl max-w-md w-full p-6 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)] border border-purple-500/30 focus:outline-none"
-        tabIndex={-1} ref={ref} onClick={e => e.stopPropagation()}>
-        {children}
-      </motion.div>
-    </div>
-  );
-}
-
-function Panel({ icon: Icon, title, children, defaultOpen = false }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  const { isDark, prefersReducedMotion } = useCreatePostServices();
-  return (
-    <details className={`rounded-2xl backdrop-blur-sm border shadow-2xl overflow-hidden ${
-      isDark ? 'bg-black/20 border-gray-700/30' : 'bg-white/90 border-gray-200/50 shadow-gray-200/20'
-    }`} open={isOpen} onToggle={(e) => setIsOpen(e.target.open)}>
-      <summary className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/5 dark:hover:bg-black/5 transition">
-        <Icon className="w-6 h-6 text-purple-400" />
-        <span className="font-semibold text-sm text-gray-800 dark:text-white uppercase tracking-wide">{title}</span>
-        <Icons.ChevronDown className="ml-auto w-4 h-4 text-gray-400 transition-transform" />
-      </summary>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div initial={prefersReducedMotion ? {} : { height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={prefersReducedMotion ? {} : { height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="p-4 pt-0 space-y-3">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </details>
-  );
-}
-
-// ── PANELS (exported for Step 3) – all inputs/selects use INPUT_CLASS ─
-export function VisibilityPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  return (
-    <Panel icon={Icons.Eye} title="Visibility" defaultOpen={defaultOpen}>
-      <select aria-label="return (" value={state.visibility} onChange={e => dispatch({ type: "SET_VISIBILITY", payload: e.target.value })}
-        className={INPUT_CLASS}>
-        {VISIBILITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </Panel>
-  );
-}
-
-export function LocationPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const [query, setQuery] = useState(state.location || "");
-  const [suggestions, setSuggestions] = useState([]);
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (!query.trim()) return;
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`, { headers: { "User-Agent": "ArvdoulApp/1.0" } });
-        const data = await res.json();
-        setSuggestions(data.map(d => d.display_name));
-        setShow(true);
-      } catch (err) {
-        // Geocoding is best-effort; log so a broken lookup is diagnosable.
-        console.warn('CreatePost: location lookup failed', err);
-        setSuggestions([]);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  return (
-    <Panel icon={Icons.MapPin} title="Location" defaultOpen={defaultOpen}>
-      <input aria-label="Add location..." type="text" placeholder="Add location..." value={query} onChange={e => setQuery(e.target.value)}
-        onFocus={() => setShow(true)} onBlur={() => setTimeout(() => setShow(false), 200)}
-        className={INPUT_CLASS} />
-      {show && suggestions.length > 0 && (
-        <div className="mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl shadow-lg max-h-40 overflow-y-auto">
-          {suggestions.map((s, i) => (
-            <button key={i} onMouseDown={() => { dispatch({ type: "SET_LOCATION", payload: s }); setQuery(s); setShow(false); }} className="w-full text-left p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600">{s}</button>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-export function SchedulingPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const [showPicker, setShowPicker] = useState(false);
-
-  return (
-    <Panel icon={Icons.Clock} title="Scheduling" defaultOpen={defaultOpen}>
-      <button onClick={() => setShowPicker(!showPicker)} className="text-sm text-purple-500 hover:underline">
-        {showPicker ? "Hide picker" : "Set specific date/time"}
-      </button>
-      {showPicker && (
-        <Suspense fallback={<div className="h-10 animate-pulse bg-gray-200 dark:bg-gray-700 rounded" />}>
-          <DateTimePicker
-            selected={state.scheduledTime ? new Date(state.scheduledTime) : null}
-            onChange={date => dispatch({ type: "SET_SCHEDULED_TIME", payload: date ? date.toISOString() : null })}
-            showTimeSelect dateFormat="Pp" placeholderText="Select date and time"
-            className={INPUT_CLASS} />
-        </Suspense>
-      )}
-      {state.scheduledTime && (
-        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          Publishes automatically at {new Date(state.scheduledTime).toLocaleString()}.
-        </p>
-      )}
-    </Panel>
-  );
-}
-
-export function AIPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { generateAICaption, generateAIHashtags, aiLoading } = useCreatePostServices();
-  return (
-    <Panel icon={Icons.Sparkles} title="AI Tools" defaultOpen={defaultOpen}>
-      <div className="flex flex-wrap gap-2 mb-2">
-        <button onClick={() => generateAICaption("casual")} disabled={aiLoading} className="px-3 py-1 text-xs bg-purple-500 text-white rounded-full disabled:opacity-50">
-          {aiLoading ? <LoadingSpinner size="xs" /> : "AI Caption (Casual)"}
-        </button>
-        <button onClick={() => generateAICaption("professional")} disabled={aiLoading} className="px-3 py-1 text-xs bg-purple-500 text-white rounded-full disabled:opacity-50">
-          {aiLoading ? <LoadingSpinner size="xs" /> : "AI Caption (Pro)"}
-        </button>
-        <button onClick={() => generateAICaption("viral")} disabled={aiLoading} className="px-3 py-1 text-xs bg-purple-500 text-white rounded-full disabled:opacity-50">
-          {aiLoading ? <LoadingSpinner size="xs" /> : "AI Caption (Viral)"}
-        </button>
-        <button onClick={generateAIHashtags} disabled={aiLoading} className="px-3 py-1 text-xs bg-pink-500 text-white rounded-full disabled:opacity-50">
-          {aiLoading ? <LoadingSpinner size="xs" /> : "# AI Hashtags"}
-        </button>
-      </div>
-      {state.aiCaption && (
-        <div className="p-3 bg-white/5 dark:bg-black/20 rounded-xl border border-purple-500/20">
-          <p className="text-sm">{state.aiCaption}</p>
-          <div className="flex gap-2 mt-2">
-            <button onClick={() => { dispatch({ type: "SET_CONTENT", payload: state.aiCaption }); dispatch({ type: "SET_AI_CAPTION", payload: null }); }} className="text-xs text-green-500">Apply</button>
-            <button onClick={() => dispatch({ type: "SET_AI_CAPTION", payload: null })} className="text-xs text-red-400">Dismiss</button>
-          </div>
-        </div>
-      )}
-      {state.aiHashtags && (
-        <div className="p-3 bg-white/5 dark:bg-black/20 rounded-xl border border-purple-500/20 mt-2">
-          <p className="text-sm">{state.aiHashtags.join(" ")}</p>
-          <div className="flex gap-2 mt-2">
-            <button onClick={() => { dispatch({ type: "SET_HASHTAGS", payload: state.aiHashtags }); dispatch({ type: "SET_AI_HASHTAGS", payload: null }); }} className="text-xs text-green-500">Apply</button>
-            <button onClick={() => dispatch({ type: "SET_AI_HASHTAGS", payload: null })} className="text-xs text-red-400">Dismiss</button>
-          </div>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-export function InsightsPanel({ defaultOpen = false }) {
-  const { state } = useCreatePostState();
-  const { getPredictions } = useCreatePostServices();
-  const content = !state.insights ? (
-    <button onClick={getPredictions} className="px-4 py-2 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600">📊 Get Predictions</button>
-  ) : (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div><span className="text-gray-500">Reach:</span> {state.insights.reach}</div>
-        <div><span className="text-gray-500">Engagement:</span> {state.insights.engagement}%</div>
-        <div><span className="text-gray-500">Viral Score:</span> {state.insights.viralScore}%</div>
-        {state.insights.suggestedWindow && (
-          <div className="col-span-2"><span className="text-gray-500">Suggested window:</span> {state.insights.suggestedWindow}</div>
-        )}
-      </div>
-      {Array.isArray(state.insights.factors) && state.insights.factors.length > 0 && (
-        <ul className="text-xs text-gray-500 dark:text-gray-400 list-disc pl-4 space-y-0.5">
-          {state.insights.factors.map((f, i) => <li key={i}>{f}</li>)}
-        </ul>
-      )}
-      <p className="text-[11px] text-gray-400 dark:text-gray-500">
-        Heuristic estimates from your draft — not a guarantee of performance.
-      </p>
-    </div>
-  );
-  return (
-    <Panel icon={Icons.TrendingUp} title="Post Predictions" defaultOpen={defaultOpen}>
-      {content}
-    </Panel>
-  );
-}
-
-export function ModerationStatus({ defaultOpen = false }) {
-  const { state } = useCreatePostState();
-  return (
-    <Panel icon={Icons.Shield} title="Content Moderation" defaultOpen={defaultOpen}>
-      {state.moderationStatus ? (
-        state.moderationStatus.unknown ? (
-          <div className="p-2 rounded-lg text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
-            Moderation check unavailable — content was not screened.
-          </div>
-        ) : (
-          <div className={`p-2 rounded-lg text-xs ${state.moderationStatus.approved ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"}`}>
-            {state.moderationStatus.approved ? "Content passed moderation" : `Content flagged: ${(state.moderationStatus.flags || []).join(", ")}`}
-            {state.moderationStatus.needsReview && <span className="ml-1 text-gray-400">(flagged for review)</span>}
-          </div>
-        )
-      ) : (
-        <p className="text-xs text-gray-500">Typing will auto‑check content.</p>
-      )}
-    </Panel>
-  );
-}
-
-// ── POST PREVIEW (draft render) ────────────────────────────────────────
-function PostPreview() {
-  const { state } = useCreatePostState();
-  const { user } = useAuth();
-  const isDark = useTheme().theme === "dark";
-
-  const authorName = pickDisplayName([user?.displayName, user?.username], { fallback: "You" });
-  const authorUsername = deriveHandle(user?.username) || deriveHandle(user?.email) || "";
-  const authorPhoto = user?.photoURL || "";
-
-  const mediaPreviews = useMemo(() => {
-    if (!state.mediaItems.length) return null;
-    const previews = state.mediaItems.slice(0, 4);
-    return (
-      <div className={`grid gap-2 mt-3 rounded-xl overflow-hidden ${
-        previews.length === 1 ? 'grid-cols-1' : previews.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
-      }`}>
-        {previews.map((m, i) => (
-          <div key={i} className="relative aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200/30 dark:border-gray-700/30">
-            {m.type === 'video' ? (
-              <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white">
-                <Icons.Play className="w-8 h-8 opacity-80" />
-              </div>
-            ) : (
-              <LazyImage src={m.preview || m.url} alt={m.alt || ""} className="w-full h-full object-cover" />
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }, [state.mediaItems]);
-
-  return (
-    <div className={`rounded-2xl border p-5 space-y-3 ${
-      isDark ? 'bg-gray-800/80 border-gray-700/50' : 'bg-white border-gray-200'
-    } shadow-md transition-all`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {authorPhoto ? (
-            <LazyImage src={authorPhoto} alt="" className="w-10 h-10 rounded-full object-cover border border-purple-500/30" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              {authorName[0]?.toUpperCase() || "U"}
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-gray-900 dark:text-white">{authorName}</span>
-              {authorUsername && (
-                <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">@{authorUsername}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span>Preview</span>
-              {state.location && (
-                <>
-                  <span>•</span>
-                  <span className="flex items-center gap-0.5"><Icons.MapPin className="w-3 h-3 text-purple-500" /> {state.location}</span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 capitalize">
-          {state.postType}
-        </span>
-      </div>
-
-      {state.content ? (
-        <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-          {state.content}
-        </p>
-      ) : (
-        <p className="text-sm text-gray-400 italic">No text provided</p>
-      )}
-
-      {/* Media previews */}
-      {mediaPreviews}
-
-      {/* Poll preview */}
-      {state.postType === "poll" && state.typeData?.poll?.options?.length > 0 && (
-        <div className="space-y-2 mt-3 p-3 rounded-xl bg-purple-500/5 border border-purple-500/20">
-          <p className="text-xs font-semibold text-purple-600 dark:text-purple-400">Poll Options:</p>
-          {state.typeData.poll.options.filter(o => o.trim()).map((opt, i) => (
-            <div key={i} className="p-2.5 rounded-lg border border-purple-200/50 dark:border-purple-800/40 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60">
-              {opt}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Event preview */}
-      {state.postType === "event" && state.typeData?.event && (
-        <div className="p-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs flex-col">
-            <Icons.Calendar className="w-5 h-5" />
-          </div>
-          <div className="text-xs">
-            <p className="font-semibold text-gray-900 dark:text-white">{state.typeData.event.location || "Online Event"}</p>
-            <p className="text-gray-500 dark:text-gray-400">{state.typeData.event.date ? new Date(state.typeData.event.date).toLocaleDateString() : "Upcoming"}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Link preview */}
-      {state.postType === "link" && state.typeData?.link?.url && (
-        <a href={state.typeData.link.url} target="_blank" rel="noreferrer" className="block p-3 rounded-xl border border-purple-200 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20 text-xs text-purple-600 dark:text-purple-400 truncate hover:underline">
-          🔗 {state.typeData.link.title || state.typeData.link.url}
-        </a>
-      )}
-
-      {/* Hashtags */}
-      {state.hashtags.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap pt-1">
-          {state.hashtags.map(tag => (
-            <span key={tag} className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-2 py-0.5 rounded-md font-medium">
-              #{tag}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Draft preview footer: no engagement exists yet, so it is not shown as a
-          measured "0" — the audience scope is the only real signal here. */}
-      <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
-        <span>Preview — engagement appears after publishing</span>
-        <span className="flex items-center gap-1 text-purple-500 font-medium">
-          <Icons.Eye className="w-4 h-4" /> {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label || "Public"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-export function ReviewSummary({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  const { saveDraft, saveAsTemplate } = useCreatePostServices();
-  const isDark = useTheme().theme === "dark";
-
-  return (
-    <div className={`rounded-2xl p-5 border ${
-      isDark ? 'bg-gray-900/90 border-gray-800 shadow-xl' : 'bg-white border-gray-200 shadow-sm'
-    } space-y-4`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
-            <Icons.CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Review & Finalize</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Check how your post looks before publishing</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={saveDraft}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-            title="Save as draft"
-          >
-            💾 Draft
-          </button>
-          <button
-            onClick={saveAsTemplate}
-            className="px-3 py-1.5 rounded-lg border border-purple-500/30 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition"
-            title="Save as template"
-          >
-            📋 Template
-          </button>
-        </div>
-      </div>
-
-      {/* Live Preview */}
-      <PostPreview />
-
-      {/* Metadata Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs">
-        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
-          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Visibility</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
-            {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label || "Public"}
-          </span>
-        </div>
-        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
-          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Media Items</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200">{state.mediaItems.length} attached</span>
-        </div>
-        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
-          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Schedule</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200">
-            {state.scheduledTime ? new Date(state.scheduledTime).toLocaleDateString() : "Immediately"}
-          </span>
-        </div>
-      </div>
-
-      {state.error && (
-        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-medium flex items-center gap-2">
-          <Icons.AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span className="flex-1">{state.error}</span>
-          <button
-            type="button"
-            aria-label="Dismiss error"
-            onClick={() => dispatch({ type: "CLEAR_ERROR" })}
-            className="p-0.5 rounded hover:bg-red-500/20"
-          >
-            <Icons.X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── STEP INDICATOR ─────────────────────────────────────────────────────
 function StepIndicator() {
   const { state, dispatch } = useCreatePostState();
-  const steps = [{ num: 1, label: "Type" }, { num: 2, label: "Create" }, { num: 3, label: "Publish" }];
+  const { autoSaveStatus, lastSavedAt } = useCreatePostServices();
+  const steps = [
+    { num: 1, label: 'Format' },
+    { num: 2, label: 'Compose' },
+    { num: 3, label: 'Publish' },
+  ];
+
   return (
-    <div className="sticky top-0 z-20 bg-gray-50/80 dark:bg-[#030712]/80 backdrop-blur-xl py-4 px-4 border-b border-gray-200/50 dark:border-gray-700/30">
-      <div className="relative flex items-center justify-center max-w-xs mx-auto">
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-1 rounded-full shadow-lg transition-all duration-500"
-          style={{ background: DNA_GRADIENT_STYLE, width: `${((state.step - 1) / 2) * 100}%`, maxWidth: "100%", left: "0", transform: "translateY(-50%)" }} />
-        <div className="relative flex justify-between w-full z-10">
+    <div className="sticky top-0 z-20 px-4 py-2.5 bg-[#F6F8FC]/85 dark:bg-[#03071B]/85 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10">
+      <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+        <div className="relative flex items-center justify-between w-full max-w-xs mx-auto sm:mx-0">
+          <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-slate-200 dark:bg-white/15 -translate-y-1/2 rounded-full" />
+          <div
+            className="absolute top-1/2 left-4 h-0.5 -translate-y-1/2 rounded-full transition-all duration-300"
+            style={{
+              background: BRAND_GRADIENT,
+              width: `calc(${((state.step - 1) / 2) * 100}% - 16px)`,
+            }}
+          />
           {steps.map((step) => {
             const isActive = state.step >= step.num;
             const isCurrent = state.step === step.num;
             return (
-              <button key={step.num} onClick={() => { if (step.num <= state.step) dispatch({ type: "SET_STEP", payload: step.num }); }} disabled={step.num > state.step}
-                className="flex flex-col items-center space-y-1" aria-label={`Step ${step.num}: ${step.label}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-                  isCurrent
-                    ? 'text-white shadow-[0_0_30px_rgba(147,51,234,0.5)] ring-2 ring-purple-400/50 ring-offset-2 ring-offset-gray-50 dark:ring-offset-[#030712]'
-                    : isActive
-                    ? 'text-white backdrop-blur-sm border border-purple-500/30'
-                    : 'bg-gray-200/50 dark:bg-gray-700/50 text-gray-400 backdrop-blur-sm'
-                }`}
-                style={isCurrent ? { background: DNA_GRADIENT_STYLE } : {}}
+              <button
+                key={step.num}
+                type="button"
+                onClick={() => {
+                  if (step.num <= state.step) dispatch({ type: 'SET_STEP', payload: step.num });
+                }}
+                disabled={step.num > state.step}
+                className="relative z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#F6F8FC] dark:bg-[#03071B] disabled:opacity-60"
+                aria-label={`Step ${step.num}: ${step.label}`}
+              >
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold tabular-nums ${
+                    isCurrent
+                      ? 'text-white shadow-md'
+                      : isActive
+                      ? 'bg-arvdoul-purple/15 text-arvdoul-purple'
+                      : 'bg-slate-200 dark:bg-white/10 text-slate-500'
+                  }`}
+                  style={isCurrent ? { background: BRAND_GRADIENT } : {}}
                 >
                   {step.num}
-                </div>
-                <span className={`text-[10px] sm:text-xs font-medium ${isActive ? "text-purple-500 font-semibold" : "text-gray-400"}`}>{step.label}</span>
+                </span>
+                <span
+                  className={`text-xs font-medium whitespace-nowrap ${
+                    isCurrent
+                      ? 'text-slate-900 dark:text-white font-semibold'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {step.label}
+                </span>
               </button>
             );
           })}
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums shrink-0" aria-live="polite">
+          {autoSaveStatus === 'saving' && (
+            <>
+              <LoadingSpinner size="xs" />
+              <span>Saving draft...</span>
+            </>
+          )}
+          {autoSaveStatus === 'saved' && lastSavedAt && (
+            <>
+              <Icons.CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Saved {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </>
+          )}
+          {autoSaveStatus === 'error' && (
+            <>
+              <Icons.AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+              <span>Autosave paused</span>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ── LAUNCHER GRID ──────────────────────────────────────────────────────
 const LauncherGrid = React.memo(() => {
-  const navigate = useNavigate();
-  const { selectPostType, resumeLatestDraft, offlineQueueItems, isDark, retryOfflineItem, deleteOfflineItem, loadTemplates, loadVersions, loadDraft } = useCreatePostServices();
-  const { state: appState, dispatch, draftsList } = useCreatePostState();
-  const draftCounts = useMemo(() => { const counts = {}; draftsList.forEach(d => { counts[d.postType] = (counts[d.postType] || 0) + 1; }); return counts; }, [draftsList]);
-  const hasDrafts = draftsList.length > 0;
-  const offlineCount = offlineQueueItems.length;
+  const {
+    selectPostType,
+    resumeLatestDraft,
+    offlineQueueItems,
+    retryOfflineItem,
+    deleteOfflineItem,
+    loadTemplates,
+    loadVersions,
+    loadDraft,
+  } = useCreatePostServices();
+  const { draftsList } = useCreatePostState();
+
+  const draftCounts = useMemo(() => {
+    const counts = {};
+    draftsList.forEach((d) => {
+      counts[d.postType] = (counts[d.postType] || 0) + 1;
+    });
+    return counts;
+  }, [draftsList]);
+
+  const scheduledDrafts = useMemo(
+    () =>
+      draftsList
+        .filter((d) => d.data?.scheduledTime)
+        .sort((a, b) => new Date(a.data.scheduledTime) - new Date(b.data.scheduledTime)),
+    [draftsList]
+  );
+
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [showScheduled, setShowScheduled] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [analyticsData, setAnalyticsData] = useState(null);
-  const [recentPostsData, setRecentPostsData] = useState([]);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-  const { user } = useAuth();
-
-  const loadAnalyticsData = useCallback(async (force = false) => {
-    if (!user?.uid) return;
-    if (analyticsData && !force) return;
-    setLoadingAnalytics(true);
-    try {
-      const { default: analyticsService } = await import('../services/analyticsService.js');
-      const data = await analyticsService.getUserAnalytics(user.uid);
-      setAnalyticsData(data);
-
-      const fsService = getFirestoreService();
-      if (fsService && typeof fsService.getUserPosts === 'function') {
-        const postsRes = await fsService.getUserPosts(user.uid, { limit: 3 }).catch(() => null);
-        if (postsRes?.posts) {
-          setRecentPostsData(postsRes.posts);
-        }
-      }
-    } catch (_e) {
-      // Analytics are advisory; the composer stays usable without them.
-      console.warn('Composer analytics unavailable:', _e?.message);
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  }, [user?.uid, analyticsData]);
-
-  useEffect(() => {
-    if (showAnalytics && user?.uid && !analyticsData) {
-      loadAnalyticsData();
-    }
-  }, [showAnalytics, user?.uid, analyticsData, loadAnalyticsData]);
-
-  const scheduledDrafts = useMemo(() => draftsList.filter(d => d.data?.scheduledTime).sort((a, b) => new Date(a.data.scheduledTime) - new Date(b.data.scheduledTime)), [draftsList]);
-  const memoizedDraftsList = useMemo(() => draftsList, [draftsList]);
+  const [activeSidePanel, setActiveSidePanel] = useState(null); // 'analytics' | 'schedule' | null
 
   return (
-    <div className={`min-h-screen ${isDark ? "bg-[#030712]" : "bg-gray-50"} p-4`}>
-      {/* HEADER */}
-      <div className="mb-6 max-w-lg mx-auto">
-        <div className="rounded-3xl p-4 text-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.3)]" style={{ background: DNA_GRADIENT_STYLE }}>
-          <h1 className="text-xl md:text-2xl font-bold text-white mb-1">
-            Welcome to Arvdoul Creators Studio
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-6">
+      {/* Studio Action Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Create Post
           </h1>
-          <p className="text-xs text-white/80">
-            Your canvas, your rules. Create without limits.
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Choose a format to compose for your feed or community
           </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={loadTemplates}
+            className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200/90 dark:border-white/12 bg-white/85 dark:bg-[#080F2E]/75 text-xs font-semibold text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-white/10 transition-colors flex items-center gap-2 whitespace-nowrap"
+          >
+            <Icons.LayoutTemplate className="w-4 h-4 text-arvdoul-purple" />
+            <span>Templates</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setActiveSidePanel((cur) => (cur === 'schedule' ? null : 'schedule'))
+            }
+            aria-pressed={activeSidePanel === 'schedule'}
+            className={`min-h-[44px] px-4 py-2 rounded-xl border text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
+              activeSidePanel === 'schedule'
+                ? 'border-arvdoul-purple bg-arvdoul-purple/12 text-arvdoul-purple'
+                : 'border-slate-200/90 dark:border-white/12 bg-white/85 dark:bg-[#080F2E]/75 text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-white/10'
+            }`}
+          >
+            <Icons.Calendar className="w-4 h-4" />
+            <span>Scheduled</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setActiveSidePanel((cur) => (cur === 'analytics' ? null : 'analytics'))
+            }
+            aria-pressed={activeSidePanel === 'analytics'}
+            className={`min-h-[44px] px-4 py-2 rounded-xl border text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
+              activeSidePanel === 'analytics'
+                ? 'border-arvdoul-purple bg-arvdoul-purple/12 text-arvdoul-purple'
+                : 'border-slate-200/90 dark:border-white/12 bg-white/85 dark:bg-[#080F2E]/75 text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-white/10'
+            }`}
+          >
+            <Icons.BarChart2 className="w-4 h-4" />
+            <span>Insights</span>
+          </button>
         </div>
       </div>
 
-      {/* TEMPLATES, SCHEDULE & ANALYTICS */}
-      <div className="max-w-lg mx-auto mb-6 flex flex-wrap gap-2.5">
-        <button
-          onClick={loadTemplates}
-          className="flex-1 min-w-[100px] flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-white text-xs sm:text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95"
-          style={{ background: DNA_GRADIENT_STYLE }}
-        >
-          <Icons.LayoutTemplate className="w-4 h-4 sm:w-5 sm:h-5" />
-          Templates
-        </button>
-        <button
-          onClick={() => { setShowScheduled(!showScheduled); setShowAnalytics(false); }}
-          className="flex-1 min-w-[100px] flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-white text-xs sm:text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95"
-          style={{ background: DNA_GRADIENT_STYLE }}
-        >
-          <Icons.Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-          Schedule
-        </button>
-        <button
-          onClick={() => { setShowAnalytics(!showAnalytics); setShowScheduled(false); }}
-          className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-white text-xs sm:text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95 border border-purple-400/40"
-          style={{ background: DNA_GRADIENT_STYLE }}
-        >
-          <Icons.BarChart2 className="w-4 h-4 sm:w-5 sm:h-5" />
-          Post Analytics
-        </button>
-      </div>
-
-      {/* Post Analytics panel */}
-      {showAnalytics && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-lg mx-auto mb-6">
-          <div className="rounded-2xl bg-white dark:bg-gray-800/95 backdrop-blur-xl border border-purple-500/20 shadow-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                  <Icons.BarChart3 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Post Analytics & Performance</h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">Real-time creator insights</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
+      <div className={`grid gap-6 ${activeSidePanel ? 'lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
+        <div className={activeSidePanel ? 'lg:col-span-7 space-y-5' : 'space-y-5'}>
+          {/* Compact Post Format Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            {POST_TYPES.map((type) => {
+              const draftCount = draftCounts[type.id] || 0;
+              return (
                 <button
-                  onClick={() => loadAnalyticsData(true)}
-                  disabled={loadingAnalytics}
-                  title="Refresh analytics"
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition disabled:opacity-50"
+                  key={type.id}
+                  type="button"
+                  onClick={() => selectPostType(type.id)}
+                  className={`${SURFACE_GLASS_CLASS} group relative flex flex-col items-start justify-between p-4 sm:p-5 min-h-[132px] text-left hover:border-arvdoul-purple/50 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-arvdoul-purple`}
+                  aria-label={`Create ${type.label}`}
                 >
-                  <Icons.RefreshCw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin text-purple-500' : ''}`} />
+                  <div className="flex items-center justify-between w-full mb-3">
+                    <type.icon className="w-11 h-11 transition-transform duration-200 group-hover:scale-105" />
+                    {draftCount > 0 && (
+                      <span className="text-[11px] font-semibold text-arvdoul-purple tabular-nums">
+                        {draftCount} draft{draftCount === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-slate-900 dark:text-white">
+                      {type.label}
+                    </span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {type.subtitle}
+                    </span>
+                  </div>
                 </button>
-                <button onClick={() => setShowAnalytics(false)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50">Close</button>
+              );
+            })}
+          </div>
+
+          {/* Resume Latest Draft */}
+          {draftsList.length > 0 && (
+            <div className={`${SURFACE_GLASS_CLASS} p-4 flex items-center justify-between gap-4`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-10 h-10 rounded-xl bg-arvdoul-purple/12 text-arvdoul-purple flex items-center justify-center shrink-0">
+                  <Icons.RotateCcw className="w-4 h-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Continue Draft
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    <span className="capitalize">{draftsList[0].postType}</span>
+                    <span aria-hidden="true"> · </span>
+                    {new Date(draftsList[0].updatedAt).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={resumeLatestDraft}
+                className="min-h-[40px] px-4 py-2 rounded-xl text-white text-xs font-semibold shrink-0 hover:opacity-95 transition-opacity"
+                style={{ background: BRAND_GRADIENT }}
+              >
+                Continue
+              </button>
             </div>
+          )}
 
-            {!user ? (
-              <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
-                Please sign in to view your post analytics.
-              </div>
-            ) : loadingAnalytics ? (
-              <div className="flex flex-col items-center justify-center py-8 gap-2">
-                <LoadingSpinner size="sm" />
-                <p className="text-xs text-gray-400">Aggregating post metrics...</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
-                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Views</p>
-                    <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? '—'}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
-                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Reach</p>
-                    <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? '—'}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
-                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Engagement</p>
-                    <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? '—'}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
-                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Coins Earned</p>
-                    <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? '—'}</p>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                    <Icons.TrendingUp className="w-3.5 h-3.5 text-green-500" />
-                    <span>Audience Growth Rate:</span>
-                  </div>
-                  {/* No fabricated growth rate: an absent delta reads as unavailable. */}
-                  <span className="font-semibold text-green-500">
-                    {typeof analyticsData?.changes?.engagement === 'number'
-                      ? `${analyticsData.changes.engagement >= 0 ? '+' : ''}${Math.round(analyticsData.changes.engagement)}% this week`
-                      : 'Unavailable'}
-                  </span>
-                </div>
-
-                {recentPostsData && recentPostsData.length > 0 && (
-                  <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Recent Content Performance</p>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/profile/analytics')}
-                        className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <span>Full Studio</span>
-                        <Icons.ArrowRight className="w-3 h-3" />
-                      </button>
+          {/* Expandable Drafts List */}
+          {draftsList.length > 0 && (
+            <div className={`${SURFACE_GLASS_CLASS} p-4`}>
+              <button
+                type="button"
+                aria-expanded={draftsOpen}
+                onClick={() => setDraftsOpen((v) => !v)}
+                className="w-full min-h-[40px] flex items-center justify-between text-left"
+              >
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Saved Drafts ({draftsList.length})
+                </span>
+                <Icons.ChevronDown
+                  aria-hidden="true"
+                  className={`w-4 h-4 text-slate-400 transition-transform ${
+                    draftsOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {draftsOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 h-60 w-full">
+                      <Virtuoso
+                        data={draftsList}
+                        itemContent={(_index, draft) => (
+                          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                <span className="font-semibold capitalize text-arvdoul-purple">
+                                  {draft.postType}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span>{new Date(draft.updatedAt).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-sm text-slate-900 dark:text-white truncate mt-0.5">
+                                {draft.data?.content?.slice(0, 60) || 'Untitled draft'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => loadVersions(draft.id)}
+                                className="min-h-[36px] px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-white/12 text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-white/10"
+                              >
+                                History
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => loadDraft(draft.id)}
+                                className="min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg text-white"
+                                style={{ background: BRAND_GRADIENT }}
+                              >
+                                Open
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      />
                     </div>
-                    <div className="space-y-1.5">
-                      {recentPostsData.slice(0, 4).map((post, idx) => (
-                        <div 
-                          key={post.id || idx} 
-                          onClick={() => post.id && navigate(`/post/${post.id}/analytics`)}
-                          className="flex items-center justify-between p-2 rounded-xl bg-gray-50/70 dark:bg-gray-700/20 text-xs cursor-pointer hover:bg-purple-500/10 dark:hover:bg-purple-900/30 transition group"
-                          title="Click to view full post analytics"
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Offline Queue */}
+          {offlineQueueItems.length > 0 && (
+            <div className={`${SURFACE_GLASS_CLASS} p-4`}>
+              <button
+                type="button"
+                aria-expanded={queueOpen}
+                onClick={() => setQueueOpen((v) => !v)}
+                className="w-full min-h-[40px] flex items-center justify-between text-left"
+              >
+                <span className="text-sm font-semibold text-amber-600 dark:text-amber-300">
+                  Offline Queue ({offlineQueueItems.length})
+                </span>
+                <Icons.ChevronDown
+                  aria-hidden="true"
+                  className={`w-4 h-4 text-slate-400 transition-transform ${
+                    queueOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {queueOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                      {offlineQueueItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20"
                         >
-                          <span className="truncate max-w-[170px] sm:max-w-[220px] font-medium text-gray-800 dark:text-gray-200 group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                            {post.content || post.title || 'Untitled Post'}
-                          </span>
-                          <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                            <span>❤️ {(() => { const v = post.stats?.likes ?? post.likeCount; return typeof v === 'number' ? v : '—'; })()}</span>
-                            <span>💬 {(() => { const v = post.stats?.comments ?? post.commentCount; return typeof v === 'number' ? v : '—'; })()}</span>
-                            <span>👁️ {(() => { const v = post.stats?.views ?? post.viewCount; return typeof v === 'number' ? v : '—'; })()}</span>
-                            <Icons.ChevronRight className="w-3.5 h-3.5 text-purple-400 group-hover:translate-x-0.5 transition-transform" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold capitalize text-amber-700 dark:text-amber-300">
+                              {item.postType}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {new Date(item.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => retryOfflineItem(item.id)}
+                              className="min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg bg-arvdoul-purple text-white"
+                            >
+                              Retry
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteOfflineItem(item.id)}
+                              className="min-h-[36px] px-3 py-1 text-xs font-semibold rounded-lg bg-rose-600 text-white"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </motion.div>
                 )}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Scheduled Posts panel */}
-      {showScheduled && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-lg mx-auto mb-6">
-          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-white">📅 Scheduled Posts</h3>
-              <button onClick={() => setShowScheduled(false)} className="text-xs text-gray-500">Close</button>
+              </AnimatePresence>
             </div>
-            {scheduledDrafts.length === 0 ? (
-              <p className="text-xs text-gray-500">No scheduled posts yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {scheduledDrafts.map(draft => (
-                  <div key={draft.id} className="flex items-center justify-between p-2 rounded-xl bg-gray-50 dark:bg-gray-700/20">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-purple-600">{draft.postType}</p>
-                      <p className="text-xs text-gray-600 dark:text-gray-300 truncate">{draft.data.content?.slice(0, 40) || "Untitled"}</p>
-                      <p className="text-xs text-gray-400">{new Date(draft.data.scheduledTime).toLocaleString()}</p>
-                    </div>
-                    <button onClick={() => { loadDraft(draft.id); dispatch({ type: "SET_POST_TYPE", payload: draft.postType }); dispatch({ type: "SET_STEP", payload: 2 }); }} className="text-xs px-3 py-1 bg-purple-500 text-white rounded-full">Edit</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Continue Draft */}
-      {hasDrafts && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-lg mx-auto mb-6">
-          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Icons.RotateCcw className="w-5 h-5 text-purple-500" />
-              <div>
-                <p className="text-sm font-semibold text-gray-800 dark:text-white">Continue Draft</p>
-                <p className="text-xs text-gray-500">{draftsList[0].postType} • {new Date(draftsList[0].updatedAt).toLocaleDateString()}</p>
-              </div>
-            </div>
-            <button onClick={resumeLatestDraft} className="px-5 py-2 rounded-full text-white text-sm font-medium shadow hover:opacity-90 transition" style={{ background: DNA_GRADIENT_STYLE }}>
-              Continue
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Drafts */}
-      {hasDrafts && (
-        <div className="max-w-lg mx-auto mb-4">
-          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
-            <button type="button" aria-expanded={draftsOpen} className="w-full flex items-center justify-between cursor-pointer" onClick={() => setDraftsOpen(!draftsOpen)}>
-              <span className="text-sm font-medium text-gray-800 dark:text-white">My Drafts ({draftsList.length})</span>
-              <Icons.ChevronDown aria-hidden="true" className={`w-4 h-4 transition-transform ${draftsOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <AnimatePresence>
-              {draftsOpen && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                  <div className="mt-3 h-60 w-full">
-                    <Virtuoso
-                      data={memoizedDraftsList}
-                      itemContent={(index, draft) => (
-                        <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/20 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-600">{draft.postType}</span>
-                              <span className="text-xs text-gray-400">{new Date(draft.updatedAt).toLocaleDateString()}</span>
-                            </div>
-                            <p className="text-sm text-gray-800 dark:text-white truncate">{draft.data.content?.slice(0, 60) || 'Untitled'}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => loadVersions(draft.id)} className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded">Versions</button>
-                            <button onClick={() => selectPostType(draft.postType)} className="px-3 py-1.5 rounded-full bg-purple-500 text-white text-xs font-medium">Open</button>
-                          </div>
-                        </div>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          )}
         </div>
-      )}
 
-      {offlineCount > 0 && (
-        <div className="max-w-lg mx-auto mb-4">
-          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
-            <button type="button" aria-expanded={queueOpen} className="w-full flex items-center justify-between cursor-pointer" onClick={() => setQueueOpen(!queueOpen)}>
-              <span className="text-sm font-medium text-yellow-600">Offline Queue ({offlineCount})</span>
-              <Icons.ChevronDown aria-hidden="true" className={`w-4 h-4 transition-transform ${queueOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <AnimatePresence>
-              {queueOpen && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                  <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
-                    {offlineQueueItems.map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-yellow-50 dark:bg-yellow-500/10">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-yellow-600">Queued</span>
-                            <span className="text-xs text-gray-400">{new Date(item.createdAt).toLocaleString()}</span>
-                          </div>
-                          <p className="text-sm text-gray-800 dark:text-white truncate">{item.postType}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => retryOfflineItem(item.id)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Retry</button>
-                          <button onClick={() => deleteOfflineItem(item.id)} className="px-2 py-1 text-xs bg-red-500 text-white rounded">Delete</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+        {/* Side Drawer / Column for Schedule or Insights */}
+        {activeSidePanel && (
+          <div className="lg:col-span-5">
+            <CreatorInsightsDrawer
+              activeTab={activeSidePanel}
+              scheduledDrafts={scheduledDrafts}
+              onEditScheduledDraft={(draft) => loadDraft(draft.id)}
+              onClose={() => setActiveSidePanel(null)}
+            />
           </div>
-        </div>
-      )}
-
-      {/* POST TYPE GRID – FLOATING GLASS CARDS, INCREASED HEIGHT */}
-      <div className="grid grid-cols-3 xs:grid-cols-2 gap-4 w-full max-w-lg mx-auto">
-        {POST_TYPES.map(type => {
-          const draftCount = draftCounts[type.id] || 0;
-          return (
-            <button
-              key={type.id}
-              onClick={() => selectPostType(type.id)}
-              className="group relative flex flex-col items-center justify-center w-full aspect-[3/5] rounded-2xl bg-white dark:bg-gray-800 shadow-[0_12px_35px_rgba(0,0,0,0.15)] dark:shadow-[0_12px_35px_rgba(0,0,0,0.4)] hover:scale-[1.02] active:scale-95 transition-all backdrop-blur-sm"
-              aria-label={`Create ${type.label}`}
-            >
-              <div className="mb-3">
-                <type.icon />
-              </div>
-              <span className="text-sm font-bold text-gray-900 dark:text-white tracking-wide">{type.label}</span>
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-1">{type.subtitle}</span>
-              {draftCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-pink-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
-                  {draftCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
+        )}
       </div>
     </div>
   );
 });
 
-// ── CREATOR SHELL ──────────────────────────────────────────────────────
 function CreatorShell({ children }) {
   const { goBackToLauncher } = useCreatePostServices();
+  const { state } = useCreatePostState();
+  const typeLabel =
+    POST_TYPES.find((t) => t.id === state.postType)?.label || 'Post';
+
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="h-14 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/30 flex items-center px-4">
-        <Icons.ArrowLeft className="w-5 h-5 cursor-pointer" onClick={() => goBackToLauncher()} />
-        <span className="ml-3 font-semibold text-gray-800 dark:text-white">Create Post</span>
+    <div className="flex flex-col min-h-full">
+      <div className="h-14 px-4 sm:px-6 bg-white/80 dark:bg-[#080F2E]/70 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={goBackToLauncher}
+            aria-label="Back to post formats"
+            className="min-h-[44px] min-w-[44px] -ml-2 flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+          >
+            <Icons.ArrowLeft className="w-5 h-5" />
+          </button>
+          <span className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+            {state.editPostId ? `Edit ${typeLabel}` : `Create ${typeLabel}`}
+          </span>
+        </div>
       </div>
       {children}
     </div>
   );
 }
 
-// ── ENHANCED STEP 3 VIEW ───────────────────────────────────────────────
 function EnhancedStep3View() {
   const { state, dispatch } = useCreatePostState();
   const { publishPost, saveDraft } = useCreatePostServices();
-  const [activeSection, setActiveSection] = useState('audience');
 
   return (
-    <div className="space-y-6 py-4 max-w-2xl mx-auto select-none">
-      {/* Review and Live Preview */}
-      <ReviewSummary />
-
-      {/* Quick Audience Selector Pills */}
-      <div className="p-4 rounded-2xl bg-white/80 dark:bg-gray-900/80 border border-gray-200/80 dark:border-gray-800 shadow-sm backdrop-blur-md space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-            Who can see this?
-          </span>
-          <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold capitalize">
-            {state.visibility}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {VISIBILITY_OPTIONS.map((opt) => {
-            const isSelected = state.visibility === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => dispatch({ type: "SET_VISIBILITY", payload: opt.value })}
-                className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
-                  isSelected
-                    ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/30 font-bold"
-                    : "bg-gray-50 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-purple-400"
-                }`}
-              >
-                <span>{opt.label}</span>
-              </button>
-            );
-          })}
-        </div>
+    <div className="max-w-5xl mx-auto py-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="lg:col-span-7 space-y-5">
+        <ReviewSummary />
       </div>
 
-      {/* Categorized Options Tabs */}
-      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-gray-100 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/60 overflow-x-auto scrollbar-hide">
-        {[
-          { id: 'audience', label: '🎯 Audience & Reach' },
-          { id: 'content', label: '📍 Location' },
-          { id: 'advanced', label: '⚙️ AI & Scheduling' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveSection(tab.id)}
-            className={`flex-1 text-center py-2 px-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-              activeSection === tab.id
-                ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-sm border border-gray-200/50 dark:border-gray-800'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Active Tab Content */}
-      <div className="space-y-4">
-        {activeSection === 'audience' && (
-          <div className="space-y-4">
-            <VisibilityPanel defaultOpen={true} />
+      <div className="lg:col-span-5 space-y-4">
+        {/* Quick Audience Selector */}
+        <div className={`${SURFACE_GLASS_CLASS} p-4 space-y-3`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              Audience
+            </span>
+            <span className="text-xs font-semibold text-arvdoul-purple capitalize">
+              {VISIBILITY_OPTIONS.find((o) => o.value === state.visibility)?.label || state.visibility}
+            </span>
           </div>
-        )}
-
-        {activeSection === 'content' && (
-          <div className="space-y-4">
-            <LocationPanel defaultOpen={true} />
+          <div className="grid grid-cols-2 gap-2">
+            {VISIBILITY_OPTIONS.map((opt) => {
+              const isSelected = state.visibility === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => dispatch({ type: 'SET_VISIBILITY', payload: opt.value })}
+                  className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                    isSelected
+                      ? 'bg-arvdoul-purple text-white border-arvdoul-purple shadow-sm'
+                      : 'bg-slate-50 dark:bg-white/[0.04] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-arvdoul-purple/50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
-        )}
-
-        {activeSection === 'advanced' && (
-          <div className="space-y-4">
-            <SchedulingPanel defaultOpen={true} />
-            <AIPanel defaultOpen={false} />
-            <InsightsPanel defaultOpen={false} />
-            <ModerationStatus defaultOpen={false} />
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Publish Banner */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-900/40 via-pink-900/30 to-purple-900/40 border border-purple-500/30 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-bold text-white flex items-center gap-2">
-            <span>Ready to publish?</span>
-          </h4>
-          <p className="text-xs text-purple-200/80 mt-0.5">
-            {state.scheduledTime
-              ? `Scheduled for ${new Date(state.scheduledTime).toLocaleString()}`
-              : "Your post will be published immediately to your followers and feed."}
-          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={saveDraft}
-            className="px-4 py-2.5 rounded-full border border-purple-400/40 text-purple-200 hover:bg-purple-900/40 text-xs font-semibold transition cursor-pointer"
-          >
-            Save Draft
-          </button>
+        <VisibilityPanel defaultOpen={false} />
+        <LocationPanel defaultOpen={false} />
+        <SchedulingPanel defaultOpen={false} />
+        <ModerationStatus defaultOpen={false} />
+        <InsightsPanel defaultOpen={false} />
+
+        <div className={`${SURFACE_GLASS_CLASS} p-4 space-y-3`}>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+              {state.scheduledTime ? 'Ready to schedule' : 'Ready to publish'}
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {state.scheduledTime
+                ? `Scheduled for ${new Date(state.scheduledTime).toLocaleString()}`
+                : 'Published posts appear immediately for your selected audience.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={saveDraft}
+              className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-white/15 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+            >
+              Save Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => publishPost()}
+              disabled={state.loading}
+              className="min-h-[44px] flex-1 px-5 py-2 rounded-xl font-semibold text-white text-sm shadow-lg hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: BRAND_GRADIENT }}
+            >
+              {state.loading ? (
+                <>
+                  <LoadingSpinner size="xs" color="white" />
+                  <span>Publishing...</span>
+                </>
+              ) : (
+                <span>
+                  {state.editPostId
+                    ? 'Save Changes'
+                    : state.scheduledTime
+                    ? 'Schedule Post'
+                    : 'Publish Now'}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreatePostShell({ children }) {
+  const { state, dispatch } = useCreatePostState();
+  const { goBackToLauncher, publishPost, saveDraft } = useCreatePostServices();
+  const ready = canProceedForState(state);
+
+  return (
+    <div className="flex flex-col flex-1">
+      {state.step > 1 && <StepIndicator />}
+      <div className="flex-1 px-3 sm:px-6 pb-6">{children}</div>
+      <div className="sticky bottom-0 z-20 flex justify-between items-center gap-3 px-4 sm:px-6 py-3 bg-[#F6F8FC]/90 dark:bg-[#03071B]/90 backdrop-blur-xl border-t border-slate-200/70 dark:border-white/10">
+        <button
+          type="button"
+          onClick={() => {
+            if (state.step <= 1) goBackToLauncher();
+            else dispatch({ type: 'SET_STEP', payload: state.step - 1 });
+          }}
+          className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-white/12 bg-white/80 dark:bg-white/[0.06] text-slate-800 dark:text-slate-100 text-xs sm:text-sm font-semibold hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+        >
+          {state.step === 3 ? 'Back to Edit' : 'Back'}
+        </button>
+
+        {state.step === 2 ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={saveDraft}
+              className="hidden sm:inline-flex min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-white/12 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors items-center gap-1.5"
+            >
+              <Icons.Save className="w-3.5 h-3.5" />
+              <span>Save Draft</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => publishPost()}
+              disabled={state.loading || !ready}
+              className="min-h-[44px] px-4 sm:px-5 py-2 rounded-xl font-semibold text-white text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700 transition-colors flex items-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed"
+            >
+              {state.loading ? (
+                <>
+                  <LoadingSpinner size="xs" color="white" />
+                  <span>Publishing...</span>
+                </>
+              ) : (
+                <span>{state.editPostId ? 'Save Changes' : 'Publish'}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'SET_STEP', payload: 3 })}
+              disabled={!ready}
+              className="min-h-[44px] px-4 sm:px-5 py-2 rounded-xl font-semibold text-white text-xs sm:text-sm transition-opacity flex items-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed"
+              style={ready ? { background: BRAND_GRADIENT } : { backgroundColor: '#64748b' }}
+            >
+              <span>Options</span>
+              <Icons.ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
             onClick={() => publishPost()}
-            disabled={state.loading}
-            className="px-6 py-2.5 rounded-full font-bold text-white text-sm shadow-lg shadow-purple-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            style={{ background: DNA_GRADIENT_STYLE }}
+            disabled={state.loading || !ready}
+            className="min-h-[44px] px-6 py-2 rounded-xl font-semibold text-white text-sm shadow-lg hover:opacity-95 transition-opacity flex items-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed"
+            style={{ background: BRAND_GRADIENT }}
           >
             {state.loading ? (
               <>
@@ -2781,44 +1780,64 @@ function EnhancedStep3View() {
                 <span>Publishing...</span>
               </>
             ) : (
-              <span>{state.scheduledTime ? "📅 Schedule" : "🚀 Publish Now"}</span>
+              <span>
+                {state.editPostId
+                  ? 'Save Changes'
+                  : state.scheduledTime
+                  ? 'Schedule Post'
+                  : 'Publish Post'}
+              </span>
             )}
           </button>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── MAIN CONTENT ROUTER ────────────────────────────────────────────────
 function CreatePostContent() {
   const { state } = useCreatePostState();
   const step2Content = useMemo(() => {
     if (!state.postType) return null;
     switch (state.postType) {
-      case "text": return <CreateText />;
-      case "image": return <CreateImage />;
-      case "video": return <CreateVideo />;
-      case "poll": return <CreatePoll />;
-      case "question": return <CreateQuestion />;
-      case "link": return <CreateLink />;
-      case "audio": return <CreateAudio />;
-      case "event": return <CreateEvent />;
-      default: return null;
+      case 'text':
+        return <CreateText />;
+      case 'image':
+        return <CreateImage />;
+      case 'video':
+        return <CreateVideo />;
+      case 'poll':
+        return <CreatePoll />;
+      case 'question':
+        return <CreateQuestion />;
+      case 'link':
+        return <CreateLink />;
+      case 'audio':
+        return <CreateAudio />;
+      case 'event':
+        return <CreateEvent />;
+      default:
+        return null;
     }
   }, [state.postType]);
 
   if (state.step === 1 || !state.postType) {
     return (
-      <ErrorBoundary fallback={<div className="p-4 text-red-500">Launcher error</div>}>
+      <ErrorBoundary fallback={<div className="p-4 text-rose-500">Launcher failed to render</div>}>
         <LauncherGrid />
       </ErrorBoundary>
     );
   }
 
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>}>
-      <ErrorBoundary fallback={<div className="p-4 text-red-500">Failed to load editor.</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <LoadingSpinner size="lg" />
+        </div>
+      }
+    >
+      <ErrorBoundary fallback={<div className="p-4 text-rose-500">Failed to load editor.</div>}>
         <CreatorShell>
           <CreatePostShell>
             {state.step === 2 ? step2Content : <EnhancedStep3View />}
@@ -2827,298 +1846,6 @@ function CreatePostContent() {
       </ErrorBoundary>
     </Suspense>
   );
-}
-
-function CreatePostShell({ children }) {
-  const { state, dispatch } = useCreatePostState();
-  const { goBackToLauncher, publishPost, saveDraft } = useCreatePostServices();
-
-  const canProceed = useCallback(() => {
-    if (state.isContentReady) return true;
-    if (state.step === 1) return !!state.postType;
-    if (state.step === 2) {
-      const hasText = (typeof state.content === 'string' && state.content.trim().length > 0) ||
-                      (state.contentJSON && (typeof state.contentJSON === 'string' ? state.contentJSON.trim().length > 0 : true));
-      switch (state.postType) {
-        case "text": case "question": return hasText;
-        case "image": case "video": return state.mediaItems.length > 0 || hasText;
-        case "audio": return state.typeData.audio.file !== null || !!state.typeData.audio.url || hasText;
-        case "poll": return hasText && state.typeData.poll.options.filter(o => o.trim()).length >= 2;
-        case "event": return hasText && state.typeData.event.date !== null;
-        case "link": return state.typeData.link.url.trim().length > 0;
-        default: return true;
-      }
-    }
-    return true;
-  }, [state.isContentReady, state.step, state.postType, state.content, state.contentJSON, state.mediaItems, state.typeData]);
-
-  return (
-    <div className="flex flex-col h-full">
-      {state.step > 1 && <StepIndicator />}
-      <div className="flex-1 overflow-y-auto px-4 min-h-[60vh]">
-        <AnimatePresence mode="wait">
-          <motion.div key={state.step} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-            {children}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-      <div className="sticky bottom-0 z-20 flex justify-between items-center px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200/60 dark:border-gray-800/60">
-        <button
-          onClick={() => { if (state.step === 1) goBackToLauncher(); else dispatch({ type: "SET_STEP", payload: state.step - 1 }); }}
-          className="px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-semibold shadow-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition cursor-pointer"
-          aria-label="Back"
-        >
-          {state.step === 3 ? "Back to Edit" : "Back"}
-        </button>
-
-        {state.step === 3 && (
-          <button
-            onClick={saveDraft}
-            className="px-4 py-2 rounded-full border border-purple-500/30 text-purple-600 dark:text-purple-400 text-sm font-semibold hover:bg-purple-500/10 transition cursor-pointer"
-          >
-            💾 Save Draft
-          </button>
-        )}
-
-        {state.step === 2 ? (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => publishPost()}
-              disabled={state.loading || !canProceed()}
-              className={`px-4 sm:px-5 py-2.5 rounded-full font-bold text-white text-xs sm:text-sm transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
-                canProceed() && !state.loading
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-500 shadow-md shadow-emerald-500/20 hover:scale-105 active:scale-95'
-                  : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60'
-              }`}
-            >
-              {state.loading ? (
-                <>
-                  <LoadingSpinner size="xs" color="white" />
-                  <span>Publishing...</span>
-                </>
-              ) : (
-                <span>🚀 Quick Publish</span>
-              )}
-            </button>
-            <button
-              onClick={() => dispatch({ type: "SET_STEP", payload: 3 })}
-              disabled={!canProceed()}
-              className={`px-4 sm:px-6 py-2.5 rounded-full font-bold text-white text-xs sm:text-sm transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
-                canProceed()
-                  ? 'shadow-[0_0_30px_rgba(147,51,234,0.4)] hover:shadow-[0_0_40px_rgba(147,51,234,0.6)] hover:scale-105 active:scale-95'
-                  : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60'
-              }`}
-              style={canProceed() ? { background: DNA_GRADIENT_STYLE } : {}}
-            >
-              Options <Icons.ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        ) : state.step === 1 ? (
-          <button
-            onClick={() => dispatch({ type: "SET_STEP", payload: 2 })}
-            disabled={!canProceed()}
-            className={`px-8 py-2.5 rounded-full font-bold text-white text-sm transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              canProceed()
-                ? 'shadow-[0_0_30px_rgba(147,51,234,0.4)] hover:shadow-[0_0_40px_rgba(147,51,234,0.6)] hover:scale-105 active:scale-95'
-                : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60'
-            }`}
-            style={canProceed() ? { background: DNA_GRADIENT_STYLE } : {}}
-          >
-            Next <Icons.ArrowRight className="w-4 h-4" />
-          </button>
-        ) : (
-          <button
-            onClick={() => publishPost()}
-            disabled={state.loading}
-            className="px-8 py-2.5 rounded-full font-bold text-white text-sm shadow-lg shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: DNA_GRADIENT_STYLE }}
-          >
-            {state.loading ? (
-              <>
-                <LoadingSpinner size="xs" color="white" />
-                <span>Publishing...</span>
-              </>
-            ) : (
-              <span>{state.editPostId ? "💾 Save Changes" : state.scheduledTime ? "📅 Schedule Post" : "🚀 Publish Post"}</span>
-            )}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── DEFAULT EXPORT ─────────────────────────────────────────────────────
-// Loads a post for editing when /create-post?edit=<id> is used (from
-// PostOptionsDrawer "Edit"). Fetches the post and dispatches LOAD_DRAFT.
-function EditPostLoader() {
-  const [searchParams] = useSearchParams();
-  // PostOptionsDrawer "Edit" navigates to the /edit/:postId route, not to
-  // ?edit=. Reading only the query param left the composer empty, so editing a
-  // post silently created a new one instead of updating the original.
-  const { postId: routePostId } = useParams();
-  const { dispatch } = useCreatePostState();
-  const editId = searchParams.get("edit") || routePostId || null;
-  const quoteSnippet = searchParams.get("quote");
-  const location = useLocation();
-  const loadedRef = React.useRef(false);
-  const quotedRef = React.useRef(false);
-  const soundRef = React.useRef(false);
-  const videoRef = React.useRef(false);
-  const typeRef = React.useRef(false);
-
-  // "Share to Feed" from the Video Editor navigates here with the rendered
-  // blob/URL in route state. Nothing read it, so the composer opened empty and
-  // the just-rendered video was thrown away.
-  React.useEffect(() => {
-    const file = location.state?.videoFile;
-    const url = location.state?.videoUrl;
-    const audioFile = location.state?.audioFile;
-    const audioDataUrl = location.state?.audioDataUrl;
-    const prefillContent = location.state?.prefillContent;
-    if ((!file && !url && !audioFile && !audioDataUrl && !prefillContent) || videoRef.current) return;
-    videoRef.current = true;
-
-    if (file || url) {
-      dispatch({
-        type: "SET_MEDIA_ITEMS",
-        payload: [{
-          id: "video-export",
-          type: "video",
-          file: file || null,
-          url: file ? "" : url,
-          preview: url || "",
-          name: location.state?.title || "video",
-          alt: "",
-        }],
-      });
-      if (location.state?.title) dispatch({ type: "SET_CONTENT", payload: `${location.state.title} ` });
-      const handedType = location.state?.mediaType;
-      dispatch({ type: "SET_POST_TYPE", payload: handedType === 'audio' || handedType === 'photo' ? handedType : 'video' });
-      dispatch({ type: "SET_STEP", payload: 2 });
-      return;
-    }
-
-    if (audioFile || audioDataUrl) {
-      const localUrl = audioDataUrl || (audioFile ? URL.createObjectURL(audioFile) : "");
-      dispatch({
-        type: "SET_TYPE_DATA",
-        payload: {
-          audio: {
-            url: localUrl,
-            previewUrl: localUrl,
-            file: audioFile || null,
-            title: location.state?.title || "Audio Mix",
-            artist: "",
-          },
-        },
-      });
-      if (location.state?.title) dispatch({ type: "SET_CONTENT", payload: `${location.state.title} ` });
-      dispatch({ type: "SET_POST_TYPE", payload: "audio" });
-      dispatch({ type: "SET_STEP", payload: 2 });
-      return;
-    }
-
-    if (typeof prefillContent === 'string' && prefillContent.trim()) {
-      dispatch({ type: "SET_CONTENT", payload: prefillContent });
-      dispatch({ type: "SET_POST_TYPE", payload: location.state?.prefillType || "text" });
-      dispatch({ type: "SET_STEP", payload: 2 });
-    }
-  }, [location.state, dispatch]);
-
-  // "Use in Reel" from the Sounds library navigates here with the chosen track
-  // in route state. Nothing read it, so the toast promised a reel that opened
-  // empty. Seed an audio post from the sound's persisted URL.
-  React.useEffect(() => {
-    const snd = location.state?.selectedAudio;
-    if (!snd || soundRef.current) return;
-    soundRef.current = true;
-    const audioUrl = snd.audioUrl || snd.url || "";
-    if (!audioUrl) return;
-    dispatch({
-      type: "SET_TYPE_DATA",
-      payload: {
-        audio: {
-          url: audioUrl,
-          previewUrl: audioUrl,
-          title: snd.title || "Untitled Audio",
-          artist: snd.artist || snd.creatorName || "",
-          genre: snd.genre || "",
-          coverUrl: snd.coverUrl || snd.thumbnail || "",
-          sourceSoundId: snd.id || null,
-        },
-      },
-    });
-    if (snd.title) dispatch({ type: "SET_CONTENT", payload: `${snd.title} ` });
-    dispatch({ type: "SET_POST_TYPE", payload: "audio" });
-    dispatch({ type: "SET_STEP", payload: 2 });
-  }, [location.state, dispatch]);
-
-  // "Quote Post" seeds the composer with the quoted snippet as a blockquote.
-  React.useEffect(() => {
-    if (!quoteSnippet || quotedRef.current) return;
-    quotedRef.current = true;
-    const quoted = quoteSnippet
-      .split("\n")
-      .map((line) => `> ${line}`)
-      .join("\n");
-    dispatch({
-      type: "LOAD_DRAFT",
-      payload: { postType: "text", content: `${quoted}\n\n`, contentJSON: null, mediaItems: [], visibility: "public", isDraftLoaded: true, isDirty: false },
-    });
-    dispatch({ type: "SET_POST_TYPE", payload: "text" });
-    dispatch({ type: "SET_STEP", payload: 2 });
-  }, [quoteSnippet, dispatch]);
-
-  // Deep links like /create-post?type=poll (QuickAccessPanel "Create Poll")
-  // carry the intended composer type in the query string. Nothing read it, so
-  // the link landed on the type launcher instead of the poll composer.
-  React.useEffect(() => {
-    const requestedType = searchParams.get("type");
-    if (!requestedType || typeRef.current) return;
-    if (!POST_TYPES.some((t) => t.id === requestedType)) return;
-    typeRef.current = true;
-    if (requestedType === "vibe") return; // handled by /create-story
-    dispatch({ type: "SET_POST_TYPE", payload: requestedType });
-    dispatch({ type: "SET_STEP", payload: 2 });
-  }, [searchParams, dispatch]);
-
-  React.useEffect(() => {
-    if (!editId || loadedRef.current) return;
-    loadedRef.current = true;
-    (async () => {
-      try {
-        const { getFirestoreService } = await import("../services/firestoreService.js");
-        const res = await getFirestoreService().getPost(editId);
-        if (res?.success && res.post) {
-          const p = res.post;
-          dispatch({
-            type: "LOAD_DRAFT",
-            payload: {
-              postType: p.type || "text",
-              content: p.content || "",
-              contentJSON: null,
-              mediaItems: (p.media || []).map((m, i) => ({
-                id: `edit_${i}`, type: m.type === "video" ? "video" : "image",
-                url: m.url, preview: m.url, file: null, name: m.name || "", size: 0,
-              })),
-              visibility: p.visibility || "public",
-              draftId: null,
-              isDraftLoaded: true,
-              isDirty: false,
-              editPostId: editId,
-            },
-          });
-          dispatch({ type: "SET_POST_TYPE", payload: p.type || "text" });
-          dispatch({ type: "SET_STEP", payload: 2 });
-        }
-      } catch (err) {
-        console.warn("Could not load post for editing:", err?.message);
-      }
-    })();
-  }, [editId, dispatch]);
-
-  return null;
 }
 
 export default function CreatePostEntry() {

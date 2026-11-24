@@ -108,8 +108,8 @@ describe('every static navigate() target resolves to a defined route', () => {
     const profile = fs.readFileSync(path.join(SRC, 'screens/Profile/ProfileMyScreen.jsx'), 'utf8');
     expect(profile).toContain("searchParams.get('tab')");
 
-    const composer = fs.readFileSync(path.join(SRC, 'screens/CreatePost.jsx'), 'utf8');
-    expect(composer).toContain('searchParams.get("type")');
+    const composer = fs.readFileSync(path.join(SRC, 'screens/CreatePost/EditPostLoader.jsx'), 'utf8');
+    expect(composer).toMatch(/searchParams\.get\(['"]type['"]\)/);
 
     const videos = fs.readFileSync(path.join(SRC, 'screens/VideosScreen.jsx'), 'utf8');
     expect(videos).toContain("searchParams.get('tab')");

@@ -65,7 +65,10 @@ describe('highlight deep links reach the viewer', () => {
 });
 
 describe('community compose route reaches the community callable', () => {
-  const createPost = read('src/screens/CreatePost.jsx');
+  const createPost = [
+    read('src/screens/CreatePost.jsx'),
+    read('src/screens/CreatePost/postPublishPipeline.js'),
+  ].join('\n');
   const communityDetail = read('src/screens/Community/CommunityDetailScreen.jsx');
 
   test('CommunityDetailScreen links to /create-post with the community id', () => {
@@ -77,11 +80,11 @@ describe('community compose route reaches the community callable', () => {
   });
 
   test('a community post publishes through createCommunityPost, not a bare addDoc', () => {
-    expect(createPost).toMatch(/createCommunityPost\(communityId, userNow\.uid, finalPostData\)/);
+    expect(createPost).toMatch(/createCommunityPost\(\s*communityId,\s*userNow\.uid,\s*finalPostData\s*\)/);
   });
 
   test('the publish path returns to the community, not /home', () => {
-    expect(createPost).toMatch(/navigate\(communityId \? `\/community\/\$\{communityId\}` : "\/home"\)/);
+    expect(createPost).toMatch(/navigate\(communityId \? `\/community\/\$\{communityId\}` : ['"]\/home['"]\)/);
   });
 });
 

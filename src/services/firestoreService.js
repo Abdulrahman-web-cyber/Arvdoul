@@ -241,7 +241,7 @@ class EnterpriseFirestoreService {
       // missing session is an error, not something to paper over.
       if (!currentUser?.uid) throw new Error('User not authenticated. Please sign in to publish.');
       postData.authorId = currentUser.uid;
-      const { collection, addDoc, serverTimestamp } = this.firestoreMethods;
+      const { collection, doc, getDoc, setDoc, serverTimestamp } = this.firestoreMethods;
 
       // Denormalise the author's privacy onto the post: the read rule gates a
       // private account's content on this field (rules cannot get() a user doc
@@ -250,13 +250,12 @@ class EnterpriseFirestoreService {
       // to public and a genuinely-private author is then rejected (fail closed).
       let authorIsPrivate = false;
       try {
-        const { doc: userDoc, getDoc: getUserDoc } = this.firestoreMethods;
-        const authorSnap = await getUserDoc(userDoc(this.firestore, 'users', postData.authorId));
+        const authorSnap = await getDoc(doc(this.firestore, 'users', postData.authorId));
         if (authorSnap.exists()) authorIsPrivate = authorSnap.data()?.isPrivate === true;
       } catch (privacyErr) {
         logger.warn('Author privacy lookup failed; defaulting post to public', { error: privacyErr?.message });
       }
-      
+
       const scheduledTime = postData.scheduledTime && !isNaN(new Date(postData.scheduledTime).getTime())
         ? new Date(postData.scheduledTime)
         : null;
@@ -265,58 +264,138 @@ class EnterpriseFirestoreService {
       const expiresAt = postData.expiresAt && !isNaN(new Date(postData.expiresAt).getTime())
         ? new Date(postData.expiresAt)
         : null;
-      
-      // Sanitize media items to ensure pure serializable objects. A
-      // session-scoped `blob:` object URL or a base64 `data:` URL is dropped:
-      // it renders only for the uploader's current tab and is broken for every
-      // other viewer and after any reload, and a `data:` URL can be megabytes
-      // written into the document.
-      const cleanMedia = (Array.isArray(postData.media) ? postData.media : []).map((m) => {
+
+      const isSafeRemoteUrl = (val) => {
+        if (typeof val !== 'string' || !val.trim()) return false;
+        if (val.startsWith('blob:') || val.startsWith('data:')) return false;
+        try {
+          const parsed = new URL(val);
+          return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+        } catch {
+          return false;
+        }
+      };
+
+      // Sanitize media items to ensure pure serializable objects. Session-scoped
+      // `blob:` or `data:` URLs are stripped so broken previews never enter Firestore.
+      const cleanMedia = (Array.isArray(postData.media) ? postData.media : []).map((m, idx) => {
         if (!m) return null;
         const url = typeof m === 'string' ? m : (m.url || m.preview || '');
-        if (typeof url !== 'string' || url.startsWith('blob:') || url.startsWith('data:')) return null;
-        if (typeof m === 'string') return { url, type: 'image' };
-        const thumbnail = typeof m.thumbnail === 'string' && !m.thumbnail.startsWith('blob:') && !m.thumbnail.startsWith('data:')
-          ? m.thumbnail
-          : null;
+        if (!isSafeRemoteUrl(url)) return null;
+        if (typeof m === 'string') return { url, type: 'image', order: idx };
+        const thumbnail = isSafeRemoteUrl(m.thumbnail) ? m.thumbnail : null;
+        const coverUrl = isSafeRemoteUrl(m.coverUrl) ? m.coverUrl : null;
         return {
           url,
           type: m.type || 'image',
           name: m.name || '',
           alt: m.alt || '',
-          thumbnail,
+          order: typeof m.order === 'number' ? m.order : idx,
+          ...(thumbnail ? { thumbnail } : {}),
+          ...(coverUrl ? { coverUrl } : {}),
+          ...(typeof m.duration === 'number' && Number.isFinite(m.duration) ? { duration: m.duration } : {}),
+          ...(m.title ? { title: String(m.title).slice(0, 140) } : {}),
+          ...(m.artist ? { artist: String(m.artist).slice(0, 100) } : {}),
+          ...(m.genre ? { genre: String(m.genre).slice(0, 50) } : {}),
+          ...(m.crop ? { crop: m.crop } : {}),
+          ...(m.filter ? { filter: m.filter } : {}),
         };
       }).filter((m) => m && m.url);
 
       const firstMedia = cleanMedia[0] || null;
       const videoItem = cleanMedia.find(m => m.type === 'video') || null;
+      const audioItem = cleanMedia.find(m => m.type === 'audio') || null;
+
+      const sanitizeLink = (rawLink) => {
+        if (!rawLink || typeof rawLink !== 'object') return null;
+        const rawUrl = String(rawLink.url || '').trim();
+        if (!isSafeRemoteUrl(rawUrl)) return null;
+        let hostname = '';
+        try { hostname = new URL(rawUrl).hostname; } catch { hostname = ''; }
+        return {
+          url: rawUrl,
+          title: String(rawLink.title || hostname || rawUrl).slice(0, 200),
+          description: String(rawLink.description || '').slice(0, 500),
+          image: isSafeRemoteUrl(rawLink.image) ? rawLink.image : '',
+          domain: String(rawLink.domain || hostname || '').slice(0, 120),
+          author: rawLink.author ? String(rawLink.author).slice(0, 120) : '',
+        };
+      };
+
+      const sanitizeEvent = (rawEvent) => {
+        if (!rawEvent || typeof rawEvent !== 'object') return null;
+        const coverImage = isSafeRemoteUrl(rawEvent.coverImage) ? rawEvent.coverImage : '';
+        return {
+          id: rawEvent.id || null,
+          title: String(rawEvent.title || '').slice(0, 160),
+          description: String(rawEvent.description || '').slice(0, 2000),
+          date: rawEvent.date || null,
+          endDate: rawEvent.endDate || null,
+          location: String(rawEvent.location || '').slice(0, 240),
+          locationData: rawEvent.locationData || null,
+          coverImage,
+          rsvpEnabled: rawEvent.rsvpEnabled !== false,
+          capacity: typeof rawEvent.capacity === 'number' && rawEvent.capacity > 0 ? rawEvent.capacity : null,
+          timezone: rawEvent.timezone || null,
+          category: rawEvent.category || null,
+        };
+      };
+
+      const sanitizeAudio = (rawAudio) => {
+        const audioUrl = isSafeRemoteUrl(rawAudio?.url) ? rawAudio.url : (audioItem?.url || '');
+        if (!audioUrl) return null;
+        const coverUrl = isSafeRemoteUrl(rawAudio?.coverUrl)
+          ? rawAudio.coverUrl
+          : (audioItem?.coverUrl || null);
+        return {
+          url: audioUrl,
+          title: String(rawAudio?.title || audioItem?.title || audioItem?.name || 'Untitled Audio').slice(0, 140),
+          artist: String(rawAudio?.artist || audioItem?.artist || '').slice(0, 100),
+          genre: String(rawAudio?.genre || audioItem?.genre || '').slice(0, 50),
+          duration: typeof rawAudio?.duration === 'number' ? rawAudio.duration : (audioItem?.duration || 0),
+          ...(coverUrl ? { coverUrl } : {}),
+        };
+      };
+
+      const normalizedExplicitHashtags = (Array.isArray(postData.hashtags) ? postData.hashtags : [])
+        .map((t) => String(t || '').trim().replace(/^#+/, '').toLowerCase())
+        .filter((t) => t.length > 0 && t.length <= 50);
+      const mergedHashtags = [...new Set([...normalizedExplicitHashtags, ...this.extractHashtags(postData.content)])].slice(0, 30);
 
       const postDoc = {
         type: postData.type || 'text',
         content: postData.content || '',
         contentJSON: postData.contentJSON || null,
         media: cleanMedia,
-        mediaUrl: postData.mediaUrl || firstMedia?.url || '',
-        videoUrl: postData.videoUrl || postData.video?.url || videoItem?.url || '',
-        thumbnailUrl: postData.thumbnailUrl || firstMedia?.thumbnail || firstMedia?.url || '',
+        mediaUrl: isSafeRemoteUrl(postData.mediaUrl) ? postData.mediaUrl : (firstMedia?.url || ''),
+        videoUrl: isSafeRemoteUrl(postData.videoUrl) ? postData.videoUrl : (isSafeRemoteUrl(postData.video?.url) ? postData.video.url : (videoItem?.url || '')),
+        thumbnailUrl: isSafeRemoteUrl(postData.thumbnailUrl) ? postData.thumbnailUrl : (firstMedia?.thumbnail || firstMedia?.coverUrl || firstMedia?.url || ''),
         authorId: postData.authorId,
-        authorName: pickDisplayName([postData.authorName, currentUser.displayName, currentUser.displayName]),
+        authorName: pickDisplayName([postData.authorName, currentUser.displayName]),
         authorUsername: deriveHandle(postData.authorUsername) || '',
         authorIsPrivate,
         authorPhoto: getSafeAvatarUrl(postData.authorPhoto, pickDisplayName([postData.authorName, currentUser.displayName]), postData.authorId),
-        ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0, allowMultiple: !!postData.poll?.allowMultiple } }),
+        ...(postData.type === 'poll' && {
+          poll: {
+            question: String(postData.poll?.question || postData.content || '').slice(0, 500),
+            options: Array.isArray(postData.poll?.options) ? postData.poll.options : [],
+            totalVotes: 0,
+            allowMultiple: !!postData.poll?.allowMultiple,
+            closesAt: postData.poll?.closesAt || null,
+          }
+        }),
         ...(postData.type === 'question' && { question: this._normaliseQuestion(postData.question, postData.content) }),
-        ...(postData.type === 'link' && { link: postData.link }),
-        ...(postData.type === 'event' && { event: postData.event }),
-        ...(postData.type === 'video' && { video: postData.video || { url: videoItem?.url || '' } }),
-        ...(postData.type === 'audio' && { audio: postData.audio || null }),
+        ...(postData.type === 'link' && { link: sanitizeLink(postData.link) }),
+        ...(postData.type === 'event' && { event: sanitizeEvent(postData.event) }),
+        ...(postData.type === 'video' && { video: postData.video || { url: videoItem?.url || '', thumbnail: videoItem?.thumbnail || null } }),
+        ...(postData.type === 'audio' && { audio: sanitizeAudio(postData.audio) }),
         visibility: postData.visibility || CONFIG.POST_VISIBILITY.PUBLIC,
         enableComments: postData.enableComments !== false,
         enableGifts: postData.enableGifts !== false,
         location: postData.location || null,
         tags: postData.tags || [],
-        hashtags: this.extractHashtags(postData.content),
-        status: status,
+        hashtags: mergedHashtags,
+        status,
         isDeleted: false,
         monetization: postData.monetization || null,
         // boostData is server-owned (set only by the `boostPost` callable after
@@ -338,7 +417,7 @@ class EnterpriseFirestoreService {
         _clientCreatedAt: new Date().toISOString()
       };
 
-      // Helper to strip any undefined keys recursively so addDoc never rejects
+      // Helper to strip any undefined keys recursively so setDoc never rejects
       const sanitizeUndefined = (obj) => {
         if (obj === null || typeof obj !== 'object') return obj;
         if (obj instanceof Date) return obj;
@@ -355,12 +434,40 @@ class EnterpriseFirestoreService {
 
       const cleanPostDoc = sanitizeUndefined(postDoc);
       const postsRef = collection(this.firestore, 'posts');
-      const addDocPromise = addDoc(postsRef, cleanPostDoc);
-      const addDocTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore addDoc timeout')), 5000)
-      );
-      const docRef = await Promise.race([addDocPromise, addDocTimeout]);
-      const postId = docRef.id;
+      const requestedId = typeof (postData.id || postData.clientPostId) === 'string'
+        ? (postData.id || postData.clientPostId).trim()
+        : '';
+      const validId = requestedId && !requestedId.includes('/') ? requestedId : '';
+      const postRef = validId ? doc(postsRef, validId) : doc(postsRef);
+      const postId = postRef.id;
+
+      // Idempotency guard for retries / offline replays sharing a clientPostId:
+      // if the document already exists for this author, return it instead of
+      // failing `update` rules or creating a duplicate document.
+      if (validId) {
+        try {
+          const existingSnap = await getDoc(postRef);
+          if (existingSnap.exists()) {
+            const existingData = existingSnap.data();
+            if (existingData?.authorId === currentUser.uid) {
+              return {
+                success: true,
+                postId,
+                post: { ...existingData, id: postId },
+                operationId,
+                idempotentHit: true,
+                duration: Date.now() - startTime
+              };
+            }
+          }
+        } catch (precheckErr) {
+          // Non-existing doc reads on private shapes may reject with permission-denied
+          // before creation; proceed to deterministic create write.
+          logger.debug('Pre-create existence check skipped', { postId, error: precheckErr?.code });
+        }
+      }
+
+      await setDoc(postRef, cleanPostDoc);
       this.cache.set(postId, { ...cleanPostDoc, id: postId, _cachedAt: Date.now() });
       this.invalidateCachePattern(`user_posts_${postData.authorId}*`);
 
@@ -375,7 +482,7 @@ class EnterpriseFirestoreService {
       }
 
       return {
-        success: true, postId, post: { ...postDoc, id: postId }, operationId,
+        success: true, postId, post: { ...cleanPostDoc, id: postId }, operationId,
         duration: Date.now() - startTime
       };
     } catch (error) {
@@ -386,8 +493,8 @@ class EnterpriseFirestoreService {
 
   extractHashtags(content) {
     if (!content) return [];
-    const hashtags = content.match(/#(\w+)/g);
-    return hashtags ? [...new Set(hashtags.map(tag => tag.toLowerCase()))] : [];
+    const matches = [...String(content).matchAll(/#([a-zA-Z0-9_]+)/g)];
+    return matches.length ? [...new Set(matches.map(m => m[1].toLowerCase()))] : [];
   }
 
   async getPost(postId, options = {}) {
@@ -592,12 +699,67 @@ class EnterpriseFirestoreService {
     }
   }
 
+  async getScheduledPosts(userId, limitCount = 20) {
+    await this.ensureInitialized();
+    if (!userId) return { success: false, posts: [] };
+    const auth = await this.getAuthInstance();
+    if (auth?.currentUser?.uid !== userId) {
+      return { success: false, posts: [] };
+    }
+    try {
+      const { collection, query, where, orderBy, limit, getDocs } = this.firestoreMethods;
+      const postsRef = collection(this.firestore, 'posts');
+      const cappedLimit = Math.min(Math.max(1, Number(limitCount) || 20), 50);
+      const q = query(
+        postsRef,
+        where('authorId', '==', userId),
+        where('isDeleted', '==', false),
+        where('status', '==', 'scheduled'),
+        orderBy('createdAt', 'desc'),
+        limit(cappedLimit)
+      );
+      const snap = await getDocs(q);
+      const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      return { success: true, posts };
+    } catch (error) {
+      logger.warn('getScheduledPosts failed', { userId, error: error?.message });
+      return { success: false, posts: [], error: error?.message };
+    }
+  }
+
   async updatePost(postId, updates) {
     await this.ensureInitialized();
     try {
       const { doc, updateDoc, serverTimestamp } = this.firestoreMethods;
+      const IMMUTABLE_FIELDS = new Set([
+        'id', 'authorId', 'createdAt', 'stats', 'gifts', 'boostData', 'poll',
+        'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount',
+      ]);
+      const sanitizeUndefined = (obj) => {
+        if (obj === null || typeof obj !== 'object') return obj;
+        if (obj instanceof Date) return obj;
+        if (Array.isArray(obj)) return obj.map(sanitizeUndefined).filter((v) => v !== undefined);
+        if (obj._methodName || (obj.constructor && obj.constructor.name === 'FieldValue')) return obj;
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (v !== undefined) out[k] = sanitizeUndefined(v);
+        }
+        return out;
+      };
+      const cleanUpdates = {};
+      for (const [k, v] of Object.entries(updates || {})) {
+        if (IMMUTABLE_FIELDS.has(k) || v === undefined) continue;
+        cleanUpdates[k] = sanitizeUndefined(v);
+      }
+      if (Array.isArray(cleanUpdates.hashtags)) {
+        cleanUpdates.hashtags = [...new Set(
+          cleanUpdates.hashtags
+            .map((t) => String(t || '').trim().replace(/^#+/, '').toLowerCase())
+            .filter(Boolean)
+        )].slice(0, 30);
+      }
       const postRef = doc(this.firestore, 'posts', postId);
-      await updateDoc(postRef, { ...updates, updatedAt: serverTimestamp(), _clientUpdatedAt: new Date().toISOString() });
+      await updateDoc(postRef, { ...cleanUpdates, updatedAt: serverTimestamp(), _clientUpdatedAt: new Date().toISOString() });
       this.cache.delete(postId);
       this.invalidateCachePattern(`user_posts_*`);
       return { success: true, postId };
@@ -1446,6 +1608,7 @@ const firestoreService = {
   createPost: (data) => getFirestoreService().createPost(data),
   getPost: (id, opts) => getFirestoreService().getPost(id, opts),
   getPostsByUser: (uid, opts) => getFirestoreService().getPostsByUser(uid, opts),
+  getScheduledPosts: (uid, limitCount) => getFirestoreService().getScheduledPosts(uid, limitCount),
   getUserPostsCount: (uid, opts) => getFirestoreService().getUserPostsCount(uid, opts),
   getUserTotalPostLikes: (uid, opts) => getFirestoreService().getUserTotalPostLikes(uid, opts),
   updatePost: (id, updates) => getFirestoreService().updatePost(id, updates),

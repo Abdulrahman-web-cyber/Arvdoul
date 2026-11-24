@@ -120,9 +120,9 @@ describe('client post queries constrain a rule-provable shape', () => {
   });
 
   test('the composer only offers visibility scopes the rules can honour', () => {
-    const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+    const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost/createPostConstants.js'), 'utf8');
     const block = src.slice(src.indexOf('const VISIBILITY_OPTIONS'), src.indexOf('const MEDIA_LIMITS'));
-    const offered = [...block.matchAll(/value:\s*"([a-z_]+)"/g)].map((m) => m[1]);
+    const offered = [...block.matchAll(/value:\s*['"]([a-z_]+)['"]/g)].map((m) => m[1]);
     expect(offered.length).toBeGreaterThan(0);
     // Scopes with no backing model (no list/edge/tier collection, no management
     // UI) must not be selectable.

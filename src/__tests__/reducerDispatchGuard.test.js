@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const ORCHESTRATOR = path.join(root, 'src/screens/CreatePost.jsx');
+const REDUCER = path.join(root, 'src/screens/CreatePost/createPostReducer.js');
 const TREE = path.join(root, 'src/screens/CreatePost');
 
 function collect(dir) {
@@ -41,20 +42,20 @@ function collect(dir) {
 
 describe('reducer-dispatch guard: every dispatched action is handled', () => {
   test('no CreatePost tree dispatch hits the reducer default branch', () => {
-    const reducerSource = fs.readFileSync(ORCHESTRATOR, 'utf8');
+    const reducerSource = fs.readFileSync(REDUCER, 'utf8');
 
     // Action types the reducer actually handles: switch cases plus the
     // UNDO/REDO early returns (`if (action.type === "UNDO")`).
     const handled = new Set([
-      ...[...reducerSource.matchAll(/case\s+"([A-Z0-9_]+)"/g)].map((m) => m[1]),
-      ...[...reducerSource.matchAll(/action\.type\s*===\s*"([A-Z0-9_]+)"/g)].map((m) => m[1]),
+      ...[...reducerSource.matchAll(/case\s+['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]),
+      ...[...reducerSource.matchAll(/action\.type\s*===\s*['"]([A-Z0-9_]+)['"]/g)].map((m) => m[1]),
     ]);
 
     const files = [ORCHESTRATOR, ...collect(TREE)];
     const violations = [];
     for (const file of files) {
       const source = fs.readFileSync(file, 'utf8');
-      for (const match of source.matchAll(/dispatch\(\s*\{\s*type:\s*"([A-Z0-9_]+)"/g)) {
+      for (const match of source.matchAll(/\bdispatch\(\s*\{\s*type:\s*['"]([A-Z0-9_]+)['"]/g)) {
         if (!handled.has(match[1])) {
           violations.push(`${path.relative(root, file)}: dispatches "${match[1]}" with no reducer case`);
         }
@@ -67,7 +68,7 @@ describe('reducer-dispatch guard: every dispatched action is handled', () => {
   test('the guard would catch a synthetic dead dispatch', () => {
     const handled = new Set(['SET_CONTENT']);
     const source = 'dispatch({ type: "SET_NOT_A_REAL_ACTION", payload: 1 });';
-    const found = [...source.matchAll(/dispatch\(\s*\{\s*type:\s*"([A-Z0-9_]+)"/g)]
+    const found = [...source.matchAll(/\bdispatch\(\s*\{\s*type:\s*['"]([A-Z0-9_]+)['"]/g)]
       .map((m) => m[1])
       .filter((t) => !handled.has(t));
     expect(found).toEqual(['SET_NOT_A_REAL_ACTION']);

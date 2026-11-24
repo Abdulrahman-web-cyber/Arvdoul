@@ -38,13 +38,6 @@ const CONTRACTS = [
     consumerPattern: /event\?\.detail\?\.url/,
   },
   {
-    event: 'arvdoul:post_id_synced',
-    producer: 'src/screens/CreatePost.jsx',
-    producerPattern: /CustomEvent\(\s*['"]arvdoul:post_id_synced['"]\s*,\s*\{\s*detail:\s*\{\s*oldId:\s*instantPostId,\s*newId:\s*result\.postId\s*\}/,
-    consumer: 'src/screens/HomeScreen.jsx',
-    consumerPattern: /const\s*\{\s*oldId,\s*newId\s*\}\s*=\s*e\.detail/,
-  },
-  {
     event: 'arvdoul:search_query',
     producer: 'src/components/Shared/TopAppBar.jsx',
     producerPattern: /CustomEvent\(\s*["']arvdoul:search_query["']\s*,\s*\{\s*detail:\s*(val|"")\s*\}/,
@@ -60,8 +53,8 @@ const CONTRACTS = [
   },
   {
     event: 'arvdoul:new_post_published',
-    producer: 'src/screens/CreatePost.jsx',
-    producerPattern: /CustomEvent\(\s*['"]arvdoul:new_post_published['"]\s*,\s*\{\s*detail:\s*instantPublishedPost\s*\}/,
+    producer: 'src/screens/CreatePost/postPublishPipeline.js',
+    producerPattern: /CustomEvent\(\s*['"]arvdoul:new_post_published['"]\s*,\s*\{\s*detail:\s*confirmedPost\s*\}/,
     consumer: 'src/screens/HomeScreen.jsx',
     consumerPattern: /const\s+newPost\s*=\s*e\.detail/,
   },
@@ -86,6 +79,7 @@ describe('event-payload contract', () => {
       'src/services/userService.js',
       'src/services/messagesService.js',
       'src/screens/CreatePost.jsx',
+      'src/screens/CreatePost/postPublishPipeline.js',
       'src/screens/SearchScreen.jsx',
       'src/components/Shared/TopAppBar.jsx',
       'src/components/profile/ProfileOptionsMenu.jsx',

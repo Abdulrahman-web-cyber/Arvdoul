@@ -28,7 +28,7 @@ describe('post performance prediction — no fabricated earnings', () => {
   });
 
   test('the composer does not render an earnings insight', () => {
-    const src = read('src/screens/CreatePost.jsx');
+    const src = read('src/screens/CreatePost/ComposerPanels.jsx');
     expect(src).not.toContain('state.insights.earnings');
     // The real, factor-explained signals remain.
     expect(src).toContain('state.insights.reach');
@@ -46,7 +46,7 @@ describe('post performance prediction — no fabricated earnings', () => {
   });
 
   test('the composer renders a suggested window, never a "Best time" claim', () => {
-    const src = read('src/screens/CreatePost.jsx');
+    const src = read('src/screens/CreatePost/ComposerPanels.jsx');
     expect(src).not.toContain('state.insights.bestTime');
     expect(src).not.toContain('Best time:');
     expect(src).toContain('suggestedWindow');

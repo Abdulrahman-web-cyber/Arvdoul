@@ -1319,24 +1319,6 @@ export default function HomeScreen() {
     return () => window.removeEventListener('arvdoul:new_post_published', handleNewPost);
   }, [hydratePost]);
 
-  // The optimistic post is published with a temporary id, then the server
-  // returns the real Firestore doc id. Without this the feed kept the temp id,
-  // so likes/comments/deep links on the just-published post targeted a doc
-  // that does not exist.
-  useEffect(() => {
-    const handleIdSynced = (e) => {
-      const { oldId, newId } = e.detail || {};
-      if (!oldId || !newId) return;
-      dispatchFeed({ type: 'REPLACE_POST_ID', payload: { oldId, newId } });
-      feedRuntimeRef.current.seenIds.delete(oldId);
-      feedRuntimeRef.current.seenIds.add(newId);
-      feedRuntimeRef.current.insertedIds.delete(oldId);
-      feedRuntimeRef.current.insertedIds.add(newId);
-    };
-    window.addEventListener('arvdoul:post_id_synced', handleIdSynced);
-    return () => window.removeEventListener('arvdoul:post_id_synced', handleIdSynced);
-  }, []);
-
   // Online/offline with debounced refresh. Connection banners are owned by the
   // global `OfflineIndicator` / `TopAppBar`; the screen only re-syncs the feed.
   useEffect(() => {

@@ -728,14 +728,23 @@ const AudioCard = React.memo(({
         <div className="flex items-center gap-4">
           <div className="relative flex-shrink-0">
             <div
-              className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all duration-500"
+              className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center shadow-xl transition-all duration-500 relative"
               style={{
                 background: neonButtonGradient,
                 boxShadow: isActuallyPlaying ? buttonGlow : '0 8px 20px rgba(0,0,0,0.2)',
               }}
             >
+              {audio?.coverUrl && (
+                <img
+                  src={audio.coverUrl}
+                  alt={audio?.title || audio?.name || 'Audio cover'}
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
               {isActuallyPlaying ? (
-                <div className="flex items-center justify-center gap-0.5">
+                <div className="relative z-10 flex items-center justify-center gap-0.5 bg-black/35 inset-0 absolute">
                   {equaliserBars.map((height, idx) => (
                     <motion.div
                       key={idx}
@@ -747,17 +756,22 @@ const AudioCard = React.memo(({
                   ))}
                 </div>
               ) : (
-                <Music className="w-7 h-7 text-white drop-shadow-md" />
+                !audio?.coverUrl && <Music className="w-7 h-7 text-white drop-shadow-md" />
               )}
             </div>
             {isActuallyPlaying && (
-              <div className="absolute inset-0 rounded-full animate-ping opacity-40" style={{ background: neonButtonGradient, zIndex: -1 }} />
+              <div className="absolute inset-0 rounded-2xl animate-ping opacity-40" style={{ background: neonButtonGradient, zIndex: -1 }} />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <span className="text-sm font-bold truncate block" style={{ color: tokens.text }}>
-              {audio?.name || 'Untitled Audio'}
+              {audio?.title || audio?.name || 'Untitled Audio'}
             </span>
+            {audio?.artist && (
+              <span className="text-xs truncate block opacity-75" style={{ color: tokens.textSecondary }}>
+                {audio.artist}
+              </span>
+            )}
             <span className="text-xs font-mono opacity-80" style={{ color: tokens.textSecondary }}>
               {formatTime(duration)}
             </span>

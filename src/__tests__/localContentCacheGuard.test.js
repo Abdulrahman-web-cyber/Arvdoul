@@ -32,7 +32,7 @@ describe('device-local content cache is registered and purged', () => {
     // Every reader/writer must reference the registry keys, not a fresh literal
     // that could drift from the purge list.
     const consumers = [
-      'src/screens/CreatePost.jsx',
+      'src/screens/CreatePost/postPublishPipeline.js',
       'src/services/feedService.js',
       'src/store/profileStore.js',
       'src/screens/HomeScreen.jsx',
@@ -70,18 +70,19 @@ describe('device-local content cache is registered and purged', () => {
   });
 });
 
-describe('a failed background publish is queued, not left as a ghost', () => {
-  const src = read('src/screens/CreatePost.jsx');
+describe('a failed publish is queued cleanly and never leaves an unconfirmed ghost', () => {
+  const src = read('src/screens/CreatePost/postPublishPipeline.js');
 
-  test('the optimistic entry is dropped when createPost returns no id', () => {
-    // A resolved-but-unpersisted write used to leave the optimistic (blob-URL)
-    // entry in localStorage forever, so the post showed broken and duplicated.
+  test('no local cache entry is written when createPost returns no id', () => {
+    const throwIdx = src.indexOf('if (!result?.postId)');
+    const cacheIdx = src.indexOf('localStorage.setItem(LOCAL_POSTS_KEY');
+    expect(throwIdx).toBeGreaterThan(-1);
+    expect(cacheIdx).toBeGreaterThan(throwIdx);
     expect(src).toMatch(/if \(!result\?\.postId\)[\s\S]*?throw new Error/);
   });
 
-  test('the background failure path enqueues into the real offline queue', () => {
-    expect(src).toMatch(/catch \(bgErr\)[\s\S]*addToOfflineQueue\(current\)/);
-    // and removes the optimistic entry it can no longer honour
-    expect(src).toMatch(/catch \(bgErr\)[\s\S]*filter\(p => p\.id !== instantPostId\)/);
+  test('offline or transient network failure enqueues via onEnqueueOffline without caching unconfirmed posts', () => {
+    expect(src).toMatch(/await onEnqueueOffline\?\.\(\{\s*\.\.\.current,\s*clientPostId\s*\}\)/);
+    expect(src).toMatch(/isNetworkIssue && onEnqueueOffline[\s\S]*?await onEnqueueOffline\(\{\s*\.\.\.current,\s*clientPostId\s*\}\)/);
   });
 });

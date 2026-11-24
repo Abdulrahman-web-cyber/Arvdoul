@@ -1,252 +1,162 @@
 // src/screens/CreatePost/CreateLink.jsx
-
-import React, {
-  useEffect, useCallback, useState, useRef, useMemo
-} from "react";
-import { useCreatePostState, useCreatePostServices } from "../CreatePost";
-import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
-import { callFunction, FUNCTIONS } from "../../services/callableService.js";
-import * as Icons from "lucide-react";
-import LoadingSpinner from "../../components/Shared/LoadingSpinner";
+import React, { useEffect, useCallback, useState, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import * as Icons from 'lucide-react';
+import { callFunction, FUNCTIONS } from '../../services/callableService.js';
+import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
-
-// ── ARVDOUL DNA ──────────────────────────────────────────────────────
-const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
-const DNA_SHADOW = "0 0 20px rgba(147,51,234,0.4)";
-const INPUT_CLASS =
-  "w-full p-3 rounded-xl border text-gray-900 dark:text-white bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-arvdoul-purple focus:outline-none";
+import { useCreatePostState, useCreatePostServices } from './CreatePostContext.jsx';
+import { INPUT_CLASS, SURFACE_GLASS_CLASS } from './createPostConstants.js';
 
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 500;
-const AUTO_SAVE_DEBOUNCE = 2000;
-const SCRAPE_DEBOUNCE = 800;
+const SCRAPE_DEBOUNCE = 700;
 
-// ── RELATIVE TIME FORMATTER ─────────────────────────────────────────
-const formatTimeAgo = (timestamp) => {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 10) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-};
-
-// ── LINK PREVIEW CARD (memoised, secure) ────────────────────────────
-const LinkPreviewCard = React.memo(({ metadata, isDark }) => {
+const LinkPreviewCard = React.memo(({ metadata }) => {
   if (!metadata) return null;
   const { title, description, image, siteName } = metadata;
   return (
-    <div
-      className={`rounded-2xl p-4 backdrop-blur-xl border ${
-        isDark ? "bg-gray-800/60 border-gray-700" : "bg-white/90 border-gray-200"
-      } shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)]`}
-    >
+    <div className={`${SURFACE_GLASS_CLASS} p-5 space-y-2.5`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-arvdoul-purple">
+        Link Card Preview
+      </p>
       {image && (
         <LazyImage
           src={image}
-          alt=""
+          alt={title || 'Link preview image'}
           loading="lazy"
           referrerPolicy="no-referrer"
-          className="w-full h-40 object-cover rounded-xl mb-3"
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
+          className="w-full h-44 object-cover rounded-xl border border-slate-200/70 dark:border-white/10"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
         />
       )}
-      <h3 className="font-semibold text-lg text-gray-900 dark:text-white line-clamp-2">
-        {title || "No title"}
+      <h3 className="font-semibold text-base text-slate-900 dark:text-white line-clamp-2">
+        {title || 'Untitled link'}
       </h3>
       {description && (
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-3">
+        <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-3">
           {description}
         </p>
       )}
-      <p className="text-xs text-purple-500 mt-2">{siteName || ""}</p>
+      {siteName && <p className="text-xs font-medium text-arvdoul-purple">{siteName}</p>}
     </div>
   );
 });
 
 export default function CreateLink() {
   const { state, dispatch } = useCreatePostState();
-  const { saveDraft, isDark } = useCreatePostServices();
+  const { saveDraft, autoSaveStatus, lastSavedAt } = useCreatePostServices();
 
   const link = state.typeData.link;
-  const content = state.content; // custom description
+  const content = state.content || '';
 
-  // ── LOCAL UI STATE ─────────────────────────────────────────────────
   const [scraping, setScraping] = useState(false);
-  const [customThumbnail, setCustomThumbnail] = useState(link.thumbnail || "");
+  const [customThumbnail, setCustomThumbnail] = useState(link.thumbnail || '');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  // ── URL NORMALISATION & VALIDATION ────────────────────────────────
-  const normalizedUrl = useMemo(() => link.url.trim(), [link.url]);
+  // Sync local custom thumbnail input when a draft or edit payload loads
+  useEffect(() => {
+    setCustomThumbnail(link.thumbnail || '');
+  }, [link.thumbnail]);
+
+  const normalizedUrl = useMemo(() => (link.url || '').trim(), [link.url]);
 
   const isValidUrl = useMemo(() => {
+    if (!normalizedUrl) return false;
     try {
       const url = new URL(normalizedUrl);
-      return ["http:", "https:"].includes(url.protocol);
+      return ['http:', 'https:'].includes(url.protocol);
     } catch {
       return false;
     }
   }, [normalizedUrl]);
 
-  // ── METADATA PERSISTENCE (global state, url‑bound) ────────────────
   const metadata = link.metadata || null;
-
-  // ── METADATA SCRAPER (deduplicated, url‑bound, no re‑scrape if already fetched) ──
   const urlRef = useRef(normalizedUrl);
+  const titleRef = useRef(link.title || '');
+  titleRef.current = link.title || '';
+  const metadataRef = useRef(metadata);
+  metadataRef.current = metadata;
+
   const requestIdRef = useRef(0);
   const scrapeTimerRef = useRef(null);
 
-  const scrapeLink = useCallback(async (url) => {
-    if (!isValidUrl) return;
-    // Skip if metadata for this exact URL already exists
-    if (link.metadata && link.metadata.url === url) return;
+  const scrapeLink = useCallback(
+    async (url) => {
+      if (!url) return;
+      if (metadataRef.current && metadataRef.current.url === url) return;
 
-    const currentId = ++requestIdRef.current;
-    setScraping(true);
-    try {
-      const data = (await callFunction(FUNCTIONS.SCRAPE_LINK, { url })) ?? {};
-      if (currentId !== requestIdRef.current) return;
-      if (urlRef.current !== url) return;
-      const meta = {
-        url,                   // bind metadata to the scraped URL
-        title: data.title || "",
-        description: data.description || "",
-        image: data.image || "",
-        siteName: data.siteName || "",
-      };
-      dispatch({ type: "SET_LINK_METADATA", payload: meta });
-      // Auto‑fill title only if still empty
-      if (!link.title && meta.title) {
-        dispatch({ type: "SET_LINK_TITLE", payload: meta.title });
-      }
-    } catch {
-      if (currentId === requestIdRef.current && urlRef.current === url) {
-        toast.error("Failed to fetch link preview");
-      }
-    } finally {
-      if (currentId === requestIdRef.current) {
-        setScraping(false);
-      }
-    }
-  }, [isValidUrl, link.metadata, link.title, dispatch]);
-
-  // ── SCRAPE ON URL CHANGE (clear old metadata immediately) ─────────
-  useEffect(() => {
-    urlRef.current = normalizedUrl;
-    // If URL is invalid or has changed, clear any old metadata that doesn't match
-    if (!isValidUrl) {
-      dispatch({ type: "SET_LINK_METADATA", payload: null });
-      return;
-    }
-    // If metadata exists but belongs to a different URL, clear it
-    if (link.metadata && link.metadata.url !== normalizedUrl) {
-      dispatch({ type: "SET_LINK_METADATA", payload: null });
-      // Also clear auto‑generated title if it came from metadata
-      if (link.title === link.metadata.title) {
-        dispatch({ type: "SET_LINK_TITLE", payload: "" });
-      }
-    }
-    // Debounced scrape
-    clearTimeout(scrapeTimerRef.current);
-    scrapeTimerRef.current = setTimeout(() => {
-      scrapeLink(normalizedUrl);
-    }, SCRAPE_DEBOUNCE);
-    return () => clearTimeout(scrapeTimerRef.current);
-  }, [normalizedUrl, isValidUrl, scrapeLink, dispatch, link.metadata, link.title]);
-
-  // ── CONTENT READINESS ────────────────────────────────────────────
-  useEffect(() => {
-    const ready = normalizedUrl.length > 0 && isValidUrl;
-    dispatch({ type: "SET_CONTENT_READY", payload: ready });
-  }, [normalizedUrl, isValidUrl, dispatch]);
-
-  // ── AUTOSAVE (versioned, duplicate prevention, manual cancels pending) ──
-  const [saving, setSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState(null);
-  const lastSavedContentRef = useRef();
-  const saveVersionRef = useRef(0);
-  const autoSaveTimerRef = useRef(null);
-  const activeSavesRef = useRef(0);
-
-  const performSave = useCallback(
-    async (dataSnapshot) => {
-      saveVersionRef.current++;
-      const version = saveVersionRef.current;
-      activeSavesRef.current++;
+      const currentId = ++requestIdRef.current;
+      setScraping(true);
       try {
-        await saveDraft();
-        if (version !== saveVersionRef.current) return;
-        setLastSaved(Date.now());
-        lastSavedContentRef.current = dataSnapshot;
-      } catch {
-        if (version === saveVersionRef.current) {
-          toast.error("Save failed");
+        const data = (await callFunction(FUNCTIONS.SCRAPE_LINK, { url })) ?? {};
+        if (currentId !== requestIdRef.current || urlRef.current !== url) return;
+        const meta = {
+          url,
+          title: data.title || '',
+          description: data.description || '',
+          image: data.image || '',
+          siteName: data.siteName || '',
+        };
+        dispatch({ type: 'SET_LINK_METADATA', payload: meta });
+        if (!titleRef.current && meta.title) {
+          dispatch({ type: 'SET_LINK_TITLE', payload: meta.title });
+        }
+      } catch (err) {
+        if (currentId === requestIdRef.current && urlRef.current === url) {
+          console.warn('[CreateLink] Preview scrape failed:', err?.message);
+          toast.error('Could not fetch link preview metadata');
         }
       } finally {
-        activeSavesRef.current--;
-        if (activeSavesRef.current <= 0) {
-          setSaving(false);
-          activeSavesRef.current = 0;
+        if (currentId === requestIdRef.current) {
+          setScraping(false);
         }
       }
     },
-    [saveDraft]
+    [dispatch]
   );
 
-  const contentSnapshot = useMemo(() => {
-    return JSON.stringify({
-      url: normalizedUrl,
-      title: link.title,
-      description: content,
-      thumbnail: customThumbnail,
-      metadata: link.metadata,
-    });
-  }, [normalizedUrl, link.title, content, customThumbnail, link.metadata]);
+  useEffect(() => {
+    urlRef.current = normalizedUrl;
+    clearTimeout(scrapeTimerRef.current);
+
+    if (!isValidUrl) {
+      if (metadataRef.current) {
+        dispatch({ type: 'SET_LINK_METADATA', payload: null });
+      }
+      return;
+    }
+
+    if (metadataRef.current && metadataRef.current.url !== normalizedUrl) {
+      if (titleRef.current === metadataRef.current.title) {
+        dispatch({ type: 'SET_LINK_TITLE', payload: '' });
+      }
+      dispatch({ type: 'SET_LINK_METADATA', payload: null });
+    }
+
+    if (metadataRef.current?.url === normalizedUrl) return;
+
+    scrapeTimerRef.current = setTimeout(() => {
+      scrapeLink(normalizedUrl);
+    }, SCRAPE_DEBOUNCE);
+
+    return () => clearTimeout(scrapeTimerRef.current);
+  }, [normalizedUrl, isValidUrl, scrapeLink, dispatch]);
 
   useEffect(() => {
-    if (!normalizedUrl || !state.postType) return;
-    if (contentSnapshot === lastSavedContentRef.current) return;
-    // Clear existing timer before setting a new one
-    clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      setSaving(true);
-      performSave(contentSnapshot);
-    }, AUTO_SAVE_DEBOUNCE);
-    return () => clearTimeout(autoSaveTimerRef.current);
-  }, [contentSnapshot, state.postType, performSave]);
+    dispatch({ type: 'SET_CONTENT_READY', payload: normalizedUrl.length > 0 && isValidUrl });
+  }, [normalizedUrl, isValidUrl, dispatch]);
 
-  // ── MANUAL SAVE (cancels pending autosave) ────────────────────────
-  const manualSave = useCallback(() => {
-    clearTimeout(autoSaveTimerRef.current);
-    if (saving) return;
-    setSaving(true);
-    performSave(contentSnapshot);
-  }, [saving, performSave, contentSnapshot]);
-
-  // ── RELATIVE SAVE INDICATOR ──────────────────────────────────────
-  const [timeAgo, setTimeAgo] = useState("");
-  useEffect(() => {
-    if (!lastSaved) return;
-    const update = () => setTimeAgo(formatTimeAgo(lastSaved));
-    update();
-    const interval = setInterval(update, 10000);
-    return () => clearInterval(interval);
-  }, [lastSaved]);
-
-  // ── PREVIEW TOGGLE ───────────────────────────────────────────────
-  const [previewOpen, setPreviewOpen] = useState(false);
-
-  // ── HANDLERS ─────────────────────────────────────────────────────
   const handleUrlChange = useCallback(
     (e) => {
       const value = e.target.value;
       if (value.length <= MAX_URL_LENGTH) {
-        dispatch({ type: "SET_LINK_URL", payload: value });
+        dispatch({ type: 'SET_LINK_URL', payload: value });
       }
     },
     [dispatch]
@@ -256,7 +166,7 @@ export default function CreateLink() {
     (e) => {
       const value = e.target.value;
       if (value.length <= MAX_TITLE_LENGTH) {
-        dispatch({ type: "SET_LINK_TITLE", payload: value });
+        dispatch({ type: 'SET_LINK_TITLE', payload: value });
       }
     },
     [dispatch]
@@ -266,7 +176,7 @@ export default function CreateLink() {
     (e) => {
       const value = e.target.value;
       if (value.length <= MAX_DESCRIPTION_LENGTH) {
-        dispatch({ type: "SET_CONTENT", payload: value });
+        dispatch({ type: 'SET_CONTENT', payload: value });
       }
     },
     [dispatch]
@@ -279,73 +189,94 @@ export default function CreateLink() {
       if (raw.length > 0) {
         try {
           const url = new URL(raw);
-          if (!["http:", "https:"].includes(url.protocol)) valid = false;
+          if (!['http:', 'https:'].includes(url.protocol)) valid = false;
         } catch {
           valid = false;
         }
       }
       setCustomThumbnail(raw);
-      dispatch({ type: "SET_LINK_THUMBNAIL", payload: valid ? raw : "" });
+      dispatch({ type: 'SET_LINK_THUMBNAIL', payload: valid ? raw : '' });
       if (!valid && raw.length > 0) {
-        toast.error("Invalid thumbnail URL – must be a valid http/https URL");
+        toast.error('Invalid thumbnail URL — must start with http:// or https://');
       }
     },
     [dispatch]
   );
 
-  // ── PREVIEW DATA (memoised, uses metadata only if URL matches) ────
   const previewData = useMemo(() => {
-    // Only use metadata if it belongs to the current URL
-    if (metadata && metadata.url === normalizedUrl) return metadata;
+    if (metadata && metadata.url === normalizedUrl) {
+      return {
+        ...metadata,
+        title: link.title || metadata.title,
+        description: content || metadata.description,
+        image: customThumbnail || metadata.image,
+      };
+    }
     return {
       title: link.title,
       description: content,
       image: customThumbnail,
-      siteName: "",
+      siteName: '',
     };
   }, [metadata, normalizedUrl, link.title, content, customThumbnail]);
 
-  // ── CLEANUP ALL TIMERS ON UNMOUNT ────────────────────────────────
-  useEffect(() => {
-    return () => {
-      clearTimeout(autoSaveTimerRef.current);
-      clearTimeout(scrapeTimerRef.current);
-    };
-  }, []);
-
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto w-full px-4 sm:px-0">
-      {/* ── HEADER ──────────────────────────────────────────────── */}
-      <div className="mb-6 mt-2">
-        <div
-          className="rounded-2xl shadow-[0_20px_40px_-12px_rgba(0,0,0,0.3)] p-4 text-center border border-white/10"
-          style={{ background: DNA_GRADIENT_STYLE }}
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold text-white">Share a Link</h2>
-          <p className="text-sm text-white/80 mt-1">share. connect. inspire.</p>
+    <div className="max-w-3xl mx-auto w-full py-4 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+            Share a Link
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Attach an article, resource, or web link with live preview metadata
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPreviewOpen((v) => !v)}
+            aria-label={previewOpen ? 'Switch to link editor' : 'Preview link card'}
+            className="min-h-[40px] px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/12 bg-white/80 dark:bg-[#080F2E]/80 text-xs font-semibold text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-white/10 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+          >
+            {previewOpen ? <Icons.Edit3 className="w-3.5 h-3.5" /> : <Icons.Eye className="w-3.5 h-3.5" />}
+            <span>{previewOpen ? 'Edit' : 'Preview'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={saveDraft}
+            disabled={autoSaveStatus === 'saving'}
+            aria-label="Save draft"
+            className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-95 flex items-center gap-1.5 disabled:opacity-50 whitespace-nowrap"
+            style={{ background: BRAND_GRADIENT }}
+          >
+            {autoSaveStatus === 'saving' ? (
+              <LoadingSpinner size="xs" color="white" />
+            ) : (
+              <Icons.Save className="w-3.5 h-3.5" />
+            )}
+            <span>Save Draft</span>
+          </button>
         </div>
       </div>
 
-      {/* ── FLOATING FORM CARD (GLASSMORPHISM, WIDER, COMPACT) ────── */}
-      <div
-        className={`rounded-2xl backdrop-blur-sm border shadow-2xl p-4 space-y-3 ${
-          isDark
-            ? "bg-black/20 border-gray-700/30 shadow-none dark:shadow-[0_12px_35px_rgba(0,0,0,0.4)]"
-            : "bg-white/90 border-gray-200/50 shadow-[0_12px_35px_rgba(0,0,0,0.15)]"
-        }`}
-      >
-        {/* URL Input */}
+      <div className={`${SURFACE_GLASS_CLASS} p-4 sm:p-5 space-y-4`}>
         <div>
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-            URL
+          <label
+            htmlFor="link-url-input"
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block"
+          >
+            Web URL
           </label>
           <div className="relative">
-            <Icons.Link className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Icons.Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
+              id="link-url-input"
               type="url"
-              value={link.url}
+              value={link.url || ''}
               onChange={handleUrlChange}
-              placeholder="Paste a link..."
+              placeholder="https://example.com/article"
               maxLength={MAX_URL_LENGTH}
               className={`${INPUT_CLASS} pl-10`}
               autoFocus
@@ -353,40 +284,49 @@ export default function CreateLink() {
             />
           </div>
           {!isValidUrl && normalizedUrl.length > 0 && (
-            <p className="text-xs text-red-500 mt-1">Please enter a valid URL (http/https)</p>
+            <p className="text-xs text-rose-500 mt-1.5">
+              Please enter a valid http or https URL
+            </p>
           )}
           {scraping && (
-            <div className="flex items-center gap-2 mt-2 text-xs text-purple-500">
-              <LoadingSpinner size="xs" /> Fetching preview…
+            <div className="flex items-center gap-2 mt-2 text-xs text-arvdoul-purple">
+              <LoadingSpinner size="xs" />
+              <span>Fetching link metadata...</span>
             </div>
           )}
         </div>
 
-        {/* Custom Title */}
         <div>
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-            Custom Title ({link.title.length}/{MAX_TITLE_LENGTH})
+          <label
+            htmlFor="link-title-input"
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block"
+          >
+            Custom Title ({(link.title || '').length}/{MAX_TITLE_LENGTH})
           </label>
           <input
+            id="link-title-input"
             type="text"
-            value={link.title}
+            value={link.title || ''}
             onChange={handleTitleChange}
-            placeholder="Optional title"
+            placeholder="Optional headline override"
             maxLength={MAX_TITLE_LENGTH}
             className={INPUT_CLASS}
             aria-label="Custom title"
           />
         </div>
 
-        {/* Custom Description */}
         <div>
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-            Description ({(content || "").length}/{MAX_DESCRIPTION_LENGTH})
+          <label
+            htmlFor="link-description-input"
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block"
+          >
+            Commentary ({content.length}/{MAX_DESCRIPTION_LENGTH})
           </label>
           <textarea
+            id="link-description-input"
             value={content}
             onChange={handleDescriptionChange}
-            placeholder="Add a description..."
+            placeholder="Why are you sharing this link?"
             maxLength={MAX_DESCRIPTION_LENGTH}
             rows={3}
             className={`${INPUT_CLASS} resize-none`}
@@ -394,81 +334,47 @@ export default function CreateLink() {
           />
         </div>
 
-        {/* Custom Thumbnail URL */}
         <div>
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+          <label
+            htmlFor="link-thumb-input"
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block"
+          >
             Custom Thumbnail URL (optional)
           </label>
           <input
+            id="link-thumb-input"
             type="url"
             value={customThumbnail}
             onChange={handleThumbnailChange}
-            placeholder="https://example.com/image.jpg"
+            placeholder="https://example.com/preview.jpg"
             className={INPUT_CLASS}
             aria-label="Custom thumbnail URL"
           />
         </div>
-      </div>
 
-      {/* ── ACTION BUTTONS & SAVE INDICATOR ─────────────────────── */}
-      <div className="flex justify-center gap-3 my-4 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setPreviewOpen(!previewOpen)}
-          className="px-3 py-1.5 text-xs text-white rounded-full transition flex items-center gap-1"
-          style={{ background: DNA_GRADIENT_STYLE, boxShadow: DNA_SHADOW }}
-          aria-label={previewOpen ? "Edit" : "Preview"}
-        >
-          {previewOpen ? (
-            <Icons.EyeOff className="w-3 h-3" />
-          ) : (
-            <Icons.Eye className="w-3 h-3" />
+        <div className="flex items-center justify-end text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+          {autoSaveStatus === 'saving' && (
+            <span className="flex items-center gap-1.5">
+              <LoadingSpinner size="xs" /> Saving draft...
+            </span>
           )}
-          {previewOpen ? "Edit" : "Preview"}
-        </button>
-        <button
-          type="button"
-          onClick={manualSave}
-          disabled={saving}
-          className="px-3 py-1.5 text-xs text-white rounded-full transition flex items-center gap-1 disabled:opacity-50"
-          style={{ background: DNA_GRADIENT_STYLE, boxShadow: DNA_SHADOW }}
-          aria-label="Save draft"
-        >
-          {saving ? (
-            <LoadingSpinner size="xs" />
-          ) : (
-            <Icons.Save className="w-3 h-3" />
+          {autoSaveStatus === 'saved' && lastSavedAt && (
+            <span className="flex items-center gap-1.5">
+              <Icons.CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              Saved {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
           )}
-          Save
-        </button>
+        </div>
       </div>
 
-      {/* Save indicator (relative time) */}
-      <div
-        className="flex justify-center items-center gap-1 text-xs mb-4"
-        aria-live="polite"
-      >
-        {saving ? (
-          <span className="text-gray-500 flex items-center gap-1">
-            <LoadingSpinner size="xs" /> Saving…
-          </span>
-        ) : lastSaved ? (
-          <span className="text-green-500 flex items-center gap-1">
-            <Icons.CheckCircle className="w-3 h-3" /> Saved {timeAgo}
-          </span>
-        ) : null}
-      </div>
-
-      {/* ── PREVIEW ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {previewOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="mb-4"
+            exit={{ opacity: 0, y: 8 }}
           >
-            <LinkPreviewCard metadata={previewData} isDark={isDark} />
+            <LinkPreviewCard metadata={previewData} />
           </motion.div>
         )}
       </AnimatePresence>

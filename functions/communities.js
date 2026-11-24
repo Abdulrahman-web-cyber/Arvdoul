@@ -465,23 +465,131 @@ exports.createCommunityPost = functions.https.onCall(async (data, context) => {
   }
 
   const userSnap = await db.doc(`users/${uid}`).get();
-  const authorIsPrivate = userSnap.exists ? userSnap.data()?.isPrivate === true : false;
+  const userData = userSnap.exists ? userSnap.data() || {} : {};
+  const authorIsPrivate = userData.isPrivate === true;
+
+  const safeHttpUrl = (val) => {
+    if (typeof val !== 'string' || !val.trim()) return null;
+    try {
+      const u = new URL(val.trim());
+      return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString().slice(0, 2048) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const cleanMedia = Array.isArray(post?.media)
+    ? post.media.slice(0, 10).map((m, idx) => {
+        if (!m || typeof m !== 'object') return null;
+        const url = safeHttpUrl(m.url);
+        if (!url) return null;
+        const thumbnail = safeHttpUrl(m.thumbnail);
+        const coverUrl = safeHttpUrl(m.coverUrl);
+        return {
+          url,
+          type: cleanText(m.type, 20) || 'image',
+          name: cleanText(m.name, 140) || '',
+          alt: cleanText(m.alt, 500) || '',
+          order: typeof m.order === 'number' ? m.order : idx,
+          ...(thumbnail ? { thumbnail } : {}),
+          ...(coverUrl ? { coverUrl } : {}),
+          ...(typeof m.duration === 'number' && Number.isFinite(m.duration) ? { duration: m.duration } : {}),
+        };
+      }).filter(Boolean)
+    : [];
+
+  const postType = cleanText(post?.type, 30) || 'text';
+  const normalizedHashtags = Array.isArray(post?.hashtags)
+    ? [...new Set(post.hashtags.map((t) => cleanText(String(t || '').replace(/^#+/, '').toLowerCase(), 50)).filter(Boolean))].slice(0, 30)
+    : [];
 
   const postRef = db.collection('posts').doc();
   const newPost = {
     id: postRef.id,
     authorId: uid,
     authorIsPrivate,
+    authorName: cleanText(post?.authorName || userData.displayName || userData.username, 120) || '',
+    authorUsername: cleanText(post?.authorUsername || userData.username, 60) || '',
+    authorPhoto: safeHttpUrl(post?.authorPhoto || userData.photoURL) || '',
     communityId,
     content,
-    type: cleanText(post?.type, 30) || 'text',
-    media: Array.isArray(post?.media) ? post.media.slice(0, 10) : [],
+    contentJSON: post?.contentJSON && typeof post.contentJSON === 'object' ? post.contentJSON : null,
+    type: postType,
+    media: cleanMedia,
+    mediaUrl: safeHttpUrl(post?.mediaUrl) || cleanMedia[0]?.url || '',
+    videoUrl: safeHttpUrl(post?.videoUrl) || cleanMedia.find((m) => m.type === 'video')?.url || '',
+    thumbnailUrl: safeHttpUrl(post?.thumbnailUrl) || cleanMedia[0]?.thumbnail || cleanMedia[0]?.coverUrl || cleanMedia[0]?.url || '',
+    ...(postType === 'poll' && post?.poll && {
+      poll: {
+        question: cleanText(post.poll.question || content, 500),
+        options: Array.isArray(post.poll.options)
+          ? post.poll.options.slice(0, 10).map((opt, idx) => ({
+              id: cleanText(opt?.id || String(idx), 40),
+              text: cleanText(opt?.text, 120),
+              votes: 0,
+            })).filter((o) => o.text)
+          : [],
+        totalVotes: 0,
+        allowMultiple: Boolean(post.poll.allowMultiple),
+        closesAt: post.poll.closesAt || null,
+      },
+    }),
+    ...(postType === 'question' && {
+      question: {
+        title: cleanText(post?.question?.title || content, 300),
+        details: cleanText(post?.question?.details || '', 2000),
+        answers: [],
+        totalAnswers: 0,
+        bestAnswerId: null,
+      },
+    }),
+    ...(postType === 'link' && post?.link && safeHttpUrl(post.link.url) && {
+      link: {
+        url: safeHttpUrl(post.link.url),
+        title: cleanText(post.link.title, 200) || '',
+        description: cleanText(post.link.description, 500) || '',
+        image: safeHttpUrl(post.link.image) || '',
+        domain: cleanText(post.link.domain, 120) || '',
+      },
+    }),
+    ...(postType === 'event' && post?.event && {
+      event: {
+        id: cleanText(post.event.id, 80) || null,
+        title: cleanText(post.event.title, 160),
+        description: cleanText(post.event.description, 2000),
+        date: post.event.date || null,
+        endDate: post.event.endDate || null,
+        location: cleanText(post.event.location, 240),
+        coverImage: safeHttpUrl(post.event.coverImage) || '',
+        rsvpEnabled: post.event.rsvpEnabled !== false,
+        capacity: typeof post.event.capacity === 'number' && post.event.capacity > 0 ? post.event.capacity : null,
+      },
+    }),
+    ...(postType === 'audio' && post?.audio && safeHttpUrl(post.audio.url) && {
+      audio: {
+        url: safeHttpUrl(post.audio.url),
+        title: cleanText(post.audio.title, 140) || 'Untitled Audio',
+        artist: cleanText(post.audio.artist, 100) || '',
+        genre: cleanText(post.audio.genre, 50) || '',
+        duration: typeof post.audio.duration === 'number' ? post.audio.duration : 0,
+        ...(safeHttpUrl(post.audio.coverUrl) ? { coverUrl: safeHttpUrl(post.audio.coverUrl) } : {}),
+      },
+    }),
+    ...(post?.location && typeof post.location === 'object' && {
+      location: {
+        name: cleanText(post.location.name || post.location.label || '', 200),
+        ...(typeof post.location.lat === 'number' ? { lat: post.location.lat } : {}),
+        ...(typeof post.location.lng === 'number' ? { lng: post.location.lng } : {}),
+      },
+    }),
     visibility: 'community',
-    allowComments: post?.allowComments !== false,
+    enableComments: post?.enableComments !== false && post?.allowComments !== false,
+    allowComments: post?.allowComments !== false && post?.enableComments !== false,
+    enableGifts: post?.enableGifts !== false,
     allowSharing: post?.allowSharing !== false,
     stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
     reactions: { like: 0, love: 0, laugh: 0, celebrate: 0, support: 0, insightful: 0 },
-    hashtags: Array.isArray(post?.hashtags) ? post.hashtags.slice(0, 30) : [],
+    hashtags: normalizedHashtags,
     mentions: Array.isArray(post?.mentions) ? post.mentions.slice(0, 30) : [],
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
