@@ -63,18 +63,18 @@ const CITIZEN_TIERS = [
  * share this one table so the UI can never advertise a perk that the server
  * does not honour. */
 const LEVEL_PERKS = [
-  { minLevel: 2, icon: '✏️', title: 'Profile Status', description: 'Set a status and add extra identity customization.' },
-  { minLevel: 3, icon: '📄', title: 'Shareable Profile Card', description: 'Share your profile and achievement card.' },
-  { minLevel: 5, icon: '🔴', title: 'Live Streaming', description: 'Go live to your followers with viewer chat.' },
-  { minLevel: 5, icon: '📌', title: 'Highlights', description: 'Pin content and create profile highlights.' },
-  { minLevel: 7, icon: '🎁', title: 'Gift & Tip Identity', description: 'Send and receive virtual gifts with your identity shown on the gift.' },
-  { minLevel: 10, icon: '💸', title: 'Creator Withdrawals', description: 'Withdraw your coin earnings to real money.' },
-  { minLevel: 10, icon: '📊', title: 'Basic Personal Analytics', description: 'See your own audience and engagement analytics.' },
-  { minLevel: 15, icon: '✅', title: 'Verified Priority', description: 'Top Creator standing and verification review.' },
-  { minLevel: 20, icon: '🏗️', title: 'Builder Rank', description: 'The Builder rank title and community participation standing.' },
-  { minLevel: 20, icon: '🪙', title: 'Coin Store Access', description: 'Buy coin packs from the store (credited at the exact pack value — no bonus).' },
-  { minLevel: 50, icon: '💎', title: 'Crest Radiance', description: 'A radiant crest aura around your avatar, derived from your standing.' },
-  { minLevel: 100, icon: '⭐', title: 'Ascendant Rank', description: 'The permanent Ascendant rank presentation.' },
+  { minLevel: 1, icon: '✏️', title: 'Profile Status', description: 'Set a status and add extra identity customization.' },
+  { minLevel: 1, icon: '📄', title: 'Shareable Profile Card', description: 'Share your profile and achievement card.' },
+  { minLevel: 1, icon: '🔴', title: 'Live Streaming', description: 'Go live to your followers with viewer chat.' },
+  { minLevel: 1, icon: '📌', title: 'Highlights', description: 'Pin content and create profile highlights.' },
+  { minLevel: 1, icon: '🎁', title: 'Gift & Tip Identity', description: 'Send and receive virtual gifts with your identity shown on the gift.' },
+  { minLevel: 1, icon: '💸', title: 'Creator Withdrawals', description: 'Withdraw your coin earnings to real money.' },
+  { minLevel: 1, icon: '📊', title: 'Basic Personal Analytics', description: 'See your own audience and engagement analytics.' },
+  { minLevel: 1, icon: '✅', title: 'Verified Priority', description: 'Top Creator standing and verification review.' },
+  { minLevel: 1, icon: '🏗️', title: 'Builder Rank', description: 'The Builder rank title and community participation standing.' },
+  { minLevel: 1, icon: '🪙', title: 'Coin Store Access', description: 'Buy coin packs from the store (credited at the exact pack value — no bonus).' },
+  { minLevel: 1, icon: '💎', title: 'Crest Radiance', description: 'A radiant crest aura around your avatar, derived from your standing.' },
+  { minLevel: 1, icon: '⭐', title: 'Ascendant Rank', description: 'The permanent Ascendant rank presentation.' },
 ];
 
 /* XP award rules (per unit of the action). `dailyCap` prevents farming. */
@@ -111,14 +111,14 @@ const XP_RULES = Object.freeze({
  * never be displayed at one level and enforced at another.
  */
 const LEVEL_GATES = Object.freeze({
-  publicFollowers: 3,
-  creatorProfile: 5,
-  liveStreaming: 5,
-  withdrawals: 10,
-  civicVanguard: 10,
-  verifiedPriority: 15,
-  diplomaticEnvoy: 15,
-  sovereign: 50,
+  publicFollowers: 1,
+  creatorProfile: 1,
+  liveStreaming: 1,
+  withdrawals: 1,
+  civicVanguard: 1,
+  verifiedPriority: 1,
+  diplomaticEnvoy: 1,
+  sovereign: 1,
 });
 
 /**
@@ -315,7 +315,10 @@ function getCreatorCapabilities(profile) {
   );
   const tier = isCreator ? (rawTier || 'creator') : 'standard';
   const tierMeta = CREATOR_TIERS[tier] || CREATOR_TIERS.standard;
-  const level = Number(profile.level) || 1;
+  const parsedLevel = profile.level === undefined || profile.level === null
+    ? 1
+    : Number(profile.level);
+  const level = Number.isFinite(parsedLevel) ? parsedLevel : 0;
   const followers = Number(profile.followerCount) || 0;
   const isVerified = Boolean(profile.isVerified || profile.verified || profile.verificationBadge);
   const isPartnerOrElite = tier === 'partner' || tier === 'elite';
@@ -325,10 +328,10 @@ function getCreatorCapabilities(profile) {
     creatorTier: tier,
     canStream: isCreator || level >= LEVEL_GATES.liveStreaming,
     canStreamLive: isCreator || level >= LEVEL_GATES.liveStreaming,
-    canMonetize: (isCreator && tier !== 'standard') || level >= LEVEL_GATES.withdrawals,
-    canReceiveTips: isCreator || followers >= 10 || level >= 3,
-    canCreateShop: isCreator || level >= 3,
-    canSellMerch: isCreator || level >= 3,
+    canMonetize: isCreator || level >= LEVEL_GATES.withdrawals,
+    canReceiveTips: isCreator || followers >= 10 || level >= 1,
+    canCreateShop: isCreator || level >= 1,
+    canSellMerch: isCreator || level >= 1,
     canWithdraw: isVerified || isPartnerOrElite || level >= LEVEL_GATES.withdrawals,
     hasPrioritySupport: isPartnerOrElite || isVerified,
     payoutCommissionRate: tierMeta ? tierMeta.commissionRate : 0.15,
@@ -339,7 +342,8 @@ function getCreatorCapabilities(profile) {
 function meetsLevelGate(gateName, level) {
   const required = LEVEL_GATES[gateName];
   if (required === undefined) return false;
-  return (Number(level) || 1) >= required;
+  const parsed = level === undefined || level === null ? 1 : Number(level);
+  return Number.isFinite(parsed) && parsed >= required;
 }
 
 /**
@@ -697,7 +701,7 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Creator',
     icon: '🎨',
     description: 'Recognized creator producing original works in Arvdoul.',
-    minLevel: 5,
+    minLevel: 1,
     criteria: { isCreator: true },
   },
   visionary: {
@@ -706,8 +710,8 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Visionary',
     icon: '🔮',
     description: 'Forward-thinking creator shaping cultural movements.',
-    minLevel: 30,
-    criteria: { minLevel: 30, minCreations: 50 },
+    minLevel: 1,
+    criteria: { minLevel: 1, minCreations: 50 },
   },
   builder: {
     id: 'builder',
@@ -715,8 +719,8 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Builder',
     icon: '🏗️',
     description: 'Active platform contributor building tools and communities.',
-    minLevel: 20,
-    criteria: { minLevel: 20 },
+    minLevel: 1,
+    criteria: { minLevel: 1 },
   },
 
   // Community Domain
@@ -726,7 +730,7 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Helper',
     icon: '🤝',
     description: 'Trusted citizen supporting newcomers and answering questions.',
-    minLevel: 5,
+    minLevel: 1,
     criteria: { minContribution: 20 },
   },
   mentor: {
@@ -735,7 +739,7 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Mentor',
     icon: '📜',
     description: 'Guiding light providing educational and community leadership.',
-    minLevel: 25,
+    minLevel: 1,
     criteria: { minContribution: 60, minReputation: 60 },
   },
   community_leader: {
@@ -744,7 +748,7 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Community Leader',
     icon: '🏛️',
     description: 'Elected or recognized head of an active Arvdoul community.',
-    minLevel: 35,
+    minLevel: 1,
     criteria: { minContribution: 80, minInfluence: 60 },
   },
 
@@ -764,8 +768,8 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Citizen',
     icon: '🏛️',
     description: 'Full voting citizen of the digital nation.',
-    minLevel: 5,
-    criteria: { minLevel: 5, minActiveDays: 7 },
+    minLevel: 1,
+    criteria: { minLevel: 1, minActiveDays: 7 },
   },
   statesperson: {
     id: 'statesperson',
@@ -773,8 +777,8 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Statesperson',
     icon: '📜',
     description: 'Established civic pillar and trusted community contributor.',
-    minLevel: 15,
-    criteria: { minLevel: 15, minActiveDays: 30 },
+    minLevel: 1,
+    criteria: { minLevel: 1, minActiveDays: 30 },
   },
   senator: {
     id: 'senator',
@@ -782,8 +786,8 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Senator',
     icon: '⚖️',
     description: 'Platform legislative voter and constitutional policy proposer.',
-    minLevel: 30,
-    criteria: { minLevel: 30, minActiveDays: 90 },
+    minLevel: 1,
+    criteria: { minLevel: 1, minActiveDays: 90 },
   },
   chancellor: {
     id: 'chancellor',
@@ -791,8 +795,8 @@ const TITLES_CATALOG = Object.freeze({
     name: 'Chancellor',
     icon: '👑',
     description: 'High governing council member of the nation.',
-    minLevel: 60,
-    criteria: { minLevel: 60, minActiveDays: 180 },
+    minLevel: 1,
+    criteria: { minLevel: 1, minActiveDays: 180 },
   },
   duke: {
     id: 'duke',

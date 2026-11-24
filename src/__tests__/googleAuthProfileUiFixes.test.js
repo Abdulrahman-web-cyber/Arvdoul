@@ -50,7 +50,7 @@ describe('Google OAuth & SetupProfile permission hardening', () => {
   });
 });
 
-describe('Avatar upload, single offline banner, and bio-only quick edit', () => {
+describe('Avatar upload, single offline banner, and Quick Edit removal', () => {
   test('userService.uploadAvatar guarantees canonical URL keys and ProfileMyScreen/AvatarUploadModal fail closed', () => {
     const userSvc = read('src/services/userService.js');
     const myProfile = read('src/screens/Profile/ProfileMyScreen.jsx');
@@ -72,14 +72,12 @@ describe('Avatar upload, single offline banner, and bio-only quick edit', () => 
     expect(offlineBanner).toContain("import { cn } from '../../lib/utils'");
   });
 
-  test('ProfileQuickEditModal isolates bio-only edits and ProfileHeroSection routes both add & edit bio there', () => {
-    const modal = read('src/components/profile/ProfileQuickEditModal.jsx');
+  test('ProfileQuickEditModal is completely removed from profile surfaces', () => {
     const hero = read('src/components/profile/ProfileHeroSection.jsx');
-    expect(modal).toContain("initialField === 'bio'");
-    expect(modal).toContain("updates.bio = bio.trim()");
-    expect(modal).toContain('{showDisplayName &&');
-    expect(modal).toContain('{showWebsite &&');
-    expect(hero).toContain("onOpenQuickEdit('bio')");
+    const myProfile = read('src/screens/Profile/ProfileMyScreen.jsx');
+    expect(fs.existsSync(path.join(root, 'src/components/profile/ProfileQuickEditModal.jsx'))).toBe(false);
+    expect(hero).not.toContain('onOpenQuickEdit');
+    expect(myProfile).not.toContain('ProfileQuickEditModal');
   });
 });
 

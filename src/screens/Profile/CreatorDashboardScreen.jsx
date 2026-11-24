@@ -69,9 +69,9 @@ export default function CreatorDashboardScreen() {
   // Load analytics
   useEffect(() => {
     if (currentUserId) {
-      loadAnalytics(currentUserId, timeframe);
+      loadAnalytics(currentUserId, timeframe, { forceRefresh: true });
     }
-  }, [currentUserId, timeframe]);
+  }, [currentUserId, timeframe, loadAnalytics]);
   
   const handleRefresh = useCallback(() => {
     if (currentUserId) refresh(currentUserId);

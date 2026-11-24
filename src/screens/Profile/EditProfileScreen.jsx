@@ -45,18 +45,27 @@ import {
   ShieldCheck,
   Flame,
   LayoutGrid,
-  Palette
+  Palette,
+  MessageSquare,
+  Phone,
+  Users,
+  Gift,
+  Sliders,
+  UserX,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
-import { useProfileStore } from '../../store/profileStore';
+import { useProfileStore, patchCachedProfile, invalidateProfileCache } from '../../store/profileStore';
 import { 
+  PROFILE_TYPES,
   VISIBILITY_SCOPES, 
   DEFAULT_PROFILE_PRIVACY, 
   PROFILE_CONSTRAINTS, 
   sanitizeProfileUrl,
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
+import { settingsService, DEFAULT_SETTINGS } from '../../services/settingsService.js';
 import { isPlaceholderHandle, resolveCreatorFlag, resolveRoyalFlag } from '../../services/profileReadModel.js';
 import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
@@ -66,6 +75,14 @@ import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { BRAND_GRADIENT, brandRgba, tokens } from '../../design-system/tokens.js';
 import { LazyImage } from '../../components/Shared/LazyImage';
 import { useAppStore } from '../../store/appStore';
+
+const PROFILE_TYPE_OPTIONS = [
+  { id: PROFILE_TYPES.PERSONAL, label: 'Personal', hint: 'Individual citizen profile' },
+  { id: PROFILE_TYPES.CREATOR, label: 'Creator', hint: 'Artists, makers & publishers' },
+  { id: PROFILE_TYPES.BUSINESS, label: 'Business', hint: 'Brands & studios' },
+  { id: PROFILE_TYPES.ORGANIZATION, label: 'Organization', hint: 'Institutions & nonprofits' },
+  { id: PROFILE_TYPES.COMMUNITY, label: 'Community', hint: 'Clubs & collectives' },
+];
 
 const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
 
@@ -135,6 +152,7 @@ export default function EditProfileScreen() {
     profession: '',
     education: '',
     gender: '',
+    profileType: PROFILE_TYPES.PERSONAL,
     isPrivate: false,
     links: [],
     privacy: {
@@ -153,6 +171,8 @@ export default function EditProfileScreen() {
     showStreak: true,
     defaultTab: 'posts',
   });
+  const [interactionSettings, setInteractionSettings] = useState(() => ({ ...DEFAULT_SETTINGS.privacy }));
+  const [savingInteractionKey, setSavingInteractionKey] = useState(null);
 
   const [saving, setSaving] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
@@ -215,6 +235,7 @@ export default function EditProfileScreen() {
         profession: src.profession || '',
         education: src.education || '',
         gender: src.gender || '',
+        profileType: Object.values(PROFILE_TYPES).includes(src.profileType) ? src.profileType : PROFILE_TYPES.PERSONAL,
         isPrivate: Boolean(src.isPrivate),
         links: Array.isArray(src.links) ? src.links : [],
         privacy: {
@@ -251,6 +272,36 @@ export default function EditProfileScreen() {
       setAvatarPreview(safePhoto);
     }
   }, [userProfile, user, currentUid]);
+
+  // Hydrate persisted interaction settings from canonical settingsService
+  useEffect(() => {
+    if (!currentUid) return;
+    let active = true;
+    settingsService.getSettings(currentUid)
+      .then((res) => {
+        if (active && res?.privacy) {
+          setInteractionSettings({ ...DEFAULT_SETTINGS.privacy, ...res.privacy });
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [currentUid]);
+
+  const handleInteractionSettingChange = useCallback(async (key, value) => {
+    if (!currentUid) return;
+    const prev = interactionSettings[key];
+    setInteractionSettings((curr) => ({ ...curr, [key]: value }));
+    setSavingInteractionKey(key);
+    try {
+      await settingsService.updateSetting(currentUid, `privacy.${key}`, value);
+      toast.success('Interaction preference saved');
+    } catch (err) {
+      setInteractionSettings((curr) => ({ ...curr, [key]: prev }));
+      toast.error(err?.message || 'Could not update setting');
+    } finally {
+      setSavingInteractionKey((curr) => (curr === key ? null : curr));
+    }
+  }, [currentUid, interactionSettings]);
 
   // Live username availability check with debounce
   useEffect(() => {
@@ -420,9 +471,14 @@ export default function EditProfileScreen() {
       useProfileStore.setState((s) => ({
         profile: s.profile ? { ...s.profile, photoURL: '' } : s.profile,
       }));
+      patchCachedProfile(currentUid, { photoURL: '' });
+      invalidateProfileCache(currentUid);
       const appUser = useAppStore.getState().currentUser;
       if (appUser && (appUser.uid === currentUid || appUser.id === currentUid)) {
         useAppStore.getState().setCurrentUser({ ...appUser, photoURL: '' });
+      }
+      if (loadStoreProfile) {
+        await loadStoreProfile(currentUid, currentUid, { force: true }).catch(() => {});
       }
       toast.success('Avatar reset to default citizen monogram');
     } catch (err) {
@@ -431,7 +487,7 @@ export default function EditProfileScreen() {
     } finally {
       setRemovingAvatar(false);
     }
-  }, [currentUid, removingAvatar, avatarPreview, formData.displayName, updateUserProfile, userService]);
+  }, [currentUid, removingAvatar, avatarPreview, formData.displayName, updateUserProfile, userService, loadStoreProfile]);
 
   // Save changes handler
   const handleSave = useCallback(async () => {
@@ -512,6 +568,7 @@ export default function EditProfileScreen() {
         profession: formData.profession?.trim() || '',
         education: formData.education?.trim() || '',
         gender: formData.gender?.trim() || '',
+        profileType: Object.values(PROFILE_TYPES).includes(formData.profileType) ? formData.profileType : PROFILE_TYPES.PERSONAL,
         isPrivate: Boolean(formData.isPrivate),
         links: cleanedLinks,
         privacy: formData.privacy,
@@ -583,6 +640,10 @@ export default function EditProfileScreen() {
         const appUser = useAppStore.getState().currentUser;
         if (appUser && (appUser.uid === currentUid || appUser.id === currentUid)) {
           useAppStore.getState().setCurrentUser({ ...appUser, ...sanitizedUpdates });
+        }
+
+        if (currentUid) {
+          patchCachedProfile(currentUid, sanitizedUpdates);
         }
 
         // Force fresh store sync so returning to /profile/me reflects every edit immediately
@@ -1055,6 +1116,40 @@ export default function EditProfileScreen() {
                       : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-arvdoul-purple"
                   )}
                 />
+              </div>
+            </div>
+
+            {/* Profile Classification Selector */}
+            <div className="space-y-2 pt-1">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Briefcase className="w-4 h-4 text-arvdoul-purple" />
+                <span>Account Classification</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {PROFILE_TYPE_OPTIONS.map((opt) => {
+                  const selected = formData.profileType === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleInputChange('profileType', opt.id)}
+                      aria-pressed={selected}
+                      className={cn(
+                        "p-2.5 rounded-2xl border text-left transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                        selected
+                          ? isDark
+                            ? "bg-arvdoul-purple/20 border-arvdoul-purple text-white shadow-sm"
+                            : "bg-purple-50 border-purple-400 text-purple-950 shadow-sm"
+                          : isDark
+                            ? "bg-[#0A1030]/42 border-white/[0.09] text-slate-300 hover:bg-white/[0.04]"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      )}
+                    >
+                      <div className="text-xs font-bold">{opt.label}</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{opt.hint}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1874,6 +1969,169 @@ export default function EditProfileScreen() {
 
             </div>
 
+          </div>
+        </section>
+
+        {/* 9. INTERACTION, MESSAGING & SAFETY SETTINGS */}
+        <section className={cn(
+          "rounded-[28px] border backdrop-blur-xl transition-all p-5 sm:p-7 space-y-5",
+          isDark
+            ? "bg-[#0B1234]/34 border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+              <Sliders className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+                Interaction &amp; Safety Controls
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Syncs directly with your account settings across messaging, calls, groups, and gifting.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3.5 pt-1">
+            {/* Direct Messages */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <MessageSquare className="w-4 h-4 text-cyan-400 shrink-0" />
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Direct Messages</div>
+                  <div className="text-[11px] text-slate-400">Who can send you new message requests</div>
+                </div>
+              </div>
+              <select
+                aria-label="Direct Messages permission"
+                value={interactionSettings.allowDMs || 'everyone'}
+                disabled={savingInteractionKey === 'allowDMs'}
+                onChange={(e) => handleInteractionSettingChange('allowDMs', e.target.value)}
+                className={cn(
+                  "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
+                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <option value="everyone">Everyone</option>
+                <option value="friends">Friends Only</option>
+                <option value="none">Nobody</option>
+              </select>
+            </div>
+
+            {/* Voice & Video Calls */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Voice &amp; Video Calls</div>
+                  <div className="text-[11px] text-slate-400">Who can initiate a call with you</div>
+                </div>
+              </div>
+              <select
+                aria-label="Voice and Video Calls permission"
+                value={interactionSettings.whoCanCall || 'everyone'}
+                disabled={savingInteractionKey === 'whoCanCall'}
+                onChange={(e) => handleInteractionSettingChange('whoCanCall', e.target.value)}
+                className={cn(
+                  "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
+                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <option value="everyone">Everyone</option>
+                <option value="followers">Followers</option>
+                <option value="friends">Friends Only</option>
+                <option value="none">Nobody</option>
+              </select>
+            </div>
+
+            {/* Group Invitations */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Group &amp; Space Invites</div>
+                  <div className="text-[11px] text-slate-400">Who can add you to group conversations</div>
+                </div>
+              </div>
+              <select
+                aria-label="Group and Space Invites permission"
+                value={interactionSettings.whoCanAddToGroups || 'everyone'}
+                disabled={savingInteractionKey === 'whoCanAddToGroups'}
+                onChange={(e) => handleInteractionSettingChange('whoCanAddToGroups', e.target.value)}
+                className={cn(
+                  "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
+                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <option value="everyone">Everyone</option>
+                <option value="followers">Followers</option>
+                <option value="friends">Friends Only</option>
+                <option value="none">Nobody</option>
+              </select>
+            </div>
+
+            {/* Coin Gifts & Patronage */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Gift className="w-4 h-4 text-amber-400 shrink-0" />
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Coin Gifts &amp; Tips</div>
+                  <div className="text-[11px] text-slate-400">Who can send coin gifts to your treasury</div>
+                </div>
+              </div>
+              <select
+                aria-label="Coin Gifts permission"
+                value={interactionSettings.whoCanSendGifts || 'everyone'}
+                disabled={savingInteractionKey === 'whoCanSendGifts'}
+                onChange={(e) => handleInteractionSettingChange('whoCanSendGifts', e.target.value)}
+                className={cn(
+                  "px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-semibold outline-none border cursor-pointer focus-visible:ring-2 focus-visible:ring-arvdoul-purple disabled:opacity-60",
+                  isDark ? "bg-[#0B1234]/75 border-white/[0.10] text-white" : "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <option value="everyone">Everyone</option>
+                <option value="friends">Friends Only</option>
+                <option value="none">Nobody</option>
+              </select>
+            </div>
+
+            {/* Shortcuts to Blocked Accounts & Full Settings */}
+            <div className="pt-3 border-t border-slate-200/70 dark:border-white/[0.06] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate('/settings/blocked')}
+                className={cn(
+                  "min-h-[44px] px-4 py-2.5 rounded-2xl border flex items-center justify-between gap-2 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  isDark
+                    ? "bg-[#0A1030]/42 border-white/[0.09] text-slate-200 hover:bg-white/[0.05]"
+                    : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <UserX className="w-4 h-4 text-rose-400" />
+                  <span>Manage Blocked Accounts</span>
+                </span>
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                className={cn(
+                  "min-h-[44px] px-4 py-2.5 rounded-2xl border flex items-center justify-between gap-2 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arvdoul-purple",
+                  isDark
+                    ? "bg-[#0A1030]/42 border-white/[0.09] text-slate-200 hover:bg-white/[0.05]"
+                    : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-arvdoul-purple" />
+                  <span>Full Account &amp; Notification Settings</span>
+                </span>
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
           </div>
         </section>
 

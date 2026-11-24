@@ -81,7 +81,6 @@ const ProfilePerspectiveModal = lazyComponent(() => import('../../components/pro
 const ProfileVerificationModal = lazyComponent(() => import('../../components/profile/ProfileVerificationModal'), 'ProfileVerificationModal');
 const ProfileOptionsMenu = lazyComponent(() => import('../../components/profile/ProfileOptionsMenu'), 'ProfileOptionsMenu');
 const AvatarUploadModal = lazyComponent(() => import('../../components/profile/AvatarUploadModal'), 'AvatarUploadModal');
-const ProfileQuickEditModal = lazyComponent(() => import('../../components/profile/ProfileQuickEditModal'), 'ProfileQuickEditModal');
 
 /* ── constants ─────────────────────────────────────────────────────────── */
 
@@ -91,7 +90,7 @@ const PERSPECTIVES = Object.freeze(['owner', 'public', 'follower', 'connection']
 const PERSPECTIVE_LABELS = Object.freeze({ public: 'Public', follower: 'Follower', connection: 'Connection' });
 
 // Surfaces and tabs that only exist for the real owner.
-const OWNER_ONLY_MODALS = Object.freeze(['avatar', 'location', 'verification', 'options', 'quickEdit']);
+const OWNER_ONLY_MODALS = Object.freeze(['avatar', 'location', 'verification', 'options']);
 const OWNER_ONLY_TABS = Object.freeze(['saved', 'stories']);
 
 const PREVIEW_POST_LIMIT = 12;
@@ -265,29 +264,31 @@ const buildTabCounts = ({ posts, stories, savedPosts, uid, postsLoaded, postsCom
  */
 const PMS_CSS = `
 .pms{
-  --v:200,43,255;--b:0,136,255;--gold:241,205,115;
+  --v:200,43,255;--b:0,136,255;--gold:245,196,81;--gold2:217,145,14;
   --tx:#F5F7FF;--tx2:#B4BFDE;--link:#8EC3FF;--focus:#7DB6FF;
   --err:#FCA5A5;--err-bg:rgba(239,68,68,.10);--err-bd:rgba(239,68,68,.30);
   --base:rgba(14,20,60,.28);--solid:#0B1234;
-  --spec:.12;--spec2:.03;--cv:.08;--cb:.12;--cg:.11;--gloss:.045;--blur:20px;
+  --spec:.12;--spec2:.03;--cv:.08;--cb:.12;--cg:.18;--gloss:.045;--blur:20px;
   --shadow:0 14px 26px -22px rgba(0,0,0,.48),0 2px 6px -3px rgba(0,0,0,.20);
   --inset:inset 0 1px 1px rgba(255,255,255,.15),inset 0 -10px 16px -14px rgba(var(--b),.20),inset 0 0 14px rgba(130,110,255,.04);
   --rim:linear-gradient(140deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 30%,rgba(255,255,255,.02) 56%,rgba(var(--b),.26));
+  --rim-gold:linear-gradient(140deg,rgba(255,232,163,.54),rgba(var(--gold),.26) 34%,rgba(var(--gold),.10) 62%,rgba(var(--gold),.48));
   --chip:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.03));--chip-rim:rgba(255,255,255,.12);
-  --coin:#F1CD73;--sk:rgba(255,255,255,.07);
+  --coin:#FDE68A;--gold-tx:#FDE68A;--sk:rgba(255,255,255,.07);
   color:var(--tx);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
 }
 .pms[data-theme="light"]{
-  --gold:224,163,38;
+  --gold:217,145,14;--gold2:180,104,6;
   --tx:#121A3A;--tx2:#4B5679;--link:#055BFB;--focus:#055BFB;
   --err:#B91C1C;--err-bg:rgba(239,68,68,.08);--err-bd:rgba(239,68,68,.28);
   --base:rgba(255,255,255,.8);--solid:#FFFFFF;
-  --spec:.5;--spec2:.2;--cv:.07;--cb:.11;--cg:.16;--gloss:.4;
+  --spec:.5;--spec2:.2;--cv:.07;--cb:.11;--cg:.22;--gloss:.4;
   --shadow:0 16px 26px -22px rgba(40,50,150,.34),0 1px 3px -1px rgba(30,40,110,.10);
   --inset:inset 0 1px 1px #fff,inset 0 -10px 16px -14px rgba(var(--b),.14),inset 0 0 14px rgba(255,255,255,.5);
   --rim:linear-gradient(140deg,rgba(255,255,255,.95),rgba(35,49,84,.13) 32%,rgba(35,49,84,.09) 58%,rgba(var(--b),.30));
+  --rim-gold:linear-gradient(140deg,#FFFBEB,rgba(var(--gold),.36) 36%,rgba(var(--gold),.18) 64%,rgba(var(--gold),.46));
   --chip:linear-gradient(160deg,#FFFFFF,rgba(240,243,255,.78));--chip-rim:rgba(35,49,84,.12);
-  --coin:#9A6B12;--sk:rgba(35,49,84,.07);
+  --coin:#92580A;--gold-tx:#784505;--sk:rgba(35,49,84,.07);
 }
 .pms *,.pms *::before,.pms *::after{box-sizing:border-box}
 
@@ -360,33 +361,45 @@ const PMS_CSS = `
 .pms-rise{animation:pms-rise .38s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i,0) * 45ms)}
 @keyframes pms-rise{from{opacity:0;transform:translateY(8px)}}
 
-/* coins treasury: warm gold light behind the existing coin mark, brand light on the opposite corner */
+/* coins treasury: luxury metallic gold liquid-glass across both themes */
 .pms-treasury{
+  --rim:var(--rim-gold);
+  --inset:inset 0 1px 1px rgba(255,248,214,.32),inset 0 -12px 18px -14px rgba(var(--gold),.34),inset 0 0 18px rgba(var(--gold),.08);
   --layers:
-    radial-gradient(120% 90% at 14% -30%,rgba(255,255,255,var(--spec)) 0%,rgba(255,255,255,var(--spec2)) 34%,transparent 58%),
-    radial-gradient(60% 110% at 0% 50%,rgba(var(--gold),var(--cg)) 0%,transparent 68%),
-    radial-gradient(70% 70% at 104% 120%,rgba(var(--b),var(--cb)) 0%,transparent 64%),
-    linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));
+    radial-gradient(120% 90% at 14% -28%,rgba(255,248,214,.26) 0%,rgba(255,235,165,.08) 36%,transparent 60%),
+    radial-gradient(68% 110% at 0% 50%,rgba(var(--gold),var(--cg)) 0%,transparent 68%),
+    radial-gradient(72% 80% at 102% 118%,rgba(var(--gold2),.22) 0%,transparent 64%),
+    linear-gradient(145deg,rgba(var(--gold),.11),rgba(var(--gold2),.04));
   display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;height:100%;min-height:76px;min-width:0;
   padding:14px 16px 14px 14px;margin:0;text-align:left;font:inherit;color:var(--tx);
   -webkit-appearance:none;appearance:none;transition:transform .18s ease,filter .18s ease}
+.pms[data-theme="light"] .pms-treasury{
+  --inset:inset 0 1px 1px #fff,inset 0 -12px 18px -14px rgba(var(--gold),.22),inset 0 0 18px rgba(var(--gold),.08);
+  --layers:
+    radial-gradient(120% 90% at 14% -28%,rgba(255,255,255,.85) 0%,rgba(255,248,220,.4) 36%,transparent 60%),
+    radial-gradient(68% 110% at 0% 50%,rgba(var(--gold),var(--cg)) 0%,transparent 68%),
+    radial-gradient(72% 80% at 102% 118%,rgba(var(--gold2),.18) 0%,transparent 64%),
+    linear-gradient(145deg,rgba(255,249,225,.92),rgba(254,240,199,.68));
+}
 button.pms-treasury{cursor:pointer}
-button.pms-treasury:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+button.pms-treasury:focus-visible{outline:2px solid rgba(var(--gold),.85);outline-offset:3px}
 button.pms-treasury:active{transform:scale(.985)}
 .pms-treasury-main{display:flex;align-items:center;gap:14px;min-width:0}
 .pms-treasury-text{display:flex;flex-direction:column;gap:3px;min-width:0}
 .pms-coin{position:relative;display:grid;place-items:center;flex:none;width:48px;height:48px;border-radius:16px;color:var(--coin);
-  background:radial-gradient(80% 80% at 30% 15%,rgba(var(--gold),.42),rgba(var(--gold),0) 66%),linear-gradient(150deg,var(--pms-brand-soft),var(--pms-blue-soft));
-  border:1px solid rgba(var(--gold),.38);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.3),inset 0 -8px 12px -10px rgba(var(--b),.4),0 8px 16px -10px rgba(var(--gold),.5)}
-.pms-coin svg{width:24px;height:24px;stroke-width:1.75;filter:drop-shadow(0 1px 3px rgba(var(--gold),.45))}
-.pms-eyebrow{display:block;font-size:12.5px;line-height:1.2;font-weight:600;letter-spacing:.01em;color:var(--tx2)}
+  background:radial-gradient(85% 85% at 28% 14%,rgba(255,244,196,.48),rgba(var(--gold),0) 68%),linear-gradient(145deg,rgba(var(--gold),.34),rgba(var(--gold2),.24));
+  border:1px solid rgba(var(--gold),.54);
+  box-shadow:inset 0 1px 1px rgba(255,250,220,.48),inset 0 -8px 12px -10px rgba(var(--gold2),.55),0 8px 18px -10px rgba(var(--gold),.58)}
+.pms-coin svg{width:24px;height:24px;stroke-width:1.85;filter:drop-shadow(0 1px 4px rgba(var(--gold),.52))}
+.pms-eyebrow{display:block;font-size:12.5px;line-height:1.2;font-weight:700;letter-spacing:.02em;color:var(--tx2)}
+.pms-treasury .pms-eyebrow{color:var(--gold-tx)}
 .pms-balance{display:flex;align-items:baseline;gap:6px;min-width:0;min-height:28px}
 .pms-balance strong{font-size:clamp(20px,5.6vw,26px);line-height:1.1;font-weight:800;letter-spacing:-.015em;font-variant-numeric:tabular-nums;color:var(--tx);overflow-wrap:anywhere}
-.pms-balance span{font-size:13px;font-weight:600;color:var(--tx2)}
+.pms-balance span{font-size:13px;font-weight:600;color:var(--gold-tx);opacity:.9}
 .pms-balance em{align-self:center;font-style:normal;font-size:13px;font-weight:600;color:var(--tx2)}
 .pms-bar{display:inline-block;align-self:center;width:96px;height:22px;border-radius:8px;background:var(--sk)}
 .pms-chev{display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:50%;background:var(--chip);border:1px solid var(--chip-rim);color:var(--tx2);transition:transform .18s ease,color .18s ease}
+.pms-treasury .pms-chev{background:rgba(var(--gold),.14);border-color:rgba(var(--gold),.36);color:var(--gold-tx)}
 .pms-chev svg{width:16px;height:16px}
 @media (hover:hover){
   button.pms-treasury:hover{filter:brightness(1.06)}
@@ -570,7 +583,9 @@ export default function ProfileMyScreen() {
       uid: currentUserId,
       displayName: authDisplayName || cleanText(supplement.displayName) || undefined,
       email: authEmail || cleanText(supplement.email) || undefined,
-      photoURL: authPhotoURL || safeHttpUrl(supplement.photoURL) || undefined,
+      photoURL: (appStoreUser?.uid === currentUserId && supplement.photoURL !== undefined)
+        ? (safeHttpUrl(supplement.photoURL) || undefined)
+        : (authPhotoURL || undefined),
     };
   }, [currentUserId, appStoreUser, authDisplayName, authEmail, authPhotoURL]);
 
@@ -832,7 +847,7 @@ export default function ProfileMyScreen() {
   // Analytics load separately so a timeframe change never re-fetches profile or posts. Owner only.
   useEffect(() => {
     if (!currentUserId || !isOwnerView) return;
-    settleAction(() => useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe));
+    settleAction(() => useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe, { forceRefresh: true }));
   }, [currentUserId, isOwnerView, timeframe]);
 
   // Saved posts load on demand (owner only). The status distinguishes not-loaded, loading, empty and failed.
@@ -881,7 +896,7 @@ export default function ProfileMyScreen() {
     try {
       const tasks = [loadContext(uid, mode, gen, { refresh: true })];
       if (mode === 'owner') {
-        tasks.push(settleAction(() => useAnalyticsStore.getState().loadAnalytics(uid, timeframeRef.current))
+        tasks.push(settleAction(() => useAnalyticsStore.getState().loadAnalytics(uid, timeframeRef.current, { forceRefresh: true }))
           .then((ok) => ({ analytics: ok })));
       }
       const settled = await Promise.all(tasks);
@@ -901,7 +916,7 @@ export default function ProfileMyScreen() {
   const reloadOwnerProfile = useCallback(() => {
     const uid = uidRef.current;
     if (!uid || viewAsRef.current !== 'owner') return;
-    settleAction(() => useProfileStore.getState().loadProfile(uid, uid));
+    settleAction(() => useProfileStore.getState().loadProfile(uid, uid, { force: true }));
   }, []);
 
   // --- Perspective switching (allowlisted, deduplicated) ----------------
@@ -947,7 +962,7 @@ export default function ProfileMyScreen() {
       });
       // Reload only while the same account is still showing its owner view.
       if (succeeded && mountedRef.current && uidRef.current === uid && viewAsRef.current === 'owner') {
-        settleAction(() => useProfileStore.getState().loadProfile(uid, uid));
+        settleAction(() => useProfileStore.getState().loadProfile(uid, uid, { force: true }));
       }
     })();
   }, [isOwnerView, currentUserId, loading, ownedProfile, profileUsername, profileDisplayName, authDisplayName]);
@@ -959,7 +974,6 @@ export default function ProfileMyScreen() {
   const openVerification = useCallback(() => openModal('verification'), [openModal]);
   const openQrCode = useCallback(() => openModal('qr'), [openModal]);
   const openPerspective = useCallback(() => openModal('perspective'), [openModal]);
-  const openQuickEdit = useCallback((field) => openModal('quickEdit', cleanText(field) || 'bio'), [openModal]);
 
   const handleEditProfile = useCallback(() => {
     if (viewAsRef.current === 'owner') navigate('/profile/edit');
@@ -1323,7 +1337,6 @@ export default function ProfileMyScreen() {
               onRefresh={handleRefresh}
               isRefreshing={isRefreshing}
               onEditProfile={isOwnerView ? handleEditProfile : undefined}
-              onOpenQuickEdit={isOwnerView ? openQuickEdit : undefined}
               onOpenVerificationModal={isOwnerView ? openVerification : undefined}
               onInsightsPress={isOwnerView ? handleInsights : undefined}
               capabilities={capabilities}
@@ -1595,20 +1608,6 @@ export default function ProfileMyScreen() {
             onRemoveAvatar={handleAvatarRemove}
             currentAvatarUrl={effectiveProfile?.photoURL}
             theme={theme}
-          />
-        </LazyModal>
-      )}
-
-      {visibleModal === 'quickEdit' && (
-        <LazyModal onFail={handleModalFailure}>
-          <ProfileQuickEditModal
-            isOpen
-            initialField={modalState.field}
-            onClose={() => closeModal('quickEdit')}
-            profile={effectiveProfile}
-            userId={currentUserId}
-            theme={theme}
-            onProfileUpdated={reloadOwnerProfile}
           />
         </LazyModal>
       )}

@@ -837,7 +837,6 @@ export const ProfileHeroSection = memo(({
   onAvatarClick,
   onShare,
   onEditProfile,
-  onOpenQuickEdit,
   onOpenVerificationModal,
   onInsightsPress,
   onFollowToggle,
@@ -1079,7 +1078,6 @@ export const ProfileHeroSection = memo(({
 
   const moreItems = (isOwner
     ? [
-        onOpenQuickEdit && { key: 'quick', icon: Edit3, label: 'Quick edit', onClick: () => onOpenQuickEdit('all') },
         onOpenLocationSetup && { key: 'loc', icon: MapPin, label: 'Location', onClick: onOpenLocationSetup },
         passportUrl && { key: 'passport', icon: ShieldCheck, label: 'Digital Passport', onClick: openPassport },
         { key: 'about', icon: Info, label: 'About profile', onClick: () => navigate('/profile/about') },
@@ -1276,25 +1274,17 @@ export const ProfileHeroSection = memo(({
         {(bio || tagline || motto) && (
           <div className="phs-bio">
             {bio && <p data-clamp={isLongBio && !bioExpanded ? 'true' : 'false'}>{bio}</p>}
-            <div className="inline-flex items-center justify-center gap-2 flex-wrap">
-              {bio && isLongBio && (
+            {bio && isLongBio && (
+              <div className="inline-flex items-center justify-center gap-2 flex-wrap">
                 <button type="button" className="phs-more" onClick={() => setBioExpanded((v) => !v)} aria-expanded={bioExpanded}>
                   <span>{bioExpanded ? 'Less' : 'More'}</span>
                   <ChevronDown aria-hidden="true" />
                 </button>
-              )}
-              {isOwner && onOpenQuickEdit && (
-                <button type="button" onClick={() => onOpenQuickEdit('bio')} className="phs-more">
-                  <span>{bio ? 'Edit bio' : 'Add a bio'}</span>
-                </button>
-              )}
-            </div>
+              </div>
+            )}
             {tagline && <p className="phs-tag">{tagline}</p>}
             {motto && <p className="phs-motto">{motto}</p>}
           </div>
-        )}
-        {!bio && !tagline && !motto && isOwner && onOpenQuickEdit && (
-          <button type="button" onClick={() => onOpenQuickEdit('bio')} className="phs-add">Add a bio</button>
         )}
 
         {/* 7. Actions: one row. Label button first, then icon-only controls. */}

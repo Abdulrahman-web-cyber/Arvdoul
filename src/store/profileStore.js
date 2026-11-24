@@ -227,6 +227,54 @@ export function isSwrFreshForTarget(userId, currentUserId, viewAs = 'default') {
   return Boolean(hit && hit.isFresh);
 }
 
+export function patchCachedProfile(userId, updates = {}) {
+  if (!userId || !updates || typeof updates !== 'object') return;
+  const target = String(userId).trim();
+  const targetLower = target.toLowerCase();
+  for (const [key, entry] of _swrProfileCache.entries()) {
+    const cachedUid = entry?.profile?.id || entry?.profile?.uid;
+    const cachedUsername = entry?.profile?.username?.toLowerCase?.();
+    if (
+      key.startsWith(`${target}::`) ||
+      cachedUid === target ||
+      (cachedUsername && `@${cachedUsername}` === targetLower) ||
+      (cachedUsername && cachedUsername === targetLower)
+    ) {
+      writeSwrEntry(
+        key,
+        { profile: { ...(entry.profile || {}), ...updates } },
+        { touchTimestamp: true }
+      );
+    }
+  }
+}
+
+export function invalidateProfileCache(userId) {
+  if (!userId) return;
+  const target = String(userId).trim();
+  const targetLower = target.toLowerCase();
+  for (const [key, entry] of [..._swrProfileCache.entries()]) {
+    const cachedUid = entry?.profile?.id || entry?.profile?.uid;
+    const cachedUsername = entry?.profile?.username?.toLowerCase?.();
+    if (
+      key.startsWith(`${target}::`) ||
+      cachedUid === target ||
+      (cachedUsername && `@${cachedUsername}` === targetLower) ||
+      (cachedUsername && cachedUsername === targetLower)
+    ) {
+      _swrProfileCache.delete(key);
+    }
+  }
+  if (_lastCompletedProfileKey && _lastCompletedProfileKey.startsWith(`${target}::`)) {
+    _lastCompletedProfileKey = null;
+    _lastCompletedProfileAt = 0;
+  }
+  if (_inFlightProfileKey && _inFlightProfileKey.startsWith(`${target}::`)) {
+    _inFlightProfileKey = null;
+    _inFlightProfilePromise = null;
+  }
+}
+
 export const useProfileStore = create(
   immer((set, get) => ({
     ...initialState,
@@ -293,9 +341,12 @@ export const useProfileStore = create(
             if (!_trackedProfileViews.has(viewKey)) {
               if (_trackedProfileViews.size > 200) _trackedProfileViews.clear();
               _trackedProfileViews.add(viewKey);
-              getAnalyticsService().trackProfileView(currentUserId, cachedUid).catch((e) => {
-                console.warn('Profile view not tracked', e?.message);
-              });
+              getAnalyticsService().trackProfileView(currentUserId, cachedUid)
+                .then((ok) => { if (ok === false) _trackedProfileViews.delete(viewKey); })
+                .catch((e) => {
+                  _trackedProfileViews.delete(viewKey);
+                  console.warn('Profile view not tracked', e?.message);
+                });
             }
           }
           return;
@@ -534,11 +585,16 @@ export const useProfileStore = create(
         // Track profile view once using resolvedUid (never raw @handle)
         if (!isOwner && currentUserId && resolvedUid && !options?.viewAs) {
           const viewKey = buildViewTrackKey(currentUserId, resolvedUid);
-          if (_trackedProfileViews.size > 200) _trackedProfileViews.clear();
-          _trackedProfileViews.add(viewKey);
-          analyticsService.trackProfileView(currentUserId, resolvedUid).catch((e) => {
-            console.warn('Profile view not tracked', e?.message);
-          });
+          if (!_trackedProfileViews.has(viewKey)) {
+            if (_trackedProfileViews.size > 200) _trackedProfileViews.clear();
+            _trackedProfileViews.add(viewKey);
+            analyticsService.trackProfileView(currentUserId, resolvedUid)
+              .then((ok) => { if (ok === false) _trackedProfileViews.delete(viewKey); })
+              .catch((e) => {
+                _trackedProfileViews.delete(viewKey);
+                console.warn('Profile view not tracked', e?.message);
+              });
+          }
         }
       } catch (error) {
         if (isBackgroundRevalidate) {

@@ -16,7 +16,7 @@
 // `loading="eager"`). Callers keep full control of `className` (sizing,
 // rounding, object-fit) — the component only adds the loading behaviour.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ImageOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -49,6 +49,10 @@ export function LazyImage({
   ...rest
 }) {
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
 
   const resolvedFallback =
     fallback ?? <Placeholder className={className} wrapperClassName={wrapperClassName} />;

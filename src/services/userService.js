@@ -1032,7 +1032,9 @@ class ProfessionalUserService {
         const { updateProfile } = await import('firebase/auth');
         const authPatch = {};
         if (sanitizedUpdates.displayName) authPatch.displayName = sanitizedUpdates.displayName;
-        if (sanitizedUpdates.photoURL && /^https?:\/\//i.test(sanitizedUpdates.photoURL) && sanitizedUpdates.photoURL.length < 1800) {
+        if (sanitizedUpdates.photoURL === '') {
+          authPatch.photoURL = '';
+        } else if (sanitizedUpdates.photoURL && /^https?:\/\//i.test(sanitizedUpdates.photoURL) && sanitizedUpdates.photoURL.length < 1800) {
           authPatch.photoURL = sanitizedUpdates.photoURL;
         }
         if (Object.keys(authPatch).length > 0) {
@@ -1041,6 +1043,12 @@ class ProfessionalUserService {
       }
     } catch (authSyncErr) {
       logger.warn('Firebase Auth profile sync failed (non-blocking)', { error: authSyncErr?.message });
+    }
+
+    if (sanitizedUpdates.photoURL === '') {
+      this.avatarCache.delete(`avatar_${userId}`);
+    } else if (sanitizedUpdates.photoURL && /^https?:\/\//i.test(sanitizedUpdates.photoURL)) {
+      this.avatarCache.set(`avatar_${userId}`, sanitizedUpdates.photoURL);
     }
 
     const storeUpdates = {
@@ -1061,7 +1069,8 @@ class ProfessionalUserService {
     }
 
     try {
-      const { useProfileStore } = await import('../store/profileStore.js');
+      const { useProfileStore, patchCachedProfile } = await import('../store/profileStore.js');
+      patchCachedProfile(userId, storeUpdates);
       const storeProfile = useProfileStore.getState().profile;
       if (storeProfile && (storeProfile.id === userId || storeProfile.uid === userId)) {
         useProfileStore.setState((state) => ({
@@ -1942,12 +1951,20 @@ class ProfessionalUserService {
     const { doc, getDoc } = await import('firebase/firestore');
     const sentRef = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
     const receivedRef = doc(this.firestore, 'friend_requests', `${toUserId}_${fromUserId}`);
-    const [sentSnap, receivedSnap] = await Promise.all([
+    const [sentRes, receivedRes] = await Promise.allSettled([
       getDoc(sentRef),
       getDoc(receivedRef),
     ]);
-    const sentData = sentSnap.exists() ? { id: sentSnap.id, ...sentSnap.data() } : null;
-    const receivedData = receivedSnap.exists() ? { id: receivedSnap.id, ...receivedSnap.data() } : null;
+    if (sentRes.status === 'rejected') {
+      logger.warn('Friend request sent read failed', { fromUserId, toUserId, error: sentRes.reason?.message });
+    }
+    if (receivedRes.status === 'rejected') {
+      logger.warn('Friend request received read failed', { fromUserId, toUserId, error: receivedRes.reason?.message });
+    }
+    const sentSnap = sentRes.status === 'fulfilled' ? sentRes.value : null;
+    const receivedSnap = receivedRes.status === 'fulfilled' ? receivedRes.value : null;
+    const sentData = sentSnap?.exists?.() ? { id: sentSnap.id, ...sentSnap.data() } : null;
+    const receivedData = receivedSnap?.exists?.() ? { id: receivedSnap.id, ...receivedSnap.data() } : null;
     return {
       sent: sentData?.fromUserId === fromUserId && sentData?.toUserId === toUserId && sentData.status === 'pending' ? sentData : null,
       received: receivedData?.fromUserId === toUserId && receivedData?.toUserId === fromUserId && receivedData.status === 'pending' ? receivedData : null,

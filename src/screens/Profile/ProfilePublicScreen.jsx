@@ -211,8 +211,7 @@ export default function ProfilePublicScreen() {
             }
           } else {
             console.warn('Friend request status could not be verified:', reqResult?.reason);
-            if (isMountedRef.current) setRelationshipError(true);
-            return;
+            if (isMountedRef.current) setFriendshipStatus('none');
           }
         }
       } else {

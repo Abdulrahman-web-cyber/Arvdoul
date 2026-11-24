@@ -50,12 +50,12 @@ describe('level curve (pure math)', () => {
     expect(getRankTitle(100)).toBe('Ascendant');
   });
 
-  test('perks unlock at the correct levels', () => {
-    expect(getPerksForLevel(4).some((p) => p.title === 'Live Streaming')).toBe(false);
+  test('perks unlock at level 1 and remain locked at level 0', () => {
+    expect(getPerksForLevel(0)).toEqual([]);
+    expect(getPerksForLevel(1).some((p) => p.title === 'Live Streaming')).toBe(true);
+    expect(getPerksForLevel(1).some((p) => p.title === 'Creator Withdrawals')).toBe(true);
+    expect(getPerksForLevel(1).some((p) => p.title === 'Builder Rank')).toBe(true);
     expect(getPerksForLevel(5).some((p) => p.title === 'Live Streaming')).toBe(true);
-    expect(getPerksForLevel(10).some((p) => p.title === 'Creator Withdrawals')).toBe(true);
-    expect(getPerksForLevel(19).some((p) => p.title === 'Builder Rank')).toBe(false);
-    expect(getPerksForLevel(20).some((p) => p.title === 'Builder Rank')).toBe(true);
   });
 
   test('lifetime rewards accumulate coin rewards', () => {
@@ -166,13 +166,13 @@ describe('awardExperience contract (server-authoritative)', () => {
     expect(getCitizenTier(100, 365).tier).toBe('Founder');
   });
 
-  test('creator capabilities are decoupled from raw level', async () => {
+  test('creator capabilities are unlocked from Level 1 and decoupled for approved creators', async () => {
     const { getCreatorCapabilities } = await import('../services/levelSystemService.js');
-    // Basic user
+    // Level 1 user has all features unlocked
     const basic = getCreatorCapabilities({ level: 1, followerCount: 10 });
     expect(basic.canReceiveTips).toBe(true);
-    expect(basic.canStreamLive).toBe(false);
-    expect(basic.canMonetize).toBe(false);
+    expect(basic.canStreamLive).toBe(true);
+    expect(basic.canMonetize).toBe(true);
 
     // Level 10 or verified creator
     const streamUser = getCreatorCapabilities({ level: 10, followerCount: 50 });

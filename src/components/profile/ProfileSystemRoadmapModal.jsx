@@ -145,7 +145,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex flex-col overflow-hidden">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -155,111 +155,116 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
           className="fixed inset-0 bg-black/80 backdrop-blur-md"
         />
 
-        {/* Modal Window */}
+        {/* Full-Screen Modal Window */}
         <motion.div
           role="dialog"
           aria-modal="true"
           aria-label="Arvdoul Progression & Citizenship Roadmap"
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 18 }}
+          transition={{ type: 'spring', damping: 28, stiffness: 320 }}
           className={cn(
-            "relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10",
+            "relative w-full h-full max-w-none max-h-none rounded-none border-0 flex flex-col overflow-hidden z-10 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
             isDark
-              ? "bg-[#0B1234]/74 backdrop-blur-2xl border-white/[0.09] text-white"
-              : "bg-white border-slate-200 text-slate-900"
+              ? "bg-[#03071B] text-white"
+              : "bg-[#F6F8FC] text-slate-900"
           )}
         >
           {/* Header */}
           <div className={cn(
-            "p-4 sm:p-6 border-b flex items-start justify-between gap-4 shrink-0",
+            "border-b shrink-0",
             isDark
               ? "border-white/10 bg-gradient-to-r from-purple-950/30 via-indigo-950/20 to-transparent"
               : "border-slate-200 bg-gradient-to-r from-purple-50/80 via-indigo-50/40 to-transparent"
           )}>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white shadow-lg shadow-purple-500/25 shrink-0">
-                {activeTab === 'royals' ? (
-                  <Crown className="w-6 h-6 text-amber-300" />
-                ) : activeTab === 'citizenship' ? (
-                  <ShieldCheck className="w-6 h-6 text-cyan-300" />
-                ) : (
-                  <Zap className="w-6 h-6 text-white" />
-                )}
+            <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-arvdoul-purple to-arvdoul-blue flex items-center justify-center text-white shadow-lg shadow-purple-500/25 shrink-0">
+                  {activeTab === 'royals' ? (
+                    <Crown className="w-6 h-6 text-amber-300" />
+                  ) : activeTab === 'citizenship' ? (
+                    <ShieldCheck className="w-6 h-6 text-cyan-300" />
+                  ) : (
+                    <Zap className="w-6 h-6 text-white" />
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-purple-600 dark:text-purple-400 block font-mono">
+                    Arvdoul Institutional Framework
+                  </span>
+                  <h2 className="text-lg sm:text-xl font-black tracking-tight leading-snug">
+                    {activeTab === 'levels' && "Level Progression & Feature Unlocks"}
+                    {activeTab === 'citizenship' && "Digital Citizenship & Passport Roadmap"}
+                    {activeTab === 'royals' && "Royal Family Standing & Privileges"}
+                  </h2>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold tracking-widest text-purple-600 dark:text-purple-400 block font-mono">
-                  Arvdoul Institutional Framework
-                </span>
-                <h2 className="text-lg sm:text-xl font-black tracking-tight leading-snug">
-                  {activeTab === 'levels' && "Level Progression & Feature Unlocks"}
-                  {activeTab === 'citizenship' && "Digital Citizenship & Passport Roadmap"}
-                  {activeTab === 'royals' && "Royal Family Standing & Privileges"}
-                </h2>
-              </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Segmented Tab Navigation */}
           <div className={cn(
-            "p-3 border-b flex items-center gap-1.5 shrink-0",
-            isDark ? "border-white/5 bg-white/[0.02]" : "border-slate-200 bg-slate-50"
+            "border-b shrink-0",
+            isDark ? "border-white/5 bg-white/[0.02]" : "border-slate-200 bg-white/70"
           )}>
-            <button
-              type="button"
-              onClick={() => setActiveTab('levels')}
-              className={cn(
-                "flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer",
-                activeTab === 'levels'
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-500/30"
-                  : isDark ? "text-slate-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
-              )}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Levels & Unlocks</span>
-            </button>
+            <div className="w-full max-w-4xl mx-auto p-3 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('levels')}
+                className={cn(
+                  "flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'levels'
+                    ? "bg-purple-600 text-white shadow-md shadow-purple-500/30"
+                    : isDark ? "text-slate-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
+                )}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Levels & Unlocks</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('citizenship')}
-              className={cn(
-                "flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer",
-                activeTab === 'citizenship'
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-500/30"
-                  : isDark ? "text-slate-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
-              )}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Citizenship & Passport</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('citizenship')}
+                className={cn(
+                  "flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'citizenship'
+                    ? "bg-purple-600 text-white shadow-md shadow-purple-500/30"
+                    : isDark ? "text-slate-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
+                )}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Citizenship & Passport</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('royals')}
-              className={cn(
-                "flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer",
-                activeTab === 'royals'
-                  ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30"
-                  : isDark ? "text-slate-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
-              )}
-            >
-              <Crown className="w-3.5 h-3.5" />
-              <span>Royal Family</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('royals')}
+                className={cn(
+                  "flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'royals'
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30"
+                    : isDark ? "text-slate-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-100"
+                )}
+              >
+                <Crown className="w-3.5 h-3.5" />
+                <span>Royal Family</span>
+              </button>
+            </div>
           </div>
 
           {/* Tab Content Body (Scrollable) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 overscroll-contain">
+          <div className="flex-1 overflow-y-auto overscroll-contain">
+            <div className="w-full max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
             {/* The Three Identity Pillars of Arvdoul */}
             <div className={cn(
               "p-4 rounded-2xl border text-xs space-y-2",
@@ -690,6 +695,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                 </div>
               </div>
             )}
+            </div>
           </div>
         </motion.div>
       </div>

@@ -50,17 +50,27 @@ export async function getCroppedImg(imageSrc, pixelCrop, maxSize = 512) {
   );
 
   return new Promise((resolve, reject) => {
+    const finalize = (blob) => {
+      if (!blob) {
+        reject(new Error('Failed to generate cropped image'));
+        return;
+      }
+      const mimeType = blob.type || 'image/jpeg';
+      const ext = mimeType === 'image/webp' ? 'webp' : mimeType === 'image/png' ? 'png' : 'jpg';
+      const file = new File([blob], `avatar_${Date.now()}.${ext}`, {
+        type: mimeType,
+        lastModified: Date.now(),
+      });
+      resolve(file);
+    };
+
     canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error('Failed to generate cropped image'));
+      (webpBlob) => {
+        if (webpBlob) {
+          finalize(webpBlob);
           return;
         }
-        const file = new File([blob], `avatar_${Date.now()}.webp`, {
-          type: 'image/webp',
-          lastModified: Date.now(),
-        });
-        resolve(file);
+        canvas.toBlob(finalize, 'image/jpeg', 0.9);
       },
       'image/webp',
       0.88

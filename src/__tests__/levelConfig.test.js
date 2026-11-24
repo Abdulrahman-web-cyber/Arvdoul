@@ -86,10 +86,10 @@ describe('shared levelConfig - gated unlocks', () => {
   });
 
   test('meetsLevelGate enforces the threshold exactly', () => {
-    expect(meetsLevelGate('withdrawals', 10)).toBe(true);
-    expect(meetsLevelGate('withdrawals', 9)).toBe(false);
-    expect(meetsLevelGate('liveStreaming', 5)).toBe(true);
-    expect(meetsLevelGate('liveStreaming', 4)).toBe(false);
+    expect(meetsLevelGate('withdrawals', LEVEL_GATES.withdrawals)).toBe(true);
+    expect(meetsLevelGate('withdrawals', LEVEL_GATES.withdrawals - 1)).toBe(false);
+    expect(meetsLevelGate('liveStreaming', LEVEL_GATES.liveStreaming)).toBe(true);
+    expect(meetsLevelGate('liveStreaming', LEVEL_GATES.liveStreaming - 1)).toBe(false);
   });
 
   test('an unknown gate never passes', () => {
@@ -97,8 +97,8 @@ describe('shared levelConfig - gated unlocks', () => {
   });
 
   test('passport stamps read their thresholds from the gate table', () => {
-    expect(LEVEL_GATES.civicVanguard).toBe(10);
-    expect(LEVEL_GATES.diplomaticEnvoy).toBe(15);
+    expect(LEVEL_GATES.civicVanguard).toBe(1);
+    expect(LEVEL_GATES.diplomaticEnvoy).toBe(1);
     const src = fs.readFileSync(
       new URL('../services/passportService.js', import.meta.url),
       'utf8'

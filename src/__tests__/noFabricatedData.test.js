@@ -2551,13 +2551,11 @@ describe('Profile hero XP bar shows a consistent within-level fraction', () => {
 describe('Profile edit forms never reset on a whole-profile effect', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  test('ProfileQuickEditModal keys its reset on the target id, not the profile object', () => {
-    const s = read('src/components/profile/ProfileQuickEditModal.jsx');
-    // AGENTS.md: "Never reset a form from an effect keyed on the whole profile
-    // object; key on uid so in-progress edits are not discarded by realtime
-    // snapshots."
-    expect(s).not.toContain('}, [isOpen, profile]);');
-    expect(s).toContain('}, [isOpen, profileId]);');
+  test('EditProfileScreen keys its initialization on currentUid rather than resetting on snapshot changes', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(fs.existsSync(path.join(root, 'src/components/profile/ProfileQuickEditModal.jsx'))).toBe(false);
+    expect(s).toContain('initializedUidRef.current !== currentUid');
+    expect(s).toContain('initializedUidRef.current = currentUid');
   });
 });
 

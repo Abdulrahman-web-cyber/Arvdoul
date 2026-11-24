@@ -133,12 +133,12 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
   });
 
   describe('Creator Accreditation Gating', () => {
-    test('isEligibleToApply enforces Level 5 minimum threshold', () => {
-      const underLevel = creatorService.isEligibleToApply({ level: 3, policyStanding: 'good' });
+    test('isEligibleToApply enforces LEVEL_GATES.creatorProfile threshold and good standing', () => {
+      const underLevel = creatorService.isEligibleToApply({ level: LEVEL_GATES.creatorProfile - 1, policyStanding: 'good' });
       expect(underLevel.eligible).toBe(false);
       expect(underLevel.reasons.some((r) => r.includes(`Level ${LEVEL_GATES.creatorProfile}`))).toBe(true);
 
-      const eligible = creatorService.isEligibleToApply({ level: 5, policyStanding: 'good' });
+      const eligible = creatorService.isEligibleToApply({ level: LEVEL_GATES.creatorProfile, policyStanding: 'good' });
       expect(eligible.eligible).toBe(true);
 
       const badStanding = creatorService.isEligibleToApply({ level: 10, policyStanding: 'restricted' });
@@ -146,10 +146,15 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
       expect(badStanding.reasons.some((r) => r.includes('policy standing'))).toBe(true);
     });
 
-    test('getCreatorCapabilities unlocks capabilities progressively by tier', () => {
-      const noneTier = getCreatorCapabilities({ creatorTier: 'NONE', level: 1 });
-      expect(noneTier.canMonetize).toBe(false);
-      expect(noneTier.payoutCommissionRate).toBe(0.15);
+    test('getCreatorCapabilities unlocks core features at Level 1 and scales commission by tier', () => {
+      const levelZero = getCreatorCapabilities({ creatorTier: 'NONE', level: 0 });
+      expect(levelZero.canMonetize).toBe(false);
+      expect(levelZero.payoutCommissionRate).toBe(0.15);
+
+      const levelOne = getCreatorCapabilities({ creatorTier: 'NONE', level: 1 });
+      expect(levelOne.canMonetize).toBe(true);
+      expect(levelOne.canStreamLive).toBe(true);
+      expect(levelOne.payoutCommissionRate).toBe(0.15);
 
       const partnerTier = getCreatorCapabilities({ creatorTier: 'partner', level: 10 });
       expect(partnerTier.canMonetize).toBe(true);

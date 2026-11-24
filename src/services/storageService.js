@@ -599,6 +599,7 @@ class StorageSecurityService {
         'jpg': 'image/jpeg',
         'jpeg': 'image/jpeg',
         'png': 'image/png',
+        'webp': 'image/webp',
         'gif': 'image/gif',
         'pdf': 'application/pdf',
         'txt': 'text/plain'
@@ -712,8 +713,13 @@ class StorageSecurityService {
               return;
             }
             
-            const compressedFile = new File([blob], file.name, {
-              type: file.type,
+            const actualType = blob.type || file.type;
+            const ext = actualType === 'image/webp' ? 'webp' : actualType === 'image/png' ? 'png' : 'jpg';
+            const baseName = file.name.includes('.') ? file.name.replace(/\.[^.]+$/, '') : file.name;
+            const outName = actualType === file.type ? file.name : `${baseName}.${ext}`;
+
+            const compressedFile = new File([blob], outName, {
+              type: actualType,
               lastModified: Date.now()
             });
             

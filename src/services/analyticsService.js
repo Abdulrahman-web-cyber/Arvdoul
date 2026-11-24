@@ -208,13 +208,20 @@ class UltimateAnalyticsService {
    * @param {string} timeframe - Timeframe (7d, 30d, 90d, 365d)
    * @returns {Object} Analytics data including views, reach, engagement, coins, daily stats
    */
-  async getUserAnalytics(userId, timeframe = '30d') {
+  async getUserAnalytics(userId, timeframe = '30d', { forceRefresh = false } = {}) {
     const cacheKey = `analytics_${userId}_${timeframe}`;
     try {
       await this._ensureInitialized();
-      
-      const cached = this.cache.get(cacheKey);
-      if (cached) return cached;
+      const docPath = `profile_analytics/${userId}`;
+
+      if (forceRefresh) {
+        this.cache.delete(cacheKey);
+        countersManager.invalidate({ docPath, field: 'totalViews' });
+        countersManager.invalidate({ docPath, field: 'totalReach' });
+      } else {
+        const cached = this.cache.get(cacheKey);
+        if (cached) return cached;
+      }
 
       const { doc, getDoc } = await import('firebase/firestore');
       
@@ -273,11 +280,15 @@ class UltimateAnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        // Shard-backed totals with legacy fallback (no shards = old doc value).
-        const docPath = `profile_analytics/${userId}`;
+        // Shard-backed totals with legacy + dailyStats fallback (no shards = dailyStats/old doc value).
+        const dailyEntries = data.dailyStats && typeof data.dailyStats === 'object'
+          ? Object.values(data.dailyStats)
+          : [];
+        const dailyViewsSum = dailyEntries.reduce((sum, entry) => sum + (Number(entry?.views) || 0), 0);
+        const dailyReachSum = dailyEntries.reduce((sum, entry) => sum + (Number(entry?.reach) || 0), 0);
         const [totalViews, totalReach] = await Promise.all([
-          countersManager.get({ docPath, field: 'totalViews', fallback: data.totalViews || 0 }),
-          countersManager.get({ docPath, field: 'totalReach', fallback: data.totalReach || 0 }),
+          countersManager.get({ docPath, field: 'totalViews', fallback: Math.max(Number(data.totalViews) || 0, dailyViewsSum) }),
+          countersManager.get({ docPath, field: 'totalReach', fallback: Math.max(Number(data.totalReach) || 0, dailyReachSum) }),
         ]);
 
         analytics = {
@@ -507,12 +518,12 @@ class UltimateAnalyticsService {
    * @param {string} profileOwnerId - The profile being viewed
    */
   async trackProfileView(viewerId, profileOwnerId) {
-    if (!viewerId || viewerId === profileOwnerId) return; // Don't track self-views
+    if (!viewerId || viewerId === profileOwnerId) return false; // Don't track self-views
 
     // Client-side UX guard against view-write storms (the callable enforces the
     // real server-side rate limit).
     const rl = rateLimiter.checkAndHit(`analytics:view:${viewerId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.TRACK_VIEW_MAX, windowMs: 60000 });
-    if (!rl.allowed) return; // silently drop excess view events
+    if (!rl.allowed) return false; // silently drop excess view events
 
     try {
       // Counting is server-authoritative: the daily marker, the owner's daily
@@ -529,9 +540,11 @@ class UltimateAnalyticsService {
         countersManager.invalidate({ docPath, field: 'totalViews' });
         countersManager.invalidate({ docPath, field: 'totalReach' });
       }
+      return Boolean(result?.success !== false);
     } catch (error) {
       logger.warn('Track profile view failed', { error: error.message, profileOwnerId });
-      // Don't throw - this is a non-critical operation
+      // Don't throw - allow retry by returning false
+      return false;
     }
   }
 

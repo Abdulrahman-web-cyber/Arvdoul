@@ -50,10 +50,11 @@ export const useAnalyticsStore = create(
      * @param {string} userId - User ID
      * @param {string} timeframe - Timeframe (7d, 30d, 90d, 365d)
      */
-    loadAnalytics: async (userId, timeframe) => {
+    loadAnalytics: async (userId, timeframe, options = {}) => {
       if (!userId) return;
       
       const selectedTimeframe = timeframe || get().timeframe;
+      const forceRefresh = Boolean(options?.forceRefresh);
       const requestId = (get().requestSeq || 0) + 1;
       const dataScopeChanged = get().analyticsUserId !== userId || get().analyticsTimeframe !== selectedTimeframe;
 
@@ -78,7 +79,7 @@ export const useAnalyticsStore = create(
       try {
         const analyticsService = (await import('../services/analyticsService.js')).getAnalyticsService();
         
-        const analytics = await analyticsService.getUserAnalytics(userId, selectedTimeframe);
+        const analytics = await analyticsService.getUserAnalytics(userId, selectedTimeframe, { forceRefresh });
         if (get().requestSeq !== requestId || get().analyticsUserId !== userId) return;
 
         set((state) => {
@@ -125,7 +126,7 @@ export const useAnalyticsStore = create(
         state.refreshKey += 1;
       });
       
-      await get().loadAnalytics(userId, timeframe);
+      await get().loadAnalytics(userId, timeframe, { forceRefresh: true });
     },
     
     /**
